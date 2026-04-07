@@ -1,0 +1,885 @@
+# **PRD: Strata multisig app**
+
+**Background**
+
+The Strata protocol specifies several multisigs for administrative functions, namely the Strata Administrator, the Strata Sequencer Manager, the Strata Security Council, and the Payout Administrator. Additionally, the Alpen protocol specifies an administrative multisig, the Alpen Administrator. This document specifies requirements for a minimal, cross-platform desktop application ("the application") that enables easy and secure management of these multisigs by their respective signers.
+
+**Additional references and resources**
+
+* [Strata Multisig Backend \- Design Guidelines & Architectural Notes](https://www.notion.so/317901ba000f8064bfc4cd7433e1261f?pvs=21)  
+* [SPS-50: L1 transaction header and interpretation](https://www.notion.so/317901ba000f800c8f5ee39d810b159a?pvs=21)  
+* [SPS-51: Generic simple envelope format](https://www.notion.so/317901ba000f809caeaadab8951ddf17?pvs=21)  
+* [SPS-65: Strata administration subprotocol (transaction processing subsection)](https://www.notion.so/317901ba000f80bf8d96eb5ef0667772?pvs=21)
+
+**Roles**
+
+Bridge Operators: a user whose public key was included in the canonical list of bridge operators at the time of a Strata bridge deposit.
+
+Alpen Administrator Signer: a user whose public key is listed in the Alpen consensus protocol as one of the signer keys on the Alpen Administrator multisig.
+
+Strata Administrator Signer: a user whose public key is listed in the Strata consensus protocol as one of the signer keys on the Strata Administrator multisig.
+
+Strata Sequencer Manager Signer: a user whose public key is listed in the Strata consensus protocol as one of the signer keys on the Strata Sequencer Manager multisig.
+
+Strata Security Council Signer: a user whose public key is listed in the Strata consensus protocol as one of the signer keys on the Strata Security Council multisig.
+
+Payout Administrator Signer: a user who public key is included as a spender of the `block_payout` transaction in the Strata bridge bitcoin script.
+
+Note: Where the term "user" is used without further specification, the requirement applies to all roles described above.
+
+**Requirements**
+
+1. The user MUST be able to run the application locally on their desktop on an up-to-date version of the latest Long Term Support (LTS) release of the Debian Linux, Mac, or Windows operating system, using computer hardware with a minimum of 8 GB RAM, 2c4t CPU, 1 TB SSD, and 20 Mbps internet.  
+   2. Builds of the application MUST be [reproducible](https://reproducible-builds.org/docs/definition/).  
+   3. The user SHOULD be able to cryptographically verify that the application binary they are running was published and approved by multiple employees of Alpen Labs.  
+   4. The user MUST be able to install or run the application with either a single terminal command or double-click on an application icon.  
+      1. The installation of dependencies MUST take no more than one additional command or click, if any additional steps are required at all for installing dependencies.  
+      2. Any clicks required to approve administrative privileges for installing the application can be disregarded for this requirement.  
+   5. The application MUST support accessing read/write functionality for bitcoin and Strata using either a trusted RPC endpoint or by connecting to a Strata node running locally on the same desktop.  
+      1. The user MUST be able to select a trusted RPC endpoint run on the [https://stratabtc.org](https://stratabtc.org) domain for accessing read/write functionality for bitcoin and Strata, or enter their own custom RPC URL.  
+      2. The default connection method MUST be connecting to a node running locally on the same desktop.  
+         1. If no local node is detected, then the user MUST be prompted to either turn on their local node or switch the connection method to use a trusted RPC endpoint.  
+      3. If the user is running a local Strata node, the application SHOULD be able to access read/write functionality for bitcoin and Strata using that node with no additional effort from the user.  
+   6. The user MUST be able to connect a supported hardware wallet and see a list of addresses to choose from.  
+      1. Supported hardware wallets MUST include all hardware wallets currently supported by [HWI](https://github.com/bitcoin-core/HWI/blob/master/docs/devices/index.rst) using the following features:  
+         1. Taproot inputs  
+         2. Message Signing,  
+         3. Display on device screen, and  
+         4. Are otherwise compatible with SPS-65 updates.  
+      2. The user MUST be able to select from the first 20 addresses on the `m/86'/0'/73'/0/n` derivation path of the connected hardware wallet, where `73'` is the hardened account used to generate signer addresses, and `n` is the index representing the address shown.  
+      3. The address that the user selects MUST be the address whose private key will be used to sign transactions generated by the application.  
+      4. After selecting an address to connect with, the user MUST be able to see the address in the UI and copy the address to their clipboard.  
+      5. The user MUST be able to use the application to view the selected address on their hardware wallet screen to verify that the address they see in the UI was actually derived from the seed phrase loaded in their connected hardware wallet.  
+      6. The user MUST be able to clearly read and understand each message they are signing on their hardware wallet screen, to be able to visually verify that the message they are signing matches what they are expecting based on what they are seeing in the application UI.  
+   7. After the user has connected an address, the user MUST be able to select one option from a list of multisigs that the given address is a signer on. The supported multisigs MUST be:  
+      1. Alpen Administrator multisig. MUST be usable exclusively by all Alpen Administrator Signers.  
+      2. Strata Administrator multisig. MUST be usable exclusively by all Strata Administrator Signers  
+      3. Strata Sequencer Manager multisig. MUST be usable exclusively by all Strata Sequencer Manager Signers.  
+      4. Strata Security Council multisig. MUST be usable exclusively by all Strata Security Council Signers.  
+      5. Payout Administrator multisig. MUST be usable exclusively by all Payout Administrator signers.  
+   8. After selecting the multisig they want to interact with, the user MUST sign a nonce with the private key of their connected address to gain access to the UI for the selected multisig.  
+      1. The user MUST only be given access to the UI for the selected multisig if the address that they have signed the nonce for is on the canonical list of multisig signers.  
+      2. If the user produces an invalid signature, then the user SHOULD be shown an error message saying so.  
+      3. If the user produces a valid signature, but the connected address is not on the canonical list of signers on the selected multisig, then the user SHOULD be shown an error message saying so.  
+   9. After gaining access to view the selected multisig, the user MUST be able to close the selected multisig UI and go back to the multisig selection screen.  
+   10. After gaining access to view the selected multisig, the user MUST be able to disconnect the selected address and go back to the wallet connection screen.  
+   11. The requirements in this section MUST only apply to the following multisigs, unless explicitly stated otherwise:  
+       1. Alpen Administrator multisig  
+       2. Strata Administrator multisig  
+       3. Strata Sequencer Manager multisig  
+       4. Strata Security Council multisig  
+   12. The user MUST be able to see all "Approved" updates and how many cancellation signatures each "Approved" update has received (if any). An "Approved" update is an update that has reached the required quorum of approval signatures and has been confirmed onchain, but has not yet been enacted.  
+       1. The user MUST be able to cancel any "Approved" update.  
+          1. The user MUST be able to copy all available cancellation signatures for a given update to their clipboard.  
+          2. The user MUST be able to create a cancellation transaction for a given "Approved" update, paste in the quorum of signatures required to cancel the update, and broadcast the cancellation transaction to bitcoin for confirmation either using the application's bitcoin RPC or by copying the raw transaction to the clipboard and broadcasting the transaction through any other bitcoin RPC.  
+          3. Canceled updates MUST be kept offchain and accessible/visible only to multisig signers.  
+       2. For the avoidance of doubt, this subsection does not apply to the following multisigs, because they do not produce update types that have an "Approved" or "Canceled" state:  
+          1. Strata Sequencer Manager multisig  
+          2. Strata Security Council multisig  
+   13. The user MUST be able to see all "Pending" updates, including how much time is left before the "Pending" update expires and how many approval signatures the "Pending" update has received (if any) out of the total number of required signatures. A "Pending" update is an update that has been proposed but has not yet reached the required quorum of signatures for approval and been confirmed on bitcoin.  
+       1. All "Pending" updates MUST be kept offchain and accessible/visible only to multisig signers.  
+       2. The user MUST be able produce an approval signature for any "Pending" update.  
+          1. The user MUST be able to copy all available approval signatures for a given "Pending" update to their clipboard.  
+          2. The user MUST be able to create an approval transaction for a given "Pending" update, paste in the quorum of signatures required to approve the update, and broadcast the approval transaction to bitcoin for confirmation either using the application's bitcoin RPC or by copying the raw transaction to the clipboard and broadcasting the transaction through any other bitcoin RPC.  
+          3. The user whose signature causes the update transaction to reach its quorum SHOULD be given the option of creating, signing, and broadcasting the bitcoin transaction necessary for the update to be confirmed on bitcoin, or declining to do so.  
+             1. "Pending" updates that have reached quorum but have not been confirmed yet MUST have a "Send" button that, when clicked, enable the user to create, sign, and broadcast the bitcoin transaction necessary for the update to be confirmed on bitcoin, including the ability to manually set the sat/vB fee rate in increments of 0.1 sat/vB using an amount entry field.  
+       3. A "Pending" update MUST expire if it has not been approved within `7` days after the update is first proposed.  
+          1. "Expired" updates MUST be kept offchain and accessible/visible only to multisig signers.  
+   14. The user MUST be able to see all "Past" updates. A "Past" update is an update that has either been enacted, canceled, or expired.  
+   15. The user MUST be able to propose new updates on all of the multisigs they are a signer on.  
+       1. Alpen Administrator multisig:  
+          1. Alpen verification key update.  
+          2. Alpen Administrator Signer update.  
+       2. Strata Administrator multisig:  
+          1. Safe Harbor address update.  
+          2. Strata verification key update.  
+          3. Strata Administrator Signer update.  
+          4. Security Council Signer update.  
+          5. Operator update.  
+          6. "Soft" bridge update.  
+          7. "Hard" bridge update.  
+       3. Strata Sequencer Manager multisig:  
+          1. Strata Sequencer Manager Signer update.  
+          2. Sequencer update.  
+       4. Security Council multisig:  
+          1. Defcon 1 transaction  
+          2. Defcon 3 transaction  
+   16. The requirements in this section MUST only apply to the Payout Administrator multisig, unless explicitly stated otherwise.  
+   17. The user MUST be able to see all "Pending" `block_payout` transactions, including how much time is left before the "Pending" `block_payout` transaction expires, the transaction ID of the "Pending" `block_payout` transaction, and how many approval signatures the "Pending" `block_payout` transaction has received (if any) out of the total number of required signatures. A "Pending" `block_payout` transaction is `block_payout` transaction that has been proposed but has not yet reached the required quorum of signatures for spending.  
+       1. All "Pending" `block_payout` transactions MUST be kept offchain and accessible/visible only to multisig signers.  
+       2. The user MUST be able to export a raw copy of any "Pending" `block_payout` transaction.  
+       3. The user MUST be able produce a spend signature for any "Pending" `block_payout` transaction.  
+          1. The user MUST be able to copy all available spend signatures for a given `block_payout` transaction to their clipboard.  
+          2. The user MUST be able to paste in the quorum of signatures required to approve a given `block_payout` transaction, and broadcast the signed `block_payout` transaction to bitcoin for confirmation either using the application's bitcoin RPC or by copying the raw signed transaction to the clipboard and broadcasting the transaction through any other bitcoin RPC.  
+          3. The user whose signature causes the `block_payout` transaction to reach quorum SHOULD be given the option of either broadcasting the transaction to be confirmed on bitcoin, or declining to do so.  
+             1. "Pending" `block_payout` transactions that have reached quorum but have not been confirmed yet MUST have a "Send" button that, when clicked, enable the user to specify the sat/vB fee rate in increments of 0.1 sat/vB using an amount entry field then broadcast the transaction to bitcoin for confirmation.  
+       4. A "Pending" `block_payout` transaction MUST expire if it has not been spent within `7` days after the `block_payout` transaction first appears with a signature in the system.  
+          1. "Expired" `block_payout` transactions MUST be deleted from the backend and removed from the UI.  
+   18. The user MUST be able to see all "Past" `block_payout` transactions, including their confirmation status ("Unconfirmed" or "Confirmed"), block timestamp, and transaction ID. A "Past" `block_payout` transaction is a `block_payout` transaction that has been broadcast to the bitcoin network.  
+   19. The user MUST be able to manually create a "Pending" `block_payout` transaction by providing `block_payout` inputs for the transaction then adding their signature to the transaction.  
+   20. The user MUST be able to create a new `block_payout` transaction by clicking a "Block payouts" button.  
+       1. This transaction MUST automatically create a `block_payout` transaction that includes as many unspent `block_payout` inputs as will fit into a standard transaction, accounting as well for the signatures that need to be added to spend the inputs.  
+       2. The user MUST see how many inputs are included in the transaction.  
+       3. The user MUST be able to add their signature to the new `block_payout` transaction, which will then add the transaction to the "Pending" `block_payout` transaction section.  
+       4. If a user clicks the "Block payouts" button before the most recently-created "Pending" `block_payout` transaction has been confirmed, then the new `block_payout` transaction generated MUST be the same as the previous (most recently-created) "Pending" `block_payout` transaction.
+
+————————————————————————————————————————————————  
+————————————————————————————————————————————————  
+————————————————————————————————————————————————
+
+# **\[External copy\] Strata Multisig Backend \- Design Guidelines & Architectural Notes**
+
+This document provides context and development guidelines for the backend infrastructure supporting the Strata/Alpen administrative multisigs. The user experience is defined in [Strata Multisig UI PRD](https://github.com/alpenlabs/product/blob/john-light-patch-4/strata/prd-strata-multisig-ui.md).
+
+## **1\. Scope**
+
+1. The backend MUST NOT redefine, reinterpret, or override any governance or validity rule defined in [\*\*SPS-65: Strata Administration Subprotocol](https://www.notion.so/265901ba000f80e583d7ff093da6b369?pvs=21).\*\*
+
+2. The backend MUST function exclusively as an offchain coordination service for:
+
+   * Proposal creation.  
+   * Signature collection.  
+   * Proposal state tracking prior to quorum.  
+3. All canonical validity rules, including but not limited to:
+
+   * Signature threshold checks,  
+   * Sequence number validation,  
+   * Replay protection,  
+   * Update lifecycle enforcement,  
+   * Cancellation semantics,  
+   * Confirmation depth requirements,  
+4. MUST be enforced exclusively by the onchain subprotocol implementation.
+
+5. The backend MAY perform basic hygiene checks (e.g., malformed signatures, duplicate signatures, structural validation), but such checks MUST NOT be treated as authoritative protocol validation.
+
+## **2\. Operational Assumptions**
+
+1. The backend is expected to be operated by Alpen Labs and maintained with high availability.  
+2. The backend MUST NOT be a single point of failure for the ability of signers to execute valid administrative updates.  
+3. In the event that the backend becomes unavailable, signers MUST still be able to:  
+   1. Construct valid approval or cancellation transactions  
+   2. Aggregate signatures manually,  
+   3. Broadcast transactions directly to Bitcoin.
+
+## **3\. Authority Isolation and Access Control**
+
+1. The backend MUST enforce strict separation between multisig authorities.  
+2. For a selected multisig authority:  
+   1. Only addresses present in the canonical signer set for that authority (as derived from the ASM State) MUST be granted access to:  
+      1. View pending proposals,  
+      2. Create proposals,  
+      3. Submit approval signatures,  
+      4. Submit cancellation signatures.  
+   2. Any entity whose address is not in the canonical signer set for that authority MUST be treated as a non-signer.  
+3. A non-signer MUST NOT be able to view any pending proposals or infer the existence of pending proposals.  
+4. A signer of one multisig authority MUST be treated as a non-signer with respect to all other multisig authorities.  
+5. Access control decisions MUST be evaluated against the canonical signer set derived from current onchain state.  
+6. If the signer set changes onchain:  
+   1. The backend MUST update its access control rules accordingly.  
+   2. Any session authorization MUST reflect the canonical signer set at the time of authorization.
+
+### **Authentication and Session Model**
+
+1. Every backend request that accesses or modifies multisig state MUST be authenticated.  
+2. Authentication MUST provide:  
+   1. Proof-of-possession of a canonical signer private key.  
+   2. Explicit scoping to a single multisig authority.  
+   3. Bounded validity (e.g., expiration or revocation capability).
+
+### **Implementation Notes**
+
+One acceptable authentication mechanism is the use of ephemeral session keys. Under this model:
+
+1. The client generates an ephemeral keypair at session initiation.  
+2. The signer signs a structured authentication message using their canonical administrative key. The message MUST:  
+   1. Attest to the ephemeral public key.  
+   2. Bind the session to a specific multisig authority.  
+   3. Include a nonce and/or expiry.  
+3. The backend MUST:  
+   1. Verify the signature against the canonical signer set derived from the ASM STF.  
+   2. Bind the ephemeral public key to the selected authority.  
+   3. Treat the ephemeral key as the authenticated session identity.  
+4. **All subsequent requests MUST be signed using the ephemeral private key.**
+
+The system includes distinct authority roles (e.g., Strata Administrator, Strata Sequencer Manager, Alpen Administrator). Each role has its own signer set and governance scope as defined onchain.
+
+The backend must enforce strict separation between these roles:
+
+* Signers must only be able to view proposals associated with the multisig(s) for which their address is a canonical signer.  
+* Signers must not be able to view proposals belonging to other roles.
+
+The backend must run the ASM STF to get the canonical set of signers for each authority, so that in case of changes to the signing set, the access control is maintained. This is necessary since the execution are delayed.
+
+## **4\. Proposal Semantics**
+
+1. Proposals are identified by:
+
+```rust
+ActionId = hash(MultisigAction, SeqNo)
+```
+
+2.   
+   `SeqNo` MUST be a 64-bit unsigned integer (`u64`).
+
+3. The backend MUST treat `ActionId` as stable and idempotent.
+
+4. If a proposal with the same `(MultisigAction, SeqNo)` already exists:
+
+   1. The backend MUST reject duplicate creation.  
+   2. The backend MUST NOT mutate the existing proposal.  
+5. The backend MUST support multiple distinct proposals for the same `SeqNo`.
+
+## **4\. Safe Multisig and Deviation**
+
+The administrative multisig model differs from the Safe multisig model on Ethereum.
+
+1. In the Safe Model:  
+   1. Proposal `N+1` cannot execute until proposal `N` is executed or explicitly cancelled.  
+2. In the Strata/Alpen administrative model:  
+   1. A proposal that does not reach quorum MAY be skipped.  
+   2. A proposal with a higher `SeqNo` MAY be executed without requiring explicit onchain rejection of earlier unresolved proposals.  
+3. The backend MUST NOT enforce strict ordering between sequence numbers.  
+4. If signers wish to preserve strict ordering:  
+   1. That coordination MUST occur voluntarily.  
+   2. The backend MAY expose metadata to support coordination.  
+   3. The backend MUST NOT enforce ordering constraints.
+
+## Code Sketch
+
+This section sketches the what the backend might look like for a single `Role`.
+
+## **Storage**
+
+At minimum, the backend needs three maps.
+
+```rust
+// SeqNo -> Vec<ActionId>
+actions_by_seqno: Map<SeqNo, Vec<ActionId>>
+
+// ActionId -> MultisigAction
+action_by_id: Map<ActionId, MultisigAction>
+
+// ActionId -> Vec<Signature>
+sigs_by_id: Map<ActionId, Vec<Signature>>
+```
+
+```rust
+/// Minimal backend API for offchain proposal coordination and signature aggregation.
+pub trait MultisigBackend {
+    type SeqNo;
+    type ActionId;
+    type Action;
+    type Signature;
+
+    /// Return the last confirmed sequence number for this authority.
+    /// The canonical source is onchain; the backend may cache.
+    fn get_last_seqno(&self) -> Self::SeqNo;
+
+    /// Create a new action and store the creator's signature.
+    /// Returns false if the computed ActionId already exists.
+    fn create_update_action(
+        &mut self,
+        action: Self::Action,
+        seq: Self::SeqNo,
+        sig: Self::Signature,
+    ) -> bool;
+
+    /// Append an approval signature for an existing action.
+    fn approve_action(&mut self, id: Self::ActionId, sig: Self::Signature);
+
+    /// Fetch the action payload.
+    fn get_update_action(&self, id: Self::ActionId) -> Option<Self::Action>;
+
+    /// Fetch signatures collected so far.
+    fn get_signatures(&self, id: Self::ActionId) -> Vec<Self::Signature>;
+
+    /// List action ids associated with a particular seqno.
+    fn get_action_ids_by_seqno(&self, seq: Self::SeqNo) -> Vec<Self::ActionId>;
+}
+```
+
+```rust
+ActionId = hash(MultisigAction, SeqNo)
+type SeqNo = u64;
+
+fn create_update_action(action: MultisigAction, seq: SeqNo, sig: Signature) -> bool {
+    let id = compute_action_id(seq, &action);
+
+    // Basic hygiene checks are appropriate server-side (e.g., signature shape,
+    // duplicate signer indices). Canonical validity is still enforced onchain.
+    validate_sig(id, &sig);
+
+    // Reject duplicates to keep proposal ids stable and idempotent.
+    if action_by_id.contains_key(&id) {
+        return false;
+    }
+
+    actions_by_seqno.entry(seq).or_default().push(id);
+    action_by_id.insert(id, action);
+    sigs_by_id.entry(id).or_default().push(sig);
+
+    true
+}
+```
+
+————————————————————————————————————————————————  
+————————————————————————————————————————————————  
+————————————————————————————————————————————————
+
+# **\[External copy\] SPS-50 L1 transaction header and interpretation**
+
+| ID | SPS-50 |
+| ----- | ----- |
+| Name | L1 transaction header and interpretation |
+| Authors | Trey Del Bonis trey@alpenlabs.io |
+| Status | Review |
+| Dependencies | none |
+
+Signoffs:
+
+* \[x\] CTO: @Pramod Kandel  
+* \[x\] EM: @Barak
+
+## Introduction
+
+All protocol transactions that need to be directly recognized by state machines MUST be tagged with a header. This aids in simplifying transaction recognition so that we can have a shared initial pass to collect transactions without having to parse them further before passing them off to subprotocol handling logic to update ASM state.
+
+## Implementation
+
+### Identification
+
+This header is a conventional OP\_RETURN output which MUST be in position 0\.
+
+```
+OP_RETURN
+<data>
+```
+
+The tagged data contains the header data itself.
+
+### Format
+
+| Width | Purpose | Example (not specification) |
+| ----- | ----- | ----- |
+| 4 | `magic`, to identify protocol instance | ASCII `TREY` |
+| 1 | `subprotocol` ID | 1 |
+| 1 | `tx_type`, as defined by subprotocol | 7 |
+| rest ≤ 74 | `aux`iliary | type-specific |
+
+It is important that the `magic` bytes field be a well-defined constant length, even between unrelated deployments, in order to ensure that the `aux` field is always at least a certain length and guarantee that particular tx formats always have a consistent length to rely on. If a tx format had, for example, a 64 byte signature in the aux field, but a deployment set the magic to be some 16 byte magic value for fun, then the header would be 82 bytes and overflow the standardness limit.
+
+### Interpretation
+
+One point to note is that the version and tx type fields have slightly nonorthogonal purposes. We plan on using multiple version fields in parallel, but for different purposes. We expect granularity of upgrades to be at the level of enabling or disabling the recognition of entire (sub)protocol versions at a time.
+
+## Versions List
+
+This list isn’t intended to be the source of truth, but will be updated when we define versions in other subsequent spec docs, or tentatively planning for them in advance.
+
+| Version | Name |
+| ----- | ----- |
+| 0 | Upgrade |
+| 1 | Orchestration layer checkpointing |
+| 2 | Bridge v1 |
+| 3 | Execution DA |
+| 254 | Debug |
+
+## Attribution
+
+This specific layout design was introduced by Pramod Kandel.
+
+Copyright waived CC 0\.
+
+————————————————————————————————————————————————  
+————————————————————————————————————————————————  
+————————————————————————————————————————————————
+
+# **\[External copy\] SPS-51 Generic simple envelope format**
+
+| ID | SPS-51 (formerly SPS-envelope) |
+| ----- | ----- |
+| Name | Generic envelope format |
+| Authors | Trey Del Bonis trey@alpenlabs.io |
+| Status | Review |
+| Dependencies | [SPS-50](https://www.notion.so/1c5901ba000f80608cf8fdd9781666db?pvs=21) |
+
+## Introduction
+
+The purpose of this document is to describe a generic envelope format that we use for writing moderately-large payloads to L1. This is similar to the ordinals inscription format, but removing tagging and metadata functionality that is irrelevant.
+
+## Design
+
+### Tagging
+
+Envelope-carrying transactions MUST have a [SPS-50 header.](https://www.notion.so/1c5901ba000f80608cf8fdd9781666db?pvs=21) The total size of all payloads in an envelope-carrying transaction SHOULD be at least 126 bytes as otherwise it would be more efficient to pass it in the aux field in the [SPS-50 header](https://www.notion.so/1c5901ba000f80608cf8fdd9781666db?pvs=21). The total size of all payloads in an envelope carrying transaction MUST be less than 395 kilobytes in order to be comfortably below the 400 kilobyte transaction size standardness limit.
+
+### Chunking
+
+Bitcoin enforces a 520 byte stack element size limit. A script containing a pushop that pushes more than 520 bytes is always considered malformed, even if in an unexecuted branch. Therefore, all payloads longer than 520 bytes MUST be chunked as a series of 520 byte chunks following by a final chunk containing the remaining bytes.
+
+**Example:** 30 byte payload → 1 chunk of 30 bytes
+
+**Example:** 1050 byte payload → 3 chunks of 520 bytes, 520 bytes, 10 bytes
+
+### Envelope
+
+The envelope has an extremely simple packaging structure. We describe an always-untaken conditional block and encode the payloads chunks as a series of pushops. Each chunk is pushed with an appropriate PUSHDATA op. This has a minimal overhead (2-3 bytes per chunk). No other tagging is required here as it is assumed to exist in the transaction header.
+
+```rust
+OP_FALSE
+OP_IF
+  <chunk_0>
+  ...
+  <chunk_n>
+OP_ENDIF
+```
+
+### Envelope container
+
+To make a safe script, we also have to specify a container for an envelope. If defined by the transaction type, it is valid to sequentially encode multiple envelopes in a single input for a multi-envelope container. A producer MUST NOT try to conflate unrelated envelopes into a transaction if there’s not a well-defined interpretation for this. In any case, we need some initial pubkey that controls the spend in order for it to be a safe script.
+
+A consumer MAY recognize this pubkey and treat the input signature as transitively signing the contained envelopes. This would be useful in order to avoid putting a signature within the envelope(s).
+
+```rust
+<pubkey>
+CHECKSIG
+<envelope_0>
+...
+<envelope_n>
+```
+
+## Test vectors
+
+// TODO
+
+————————————————————————————————————————————————  
+————————————————————————————————————————————————  
+————————————————————————————————————————————————
+
+# **SPS-65: Strata administration subprotocol (Transaction processing subsection)**
+
+## Transaction Processing
+
+### **Main Processing Function**
+
+`process_txs` is defined as part of the Subprotocol trait in
+
+```py
+def process_txs(
+    state: AdministrationState,
+    txs: List[TxInputRef],
+    anchor_pre: AnchorState,
+    verified_aux_input: VerifiedAuxInput,
+    relayer: MsgRelayer,
+    params: AdministrationParams
+):
+    current_height = anchor_pre.chain_view.pow_state.last_verified_block.height + 1
+
+    # Process ready updates first
+    handle_pending_updates(state, relayer, current_height)
+
+    # Process new transactions
+    for tx in txs:
+        action, vote = parse_tx_multisig_action_and_vote(tx)
+        if action and vote:
+            handle_action(state, action, vote, current_height, relayer)
+```
+
+### **Handling Pending Updates**
+
+The `handle_pending_updates` function processes all queued updates that have reached their activation height. This ensures that time-delayed updates are executed in the correct order and at the appropriate time.
+
+```py
+def handle_pending_updates(
+    state: AdministrationState,
+    relayer: MsgRelayer,
+    current_height: uint64
+):
+    """Process all queued updates that are ready for execution"""
+
+    # Filter updates ready for execution
+    ready_updates = []
+    remaining_updates = []
+
+    for update in state.queued:
+        if update.activation_height <= current_height:
+            ready_updates.append(update)
+        else:
+            remaining_updates.append(update)
+
+    # Execute ready updates in order
+    for update in ready_updates:
+        execute_update(state, update, relayer)
+
+    # Update queue with remaining updates
+    state.queued = remaining_updates
+```
+
+### **Update Execution Logic**
+
+```py
+def execute_update(
+    state: AdministrationState,
+    update: QueuedUpdate,
+    relayer: MsgRelayer
+):
+    """Execute a specific queued update"""
+
+    match update.action:
+        case MultisigUpdate():
+            apply_multisig_update(state, update.action)
+        case OperatorSetUpdate():
+            apply_operator_set_update(state, update.action, relayer)
+        case SequencerUpdate():
+            # Sequencer updates should not be executed without queueing
+            apply_sequencer_update(state, update.action, relayer)
+        case VerifyingKeyUpdate():
+            apply_verifying_key_update(state, update.action, relayer)
+```
+
+## **Action Handling**
+
+The `handle_action` function processes incoming multisig actions, validates signatures, and either executes or queues updates based on their type.
+
+```py
+def handle_action(
+    state: AdministrationState,
+    payload: SignedPayload
+    current_height: uint64,
+    relayer: MsgRelayer
+    max_seqno_gap: uint8,
+):
+    """Process a multisig action with aggregated signature"""
+
+    match action:
+        case MultisigAction.Update(_) as update_action:
+            handle_update_action(state, payload, current_height, relayer, max_seqno_gap)
+        case MultisigAction.Cancel(_) as cancel_action:
+            handle_cancel_action(state, payload, max_seqno_gap)
+```
+
+### **Update Action Processing**
+
+```py
+def handle_update_action(
+    state: AdministrationState,
+    payload: SignedPayload,
+    current_height: uint64,
+    relayer: MsgRelayer,
+    max_seqno_gap: uint8
+):
+    """Process an update proposal"""
+    
+    action = payload.action.update  # The UpdateAction inside the MultisigAction
+
+    # Determine required authority based on update type
+    required_authority = get_required_authority(action)
+
+    # Validate signature against authority (includes seqno validation)
+    verify_action_signature(authority, payload, max_seqno_gap)
+    
+    # Handle based on update type
+    id = state.next_update_id
+    match action:
+        case SequencerUpdate():
+            # Execute immediately
+            apply_sequencer_update(state, action, relayer)
+        case _:
+            # Queue for delayed execution
+            queue_update(state, action, current_height)
+    state.next_update_id += 1
+    
+    # Advance sequence number to the payload's seqno (may skip values)
+    authority.last_seqno = payload.seqno
+```
+
+### **Cancel Action Processing**
+
+```py
+def handle_cancel_action(
+    state: AdministrationState,
+    payload: SignedPayload,
+    max_seqno_gap: uint8
+):
+    """Process an update cancellation"""
+    cancel = payload.action.cancel  # The CancelAction inside the MultisigAction
+
+    # Find the queued update to cancel
+    update_to_cancel = None
+    for update in state.queued:
+        if update.id == cancel.target_id:
+            update_to_cancel = update
+            break
+
+    if not update_to_cancel:
+        raise UpdateNotFound("Update ID not found in queue")
+
+    # Determine required authority (same as original update)
+    required_authority = get_required_authority(update_to_cancel.action)
+    verify_action_signature(authority, payload, max_seqno_gap)
+
+    # Validate signature
+    authority = get_authority(state, required_authority)
+    
+    # Remove from queue
+    state.queued = [u for u in state.queued if u.id != action.update_id]
+    
+    # Advance sequence number to the payload's seqno (may skip values)
+    authority.last_seqno = payload.seqno
+```
+
+## **Specific Action Implementations**
+
+### **Multisig Configuration Updates**
+
+```py
+def apply_multisig_update(state: AdministrationState, action: MultisigUpdate):
+    """Apply multisig configuration changes"""
+
+    authority = get_authority(state, action.role)
+
+    match action.config_update:
+        case AddSigner() as add:
+            if len(authority.config.keys) >= MAX_MULTISIG_KEYS:
+                raise TooManySigners("Maximum signers exceeded")
+            authority.config.keys.append(add.public_key)
+
+        case RemoveSigner() as remove:
+            if len(authority.config.keys) <= authority.config.threshold:
+                raise InvalidThreshold("Cannot remove signer below threshold")
+            authority.config.keys = [k for k in authority.config.keys if k != remove.public_key]
+
+        case UpdateThreshold() as threshold:
+            if threshold.new_threshold > len(authority.config.keys):
+                raise InvalidThreshold("Threshold exceeds signer count")
+            authority.config.threshold = threshold.new_threshold
+```
+
+### **Bridge Operator Updates**
+
+```py
+def apply_operator_set_update(
+    state: AdministrationState,
+    action: OperatorSetUpdate,
+    relayer: MsgRelayer
+):
+    """Apply bridge operator set changes"""
+
+    match action.update:
+        case AddOperator() as add:
+            # Relay to bridge subprotocol
+            relayer.send_message(
+                target_subprotocol=BRIDGE_SUBPROTOCOL_ID,
+                message=BridgeMessage.AddOperator(add.operator_key)
+            )
+
+        case RemoveOperator() as remove:
+            # Relay to bridge subprotocol
+            relayer.send_message(
+                target_subprotocol=BRIDGE_SUBPROTOCOL_ID,
+                message=BridgeMessage.RemoveOperator(remove.operator_key)
+            )
+```
+
+### **Sequencer Updates**
+
+```py
+def apply_sequencer_update(
+    state: AdministrationState,
+    action: SequencerUpdate,
+    relayer: MsgRelayer
+):
+    """Apply sequencer public key changes"""
+
+    # Relay to orchestration layer
+    relayer.send_message(
+        target_subprotocol=ORCHESTRATION_SUBPROTOCOL_ID,
+        message=OLMessage.UpdateSequencer(action.new_public_key)
+    )
+```
+
+### **Verifying Key Updates**
+
+```py
+def apply_verifying_key_update(
+    state: AdministrationState,
+    action: VerifyingKeyUpdate,
+    relayer: MsgRelayer
+):
+    """Apply verifying key changes"""
+
+    match action.key_type:
+        case OrchestratorVK():
+            # Update orchestration layer verification key
+            relayer.send_message(
+                target_subprotocol=ORCHESTRATION_SUBPROTOCOL_ID,
+                message=OLMessage.UpdateVerifyingKey(action.new_key)
+            )
+
+        case BridgeVK():
+            # Update bridge definition verification key
+            relayer.emit_log(
+                message=BridgeMessage.UpdateVerifyingKey(action.new_key)
+            )
+```
+
+## **Validation and Helper Functions**
+
+### **Authority Management**
+
+```py
+def get_required_authority(action: UpdateAction) -> uint8:
+    """Determine which authority role is required for an action"""
+
+    match action:
+        case SequencerUpdate():
+            return SEQUENCER_MANAGER_ROLE
+        case MultisigUpdate() as multisig:
+            # Authority manages its own configuration
+            return multisig.role
+        case OperatorSetUpdate() | VerifyingKeyUpdate():
+            return ADMINISTRATOR_ROLE
+
+def get_authority(state: AdministrationState, role: uint8) -> MultisigAuthority:
+    """Retrieve authority configuration by role"""
+
+    for authority in state.authorities:
+        if authority.role == role:
+            return authority
+
+    raise AuthorityNotFound(f"Authority role {role} not configured")
+```
+
+### **Queue Management**
+
+```py
+def queue_update(
+    state: AdministrationState,
+    action: UpdateAction,
+    current_height: uint64
+):
+    """Add an update to the execution queue.
+    
+    Note: The caller (handle_update_action) is responsible for incrementing
+    next_update_id after this call.
+    """
+
+    if len(state.queued) >= MAX_QUEUED_UPDATES:
+        raise QueueFull("Maximum queued updates exceeded")
+
+    # Calculate activation height
+    activation_height = current_height + state.confirmation_depth
+
+    # Create queued update
+    queued = QueuedUpdate(
+        id=state.next_update_id,
+        action=action,
+        activation_height=activation_height
+    )
+
+    # Add to queue and increment ID counter
+    state.queued.append(queued)
+```
+
+### **Signature and Sequence Number Validation**
+
+```py
+def verify_action_signature(
+    authority: MultisigAuthority,
+    payload: SignedPayload,
+    max_seqno_gap: uint8
+):
+    """Validate seqno bounds and threshold signatures for a signed payload.
+
+    The sequence number must be strictly greater than the last executed seqno
+    and must not exceed last_seqno + max_seqno_gap. This allows non-sequential
+    usage (e.g. if a transaction is dropped) while bounding the gap to prevent
+    abuse.
+    """
+
+    # Seqno must be strictly greater than last executed
+    if payload.seqno <= authority.last_seqno:
+        raise InvalidSeqno()
+
+    # Seqno must not jump too far ahead
+    if payload.seqno > authority.last_seqno + max_seqno_gap:
+        raise SeqnoGapTooLarge()
+        
+    # Compute sighash over (action, seqno)
+    sighash = compute_sighash(payload.action, payload.seqno)
+
+    # Verify threshold signatures against the sighash
+    validate_threshold_signatures(authority, sighash, payload.signatures)
+
+def compute_sighash(action: MultisigAction, seqno: uint64) -> Bytes32:
+    """Compute the tagged message hash that signers must sign.
+
+    sighash = SHA256(SHA256(tag) ‖ seqno_be ‖ sighash_payload)
+
+    Uses BIP-340-style tagged hashing where:
+    - tag = "strata/admin/<type_name>" (see Transaction Types table below)
+    - seqno_be = 8-byte big-endian sequence number
+    - sighash_payload = action-specific bytes (see Per-Type Details below)
+
+    The tag provides domain separation per action type, preventing
+    cross-type signature reuse. The seqno prevents replay attacks.
+    """
+    tag_hash = SHA256(action.sighash_tag())    # 32 bytes, precomputed per type
+    seqno_bytes = seqno.to_be_bytes(8)         # 8 bytes, big-endian
+    payload = action.sighash_payload()         # variable length, action-specific
+    return SHA256(tag_hash || seqno_bytes || payload)
+
+    
+def validate_threshold_signatures(
+    authority: MultisigAuthority,
+    message_hash: Bytes32,
+    signatures: SignatureSet
+) -> bool:
+    """Validate individual ECDSA signatures against authority threshold config"""
+
+    # Check minimum threshold
+    if len(signatures.signatures) < authority.config.threshold:
+        return InsufficientSignatures
+
+    # Check signer indices are valid and unique
+    indices = [sig.index for sig in signatures.signatures]
+    if len(set(indices)) != len(indices):
+        raise DuplicateSignerIndex
+
+    for indexed_sig in signatures.signatures:
+        if indexed_sig.index >= len(authority.config.keys):
+            raise InvalidSignerIndex
+
+        # Recover public key from ECDSA signature
+        expected_pubkey = authority.config.keys[indexed_sig.index]
+        recovered_pubkey = ecdsa_recover(message_hash, indexed_sig.signature)
+        
+        if recovered_pubkey != expected_pubkey:
+            raise InvalidSignature
+
+    return True
+```
+
+### **Structure and flow according to implementation**
+
+**Structure**
+
+* The subprotocol state is `AdministrationSubprotoState`, defined [here](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/state.rs#L14C12-L14C39).  
+* It consists of the queue of pending updates and different authorities (and update index).  
+  * We currently have 2 authorities/roles, which are defined [above](https://www.notion.so/265901ba000f80e583d7ff093da6b369?pvs=21) (there should be another entity called “Alpen Administrator”), and present [here](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/primitives/src/roles.rs#L20).  
+  * Authority is defined [here](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/authority.rs#L12): role, the list of [admin keys and threshold](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/crypto/src/multisig/config.rs#L12) and sequence number.  
+* Right now we have 2 different types of admin txes: cancel a pending update, or update some protocol parameter, as [above](https://www.notion.so/265901ba000f80e583d7ff093da6b369?pvs=21).  
+  * Admin change can either change the sequencer pk immediately or queue an update for 2016 blocks (which could be cancelled until executed).  
+  * The different actions (cancel/update) are [here](https://github.com/alpenlabs/alpen/tree/82a4b32542d6c21f236ed19a9f3fc1c390bc15bc/crates/asm/txs/administration/src/actions), and updates are defined [here](https://github.com/alpenlabs/alpen/tree/82a4b32542d6c21f236ed19a9f3fc1c390bc15bc/crates/asm/txs/administration/src/actions/updates).
+
+**Flow**
+
+1. An admin msg is defined by [MultisigAction](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/txs/administration/src/actions/mod.rs#L22C10-L22C24) and posted in a bitcoin tx.  
+2. The [`process_txs` function](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/subprotocol.rs#L71-L72) parses the tx and passes the `MultisigAction` [to `handle_action`](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/handler.rs#L82).  
+3. [Within `handle_action`](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/handler.rs#L107) we [call `verify_action_signature`](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/authority.rs#L50) that checks the threshold signature with respect to the list of admin public keys.  
+   1. This is where the sequence number is being verified: that the update (multisig action tx) contains the sequence number [as in the specific authority state](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/authority.rs#L56) ([link](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/authority.rs#L56)).  
+4. `handle_action` then [updates the queue](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/handler.rs#L122) with the action (if the action is to be queued).  
+5. We [associate an `update_id`](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/handler.rs#L113), which I think is only for the sake of cancellation(??).  
+6. Once in queue [`handle_pending_updates` will take care of it](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/handler.rs#L22).  
+   1. This is [called within `process_tx`](https://github.com/alpenlabs/alpen/blob/21d8802ce8aa8c1f0d689c38256e8b95563b7cdd/crates/asm/subprotocols/administration/src/subprotocol.rs#L67).
+
