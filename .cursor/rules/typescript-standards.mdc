@@ -1,0 +1,17 @@
+---
+description: TypeScript standards for React UI and client integration
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Standards
+
+- Use TypeScript for all frontend/client code and keep explicit types at API and component boundaries
+- Prefer `type` for domain modeling; use `interface` only when declaration merging or extension ergonomics matter
+- Model multisig domains with narrow unions (authority, lifecycle status, action kind) instead of loose strings
+- Use runtime validation for external payloads at boundaries before updating UI state
+- Prefer immutable updates and pure helpers for derived data (quorum counts, status grouping, time remaining)
+- Handle nullable and optional values with type guards and early returns
+- Keep transport DTO types separate from UI view-model types
+- Use utility types (`Pick`, `Omit`, `Partial`, `Record`) to remove duplication while preserving intent
+- Ensure async API helpers return typed success/error shapes rather than `any` or exception-only control flow
