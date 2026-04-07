@@ -540,6 +540,48 @@ handle_pending_updates(&mut state, &mut relayer, block_height);
 
 ---
 
+## 6. Crate Usage by Component (UI vs Backend)
+
+The UI and backend use very different slices of the Alpen/Strata crate ecosystem.
+
+### UI (Desktop App) — Uses the Full Stack
+
+| Purpose | Crates | Key Types / Calls |
+|---------|--------|-------------------|
+| **Display info** (signer sets, quorum, roles) | `strata-asm-params`, `strata-crypto` | `Role`, `ThresholdConfig` |
+| **Build actions** (propose updates/cancels) | `strata-asm-txs-admin` | `MultisigAction`, `UpdateAction`, `CancelAction` |
+| **Compute sighash** (for HW wallet signing) | `strata-asm-txs-admin` | `Sighash::compute_sighash(seqno) -> Buf32` |
+| **Package signatures** | `strata-crypto` | `IndexedSignature` (65-byte ECDSA + signer index) |
+| **Build SignedPayload** (when quorum reached) | `strata-asm-txs-admin`, `strata-crypto` | `SignedPayload`, `SignatureSet` |
+| **Serialize** | `borsh` | `borsh::to_vec(&payload)` |
+| **Build SPS-51 envelope** | `strata-l1-envelope-fmt` | `EnvelopeScriptBuilder` (auto-chunks at 520 bytes) |
+| **Build SPS-50 tag** | `strata-l1-txfmt` | `TagData`, `ParseConfig` |
+| **Construct Bitcoin tx** (commit+reveal) | `strata-btcio` | `EnvelopeConfig`, `create_envelope_transactions` |
+| **Broadcast** | `bitcoind-async-client` | `sign_raw_transaction_with_wallet`, `send_raw_transaction` |
+
+The UI touches nearly every crate — from domain types all the way down to Bitcoin transaction construction and broadcast.
+
+### Backend (Axum + Postgres) — Domain Types Only
+
+| Purpose | Crates | Key Types / Calls |
+|---------|--------|-------------------|
+| **Auth & access control** (verify signer is in canonical set) | `strata-asm-params`, `strata-crypto`, `secp256k1` | `Role`, `ThresholdConfig`, nonce signature verification |
+| **Store proposals** (CRUD + dedup) | `strata-asm-txs-admin` | `MultisigAction`, `ActionId = hash(action, seqno)` |
+| **Collect signatures** (with basic hygiene checks) | `strata-crypto` | `IndexedSignature`, `SignatureSet` |
+| **Serialize/deserialize** (for Postgres storage) | `borsh` | `borsh::to_vec`, `borsh::from_slice` |
+| **Sync on-chain state** (signer sets, seqnos, queued updates) | `strata-asm-subprotocols-admin` | `AdministrationSubprotoState`, `MultisigAuthority` |
+
+The backend does **not** use: `strata-l1-txfmt`, `strata-l1-envelope-fmt`, `strata-btcio`, or `bitcoind-async-client`. It never constructs or broadcasts Bitcoin transactions.
+
+### Summary
+
+```
+UI      = domain types + sighash + serialization + envelope + Bitcoin tx + broadcast
+Backend = domain types + serialization + on-chain state sync (for auth)
+```
+
+---
+
 ## Key Takeaways
 
 1. **The architecture is indirect:** the desktop app never talks to the ASM directly. It constructs Bitcoin transactions, broadcasts them, and the ASM picks them up from Bitcoin blocks.
