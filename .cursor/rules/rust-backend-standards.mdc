@@ -1,0 +1,17 @@
+---
+description: Rust backend coding standards for Axum services
+globs: **/*.rs
+alwaysApply: false
+---
+
+# Rust Backend Standards
+
+- Use idiomatic Rust module boundaries (`mod`, `pub(crate)`) to keep internal APIs narrow
+- Keep handlers thin and delegate domain logic to service/domain modules
+- Model domain errors with typed enums and map them explicitly to HTTP responses
+- Avoid panics in request paths; return typed errors (`Result<T, E>`) with contextual diagnostics
+- Keep protocol-relevant identifiers strongly typed (`ActionId`, `SeqNo`, authority/role IDs)
+- Use `u64` for sequence numbers and preserve deterministic hashing/serialization behavior
+- Keep persistence access in repository/data-access layers and avoid SQL leakage into handlers
+- Prefer `serde`-typed request/response models with explicit validation steps at boundaries
+- Add unit tests for domain invariants and integration tests for Axum routes/auth flows

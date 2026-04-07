@@ -1,0 +1,38 @@
+---
+description: Rust backend API, auth, and coordination-layer conventions
+globs: **/backend/*.{rs}
+alwaysApply: false
+---
+
+# Rust Backend Conventions
+
+## Architecture Boundaries
+
+- Treat the backend as an offchain coordination service only (proposal creation, signature collection, and lifecycle tracking)
+- Do not re-implement or override canonical protocol validity rules enforced by the ASM/SPS-65 logic
+- Allow only hygiene checks server-side (malformed input, duplicate signatures, structural consistency)
+- Keep handlers thin and place domain logic in dedicated modules/services
+- Keep role/authority concerns isolated (Alpen Admin, Strata Admin, Sequencer Manager, Security Council, Payout Admin)
+
+## API and Auth
+
+- Build HTTP APIs with Axum patterns: typed extractors, shared app state, and explicit error-to-response mapping
+- Require authentication for every read/write endpoint that touches multisig state
+- Use nonce + expiry bounded sessions and bind each session to exactly one multisig authority
+- Verify signer authorization against the canonical signer set derived from current onchain ASM state
+- Ensure non-signers cannot infer pending proposal existence through status codes, timing, or payload differences
+
+## Data and Lifecycle
+
+- Model proposal identity as deterministic and idempotent (`ActionId = hash(MultisigAction, SeqNo)`)
+- Keep sequence numbers as `u64` and preserve protocol behavior that allows skipped sequence values
+- Enforce duplicate prevention for identical `(MultisigAction, SeqNo)` submissions
+- Track explicit lifecycle states required by product flows (Pending, Approved, Enacted, Canceled, Expired, and payout-specific states)
+- Preserve offline survivability: backend downtime must not block signers from manually aggregating signatures and broadcasting transactions
+
+## Testing and Reliability
+
+- Add unit tests for authority isolation, duplicate prevention, and lifecycle transitions
+- Add integration tests for auth/session flows and multisig-scoped access control
+- Prefer deterministic serialization/hash fixtures for protocol payload compatibility checks
+- Keep observability structured (request IDs, authority scope, action IDs) without logging sensitive signing material
