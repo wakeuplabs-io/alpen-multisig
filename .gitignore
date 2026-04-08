@@ -1,3 +1,10 @@
 /orchestator-be/target/
 /desktop-app/node_modules/
 /desktop-app/src-tauri/target
+
+# Rust build artifacts
+target/
+
+# OS files
+.DS_Store
+Thumbs.db
