@@ -147,7 +147,11 @@ cd desktop-app && npm run build
    - Summary of changes
    - Test plan (what tests were added and what they cover)
 
-4. Show the PR link to the user.
+4. Add reviewer:
+   ```bash
+   gh pr edit <pr-number> --add-reviewer juandahl
+   ```
+5. Show the PR link to the user.
 
 ---
 
