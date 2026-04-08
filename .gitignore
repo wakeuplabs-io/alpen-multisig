@@ -1,3 +1,3 @@
-/backend/target/
-/frontend/node_modules/
-/frontend/src-tauri/target
+/orchestator-be/target/
+/desktop-app/node_modules/
+/desktop-app/src-tauri/target

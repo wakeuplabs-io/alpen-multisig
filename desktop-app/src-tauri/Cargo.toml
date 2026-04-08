@@ -1,5 +1,5 @@
 [package]
-name = 'alpen-multisig-desktop'
+name = 'desktop-app'
 version = '0.1.0'
 description = 'Tauri hello world'
 authors = ['you']
