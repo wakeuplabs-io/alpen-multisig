@@ -1,64 +1,44 @@
-import { useState } from 'react'
-import type { Authority, Session, WalletAddress, ConnectedWallet } from '@/types'
-import WalletConnect from '@/screens/WalletConnect'
-import AddressSelect from '@/screens/AddressSelect'
-import MultisigSelect from '@/screens/MultisigSelect'
-import Dashboard from '@/screens/Dashboard'
-
-// Navigation flow per PRD:
-// wallet connect → address select → multisig select → nonce auth → dashboard
-type AppStep =
-  | { step: 'wallet-connect' }
-  | { step: 'address-select'; wallet: ConnectedWallet }
-  | { step: 'multisig-select'; wallet: ConnectedWallet; address: WalletAddress }
-  | { step: 'authenticating'; wallet: ConnectedWallet; address: WalletAddress; authority: Authority }
-  | { step: 'dashboard'; session: Session }
+import { FormEvent, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export default function App() {
-  const [nav, setNav] = useState<AppStep>({ step: 'wallet-connect' })
+  const [name, setName] = useState('')
+  const [message, setMessage] = useState('Hello from React')
 
-  // TODO: replace stubs with real wallet/auth integration
-  if (nav.step === 'wallet-connect') {
-    return (
-      <WalletConnect
-        onConnected={() =>
-          // Stub: in real flow, wallet is passed from useWallet
-          setNav({ step: 'address-select', wallet: { deviceName: 'Ledger', addresses: [] } })
-        }
-      />
-    )
+  const handleGreet = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const greeting = await invoke<string>('greet', { name })
+    setMessage(greeting)
   }
 
-  if (nav.step === 'address-select') {
-    return (
-      <AddressSelect
-        wallet={nav.wallet}
-        onSelected={(address) =>
-          setNav({ step: 'multisig-select', wallet: nav.wallet, address })
-        }
-      />
-    )
-  }
+  return (
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        padding: '2rem',
+      }}
+    >
+      <section style={{ width: '100%', maxWidth: 420 }}>
+        <h1 style={{ marginBottom: '0.5rem' }}>React + Tauri + Rust</h1>
+        <p style={{ marginTop: 0, color: '#666' }}>Hello world example</p>
 
-  if (nav.step === 'multisig-select') {
-    return (
-      <MultisigSelect
-        selectedAddress={nav.address}
-        onSelected={(authority) =>
-          setNav({ step: 'authenticating', wallet: nav.wallet, address: nav.address, authority })
-        }
-      />
-    )
-  }
+        <form onSubmit={handleGreet} style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder='Enter your name'
+            style={{ padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid #ccc' }}
+          />
+          <button type='submit' style={{ padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid #222' }}>
+            Say hello from Rust
+          </button>
+        </form>
 
-  if (nav.step === 'authenticating') {
-    // TODO: trigger nonce auth flow, then transition to dashboard
-    return <p>Authenticating…</p>
-  }
-
-  if (nav.step === 'dashboard') {
-    return <Dashboard session={nav.session} />
-  }
-
-  return null
+        <p style={{ marginTop: '1rem' }}>{message}</p>
+      </section>
+    </main>
+  )
 }
