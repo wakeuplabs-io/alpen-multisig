@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[allow(dead_code)]
+mod signing;
+
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -52,11 +55,6 @@ struct CreateSessionPayload {
 /// Step 1 of auth: fetch a nonce challenge from the backend.
 /// The nonce is returned to React so the hardware wallet (Trezor/Ledger JS SDK)
 /// can sign it before calling create_session.
-#[tauri::command]
-fn greet(name: String) -> String {
-	format!("Hello, {}! Greetings from Rust.", name)
-}
-
 #[tauri::command]
 async fn get_challenge(
 	state: State<'_, AppState>,
@@ -179,7 +177,6 @@ fn main() {
 			backend_url,
 		})
 		.invoke_handler(tauri::generate_handler![
-			greet,
 			get_challenge,
 			create_session,
 			delete_session,
