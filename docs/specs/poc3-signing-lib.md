@@ -28,11 +28,13 @@ Prove that the desktop app can use Alpen crates directly to compute SPS-65 sigha
 
 | Type | Function | Exposed as Tauri command? |
 |------|----------|--------------------------|
-| **Production** | `compute_sighash(seqno, action)` | Yes |
-| **Production** | `sign_sighash(secret_key_hex, sighash_hex)` | Yes |
-| **Production** | `verify_threshold(public_keys_hex, threshold, signatures_hex, sighash_hex)` | Yes |
-| **Test helper** | `generate_demo_keys(num_signers, threshold)` | No — `#[cfg(test)]` only |
+| **Production** | `compute_sighash(seqno, action_hex)` | No — plain Rust module |
+| **Production** | `sign_sighash(secret_key_hex, sighash_hex)` | No — plain Rust module |
+| **Production** | `verify_threshold(public_keys_hex, threshold, signatures_hex, sighash_hex)` | No — plain Rust module |
+| **Test helper** | `generate_demo_keys(num_signers)` | No — `#[cfg(test)]` only |
 | **Test helper** | `build_demo_action()` | No — `#[cfg(test)]` only |
+
+Note: The signing module is a plain Rust library, not coupled to Tauri. It can be consumed by Tauri commands, CLI tools, or other crates in the future.
 
 ### Production functions
 

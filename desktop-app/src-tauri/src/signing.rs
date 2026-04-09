@@ -2,28 +2,27 @@ use std::num::NonZero;
 
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
 use borsh::BorshDeserialize;
-use serde::{Deserialize, Serialize};
 use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfig;
 
 // ---------------------------------------------------------------------------
-// Serializable types for Tauri IPC
+// Types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct SighashResult {
     pub sighash_hex: String,
     pub seqno: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct SignatureResult {
     pub public_key_hex: String,
     pub signature_hex: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct VerifyResult {
     pub valid: bool,
     pub signatures_verified: u32,
@@ -31,14 +30,13 @@ pub struct VerifyResult {
 }
 
 // ---------------------------------------------------------------------------
-// Production Tauri commands
+// Signing operations
 // ---------------------------------------------------------------------------
 
 /// Compute the SPS-65 tagged sighash for a given action and sequence number.
 /// The action is passed as Borsh-serialized hex (MultisigAction uses Borsh, not serde).
-#[tauri::command]
-pub fn compute_sighash(seqno: u64, action_hex: String) -> Result<SighashResult, String> {
-    let action_bytes = hex::decode(&action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
+pub fn compute_sighash(seqno: u64, action_hex: &str) -> Result<SighashResult, String> {
+    let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::try_from_slice(&action_bytes)
         .map_err(|e| format!("invalid borsh-encoded action: {e}"))?;
     let sighash = action.compute_sighash(seqno);
@@ -50,16 +48,12 @@ pub fn compute_sighash(seqno: u64, action_hex: String) -> Result<SighashResult, 
 }
 
 /// Sign a sighash with an ECDSA private key. Returns the signature and corresponding public key.
-#[tauri::command]
-pub fn sign_sighash(
-    secret_key_hex: String,
-    sighash_hex: String,
-) -> Result<SignatureResult, String> {
+pub fn sign_sighash(secret_key_hex: &str, sighash_hex: &str) -> Result<SignatureResult, String> {
     let sk_bytes =
-        hex::decode(&secret_key_hex).map_err(|e| format!("invalid secret key hex: {e}"))?;
+        hex::decode(secret_key_hex).map_err(|e| format!("invalid secret key hex: {e}"))?;
     let sk = SecretKey::from_slice(&sk_bytes).map_err(|e| format!("invalid secret key: {e}"))?;
 
-    let hash_bytes = hex::decode(&sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
+    let hash_bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
     let msg = Message::from_digest_slice(&hash_bytes)
         .map_err(|e| format!("invalid sighash (must be 32 bytes): {e}"))?;
 
@@ -73,14 +67,13 @@ pub fn sign_sighash(
 }
 
 /// Verify ECDSA signatures against a threshold signer configuration.
-#[tauri::command]
 pub fn verify_threshold(
-    public_keys_hex: Vec<String>,
+    public_keys_hex: &[String],
     threshold: u32,
-    signatures_hex: Vec<String>,
-    sighash_hex: String,
+    signatures_hex: &[String],
+    sighash_hex: &str,
 ) -> Result<VerifyResult, String> {
-    let hash_bytes = hex::decode(&sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
+    let hash_bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
     let msg =
         Message::from_digest_slice(&hash_bytes).map_err(|e| format!("invalid sighash: {e}"))?;
 
@@ -101,12 +94,12 @@ pub fn verify_threshold(
 
     // Verify each signature against the signer set
     let mut valid_count: u32 = 0;
-    for sig_hex in &signatures_hex {
+    for sig_hex in signatures_hex {
         let sig_bytes = hex::decode(sig_hex).map_err(|e| format!("invalid signature hex: {e}"))?;
         let sig =
             Signature::from_compact(&sig_bytes).map_err(|e| format!("invalid signature: {e}"))?;
 
-        for pk_hex in &public_keys_hex {
+        for pk_hex in public_keys_hex {
             let pk_bytes =
                 hex::decode(pk_hex).map_err(|e| format!("invalid public key hex: {e}"))?;
             let pk =
@@ -139,7 +132,7 @@ mod tests {
     use strata_asm_txs_admin::actions::UpdateAction;
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
-    // -- Test helpers (not production code) ----------------------------------
+    // -- Test helpers --------------------------------------------------------
 
     struct DemoKeypair {
         secret_key_hex: String,
@@ -173,30 +166,29 @@ mod tests {
     }
 
     fn demo_action_hex() -> String {
-        let action = build_demo_action();
-        hex::encode(borsh::to_vec(&action).expect("action borsh-serializes"))
+        hex::encode(borsh::to_vec(&build_demo_action()).expect("action borsh-serializes"))
     }
 
     // -- compute_sighash tests -----------------------------------------------
 
     #[test]
     fn test_compute_sighash_returns_valid_32_byte_hash() {
-        let result = compute_sighash(1, demo_action_hex()).expect("should succeed");
+        let result = compute_sighash(1, &demo_action_hex()).expect("should succeed");
         assert_eq!(result.sighash_hex.len(), 64, "32 bytes = 64 hex chars");
         assert_eq!(result.seqno, 1);
     }
 
     #[test]
     fn test_compute_sighash_deterministic() {
-        let h1 = compute_sighash(1, demo_action_hex()).expect("should succeed");
-        let h2 = compute_sighash(1, demo_action_hex()).expect("should succeed");
+        let h1 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
+        let h2 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
         assert_eq!(h1.sighash_hex, h2.sighash_hex);
     }
 
     #[test]
     fn test_compute_sighash_different_seqno() {
-        let h1 = compute_sighash(1, demo_action_hex()).expect("should succeed");
-        let h2 = compute_sighash(2, demo_action_hex()).expect("should succeed");
+        let h1 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
+        let h2 = compute_sighash(2, &demo_action_hex()).expect("should succeed");
         assert_ne!(h1.sighash_hex, h2.sighash_hex);
     }
 
@@ -205,9 +197,9 @@ mod tests {
     #[test]
     fn test_sign_sighash_success() {
         let keys = generate_demo_keys(1);
-        let sighash = compute_sighash(1, demo_action_hex()).expect("sighash ok");
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
-        let result = sign_sighash(keys[0].secret_key_hex.clone(), sighash.sighash_hex)
+        let result = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex)
             .expect("signing should succeed");
         assert!(!result.signature_hex.is_empty());
         assert!(!result.public_key_hex.is_empty());
@@ -215,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_sign_sighash_invalid_secret_key() {
-        let result = sign_sighash("not_valid_hex".to_string(), "aa".repeat(32));
+        let result = sign_sighash("not_valid_hex", &"aa".repeat(32));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid secret key"));
     }
@@ -223,7 +215,7 @@ mod tests {
     #[test]
     fn test_sign_sighash_invalid_sighash_length() {
         let keys = generate_demo_keys(1);
-        let result = sign_sighash(keys[0].secret_key_hex.clone(), "tooshort".to_string());
+        let result = sign_sighash(&keys[0].secret_key_hex, "tooshort");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid sighash"));
     }
@@ -233,19 +225,17 @@ mod tests {
     #[test]
     fn test_verify_threshold_full_flow_2_of_3() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, demo_action_hex()).expect("sighash ok");
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
-        let sig0 = sign_sighash(keys[0].secret_key_hex.clone(), sighash.sighash_hex.clone())
-            .expect("sign ok");
-        let sig2 = sign_sighash(keys[2].secret_key_hex.clone(), sighash.sighash_hex.clone())
-            .expect("sign ok");
+        let sig0 = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
+        let sig2 = sign_sighash(&keys[2].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
 
         let pub_keys: Vec<String> = keys.iter().map(|k| k.public_key_hex.clone()).collect();
         let result = verify_threshold(
-            pub_keys,
+            &pub_keys,
             2,
-            vec![sig0.signature_hex, sig2.signature_hex],
-            sighash.sighash_hex,
+            &[sig0.signature_hex, sig2.signature_hex],
+            &sighash.sighash_hex,
         )
         .expect("verify ok");
 
@@ -257,13 +247,12 @@ mod tests {
     #[test]
     fn test_verify_threshold_below_threshold() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, demo_action_hex()).expect("sighash ok");
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
-        let sig0 = sign_sighash(keys[0].secret_key_hex.clone(), sighash.sighash_hex.clone())
-            .expect("sign ok");
+        let sig0 = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
 
         let pub_keys: Vec<String> = keys.iter().map(|k| k.public_key_hex.clone()).collect();
-        let result = verify_threshold(pub_keys, 2, vec![sig0.signature_hex], sighash.sighash_hex)
+        let result = verify_threshold(&pub_keys, 2, &[sig0.signature_hex], &sighash.sighash_hex)
             .expect("verify ok");
 
         assert!(!result.valid);
@@ -273,10 +262,10 @@ mod tests {
     #[test]
     fn test_verify_threshold_empty_signatures() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, demo_action_hex()).expect("sighash ok");
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
         let pub_keys: Vec<String> = keys.iter().map(|k| k.public_key_hex.clone()).collect();
-        let result = verify_threshold(pub_keys, 2, vec![], sighash.sighash_hex).expect("verify ok");
+        let result = verify_threshold(&pub_keys, 2, &[], &sighash.sighash_hex).expect("verify ok");
 
         assert!(!result.valid);
         assert_eq!(result.signatures_verified, 0);
@@ -285,14 +274,13 @@ mod tests {
     #[test]
     fn test_verify_threshold_invalid_signature() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, demo_action_hex()).expect("sighash ok");
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
-        // Fabricate a syntactically valid but semantically wrong signature (64 zero bytes)
         let fake_sig = "00".repeat(64);
 
         let pub_keys: Vec<String> = keys.iter().map(|k| k.public_key_hex.clone()).collect();
         let result =
-            verify_threshold(pub_keys, 2, vec![fake_sig], sighash.sighash_hex).expect("verify ok");
+            verify_threshold(&pub_keys, 2, &[fake_sig], &sighash.sighash_hex).expect("verify ok");
 
         assert!(!result.valid);
         assert_eq!(result.signatures_verified, 0);

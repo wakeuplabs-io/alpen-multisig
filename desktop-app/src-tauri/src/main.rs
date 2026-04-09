@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[allow(dead_code)]
 mod signing;
 
 #[tauri::command]
@@ -9,12 +10,7 @@ fn greet(name: &str) -> String {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            greet,
-            signing::compute_sighash,
-            signing::sign_sighash,
-            signing::verify_threshold,
-        ])
+        .invoke_handler(tauri::generate_handler![greet])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
 }
