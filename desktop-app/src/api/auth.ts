@@ -1,33 +1,39 @@
-import { api } from './client'
-import type { ApiResult, AuthChallenge, Session } from '@/types'
+import { tauriCall } from './tauri-bridge'
+import type { ApiResult, AuthChallenge, SessionInfo } from '@/types'
+
+// Auth commands map 1:1 to Tauri commands in main.rs.
+// No token parameters — the session token is managed by Rust and never touches JS.
 
 export async function getChallenge(
-  signerPubkey: string,
-  authority: string
+	signerPubkey: string,
+	authority: string
 ): Promise<ApiResult<AuthChallenge>> {
-  return api.get(`/auth/challenge?signer_pubkey=${signerPubkey}&authority=${authority}`)
+	return tauriCall<AuthChallenge>('get_challenge', { pubkey: signerPubkey, authority })
 }
 
 export type CreateSessionPayload = {
-  ephemeralPubkey: string
-  nonce: string
-  attestationSignature: string
-  signerPubkey: string
-  authority: string
+	ephemeralPubkey: string
+	nonce: string
+	attestationSignature: string
+	signerPubkey: string
+	authority: string
 }
 
+// Returns SessionInfo (no token) — the bearer token stays in Rust's AppState.
 export async function createSession(
-  payload: CreateSessionPayload
-): Promise<ApiResult<Session>> {
-  return api.post('/auth/session', {
-    ephemeral_pubkey: payload.ephemeralPubkey,
-    nonce: payload.nonce,
-    attestation_signature: payload.attestationSignature,
-    signer_pubkey: payload.signerPubkey,
-    authority: payload.authority,
-  })
+	payload: CreateSessionPayload
+): Promise<ApiResult<SessionInfo>> {
+	return tauriCall<SessionInfo>('create_session', {
+		payload: {
+			ephemeral_pubkey: payload.ephemeralPubkey,
+			nonce: payload.nonce,
+			attestation_signature: payload.attestationSignature,
+			signer_pubkey: payload.signerPubkey,
+			authority: payload.authority,
+		},
+	})
 }
 
-export async function deleteSession(token: string): Promise<ApiResult<void>> {
-  return api.delete('/auth/session', token)
+export async function deleteSession(): Promise<ApiResult<void>> {
+	return tauriCall<void>('delete_session')
 }

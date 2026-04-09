@@ -60,6 +60,9 @@ export type Session = {
   expiresAt: string
 }
 
+// Returned by the Tauri create_session command — sessionId stays in Rust, never in JS.
+export type SessionInfo = Omit<Session, 'sessionId'>
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export type AuthChallenge = {
