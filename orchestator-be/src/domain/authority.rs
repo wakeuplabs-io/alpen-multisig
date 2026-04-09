@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Authority {
-	AlpenAdmin,
-	StrataAdmin,
-	SequencerManager,
-	SecurityCouncil,
-	PayoutAdmin,
+    AlpenAdmin,
+    StrataAdmin,
+    SequencerManager,
+    SecurityCouncil,
+    PayoutAdmin,
 }
 
 /// A public key identifying a signer within an authority's signer set.
@@ -18,7 +18,7 @@ pub struct SignerPubkey(pub String);
 /// The canonical signer set for a given authority, derived from onchain ASM state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignerSet {
-	pub authority: Authority,
-	pub signers: Vec<SignerPubkey>,
-	pub threshold: u32,
+    pub authority: Authority,
+    pub signers: Vec<SignerPubkey>,
+    pub threshold: u32,
 }

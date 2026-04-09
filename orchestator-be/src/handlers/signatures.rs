@@ -1,35 +1,43 @@
-use axum::{Json, extract::{Path, State}};
+use crate::{application, domain::proposal::ProposalSignature, error::Result, state::AppState};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use serde::{Deserialize, Serialize};
-use crate::{domain::proposal::ProposalSignature, error::Result, state::AppState};
 
 #[derive(Debug, Deserialize)]
 pub struct SubmitSignatureRequest {
-	pub signer_pubkey: String,
-	pub signature: String,
+    pub signer_pubkey: String,
+    pub signature: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct SubmitSignatureResponse {
-	pub signature_id: String,
-	pub quorum_reached: bool,
+    pub signature_id: String,
+    pub quorum_reached: bool,
 }
 
 pub async fn submit_signature(
-	State(_state): State<AppState>,
-	Path(_action_id): Path<String>,
-	Json(_body): Json<SubmitSignatureRequest>,
+    State(_state): State<AppState>,
+    Path(action_id): Path<String>,
+    Json(body): Json<SubmitSignatureRequest>,
 ) -> Result<Json<SubmitSignatureResponse>> {
-	todo!("validate signature, prevent duplicates, check quorum")
+    let result = application::submit_signature(&action_id, &body.signer_pubkey, &body.signature)?;
+    Ok(Json(SubmitSignatureResponse {
+        signature_id: result.signature_id,
+        quorum_reached: result.quorum_reached,
+    }))
 }
 
 #[derive(Debug, Serialize)]
 pub struct SignatureListResponse {
-	pub signatures: Vec<ProposalSignature>,
+    pub signatures: Vec<ProposalSignature>,
 }
 
 pub async fn list_signatures(
-	State(_state): State<AppState>,
-	Path(_action_id): Path<String>,
+    State(_state): State<AppState>,
+    Path(action_id): Path<String>,
 ) -> Result<Json<SignatureListResponse>> {
-	todo!("list signatures for proposal, scoped to session authority")
+    let signatures = application::list_signatures(&action_id)?;
+    Ok(Json(SignatureListResponse { signatures }))
 }

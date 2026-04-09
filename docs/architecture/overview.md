@@ -84,6 +84,7 @@ orchestator-be/src/
 │   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
 │   ├── session.rs       # Ephemeral session model, AuthChallenge
 │   └── proposal.rs      # Proposal, ProposalSignature, QuorumStatus, ActionId, SeqNo
+├── application.rs       # Business logic (auth, proposals, signatures) — see ADR-002
 ├── handlers/
 │   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session
 │   ├── proposals.rs     # GET/POST /proposals, GET /proposals/:action_id
@@ -91,6 +92,8 @@ orchestator-be/src/
 └── middleware/
     └── auth.rs          # AuthenticatedSession extractor (Bearer token)
 ```
+
+**Layering:** Handlers are thin (parse request → call application → format response). Business logic lives in `application.rs`, which uses `domain/` types directly. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
 
 **API Surface (`/api/v1`):**
 
@@ -185,9 +188,14 @@ Sessions are nonce + expiry bounded and scoped to exactly one authority. The bea
 
 ```
 desktop-app/src-tauri/src/
-├── main.rs              # Tauri setup, AppState (session token in Mutex), IPC commands
+├── main.rs              # Tauri setup, registers commands
+├── state.rs             # AppState (session token in Mutex, backend_url)
+├── commands.rs          # #[tauri::command] functions (thin, delegate to application)
+├── application.rs       # Business logic: backend calls, session management — see ADR-002
 └── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
 ```
+
+**Layering:** Commands are thin (extract State → call application → map errors). Business logic lives in `application.rs`. `signing.rs` is standalone and decoupled from both layers.
 
 **Implemented Tauri commands:**
 - `get_challenge` — Proxies `GET /auth/challenge` to backend
