@@ -13,5 +13,16 @@ tauri = { version = '2', features = [] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Alpen crates (see docs/architecture/adrs/001-alpen-crate-dependencies.md)
+strata-asm-txs-admin = { workspace = true }
+strata-crypto = { workspace = true }
+strata-asm-params = { workspace = true }
+
+# Crypto and utilities
+bitcoin = { workspace = true }
+secp256k1 = { workspace = true }
+rand = "0.8"
+hex = "0.4"
+
 [features]
 custom-protocol = ['tauri/custom-protocol']
