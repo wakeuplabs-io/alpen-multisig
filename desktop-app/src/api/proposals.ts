@@ -1,45 +1,48 @@
-import { api } from './client'
+import { tauriCall } from './tauri-bridge'
 import type { ApiResult, Proposal, ProposalSignature, ProposalStatus } from '@/types'
 
+// Proposal commands map 1:1 to Tauri commands in main.rs.
+// No token parameters — the session token is injected by Rust automatically.
+
+// ─── Example (implemented) ────────────────────────────────────────────────────
+
 export async function listProposals(
-  token: string,
-  status?: ProposalStatus
+	status?: ProposalStatus
 ): Promise<ApiResult<{ proposals: Proposal[] }>> {
-  const query = status ? `?status=${status}` : ''
-  return api.get(`/proposals${query}`, token)
+	return tauriCall('list_proposals', { status })
 }
 
+// ─── TODO: remaining commands follow the same pattern ─────────────────────────
+// Each one calls tauriCall('<command_name>', { ...args }) and the corresponding
+// Tauri command in main.rs reads the session token from AppState internally.
+
 export async function getProposal(
-  actionId: string,
-  token: string
+	_actionId: string
 ): Promise<ApiResult<Proposal>> {
-  return api.get(`/proposals/${actionId}`, token)
+	throw new Error('TODO: invoke get_proposal Tauri command')
 }
 
 export type CreateProposalPayload = {
-  seqNo: number
-  actionPayload: unknown
+	seqNo: number
+	actionPayload: unknown
 }
 
 export async function createProposal(
-  payload: CreateProposalPayload,
-  token: string
+	_payload: CreateProposalPayload
 ): Promise<ApiResult<{ actionId: string; proposal: Proposal }>> {
-  return api.post('/proposals', { seq_no: payload.seqNo, action_payload: payload.actionPayload }, token)
+	throw new Error('TODO: invoke create_proposal Tauri command')
 }
 
 export async function submitSignature(
-  actionId: string,
-  signerPubkey: string,
-  signature: string,
-  token: string
+	_actionId: string,
+	_signerPubkey: string,
+	_signature: string
 ): Promise<ApiResult<{ signatureId: string; quorumReached: boolean }>> {
-  return api.post(`/proposals/${actionId}/signatures`, { signer_pubkey: signerPubkey, signature }, token)
+	throw new Error('TODO: invoke submit_signature Tauri command')
 }
 
 export async function listSignatures(
-  actionId: string,
-  token: string
+	_actionId: string
 ): Promise<ApiResult<{ signatures: ProposalSignature[] }>> {
-  return api.get(`/proposals/${actionId}/signatures`, token)
+	throw new Error('TODO: invoke list_signatures Tauri command')
 }
