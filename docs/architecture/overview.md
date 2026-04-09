@@ -7,42 +7,50 @@ This document defines the baseline architecture for the Alpen Multisig applicati
 Alpen Multisig is a desktop application that enables authorized signers to manage on-chain governance of the Strata bridge and Alpen rollup. The system coordinates signature collection off-chain, constructs Bitcoin transactions embedding governance payloads (SPS-50/51/65), and broadcasts them for the ASM (Administration State Machine) to process deterministically.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Desktop App (Tauri)                      │
-│  ┌───────────────────────────┐  ┌────────────────────────────┐  │
-│  │   React Frontend (UI)     │  │   Tauri Rust Shell         │  │
-│  │   - Wallet connect        │  │   - HWI subprocess mgmt    │  │
-│  │   - Auth flow             │  │   - Signing bridge         │  │
-│  │   - Proposal management   │  │   - IPC commands           │  │
-│  │   - Signature collection  │  │                            │  │
-│  │   - Tx broadcast          │  │                            │  │
-│  └───────────┬───────────────┘  └────────────┬───────────────┘  │
-│              │ HTTP                           │ Tauri IPC        │
-└──────────────┼───────────────────────────────┼──────────────────┘
-               │                               │
-               ▼                               ▼
-┌──────────────────────────┐    ┌──────────────────────────────┐
-│   Orchestrator Backend   │    │   Hardware Wallet (HWI)      │
-│   (Axum + Postgres)      │    │   - Taproot signing          │
-│   - Session auth         │    │   - m/86'/0'/73'/0/n         │
-│   - Proposal CRUD        │    │   - BIP-137 ECDSA            │
-│   - Signature aggregation│    └──────────────────────────────┘
-│   - Lifecycle tracking   │
-└──────────────────────────┘
-               │
-               │ (signers broadcast independently)
-               ▼
-┌──────────────────────────────────────────────────────────────┐
-│                      Bitcoin (L1)                             │
-│   OP_RETURN (SPS-50) + Witness Envelope (SPS-51)             │
-│   ┌────────────────────────────────────────────────────────┐ │
-│   │ Strata Node → ASM (Administration State Machine)       │ │
-│   │   - Parses admin txs from Bitcoin blocks               │ │
-│   │   - Verifies threshold signatures (SPS-65)             │ │
-│   │   - Manages queued updates + confirmation depth        │ │
-│   │   - Enacts governance changes deterministically        │ │
-│   └────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Desktop App (Tauri)                          │
+│                                                                      │
+│  ┌───────────────────────┐  Tauri IPC  ┌──────────────────────────┐  │
+│  │  React Frontend (UI)  │────────────>│  Tauri Rust Shell        │  │
+│  │  - Auth flow          │  invoke()   │  - AppState (token mgmt) │  │
+│  │  - Proposal mgmt      │<────────────│  - Signing library       │  │
+│  │  - Signature collect.  │             │  - Backend proxy (reqwest│) │
+│  │  - Wallet connect     │             │  - HWI subprocess (planned│) │
+│  └───────────────────────┘             └─────────┬────────────────┘  │
+│                                                   │                   │
+│   Token NEVER leaves Rust — React sees only       │ HTTP (reqwest)    │
+│   session metadata (authority, pubkey, expiry)     │ Bearer token      │
+└───────────────────────────────────────────────────┼──────────────────┘
+                                                    │
+                                                    ▼
+                                     ┌──────────────────────────┐
+                                     │   Orchestrator Backend   │
+                                     │   (Axum + Postgres)      │
+                                     │   - Session auth         │
+                                     │   - Proposal CRUD        │
+                                     │   - Signature aggregation│
+                                     │   - Lifecycle tracking   │
+                                     └──────────────────────────┘
+                                                    │
+                                                    │ (signers broadcast
+                                                    │  independently)
+                                                    ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                           Bitcoin (L1)                                │
+│   OP_RETURN (SPS-50) + Witness Envelope (SPS-51)                     │
+│   ┌────────────────────────────────────────────────────────────────┐ │
+│   │ Strata Node → ASM (Administration State Machine)               │ │
+│   │   - Parses admin txs from Bitcoin blocks                       │ │
+│   │   - Verifies threshold signatures (SPS-65)                     │ │
+│   │   - Manages queued updates + confirmation depth                │ │
+│   │   - Enacts governance changes deterministically                │ │
+│   └────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
+
+Hardware Wallet (HWI) — planned, not yet integrated
+  - Taproot signing (m/86'/0'/73'/0/n)
+  - BIP-137 ECDSA attestation for auth
+  - Will be managed as subprocess by Tauri Rust shell
 ```
 
 ## Governance Model — Five Authorities
@@ -101,32 +109,42 @@ orchestator-be/src/
 **Authentication Model:**
 
 ```
-Signer (canonical key)                    Backend
-       │                                     │
-       │  1. GET /auth/challenge             │
-       │────────────────────────────────────>│
-       │     { nonce, expires_at }           │
-       │<────────────────────────────────────│
-       │                                     │
-       │  2. Sign attestation with HW wallet │
-       │     (binds: ephemeral_key +         │
-       │      authority + nonce + expiry)    │
-       │                                     │
-       │  3. POST /auth/session              │
-       │     { ephemeral_pubkey, nonce,      │
-       │       attestation_signature,        │
-       │       signer_pubkey, authority }    │
-       │────────────────────────────────────>│
-       │     { session_id, expires_at }      │
-       │<────────────────────────────────────│
-       │                                     │
-       │  4. Subsequent requests use         │
-       │     Bearer <session_token>          │
-       │     signed with ephemeral key       │
-       │────────────────────────────────────>│
+React (WebView)              Tauri Rust Shell              Backend
+      │                            │                          │
+      │ 1. invoke('get_challenge') │                          │
+      │───────────────────────────>│  GET /auth/challenge     │
+      │                            │─────────────────────────>│
+      │                            │  { nonce, expires_at }   │
+      │  { nonce, expires_at }     │<─────────────────────────│
+      │<───────────────────────────│                          │
+      │                            │                          │
+      │ 2. Sign attestation with   │                          │
+      │    HW wallet (binds:       │                          │
+      │    ephemeral_key +         │                          │
+      │    authority + nonce)      │                          │
+      │                            │                          │
+      │ 3. invoke('create_session')│                          │
+      │───────────────────────────>│  POST /auth/session      │
+      │                            │─────────────────────────>│
+      │                            │  { session_id, ... }     │
+      │                            │<─────────────────────────│
+      │                            │                          │
+      │                            │  Stores session_id in    │
+      │                            │  Mutex<Option<String>>   │
+      │                            │  (NEVER forwarded to JS) │
+      │                            │                          │
+      │  SessionInfo (no token)    │                          │
+      │  { pubkey, authority,      │                          │
+      │    expires_at }            │                          │
+      │<───────────────────────────│                          │
+      │                            │                          │
+      │ 4. invoke('list_proposals')│                          │
+      │───────────────────────────>│  GET /proposals          │
+      │                            │  + Bearer <token>        │
+      │                            │─────────────────────────>│
 ```
 
-Sessions are nonce + expiry bounded and scoped to exactly one authority.
+Sessions are nonce + expiry bounded and scoped to exactly one authority. The bearer token **never leaves the Rust process** — React only receives session metadata.
 
 **Data Identity:**
 
@@ -163,7 +181,24 @@ Sessions are nonce + expiry bounded and scoped to exactly one authority.
 
 ### 2. Desktop App (`desktop-app`)
 
-**Tauri Shell** (`src-tauri/`): Rust process managing HWI subprocess, IPC commands, and system-level operations.
+**Tauri Shell** (`src-tauri/`): Rust process managing IPC commands, signing operations, and system-level operations.
+
+```
+desktop-app/src-tauri/src/
+├── main.rs              # Tauri setup, AppState (session token in Mutex), IPC commands
+└── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
+```
+
+**Implemented Tauri commands:**
+- `get_challenge` — Proxies `GET /auth/challenge` to backend
+- `create_session` — Proxies `POST /auth/session`, stores token in Rust `Mutex<Option<String>>` (never exposed to frontend)
+- `delete_session` — Proxies `DELETE /auth/session` with Bearer token
+- `list_proposals` — Proxies `GET /proposals` with Bearer token injection
+
+**Signing library** (`signing.rs`): Production-ready, Tauri-decoupled functions with 13 tests:
+- `compute_sighash(seqno, action_hex)` — Borsh-decode action, compute SPS-65 tagged sighash
+- `sign_sighash(secret_key_hex, sighash_hex)` — ECDSA sign with secp256k1
+- `verify_threshold(public_keys_hex, threshold, signatures_hex, sighash_hex)` — Threshold signature verification via `strata-crypto`
 
 **React Frontend** (`src/`): UI layer for all signer interactions.
 
@@ -173,9 +208,10 @@ desktop-app/src/
 ├── App.tsx              # Root component (currently hello world stub)
 ├── types/index.ts       # Domain types (Authority, Proposal, Session, QuorumStatus, etc.)
 ├── api/
-│   ├── client.ts        # Typed fetch wrapper → ApiResult<T>
-│   ├── auth.ts          # Challenge/session API calls
-│   └── proposals.ts     # Proposal/signature API calls
+│   ├── client.ts        # Typed HTTP fetch wrapper (unused — kept for non-Tauri dev mode)
+│   ├── tauri-bridge.ts  # Generic Tauri IPC wrapper → ApiResult<T> (all API calls go through here)
+│   ├── auth.ts          # Challenge/session API calls (via Tauri commands)
+│   └── proposals.ts     # Proposal/signature API calls (via Tauri commands)
 └── hooks/
     ├── useAuth.ts       # Auth state machine (unauthenticated → authenticating → authenticated)
     ├── useWallet.ts     # Wallet connection state (disconnected → connecting → connected)
@@ -256,23 +292,29 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 
 | Layer | Stack |
 |-------|-------|
-| Backend | Rust, Axum 0.7, Tokio, Postgres (planned), `serde`, `tracing` |
-| Desktop Shell | Tauri 2, Rust |
-| Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6 |
-| Signing | ECDSA (secp256k1), HWI (Taproot, BIP-137), derivation `m/86'/0'/73'/0/n` |
-| Protocol | SPS-50/51/65, Borsh serialization, Alpen admin crate |
-| E2E Tests | Rust nightly, pinned Alpen/Strata crates |
+| Backend | Rust, Axum 0.7, Tokio, Postgres (planned), `serde`, `tracing`, `tower-http` |
+| Desktop Shell | Tauri 2, Rust, reqwest 0.12 (backend proxy), `strata-asm-txs-admin`, `strata-crypto` |
+| Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6, `@tauri-apps/api` |
+| Signing | ECDSA (secp256k1 0.29.1), Borsh-encoded `MultisigAction`, SPS-65 tagged sighash |
+| HW Wallet | Planned: HWI subprocess, Taproot (BIP-137), derivation `m/86'/0'/73'/0/n` |
+| Protocol | SPS-50/51/65, Borsh serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
+| E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
 
 ## Current State
 
 **Implemented:**
 - Domain types and API surface definition (backend + frontend)
-- Typed API client and hook state machines (frontend stubs)
+- Backend skeleton: Axum router, handlers (stubs), domain models, auth middleware extractor, error mapping
+- Tauri IPC layer: auth commands proxying to backend with session token stored securely in Rust (never exposed to JS)
+- Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 13 tests, using Alpen crates directly (`strata-asm-txs-admin`, `strata-crypto`, `secp256k1`)
+- Typed API client, Tauri bridge, and hook state machines (frontend)
 - E2E test covering full admin action flow (key gen → tx construction → signature verification)
-- Protocol documentation and POC findings
+- Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
+- Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec)
 
 **Pending implementation:**
-- Backend: persistence layer (Postgres), auth verification against ASM signer set, proposal lifecycle enforcement, session management
+- Backend: persistence layer (Postgres), handler implementations, auth verification against ASM signer set, proposal lifecycle enforcement
 - Desktop: HWI integration, wallet connection flow, proposal creation/signing UI, broadcast flow
-- Signing layer: consume Alpen admin crate for payload construction, Bitcoin tx building
+- Tauri: remaining proposal commands (create_proposal, submit_signature, get_proposal, list_signatures)
+- Bitcoin tx construction: SPS-50 OP_RETURN + SPS-51 witness envelope building (currently only in e2e-tests)
 - Payout flows: manual + automatic `block_payout` construction
