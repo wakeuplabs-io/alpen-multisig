@@ -11,7 +11,6 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             greet,
-            signing::generate_demo_keys,
             signing::compute_sighash,
             signing::sign_sighash,
             signing::verify_threshold,

@@ -17,7 +17,8 @@ You receive a description of what needs to be implemented. Follow this process p
 1. Read relevant documents in `docs/` (PRD, proposal, discovery, architecture)
 2. Read existing code related to the request
 3. Read applicable rules in `.claude/rules/`
-4. Identify which authorities, types, and protocol flows are involved
+4. Read `.claude/skills/rust-specialist/SKILL.md` — all Rust code must follow its standards
+5. Identify which authorities, types, and protocol flows are involved
 
 **Gate:** Do not proceed until scope and protocol constraints are clear.
 
@@ -40,14 +41,24 @@ Create a spec document at `docs/specs/<feature-slug>.md` with this format:
 <types, structs, functions, endpoints, components involved>
 <flow diagrams if applicable>
 
+### Production code vs. test helpers
+Clearly separate:
+- **Production functions**: reusable, exposed to consumers (Tauri commands, lib API, etc.)
+- **Test helpers**: utilities for test setup only (key generation, fixture builders, etc.)
+
+Test helpers must NOT be registered as Tauri commands or exposed in production APIs unless explicitly requested.
+
 ## Test Cases
 <exhaustive list of scenarios to test>
+Tests must target production functions only — not test helpers.
 - Happy path
 - Edge cases
 - Expected errors
 - Authority isolation (if applicable)
 - Offline fallback (if applicable)
 
+## Module structure
+Describe how code should be organized for reuse across crates (e.g., a shared lib that both desktop-app and e2e-tests can consume).
 ```
 
 Show the spec to the user and wait for confirmation before continuing. Ask: **"Does the spec look good? Any changes before implementation?"**
@@ -64,32 +75,24 @@ If the branch already exists, ask the user what to do.
 
 ---
 
-## Phase 4 — TDD: Tests first
+## Phase 4 + 5 — TDD: Incremental red-green cycles
 
-1. Write tests based on the spec's test cases
-   - Backend (Rust): unit tests in the same file (`#[cfg(test)] mod tests`) or in `tests/`
-   - Frontend (TypeScript): test files as `.test.ts` / `.test.tsx`
-2. Run the tests and **verify they fail** (red phase):
-   ```bash
-   cargo test -p orchestator-be
-   ```
-3. **Do NOT write implementation code yet**
+Do NOT write all tests at once and then implement everything. Work in small incremental cycles, one function at a time:
 
-**Gate:** All tests must exist and fail for the right reason (not due to meaningless compilation errors).
+### For each production function in the spec:
 
----
+1. **Red:** Write the test(s) for that single function
+   - Only test production functions, not test helpers
+   - Run tests — they must fail for the right reason
+2. **Green:** Write the minimum implementation to pass those tests
+   - Follow `.claude/skills/rust-specialist/SKILL.md` conventions
+   - Rust: `thiserror` for libs, `anyhow` for binaries, no `.unwrap()` in production, iterators over loops, `pub(crate)` by default
+3. **Verify:** Run tests — they must pass
+4. **Move to the next function**
 
-## Phase 5 — Implementation (Green phase)
+Repeat until all spec functions are implemented and tested.
 
-1. Implement the minimum code to make the tests pass
-2. Follow project conventions:
-   - Backend: thin handlers, logic in domain/, `thiserror` for libs, `anyhow` for binaries
-   - Frontend: function components, `use*` hooks, strict types, tabs, single quotes
-3. Run tests after each significant change:
-   ```bash
-   cargo test -p orchestator-be
-   ```
-4. Iterate until **all tests pass** (green phase)
+**Gate:** All tests pass. Each production function has corresponding tests.
 
 ---
 
@@ -100,11 +103,10 @@ If the branch already exists, ask the user what to do.
    - Functions that are too long (>40 lines)
    - Non-descriptive names
    - Types that could be stricter
+   - Test helpers mixed with production code — separate them
+   - Production code that should be extractable into a shared module/crate
 2. Refactor while keeping tests green
-3. Run tests again to confirm:
-   ```bash
-   cargo test -p orchestator-be
-   ```
+3. Run tests again to confirm
 
 ---
 
@@ -161,4 +163,6 @@ cd desktop-app && npm run build
 - **Spec is the contract:** Implementation must match the spec. If you discover the spec needs changes, update the spec first and notify the user
 - **Offline survivability:** If the feature touches the backend, ensure the system still works without it
 - **Signer safety:** Never expose private keys in UI, logs, or storage
-
+- **Production vs. test separation:** Test helpers (key generators, fixture builders, demo actions) must live in `#[cfg(test)]` blocks or dedicated test modules — never in production paths
+- **Rust standards:** All Rust code must follow `.claude/skills/rust-specialist/SKILL.md`
+- **Reusability:** When signing/crypto logic is shared across crates, extract it into a module that can be consumed by both desktop-app and e2e-tests

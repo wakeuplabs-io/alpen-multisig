@@ -20,6 +20,7 @@ strata-asm-params = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
+borsh = { workspace = true }
 secp256k1 = { workspace = true }
 rand = "0.8"
 hex = "0.4"
