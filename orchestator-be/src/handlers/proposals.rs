@@ -1,36 +1,22 @@
 use crate::{
-    application::proposals::{Proposal, QuorumStatus},
-    error::Result,
+    application::proposals::{self, ActionId, Proposal, ProposalSignature, ProposalStatus},
+    domain::authority::Authority,
+    error::{AppError, Result},
     state::AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
-pub struct ProposalListResponse {
-    pub proposals: Vec<ProposalSummary>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProposalSummary {
-    pub action_id: String,
-    pub seq_no: u64,
-    pub status: String,
-    pub quorum: QuorumStatus,
-    pub expires_at: String,
-}
-
-pub async fn list_proposals(State(_state): State<AppState>) -> Result<Json<ProposalListResponse>> {
-    todo!("wire to application::proposals::list_proposals with repository from state")
-}
+// ─── Request / Response types ───────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProposalRequest {
+    pub authority: Authority,
     pub seq_no: u64,
-    /// Hex-encoded MultisigAction payload.
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
@@ -42,16 +28,73 @@ pub struct CreateProposalResponse {
     pub proposal: Proposal,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListProposalsQuery {
+    pub status: Option<ProposalStatus>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProposalListResponse {
+    pub proposals: Vec<Proposal>,
+}
+
+// ─── Handlers ───────────────────────────────────────────────────────────────
+
 pub async fn create_proposal(
-    State(_state): State<AppState>,
-    Json(_body): Json<CreateProposalRequest>,
-) -> Result<Json<CreateProposalResponse>> {
-    todo!("wire to application::proposals::create_update_action with repository from state")
+    State(state): State<AppState>,
+    Json(body): Json<CreateProposalRequest>,
+) -> Result<(StatusCode, Json<CreateProposalResponse>)> {
+    let sig = ProposalSignature {
+        signer_pubkey: body.signer_pubkey,
+        signature_hex: body.signature_hex,
+    };
+
+    let mut repo = state
+        .repo
+        .write()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+
+    let proposal = proposals::create_update_action(
+        &mut *repo,
+        body.authority,
+        body.seq_no,
+        &body.action_hex,
+        &sig,
+    )?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateProposalResponse {
+            action_id: proposal.action_id.0.clone(),
+            proposal,
+        }),
+    ))
+}
+
+pub async fn list_proposals(
+    State(state): State<AppState>,
+    Query(query): Query<ListProposalsQuery>,
+) -> Result<Json<ProposalListResponse>> {
+    let repo = state
+        .repo
+        .read()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+
+    let proposals = proposals::list_proposals(&*repo, query.status);
+
+    Ok(Json(ProposalListResponse { proposals }))
 }
 
 pub async fn get_proposal(
-    State(_state): State<AppState>,
-    Path(_action_id): Path<String>,
+    State(state): State<AppState>,
+    Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    todo!("wire to application::proposals::get_update_action with repository from state")
+    let repo = state
+        .repo
+        .read()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+
+    let proposal = proposals::get_update_action(&*repo, &ActionId(action_id))?;
+
+    Ok(Json(proposal))
 }

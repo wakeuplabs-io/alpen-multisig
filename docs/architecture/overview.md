@@ -78,25 +78,24 @@ Each authority is an independent multisig with its own signer set, threshold, an
 orchestator-be/src/
 ├── main.rs              # Axum app setup, router, middleware stack
 ├── config.rs            # Env-based configuration (host, port)
-├── state.rs             # AppState (config + future DB pool)
+├── state.rs             # AppState (config + shared repo)
 ├── error.rs             # AppError → HTTP status mapping
 ├── domain/
 │   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
-│   ├── session.rs       # Ephemeral session model, AuthChallenge
-│   └── proposal.rs      # Proposal, ProposalSignature, QuorumStatus, ActionId, SeqNo
+│   └── session.rs       # Ephemeral session model, AuthChallenge
 ├── application/
-│   ├── mod.rs           # Re-exports + auth stubs (todo)
-│   ├── proposals.rs     # Business logic: create, approve, get, list proposals
+│   ├── mod.rs           # Auth stubs (todo)
+│   ├── proposals.rs     # Types + business logic: create, approve, get, list proposals
 │   └── repository.rs    # ProposalRepository trait + InMemoryProposalRepository
 ├── handlers/
-│   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session
-│   ├── proposals.rs     # GET/POST /proposals, GET /proposals/:action_id
-│   └── signatures.rs    # POST/GET /proposals/:action_id/signatures
+│   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session (todo stubs)
+│   ├── proposals.rs     # GET/POST /proposals, GET /proposals/:action_id — wired to application layer
+│   └── signatures.rs    # POST/GET /proposals/:action_id/signatures — wired to application layer
 └── middleware/
     └── auth.rs          # AuthenticatedSession extractor (Bearer token)
 ```
 
-**Layering:** Handlers are thin (parse request → call application → format response). Business logic lives in `application/proposals.rs`, with persistence abstracted behind `ProposalRepository` trait. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
+**Layering:** Handlers are thin (parse request → acquire repo lock → call application → format response). Business logic lives in `application/proposals.rs`, with persistence abstracted behind `ProposalRepository` trait. Shared state (`AppState`) holds the repo behind `Arc<RwLock<…>>`. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
 
 **API Surface (`/api/v1`):**
 
