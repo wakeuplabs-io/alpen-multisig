@@ -237,11 +237,14 @@ desktop-app/src-tauri/src/
 ├── main.rs              # Tauri setup, registers commands
 ├── state.rs             # AppState (session token in Mutex, backend_url)
 ├── commands.rs          # #[tauri::command] functions (thin, delegate to application)
-├── application.rs       # Business logic: backend calls, session management — see ADR-002
+├── application/
+│   ├── mod.rs               # Auth functions + submodule declarations
+│   ├── orchestrator_client.rs  # OrchestratorClient trait + HTTP impl + transport DTOs
+│   └── proposals.rs         # Application entry point: domain types + PRD-aligned API
 └── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
 ```
 
-**Layering:** Commands are thin (extract State → call application → map errors). Business logic lives in `application.rs`. `signing.rs` is standalone and decoupled from both layers.
+**Layering:** Commands are thin (extract State → call application → map errors). Business logic lives in `application/proposals.rs` — the entry point for all proposal operations (see [ADR-003](adrs/003-desktop-application-layer-api.md)). `signing.rs` is standalone and decoupled from both layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
 **Implemented Tauri commands:**
 - `get_challenge` — Proxies `GET /auth/challenge` to backend
