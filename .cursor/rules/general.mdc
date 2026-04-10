@@ -29,3 +29,9 @@ alwaysApply: true
 - Use strict equality (`===`) instead of loose equality (`==`)
 - Keep line length around 120 characters
 - Use descriptive boolean names (`isLoading`, `hasError`, `canSubmit`)
+
+# Tooling Enforcement
+
+- **Rust**: `cargo fmt` for formatting, `cargo clippy -- -D warnings` for linting (zero tolerance for warnings)
+- **Frontend**: Prettier for formatting (`desktop-app/.prettierrc`), ESLint for linting (`desktop-app/eslint.config.js`)
+- All generated code must pass CI checks — verify locally before considering work done
