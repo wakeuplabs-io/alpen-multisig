@@ -10,15 +10,14 @@
 
 **GitHub Actions** — the project is hosted on GitHub, the team already uses `gh` CLI and PRs. No need for external CI providers.
 
-### Pipeline structure: 3 parallel jobs
+### Pipeline structure: 2 parallel jobs
 
-| Job | Steps | Purpose | Est. time |
+| Job | Steps (serial) | Purpose | Est. time |
 |-----|-------|---------|-----------|
-| **lint-format** | `cargo fmt --check`, `cargo clippy -- -D warnings` | Fail-fast on style/quality issues before spending time building | ~2 min |
-| **build-test** | `cargo build`, `cargo test` (workspace), e2e tests (`e2e-tests/`) | Compile, run unit/integration tests, run e2e happy path (orchestrator subprocess) | ~5 min |
-| **frontend** | `npm ci`, `npm run lint`, `npm run build` (ESLint + tsc + vite) | Lint, type-check, and bundle the React frontend | ~1 min |
+| **rust** | `cargo fmt --check` → `cargo clippy -- -D warnings` → `cargo test` → e2e tests | Lint, build, and test in one job. Clippy compiles the full workspace, so subsequent test steps reuse the build artifacts — no double compilation. | ~5 min |
+| **frontend** | `npm ci` → `prettier --check` → `eslint` → `tsc && vite build` | Lint, format-check, type-check, and bundle the React frontend | ~1 min |
 
-Jobs run in parallel. A failure in any job blocks the PR from merging.
+Jobs run in parallel. A failure in either job blocks the PR from merging.
 
 ### Tauri system dependencies
 
@@ -54,7 +53,7 @@ Enable branch protection rules on `develop`:
 
 | Alternative | Why rejected |
 |------------|-------------|
-| Single monolithic job | Slower feedback — format errors discovered after full build |
+| Three separate Rust jobs (lint, build, test) | Each job pays full compilation cost. Clippy already compiles everything, so a single serial Rust job avoids double builds |
 | `cargo audit` for security | Too noisy with pre-release Alpen crates; revisit when deps stabilize |
 | Code coverage (`cargo llvm-cov`) | Adds significant time; coverage % doesn't correlate well with quality for this project size |
 | Multi-OS matrix (macOS, Windows) | Needed for release builds but overkill for CI; Linux catches 99% of issues |
@@ -63,7 +62,6 @@ Enable branch protection rules on `develop`:
 
 ## Consequences
 
-- Every PR must pass lint, build, all tests, and frontend build before merge
+- Every PR must pass both CI jobs (rust + frontend) before merge
 - Dead code warnings in the orchestrator must be resolved (or explicitly `#[allow]`ed with justification)
 - CI feedback loop should stay under ~5 minutes for the slowest job
-- If Tauri system dep installation becomes a bottleneck, switch to lib-only build in CI and defer full binary build to release workflow

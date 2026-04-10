@@ -362,7 +362,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 | HW Wallet | Planned: HWI subprocess, Taproot (BIP-137), derivation `m/86'/0'/73'/0/n` |
 | Protocol | SPS-50/51/65, Borsh serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
 | E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
-| CI | GitHub Actions: 3 parallel jobs (Rust lint/format, build/test + e2e, frontend lint/format/build). See [ADR-004](architecture/adrs/004-ci-pipeline-strategy.md) |
+| CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](architecture/adrs/004-ci-pipeline-strategy.md) |
 
 ## Current State
 
@@ -375,7 +375,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 13 tests
 - Typed API client, Tauri bridge, and hook state machines (frontend)
 - E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
-- CI pipeline: GitHub Actions with 3 parallel jobs — Rust lint/format, build/test + e2e, frontend lint/format/build (ADR-004)
+- CI pipeline: GitHub Actions with 2 parallel jobs — Rust (lint/build/test + e2e), frontend (lint/format/build) (ADR-004)
 - Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
 - Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
 

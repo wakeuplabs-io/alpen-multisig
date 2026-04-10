@@ -26,7 +26,7 @@ Implement a CI pipeline that enforces code quality, correctness, and build integ
 
 ### File: `.github/workflows/ci.yml`
 
-Single workflow file with 3 parallel jobs.
+Single workflow file with 2 parallel jobs (Rust + frontend).
 
 #### Shared configuration
 
@@ -36,30 +36,19 @@ Single workflow file with 3 parallel jobs.
   - `on: pull_request` — branches: `develop`, `main`
   - `on: push` — branches: `develop`, `main`
 
-#### Job 1: `lint-format`
+#### Job 1: `rust`
 
-Purpose: Fast fail on formatting and lint issues.
+Purpose: Lint, format-check, build, and test all Rust code in a single serial job. Clippy compiles the full workspace, so `cargo test` reuses the build artifacts — no double compilation.
 
 Steps:
 1. `actions/checkout@v4`
 2. `dtolnay/rust-toolchain@stable` with `components: rustfmt, clippy`
-3. Install Tauri system deps (`libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, `libappindicator3-dev`) — required because clippy compiles the `tauri` crate
+3. Install Tauri system deps (`libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, `libappindicator3-dev`)
 4. `Swatinem/rust-cache@v2`
 5. `cargo fmt --check`
 6. `cargo clippy -- -D warnings`
-
-#### Job 2: `build-test`
-
-Purpose: Compile, run all workspace tests, and run e2e integration tests.
-
-Steps:
-1. `actions/checkout@v4`
-2. `dtolnay/rust-toolchain@stable`
-3. Install Tauri system deps (same as lint-format)
-4. `Swatinem/rust-cache@v2`
-5. `cargo build`
-6. `cargo test`
-7. `cd e2e-tests && cargo test`
+7. `cargo test`
+8. `cd e2e-tests && cargo test`
 
 #### Job 3: `frontend`
 
