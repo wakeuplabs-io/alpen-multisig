@@ -59,6 +59,10 @@ Tests must target production functions only — not test helpers.
 
 ## Module structure
 Describe how code should be organized for reuse across crates (e.g., a shared lib that both desktop-app and e2e-tests can consume).
+
+For each new file/module, state its **single responsibility** in one sentence. If you can't describe it in one sentence, the module is doing too much — split it.
+
+Verify dependency direction: business logic depends on abstractions (traits), not the reverse. Types shared between trait and business logic belong in their own module or with the trait.
 ```
 
 Show the spec to the user and wait for confirmation before continuing. Ask: **"Does the spec look good? Any changes before implementation?"**
@@ -98,15 +102,31 @@ Repeat until all spec functions are implemented and tested.
 
 ## Phase 6 — Refactor
 
-1. Review the implemented code looking for:
-   - Duplication
-   - Functions that are too long (>40 lines)
-   - Non-descriptive names
-   - Types that could be stricter
-   - Test helpers mixed with production code — separate them
-   - Production code that should be extractable into a shared module/crate
-2. Refactor while keeping tests green
-3. Run tests again to confirm
+### 6a. Code-level cleanup
+
+Review the implemented code looking for:
+- Duplication (especially repetitive patterns like error handling, request/response mapping)
+- Functions that are too long (>40 lines)
+- Non-descriptive names
+- Types that could be stricter
+- Test helpers mixed with production code — separate them
+- Production code that should be extractable into a shared module/crate
+
+### 6b. Structural review — separation of concerns
+
+This is the most important part of refactoring. Review the module structure looking for:
+
+- **Single Responsibility:** Does each file/module have one clear reason to change? A file with types + trait + implementation + business logic + tests is a red flag.
+- **Dependency direction:** Do high-level modules (business logic) depend on abstractions, not the reverse? If a trait file imports from a business logic file, the dependency is inverted.
+- **Cohesion:** Are things that change together located together? Types that define a contract (DTOs, request/response) should live with or near the contract they define (e.g., the client trait), not in the business logic that uses them.
+- **God files:** If a single file has >200 lines of production code (excluding tests), consider splitting by responsibility: types, traits/interfaces, implementations, business logic.
+- **Repetitive patterns:** If multiple methods repeat the same pattern (e.g., token → build request → check status → deserialize), extract a helper method to reduce boilerplate.
+
+### 6c. Apply and verify
+
+1. Refactor while keeping tests green
+2. Run tests again to confirm
+3. Verify that each file has a clear, single responsibility you can describe in one sentence
 
 ---
 
@@ -127,6 +147,22 @@ cd desktop-app && npm run build
 ```
 
 **Gate:** Zero errors, zero clippy warnings, correct formatting. Fix anything that fails before continuing.
+
+---
+
+## Phase 7b — Documentation update
+
+If the implementation introduced or changed any of the following, update the relevant docs:
+
+- **New modules, files, or directory structure** → update `docs/architecture/overview.md` (file layout diagrams, module descriptions)
+- **New abstractions (traits, ports, service boundaries)** → update the relevant ADR or create a new one in `docs/architecture/adrs/`
+- **Changes to data flow or communication patterns** → update sequence/flow diagrams in `docs/architecture/overview.md`
+- **New dependencies** → verify `docs/architecture/adrs/001-alpen-crate-dependencies.md` is up to date
+- **POC/discovery progress** → update status in `docs/2-discovery/` plan documents (e.g., slice status from "Planning" to "In progress" or "Done")
+
+Only update docs that are actually affected by the changes. Do not create new documentation files unless the change introduces a concept not covered by existing docs.
+
+**Gate:** Architecture docs reflect the current state of the code. No stale diagrams or descriptions.
 
 ---
 

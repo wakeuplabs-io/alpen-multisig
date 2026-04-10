@@ -26,6 +26,8 @@ borsh = { workspace = true }
 secp256k1 = { workspace = true }
 rand = "0.8"
 hex = "0.4"
+async-trait = "0.1"
+thiserror = "2"
 
 [features]
 custom-protocol = ['tauri/custom-protocol']
