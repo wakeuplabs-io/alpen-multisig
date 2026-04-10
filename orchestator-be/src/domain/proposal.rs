@@ -1,12 +1,10 @@
 use crate::domain::authority::Authority;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Sequence number for a multisig action. Protocol allows gaps (skipped values).
 pub type SeqNo = u64;
 
-/// Deterministic proposal identity: hash(MultisigAction, SeqNo).
+/// Deterministic proposal identity: sha256(seq_no_be_bytes || action_hex_bytes).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ActionId(pub String);
 
@@ -29,26 +27,20 @@ pub enum ProposalStatus {
 /// A multisig proposal stored by the coordination backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proposal {
-    pub id: Uuid,
     pub action_id: ActionId,
     pub seq_no: SeqNo,
     pub authority: Authority,
     pub status: ProposalStatus,
-    /// Serialized MultisigAction payload (opaque to backend).
-    pub action_payload: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    /// Hex-encoded MultisigAction payload (opaque to backend).
+    pub action_hex: String,
+    pub signatures: Vec<ProposalSignature>,
 }
 
 /// A signature submitted for a proposal by a signer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProposalSignature {
-    pub id: Uuid,
-    pub proposal_id: Uuid,
     pub signer_pubkey: String,
-    pub signature: String,
-    pub submitted_at: DateTime<Utc>,
+    pub signature_hex: String,
 }
 
 /// Quorum progress for a proposal.

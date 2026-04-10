@@ -84,7 +84,10 @@ orchestator-be/src/
 │   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
 │   ├── session.rs       # Ephemeral session model, AuthChallenge
 │   └── proposal.rs      # Proposal, ProposalSignature, QuorumStatus, ActionId, SeqNo
-├── application.rs       # Business logic (auth, proposals, signatures) — see ADR-002
+├── application/
+│   ├── mod.rs           # Re-exports + auth stubs (todo)
+│   ├── proposals.rs     # Business logic: create, approve, get, list proposals
+│   └── repository.rs    # ProposalRepository trait + InMemoryProposalRepository
 ├── handlers/
 │   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session
 │   ├── proposals.rs     # GET/POST /proposals, GET /proposals/:action_id
@@ -93,7 +96,7 @@ orchestator-be/src/
     └── auth.rs          # AuthenticatedSession extractor (Bearer token)
 ```
 
-**Layering:** Handlers are thin (parse request → call application → format response). Business logic lives in `application.rs`, which uses `domain/` types directly. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
+**Layering:** Handlers are thin (parse request → call application → format response). Business logic lives in `application/proposals.rs`, with persistence abstracted behind `ProposalRepository` trait. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
 
 **API Surface (`/api/v1`):**
 
