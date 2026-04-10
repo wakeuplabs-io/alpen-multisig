@@ -372,6 +372,6 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 **Pending implementation:**
 - Backend: persistence layer (Postgres), handler implementations, auth verification against ASM signer set, proposal lifecycle enforcement
 - Desktop: HWI integration, wallet connection flow, proposal creation/signing UI, broadcast flow
-- Tauri: remaining proposal commands (create_proposal, submit_signature, get_proposal, list_signatures)
+- Tauri: remaining proposal commands (create_proposal, approve_action, get_proposal, list_proposals)
 - Bitcoin tx construction: SPS-50 OP_RETURN + SPS-51 witness envelope building (currently only in e2e-tests)
 - Payout flows: manual + automatic `block_payout` construction
