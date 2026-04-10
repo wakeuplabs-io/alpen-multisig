@@ -4,6 +4,9 @@
 //! session_token Mutex) to enable future testability without Tauri framework.
 //! See ADR-002 for the evolution strategy.
 
+pub(crate) mod orchestrator_client;
+pub(crate) mod proposals;
+
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
