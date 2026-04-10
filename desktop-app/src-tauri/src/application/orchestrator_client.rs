@@ -1,9 +1,9 @@
-//! Orchestrator client trait and HTTP implementation.
+//! Orchestrator client — trait and HTTP implementation.
 //!
 //! Abstracts communication with the orchestrator backend so the application
 //! layer can be tested with a mock implementation.
 
-use crate::application::proposals::{
+use crate::application::types::{
     CreateProposalRequest, ProposalDetail, ProposalResponse, ProposalSummary, SignatureResponse,
     SubmitSignatureRequest,
 };
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
-/// Errors that can occur when communicating with the orchestrator.
+/// Errors from orchestrator communication.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum OrchestratorError {
     #[error("HTTP request failed: {0}")]
@@ -24,7 +24,7 @@ pub(crate) enum OrchestratorError {
 
 // ─── Trait ───────────────────────────────────────────────────────────────────
 
-/// Abstracts HTTP communication with the orchestrator backend.
+/// Abstracts the orchestrator HTTP API.
 /// Real implementation uses reqwest; test mock uses in-memory state.
 #[async_trait::async_trait]
 pub(crate) trait OrchestratorClient: Send + Sync {
@@ -80,20 +80,13 @@ impl HttpOrchestratorClient {
             .clone()
             .ok_or_else(|| OrchestratorError::Request("not authenticated".to_string()))
     }
-}
 
-#[async_trait::async_trait]
-impl OrchestratorClient for HttpOrchestratorClient {
-    async fn create_proposal(
+    /// Send a request and parse the JSON response, handling errors uniformly.
+    async fn send_and_parse<T: serde::de::DeserializeOwned>(
         &self,
-        request: CreateProposalRequest,
-    ) -> Result<ProposalResponse, OrchestratorError> {
-        let token = self.token()?;
-        let res = self
-            .client
-            .post(format!("{}/proposals", self.base_url))
-            .bearer_auth(token)
-            .json(&request)
+        request: reqwest::RequestBuilder,
+    ) -> Result<T, OrchestratorError> {
+        let res = request
             .send()
             .await
             .map_err(|e| OrchestratorError::Request(e.to_string()))?;
@@ -107,6 +100,22 @@ impl OrchestratorClient for HttpOrchestratorClient {
         res.json()
             .await
             .map_err(|e| OrchestratorError::Deserialization(e.to_string()))
+    }
+}
+
+#[async_trait::async_trait]
+impl OrchestratorClient for HttpOrchestratorClient {
+    async fn create_proposal(
+        &self,
+        request: CreateProposalRequest,
+    ) -> Result<ProposalResponse, OrchestratorError> {
+        let token = self.token()?;
+        let req = self
+            .client
+            .post(format!("{}/proposals", self.base_url))
+            .bearer_auth(token)
+            .json(&request);
+        self.send_and_parse(req).await
     }
 
     async fn list_proposals(
@@ -125,44 +134,16 @@ impl OrchestratorClient for HttpOrchestratorClient {
             req = req.query(&[("status", s)]);
         }
 
-        let res = req
-            .send()
-            .await
-            .map_err(|e| OrchestratorError::Request(e.to_string()))?;
-
-        if !res.status().is_success() {
-            let status_code = res.status().as_u16();
-            let message = res.text().await.unwrap_or_default();
-            return Err(OrchestratorError::Backend {
-                status: status_code,
-                message,
-            });
-        }
-
-        res.json()
-            .await
-            .map_err(|e| OrchestratorError::Deserialization(e.to_string()))
+        self.send_and_parse(req).await
     }
 
     async fn get_proposal(&self, action_id: &str) -> Result<ProposalDetail, OrchestratorError> {
         let token = self.token()?;
-        let res = self
+        let req = self
             .client
             .get(format!("{}/proposals/{}", self.base_url, action_id))
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|e| OrchestratorError::Request(e.to_string()))?;
-
-        if !res.status().is_success() {
-            let status = res.status().as_u16();
-            let message = res.text().await.unwrap_or_default();
-            return Err(OrchestratorError::Backend { status, message });
-        }
-
-        res.json()
-            .await
-            .map_err(|e| OrchestratorError::Deserialization(e.to_string()))
+            .bearer_auth(token);
+        self.send_and_parse(req).await
     }
 
     async fn submit_signature(
@@ -171,26 +152,14 @@ impl OrchestratorClient for HttpOrchestratorClient {
         request: SubmitSignatureRequest,
     ) -> Result<SignatureResponse, OrchestratorError> {
         let token = self.token()?;
-        let res = self
+        let req = self
             .client
             .post(format!(
                 "{}/proposals/{}/signatures",
                 self.base_url, action_id
             ))
             .bearer_auth(token)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| OrchestratorError::Request(e.to_string()))?;
-
-        if !res.status().is_success() {
-            let status = res.status().as_u16();
-            let message = res.text().await.unwrap_or_default();
-            return Err(OrchestratorError::Backend { status, message });
-        }
-
-        res.json()
-            .await
-            .map_err(|e| OrchestratorError::Deserialization(e.to_string()))
+            .json(&request);
+        self.send_and_parse(req).await
     }
 }
