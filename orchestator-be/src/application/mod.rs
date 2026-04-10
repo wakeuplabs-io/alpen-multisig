@@ -5,7 +5,6 @@
 pub(crate) mod proposals;
 pub(crate) mod repository;
 
-use crate::application::proposals::ProposalSignature;
 use crate::domain::session::AuthChallenge;
 use crate::error::Result;
 
@@ -36,10 +35,4 @@ pub(crate) fn create_session(_input: CreateSessionInput) -> Result<SessionResult
 
 pub(crate) fn delete_session(_session_id: &str) -> Result<()> {
     todo!("invalidate session")
-}
-
-// ─── Signatures (unchanged — todo stubs) ────────────────────────────────────
-
-pub(crate) fn list_signatures(_action_id: &str) -> Result<Vec<ProposalSignature>> {
-    todo!("list signatures for proposal, scoped to session authority")
 }
