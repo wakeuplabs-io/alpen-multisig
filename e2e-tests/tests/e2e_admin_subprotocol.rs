@@ -26,132 +26,130 @@ use strata_asm_txs_admin::actions::{MultisigAction, Sighash, UpdateAction};
 use strata_asm_txs_admin::test_utils::create_test_admin_tx;
 use strata_asm_txs_test_utils::TEST_MAGIC_BYTES;
 use strata_crypto::keys::compressed::CompressedPublicKey;
+use strata_crypto::threshold_signature::verify_threshold_signatures;
 use strata_crypto::threshold_signature::ThresholdConfig;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
-use strata_crypto::threshold_signature::verify_threshold_signatures;
 use strata_l1_txfmt::ParseConfig;
 
 /// Full end-to-end flow: create an admin signer-set update, sign it, build the
 /// Bitcoin transaction, then parse it back and verify.
 #[test]
 fn e2e_build_and_verify_admin_signer_update() {
-	// ---------------------------------------------------------------
-	// Step 1: Generate signer keys (3 signers, threshold = 2)
-	// In production these come from hardware wallets via HWI.
-	// ---------------------------------------------------------------
-	let privkeys: Vec<SecretKey> = (0..3)
-		.map(|_| SecretKey::new(&mut OsRng))
-		.collect();
+    // ---------------------------------------------------------------
+    // Step 1: Generate signer keys (3 signers, threshold = 2)
+    // In production these come from hardware wallets via HWI.
+    // ---------------------------------------------------------------
+    let privkeys: Vec<SecretKey> = (0..3).map(|_| SecretKey::new(&mut OsRng)).collect();
 
-	let pubkeys: Vec<CompressedPublicKey> = privkeys
-		.iter()
-		.map(|sk| CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk)))
-		.collect();
+    let pubkeys: Vec<CompressedPublicKey> = privkeys
+        .iter()
+        .map(|sk| CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk)))
+        .collect();
 
-	let threshold = NonZero::new(2).unwrap();
-	let config = ThresholdConfig::try_new(pubkeys.clone(), threshold)
-		.expect("valid threshold config");
+    let threshold = NonZero::new(2).unwrap();
+    let config =
+        ThresholdConfig::try_new(pubkeys.clone(), threshold).expect("valid threshold config");
 
-	// ---------------------------------------------------------------
-	// Step 2: Build a MultisigAction — update the Strata Admin signer set
-	// This is the simplest update: add a new key, keep threshold at 2.
-	// ---------------------------------------------------------------
-	let new_signer = CompressedPublicKey::from(
-		PublicKey::from_secret_key(SECP256K1, &SecretKey::new(&mut OsRng)),
-	);
+    // ---------------------------------------------------------------
+    // Step 2: Build a MultisigAction — update the Strata Admin signer set
+    // This is the simplest update: add a new key, keep threshold at 2.
+    // ---------------------------------------------------------------
+    let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(
+        SECP256K1,
+        &SecretKey::new(&mut OsRng),
+    ));
 
-	let config_update = ThresholdConfigUpdate::new(
-		vec![new_signer],   // add_keys
-		vec![],             // remove_keys
-		threshold,          // new threshold (unchanged)
-	);
+    let config_update = ThresholdConfigUpdate::new(
+        vec![new_signer], // add_keys
+        vec![],           // remove_keys
+        threshold,        // new threshold (unchanged)
+    );
 
-	let multisig_update = MultisigUpdate::new(
-		config_update,
-		strata_asm_params::Role::StrataAdministrator,
-	);
+    let multisig_update =
+        MultisigUpdate::new(config_update, strata_asm_params::Role::StrataAdministrator);
 
-	let action = MultisigAction::Update(UpdateAction::Multisig(multisig_update));
+    let action = MultisigAction::Update(UpdateAction::Multisig(multisig_update));
 
-	// ---------------------------------------------------------------
-	// Step 3: Compute the sighash (SPS-65 tagged hash)
-	// Formula: SHA256(SHA256("strata/admin/strata_admin_multisig_update") || seqno_be || payload)
-	// ---------------------------------------------------------------
-	let seqno: u64 = 1; // first action, seqno must be > last_seqno (0)
-	let sighash = action.compute_sighash(seqno);
+    // ---------------------------------------------------------------
+    // Step 3: Compute the sighash (SPS-65 tagged hash)
+    // Formula: SHA256(SHA256("strata/admin/strata_admin_multisig_update") || seqno_be || payload)
+    // ---------------------------------------------------------------
+    let seqno: u64 = 1; // first action, seqno must be > last_seqno (0)
+    let sighash = action.compute_sighash(seqno);
 
-	// Sighash is a 32-byte hash that each signer will sign
-	assert_eq!(sighash.0.len(), 32, "sighash must be 32 bytes");
+    // Sighash is a 32-byte hash that each signer will sign
+    assert_eq!(sighash.0.len(), 32, "sighash must be 32 bytes");
 
-	// ---------------------------------------------------------------
-	// Steps 4-6: Sign, pack into SignedPayload, serialize, and build
-	// the Bitcoin transaction (SPS-50 OP_RETURN + SPS-51 envelope).
-	//
-	// `create_test_admin_tx` does all of this internally:
-	//   - Signs the sighash with the selected private keys
-	//   - Packs signatures into a SignatureSet
-	//   - Creates a SignedPayload { seqno, action, signatures }
-	//   - Borsh-serializes the payload
-	//   - Builds the SPS-51 witness envelope (chunked at 520 bytes)
-	//   - Adds the SPS-50 OP_RETURN tag
-	//   - Returns a complete Bitcoin reveal transaction
-	// ---------------------------------------------------------------
-	let signer_indices: Vec<u8> = vec![0, 2]; // signers 0 and 2 reach threshold of 2
-	let reveal_tx = create_test_admin_tx(&privkeys, &signer_indices, &action, seqno);
+    // ---------------------------------------------------------------
+    // Steps 4-6: Sign, pack into SignedPayload, serialize, and build
+    // the Bitcoin transaction (SPS-50 OP_RETURN + SPS-51 envelope).
+    //
+    // `create_test_admin_tx` does all of this internally:
+    //   - Signs the sighash with the selected private keys
+    //   - Packs signatures into a SignatureSet
+    //   - Creates a SignedPayload { seqno, action, signatures }
+    //   - Borsh-serializes the payload
+    //   - Builds the SPS-51 witness envelope (chunked at 520 bytes)
+    //   - Adds the SPS-50 OP_RETURN tag
+    //   - Returns a complete Bitcoin reveal transaction
+    // ---------------------------------------------------------------
+    let signer_indices: Vec<u8> = vec![0, 2]; // signers 0 and 2 reach threshold of 2
+    let reveal_tx = create_test_admin_tx(&privkeys, &signer_indices, &action, seqno);
 
-	// ---------------------------------------------------------------
-	// Step 7: Parse back and verify
-	// This simulates what the ASM does when it scans a Bitcoin block:
-	//   - Finds the OP_RETURN tag (SPS-50)
-	//   - Extracts the SignedPayload from the witness envelope (SPS-51)
-	//   - Verifies threshold signatures against the authority config
-	// ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Step 7: Parse back and verify
+    // This simulates what the ASM does when it scans a Bitcoin block:
+    //   - Finds the OP_RETURN tag (SPS-50)
+    //   - Extracts the SignedPayload from the witness envelope (SPS-51)
+    //   - Verifies threshold signatures against the authority config
+    // ---------------------------------------------------------------
 
-	// Parse the SPS-50 tag from the transaction
-	let parse_config = ParseConfig::new(TEST_MAGIC_BYTES);
-	let tag_data_ref = parse_config
-		.try_parse_tx(&reveal_tx)
-		.expect("transaction should have a valid SPS-50 tag");
+    // Parse the SPS-50 tag from the transaction
+    let parse_config = ParseConfig::new(TEST_MAGIC_BYTES);
+    let tag_data_ref = parse_config
+        .try_parse_tx(&reveal_tx)
+        .expect("transaction should have a valid SPS-50 tag");
 
-	// Build a TxInputRef (how the ASM sees the transaction)
-	let tx_input = strata_asm_common::TxInputRef::new(&reveal_tx, tag_data_ref);
+    // Build a TxInputRef (how the ASM sees the transaction)
+    let tx_input = strata_asm_common::TxInputRef::new(&reveal_tx, tag_data_ref);
 
-	// Parse the SignedPayload from the witness envelope
-	let parsed = strata_asm_txs_admin::parser::parse_tx(&tx_input)
-		.expect("should parse SignedPayload from witness envelope");
+    // Parse the SignedPayload from the witness envelope
+    let parsed = strata_asm_txs_admin::parser::parse_tx(&tx_input)
+        .expect("should parse SignedPayload from witness envelope");
 
-	// Verify: parsed data matches what we sent
-	assert_eq!(parsed.seqno, seqno, "seqno should match");
-	assert_eq!(parsed.action, action, "action should match");
+    // Verify: parsed data matches what we sent
+    assert_eq!(parsed.seqno, seqno, "seqno should match");
+    assert_eq!(parsed.action, action, "action should match");
 
-	// Verify threshold signatures against the signer config
-	let verification = verify_threshold_signatures(
-		&config,
-		parsed.signatures.signatures(),
-		&sighash.0,
-	);
-	assert!(verification.is_ok(), "threshold signatures should verify");
+    // Verify threshold signatures against the signer config
+    let verification =
+        verify_threshold_signatures(&config, parsed.signatures.signatures(), &sighash.0);
+    assert!(verification.is_ok(), "threshold signatures should verify");
 
-	// ---------------------------------------------------------------
-	// Step 8 (NOT DONE): Broadcast
-	//
-	// In production, this reveal_tx would be broadcast to Bitcoin:
-	//   let client = bitcoind_async_client::new(...);
-	//   client.send_raw_transaction(&reveal_tx).await?;
-	//
-	// Or the user can copy the raw hex and broadcast manually:
-	//   bitcoin::consensus::encode::serialize_hex(&reveal_tx)
-	//
-	// The ASM running inside the Strata node would then pick up the
-	// transaction from the Bitcoin block, parse it (as we did above),
-	// and enqueue the update with activation_height = current + 2016.
-	// ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    // Step 8 (NOT DONE): Broadcast
+    //
+    // In production, this reveal_tx would be broadcast to Bitcoin:
+    //   let client = bitcoind_async_client::new(...);
+    //   client.send_raw_transaction(&reveal_tx).await?;
+    //
+    // Or the user can copy the raw hex and broadcast manually:
+    //   bitcoin::consensus::encode::serialize_hex(&reveal_tx)
+    //
+    // The ASM running inside the Strata node would then pick up the
+    // transaction from the Bitcoin block, parse it (as we did above),
+    // and enqueue the update with activation_height = current + 2016.
+    // ---------------------------------------------------------------
 
-	println!("E2E admin flow completed successfully:");
-	println!("  - Action: Strata Admin signer set update (add 1 key)");
-	println!("  - Signers: 2 of 3 (indices 0, 2)");
-	println!("  - SeqNo: {seqno}");
-	println!("  - Tx inputs: {}, outputs: {}", reveal_tx.input.len(), reveal_tx.output.len());
-	println!("  - Signatures verified against threshold config");
-	println!("  - Ready for broadcast (skipped in this test)");
+    println!("E2E admin flow completed successfully:");
+    println!("  - Action: Strata Admin signer set update (add 1 key)");
+    println!("  - Signers: 2 of 3 (indices 0, 2)");
+    println!("  - SeqNo: {seqno}");
+    println!(
+        "  - Tx inputs: {}, outputs: {}",
+        reveal_tx.input.len(),
+        reveal_tx.output.len()
+    );
+    println!("  - Signatures verified against threshold config");
+    println!("  - Ready for broadcast (skipped in this test)");
 }

@@ -1,8 +1,8 @@
 //! Thin Tauri command wrappers. Each command extracts State, delegates to
 //! the application layer, and maps errors to String for the IPC boundary.
 
-use crate::application::{self, AuthChallenge, CreateSessionPayload, SessionInfo};
 use crate::state::AppState;
+use desktop_app::application::{self, AuthChallenge, CreateSessionPayload, SessionInfo};
 use tauri::State;
 
 #[tauri::command]

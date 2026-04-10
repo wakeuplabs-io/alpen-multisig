@@ -1,9 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod application;
 mod commands;
-#[allow(dead_code)]
-mod signing;
 mod state;
 
 use std::sync::Mutex;

@@ -11,20 +11,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-// ─── Approve (signature submission) ─────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
-pub struct ApproveActionRequest {
-    pub signer_pubkey: String,
-    pub signature_hex: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApproveActionResponse {
-    pub proposal: Proposal,
-}
-
-// ─── Request / Response types ───────────────────────────────────────────────
+// ─── Request types ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProposalRequest {
@@ -35,10 +22,10 @@ pub struct CreateProposalRequest {
     pub signature_hex: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CreateProposalResponse {
-    pub action_id: String,
-    pub proposal: Proposal,
+#[derive(Debug, Deserialize)]
+pub struct ApproveActionRequest {
+    pub signer_pubkey: String,
+    pub signature_hex: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,7 +43,7 @@ pub struct ProposalListResponse {
 pub async fn create_proposal(
     State(state): State<AppState>,
     Json(body): Json<CreateProposalRequest>,
-) -> Result<(StatusCode, Json<CreateProposalResponse>)> {
+) -> Result<(StatusCode, Json<Proposal>)> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -75,13 +62,7 @@ pub async fn create_proposal(
         &sig,
     )?;
 
-    Ok((
-        StatusCode::CREATED,
-        Json(CreateProposalResponse {
-            action_id: proposal.action_id.0.clone(),
-            proposal,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(proposal)))
 }
 
 pub async fn list_proposals(
@@ -116,7 +97,7 @@ pub async fn approve_action(
     State(state): State<AppState>,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
-) -> Result<Json<ApproveActionResponse>> {
+) -> Result<Json<Proposal>> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -129,5 +110,5 @@ pub async fn approve_action(
 
     let proposal = proposals::approve_action(&mut *repo, &ActionId(action_id), &sig)?;
 
-    Ok(Json(ApproveActionResponse { proposal }))
+    Ok(Json(proposal))
 }
