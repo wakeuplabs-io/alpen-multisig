@@ -89,8 +89,7 @@ orchestator-be/src/
 │   └── repository.rs    # ProposalRepository trait + InMemoryProposalRepository
 ├── handlers/
 │   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session (todo stubs)
-│   ├── proposals.rs     # GET/POST /proposals, GET /proposals/:action_id — wired to application layer
-│   └── signatures.rs    # POST/GET /proposals/:action_id/signatures — wired to application layer
+│   └── proposals.rs     # CRUD + approve: POST/GET /proposals, GET /proposals/:action_id, POST /proposals/:action_id/approve
 └── middleware/
     └── auth.rs          # AuthenticatedSession extractor (Bearer token)
 ```
@@ -108,8 +107,7 @@ orchestator-be/src/
 | `GET` | `/proposals` | List proposals (optional status filter) |
 | `POST` | `/proposals` | Create proposal (`seq_no` + `action_payload`) |
 | `GET` | `/proposals/:action_id` | Get proposal details + quorum status |
-| `POST` | `/proposals/:action_id/signatures` | Submit signature |
-| `GET` | `/proposals/:action_id/signatures` | List collected signatures |
+| `POST` | `/proposals/:action_id/approve` | Submit approval signature |
 
 **Authentication Model:**
 
