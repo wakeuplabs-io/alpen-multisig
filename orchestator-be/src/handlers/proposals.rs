@@ -1,6 +1,5 @@
 use crate::{
-    application,
-    domain::proposal::{Proposal, QuorumStatus},
+    application::proposals::{Proposal, QuorumStatus},
     error::Result,
     state::AppState,
 };
@@ -25,15 +24,16 @@ pub struct ProposalSummary {
 }
 
 pub async fn list_proposals(State(_state): State<AppState>) -> Result<Json<ProposalListResponse>> {
-    let _proposals = application::list_proposals(todo!("extract authority from session"), None)?;
-    todo!("map proposals to ProposalListResponse")
+    todo!("wire to application::proposals::list_proposals with repository from state")
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProposalRequest {
     pub seq_no: u64,
-    /// Serialized MultisigAction payload.
-    pub action_payload: serde_json::Value,
+    /// Hex-encoded MultisigAction payload.
+    pub action_hex: String,
+    pub signer_pubkey: String,
+    pub signature_hex: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -44,20 +44,14 @@ pub struct CreateProposalResponse {
 
 pub async fn create_proposal(
     State(_state): State<AppState>,
-    Json(body): Json<CreateProposalRequest>,
+    Json(_body): Json<CreateProposalRequest>,
 ) -> Result<Json<CreateProposalResponse>> {
-    let (_action_id, _proposal) = application::create_proposal(
-        todo!("extract authority from session"),
-        body.seq_no,
-        body.action_payload,
-    )?;
-    todo!("map to CreateProposalResponse")
+    todo!("wire to application::proposals::create_update_action with repository from state")
 }
 
 pub async fn get_proposal(
     State(_state): State<AppState>,
-    Path(action_id): Path<String>,
+    Path(_action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    let proposal = application::get_proposal(&action_id)?;
-    Ok(Json(proposal))
+    todo!("wire to application::proposals::get_update_action with repository from state")
 }
