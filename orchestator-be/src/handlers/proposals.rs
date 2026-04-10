@@ -11,6 +11,19 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+// ─── Approve (signature submission) ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ApproveActionRequest {
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApproveActionResponse {
+    pub proposal: Proposal,
+}
+
 // ─── Request / Response types ───────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -97,4 +110,24 @@ pub async fn get_proposal(
     let proposal = proposals::get_update_action(&*repo, &ActionId(action_id))?;
 
     Ok(Json(proposal))
+}
+
+pub async fn approve_action(
+    State(state): State<AppState>,
+    Path(action_id): Path<String>,
+    Json(body): Json<ApproveActionRequest>,
+) -> Result<Json<ApproveActionResponse>> {
+    let sig = ProposalSignature {
+        signer_pubkey: body.signer_pubkey,
+        signature_hex: body.signature_hex,
+    };
+
+    let mut repo = state
+        .repo
+        .write()
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+
+    let proposal = proposals::approve_action(&mut *repo, &ActionId(action_id), &sig)?;
+
+    Ok(Json(ApproveActionResponse { proposal }))
 }

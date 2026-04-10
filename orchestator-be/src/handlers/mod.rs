@@ -7,7 +7,6 @@ use serde_json::{json, Value};
 
 pub mod auth;
 pub mod proposals;
-pub mod signatures;
 
 async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
@@ -24,14 +23,9 @@ pub fn router(state: AppState) -> Router {
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))
-        // Signatures
         .route(
-            "/proposals/:action_id/signatures",
-            post(signatures::submit_signature),
-        )
-        .route(
-            "/proposals/:action_id/signatures",
-            get(signatures::list_signatures),
+            "/proposals/:action_id/approve",
+            post(proposals::approve_action),
         )
         .with_state(state)
 }
@@ -250,10 +244,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
-    // ─── submit_signature ───────────────────────────────────────────────────
+    // ─── approve_action ─────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_submit_signature_happy_path() {
+    async fn test_approve_action_happy_path() {
         let config = crate::config::Config {
             server_host: "127.0.0.1".to_string(),
             server_port: 0,
@@ -273,7 +267,7 @@ mod tests {
         });
         let req = json_request(
             "POST",
-            &format!("/proposals/{action_id}/signatures"),
+            &format!("/proposals/{action_id}/approve"),
             Some(sig_body),
         );
         let resp = app.oneshot(req).await.unwrap();
@@ -284,7 +278,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_submit_signature_duplicate_signer_rejected() {
+    async fn test_approve_action_duplicate_signer_rejected() {
         let config = crate::config::Config {
             server_host: "127.0.0.1".to_string(),
             server_port: 0,
@@ -304,7 +298,7 @@ mod tests {
         });
         let req = json_request(
             "POST",
-            &format!("/proposals/{action_id}/signatures"),
+            &format!("/proposals/{action_id}/approve"),
             Some(sig_body),
         );
         let resp = app.oneshot(req).await.unwrap();
@@ -313,62 +307,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_submit_signature_nonexistent_proposal() {
+    async fn test_approve_action_nonexistent_proposal() {
         let app = test_app();
         let sig_body = json!({
             "signer_pubkey": "pubkey_a",
             "signature_hex": "sig_a"
         });
-        let req = json_request("POST", "/proposals/nonexistent/signatures", Some(sig_body));
-        let resp = app.oneshot(req).await.unwrap();
-
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-    }
-
-    // ─── list_signatures ────────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_list_signatures_happy_path() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
-
-        // Create proposal
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
-        let created = response_json(resp).await;
-        let action_id = created["action_id"].as_str().unwrap();
-
-        // Add second signature
-        let app = router(state.clone());
-        let sig_body = json!({
-            "signer_pubkey": "pubkey_b",
-            "signature_hex": "sig_b"
-        });
-        let req = json_request(
-            "POST",
-            &format!("/proposals/{action_id}/signatures"),
-            Some(sig_body),
-        );
-        app.oneshot(req).await.unwrap();
-
-        // List signatures
-        let app = router(state);
-        let req = json_request("GET", &format!("/proposals/{action_id}/signatures"), None);
-        let resp = app.oneshot(req).await.unwrap();
-
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = response_json(resp).await;
-        assert_eq!(body["signatures"].as_array().unwrap().len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_list_signatures_not_found() {
-        let app = test_app();
-        let req = json_request("GET", "/proposals/nonexistent/signatures", None);
+        let req = json_request("POST", "/proposals/nonexistent/approve", Some(sig_body));
         let resp = app.oneshot(req).await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
