@@ -1,5 +1,5 @@
 use crate::{
-    domain::proposal::{Proposal, QuorumStatus},
+    application::proposals::{Proposal, QuorumStatus},
     error::Result,
     state::AppState,
 };

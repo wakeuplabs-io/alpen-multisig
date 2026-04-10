@@ -5,7 +5,7 @@
 pub(crate) mod proposals;
 pub(crate) mod repository;
 
-use crate::domain::proposal::ProposalSignature;
+use crate::application::proposals::ProposalSignature;
 use crate::domain::session::AuthChallenge;
 use crate::error::Result;
 

@@ -3,7 +3,7 @@
 //! Defines the storage contract and provides an in-memory implementation
 //! for POC/testing. Postgres implementation will be added in a future slice.
 
-use crate::domain::proposal::{ActionId, Proposal, ProposalStatus};
+use crate::application::proposals::{ActionId, Proposal, ProposalStatus};
 use crate::error::AppError;
 use std::collections::HashMap;
 

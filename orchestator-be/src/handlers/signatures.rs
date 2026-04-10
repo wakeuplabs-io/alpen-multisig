@@ -1,4 +1,4 @@
-use crate::{domain::proposal::ProposalSignature, error::Result, state::AppState};
+use crate::{application::proposals::ProposalSignature, error::Result, state::AppState};
 use axum::{
     extract::{Path, State},
     Json,
