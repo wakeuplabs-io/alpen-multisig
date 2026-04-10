@@ -36,8 +36,8 @@ Per ADR-002, `application.rs` is currently 154 lines. Adding the backend client 
 desktop-app/src-tauri/src/
 ├── application/
 │   ├── mod.rs              # Re-exports, auth functions (moved from application.rs)
-│   ├── orchestrator_client.rs   # OrchestratorClient trait + HttpOrchestratorClient
-│   └── proposals.rs        # Proposal flow functions + types
+│   ├── orchestrator_client.rs   # OrchestratorClient trait + HttpOrchestratorClient + transport DTOs
+│   └── proposals.rs        # Proposal flow business logic
 ├── commands.rs             # Unchanged
 ├── signing.rs              # Unchanged
 ├── state.rs                # Unchanged
@@ -97,7 +97,7 @@ pub(crate) struct HttpOrchestratorClient {
 }
 ```
 
-### Transport DTO types (`application/proposals.rs`)
+### Transport DTO types (`application/orchestrator_client.rs`)
 
 These types define the contract between desktop app and orchestrator. The orchestrator (Step 2) must produce compatible JSON.
 

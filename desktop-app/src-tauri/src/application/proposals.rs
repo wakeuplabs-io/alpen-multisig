@@ -3,10 +3,9 @@
 //! These functions compose sighash computation, ECDSA signing, and orchestrator
 //! communication into high-level operations (create proposal, sign proposal, etc.).
 
-use crate::application::orchestrator_client::{OrchestratorClient, OrchestratorError};
-use crate::application::types::{
-    CreateProposalRequest, ProposalDetail, ProposalResponse, ProposalSummary, SignatureResponse,
-    SubmitSignatureRequest,
+use crate::application::orchestrator_client::{
+    CreateProposalRequest, OrchestratorClient, OrchestratorError, ProposalDetail, ProposalResponse,
+    ProposalSummary, SignatureResponse, SubmitSignatureRequest,
 };
 use crate::signing;
 
@@ -101,7 +100,7 @@ pub(crate) async fn get_proposal(
 mod tests {
     use super::*;
     use crate::application::orchestrator_client::OrchestratorError;
-    use crate::application::types::SignatureInfo;
+    use crate::application::orchestrator_client::SignatureInfo;
     use crate::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;

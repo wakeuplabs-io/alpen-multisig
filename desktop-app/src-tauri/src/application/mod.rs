@@ -6,7 +6,6 @@
 
 pub(crate) mod orchestrator_client;
 pub(crate) mod proposals;
-pub(crate) mod types;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
