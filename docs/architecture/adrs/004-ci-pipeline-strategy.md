@@ -46,7 +46,7 @@ Use `Swatinem/rust-cache` for Cargo registry, git sources, and target directory.
 ### Branch protection
 
 Enable branch protection rules on `develop`:
-- Require all 3 CI jobs to pass before merge
+- Require both CI jobs to pass before merge
 - Require at least 1 approval
 
 ## Alternatives considered

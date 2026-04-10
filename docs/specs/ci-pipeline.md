@@ -8,7 +8,7 @@ Implement a CI pipeline that enforces code quality, correctness, and build integ
 
 **Included:**
 - GitHub Actions workflow file (`.github/workflows/ci.yml`)
-- 3 parallel jobs: lint-format, build-test, frontend
+- 2 parallel jobs: rust (lint/build/test), frontend (lint/format/build)
 - Clippy with `-D warnings` (zero tolerance)
 - Workspace tests + e2e tests (orchestrator subprocess)
 - Tauri system dependency installation (both Rust jobs)
@@ -50,7 +50,7 @@ Steps:
 7. `cargo test`
 8. `cd e2e-tests && cargo test`
 
-#### Job 3: `frontend`
+#### Job 2: `frontend`
 
 Purpose: Lint, TypeScript type-check, and Vite production build.
 
@@ -120,11 +120,11 @@ Resolution options per warning type:
 ## Test Cases
 
 1. **Workflow validates locally:** `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo build`, `cargo test`, `cd e2e-tests && cargo test`, `cd desktop-app && npm run format:check`, `cd desktop-app && npm run lint`, `cd desktop-app && npm run build` all pass locally before pushing
-2. **PR triggers CI:** Push a branch and open a PR against `develop` — all 3 jobs should run and pass
+2. **PR triggers CI:** Push a branch and open a PR against `develop` — both jobs should run and pass
 
 ## Module structure
 
-- **`.github/workflows/ci.yml`** — Single CI workflow with 3 parallel jobs (lint, build/test, frontend)
+- **`.github/workflows/ci.yml`** — Single CI workflow with 2 parallel jobs (rust, frontend)
 - **`desktop-app/eslint.config.js`** — ESLint flat config for React + TypeScript
 - **`desktop-app/.prettierrc`** — Prettier config (tabs, single quotes, no semicolons, 120 chars)
 - **`desktop-app/package.json`** — Updated with ESLint + Prettier dev deps, `lint` and `format:check` scripts
