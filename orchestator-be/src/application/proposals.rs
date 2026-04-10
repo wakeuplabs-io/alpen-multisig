@@ -79,13 +79,14 @@ pub(crate) fn compute_action_id(seq_no: SeqNo, action_hex: &str) -> Result<Actio
 }
 
 /// Create a new proposal with first signature. Rejects duplicate ActionId.
+///
+/// Mirrors PRD: `create_update_action(action, seq, sig)`.
 pub(crate) fn create_update_action(
     repo: &mut dyn ProposalRepository,
     authority: Authority,
     seq_no: SeqNo,
     action_hex: &str,
-    signer_pubkey: &str,
-    signature_hex: &str,
+    sig: &ProposalSignature,
 ) -> Result<Proposal, AppError> {
     let action_id = compute_action_id(seq_no, action_hex)?;
 
@@ -95,10 +96,7 @@ pub(crate) fn create_update_action(
         authority,
         status: ProposalStatus::Pending,
         action_hex: action_hex.to_string(),
-        signatures: vec![ProposalSignature {
-            signer_pubkey: signer_pubkey.to_string(),
-            signature_hex: signature_hex.to_string(),
-        }],
+        signatures: vec![sig.clone()],
     };
 
     repo.save_proposal(proposal.clone())?;
@@ -107,11 +105,12 @@ pub(crate) fn create_update_action(
 }
 
 /// Add a signature to an existing proposal. Rejects duplicate signer.
+///
+/// Mirrors PRD: `approve_action(id, sig)`.
 pub(crate) fn approve_action(
     repo: &mut dyn ProposalRepository,
     action_id: &ActionId,
-    signer_pubkey: &str,
-    signature_hex: &str,
+    sig: &ProposalSignature,
 ) -> Result<Proposal, AppError> {
     let proposal = repo
         .find_by_action_id_mut(action_id)
@@ -120,16 +119,13 @@ pub(crate) fn approve_action(
     let already_signed = proposal
         .signatures
         .iter()
-        .any(|s| s.signer_pubkey == signer_pubkey);
+        .any(|s| s.signer_pubkey == sig.signer_pubkey);
 
     if already_signed {
         return Err(AppError::Conflict("signer already signed".to_string()));
     }
 
-    proposal.signatures.push(ProposalSignature {
-        signer_pubkey: signer_pubkey.to_string(),
-        signature_hex: signature_hex.to_string(),
-    });
+    proposal.signatures.push(sig.clone());
 
     Ok(proposal.clone())
 }
@@ -164,10 +160,20 @@ mod tests {
     }
 
     const ACTION_HEX: &str = "deadbeef";
-    const SIGNER_A: &str = "pubkey_a";
-    const SIGNER_B: &str = "pubkey_b";
-    const SIG_A: &str = "sig_a";
-    const SIG_B: &str = "sig_b";
+
+    fn sig_a() -> ProposalSignature {
+        ProposalSignature {
+            signer_pubkey: "pubkey_a".to_string(),
+            signature_hex: "sig_a".to_string(),
+        }
+    }
+
+    fn sig_b() -> ProposalSignature {
+        ProposalSignature {
+            signer_pubkey: "pubkey_b".to_string(),
+            signature_hex: "sig_b".to_string(),
+        }
+    }
 
     // ─── ActionId ───────────────────────────────────────────────────────────
 
@@ -203,26 +209,18 @@ mod tests {
     #[test]
     fn test_create_update_action() {
         let mut repo = new_repo();
+        let sig = sig_a();
 
-        let proposal = create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_A,
-            SIG_A,
-        )
-        .unwrap();
+        let proposal =
+            create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig).unwrap();
 
         assert_eq!(proposal.seq_no, 1);
         assert_eq!(proposal.authority, Authority::StrataAdmin);
         assert_eq!(proposal.action_hex, ACTION_HEX);
         assert_eq!(proposal.status, ProposalStatus::Pending);
         assert_eq!(proposal.signatures.len(), 1);
-        assert_eq!(proposal.signatures[0].signer_pubkey, SIGNER_A);
-        assert_eq!(proposal.signatures[0].signature_hex, SIG_A);
+        assert_eq!(proposal.signatures[0].signer_pubkey, sig.signer_pubkey);
 
-        // ActionId is deterministic
         let expected_id = compute_action_id(1, ACTION_HEX).unwrap();
         assert_eq!(proposal.action_id, expected_id);
     }
@@ -231,24 +229,10 @@ mod tests {
     fn test_create_duplicate_action_rejected() {
         let mut repo = new_repo();
 
-        create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_A,
-            SIG_A,
-        )
-        .unwrap();
+        create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig_a()).unwrap();
 
-        let result = create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_B,
-            SIG_B,
-        );
+        let result =
+            create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig_b());
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
@@ -259,37 +243,29 @@ mod tests {
     fn test_approve_action() {
         let mut repo = new_repo();
 
-        let created = create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_A,
-            SIG_A,
-        )
-        .unwrap();
+        let created =
+            create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig_a())
+                .unwrap();
 
-        let updated = approve_action(&mut repo, &created.action_id, SIGNER_B, SIG_B).unwrap();
+        let updated = approve_action(&mut repo, &created.action_id, &sig_b()).unwrap();
 
         assert_eq!(updated.signatures.len(), 2);
-        assert_eq!(updated.signatures[1].signer_pubkey, SIGNER_B);
+        assert_eq!(updated.signatures[1].signer_pubkey, "pubkey_b");
     }
 
     #[test]
     fn test_approve_duplicate_signer_rejected() {
         let mut repo = new_repo();
 
-        let created = create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_A,
-            SIG_A,
-        )
-        .unwrap();
+        let created =
+            create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig_a())
+                .unwrap();
 
-        let result = approve_action(&mut repo, &created.action_id, SIGNER_A, "another_sig");
+        let dup_sig = ProposalSignature {
+            signer_pubkey: "pubkey_a".to_string(),
+            signature_hex: "different_sig".to_string(),
+        };
+        let result = approve_action(&mut repo, &created.action_id, &dup_sig);
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
@@ -299,7 +275,7 @@ mod tests {
         let mut repo = new_repo();
         let fake_id = ActionId("nonexistent".to_string());
 
-        let result = approve_action(&mut repo, &fake_id, SIGNER_A, SIG_A);
+        let result = approve_action(&mut repo, &fake_id, &sig_a());
 
         assert!(matches!(result.unwrap_err(), AppError::NotFound));
     }
@@ -310,15 +286,9 @@ mod tests {
     fn test_get_update_action() {
         let mut repo = new_repo();
 
-        let created = create_update_action(
-            &mut repo,
-            Authority::StrataAdmin,
-            1,
-            ACTION_HEX,
-            SIGNER_A,
-            SIG_A,
-        )
-        .unwrap();
+        let created =
+            create_update_action(&mut repo, Authority::StrataAdmin, 1, ACTION_HEX, &sig_a())
+                .unwrap();
 
         let fetched = get_update_action(&repo, &created.action_id).unwrap();
 
@@ -343,8 +313,8 @@ mod tests {
     fn test_list_proposals() {
         let mut repo = new_repo();
 
-        create_update_action(&mut repo, Authority::StrataAdmin, 1, "aa", SIGNER_A, SIG_A).unwrap();
-        create_update_action(&mut repo, Authority::StrataAdmin, 2, "bb", SIGNER_A, SIG_A).unwrap();
+        create_update_action(&mut repo, Authority::StrataAdmin, 1, "aa", &sig_a()).unwrap();
+        create_update_action(&mut repo, Authority::StrataAdmin, 2, "bb", &sig_a()).unwrap();
 
         let all = list_proposals(&repo, None);
         assert_eq!(all.len(), 2);
@@ -354,8 +324,8 @@ mod tests {
     fn test_list_proposals_with_status_filter() {
         let mut repo = new_repo();
 
-        create_update_action(&mut repo, Authority::StrataAdmin, 1, "aa", SIGNER_A, SIG_A).unwrap();
-        create_update_action(&mut repo, Authority::StrataAdmin, 2, "bb", SIGNER_A, SIG_A).unwrap();
+        create_update_action(&mut repo, Authority::StrataAdmin, 1, "aa", &sig_a()).unwrap();
+        create_update_action(&mut repo, Authority::StrataAdmin, 2, "bb", &sig_a()).unwrap();
 
         let pending = list_proposals(&repo, Some(ProposalStatus::Pending));
         assert_eq!(pending.len(), 2);
