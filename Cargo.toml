@@ -1,5 +1,6 @@
 [workspace]
 members = ['orchestator-be', 'desktop-app/src-tauri']
+exclude = ['e2e-tests']
 resolver = '2'
 
 [workspace.dependencies]

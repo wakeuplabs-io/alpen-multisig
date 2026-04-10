@@ -29,5 +29,9 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 
+[lib]
+name = "desktop_app"
+path = "src/lib.rs"
+
 [features]
 custom-protocol = ['tauri/custom-protocol']

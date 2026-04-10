@@ -88,14 +88,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::CREATED);
 
         let body = response_json(resp).await;
-        assert!(body["action_id"].is_string());
-        assert_eq!(body["proposal"]["seq_no"], 1);
-        assert_eq!(body["proposal"]["authority"], "strata_admin");
-        assert_eq!(body["proposal"]["status"], "pending");
-        assert_eq!(
-            body["proposal"]["signatures"][0]["signer_pubkey"],
-            "pubkey_a"
-        );
+        assert_eq!(body["seq_no"], 1);
+        assert_eq!(body["authority"], "strata_admin");
+        assert_eq!(body["status"], "pending");
+        assert_eq!(body["signatures"][0]["signer_pubkey"], "pubkey_a");
     }
 
     #[tokio::test]
@@ -274,7 +270,7 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::OK);
         let body = response_json(resp).await;
-        assert_eq!(body["proposal"]["signatures"].as_array().unwrap().len(), 2);
+        assert_eq!(body["signatures"].as_array().unwrap().len(), 2);
     }
 
     #[tokio::test]

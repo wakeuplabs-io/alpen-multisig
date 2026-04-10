@@ -4,22 +4,19 @@
 //! - `create_update_action(action, seq_no, signature)` — propose + first signature
 //! - `approve_action(action_id, signature)` — add approval signature
 //! - `get_update_action(action_id)` — fetch proposal detail
-//! - `get_signatures(action_id)` — fetch collected signatures
-//! - `get_actions_by_seqno(seq_no)` — list actions for a sequence number
-//! - `list_proposals(status?)` — list proposals (orchestrator convenience)
 //!
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing happens externally (HW wallet, software signer) before reaching this layer.
 
 use crate::application::orchestrator_client::{
-    CreateProposalRequest, OrchestratorClient, OrchestratorError, SubmitSignatureRequest,
+    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError, Proposal,
 };
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
 /// Errors that can occur during proposal operations.
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum ProposalError {
+pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
 }
@@ -28,40 +25,9 @@ pub(crate) enum ProposalError {
 
 /// A cryptographic signature from a signer.
 #[derive(Debug, Clone)]
-pub(crate) struct Signature {
-    pub(crate) signer_pubkey: String,
-    pub(crate) signature_hex: String,
-}
-
-/// A proposal (action + signatures).
-#[derive(Debug, Clone)]
-pub(crate) struct Proposal {
-    pub(crate) action_id: String,
-    pub(crate) authority: String,
-    pub(crate) seq_no: u64,
-    pub(crate) action_hex: String,
-    pub(crate) status: String,
-    pub(crate) signatures: Vec<Signature>,
-    pub(crate) threshold: u32,
-}
-
-/// Summary for list views.
-#[derive(Debug, Clone)]
-pub(crate) struct ProposalSummary {
-    pub(crate) action_id: String,
-    pub(crate) authority: String,
-    pub(crate) seq_no: u64,
-    pub(crate) status: String,
-    pub(crate) signature_count: u32,
-    pub(crate) threshold: u32,
-}
-
-/// Result of submitting a signature.
-#[derive(Debug, Clone)]
-pub(crate) struct ApprovalResult {
-    pub(crate) quorum_reached: bool,
-    pub(crate) signatures_count: u32,
-    pub(crate) threshold: u32,
+pub struct Signature {
+    pub signer_pubkey: String,
+    pub signature_hex: String,
 }
 
 // ─── Production functions ───────────────────────────────────────────────────
@@ -69,106 +35,51 @@ pub(crate) struct ApprovalResult {
 /// Create a new action and store the creator's signature.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
-/// Authority is bound to the session — the orchestrator resolves it.
-pub(crate) async fn create_update_action(
+pub async fn create_update_action(
     client: &dyn OrchestratorClient,
+    authority: &str,
     action_hex: &str,
     seq_no: u64,
     signature: &Signature,
 ) -> Result<Proposal, ProposalError> {
     let request = CreateProposalRequest {
+        authority: authority.to_string(),
         seq_no,
         action_hex: action_hex.to_string(),
         signer_pubkey: signature.signer_pubkey.clone(),
         signature_hex: signature.signature_hex.clone(),
     };
 
-    let res = client.create_proposal(request).await?;
-
-    Ok(to_proposal(res))
+    let proposal = client.create_proposal(request).await?;
+    Ok(proposal)
 }
 
 /// Append an approval signature for an existing action.
 ///
 /// Mirrors PRD: `approve_action(id, sig)`.
-pub(crate) async fn approve_action(
+pub async fn approve_action(
     client: &dyn OrchestratorClient,
     action_id: &str,
     signature: &Signature,
-) -> Result<ApprovalResult, ProposalError> {
-    let request = SubmitSignatureRequest {
+) -> Result<Proposal, ProposalError> {
+    let request = ApproveActionRequest {
         signer_pubkey: signature.signer_pubkey.clone(),
         signature_hex: signature.signature_hex.clone(),
     };
 
-    let res = client.submit_signature(action_id, request).await?;
-
-    Ok(ApprovalResult {
-        quorum_reached: res.quorum_reached,
-        signatures_count: res.signatures_count,
-        threshold: res.threshold,
-    })
+    let proposal = client.approve_action(action_id, request).await?;
+    Ok(proposal)
 }
 
 /// Fetch the action payload and details.
 ///
 /// Mirrors PRD: `get_update_action(id)`.
-pub(crate) async fn get_update_action(
+pub async fn get_update_action(
     client: &dyn OrchestratorClient,
     action_id: &str,
 ) -> Result<Proposal, ProposalError> {
-    let res = client.get_proposal(action_id).await?;
-
-    Ok(Proposal {
-        action_id: res.action_id,
-        authority: res.authority,
-        seq_no: res.seq_no,
-        action_hex: res.action_hex,
-        status: res.status,
-        signatures: res.signatures.into_iter().map(to_signature).collect(),
-        threshold: res.threshold,
-    })
-}
-
-/// List proposals, optionally filtered by status.
-pub(crate) async fn list_proposals(
-    client: &dyn OrchestratorClient,
-    status: Option<&str>,
-) -> Result<Vec<ProposalSummary>, ProposalError> {
-    let items = client.list_proposals(status).await?;
-
-    Ok(items
-        .into_iter()
-        .map(|s| ProposalSummary {
-            action_id: s.action_id,
-            authority: s.authority,
-            seq_no: s.seq_no,
-            status: s.status,
-            signature_count: s.signature_count,
-            threshold: s.threshold,
-        })
-        .collect())
-}
-
-// ─── Mapping helpers ────────────────────────────────────────────────────────
-
-fn to_signature(s: crate::application::orchestrator_client::SignatureInfo) -> Signature {
-    Signature {
-        signer_pubkey: s.signer_pubkey,
-        signature_hex: s.signature_hex,
-    }
-}
-
-fn to_proposal(res: crate::application::orchestrator_client::ProposalResponse) -> Proposal {
-    Proposal {
-        action_id: res.action_id,
-        authority: res.authority,
-        seq_no: res.seq_no,
-        action_hex: res.action_hex,
-        status: res.status,
-        signatures: res.signatures.into_iter().map(to_signature).collect(),
-        threshold: res.threshold,
-    }
+    let proposal = client.get_proposal(action_id).await?;
+    Ok(proposal)
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -177,9 +88,7 @@ fn to_proposal(res: crate::application::orchestrator_client::ProposalResponse) -
 mod tests {
     use super::*;
     use crate::application::orchestrator_client::{
-        OrchestratorError, ProposalDetail as OrcProposalDetail,
-        ProposalResponse as OrcProposalResponse, ProposalSummary as OrcProposalSummary,
-        SignatureInfo, SignatureResponse as OrcSignatureResponse,
+        OrchestratorError, Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
     };
     use crate::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
@@ -214,7 +123,6 @@ mod tests {
         hex::encode(borsh::to_vec(&action).expect("action borsh-serializes"))
     }
 
-    /// Sign externally (simulates what HW wallet or software signer would do).
     fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
         let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
         let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
@@ -224,10 +132,9 @@ mod tests {
         }
     }
 
-    /// Mock orchestrator client.
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
-        last_submit_request: Mutex<Option<(String, SubmitSignatureRequest)>>,
+        last_approve_request: Mutex<Option<(String, ApproveActionRequest)>>,
         should_fail: bool,
     }
 
@@ -235,7 +142,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 last_create_request: Mutex::new(None),
-                last_submit_request: Mutex::new(None),
+                last_approve_request: Mutex::new(None),
                 should_fail: false,
             }
         }
@@ -243,7 +150,7 @@ mod tests {
         fn failing() -> Self {
             Self {
                 last_create_request: Mutex::new(None),
-                last_submit_request: Mutex::new(None),
+                last_approve_request: Mutex::new(None),
                 should_fail: true,
             }
         }
@@ -252,8 +159,8 @@ mod tests {
             self.last_create_request.lock().unwrap().take()
         }
 
-        fn last_submit_request(&self) -> Option<(String, SubmitSignatureRequest)> {
-            self.last_submit_request.lock().unwrap().take()
+        fn last_approve_request(&self) -> Option<(String, ApproveActionRequest)> {
+            self.last_approve_request.lock().unwrap().take()
         }
     }
 
@@ -262,86 +169,64 @@ mod tests {
         async fn create_proposal(
             &self,
             request: CreateProposalRequest,
-        ) -> Result<OrcProposalResponse, OrchestratorError> {
+        ) -> Result<OrcProposal, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            let response = OrcProposalResponse {
+            let response = OrcProposal {
                 action_id: format!("action_{}", request.seq_no),
                 authority: "strata_admin".to_string(),
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
-                signatures: vec![SignatureInfo {
+                signatures: vec![OrcProposalSignature {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
                 }],
-                threshold: 2,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
         }
 
-        async fn list_proposals(
-            &self,
-            _status: Option<&str>,
-        ) -> Result<Vec<OrcProposalSummary>, OrchestratorError> {
+        async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            Ok(vec![OrcProposalSummary {
-                action_id: "action_1".to_string(),
-                authority: "strata_admin".to_string(),
-                seq_no: 1,
-                status: "pending".to_string(),
-                signature_count: 1,
-                threshold: 2,
-            }])
-        }
-
-        async fn get_proposal(
-            &self,
-            action_id: &str,
-        ) -> Result<OrcProposalDetail, OrchestratorError> {
-            if self.should_fail {
-                return Err(OrchestratorError::Backend {
-                    status: 500,
-                    message: "mock error".to_string(),
-                });
-            }
-            Ok(OrcProposalDetail {
+            Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: "strata_admin".to_string(),
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
                 signatures: vec![],
-                threshold: 2,
             })
         }
 
-        async fn submit_signature(
+        async fn approve_action(
             &self,
             action_id: &str,
-            request: SubmitSignatureRequest,
-        ) -> Result<OrcSignatureResponse, OrchestratorError> {
+            request: ApproveActionRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            *self.last_submit_request.lock().unwrap() = Some((action_id.to_string(), request));
-            Ok(OrcSignatureResponse {
-                quorum_reached: false,
-                signatures_count: 1,
-                threshold: 2,
+            *self.last_approve_request.lock().unwrap() = Some((action_id.to_string(), request));
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: "strata_admin".to_string(),
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: "pending".to_string(),
+                signatures: vec![],
             })
         }
     }
@@ -355,7 +240,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, &action_hex, 1, &sig)
+        let result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -367,6 +252,7 @@ mod tests {
         let req = mock.last_create_request().expect("request sent");
         assert_eq!(req.seq_no, 1);
         assert_eq!(req.action_hex, action_hex);
+        assert_eq!(req.authority, "strata_admin");
     }
 
     #[tokio::test]
@@ -380,10 +266,9 @@ mod tests {
             .await
             .expect("should succeed");
 
-        assert!(!result.quorum_reached);
-        assert_eq!(result.signatures_count, 1);
+        assert_eq!(result.action_id, "action_1");
 
-        let (action_id, req) = mock.last_submit_request().expect("request sent");
+        let (action_id, req) = mock.last_approve_request().expect("request sent");
         assert_eq!(action_id, "action_1");
         assert_eq!(req.signer_pubkey, sig.signer_pubkey);
     }
@@ -398,20 +283,6 @@ mod tests {
 
         assert_eq!(result.action_id, "action_1");
         assert_eq!(result.authority, "strata_admin");
-        assert_eq!(result.threshold, 2);
-    }
-
-    #[tokio::test]
-    async fn test_list_proposals() {
-        let mock = MockOrchestratorClient::new();
-
-        let result = list_proposals(&mock, Some("pending"))
-            .await
-            .expect("should succeed");
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].status, "pending");
-        assert_eq!(result[0].threshold, 2);
     }
 
     #[tokio::test]
@@ -421,7 +292,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let created = create_update_action(&mock, &action_hex, 1, &sig)
+        let created = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -440,7 +311,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let _result = create_update_action(&mock, &action_hex, 1, &sig)
+        let _result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -464,7 +335,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, &action_hex, 1, &sig).await;
+        let result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig).await;
 
         assert!(matches!(
             result.unwrap_err(),
