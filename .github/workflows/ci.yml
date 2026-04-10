@@ -26,6 +26,10 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libappindicator3-dev
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            e2e-tests -> target
 
       - name: Check formatting
         run: cargo fmt --check
