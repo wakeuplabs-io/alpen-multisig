@@ -150,6 +150,22 @@ cd desktop-app && npm run build
 
 ---
 
+## Phase 7b — Documentation update
+
+If the implementation introduced or changed any of the following, update the relevant docs:
+
+- **New modules, files, or directory structure** → update `docs/architecture/overview.md` (file layout diagrams, module descriptions)
+- **New abstractions (traits, ports, service boundaries)** → update the relevant ADR or create a new one in `docs/architecture/adrs/`
+- **Changes to data flow or communication patterns** → update sequence/flow diagrams in `docs/architecture/overview.md`
+- **New dependencies** → verify `docs/architecture/adrs/001-alpen-crate-dependencies.md` is up to date
+- **POC/discovery progress** → update status in `docs/2-discovery/` plan documents (e.g., slice status from "Planning" to "In progress" or "Done")
+
+Only update docs that are actually affected by the changes. Do not create new documentation files unless the change introduces a concept not covered by existing docs.
+
+**Gate:** Architecture docs reflect the current state of the code. No stale diagrams or descriptions.
+
+---
+
 ## Phase 8 — PR
 
 1. Commit with a descriptive message:
