@@ -23,9 +23,9 @@ pub(crate) enum OrchestratorError {
 // ─── Transport DTOs ─────────────────────────────────────────────────────────
 
 /// Request to create a proposal with initial signature.
+/// Authority is implicit — derived from the authenticated session.
 #[derive(Debug, Serialize)]
 pub(crate) struct CreateProposalRequest {
-    pub(crate) authority: String,
     pub(crate) seq_no: u64,
     pub(crate) action_hex: String,
     pub(crate) signer_pubkey: String,
@@ -48,6 +48,7 @@ pub(crate) struct ProposalResponse {
     pub(crate) action_hex: String,
     pub(crate) status: String,
     pub(crate) signatures: Vec<SignatureInfo>,
+    pub(crate) threshold: u32,
 }
 
 /// Summary of a proposal for list views.
@@ -100,10 +101,9 @@ pub(crate) trait OrchestratorClient: Send + Sync {
         request: CreateProposalRequest,
     ) -> Result<ProposalResponse, OrchestratorError>;
 
-    /// List proposals for an authority, optionally filtered by status.
+    /// List proposals for the authenticated authority, optionally filtered by status.
     async fn list_proposals(
         &self,
-        authority: &str,
         status: Option<&str>,
     ) -> Result<Vec<ProposalSummary>, OrchestratorError>;
 
@@ -186,15 +186,13 @@ impl OrchestratorClient for HttpOrchestratorClient {
 
     async fn list_proposals(
         &self,
-        authority: &str,
         status: Option<&str>,
     ) -> Result<Vec<ProposalSummary>, OrchestratorError> {
         let token = self.token()?;
         let mut req = self
             .client
             .get(format!("{}/proposals", self.base_url))
-            .bearer_auth(token)
-            .query(&[("authority", authority)]);
+            .bearer_auth(token);
 
         if let Some(s) = status {
             req = req.query(&[("status", s)]);
