@@ -8,10 +8,7 @@ import type { ApiResult } from '@/types'
 //   const result = await tauriCall<Proposal[]>('list_proposals', { status: 'pending' })
 //   if (result.ok) console.log(result.data)
 
-export async function tauriCall<T>(
-	command: string,
-	args?: Record<string, unknown>
-): Promise<ApiResult<T>> {
+export async function tauriCall<T>(command: string, args?: Record<string, unknown>): Promise<ApiResult<T>> {
 	try {
 		const data = await invoke<T>(command, args)
 		return { ok: true, data }

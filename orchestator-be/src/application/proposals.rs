@@ -54,6 +54,7 @@ pub struct ProposalSignature {
 }
 
 /// Quorum progress for a proposal.
+#[allow(dead_code)] // Planned: quorum detection
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuorumStatus {
     pub collected: u32,

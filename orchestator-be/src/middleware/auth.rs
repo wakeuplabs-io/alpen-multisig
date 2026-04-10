@@ -3,6 +3,7 @@ use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 
 /// Extractor that validates the session token from the Authorization header
 /// and injects the authenticated session into handler arguments.
+#[allow(dead_code)] // Planned: auth middleware
 pub struct AuthenticatedSession(pub Session);
 
 #[async_trait]

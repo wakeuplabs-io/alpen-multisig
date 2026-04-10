@@ -6,9 +6,7 @@ import type { ApiResult, Proposal, ProposalSignature, ProposalStatus } from '@/t
 
 // ─── Example (implemented) ────────────────────────────────────────────────────
 
-export async function listProposals(
-	status?: ProposalStatus
-): Promise<ApiResult<{ proposals: Proposal[] }>> {
+export async function listProposals(status?: ProposalStatus): Promise<ApiResult<{ proposals: Proposal[] }>> {
 	return tauriCall('list_proposals', { status })
 }
 
@@ -16,9 +14,7 @@ export async function listProposals(
 // Each one calls tauriCall('<command_name>', { ...args }) and the corresponding
 // Tauri command in main.rs reads the session token from AppState internally.
 
-export async function getProposal(
-	_actionId: string
-): Promise<ApiResult<Proposal>> {
+export async function getProposal(_actionId: string): Promise<ApiResult<Proposal>> {
 	throw new Error('TODO: invoke get_proposal Tauri command')
 }
 
@@ -28,7 +24,7 @@ export type CreateProposalPayload = {
 }
 
 export async function createProposal(
-	_payload: CreateProposalPayload
+	_payload: CreateProposalPayload,
 ): Promise<ApiResult<{ actionId: string; proposal: Proposal }>> {
 	throw new Error('TODO: invoke create_proposal Tauri command')
 }
@@ -36,13 +32,11 @@ export async function createProposal(
 export async function submitSignature(
 	_actionId: string,
 	_signerPubkey: string,
-	_signature: string
+	_signature: string,
 ): Promise<ApiResult<{ signatureId: string; quorumReached: boolean }>> {
 	throw new Error('TODO: invoke submit_signature Tauri command')
 }
 
-export async function listSignatures(
-	_actionId: string
-): Promise<ApiResult<{ signatures: ProposalSignature[] }>> {
+export async function listSignatures(_actionId: string): Promise<ApiResult<{ signatures: ProposalSignature[] }>> {
 	throw new Error('TODO: invoke list_signatures Tauri command')
 }
