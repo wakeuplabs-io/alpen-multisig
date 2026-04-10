@@ -1,80 +1,139 @@
-//! Proposal signing flow — orchestrates signing.rs + orchestrator client.
+//! Proposal management — application layer entry point for the desktop app.
 //!
-//! These functions compose sighash computation, ECDSA signing, and orchestrator
-//! communication into high-level operations (create proposal, sign proposal, etc.).
+//! These functions are the business API consumed by Tauri commands, CLI, or any
+//! other interface. They receive already-signed data (signing happens externally,
+//! e.g. hardware wallet or software signer) and delegate persistence/coordination
+//! to the orchestrator client.
+//!
+//! Domain types are defined here — orchestrator DTOs never leak to consumers.
 
 use crate::application::orchestrator_client::{
-    CreateProposalRequest, OrchestratorClient, OrchestratorError, ProposalDetail, ProposalResponse,
-    ProposalSummary, SignatureResponse, SubmitSignatureRequest,
+    CreateProposalRequest, OrchestratorClient, OrchestratorError, SubmitSignatureRequest,
 };
-use crate::signing;
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
 /// Errors that can occur during proposal operations.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProposalError {
-    #[error("Signing failed: {0}")]
-    Signing(String),
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
 }
 
-// ─── Production functions ───────────────────────────────────────────────────
+// ─── Domain types ──────────────────────────────────────────────────────────
 
-/// Compute sighash and sign it. Shared by create_proposal and sign_proposal.
-fn compute_and_sign(
-    secret_key_hex: &str,
-    seq_no: u64,
-    action_hex: &str,
-) -> Result<(String, String, String), ProposalError> {
-    let sighash = signing::compute_sighash(seq_no, action_hex).map_err(ProposalError::Signing)?;
-    let sig_result = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex)
-        .map_err(ProposalError::Signing)?;
-    Ok((
-        sighash.sighash_hex,
-        sig_result.public_key_hex,
-        sig_result.signature_hex,
-    ))
+/// A signature attached to a proposal.
+#[derive(Debug, Clone)]
+pub(crate) struct Signature {
+    pub(crate) signer_pubkey: String,
+    pub(crate) signature_hex: String,
 }
 
-/// Create a proposal: compute sighash, sign it, send to orchestrator with first signature.
+/// Result of creating a proposal.
+#[derive(Debug, Clone)]
+pub(crate) struct Proposal {
+    pub(crate) action_id: String,
+    pub(crate) authority: String,
+    pub(crate) seq_no: u64,
+    pub(crate) action_hex: String,
+    pub(crate) status: String,
+    pub(crate) signatures: Vec<Signature>,
+}
+
+/// Summary of a proposal for list views.
+#[derive(Debug, Clone)]
+pub(crate) struct ProposalSummary {
+    pub(crate) action_id: String,
+    pub(crate) authority: String,
+    pub(crate) seq_no: u64,
+    pub(crate) status: String,
+    pub(crate) signature_count: u32,
+    pub(crate) threshold: u32,
+}
+
+/// Full proposal detail including all signatures.
+#[derive(Debug, Clone)]
+pub(crate) struct ProposalDetail {
+    pub(crate) action_id: String,
+    pub(crate) authority: String,
+    pub(crate) seq_no: u64,
+    pub(crate) action_hex: String,
+    pub(crate) status: String,
+    pub(crate) signatures: Vec<Signature>,
+    pub(crate) threshold: u32,
+}
+
+/// Result of submitting a signature.
+#[derive(Debug, Clone)]
+pub(crate) struct SignatureResult {
+    pub(crate) quorum_reached: bool,
+    pub(crate) signatures_count: u32,
+    pub(crate) threshold: u32,
+}
+
+// ─── Production functions ───────────────────────────────────────────────────
+
+/// Create a proposal with the first signature.
+///
+/// The caller is responsible for computing the sighash and signing it
+/// (via `signing::compute_sighash` + hardware wallet or `signing::sign_sighash`).
+/// This function only handles coordination with the orchestrator.
 pub(crate) async fn create_proposal(
     client: &dyn OrchestratorClient,
-    secret_key_hex: &str,
     authority: &str,
     seq_no: u64,
     action_hex: &str,
-) -> Result<ProposalResponse, ProposalError> {
-    let (_sighash, pubkey, signature) = compute_and_sign(secret_key_hex, seq_no, action_hex)?;
-
+    signer_pubkey: &str,
+    signature_hex: &str,
+) -> Result<Proposal, ProposalError> {
     let request = CreateProposalRequest {
         authority: authority.to_string(),
         seq_no,
         action_hex: action_hex.to_string(),
-        signer_pubkey: pubkey,
-        signature_hex: signature,
+        signer_pubkey: signer_pubkey.to_string(),
+        signature_hex: signature_hex.to_string(),
     };
 
-    Ok(client.create_proposal(request).await?)
+    let res = client.create_proposal(request).await?;
+
+    Ok(Proposal {
+        action_id: res.action_id,
+        authority: res.authority,
+        seq_no: res.seq_no,
+        action_hex: res.action_hex,
+        status: res.status,
+        signatures: res
+            .signatures
+            .into_iter()
+            .map(|s| Signature {
+                signer_pubkey: s.signer_pubkey,
+                signature_hex: s.signature_hex,
+            })
+            .collect(),
+    })
 }
 
-/// Sign an existing proposal: compute sighash, sign it, submit signature to orchestrator.
+/// Submit a signature for an existing proposal.
+///
+/// The caller is responsible for signing the sighash externally.
 pub(crate) async fn sign_proposal(
     client: &dyn OrchestratorClient,
-    secret_key_hex: &str,
     action_id: &str,
-    action_hex: &str,
-    seq_no: u64,
-) -> Result<SignatureResponse, ProposalError> {
-    let (_sighash, pubkey, signature) = compute_and_sign(secret_key_hex, seq_no, action_hex)?;
-
+    signer_pubkey: &str,
+    signature_hex: &str,
+) -> Result<SignatureResult, ProposalError> {
     let request = SubmitSignatureRequest {
-        signer_pubkey: pubkey,
-        signature_hex: signature,
+        signer_pubkey: signer_pubkey.to_string(),
+        signature_hex: signature_hex.to_string(),
     };
 
-    Ok(client.submit_signature(action_id, request).await?)
+    let res = client.submit_signature(action_id, request).await?;
+
+    Ok(SignatureResult {
+        quorum_reached: res.quorum_reached,
+        signatures_count: res.signatures_count,
+        threshold: res.threshold,
+    })
 }
 
 /// List proposals for an authority, optionally filtered by status.
@@ -83,7 +142,19 @@ pub(crate) async fn list_proposals(
     authority: &str,
     status: Option<&str>,
 ) -> Result<Vec<ProposalSummary>, ProposalError> {
-    Ok(client.list_proposals(authority, status).await?)
+    let items = client.list_proposals(authority, status).await?;
+
+    Ok(items
+        .into_iter()
+        .map(|s| ProposalSummary {
+            action_id: s.action_id,
+            authority: s.authority,
+            seq_no: s.seq_no,
+            status: s.status,
+            signature_count: s.signature_count,
+            threshold: s.threshold,
+        })
+        .collect())
 }
 
 /// Get full details of a specific proposal.
@@ -91,7 +162,24 @@ pub(crate) async fn get_proposal(
     client: &dyn OrchestratorClient,
     action_id: &str,
 ) -> Result<ProposalDetail, ProposalError> {
-    Ok(client.get_proposal(action_id).await?)
+    let res = client.get_proposal(action_id).await?;
+
+    Ok(ProposalDetail {
+        action_id: res.action_id,
+        authority: res.authority,
+        seq_no: res.seq_no,
+        action_hex: res.action_hex,
+        status: res.status,
+        signatures: res
+            .signatures
+            .into_iter()
+            .map(|s| Signature {
+                signer_pubkey: s.signer_pubkey,
+                signature_hex: s.signature_hex,
+            })
+            .collect(),
+        threshold: res.threshold,
+    })
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -99,8 +187,11 @@ pub(crate) async fn get_proposal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::orchestrator_client::OrchestratorError;
-    use crate::application::orchestrator_client::SignatureInfo;
+    use crate::application::orchestrator_client::{
+        OrchestratorError, ProposalDetail as OrcProposalDetail,
+        ProposalResponse as OrcProposalResponse, ProposalSummary as OrcProposalSummary,
+        SignatureInfo, SignatureResponse as OrcSignatureResponse,
+    };
     use crate::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;
@@ -145,6 +236,13 @@ mod tests {
         hex::encode(borsh::to_vec(&build_demo_action()).expect("action borsh-serializes"))
     }
 
+    /// Sign externally (simulates what HW wallet or software signer would do).
+    fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> (String, String) {
+        let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
+        let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
+        (sig.public_key_hex, sig.signature_hex)
+    }
+
     /// Mock orchestrator client that records calls and returns canned responses.
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
@@ -183,14 +281,14 @@ mod tests {
         async fn create_proposal(
             &self,
             request: CreateProposalRequest,
-        ) -> Result<ProposalResponse, OrchestratorError> {
+        ) -> Result<OrcProposalResponse, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            let response = ProposalResponse {
+            let response = OrcProposalResponse {
                 action_id: format!("action_{}", request.seq_no),
                 authority: request.authority.clone(),
                 seq_no: request.seq_no,
@@ -209,14 +307,14 @@ mod tests {
             &self,
             authority: &str,
             _status: Option<&str>,
-        ) -> Result<Vec<ProposalSummary>, OrchestratorError> {
+        ) -> Result<Vec<OrcProposalSummary>, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            Ok(vec![ProposalSummary {
+            Ok(vec![OrcProposalSummary {
                 action_id: "action_1".to_string(),
                 authority: authority.to_string(),
                 seq_no: 1,
@@ -226,14 +324,17 @@ mod tests {
             }])
         }
 
-        async fn get_proposal(&self, action_id: &str) -> Result<ProposalDetail, OrchestratorError> {
+        async fn get_proposal(
+            &self,
+            action_id: &str,
+        ) -> Result<OrcProposalDetail, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
                     message: "mock error".to_string(),
                 });
             }
-            Ok(ProposalDetail {
+            Ok(OrcProposalDetail {
                 action_id: action_id.to_string(),
                 authority: "strata_admin".to_string(),
                 seq_no: 1,
@@ -248,7 +349,7 @@ mod tests {
             &self,
             action_id: &str,
             request: SubmitSignatureRequest,
-        ) -> Result<SignatureResponse, OrchestratorError> {
+        ) -> Result<OrcSignatureResponse, OrchestratorError> {
             if self.should_fail {
                 return Err(OrchestratorError::Backend {
                     status: 500,
@@ -256,7 +357,7 @@ mod tests {
                 });
             }
             *self.last_submit_request.lock().unwrap() = Some((action_id.to_string(), request));
-            Ok(SignatureResponse {
+            Ok(OrcSignatureResponse {
                 quorum_reached: false,
                 signatures_count: 1,
                 threshold: 2,
@@ -267,12 +368,13 @@ mod tests {
     // ─── Tests ──────────────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn test_create_proposal_computes_sighash_signs_and_sends() {
+    async fn test_create_proposal_sends_presigned_data() {
         let mock = MockOrchestratorClient::new();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
-        let result = create_proposal(&mock, &keys.secret_key_hex, "strata_admin", 1, &action_hex)
+        let result = create_proposal(&mock, "strata_admin", 1, &action_hex, &pubkey, &signature)
             .await
             .expect("should succeed");
 
@@ -281,6 +383,7 @@ mod tests {
         assert_eq!(result.seq_no, 1);
         assert_eq!(result.status, "pending");
         assert_eq!(result.signatures.len(), 1);
+        assert_eq!(result.signatures[0].signer_pubkey, pubkey);
 
         let req = mock
             .last_create_request()
@@ -288,17 +391,18 @@ mod tests {
         assert_eq!(req.authority, "strata_admin");
         assert_eq!(req.seq_no, 1);
         assert_eq!(req.action_hex, action_hex);
-        assert_eq!(req.signer_pubkey, keys.public_key_hex);
-        assert!(!req.signature_hex.is_empty());
+        assert_eq!(req.signer_pubkey, pubkey);
+        assert_eq!(req.signature_hex, signature);
     }
 
     #[tokio::test]
-    async fn test_sign_proposal_computes_sighash_signs_and_submits() {
+    async fn test_sign_proposal_submits_presigned_data() {
         let mock = MockOrchestratorClient::new();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
-        let result = sign_proposal(&mock, &keys.secret_key_hex, "action_1", &action_hex, 1)
+        let result = sign_proposal(&mock, "action_1", &pubkey, &signature)
             .await
             .expect("should succeed");
 
@@ -309,12 +413,12 @@ mod tests {
             .last_submit_request()
             .expect("should have received request");
         assert_eq!(action_id, "action_1");
-        assert_eq!(req.signer_pubkey, keys.public_key_hex);
-        assert!(!req.signature_hex.is_empty());
+        assert_eq!(req.signer_pubkey, pubkey);
+        assert_eq!(req.signature_hex, signature);
     }
 
     #[tokio::test]
-    async fn test_list_proposals_returns_filtered_results() {
+    async fn test_list_proposals_returns_domain_types() {
         let mock = MockOrchestratorClient::new();
 
         let result = list_proposals(&mock, "strata_admin", Some("pending"))
@@ -324,10 +428,11 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].authority, "strata_admin");
         assert_eq!(result[0].status, "pending");
+        assert_eq!(result[0].threshold, 2);
     }
 
     #[tokio::test]
-    async fn test_get_proposal_returns_detail() {
+    async fn test_get_proposal_returns_domain_detail() {
         let mock = MockOrchestratorClient::new();
 
         let result = get_proposal(&mock, "action_1")
@@ -344,8 +449,9 @@ mod tests {
         let mock = MockOrchestratorClient::new();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
-        let created = create_proposal(&mock, &keys.secret_key_hex, "strata_admin", 1, &action_hex)
+        let created = create_proposal(&mock, "strata_admin", 1, &action_hex, &pubkey, &signature)
             .await
             .expect("create should succeed");
 
@@ -363,8 +469,9 @@ mod tests {
         let mock = MockOrchestratorClient::new();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
-        let _result = create_proposal(&mock, &keys.secret_key_hex, "strata_admin", 1, &action_hex)
+        let _result = create_proposal(&mock, "strata_admin", 1, &action_hex, &pubkey, &signature)
             .await
             .expect("should succeed");
 
@@ -385,42 +492,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_proposal_invalid_action_hex_fails() {
-        let mock = MockOrchestratorClient::new();
-        let keys = generate_test_keypair();
-
-        let result = create_proposal(
-            &mock,
-            &keys.secret_key_hex,
-            "strata_admin",
-            1,
-            "not_valid_hex",
-        )
-        .await;
-
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ProposalError::Signing(_)));
-    }
-
-    #[tokio::test]
-    async fn test_create_proposal_invalid_secret_key_fails() {
-        let mock = MockOrchestratorClient::new();
-        let action_hex = demo_action_hex();
-
-        let result = create_proposal(&mock, "invalid_key", "strata_admin", 1, &action_hex).await;
-
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ProposalError::Signing(_)));
-    }
-
-    #[tokio::test]
     async fn test_create_proposal_backend_error_propagates() {
         let mock = MockOrchestratorClient::failing();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
         let result =
-            create_proposal(&mock, &keys.secret_key_hex, "strata_admin", 1, &action_hex).await;
+            create_proposal(&mock, "strata_admin", 1, &action_hex, &pubkey, &signature).await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -434,8 +513,9 @@ mod tests {
         let mock = MockOrchestratorClient::failing();
         let keys = generate_test_keypair();
         let action_hex = demo_action_hex();
+        let (pubkey, signature) = sign_action(&keys.secret_key_hex, 1, &action_hex);
 
-        let result = sign_proposal(&mock, &keys.secret_key_hex, "action_1", &action_hex, 1).await;
+        let result = sign_proposal(&mock, "action_1", &pubkey, &signature).await;
 
         assert!(result.is_err());
         assert!(matches!(
