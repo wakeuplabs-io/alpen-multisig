@@ -357,11 +357,12 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 |-------|-------|
 | Backend | Rust, Axum 0.7, Tokio, Postgres (planned), `serde`, `tracing`, `tower-http` |
 | Desktop Shell | Tauri 2, Rust, reqwest 0.12 (backend proxy), `strata-asm-txs-admin`, `strata-crypto` |
-| Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6, `@tauri-apps/api` |
+| Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6, `@tauri-apps/api`, ESLint 9, Prettier 3 |
 | Signing | ECDSA (secp256k1 0.29.1), Borsh-encoded `MultisigAction`, SPS-65 tagged sighash |
 | HW Wallet | Planned: HWI subprocess, Taproot (BIP-137), derivation `m/86'/0'/73'/0/n` |
 | Protocol | SPS-50/51/65, Borsh serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
 | E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
+| CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](architecture/adrs/004-ci-pipeline-strategy.md) |
 
 ## Current State
 
@@ -374,6 +375,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 13 tests
 - Typed API client, Tauri bridge, and hook state machines (frontend)
 - E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
+- CI pipeline: GitHub Actions with 2 parallel jobs — Rust (lint/build/test + e2e), frontend (lint/format/build) (ADR-004)
 - Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
 - Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
 

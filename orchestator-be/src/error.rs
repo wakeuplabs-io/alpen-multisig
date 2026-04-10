@@ -11,9 +11,11 @@ pub enum AppError {
     #[error("not found")]
     NotFound,
 
+    #[allow(dead_code)] // Planned: auth middleware
     #[error("unauthorized")]
     Unauthorized,
 
+    #[allow(dead_code)] // Planned: auth middleware
     #[error("forbidden: {0}")]
     Forbidden(String),
 

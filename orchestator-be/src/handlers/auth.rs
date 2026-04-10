@@ -2,6 +2,7 @@ use crate::{application, error::Result, state::AppState};
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)] // Planned: auth flow implementation
 #[derive(Debug, Deserialize)]
 pub struct ChallengeQuery {
     pub authority: String,

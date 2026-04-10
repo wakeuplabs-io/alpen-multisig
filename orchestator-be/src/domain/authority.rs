@@ -12,10 +12,12 @@ pub enum Authority {
 }
 
 /// A public key identifying a signer within an authority's signer set.
+#[allow(dead_code)] // Planned: signer verification against ASM state
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SignerPubkey(pub String);
 
 /// The canonical signer set for a given authority, derived from onchain ASM state.
+#[allow(dead_code)] // Planned: signer verification against ASM state
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignerSet {
     pub authority: Authority,

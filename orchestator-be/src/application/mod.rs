@@ -11,6 +11,7 @@ use crate::error::Result;
 // ─── Auth (unchanged — todo stubs) ─────────────────────────────────────────
 
 /// Input for creating a new session after attestation verification.
+#[allow(dead_code)] // Planned: auth flow implementation
 pub(crate) struct CreateSessionInput {
     pub(crate) ephemeral_pubkey: String,
     pub(crate) nonce: String,
@@ -20,6 +21,7 @@ pub(crate) struct CreateSessionInput {
 }
 
 /// Result of creating a new session.
+#[allow(dead_code)] // Planned: auth flow implementation
 pub(crate) struct SessionResult {
     pub(crate) session_id: String,
     pub(crate) expires_at: String,

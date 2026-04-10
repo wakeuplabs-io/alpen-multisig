@@ -55,7 +55,7 @@ impl ProposalRepository for InMemoryProposalRepository {
     fn list_by_status(&self, status: Option<ProposalStatus>) -> Vec<&Proposal> {
         self.proposals
             .values()
-            .filter(|p| status.map_or(true, |s| p.status == s))
+            .filter(|p| status.is_none_or(|s| p.status == s))
             .collect()
     }
 }

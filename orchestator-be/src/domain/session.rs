@@ -10,6 +10,7 @@ use uuid::Uuid;
 ///   2. Signer signs attestation with canonical admin key (binds ephemeral key, authority, nonce/expiry)
 ///   3. Backend verifies against ASM canonical signer set
 ///   4. All subsequent requests signed with ephemeral key
+#[allow(dead_code)] // Planned: auth flow implementation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: Uuid,
@@ -24,6 +25,7 @@ pub struct Session {
 }
 
 impl Session {
+    #[allow(dead_code)] // Planned: session expiry checks
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
