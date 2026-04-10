@@ -136,30 +136,76 @@ Sessions are nonce + expiry bounded and scoped to exactly one authority.
 
 **Proposal Lifecycle:**
 
+```mermaid
+stateDiagram-v2
+
+%% =========================
+%% OFF-CHAIN STATES
+%% =========================
+state "Off-chain (orchestrator-be)" as OFFCHAIN {
+
+    [*] --> Pending
+
+    Pending --> QuorumMet: quorum reached
+    Pending --> Expired: 7 days elapsed
+
+    QuorumMet --> Approved: tx broadcasted
+    QuorumMet --> Expired: 7 days elapsed
+    QuorumMet --> CanceledOff: canceled by signer
+
+    Pending --> CanceledOff: canceled by signer
+}
+
+%% =========================
+%% ON-CHAIN STATES
+%% =========================
+state "On-chain (Bitcoin + ASM)" as ONCHAIN {
+
+    Approved --> Enacted: activation_height reached
+    Approved --> CanceledOn: cancel tx confirmed
+}
+
+%% =========================
+%% SPECIAL CASE
+%% =========================
+Pending --> ExecutedImmediate: quorum + broadcast (special roles)
+
+%% =========================
+%% TERMINAL STATES
+%% =========================
+state Expired {
+    [*] --> EndExpired
+}
+
+state CanceledOff {
+    [*] --> EndCanceledOff
+}
+
+state CanceledOn {
+    [*] --> EndCanceledOn
+}
+
+state Enacted {
+    [*] --> EndEnacted
+}
+
+state ExecutedImmediate {
+    [*] --> EndExecuted
+}
 ```
-                    ┌──────────┐
-                    │ Pending  │ (7-day expiry window)
-                    └────┬─────┘
-                         │
-              ┌──────────┼──────────┐
-              │          │          │
-              ▼          ▼          ▼
-        ┌──────────┐ ┌────────┐ ┌─────────┐
-        │ Approved │ │Expired │ │Canceled │
-        │(broadcast│ │(timeout│ │(by auth)│
-        │ on-chain)│ │pre-    │ │         │
-        └────┬─────┘ │quorum) │ └─────────┘
-             │        └────────┘
-      ┌──────┼──────┐
-      │             │
-      ▼             ▼
-┌──────────┐  ┌──────────┐
-│ Enacted  │  │ Canceled │
-│(after    │  │(during   │
-│confirm.  │  │ waiting  │
-│depth)    │  │ period)  │
-└──────────┘  └──────────┘
-```
+
+**State reference:**
+
+| State | Layer | Description | Visible to |
+|---|---|---|---|
+| **Pending** | Off-chain (`orchestator-be`) | Proposal created, signatures being collected. Expires after 7 days from creation if quorum is not reached. | Signers of that authority only |
+| **Quorum Met** | Off-chain (`orchestator-be`) | Threshold of signatures collected. "Send" button available. Still within the 7-day window — if no one broadcasts before it elapses, transitions to Expired. | Signers of that authority only |
+| **Approved** | On-chain (Bitcoin + ASM queue) | Bitcoin tx confirmed in a block. Update is queued in the ASM waiting for its activation height. Can still be canceled during this window. | Signers of that authority only |
+| **Enacted** | On-chain (ASM final state) | `activation_height` reached. ASM applied the governance change. Irreversible. | Signers — Past view |
+| **Executed (immediate)** | On-chain (ASM) | Applies only to Sequencer Manager and Security Council updates. No confirmation queue — change takes effect in the same block the tx is mined. No Approved or on-chain Canceled states exist for these roles. | Signers — Past view |
+| **Expired** | Off-chain (terminal) | 7-day window elapsed before the tx was broadcast. Applies whether quorum was reached or not. | Signers — Past view |
+| **Canceled (off-chain)** | Off-chain (terminal) | Manually canceled by a signer before the Bitcoin tx was ever broadcast. No on-chain record. | Signers — Past view |
+| **Canceled (on-chain)** | On-chain (terminal) | A `Cancel` tx (signed by the same authority) was broadcast and confirmed during the ~2016 block wait window after Approved. Not available for Sequencer Manager or Security Council (they execute immediately, no wait window). | Signers — Past view |
 
 ### 2. Desktop App (`desktop-app`)
 
