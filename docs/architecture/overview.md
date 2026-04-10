@@ -297,8 +297,8 @@ Separate crate (excluded from workspace) with its own `rust-toolchain.toml` (nig
 **`e2e_admin_subprotocol`** — Full admin action flow against real Alpen/Strata crates:
 1. Generate signer keys → 2. Build `MultisigAction` → 3. Compute SPS-65 sighash → 4. ECDSA sign (threshold) → 5. Construct Bitcoin tx (SPS-50 OP_RETURN + SPS-51 witness) → 6. Parse back and verify signatures
 
-**`e2e_propose_sign`** — Desktop ↔ Orchestrator integration (7 tests):
-Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Tests: happy path (create → get → approve → get → verify_threshold), duplicate rejection, nonexistent proposal errors, invalid hex rejection, and multi-proposal independence.
+**`e2e_propose_sign`** — Desktop ↔ Orchestrator integration:
+Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing.
 
 **Dependencies:**
 - `desktop-app` (path) — imports `application::proposals`, `application::orchestrator_client`, `signing`
@@ -373,7 +373,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Tauri IPC layer: auth commands proxying to backend with session token stored securely in Rust (never exposed to JS)
 - Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 13 tests
 - Typed API client, Tauri bridge, and hook state machines (frontend)
-- E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator, 7 tests)
+- E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
 - Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
 - Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
 

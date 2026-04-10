@@ -80,7 +80,7 @@ Lives in `e2e-tests/tests/e2e_propose_sign.rs`. Depends on `desktop-app` lib.
 
 ## Test Cases
 
-1. **Happy path: create → get → approve → get → verify_threshold** — real desktop proposals.rs, real HTTP, real orchestrator subprocess, real cryptographic signing
+1. **Happy path: create → get → approve → get → verify_threshold** — real desktop `proposals.rs`, real HTTP, real orchestrator subprocess, real cryptographic signing. Single test covering the full propose → sign → verify flow.
 
 ## Module structure
 
