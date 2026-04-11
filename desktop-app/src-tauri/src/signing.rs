@@ -125,7 +125,6 @@ pub fn verify_threshold(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use borsh::BorshSerialize;
     use rand::rngs::OsRng;
     use strata_asm_params::Role;
     use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
