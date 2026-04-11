@@ -8,7 +8,6 @@
 use std::net::TcpListener;
 use std::num::NonZero;
 use std::process::{Child, Command};
-use std::sync::Once;
 use std::time::Duration;
 
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
@@ -84,38 +83,36 @@ fn find_available_port() -> u16 {
         .port()
 }
 
-static BUILD_ONCE: Once = Once::new();
-static mut BINARY_PATH: String = String::new();
+static BINARY_PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// Build the orchestrator binary once and return the path to the executable.
 fn orchestrator_binary() -> String {
-    BUILD_ONCE.call_once(|| {
-        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap();
+    BINARY_PATH
+        .get_or_init(|| {
+            let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap();
 
-        let status = Command::new("cargo")
-            .current_dir(workspace_root)
-            .args(["build", "-p", "orchestator-be"])
-            .status()
-            .expect("cargo build failed");
-        assert!(status.success(), "cargo build -p orchestator-be failed");
+            let status = Command::new("cargo")
+                .current_dir(workspace_root)
+                .args(["build", "-p", "orchestator-be"])
+                .status()
+                .expect("cargo build failed");
+            assert!(status.success(), "cargo build -p orchestator-be failed");
 
-        let output = Command::new("cargo")
-            .current_dir(workspace_root)
-            .args(["metadata", "--format-version", "1", "--no-deps"])
-            .output()
-            .expect("cargo metadata failed");
-        let metadata: serde_json::Value =
-            serde_json::from_slice(&output.stdout).expect("parse metadata");
-        let target_dir = metadata["target_directory"]
-            .as_str()
-            .expect("target_directory");
-        // SAFETY: Only written inside call_once, read after.
-        unsafe { BINARY_PATH = format!("{target_dir}/debug/server") };
-    });
-    // SAFETY: Read after call_once completes.
-    unsafe { BINARY_PATH.clone() }
+            let output = Command::new("cargo")
+                .current_dir(workspace_root)
+                .args(["metadata", "--format-version", "1", "--no-deps"])
+                .output()
+                .expect("cargo metadata failed");
+            let metadata: serde_json::Value =
+                serde_json::from_slice(&output.stdout).expect("parse metadata");
+            let target_dir = metadata["target_directory"]
+                .as_str()
+                .expect("target_directory");
+            format!("{target_dir}/debug/server")
+        })
+        .clone()
 }
 
 // ─── Crypto helpers ────────────────────────────────────────────────────────

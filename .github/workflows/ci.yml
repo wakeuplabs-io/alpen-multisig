@@ -13,11 +13,13 @@ jobs:
   rust:
     name: Rust (Lint, Build, Test)
     runs-on: ubuntu-latest
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-01-01
           components: rustfmt, clippy
 
       - name: Install Tauri system dependencies
@@ -27,21 +29,19 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            . -> target
-            e2e-tests -> target
+          cache-on-failure: true
 
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Build workspace (shared by clippy and test)
+        run: cargo build --workspace --all-targets
+
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test workspace
-        run: cargo test
-
-      - name: E2E tests
-        run: cd e2e-tests && cargo test
+        run: cargo test --workspace
 
   frontend:
     name: Frontend (Lint, Format, Build)
