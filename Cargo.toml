@@ -1,6 +1,5 @@
 [workspace]
-members = ['orchestator-be', 'desktop-app/src-tauri']
-exclude = ['e2e-tests']
+members = ['orchestator-be', 'desktop-app/src-tauri', 'e2e-tests']
 resolver = '2'
 
 [workspace.dependencies]
@@ -11,6 +10,8 @@ strata-crypto = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
 strata-asm-params = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
 strata-primitives = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
 strata-asm-common = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+strata-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
 
 # From alpenlabs/strata-common (tag-pinned)
 strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc11" }
@@ -19,6 +20,10 @@ strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v
 bitcoin = { version = "0.32.6", features = ["serde"] }
 borsh = { version = "1.5.0", features = ["derive"] }
 secp256k1 = { version = "0.29.1", features = ["global-context", "std"] }
+rand = "0.8"
+hex = "0.4"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
 
 # Shared across workspace members
 serde = { version = "1", features = ["derive"] }

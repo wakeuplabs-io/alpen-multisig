@@ -37,13 +37,13 @@ strata-crypto = { workspace = true }
 
 Alpen crates have transitive dependencies (notably `ssz`) that use `#![feature]` and require nightly Rust. Since the desktop app (Tauri) and backend both need to consume Alpen crates directly (for signing, sighash computation, and signature verification), **the entire workspace uses nightly**.
 
-A root `rust-toolchain.toml` pins the nightly version for all workspace members. The `e2e-tests` crate (not a workspace member) maintains its own `rust-toolchain.toml` that should be kept in sync.
+A root `rust-toolchain.toml` pins the nightly version for all workspace members, including `e2e-tests`.
 
 **This is a temporary decision.** When Alpen publishes crates that compile on stable (either via crates.io or by removing nightly-only transitive deps), the workspace should migrate back to stable. Track upstream progress on the `ssz` crate (`alpenlabs/ssz-gen`).
 
-### e2e-tests remains a separate crate
+### e2e-tests is a workspace member
 
-The `e2e-tests` crate is not a workspace member because it depends on additional test-utils crates (`strata-asm-txs-test-utils`, `strata-test-utils`) that are only needed for integration testing. It maintains its own `Cargo.toml` with explicit dependency pins that **must be kept in sync** with the workspace-level pins manually. When updating Alpen dependency versions, update both locations.
+The `e2e-tests` crate is a workspace member. It depends on additional test-utils crates (`strata-asm-txs-test-utils`, `strata-test-utils`) that are declared in `[workspace.dependencies]` alongside the production crates. This eliminates duplicate compilation and keeps all Alpen dependency pins in a single location.
 
 ### Third-party version alignment
 
@@ -72,7 +72,7 @@ Third-party crates used alongside Alpen crates (`bitcoin`, `borsh`, `secp256k1`)
 ## Risks
 
 1. **Untagged rev pin** — `308211f` does not correspond to any release. Harder to audit and communicate. Mitigated by documenting the rev in this ADR and switching to tags when available.
-2. **Version drift** — If `e2e-tests` and workspace members diverge on Alpen crate versions, compile errors or subtle behavior differences may occur. Mitigated by manual sync discipline and documenting both locations.
+2. **Version drift** — Mitigated by centralizing all Alpen crate pins in the root `[workspace.dependencies]`. All members (including `e2e-tests`) use `workspace = true`.
 3. **Build time** — Git deps clone the full repo on clean builds. Unavoidable without crates.io publication. CI caching helps.
 4. **Nightly requirement** — The entire workspace uses nightly due to transitive deps (`ssz`). This couples us to nightly stability and may introduce unexpected breakage on toolchain updates. Mitigated by pinning a specific nightly version.
 5. **Upstream breaking changes** — Alpen crates are pre-1.0 (`v0.2.0-rc`, `v0.1.0-alpha`). API breakage is expected. Pin updates should be deliberate and tested.
@@ -81,6 +81,5 @@ Third-party crates used alongside Alpen crates (`bitcoin`, `borsh`, `secp256k1`)
 
 1. Check latest tags on both repos
 2. Update `rev` or `tag` in root `Cargo.toml` `[workspace.dependencies]`
-3. Update the same pins in `e2e-tests/Cargo.toml`
-4. Run `cargo build` (workspace) and `cd e2e-tests && cargo test`
-5. Update this ADR with the new pin values
+3. Run `cargo build` and `cargo test` (covers all workspace members including e2e-tests)
+4. Update this ADR with the new pin values
