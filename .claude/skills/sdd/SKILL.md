@@ -178,7 +178,7 @@ Only update docs that are actually affected by the changes. Do not create new do
    ```
 3. Create the PR with `gh`:
    ```bash
-   gh pr create --title "feat(<scope>): <description>" --body "..."
+   gh pr create --base develop --title "feat(<scope>): <description>" --body "..."
    ```
    The PR body must include:
    - Link to the spec (`docs/specs/<feature-slug>.md`)
