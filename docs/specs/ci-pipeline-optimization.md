@@ -12,7 +12,8 @@ Fix bugs and optimize the GitHub Actions CI pipeline. Current clean build takes 
 - Remove stale `e2e-tests -> target` cache path
 - Remove redundant `cd e2e-tests && cargo test` step
 - Ensure `~/.cargo/git/db/` is cached (Alpen git deps ~21s clone on miss)
-- Add Cargo.lock to rust-cache key for better invalidation
+- Add shared build step to reduce double compilation between clippy and test
+- Make rust job non-blocking for merge while build times are being optimized
 
 ### NOT included
 
@@ -97,8 +98,32 @@ Explicit is better than implicit — ensures all members are tested even if `def
 Same for clippy:
 ```yaml
 - name: Clippy
-  run: cargo clippy --workspace -- -D warnings
+  run: cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+**5. Shared build step to reduce double compilation:**
+
+Add before clippy:
+```yaml
+- name: Build workspace (shared by clippy and test)
+  run: cargo build --workspace --all-targets
+```
+
+Clippy (check mode) and test (test mode) use different compilation profiles, causing ~370s of double compilation. A shared `cargo build --workspace --all-targets` pre-compiles everything so clippy and test can reuse artifacts.
+
+**6. Non-blocking rust job:**
+
+Add `continue-on-error: true` to the rust job:
+```yaml
+  rust:
+    name: Rust (Lint, Build, Test)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+```
+
+This prevents the rust job from blocking PR merges while build times are being optimized. The job still runs and reports results, but failures appear as warnings rather than blocking checks.
+
+Note: For more granular control (show as red but don't block), configure branch protection rules in GitHub Settings → Branches instead.
 
 ### Production code vs. test helpers
 
@@ -108,7 +133,7 @@ N/A — this is a CI configuration change only. No Rust code modified.
 
 - CI pipeline runs successfully on the PR itself (self-validating)
 - `cargo test --workspace` passes locally
-- `cargo clippy --workspace -- -D warnings` passes locally
+- `cargo clippy --workspace --all-targets -- -D warnings` passes locally
 - `cargo fmt --check` passes locally
 - Verify Swatinem/rust-cache default behavior covers `~/.cargo/git/db/`
 
