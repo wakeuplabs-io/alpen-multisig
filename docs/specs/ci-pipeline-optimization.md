@@ -13,7 +13,7 @@ Fix bugs and optimize the GitHub Actions CI pipeline. Current clean build takes 
 - Remove redundant `cd e2e-tests && cargo test` step
 - Ensure `~/.cargo/git/db/` is cached (Alpen git deps ~21s clone on miss)
 - Add shared build step to reduce double compilation between clippy and test
-- Make rust job non-blocking for merge while build times are being optimized
+- ~~Make rust job non-blocking for merge~~ — Reverted: `continue-on-error` does not prevent GitHub from waiting for the check to finish before allowing merge (only changes pass/fail status). The rust job remains blocking.
 
 ### NOT included
 
@@ -111,19 +111,9 @@ Add before clippy:
 
 Clippy (check mode) and test (test mode) use different compilation profiles, causing ~370s of double compilation. A shared `cargo build --workspace --all-targets` pre-compiles everything so clippy and test can reuse artifacts.
 
-**6. Non-blocking rust job:**
+**6. Non-blocking rust job (reverted):**
 
-Add `continue-on-error: true` to the rust job:
-```yaml
-  rust:
-    name: Rust (Lint, Build, Test)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-```
-
-This prevents the rust job from blocking PR merges while build times are being optimized. The job still runs and reports results, but failures appear as warnings rather than blocking checks.
-
-Note: For more granular control (show as red but don't block), configure branch protection rules in GitHub Settings → Branches instead.
+`continue-on-error: true` was attempted but reverted. While it changes the job's pass/fail status, GitHub still waits for all checks to complete before allowing merge — it does not skip pending checks. Making the job truly non-blocking would require configuring branch protection rules with specific required checks (excluding the rust job), but no branch protection rules are configured on `develop`. The rust job remains blocking for now.
 
 ### Production code vs. test helpers
 

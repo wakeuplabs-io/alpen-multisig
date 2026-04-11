@@ -13,7 +13,7 @@ jobs:
   rust:
     name: Rust (Lint, Build, Test)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
 

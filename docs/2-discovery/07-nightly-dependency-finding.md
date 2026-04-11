@@ -145,7 +145,7 @@ The main CI cost is double compilation: clippy (check mode) and test (test mode)
 - **e2e-tests in workspace** — Integrated into the Cargo workspace (PR #20), eliminating dual compilation of ~600 crates and centralizing all Alpen dependency pins in one location.
 - **CI toolchain fix** — CI uses `dtolnay/rust-toolchain@master` pinned to the same nightly version as `rust-toolchain.toml` (PR #21).
 - **CI shared build step** — `cargo build --workspace --all-targets` runs before clippy and test to maximize artifact reuse between compilation profiles (PR #21).
-- **CI non-blocking** — Rust job uses `continue-on-error: true` so it does not block PR merges while build times are being optimized (PR #21).
+- **CI remains blocking** — `continue-on-error` was attempted but GitHub still waits for all checks to finish before allowing merge regardless. The rust job blocks PRs until complete (~7.5 min). Future optimization: split into faster backend-only job.
 - **CI cache-on-failure** — `Swatinem/rust-cache` configured with `cache-on-failure: true` so failed runs still populate the cache for faster retries.
 
 ### Potential (not yet implemented)
