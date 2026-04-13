@@ -4,6 +4,7 @@ version = '0.1.0'
 description = 'Tauri hello world'
 authors = ['you']
 edition = '2021'
+default-run = 'desktop-app'
 
 [build-dependencies]
 tauri-build = { version = '2', features = [] }
@@ -28,10 +29,15 @@ rand = "0.8"
 hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
+trezor-client = "0.1.5"
 
 [lib]
 name = "desktop_app"
 path = "src/lib.rs"
+
+[[bin]]
+name = "trezor_test"
+path = "src/bin/trezor_test.rs"
 
 [features]
 custom-protocol = ['tauri/custom-protocol']

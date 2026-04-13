@@ -16,7 +16,7 @@ pub struct SighashResult {
     pub seqno: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct SignatureResult {
     pub public_key_hex: String,
     pub signature_hex: String,

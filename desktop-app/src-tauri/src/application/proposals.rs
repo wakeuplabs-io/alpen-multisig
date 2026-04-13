@@ -8,9 +8,8 @@
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing happens externally (HW wallet, software signer) before reaching this layer.
 
-use crate::application::orchestrator_client::{
-    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError, Proposal,
-};
+use crate::application::traits::{OrchestratorClient, OrchestratorError};
+use crate::domain::proposal::{ApproveActionRequest, CreateProposalRequest, Proposal, Signature};
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
@@ -19,15 +18,6 @@ use crate::application::orchestrator_client::{
 pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
-}
-
-// ─── Domain types ──────────────────────────────────────────────────────────
-
-/// A cryptographic signature from a signer.
-#[derive(Debug, Clone)]
-pub struct Signature {
-    pub signer_pubkey: String,
-    pub signature_hex: String,
 }
 
 // ─── Production functions ───────────────────────────────────────────────────
@@ -87,8 +77,9 @@ pub async fn get_update_action(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::orchestrator_client::{
-        OrchestratorError, Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
+    use crate::application::traits::OrchestratorError;
+    use crate::domain::proposal::{
+        Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
     };
     use crate::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
