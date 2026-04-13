@@ -82,11 +82,14 @@ orchestator-be/src/
 ├── error.rs             # AppError → HTTP status mapping
 ├── domain/
 │   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
+│   ├── proposal.rs      # Proposal, ActionId, ProposalStatus, QuorumStatus, compute_action_id
 │   └── session.rs       # Ephemeral session model, AuthChallenge
 ├── application/
-│   ├── mod.rs           # Auth stubs (todo)
-│   ├── proposals.rs     # Types + business logic: create, approve, get, list proposals
-│   └── repository.rs    # ProposalRepository trait + InMemoryProposalRepository
+│   ├── auth.rs          # Auth business logic (todo stubs)
+│   ├── proposals.rs     # Business logic: create, approve, get, list proposals
+│   └── traits.rs        # ProposalRepository trait
+├── infrastructure/
+│   └── memory_repo.rs   # InMemoryProposalRepository (in-memory impl of the trait)
 ├── handlers/
 │   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session (todo stubs)
 │   └── proposals.rs     # CRUD + approve: POST/GET /proposals, GET /proposals/:action_id, POST /proposals/:action_id/approve
@@ -94,7 +97,7 @@ orchestator-be/src/
     └── auth.rs          # AuthenticatedSession extractor (Bearer token)
 ```
 
-**Layering:** Handlers are thin (parse request → acquire repo lock → call application → format response). Business logic lives in `application/proposals.rs`, with persistence abstracted behind `ProposalRepository` trait. Shared state (`AppState`) holds the repo behind `Arc<RwLock<…>>`. See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
+**Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). `domain/` holds pure types; `application/` holds business logic and trait definitions; `infrastructure/` holds trait implementations; `handlers/` is a thin HTTP boundary. `main.rs` wires concrete impls into `AppState` (repo behind `Arc<RwLock<…>>`). See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
 
 **API Surface (`/api/v1`):**
 
@@ -234,18 +237,25 @@ state ExecutedImmediate {
 
 ```
 desktop-app/src-tauri/src/
-├── lib.rs               # Library crate: exposes application + signing publicly
+├── lib.rs               # Library crate: exposes domain + application + infrastructure + signing
 ├── main.rs              # Tauri binary: registers commands, manages AppState
 ├── state.rs             # AppState (session token in Mutex, backend_url)
-├── commands.rs          # #[tauri::command] functions (thin, delegate to application)
+├── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
+├── commands/
+│   ├── auth.rs              # #[tauri::command] auth wrappers
+│   └── proposals.rs         # #[tauri::command] proposal wrappers
+├── domain/
+│   ├── proposal.rs          # Proposal, ProposalSignature, Signature
+│   └── session.rs           # AuthChallenge, BackendSession, SessionInfo, CreateSessionPayload
 ├── application/
-│   ├── mod.rs               # Auth functions (placeholder) + public submodule declarations
-│   ├── orchestrator_client.rs  # OrchestratorClient trait + HttpOrchestratorClient + transport DTOs
-│   └── proposals.rs         # Application entry point: create/approve/get proposals via OrchestratorClient
-└── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
+│   ├── auth.rs              # Challenge/session HTTP flow
+│   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
+│   └── proposals.rs         # create/approve/get proposals via the trait; fetch_proposals (session-token)
+└── infrastructure/
+    └── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
 ```
 
-**Layering:** Commands are thin (extract State → call application → map errors). Business logic lives in `application/proposals.rs` — the entry point for all proposal operations (see [ADR-003](adrs/003-desktop-application-layer-api.md)). `signing.rs` is standalone and decoupled from both layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
+**Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). Commands are thin (extract State → call application → map errors). Business logic lives in `application/`; transport DTOs live with the trait; the real HTTP client is in `infrastructure/`. `domain/` holds pure client-side types (see [ADR-003](adrs/003-desktop-application-layer-api.md) for entry-point semantics). `signing.rs` is standalone and decoupled from all layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
 **Implemented Tauri commands:**
 - `get_challenge` — Proxies `GET /auth/challenge` to backend
@@ -301,7 +311,7 @@ Separate crate (excluded from workspace) with its own `rust-toolchain.toml` (nig
 Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing.
 
 **Dependencies:**
-- `desktop-app` (path) — imports `application::proposals`, `application::orchestrator_client`, `signing`
+- `desktop-app` (path) — imports `application::proposals`, `domain::proposal`, `infrastructure::orchestrator_client`, `signing`
 - `alpenlabs/alpen` @ rev `308211f` — `strata-asm-txs-admin`, `strata-crypto`, `strata-asm-params`, `strata-primitives`, `strata-asm-common`, test utils
 - `alpenlabs/strata-common` @ tag `v0.1.0-alpha-rc11` — `strata-l1-txfmt`
 

@@ -1,7 +1,9 @@
-//! Desktop application library — exposes the application layer for external consumers.
+//! Desktop application library — exposes layered modules for external consumers.
 //!
-//! The `application::proposals` module is the public entry point for proposal operations.
-//! The `signing` module provides cryptographic signing utilities.
+//! Layers follow ADR-005: `domain` (pure types), `application` (business logic + traits),
+//! `infrastructure` (concrete implementations), and `signing` (standalone crypto).
 
 pub mod application;
+pub mod domain;
+pub mod infrastructure;
 pub mod signing;
