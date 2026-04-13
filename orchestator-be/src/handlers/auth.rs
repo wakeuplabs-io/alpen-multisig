@@ -1,4 +1,4 @@
-use crate::{application, error::Result, state::AppState};
+use crate::{application::auth, error::Result, state::AppState};
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub struct ChallengeResponse {
 }
 
 pub async fn get_challenge(State(_state): State<AppState>) -> Result<Json<ChallengeResponse>> {
-    let _challenge = application::get_challenge("TODO", "TODO")?;
+    let _challenge = auth::get_challenge("TODO", "TODO")?;
     todo!("map challenge to ChallengeResponse")
 }
 
@@ -42,17 +42,17 @@ pub async fn create_session(
     State(_state): State<AppState>,
     Json(body): Json<CreateSessionRequest>,
 ) -> Result<Json<SessionResponse>> {
-    let input = application::CreateSessionInput {
+    let input = auth::CreateSessionInput {
         ephemeral_pubkey: body.ephemeral_pubkey,
         nonce: body.nonce,
         attestation_signature: body.attestation_signature,
         signer_pubkey: body.signer_pubkey,
         authority: body.authority,
     };
-    let _result = application::create_session(input)?;
+    let _result = auth::create_session(input)?;
     todo!("map session result to SessionResponse")
 }
 
 pub async fn delete_session(State(_state): State<AppState>) -> Result<()> {
-    application::delete_session("TODO")
+    auth::delete_session("TODO")
 }

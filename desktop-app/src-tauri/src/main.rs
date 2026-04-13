@@ -15,10 +15,10 @@ fn main() {
             backend_url,
         })
         .invoke_handler(tauri::generate_handler![
-            commands::get_challenge,
-            commands::create_session,
-            commands::delete_session,
-            commands::list_proposals,
+            commands::auth::get_challenge,
+            commands::auth::create_session,
+            commands::auth::delete_session,
+            commands::proposals::list_proposals,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

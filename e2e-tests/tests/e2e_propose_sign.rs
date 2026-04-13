@@ -18,8 +18,9 @@ use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
-use desktop_app::application::orchestrator_client::HttpOrchestratorClient;
-use desktop_app::application::proposals::{self, Signature};
+use desktop_app::application::proposals;
+use desktop_app::domain::proposal::Signature;
+use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use desktop_app::signing;
 
 // ─── Test server ───────────────────────────────────────────────────────────
