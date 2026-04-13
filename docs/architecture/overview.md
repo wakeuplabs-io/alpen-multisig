@@ -12,21 +12,19 @@ Alpen Multisig is a desktop application that enables authorized signers to manag
 │                                                                      │
 │  ┌───────────────────────┐  Tauri IPC  ┌──────────────────────────┐  │
 │  │  React Frontend (UI)  │────────────>│  Tauri Rust Shell        │  │
-│  │  - Auth flow          │  invoke()   │  - AppState (token mgmt) │  │
-│  │  - Proposal mgmt      │<────────────│  - Signing library       │  │
+│  │  - Proposal mgmt      │  invoke()   │  - Signing library       │  │
 │  │  - Signature collect.  │             │  - Backend proxy (reqwest│) │
 │  │  - Wallet connect     │             │  - HWI subprocess (planned│) │
 │  └───────────────────────┘             └─────────┬────────────────┘  │
 │                                                   │                   │
 │   Token NEVER leaves Rust — React sees only       │ HTTP (reqwest)    │
-│   session metadata (authority, pubkey, expiry)     │ Bearer token      │
+│   session metadata (authority, pubkey, expiry)     │                   │
 └───────────────────────────────────────────────────┼──────────────────┘
                                                     │
                                                     ▼
                                      ┌──────────────────────────┐
                                      │   Orchestrator Backend   │
                                      │   (Axum + Postgres)      │
-                                     │   - Session auth         │
                                      │   - Proposal CRUD        │
                                      │   - Signature aggregation│
                                      │   - Lifecycle tracking   │
@@ -82,19 +80,14 @@ orchestator-be/src/
 ├── error.rs             # AppError → HTTP status mapping
 ├── domain/
 │   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
-│   ├── proposal.rs      # Proposal, ActionId, ProposalStatus, QuorumStatus, compute_action_id
-│   └── session.rs       # Ephemeral session model, AuthChallenge
+│   └── proposal.rs      # Proposal, ActionId, ProposalStatus, QuorumStatus, compute_action_id
 ├── application/
-│   ├── auth.rs          # Auth business logic (todo stubs)
 │   ├── proposals.rs     # Business logic: create, approve, get, list proposals
 │   └── traits.rs        # ProposalRepository trait
 ├── infrastructure/
 │   └── memory_repo.rs   # InMemoryProposalRepository (in-memory impl of the trait)
-├── handlers/
-│   ├── auth.rs          # GET /auth/challenge, POST /auth/session, DELETE /auth/session (todo stubs)
-│   └── proposals.rs     # CRUD + approve: POST/GET /proposals, GET /proposals/:action_id, POST /proposals/:action_id/approve
-└── middleware/
-    └── auth.rs          # AuthenticatedSession extractor (Bearer token)
+└── handlers/
+    └── proposals.rs     # CRUD + approve: POST/GET /proposals, GET /proposals/:action_id, POST /proposals/:action_id/approve
 ```
 
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). `domain/` holds pure types; `application/` holds business logic and trait definitions; `infrastructure/` holds trait implementations; `handlers/` is a thin HTTP boundary. `main.rs` wires concrete impls into `AppState` (repo behind `Arc<RwLock<…>>`). See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
@@ -104,53 +97,15 @@ orchestator-be/src/
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | Liveness check |
-| `GET` | `/auth/challenge` | Generate nonce for signer authentication |
-| `POST` | `/auth/session` | Create ephemeral session (attestation signature required) |
-| `DELETE` | `/auth/session` | Revoke session |
 | `GET` | `/proposals` | List proposals (optional status filter) |
 | `POST` | `/proposals` | Create proposal (`seq_no` + `action_payload`) |
 | `GET` | `/proposals/:action_id` | Get proposal details + quorum status |
 | `POST` | `/proposals/:action_id/approve` | Submit approval signature |
 
-**Authentication Model:**
+**API Security:**
 
-```
-React (WebView)              Tauri Rust Shell              Backend
-      │                            │                          │
-      │ 1. invoke('get_challenge') │                          │
-      │───────────────────────────>│  GET /auth/challenge     │
-      │                            │─────────────────────────>│
-      │                            │  { nonce, expires_at }   │
-      │  { nonce, expires_at }     │<─────────────────────────│
-      │<───────────────────────────│                          │
-      │                            │                          │
-      │ 2. Sign attestation with   │                          │
-      │    HW wallet (binds:       │                          │
-      │    ephemeral_key +         │                          │
-      │    authority + nonce)      │                          │
-      │                            │                          │
-      │ 3. invoke('create_session')│                          │
-      │───────────────────────────>│  POST /auth/session      │
-      │                            │─────────────────────────>│
-      │                            │  { session_id, ... }     │
-      │                            │<─────────────────────────│
-      │                            │                          │
-      │                            │  Stores session_id in    │
-      │                            │  Mutex<Option<String>>   │
-      │                            │  (NEVER forwarded to JS) │
-      │                            │                          │
-      │  SessionInfo (no token)    │                          │
-      │  { pubkey, authority,      │                          │
-      │    expires_at }            │                          │
-      │<───────────────────────────│                          │
-      │                            │                          │
-      │ 4. invoke('list_proposals')│                          │
-      │───────────────────────────>│  GET /proposals          │
-      │                            │  + Bearer <token>        │
-      │                            │─────────────────────────>│
-```
-
-Sessions are nonce + expiry bounded and scoped to exactly one authority. The bearer token **never leaves the Rust process** — React only receives session metadata.
+- Proposer signer's signature is included in every proposal request
+- No session/bearer token — signer_pubkey + signature_hex authenticate requests directly
 
 **Data Identity:**
 
@@ -239,18 +194,15 @@ state ExecutedImmediate {
 desktop-app/src-tauri/src/
 ├── lib.rs               # Library crate: exposes domain + application + infrastructure + signing
 ├── main.rs              # Tauri binary: registers commands, manages AppState
-├── state.rs             # AppState (session token in Mutex, backend_url)
+├── state.rs             # AppState (backend_url only)
 ├── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
 ├── commands/
-│   ├── auth.rs              # #[tauri::command] auth wrappers
 │   └── proposals.rs         # #[tauri::command] proposal wrappers
 ├── domain/
-│   ├── proposal.rs          # Proposal, ProposalSignature, Signature
-│   └── session.rs           # AuthChallenge, BackendSession, SessionInfo, CreateSessionPayload
+│   └── proposal.rs          # Proposal, ProposalSignature, Signature
 ├── application/
-│   ├── auth.rs              # Challenge/session HTTP flow
 │   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
-│   └── proposals.rs         # create/approve/get proposals via the trait; fetch_proposals (session-token)
+│   └── proposals.rs         # create/approve/get proposals via the trait
 └── infrastructure/
     └── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
 ```
@@ -258,10 +210,7 @@ desktop-app/src-tauri/src/
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). Commands are thin (extract State → call application → map errors). Business logic lives in `application/`; transport DTOs live with the trait; the real HTTP client is in `infrastructure/`. `domain/` holds pure client-side types (see [ADR-003](adrs/003-desktop-application-layer-api.md) for entry-point semantics). `signing.rs` is standalone and decoupled from all layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
 **Implemented Tauri commands:**
-- `get_challenge` — Proxies `GET /auth/challenge` to backend
-- `create_session` — Proxies `POST /auth/session`, stores token in Rust `Mutex<Option<String>>` (never exposed to frontend)
-- `delete_session` — Proxies `DELETE /auth/session` with Bearer token
-- `list_proposals` — Proxies `GET /proposals` with Bearer token injection
+- `list_proposals` — Proxies `GET /proposals`
 
 **Signing library** (`signing.rs`): Production-ready, Tauri-decoupled functions with 13 tests:
 - `compute_sighash(seqno, action_hex)` — Borsh-decode action, compute SPS-65 tagged sighash
@@ -274,14 +223,12 @@ desktop-app/src-tauri/src/
 desktop-app/src/
 ├── main.tsx             # React mount
 ├── App.tsx              # Root component (currently hello world stub)
-├── types/index.ts       # Domain types (Authority, Proposal, Session, QuorumStatus, etc.)
+├── types/index.ts       # Domain types (Authority, Proposal, QuorumStatus, etc.)
 ├── api/
 │   ├── client.ts        # Typed HTTP fetch wrapper (unused — kept for non-Tauri dev mode)
 │   ├── tauri-bridge.ts  # Generic Tauri IPC wrapper → ApiResult<T> (all API calls go through here)
-│   ├── auth.ts          # Challenge/session API calls (via Tauri commands)
 │   └── proposals.ts     # Proposal/signature API calls (via Tauri commands)
 └── hooks/
-    ├── useAuth.ts       # Auth state machine (unauthenticated → authenticating → authenticated)
     ├── useWallet.ts     # Wallet connection state (disconnected → connecting → connected)
     └── useProposals.ts  # Proposal loading with status filter
 ```
@@ -289,7 +236,7 @@ desktop-app/src/
 **Required Navigation Flow:**
 
 ```
-Wallet Connect → Address Select → Authority Select → Nonce Sign Auth → Dashboard
+Wallet Connect → Address Select → Authority Select → Dashboard
 ```
 
 **Key Frontend Constraints:**

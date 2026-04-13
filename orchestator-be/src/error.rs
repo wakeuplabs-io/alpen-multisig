@@ -11,14 +11,6 @@ pub enum AppError {
     #[error("not found")]
     NotFound,
 
-    #[allow(dead_code)] // Planned: auth middleware
-    #[error("unauthorized")]
-    Unauthorized,
-
-    #[allow(dead_code)] // Planned: auth middleware
-    #[error("forbidden: {0}")]
-    Forbidden(String),
-
     #[error("bad request: {0}")]
     BadRequest(String),
 
@@ -33,8 +25,6 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
-            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
             AppError::Internal(e) => {
