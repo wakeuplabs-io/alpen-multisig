@@ -61,10 +61,10 @@ export default function App() {
 				) : (
 					<>
 						<div style={styles.infoBox}>
-							<Row label='Device' value={walletInfo?.deviceLabel} />
-							<Row label='Path' value={walletInfo?.derivationPath} />
-							<Row label='Address' value={walletInfo?.addressSample} />
-							<Row label='Public key' value={walletInfo?.xpubOrFingerprint} />
+							<Row label="Device" value={walletInfo?.deviceLabel} />
+							<Row label="Path" value={walletInfo?.derivationPath} />
+							<Row label="Address" value={walletInfo?.addressSample} />
+							<Row label="Public key" value={walletInfo?.xpubOrFingerprint} />
 						</div>
 
 						<div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
@@ -78,7 +78,7 @@ export default function App() {
 
 						{signResult && (
 							<div style={{ ...styles.infoBox, marginTop: '1rem', wordBreak: 'break-all' }}>
-								<Row label='Signature' value={signResult.signatureHex} />
+								<Row label="Signature" value={signResult.signatureHex} />
 								{signResult.note && <p style={{ ...styles.muted, marginTop: '0.5rem' }}>{signResult.note}</p>}
 							</div>
 						)}

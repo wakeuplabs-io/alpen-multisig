@@ -43,10 +43,9 @@ export function createMnemonicPocAdapter(opts: MnemonicAdapterOptions): WalletAd
 			const hashArray = Array.from(new Uint8Array(hashBuffer))
 			const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 
-			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>(
-				'sign_with_mnemonic_wallet',
-				{ sighashHex: hashHex },
-			)
+			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>('sign_with_mnemonic_wallet', {
+				sighashHex: hashHex,
+			})
 			if (!result.ok) {
 				throw new Error(result.error)
 			}
@@ -60,10 +59,9 @@ export function createMnemonicPocAdapter(opts: MnemonicAdapterOptions): WalletAd
 			if (!publicKeyHex) {
 				throw new Error('Connect the mnemonic wallet first.')
 			}
-			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>(
-				'sign_with_mnemonic_wallet',
-				{ sighashHex },
-			)
+			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>('sign_with_mnemonic_wallet', {
+				sighashHex,
+			})
 			if (!result.ok) {
 				throw new Error(result.error)
 			}

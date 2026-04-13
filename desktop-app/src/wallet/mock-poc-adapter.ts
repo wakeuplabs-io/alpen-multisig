@@ -22,13 +22,10 @@ export function createMockPocAdapter(): WalletAdapter {
 			const bytes = crypto.getRandomValues(new Uint8Array(32))
 			secretKeyHex = bytesToHex(bytes)
 
-			const warmup = await tauriCall<{ public_key_hex: string; signature_hex: string }>(
-				'sign_action_sighash',
-				{
-					secretKeyHex,
-					sighashHex: '00'.repeat(32),
-				}
-			)
+			const warmup = await tauriCall<{ public_key_hex: string; signature_hex: string }>('sign_action_sighash', {
+				secretKeyHex,
+				sighashHex: '00'.repeat(32),
+			})
 			if (!warmup.ok) {
 				secretKeyHex = null
 				throw new Error(`Mock wallet init failed: ${warmup.error}`)
@@ -63,13 +60,10 @@ export function createMockPocAdapter(): WalletAdapter {
 			if (!connected || !secretKeyHex) {
 				throw new Error('Connect the Mock wallet first.')
 			}
-			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>(
-				'sign_action_sighash',
-				{
-					secretKeyHex,
-					sighashHex,
-				}
-			)
+			const result = await tauriCall<{ public_key_hex: string; signature_hex: string }>('sign_action_sighash', {
+				secretKeyHex,
+				sighashHex,
+			})
 			if (!result.ok) {
 				throw new Error(result.error)
 			}

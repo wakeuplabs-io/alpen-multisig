@@ -1,8 +1,8 @@
 import { tauriCall } from '@/api/tauri-bridge'
 import type { SignSighashResult, SignTestPayloadResult, WalletAccountInfo, WalletAdapter } from './types'
 
-/** BIP-84 first receive address — must match the Rust DEFAULT_PATH. */
-const DEFAULT_DERIVATION_PATH = 'm/84\'/0\'/0\'/0/0'
+/** BIP-86 first receive address — Taproot (P2TR, bc1p...). Must match the Rust DEFAULT_PATH. */
+const DEFAULT_DERIVATION_PATH = "m/86'/0'/0'/0/0"
 
 type HwWalletInfo = {
 	deviceLabel: string
@@ -48,7 +48,8 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			const encoded: Uint8Array<ArrayBuffer> = new Uint8Array(new TextEncoder().encode(payloadUtf8))
 			const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
 			const sighashHex = Array.from(new Uint8Array(hashBuffer))
-				.map(b => b.toString(16).padStart(2, '0')).join('')
+				.map((b) => b.toString(16).padStart(2, '0'))
+				.join('')
 			const result = await tauriCall<SignatureResult>('sign_with_trezor', { sighashHex, derivationPath })
 			if (!result.ok) throw new Error(result.error)
 			return {

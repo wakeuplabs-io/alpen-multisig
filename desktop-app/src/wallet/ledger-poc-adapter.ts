@@ -48,7 +48,8 @@ export function createLedgerPocAdapter(): WalletAdapter {
 			const encoded: Uint8Array<ArrayBuffer> = new Uint8Array(new TextEncoder().encode(payloadUtf8))
 			const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
 			const sighashHex = Array.from(new Uint8Array(hashBuffer))
-				.map(b => b.toString(16).padStart(2, '0')).join('')
+				.map((b) => b.toString(16).padStart(2, '0'))
+				.join('')
 			const result = await tauriCall<SignatureResult>('sign_with_ledger', { sighashHex, derivationPath })
 			if (!result.ok) throw new Error(result.error)
 			return {
