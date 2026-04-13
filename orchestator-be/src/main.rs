@@ -10,7 +10,7 @@ mod domain;
 mod error;
 mod handlers;
 mod infrastructure;
-mod middleware;
+
 mod state;
 
 #[tokio::main]
