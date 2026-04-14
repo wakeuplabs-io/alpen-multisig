@@ -75,7 +75,7 @@ Third-party crates used alongside Alpen crates (`bitcoin`, `borsh`, `secp256k1`)
 2. **Version drift** — Mitigated by centralizing all Alpen crate pins in the root `[workspace.dependencies]`. All members (including `e2e-tests`) use `workspace = true`.
 3. **Build time** — Git deps clone the full repo on clean builds. Unavoidable without crates.io publication. CI caching helps.
 4. **Nightly requirement** — The entire workspace uses nightly due to transitive deps (`ssz`). This couples us to nightly stability and may introduce unexpected breakage on toolchain updates. Mitigated by pinning a specific nightly version.
-5. **Upstream breaking changes** — Alpen crates are pre-1.0 (`v0.2.0-rc`, `v0.1.0-alpha`). API breakage is expected. Pin updates should be deliberate and tested.
+5. **Upstream breaking changes** — Alpen crates are pre-1.0 (`v0.2.0-rc`, `v0.1.0-alpha`). API breakage is expected. Pin updates should be deliberate and tested. Mitigated inside `desktop-app` by concentrating all Strata-facing code in `infrastructure/action_codec.rs` (client domain types live in `domain/action.rs` / `domain/authority.rs`): pin bumps that rename or reshape `MultisigAction` / `Role` / `ThresholdConfigUpdate` only break the codec, not the application, UI, or tests. A byte-level roundtrip test in the codec guards the SPS-65 signed form against accidental divergence.
 
 ## Update procedure
 

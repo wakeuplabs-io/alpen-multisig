@@ -199,13 +199,19 @@ desktop-app/src-tauri/src/
 ├── commands/
 │   └── proposals.rs         # #[tauri::command] proposal wrappers
 ├── domain/
-│   └── proposal.rs          # Proposal, ProposalSignature, Signature
+│   ├── authority.rs         # Authority enum (wire (de)serialization), AuthorityParseError
+│   ├── action.rs            # Action, MultisigUpdate, CompressedPubKey, PubKeyError
+│   ├── proposal.rs          # Proposal, ProposalSignature, Signature
+│   └── session.rs
 ├── application/
 │   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
-│   └── proposals.rs         # create/approve/get proposals via the trait
+│   └── proposals.rs         # create/approve/get proposals via the trait (takes domain Action)
 └── infrastructure/
+    ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction borsh — ONLY crossing point to strata_* crates
     └── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
 ```
+
+**Strata crate isolation:** `infrastructure/action_codec.rs` is the single module in the desktop app that imports `strata_asm_params`, `strata_asm_txs_admin`, and `strata_crypto`. All other layers (`domain/`, `application/`, commands, UI) talk in client-owned domain types (`Authority`, `Action`, `MultisigUpdate`, `CompressedPubKey`). A codec test asserts byte-level borsh compatibility with the direct Strata call, guaranteeing the SPS-65 signed form stays identical.
 
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). Commands are thin (extract State → call application → map errors). Business logic lives in `application/`; transport DTOs live with the trait; the real HTTP client is in `infrastructure/`. `domain/` holds pure client-side types (see [ADR-003](adrs/003-desktop-application-layer-api.md) for entry-point semantics). `signing.rs` is standalone and decoupled from all layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
@@ -255,10 +261,10 @@ Separate crate (excluded from workspace) with its own `rust-toolchain.toml` (nig
 1. Generate signer keys → 2. Build `MultisigAction` → 3. Compute SPS-65 sighash → 4. ECDSA sign (threshold) → 5. Construct Bitcoin tx (SPS-50 OP_RETURN + SPS-51 witness) → 6. Parse back and verify signatures
 
 **`e2e_propose_sign`** — Desktop ↔ Orchestrator integration:
-Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing.
+Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing. Builds the `MultisigUpdate` action through `desktop_app::domain` + `action_codec` — does not import Strata crates directly.
 
 **Dependencies:**
-- `desktop-app` (path) — imports `application::proposals`, `domain::proposal`, `infrastructure::orchestrator_client`, `signing`
+- `desktop-app` (path) — imports `application::proposals`, `domain::{authority, action, proposal}`, `infrastructure::{action_codec, orchestrator_client}`, `signing`
 - `alpenlabs/alpen` @ rev `308211f` — `strata-asm-txs-admin`, `strata-crypto`, `strata-asm-params`, `strata-primitives`, `strata-asm-common`, test utils
 - `alpenlabs/strata-common` @ tag `v0.1.0-alpha-rc11` — `strata-l1-txfmt`
 
