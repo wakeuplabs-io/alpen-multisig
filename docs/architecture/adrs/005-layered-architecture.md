@@ -1,6 +1,6 @@
 # ADR-005: Layered Architecture for Backend and Desktop App
 
-**Status:** Accepted
+**Status:** Implemented
 **Date:** 2026-04-11
 **Context:** The orchestrator backend and desktop Tauri app have grown organically during POC phases. Both already have partial layering (domain/, application/, handlers/commands), but boundaries are blurry — domain types live inside application modules, repository implementations sit next to business logic, and the desktop app lacks an explicit domain layer. Before building production features (Postgres persistence, full auth, HWI integration), we need clear module boundaries to avoid coupling that becomes expensive to untangle later.
 

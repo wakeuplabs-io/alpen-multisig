@@ -1,9 +1,9 @@
 //! Application layer — business logic for backend communication.
 //!
-//! - `auth` handles the challenge/session lifecycle.
-//! - `proposals` orchestrates proposal operations via the `OrchestratorClient` trait.
-//! - `traits` defines the `OrchestratorClient` trait and `OrchestratorError`.
+//! `proposals` is the entry point for domain operations.
+//! `orchestrator_client` defines the HTTP client contract (trait + DTOs);
+//! the implementation lives in `crate::infrastructure`.
 
 pub mod auth;
+pub mod orchestrator_client;
 pub mod proposals;
-pub mod traits;

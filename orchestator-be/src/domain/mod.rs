@@ -1,2 +1,2 @@
 pub mod authority;
-pub mod session;
+pub mod proposal;

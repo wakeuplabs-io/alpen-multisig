@@ -1,6 +1,9 @@
 use crate::{
-    application::proposals::{self, ActionId, Proposal, ProposalSignature, ProposalStatus},
-    domain::authority::Authority,
+    application::proposals,
+    domain::{
+        authority::Authority,
+        proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
+    },
     error::{AppError, Result},
     state::AppState,
 };

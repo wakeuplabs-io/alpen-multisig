@@ -1,28 +1,10 @@
-//! Proposal repository — persistence abstraction for proposals and signatures.
-//!
-//! Defines the storage contract and provides an in-memory implementation
-//! for POC/testing. Postgres implementation will be added in a future slice.
+//! In-memory proposal repository for POC and testing.
 
-use crate::application::proposals::{ActionId, Proposal, ProposalStatus};
+use crate::application::traits::ProposalRepository;
+use crate::domain::proposal::{ActionId, Proposal, ProposalStatus};
 use crate::error::AppError;
 use std::collections::HashMap;
 
-/// Persistence contract for proposals.
-pub(crate) trait ProposalRepository: Send + Sync {
-    /// Store a new proposal. Fails if ActionId already exists.
-    fn save_proposal(&mut self, proposal: Proposal) -> Result<(), AppError>;
-
-    /// Find a proposal by ActionId (immutable reference).
-    fn find_by_action_id(&self, action_id: &ActionId) -> Option<&Proposal>;
-
-    /// Find a proposal by ActionId (mutable reference, for adding signatures).
-    fn find_by_action_id_mut(&mut self, action_id: &ActionId) -> Option<&mut Proposal>;
-
-    /// List proposals, optionally filtered by status.
-    fn list_by_status(&self, status: Option<ProposalStatus>) -> Vec<&Proposal>;
-}
-
-/// In-memory implementation for POC and testing.
 pub(crate) struct InMemoryProposalRepository {
     proposals: HashMap<ActionId, Proposal>,
 }

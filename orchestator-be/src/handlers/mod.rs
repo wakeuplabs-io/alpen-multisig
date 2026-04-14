@@ -5,7 +5,6 @@ use axum::{
 };
 use serde_json::{json, Value};
 
-pub mod auth;
 pub mod proposals;
 
 async fn health() -> Json<Value> {
@@ -15,10 +14,6 @@ async fn health() -> Json<Value> {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
-        // Auth
-        .route("/auth/challenge", get(auth::get_challenge))
-        .route("/auth/session", post(auth::create_session))
-        .route("/auth/session", axum::routing::delete(auth::delete_session))
         // Proposals
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))

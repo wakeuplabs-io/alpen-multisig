@@ -1,5 +1,5 @@
-use crate::application::repository::InMemoryProposalRepository;
 use crate::config::Config;
+use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]

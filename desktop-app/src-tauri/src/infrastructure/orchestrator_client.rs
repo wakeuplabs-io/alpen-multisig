@@ -1,16 +1,16 @@
-//! HTTP implementation of the OrchestratorClient trait.
+//! HTTP implementation of the `OrchestratorClient` trait.
 
-use crate::application::traits::{OrchestratorClient, OrchestratorError};
-use crate::domain::proposal::{ApproveActionRequest, CreateProposalRequest, Proposal};
+use crate::application::orchestrator_client::{
+    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
+};
+use crate::domain::proposal::Proposal;
 
-/// Real orchestrator client that communicates via HTTP/reqwest.
 pub struct HttpOrchestratorClient {
     base_url: String,
     client: reqwest::Client,
 }
 
 impl HttpOrchestratorClient {
-    /// Create a new HTTP client for the orchestrator.
     pub fn new(base_url: String) -> Self {
         Self {
             base_url,
@@ -18,7 +18,6 @@ impl HttpOrchestratorClient {
         }
     }
 
-    /// Send a request and parse the JSON response, handling errors uniformly.
     async fn send_and_parse<T: serde::de::DeserializeOwned>(
         &self,
         request: reqwest::RequestBuilder,

@@ -1,13 +1,13 @@
+//! Client-side session domain types — pure data, no framework dependencies.
+
 use serde::{Deserialize, Serialize};
 
-/// Challenge issued by the backend for the auth handshake.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthChallenge {
     pub nonce: String,
     pub expires_at: String,
 }
 
-/// Full session as returned by the backend (includes session_id used as Bearer token).
 #[derive(Debug, Deserialize)]
 pub struct BackendSession {
     pub session_id: String,
@@ -16,7 +16,6 @@ pub struct BackendSession {
     pub expires_at: String,
 }
 
-/// Session info exposed to the frontend (no session_id — kept only in AppState).
 #[derive(Debug, Serialize)]
 pub struct SessionInfo {
     pub signer_pubkey: String,
@@ -24,7 +23,6 @@ pub struct SessionInfo {
     pub expires_at: String,
 }
 
-/// Payload sent by the frontend to create a session.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateSessionPayload {
     pub ephemeral_pubkey: String,

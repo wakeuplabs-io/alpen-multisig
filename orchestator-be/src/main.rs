@@ -9,7 +9,8 @@ mod config;
 mod domain;
 mod error;
 mod handlers;
-mod middleware;
+mod infrastructure;
+
 mod state;
 
 #[tokio::main]
