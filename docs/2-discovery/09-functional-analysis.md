@@ -522,6 +522,60 @@ ProposalStatus
 ├── Expired                           (7 days without quorum)
 ```
 
+### 6.3 Desktop Client Domain Model
+
+The desktop application models governance actions with a small set of client-owned types
+(in `desktop-app/src-tauri/src/domain/`). These intentionally do **not** mirror the full
+protocol state: signer sets, thresholds, and `last_seqno` live onchain (§2.1, §8.1) and
+are derived by the backend from the ASM state — the client never owns them.
+
+```
+Authority                          (enum, pure value type)
+├── StrataAdmin                     (POC-4 scope; other roles TBD)
+│                                    (no signer_set, no threshold, no last_seqno —
+│                                     those are ASM-derived)
+
+CompressedPubKey                   (newtype over [u8; 33], hex (de)serialization)
+
+MultisigUpdate                     (client mirror of the protocol action)
+├── role: Authority                 (must equal the Proposal's authority)
+├── add_keys: Vec<CompressedPubKey>
+├── remove_keys: Vec<CompressedPubKey>
+├── new_threshold: NonZeroU8
+
+Action                             (enum — set cap per authority per §7)
+└── MultisigUpdate(MultisigUpdate) (POC-4 scope; Cancel / OperatorSet / Sequencer /
+                                    VerifyingKey TBD)
+
+Proposal                           (client view, consumed from orchestrator)
+├── action_id: String
+├── authority: Authority            (not String — parsed at the wire boundary)
+├── seq_no: u64
+├── status: String
+├── action_hex: String              (canonical borsh form — what gets signed, SPS-65)
+└── signatures: Vec<ProposalSignature>
+```
+
+**Invariants enforced at the type level (current POC-4 scope):**
+- `Action` only accepts variants the client knows how to build — unsupported protocol
+  variants surface as `CodecError::UnsupportedVariant` at decode time.
+- `Authority::from_wire` rejects unknown role strings at API boundaries.
+- `CompressedPubKey::from_hex` rejects non-33-byte inputs.
+
+**Not modeled in the client (by design):**
+- Current signer set, threshold, and `last_seqno` of any authority — derived on-demand
+  from the ASM state by the backend (§8.1, §8.2).
+- The `authority == MultisigUpdate.role` cross-field invariant — trivially satisfied
+  today (one role, one variant); will be enforced when a second role or variant is
+  added.
+
+**Isolation from Strata crates:** A single module, `infrastructure/action_codec.rs`,
+translates between the client `Action` and the Strata `MultisigAction` borsh form. All
+other desktop layers (UI, application, tests) talk in client domain types — pin bumps
+of `strata-asm-txs-admin` / `strata-crypto` / `strata-asm-params` only break the codec.
+A roundtrip test asserts byte-level compatibility with the direct Strata call so the
+SPS-65 signed form stays identical to what the ASM expects.
+
 ---
 
 ## 7. Authority × Update Type Matrix

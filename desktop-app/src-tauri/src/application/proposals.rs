@@ -11,7 +11,10 @@
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
 };
+use crate::domain::action::Action;
+use crate::domain::authority::Authority;
 use crate::domain::proposal::{Proposal, Signature};
+use crate::infrastructure::action_codec::{self, CodecError};
 use std::sync::Mutex;
 
 /// Errors that can occur during proposal operations.
@@ -19,6 +22,8 @@ use std::sync::Mutex;
 pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
+    #[error("Codec error: {0}")]
+    Codec(#[from] CodecError),
 }
 
 /// Session-authenticated listing endpoint used by the desktop UI.
@@ -59,17 +64,21 @@ pub async fn fetch_proposals(
 /// Create a new action and store the creator's signature.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
+///
+/// Takes domain types (`Authority`, `Action`) and encodes them to the canonical borsh
+/// form at the boundary — callers never touch Strata crates directly.
 pub async fn create_update_action(
     client: &dyn OrchestratorClient,
-    authority: &str,
-    action_hex: &str,
+    authority: Authority,
+    action: &Action,
     seq_no: u64,
     signature: &Signature,
 ) -> Result<Proposal, ProposalError> {
+    let action_hex = action_codec::encode_hex(action)?;
     let request = CreateProposalRequest {
-        authority: authority.to_string(),
+        authority: authority.as_str().to_string(),
         seq_no,
-        action_hex: action_hex.to_string(),
+        action_hex,
         signer_pubkey: signature.signer_pubkey.clone(),
         signature_hex: signature.signature_hex.clone(),
     };
@@ -112,19 +121,15 @@ pub async fn get_update_action(
 mod tests {
     use super::*;
     use crate::application::orchestrator_client::OrchestratorError;
+    use crate::domain::action::{CompressedPubKey, MultisigUpdate};
     use crate::domain::proposal::{
         Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
     };
     use crate::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;
-    use std::num::NonZero;
+    use std::num::NonZeroU8;
     use std::sync::Mutex;
-    use strata_asm_params::Role;
-    use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
-    use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-    use strata_crypto::keys::compressed::CompressedPublicKey;
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
     // ─── Test helpers ───────────────────────────────────────────────────────
 
@@ -134,18 +139,22 @@ mod tests {
         (hex::encode(sk.secret_bytes()), hex::encode(pk.serialize()))
     }
 
-    fn demo_action_hex() -> String {
+    /// Builds a sample `Action::MultisigUpdate` via domain types only.
+    fn demo_action() -> Action {
         let demo_bytes = [0x42u8; 32];
         let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
-        let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, &demo_sk));
-        let config_update = ThresholdConfigUpdate::new(
-            vec![new_signer],
-            vec![],
-            NonZero::new(2).expect("non-zero"),
-        );
-        let multisig_update = MultisigUpdate::new(config_update, Role::StrataAdministrator);
-        let action = MultisigAction::Update(UpdateAction::Multisig(multisig_update));
-        hex::encode(borsh::to_vec(&action).expect("action borsh-serializes"))
+        let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
+        let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+        Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: vec![new_signer],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).expect("non-zero"),
+        })
+    }
+
+    fn demo_action_hex() -> String {
+        action_codec::encode_hex(&demo_action()).expect("encode ok")
     }
 
     fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
@@ -203,7 +212,7 @@ mod tests {
             }
             let response = OrcProposal {
                 action_id: format!("action_{}", request.seq_no),
-                authority: "strata_admin".to_string(),
+                authority: Authority::StrataAdmin,
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
@@ -225,7 +234,7 @@ mod tests {
             }
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
-                authority: "strata_admin".to_string(),
+                authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
@@ -247,7 +256,7 @@ mod tests {
             *self.last_approve_request.lock().unwrap() = Some((action_id.to_string(), request));
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
-                authority: "strata_admin".to_string(),
+                authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
@@ -262,10 +271,11 @@ mod tests {
     async fn test_create_update_action() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
+        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
+        let result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -307,17 +317,18 @@ mod tests {
             .expect("should succeed");
 
         assert_eq!(result.action_id, "action_1");
-        assert_eq!(result.authority, "strata_admin");
+        assert_eq!(result.authority, Authority::StrataAdmin);
     }
 
     #[tokio::test]
     async fn test_create_then_get_consistent() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
+        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let created = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
+        let created = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -333,10 +344,11 @@ mod tests {
     async fn test_signature_is_verifiable() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
+        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let _result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig)
+        let _result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -357,10 +369,11 @@ mod tests {
     async fn test_create_backend_error_propagates() {
         let mock = MockOrchestratorClient::failing();
         let (sk, _pk) = generate_test_keypair();
+        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, "strata_admin", &action_hex, 1, &sig).await;
+        let result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig).await;
 
         assert!(matches!(
             result.unwrap_err(),
