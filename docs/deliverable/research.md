@@ -1,9 +1,9 @@
 # Phase 1 — Protocol Research & Architecture
 
-> **Status:** In progress
-> **Goal:** Internalize SPS-50, SPS-51, SPS-65; identify integration points with the Alpen admin subprotocol crate; validate hardware wallet device matrix; finalize data model and API contract; recommend HWI bundling approach.
+> **Status:** Complete
+> **Scope:** Internalize SPS-50, SPS-51, SPS-65; identify integration points with the Alpen admin subprotocol crate; validate hardware wallet device matrix; finalize data model and API contract; recommend HWI bundling approach.
 
----
+This document is the consolidated Phase 1 deliverable for the Alpen Multisig project. It covers the four required outputs defined in the [project proposal](../1-proposal/01-alpen-multisig-proposal.md): (1) Alpen admin crate integration assessment, (2) hardware wallet compatibility matrix, (3) architecture document covering data model, API contract, component boundaries, and tech stack confirmation, and (4) HWI bundling recommendation. Each section documents findings, current implementation status, open gaps, and risks to inform Phase 3 scoping decisions.
 
 ## 1. Alpen Admin Crate Integration Assessment
 
@@ -144,7 +144,6 @@ These questions must be resolved before the blocked update types can be scoped i
 - Backend proposal CRUD with deterministic `ActionId` and duplicate rejection is implemented in [`orchestator-be/src/application/proposals.rs`](../../orchestator-be/src/application/proposals.rs), mirroring the backend PRD's minimal API sketch (`create_update_action`, `approve_action`, `get_update_action`, `list_proposals`).
 - `strata-asm-subprotocols-admin`, `strata-l1-envelope-fmt`, `strata-btcio`, and `bitcoind-async-client` are not yet compiled or exercised in the workspace.
 
----
 
 ## 2. Hardware Wallet Compatibility Matrix
 
@@ -180,7 +179,7 @@ Resolution options:
 
 **Recommendation:** Option B (PSBT path) for proposal signing. Option A for auth nonce (backend controls both sides).
 
-> **Source:** [`docs/2-discovery/10-poc5-trezor-findings.md`](../2-discovery/10-poc5-trezor-findings.md)
+> **Sources:** [`docs/2-discovery/06-hardware-wallet-architecture.md`](../2-discovery/06-hardware-wallet-architecture.md), [`docs/2-discovery/07-hardware-wallet-library-analysis.md`](../2-discovery/07-hardware-wallet-library-analysis.md)
 
 ### 2.3 Device Matrix
 
@@ -218,13 +217,14 @@ Resolution options:
 - Next: physical device test + PSBT signing path for raw ECDSA extraction.
 - Next: Ledger emulator equivalent of POC-5.
 
----
 
 ## 3. Architecture Document
 
+This section is the Phase 1 architecture deliverable. It covers the four required outputs: **component boundaries** (§3.1), **data model** (§3.3), **API contract** (§3.4), and **tech stack confirmation** (§3.7). §3.2 maps the five governance authorities to their available and blocked update types. §3.5 and §3.6 document the protocol integration surfaces (SPS-65 sighash and SPS-50/51 transaction structure). §3.8 collects limitations, risks, and current POC status.
+
 The system has three tiers: an **onchain layer** (Bitcoin + Strata ASM) that owns canonical governance state, an **offchain coordination layer** (orchestrator backend) that manages the pre-broadcast lifecycle, and a **client layer** (desktop app + hardware wallets) where signers interact and produce signatures.
 
-The key architectural invariant is that the backend is a coordination service, not an authority. It collects signatures and tracks proposal status, but it cannot enforce protocol validity — that is the ASM's job. The backend's access control decisions depend on the onchain signer set, which means it must stay synchronized with the Strata node. Backend downtime must not prevent signers from acting: the offline fallback path (manual aggregation + direct broadcast) is a spec requirement, not a nice-to-have.
+The key architectural invariant is that the backend is a coordination service, not an authority. It collects signatures and tracks proposal status, but it cannot enforce protocol validity: that is the ASM's job. The backend's access control decisions depend on the onchain signer set, which means it must stay synchronized with the Strata node. Backend downtime must not prevent signers from acting: the offline fallback path (manual aggregation plus direct broadcast) is a spec requirement, not a nice-to-have. The concrete module layout and dependency rules below come from [ADR-005](../architecture/adrs/005-layered-architecture.md) and from [`docs/architecture/overview.md`](../architecture/overview.md), which track the real source tree.
 
 ### 3.1 System Components
 
@@ -298,57 +298,61 @@ flowchart TB
 
 ### 3.3 Data Model
 
-> **Note:** This is a high-level conceptual structure derived from the POC phase and protocol research. It is not a final schema — field names, persistence layout, and relationships will be refined during implementation.
+The orchestrator backend does not own protocol state. It coordinates around it. The canonical source of truth is always the onchain ASM (signer sets, enacted actions, sequence numbers). The backend's data model reflects only what is needed to run the offchain lifecycle: collecting signatures, tracking proposal status, and enforcing authority-scoped access. The shapes below match the current code in [`orchestator-be/src/domain/proposal.rs`](../../orchestator-be/src/domain/proposal.rs) and [`desktop-app/src-tauri/src/domain/`](../../desktop-app/src-tauri/src/domain/), which both follow the layering defined in [ADR-005](../architecture/adrs/005-layered-architecture.md).
 
-The orchestrator backend does not own the protocol state — it coordinates around it. The canonical source of truth is always the onchain ASM state (signer sets, enacted actions, sequence numbers). The backend's data model reflects only what is needed to manage the offchain lifecycle: collecting signatures, tracking proposal status, and enforcing authority-scoped access.
-
-**Governance state** (read from onchain ASM via Strata node — cached locally):
+**Governance state** (read from the onchain ASM via the Strata node, cached locally):
 
 ```
 Authority
-├── role: Role                        (AlpenAdmin | StrataAdmin | SequencerManager | SecurityCouncil | PayoutAdmin)
+├── role: Authority            (StrataAdmin | StrataSequencerManager |
+│                               AlpenAdmin | SecurityCouncil | PayoutAdmin)
 ├── signer_set: Vec<CompressedPublicKey>
 ├── threshold: NonZero<u8>
-└── last_seqno: u64                   last sequence number confirmed onchain
-
-MultisigAction
-├── Update(UpdateAction)
-│   ├── Multisig(MultisigUpdate)      role + add_keys + remove_keys + new_threshold
-│   ├── OperatorSet(OperatorSetUpdate)
-│   ├── Sequencer(SequencerUpdate)
-│   └── VerifyingKey(PredicateUpdate)
-└── Cancel(CancelAction)              target_id: u32 + seqno
+└── last_seqno: u64            last sequence number confirmed onchain
 ```
 
-**Coordination state** (owned by the backend orchestrator):
+> Only `StrataAdmin` and `StrataSequencerManager` exist in the upstream `Role` enum today (see §1.4). The other three variants are the backend-side representation the system will adopt once Alpen ships them.
+
+**Coordination state** (owned by the backend, in `orchestator-be/src/domain/proposal.rs`):
 
 ```
-Session
-├── id
-├── signer_pubkey                     canonical key that authenticated
-├── ephemeral_pubkey                  attested ephemeral key for subsequent requests
-├── authority: Role                   single authority scope per session
-└── expires_at
-
 Proposal
-├── action_id: ActionId               hash(MultisigAction, SeqNo) — deterministic, idempotent
-├── authority: Role
-├── seqno: u64
-├── action: MultisigAction            Borsh-serialized, opaque to the backend
-├── signatures: Vec<Signature>
+├── action_id: ActionId        sha256(seq_no_be ‖ action_hex_bytes),
+│                              deterministic and idempotent
+├── seq_no: u64
+├── authority: Authority
 ├── status: ProposalStatus
-├── created_at
-└── expires_at                        created_at + 7 days
+├── action_hex: String         Borsh-serialized MultisigAction, hex-encoded,
+│                              opaque to the backend
+└── signatures: Vec<ProposalSignature>
+
+ProposalSignature
+├── signer_pubkey: String      signer canonical pubkey, hex-encoded
+└── signature_hex: String      raw secp256k1 ECDSA over the SPS-65 sighash
+
+QuorumStatus                   derived view, not persisted
+├── collected: u32             unique signer count
+├── required: u32              authority threshold
+└── is_reached: bool
 
 ProposalStatus = Pending | Approved | Enacted | Canceled | Expired
 ```
 
-**Entity relationships:**
+**Deliberate choices worth noting:**
+
+- `action_hex` stays opaque to the backend. The backend only parses Borsh when it must check structural hygiene (malformed hex, discriminant sanity). It never re-interprets semantics. That is what keeps the service inside the "coordination only" boundary from ADR-005 and the backend PRD.
+- `ActionId` is content-addressed: `sha256(seq_no_be_bytes ‖ action_hex_bytes)`. The same `(MultisigAction, SeqNo)` pair always produces the same id, which gives duplicate rejection for free and makes the API idempotent by construction.
+- The desktop app maintains a parallel `domain/` module with its own `Action`, `Authority`, and `Proposal` types. Strata crate types only cross into the desktop app at `infrastructure/action_codec.rs`, the single place where Borsh encoding happens. Everything above that boundary works in project-owned domain types, which is exactly the direction ADR-005 prescribes.
+- Session state is intentionally absent from the current schema. Ephemeral-key authentication is part of the target architecture (see §3.4) but no `Session` type exists in the code yet. Adding it is tracked under §3.8 as the next concrete backend step.
+
+**Richer lifecycle on the design board.** The implementation uses the five `ProposalStatus` variants above because that is what the POC needed. The target lifecycle, documented in [`docs/architecture/overview.md`](../architecture/overview.md), splits the pending phase into `Pending → QuorumMet → Approved`, adds `ExecutedImmediate` for `SequencerUpdate` (which skips the queue, see §1.2), and distinguishes `CanceledOff` (removed before broadcast) from `CanceledOn` (removed via an onchain `Cancel` transaction). These states will land alongside the flows that require them.
+
+**Entity relationships (current schema):**
 
 ```mermaid
 erDiagram
     AUTHORITY {
-        Role role
+        enum role
         uint threshold
         uint last_seqno
     }
@@ -357,51 +361,47 @@ erDiagram
         string pubkey
     }
 
-    SESSION {
-        string id
-        string ephemeral_pubkey
-        datetime expires_at
-    }
-
     PROPOSAL {
         string action_id
         uint seq_no
-        string action_payload
+        enum authority
+        string action_hex
         enum status
-        datetime created_at
-        datetime expires_at
     }
 
-    SIGNATURE {
-        string value
-        datetime submitted_at
+    PROPOSAL_SIGNATURE {
+        string signer_pubkey
+        string signature_hex
     }
 
     AUTHORITY ||--o{ SIGNER : "signer set"
     AUTHORITY ||--o{ PROPOSAL : "scopes"
-    AUTHORITY ||--o{ SESSION : "scopes"
-    SIGNER ||--o{ SESSION : "authenticates"
-    SIGNER ||--o{ SIGNATURE : "submits"
-    PROPOSAL ||--o{ SIGNATURE : "collects"
+    PROPOSAL ||--o{ PROPOSAL_SIGNATURE : "collects"
+    SIGNER ||--o{ PROPOSAL_SIGNATURE : "submits"
 ```
 
 ### 3.4 API Contract
 
-All endpoints that touch multisig state require authentication. The session token is an ephemeral keypair attested by the signer's canonical key — all subsequent requests are signed with the ephemeral private key and scoped to a single authority.
+The backend exposes a versioned HTTP surface under `/api/v1`, wired in [`orchestator-be/src/main.rs`](../../orchestator-be/src/main.rs) and [`orchestator-be/src/handlers/mod.rs`](../../orchestator-be/src/handlers/mod.rs). Handlers are thin wrappers around `application::proposals`, which is the only layer allowed to mutate domain state. This is the ADR-005 rule applied in practice.
 
-| Endpoint | Auth | Description |
-| --- | --- | --- |
-| `POST /sessions` | None | Create session: signer signs a nonce + authority binding with their canonical key |
-| `GET /proposals` | Required | List proposals scoped to the caller's authority |
-| `POST /proposals` | Required | Create a new proposal; submits creator's signature inline |
-| `GET /proposals/{id}` | Required | Get proposal details, current signatures, and quorum progress |
-| `POST /proposals/{id}/signatures` | Required | Submit an approval or cancellation signature |
-| `DELETE /proposals/{id}` | Required | Cancel a proposal (only before broadcast) |
+**Implemented today:**
 
-**Access control invariants enforced at every authenticated endpoint:**
+| Method | Path                                    | Body / Query                                                        | Description                                          |
+| ------ | --------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| GET    | `/api/v1/health`                        | —                                                                   | Liveness probe                                       |
+| GET    | `/api/v1/proposals`                     | `?status=pending\|approved\|enacted\|canceled\|expired`             | List proposals, optionally filtered by status        |
+| POST   | `/api/v1/proposals`                     | `{ authority, seq_no, action_hex, signer_pubkey, signature_hex }`   | Create a proposal with the creator's first signature |
+| GET    | `/api/v1/proposals/:action_id`          | —                                                                   | Fetch a proposal by its deterministic action id      |
+| POST   | `/api/v1/proposals/:action_id/approve`  | `{ signer_pubkey, signature_hex }`                                  | Append an approval signature                         |
+
+Error responses are mapped from `AppError` in [`orchestator-be/src/error.rs`](../../orchestator-be/src/error.rs): `400 Bad Request` for invalid hex or malformed Borsh, `404 Not Found` for unknown `action_id`, `409 Conflict` for duplicate `(seq_no, action_hex)` or duplicate signer on the same proposal, `500 Internal Server Error` for repository-level failures. All of these are covered by the integration tests in `handlers::tests`.
+
+**Authentication: as designed vs. as implemented.** The target model, required by the backend PRD and already assumed by the desktop client's `fetch_proposals`, uses an ephemeral-key session. A signer authenticates with their canonical key, receives a short-lived session bound to a single authority, and signs subsequent requests with the session key. None of that is in the backend code today. There is no `POST /sessions` route, no bearer-token middleware, and no session extractor. The desktop client already calls `bearer_auth(token)` against endpoints that silently ignore the header. Closing this gap is the single most visible drift between the two apps and is tracked under §3.8.
+
+**Access-control invariants to enforce once session middleware lands** (from [`.claude/rules/backend-api-conventions.md`](../../.claude/rules/backend-api-conventions.md)):
 - The session's authority scope must match the proposal's authority.
-- The caller's canonical pubkey must exist in the onchain signer set for that authority at the time of the request.
-- A non-signer receives the same response as a signer for non-existent resources — proposal existence must not be inferable by non-signers.
+- The caller's canonical pubkey must exist in the onchain signer set for that authority at the time of the request, as derived from live ASM state.
+- Non-signers must not be able to infer proposal existence from status codes, response shape, or timing differences.
 
 ### 3.5 Sighash Computation (SPS-65)
 
@@ -426,7 +426,7 @@ Every admin update produces a Bitcoin reveal transaction:
 
 | Layer         | Stack                                     |
 | ------------- | ----------------------------------------- |
-| Backend       | Rust, Axum, Postgres                      |
+| Backend       | Rust, Axum, in-memory (Postgres planned)  |
 | Desktop shell | Tauri 2                                   |
 | Frontend      | React 18, TypeScript, TailwindCSS, Vite   |
 | Signing       | `strata-asm-txs-admin`, `strata-crypto`   |
@@ -451,7 +451,6 @@ Every admin update produces a Bitcoin reveal transaction:
 - Layered architecture implemented per ADR-005 (handlers → application → domain → infrastructure).
 - Postgres migrations, repository trait implementation, and session middleware are the next concrete steps.
 
----
 
 ## 4. HWI Bundling vs. Device-Narrowing Recommendation
 
@@ -522,7 +521,6 @@ HWI bundling should be revisited if Coldcard support is required or if Ledger's 
 - Ledger POC (emulator equivalent of POC-5) is the next required step before finalizing this recommendation.
 - HWI subprocess integration (Option A) has not been prototyped.
 
----
 
 ## 5. Appendix — Protocol References
 
@@ -537,4 +535,5 @@ HWI bundling should be revisited if Coldcard support is required or if Ledger's 
 - [Conceptual overview](../2-discovery/01-conceptual-overview.md)
 - [Alpen crate coverage vs PRD](../2-discovery/08-alpen-crate-prd-coverage.md)
 - [Functional analysis](../2-discovery/09-functional-analysis.md)
-- [POC-5 — Trezor findings](../2-discovery/10-poc5-trezor-findings.md)
+- [Hardware wallet architecture](../2-discovery/06-hardware-wallet-architecture.md)
+- [Hardware wallet library analysis](../2-discovery/07-hardware-wallet-library-analysis.md)
