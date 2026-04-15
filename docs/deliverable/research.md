@@ -7,87 +7,141 @@
 
 ## 1. Alpen Admin Crate Integration Assessment
 
-The Alpen/Strata ecosystem publishes its protocol types as internal Rust crates, not on crates.io. This creates a hard dependency: the desktop app and backend must consume these crates directly from the `alpenlabs/alpen` and `alpenlabs/strata-common` repositories, pinned by git commit in the workspace `Cargo.toml`.
+The Alpen/Strata ecosystem publishes its protocol types as internal Rust crates, not on crates.io. The desktop app and backend must therefore consume these crates directly from `alpenlabs/alpen` (currently pinned at rev `308211f`) and `alpenlabs/strata-common` (tag `v0.1.0-alpha-rc11`) in the workspace `Cargo.toml`, following the strategy defined in [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md).
 
-The central constraint of this integration is **Borsh serialization compatibility**. The canonical wire format for `MultisigAction`, `SignedPayload`, and all admin transaction types is defined by these crates and must match exactly what the ASM onchain subprotocol expects. Any re-implementation or reinterpretation would produce protocol-invalid transactions. This means none of the core protocol crates are replaceable — the project must track them upstream.
+The central constraint of this integration is **Borsh serialization compatibility**. The canonical wire format for `MultisigAction`, `SignedPayload`, and all admin transaction types is defined by these crates and must match, byte-for-byte, what the ASM onchain subprotocol expects. A single discriminant, field-ordering, or sighash-tag difference produces a transaction the ASM will reject. None of the core protocol crates are replaceable — the project must track them upstream, and every upstream change may require a coordinated workspace pin update.
 
-The integration assessment is structured around three questions:
-1. Which crates are already confirmed and in use?
-2. Which crates are needed but not yet validated?
-3. Which update types are blocked because the upstream role or transaction type doesn't exist yet?
+This section answers three questions:
+1. Which crates are confirmed and in use today?
+2. Which crates are needed for the final delivery but not yet integrated in the workspace?
+3. Which PRD update types are blocked because the upstream `Role`, `AdminTxType`, or `UpdateAction` variant does not exist yet?
+
+> **Core assumption.** WakeUp Labs does not fork, re-implement, or extend protocol types. Any role, transaction type, action variant, or script template missing from the upstream Alpen crates is a **delivery dependency on Alpen Labs**, not an internal implementation task. This is consistent with ADR-001 and with the "backend MUST NOT redefine governance rules" clause in the backend PRD (§1, [`docs/0-prd/02-multisig-backend.md`](../0-prd/02-multisig-backend.md)).
 
 ### 1.1 Crate Inventory
 
-| Crate                       | Key types / functions                                                                                        | Used by                  | Replaceable?                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------ | -------------------------------------------- |
-| `strata-asm-txs-admin`      | `MultisigAction`, `UpdateAction`, `CancelAction`, `compute_sighash()`, `parser::parse_tx()`, `SignedPayload` | desktop-app, e2e-tests   | No — canonical Borsh layout and sighash tags |
-| `strata-crypto`             | `CompressedPublicKey`, `ThresholdConfig`, `verify_threshold_signatures()`, `SignatureSet`                    | desktop-app, e2e-tests   | No — types embedded in Borsh serialization   |
-| `strata-asm-params`         | `Role` enum                                                                                                  | desktop-app, e2e-tests   | No — Borsh discriminant must match ASM       |
-| `strata-primitives`         | `Buf32` (sighash return type)                                                                                | e2e-tests (transitively) | No — return type of `compute_sighash()`      |
-| `strata-asm-common`         | `TxInputRef`                                                                                                 | e2e-tests                | No — required by `parser::parse_tx()`        |
-| `strata-l1-txfmt`           | `ParseConfig`, `TagData` (SPS-50 parsing)                                                                    | e2e-tests                | No — protocol header format                  |
-| `strata-asm-txs-test-utils` | `TEST_MAGIC_BYTES`, tx construction helpers                                                                  | e2e-tests                | No — builds exact witness envelope structure |
+**Confirmed and in use** (pinned in workspace `Cargo.toml`, rev `308211f` / tag `v0.1.0-alpha-rc11`):
 
-**Crates to add:**
+| Crate                       | Key types / functions                                                                                                            | Used by                  | Replaceable?                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------- |
+| `strata-asm-txs-admin`      | `MultisigAction`, `UpdateAction`, `CancelAction`, `Sighash::compute_sighash()`, `parser::parse_tx()`, `SignedPayload`            | desktop-app, e2e-tests   | No — canonical Borsh layout and sighash tags |
+| `strata-crypto`             | `CompressedPublicKey`, `ThresholdConfig`, `ThresholdConfigUpdate`, `verify_threshold_signatures()`, `SignatureSet`, `IndexedSignature` | desktop-app, e2e-tests   | No — types embedded in Borsh serialization   |
+| `strata-asm-params`         | `Role` enum — **2 variants today**: `StrataAdministrator`, `StrataSequencerManager`                                              | desktop-app, e2e-tests   | No — Borsh discriminant must match ASM       |
+| `strata-primitives`         | `Buf32` (sighash return type)                                                                                                    | e2e-tests (transitively) | No — return type of `compute_sighash()`      |
+| `strata-asm-common`         | `TxInputRef`                                                                                                                     | e2e-tests                | No — required by `parser::parse_tx()`        |
+| `strata-l1-txfmt`           | `ParseConfig`, `TagData` (SPS-50 parsing)                                                                                        | e2e-tests                | No — protocol header format                  |
+| `strata-asm-txs-test-utils` | `TEST_MAGIC_BYTES`, reveal-tx construction helpers                                                                               | e2e-tests                | No — builds exact witness envelope structure |
 
-| Crate                           | Source                    | Needed for                                                                                                                              |
-| ------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `strata-asm-subprotocols-admin` | `alpenlabs/alpen`         | Reading canonical signer sets from ASM state (`AdministrationSubprotoState`, `MultisigAuthority`) — required for backend access control |
-| `strata-l1-envelope-fmt`        | `alpenlabs/strata-common` | SPS-51 envelope construction for production Bitcoin transactions                                                                        |
+**Required for the final delivery, not yet integrated in the workspace:**
 
-> **Source:** [`docs/2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md)
+| Crate                           | Source                    | Needed for                                                                                                              | PRD driver                                                                 |
+| ------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `strata-asm-subprotocols-admin` | `alpenlabs/alpen`         | Reading canonical signer sets via `AdministrationSubprotoState` / `MultisigAuthority` (backend access control)          | Backend PRD §3 — "backend must run the ASM STF to get the canonical set of signers for each authority" |
+| `strata-l1-envelope-fmt`        | `alpenlabs/strata-common` | SPS-51 reveal-script envelope construction (`EnvelopeScriptBuilder`, auto-chunks at 520 bytes)                          | UI PRD req 13.2 — create and broadcast approval transactions               |
+| `strata-btcio` (`writer::builder`) | `alpenlabs/alpen`      | Commit + reveal transaction construction (`EnvelopeConfig`, `create_envelope_transactions`) at broadcast time            | UI PRD req 13.2.1 — "Send" button, sat/vB fee-rate control                 |
+| `bitcoind-async-client` (or equivalent) | external / `alpen` | Bitcoin RPC client for wallet signing of the commit tx and raw-tx broadcast                                             | UI PRD req 13.2 — broadcast via the application's Bitcoin RPC              |
+
+None of these four are compiled into the workspace today; they are the integration surface remaining for Phase 3.
+
+> **Sources:** [`docs/2-discovery/03-poc1-findings.md`](../2-discovery/03-poc1-findings.md) §5–§6, [`docs/2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md), [`docs/2-discovery/10-asm-bitcoin-state-model.md`](../2-discovery/10-asm-bitcoin-state-model.md).
 
 ### 1.2 Implemented Update Types (available today)
 
-| PRD Update Type                    | Authority       | `UpdateAction` variant           | `AdminTxType`                         | Sighash tag                                       |
-| ---------------------------------- | --------------- | -------------------------------- | ------------------------------------- | ------------------------------------------------- |
-| Strata Administrator Signer update | Strata Admin    | `Multisig(MultisigUpdate)`       | `StrataAdminMultisigUpdate` (10)      | `strata/admin/strata_admin_multisig_update`       |
-| Strata verification key update     | Strata Admin    | `VerifyingKey(PredicateUpdate)`  | `OlStfVkUpdate` (30)                  | `strata/admin/ol_stf_vk_update`                   |
-| Operator update                    | Strata Admin    | `OperatorSet(OperatorSetUpdate)` | `OperatorUpdate` (20)                 | `strata/admin/operator_update`                    |
-| Seq Manager Signer update          | Seq Manager     | `Multisig(MultisigUpdate)`       | `StrataSeqManagerMultisigUpdate` (11) | `strata/admin/strata_seq_manager_multisig_update` |
-| Sequencer update                   | Seq Manager     | `Sequencer(SequencerUpdate)`     | `SequencerUpdate` (21)                | `strata/admin/sequencer_update`                   |
-| Cancel action                      | Admin / Seq Mgr | `MultisigAction::Cancel`         | `Cancel` (0)                          | `strata/admin/cancel`                             |
+The `AdminTxType` enum in `strata-asm-txs-admin` defines **7 variants**. Six map 1:1 to PRD update types; the seventh (`AsmStfVkUpdate`, type 31) has no corresponding PRD update type and is currently treated as unused by the multisig app.
+
+| PRD Update Type                    | Authority       | `UpdateAction` variant           | `AdminTxType`                         | Sighash tag                                       | Execution                |
+| ---------------------------------- | --------------- | -------------------------------- | ------------------------------------- | ------------------------------------------------- | ------------------------ |
+| Strata Administrator Signer update | Strata Admin    | `Multisig(MultisigUpdate)`       | `StrataAdminMultisigUpdate` (10)      | `strata/admin/strata_admin_multisig_update`       | Queued (~2016 blocks)    |
+| Strata verification key update     | Strata Admin    | `VerifyingKey(PredicateUpdate)`  | `OlStfVkUpdate` (30)                  | `strata/admin/ol_stf_vk_update`                   | Queued                   |
+| Operator update                    | Strata Admin    | `OperatorSet(OperatorSetUpdate)` | `OperatorUpdate` (20)                 | `strata/admin/operator_update`                    | Queued                   |
+| Seq Manager Signer update          | Seq Manager     | `Multisig(MultisigUpdate)`       | `StrataSeqManagerMultisigUpdate` (11) | `strata/admin/strata_seq_manager_multisig_update` | Queued                   |
+| Sequencer update                   | Seq Manager     | `Sequencer(SequencerUpdate)`     | `SequencerUpdate` (21)                | `strata/admin/sequencer_update`                   | **Immediate** — skips the queue |
+| Cancel action                      | Admin / Seq Mgr | `MultisigAction::Cancel`         | `Cancel` (0)                          | `strata/admin/cancel`                             | Consumes a seqno; removes a queued update |
+| _(unmapped)_                       | —               | `VerifyingKey(PredicateUpdate)`  | `AsmStfVkUpdate` (31)                 | `strata/admin/asm_stf_vk_update`                  | Queued; not referenced by the PRD |
+
+> **Note on `VerifyingKey` dispatch.** `OlStfVkUpdate` (30) and `AsmStfVkUpdate` (31) are two rows that share a single Rust variant: `UpdateAction::VerifyingKey(PredicateUpdate)`. The choice between the two `AdminTxType` values (and therefore sighash tags) is driven by an inner `ProofType` discriminator inside `PredicateUpdate` — there is no separate `UpdateAction::AsmStfVk` variant in the crate.
+
+> **Note on `Cancel` authorization.** A `CancelAction` targets a queued action by id and, at handling time, the required authority is derived from the **targeted** queued action's role (see `crates/asm/subprotocols/admin/src/handler.rs`), not from a role inside the cancel payload. The desktop app must therefore sign a cancel with the same authority that authorized the original update.
+
+The `SequencerUpdate` exception is significant for the lifecycle model: it has no `Approved → Enacted` window and cannot be canceled. The backend proposal state machine and the UI "Past/Approved" views must treat it as a special case.
 
 ### 1.3 Gaps — Blocked on Upstream Alpen Crate Additions
 
-| PRD Update Type                   | Authority        | Status      | Blocker                                                                 |
-| --------------------------------- | ---------------- | ----------- | ----------------------------------------------------------------------- |
-| Alpen verification key update     | Alpen Admin      | **Blocked** | `Role::AlpenAdministrator` does not exist — zero references in codebase |
-| Alpen Administrator Signer update | Alpen Admin      | **Blocked** | Same — role not defined                                                 |
-| Safe Harbor address update        | Strata Admin     | **Blocked** | Zero references to "safe harbor" in codebase                            |
-| Security Council Signer update    | Strata Admin     | **Blocked** | `Role::SecurityCouncil` does not exist                                  |
-| "Soft" bridge update              | Strata Admin     | **Blocked** | Term only in PRD, not in codebase — semantics unclear                   |
-| "Hard" bridge update              | Strata Admin     | **Blocked** | Same                                                                    |
-| Defcon 1 transaction              | Security Council | **Blocked** | Zero references to "defcon"                                             |
-| Defcon 3 transaction              | Security Council | **Blocked** | Same                                                                    |
+The PRD enumerates 13 distinct admin-subprotocol update types (req 15) plus `block_payout` (req 16+). Six are implemented today (§1.2). **Eight are blocked** because the required `Role`, `AdminTxType`, or action semantics do not exist upstream. The "zero references" claims below were independently corroborated by a full-codebase sweep in [`docs/2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) §2.
+
+| PRD Update Type                   | PRD req | Authority                                         | Blocker                                                                                                                                                                                                       |
+| --------------------------------- | ------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alpen verification key update     | 15.1.1  | Alpen Administrator                               | `Role::AlpenAdministrator` does not exist — zero references in the Alpen codebase                                                                                                                             |
+| Alpen Administrator Signer update | 15.1.2  | Alpen Administrator                               | Same — role not defined                                                                                                                                                                                        |
+| Safe Harbor address update        | 15.2.1  | Strata Administrator                              | Zero references to "safe harbor" in the Alpen codebase — concept undefined upstream                                                                                                                            |
+| Security Council Signer update    | 15.2.4  | Strata Administrator *(target: Security Council)* | `Role::SecurityCouncil` does not exist. Strata Admin is the authorizing authority, but the `MultisigUpdate { role, .. }` payload cannot reference a role enum variant that does not exist upstream.           |
+| "Soft" bridge update              | 15.2.6  | Strata Administrator                              | Term only in PRD; semantically undefined in the crates                                                                                                                                                        |
+| "Hard" bridge update              | 15.2.7  | Strata Administrator                              | Same                                                                                                                                                                                                           |
+| Defcon 1 transaction              | 15.4.1  | Security Council                                  | No `Role::SecurityCouncil`; zero references to "defcon" — mechanism not specified                                                                                                                              |
+| Defcon 3 transaction              | 15.4.2  | Security Council                                  | Same                                                                                                                                                                                                           |
+
+**Role coverage summary** (against the `Role` enum in `strata-asm-params`):
+
+| PRD Role                 | Exists upstream?       | PRD update types | Implemented |
+| ------------------------ | ---------------------- | ---------------- | ----------- |
+| Alpen Administrator      | **No**                 | 2                | 0 (0%)      |
+| Strata Administrator     | Yes                    | 7                | 3 (43%)     |
+| Strata Sequencer Manager | Yes                    | 2                | 2 (100%)    |
+| Security Council         | **No**                 | 2                | 0 (0%)      |
+| Payout Administrator     | **No** (separate protocol) | 1 (`block_payout`) | 0 — different path |
 
 ### 1.4 Payout Administrator — Separate Protocol
 
-`block_payout` is **not part of the admin subprotocol**. It is a Bitcoin-native UTXO spend from the bridge multisig script (not SPS-50/SPS-65). Requires direct PSBT construction, bridge script spending conditions, and a Bitcoin RPC client.
+`block_payout` (PRD req 16–20) is **not part of the admin subprotocol**. It is a native Bitcoin UTXO spend from the bridge multisig script, not an SPS-50/SPS-65 tagged admin transaction. It requires a fundamentally different implementation path:
+
+- Direct PSBT construction using the `bitcoin` crate — no sighash tag, no SPS-51 envelope, no OP_RETURN header.
+- Knowledge of the bridge script spending conditions — **not located in any crate surveyed so far**; the `bridge-v1` subprotocol at `crates/asm/subprotocols/bridge-v1/` (deposit, operator, assignment, withdrawal handlers) does not expose `block_payout` spending logic.
+- A Bitcoin RPC client for broadcast, fee-rate control at 0.1 sat/vB granularity (PRD req 17.3.1.1), and UTXO selection within the ~400 KB standardness limit (PRD req 20.1).
+- A distinct lifecycle: expired `block_payout` proposals are **deleted** rather than kept as history (PRD req 17.4.1) — diverges from the admin update lifecycle.
 
 ### 1.5 Open Questions for Alpen Labs
 
-- What do "Soft" vs "Hard" bridge updates mean? They appear only in the PRD.
-- When will `Role::AlpenAdministrator`, `Role::SecurityCouncil`, and corresponding `AdminTxType` variants be added?
-- Are Defcon 1/3 standard admin transactions or a separate mechanism?
-- Where are the `block_payout` bridge script spending conditions defined?
-- What RPC endpoint provides `AdministrationSubprotoState`? Is there a client crate?
+These questions must be resolved before the blocked update types can be scoped into the implementation phase.
 
-### 1.6 Limitations, Risks & POC Status
+| # | Question                                                                                                                           | Why it blocks us                                                                                                          |
+| - | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1 | What do "Soft" vs "Hard" bridge updates mean (PRD req 15.2.6–7)?                                                                   | Zero codebase references; we cannot design the action payload, the `UpdateAction` variant, or the sighash tag.           |
+| 2 | What does "Safe Harbor address" represent (PRD req 15.2.1) — a Bitcoin address, a script, or a protocol parameter?                 | No upstream type; cannot design the `UpdateAction` variant.                                                              |
+| 3 | Will `Role::AlpenAdministrator` and `Role::SecurityCouncil` be added upstream? When?                                               | Both roles cover 4 of 13 PRD update types plus all Defcon transactions — half of the blocked scope.                      |
+| 4 | Are Defcon 1/3 standard `UpdateAction` variants, or a separate mechanism (e.g., a dedicated subprotocol)?                          | Determines whether they reuse the existing sighash/envelope pipeline or require a new one.                                |
+| 5 | Where are the `block_payout` bridge-script spending conditions defined? Which crate, if any, exposes the script template?         | Required to construct any spending PSBT; no known crate surfaces it today.                                               |
+| 6 | What Strata node RPC endpoint exposes `AdministrationSubprotoState`? Is there a client crate, or must the backend implement its own? | Backend PRD §3 mandates running the ASM STF to derive canonical signer sets; without RPC access there is no access control. |
+| 7 | Is `AsmStfVkUpdate` (type 31) a PRD-relevant update type we should surface, or an internal-only variant?                           | Currently unmapped; if the PRD intends it to be exposed, the UI and backend need a new code path.                        |
+| 8 | Timeline for upstream additions — is there a release roadmap the multisig app should track?                                       | Affects Phase 3 scoping and risk: blocked types cannot be delivered while they remain missing upstream.                  |
+
+### 1.6 Assumptions
+
+1. **Alpen Labs is the sole source of protocol-layer additions.** WakeUp Labs will not author new `Role` variants, `AdminTxType` values, `UpdateAction` variants, or sighash tags. Any missing PRD update type is tracked as a delivery dependency on Alpen Labs, not as internal implementation work (per ADR-001).
+2. **Upstream Borsh layout is stable between pin updates** within a given Phase 3 milestone. A mid-phase breaking change to the Borsh form of `MultisigAction`, `SignedPayload`, or `ThresholdConfig` would invalidate any signatures already collected off-chain against the previous layout, and would require a signature re-collection procedure.
+3. **Sighash computation is always delegated to `strata-asm-txs-admin`** via the `Sighash` trait (`compute_sighash(seqno) -> Buf32`). The desktop app never re-implements tag construction; it always calls the crate. This is the single point that guarantees signature compatibility with the ASM.
+4. **Signer-as-broadcaster is the canonical broadcast path.** The actor who reaches quorum (or any later signer) builds the commit+reveal pair locally from the collected `SignedPayload`. The backend never broadcasts — it only coordinates (backend PRD §2.3).
+
+### 1.7 Limitations, Risks & POC Status
 
 **Limitations:**
-- `Role::AlpenAdministrator` and `Role::SecurityCouncil` don't exist upstream — all Alpen Admin and Security Council update types are fully blocked until Alpen Labs adds them.
-- `block_payout` is outside the admin subprotocol entirely — requires a separate PSBT + Bitcoin RPC implementation path not yet scoped.
-- `strata-asm-subprotocols-admin` (required to read canonical signer sets for access control) has not been compiled or integrated in the workspace yet.
+- `Role::AlpenAdministrator` and `Role::SecurityCouncil` do not exist upstream — all Alpen Admin update types, all Security Council update types, and the "Security Council Signer update" payload under Strata Admin are fully blocked until Alpen Labs adds them.
+- "Soft/hard bridge update" and "Safe Harbor address update" have no upstream type and no agreed semantics — Strata Admin update types blocked on clarification, not on code.
+- `block_payout` is outside the admin subprotocol entirely; the bridge spending script is not exposed in any crate surveyed to date, and the implementation path is not yet scoped.
+- Four crates required by the final delivery are not yet integrated in the workspace: `strata-asm-subprotocols-admin`, `strata-l1-envelope-fmt`, `strata-btcio`, and `bitcoind-async-client` (or equivalent RPC client).
+- `AsmStfVkUpdate` (type 31) exists upstream but has no PRD mapping; its intended exposure is unclear.
 
 **Risks:**
-- All Alpen crates are git dependencies without crates.io releases — upstream breaking changes require manual workspace pin updates with no automated notice.
-- "Soft/hard bridge updates" and Defcon transactions remain semantically undefined. If Alpen Labs defines them mid-implementation, they could require significant scope additions.
-- The ASM RPC endpoint for `AdministrationSubprotoState` is unidentified — could block backend access control implementation if no client crate exists.
+- All Alpen crates are git dependencies without crates.io releases — upstream breaking changes require manual workspace pin updates with no automated notice. Pin bumps must be gated by the Borsh roundtrip test already established in the desktop client codec.
+- Mid-phase upstream changes to `MultisigAction`, `SignedPayload`, or `ThresholdConfig` Borsh layout would invalidate off-chain signatures already collected against the previous layout. A signature rotation / re-collection procedure must be defined.
+- If Alpen Labs defines the missing roles and update types late in the project, Phase 3 scope may need to extend substantially or defer those types to a follow-up milestone.
+- The Strata node RPC surface for `AdministrationSubprotoState` is unidentified. If no client crate exists, the backend must implement its own RPC adapter — an unscoped integration.
+- The `block_payout` path requires a distinct Bitcoin-native PSBT + RPC implementation with no prototype yet; its complexity is not bounded by the current architecture.
 
-**POC Status:**
-- Sighash computation validated end-to-end in `e2e-tests` with `strata-asm-txs-admin` and `strata-crypto`.
-- `strata-asm-subprotocols-admin` and `strata-l1-envelope-fmt` not yet compiled or exercised in the workspace.
+**POC status:**
+- End-to-end sighash computation validated in `e2e-tests` against `strata-asm-txs-admin` and `strata-crypto` at pin `308211f`.
+- Desktop client domain ↔ protocol Borsh roundtrip is isolated in a single `infrastructure/action_codec.rs` module, with a byte-level compatibility test (POC-4) that fails fast on upstream layout drift.
+- Backend proposal CRUD with deterministic `ActionId` and duplicate rejection is implemented in [`orchestator-be/src/application/proposals.rs`](../../orchestator-be/src/application/proposals.rs), mirroring the backend PRD's minimal API sketch (`create_update_action`, `approve_action`, `get_update_action`, `list_proposals`).
+- `strata-asm-subprotocols-admin`, `strata-l1-envelope-fmt`, `strata-btcio`, and `bitcoind-async-client` are not yet compiled or exercised in the workspace.
 
 ---
 
