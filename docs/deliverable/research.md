@@ -136,6 +136,7 @@ These questions must be resolved before the blocked update types can be scoped i
 - If Alpen Labs defines the missing roles and update types late in the project, Phase 3 scope may need to extend substantially or defer those types to a follow-up milestone.
 - The Strata node RPC surface for `AdministrationSubprotoState` is unidentified. If no client crate exists, the backend must implement its own RPC adapter — an unscoped integration.
 - The `block_payout` path requires a distinct Bitcoin-native PSBT + RPC implementation with no prototype yet; its complexity is not bounded by the current architecture.
+- The whole workspace is forced onto nightly Rust because `strata-asm-params` pulls in `ssz` transitively, and `ssz` depends on `generic_const_exprs`, a nightly feature with no stabilization timeline. We pin a specific nightly date in `rust-toolchain.toml` to avoid surprise breakage, but every pin bump needs a full build and test pass. The backend does not use any Strata crate today, yet it inherits the same toolchain constraint from the workspace. There is no realistic path to stable Rust until Alpen replaces SSZ or the feature stabilizes upstream. See [`docs/2-discovery/07-nightly-dependency-finding.md`](../2-discovery/07-nightly-dependency-finding.md) for the full dependency chain and mitigation options.
 
 **POC status:**
 - End-to-end sighash computation validated in `e2e-tests` against `strata-asm-txs-admin` and `strata-crypto` at pin `308211f`.
