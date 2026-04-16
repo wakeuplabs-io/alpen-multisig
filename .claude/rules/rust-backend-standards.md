@@ -13,3 +13,4 @@ globs: ["orchestator-be/**/*.rs", "desktop-app/src-tauri/**/*.rs"]
 - Keep persistence access in repository/data-access layers and avoid SQL leakage into handlers
 - Prefer `serde`-typed request/response models with explicit validation steps at boundaries
 - Add unit tests for domain invariants and integration tests for Axum routes/auth flows
+- Run `cargo clippy -- -D warnings` before considering work done (zero tolerance for warnings)
