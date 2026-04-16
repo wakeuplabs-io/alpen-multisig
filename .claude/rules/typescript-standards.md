@@ -1,5 +1,6 @@
 ---
-globs: ["desktop-app/src/**/*.{ts,tsx}"]
+paths:
+  - "desktop-app/src/**/*.{ts,tsx}"
 ---
 
 # TypeScript Standards

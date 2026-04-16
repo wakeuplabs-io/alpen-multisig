@@ -1,4 +1,4 @@
-# Spec: Conditional Rules Loading via Globs Frontmatter
+# Spec: Conditional Rules Loading via Path-Scoped Frontmatter
 
 ## Objective
 
@@ -7,20 +7,20 @@ Reduce context window consumption by making AI assistant rules (Claude Code and 
 ## Scope
 
 **Included:**
-- Add `globs` frontmatter to `.claude/rules/*.md` files (Claude Code)
-- Sync `.cursor/rules/*.mdc` files with matching content and corrected globs (Cursor)
+- Add `paths` frontmatter to `.claude/rules/*.md` files (Claude Code's native field — see [docs](https://code.claude.com/docs/en/memory.md#path-specific-rules))
+- Sync `.cursor/rules/*.mdc` files with matching content and corrected `globs` (Cursor's native field)
 - Eliminate `general.md` (Claude) by redistributing its non-duplicated content into AGENTS.md and scoped rules
 - Slim `general.mdc` (Cursor) to Key Conventions only — Cursor needs `alwaysApply: true` since it has no AGENTS.md equivalent
-- Update AGENTS.md to document the glob-based conditional loading
+- Update AGENTS.md to document the path-based conditional loading
 
 **Not included:**
 - No production code changes
 
 ## Technical Design
 
-### Glob assignments
+### Path/glob assignments
 
-Both Claude (`.md`) and Cursor (`.mdc`) rules use the same glob patterns:
+Claude (`paths`) and Cursor (`globs`) use different field names but the same glob patterns:
 
 | Rule | Globs | Rationale |
 |------|-------|-----------|
@@ -31,14 +31,16 @@ Both Claude (`.md`) and Cursor (`.mdc`) rules use the same glob patterns:
 
 ### Frontmatter format differences
 
-**Claude** (`.claude/rules/*.md`):
+**Claude** (`.claude/rules/*.md`) — field is `paths`, YAML block list:
 ```yaml
 ---
-globs: ["pattern1", "pattern2"]
+paths:
+  - "pattern1"
+  - "pattern2"
 ---
 ```
 
-**Cursor** (`.cursor/rules/*.mdc`):
+**Cursor** (`.cursor/rules/*.mdc`) — field is `globs`, comma-separated inline:
 ```yaml
 ---
 description: Rule description
@@ -46,6 +48,8 @@ globs: pattern1, pattern2
 alwaysApply: false
 ---
 ```
+
+> Using `globs` in a Claude rule file silently disables conditional loading — the rule loads unconditionally into every session. This was the defect in the initial version of this spec.
 
 ### `general` rule handling
 
@@ -70,8 +74,10 @@ Previous Cursor globs did not match the actual project structure:
 
 ## Test Cases
 
-- Verify each Claude rules file has valid YAML frontmatter with array globs
+- Verify each Claude rules file has valid YAML frontmatter with a `paths` block list
 - Verify each Cursor rules file has valid frontmatter with `description`, `globs`, `alwaysApply`
+- Verify no `.claude/rules/*.md` uses `globs` (Cursor-only field — silently ignored by Claude Code)
+- In a fresh Claude Code session opened without touching any matching files, run `/context` and confirm `.claude/rules/*.md` files are NOT listed under "Memory files"
 - Verify `.claude/rules/general.md` no longer exists
 - Verify `.cursor/rules/general.mdc` exists with `alwaysApply: true` and slimmed content
 - Verify AGENTS.md Key Conventions contains the redistributed lines

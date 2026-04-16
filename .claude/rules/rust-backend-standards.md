@@ -1,5 +1,7 @@
 ---
-globs: ["orchestator-be/**/*.rs", "desktop-app/src-tauri/**/*.rs"]
+paths:
+  - "orchestator-be/**/*.rs"
+  - "desktop-app/src-tauri/**/*.rs"
 ---
 
 # Rust Backend Standards

@@ -72,7 +72,7 @@ Alpen/Strata crates are not on crates.io — consumed as git dependencies. Share
 
 ## Rule Files
 
-Rules in `.claude/rules/` auto-load based on `globs` frontmatter — only the rules relevant to the files being edited are loaded into context:
+Rules in `.claude/rules/` auto-load based on `paths` frontmatter — only the rules relevant to the files being edited are loaded into context:
 
 - `typescript-standards.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
 - `react-frontend-patterns.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`

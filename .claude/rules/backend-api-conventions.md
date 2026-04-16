@@ -1,5 +1,6 @@
 ---
-globs: ["orchestator-be/**/*.rs"]
+paths:
+  - "orchestator-be/**/*.rs"
 ---
 
 # Rust Backend Conventions
