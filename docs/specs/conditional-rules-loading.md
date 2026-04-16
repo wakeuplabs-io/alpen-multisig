@@ -2,59 +2,80 @@
 
 ## Objective
 
-Reduce context window consumption by making Claude Code rules load conditionally based on which files are being discussed, instead of loading all 5 rules files on every conversation.
+Reduce context window consumption by making AI assistant rules (Claude Code and Cursor) load conditionally based on which files are being discussed, instead of loading all rules on every conversation.
 
 ## Scope
 
 **Included:**
-- Add YAML `globs` frontmatter to 4 `.claude/rules/*.md` files
-- Eliminate `general.md` by redistributing its non-duplicated content into AGENTS.md and the scoped rules files
+- Add `globs` frontmatter to `.claude/rules/*.md` files (Claude Code)
+- Sync `.cursor/rules/*.mdc` files with matching content and corrected globs (Cursor)
+- Eliminate `general.md` (Claude) by redistributing its non-duplicated content into AGENTS.md and scoped rules
+- Slim `general.mdc` (Cursor) to Key Conventions only — Cursor needs `alwaysApply: true` since it has no AGENTS.md equivalent
 - Update AGENTS.md to document the glob-based conditional loading
 
 **Not included:**
 - No production code changes
-- No restructuring of `.claude/rules/` directory beyond removing `general.md`
 
 ## Technical Design
 
 ### Glob assignments
 
-| File | Globs | Rationale |
+Both Claude (`.md`) and Cursor (`.mdc`) rules use the same glob patterns:
+
+| Rule | Globs | Rationale |
 |------|-------|-----------|
-| `typescript-standards.md` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React/TS frontend code |
-| `react-frontend-patterns.md` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React components/hooks |
-| `rust-backend-standards.md` | `orchestator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs` | Applies to all Rust service code (backend + Tauri shell) |
-| `backend-api-conventions.md` | `orchestator-be/**/*.rs` | Specific to the orchestrator HTTP API — not Tauri |
+| `typescript-standards` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React/TS frontend code |
+| `react-frontend-patterns` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React components/hooks |
+| `rust-backend-standards` | `orchestator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs` | Applies to all Rust service code (backend + Tauri shell) |
+| `backend-api-conventions` | `orchestator-be/**/*.rs` | Specific to the orchestrator HTTP API — not Tauri |
 
-### `general.md` elimination
+### Frontmatter format differences
 
-Most content is already duplicated in AGENTS.md or the scoped rules. Non-duplicated lines are redistributed:
+**Claude** (`.claude/rules/*.md`):
+```yaml
+---
+globs: ["pattern1", "pattern2"]
+---
+```
 
-**To AGENTS.md Key Conventions:**
-- "Use kebab-case for directories and file names"
-- "Match existing project patterns before introducing new abstractions"
-- "All generated code must pass CI checks — verify locally before considering work done"
+**Cursor** (`.cursor/rules/*.mdc`):
+```yaml
+---
+description: Rule description
+globs: pattern1, pattern2
+alwaysApply: false
+---
+```
 
-**To `typescript-standards.md`:**
-- "Favor named exports for functions and components"
-- "Use descriptive boolean names (`isLoading`, `hasError`, `canSubmit`)"
-- "Omit semicolons unless required for correctness"
+### `general` rule handling
 
-**To `rust-backend-standards.md`:**
-- "`cargo clippy -- -D warnings` for linting (zero tolerance for warnings)"
+**Claude (`general.md`)** — Eliminated. Content redistributed:
 
-### AGENTS.md changes
+- **To AGENTS.md Key Conventions:** kebab-case naming, match existing patterns, CI gate
+- **To `typescript-standards.md`:** named exports, boolean names, omit semicolons
+- **To `rust-backend-standards.md`:** `cargo clippy -- -D warnings` zero tolerance
 
-- Add redistributed lines to Key Conventions
-- Update Rule Files section to remove `general.md` entry
+**Cursor (`general.mdc`)** — Kept with `alwaysApply: true`, slimmed to Key Conventions only (mirrors AGENTS.md). Cursor has no AGENTS.md equivalent, so this is the only place for global rules.
+
+### Cursor glob fixes
+
+Previous Cursor globs did not match the actual project structure:
+
+| File | Before (broken) | After (correct) |
+|------|-----------------|-----------------|
+| `typescript-standards.mdc` | `**/*.{ts,tsx}` | `desktop-app/src/**/*.{ts,tsx}` |
+| `react-frontend-patterns.mdc` | `**/frontend/*.{tsx,jsx}` | `desktop-app/src/**/*.{ts,tsx}` |
+| `rust-backend-standards.mdc` | `**/*.rs` | `orchestator-be/**/*.rs, desktop-app/src-tauri/**/*.rs` |
+| `backend-api-conventions.mdc` | `**/backend/*.{rs}` | `orchestator-be/**/*.rs` |
 
 ## Test Cases
 
-- Verify each rules file has valid YAML frontmatter (manual review)
-- Verify `general.md` no longer exists
+- Verify each Claude rules file has valid YAML frontmatter with array globs
+- Verify each Cursor rules file has valid frontmatter with `description`, `globs`, `alwaysApply`
+- Verify `.claude/rules/general.md` no longer exists
+- Verify `.cursor/rules/general.mdc` exists with `alwaysApply: true` and slimmed content
 - Verify AGENTS.md Key Conventions contains the redistributed lines
-- Verify `typescript-standards.md` contains the 3 new lines
-- Verify `rust-backend-standards.md` contains the clippy line
+- Verify content is identical between `.md` and `.mdc` counterparts (excluding frontmatter format)
 - Verify glob patterns match the actual project directory structure
 
 ## Module structure
