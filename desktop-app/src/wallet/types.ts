@@ -20,7 +20,7 @@ export type SignTestPayloadResult = {
 	note?: string
 }
 
-export type SignatureFormat = 'raw-ecdsa' | 'bitcoin-message'
+export type SignatureFormat = 'raw-ecdsa' | 'bitcoin-message' | 'p2wpkh-tx-binding'
 
 export type SignSighashResult = {
 	publicKeyHex: string

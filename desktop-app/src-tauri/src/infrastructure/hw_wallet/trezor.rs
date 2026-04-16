@@ -1,23 +1,54 @@
-use bitcoin::bip32::DerivationPath;
-use bitcoin::secp256k1::ecdsa::RecoverableSignature;
 use std::str::FromStr;
+
+use bitcoin::address::KnownHrp;
+use bitcoin::bip32::{DerivationPath, Xpub};
+use bitcoin::key::TweakedPublicKey;
+use bitcoin::secp256k1::XOnlyPublicKey;
+use bitcoin::Network;
 use trezor_client::{InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
-use super::HwWalletInfo;
-use crate::signing::SignatureResult;
+use super::{HwAddressEntry, HwWalletInfo};
 
-// ─── BIP-86 first receive address — Taproot (P2TR, bc1p...) ─────────────────
-const DEFAULT_PATH: &str = "m/86'/0'/0'/0/0";
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+/// Product default derivation path (BIP86 Taproot).
+const DEFAULT_PATH: &str = "m/86'/0'/73'/0/0";
 
 fn open_trezor() -> Result<Trezor, String> {
-    let mut trezor = trezor_client::unique(false)
-        .map_err(|_| "Trezor not found. Connect the device.".to_string())?;
-    trezor
-        .init_device(None)
-        .map_err(|e| format!("Trezor init failed: {e}"))?;
-    Ok(trezor)
+    let mut attempts = Vec::with_capacity(2);
+    let mut saw_invalid_protocol = false;
+    for debug in [false, true] {
+        let mut trezor = match trezor_client::unique(debug) {
+            Ok(device) => device,
+            Err(e) => {
+                attempts.push(format!("debug={debug}: discovery failed ({e})"));
+                continue;
+            }
+        };
+
+        match trezor.init_device(None) {
+            Ok(_) => return Ok(trezor),
+            Err(e) => {
+                if e.to_string().contains("Failure_InvalidProtocol") {
+                    saw_invalid_protocol = true;
+                }
+                attempts.push(format!("debug={debug}: init failed ({e})"));
+            }
+        }
+    }
+
+    let mut hint = "Ensure trezord/emulator are healthy, then reconnect the device.".to_string();
+    if saw_invalid_protocol {
+        hint.push_str(
+            " If you are testing with an emulator, point this app directly to the emulator UDP port \
+(21324) instead of the Trezor Bridge endpoint."
+        );
+    }
+
+    Err(format!(
+        "Trezor init failed on both transport modes. \
+{} Details: {}",
+        hint,
+        attempts.join(" | ")
+    ))
 }
 
 fn parse_path(path: &str) -> Result<DerivationPath, String> {
@@ -25,11 +56,6 @@ fn parse_path(path: &str) -> Result<DerivationPath, String> {
 }
 
 /// Drive a TrezorResponse to completion, handling ButtonRequests along the way.
-///
-/// When the device sends a ButtonRequest it is showing a confirmation screen and
-/// waiting for the user to press the physical button (or the emulator button).
-/// We respond with ButtonAck so the device knows the client is ready, then block
-/// until the user confirms and the device sends the final response.
 fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> Result<T, String> {
     loop {
         match response {
@@ -48,10 +74,7 @@ fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> R
     }
 }
 
-// ─── Public interface ─────────────────────────────────────────────────────────
-
-/// Connect: read the compressed public key and address at the derivation path.
-/// Mirrors TrezorConnect's getAddress + getPublicKey calls from the JS adapter.
+/// Connect: read the P2TR address at the given derivation path (default `m/86'/0'/73'/0/0`).
 pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
     let path_str = derivation_path.unwrap_or_else(|| DEFAULT_PATH.to_string());
     let path = parse_path(&path_str)?;
@@ -63,7 +86,7 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
             .get_public_key(
                 &path,
                 InputScriptType::SPENDTAPROOT,
-                bitcoin::Network::Bitcoin,
+                Network::Bitcoin,
                 false,
             )
             .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
@@ -71,16 +94,9 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
 
     let pubkey_hex = hex::encode(xpub.public_key.serialize());
 
-    let address: bitcoin::Address = resolve(
-        trezor
-            .get_address(
-                &path,
-                InputScriptType::SPENDTAPROOT,
-                bitcoin::Network::Bitcoin,
-                false,
-            )
-            .map_err(|e| format!("Trezor get_address failed: {e}"))?,
-    )?;
+    let xonly = XOnlyPublicKey::from(xpub.public_key);
+    let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
+    let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
 
     Ok(HwWalletInfo {
         device_label: "Trezor".to_string(),
@@ -91,44 +107,46 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
     })
 }
 
-/// Sign a message using Bitcoin Signed Message format (BIP-137 ECDSA).
-/// The device shows the message on screen — the user confirms by pressing the
-/// button on the physical device or emulator.
-pub fn sign_message(sighash_hex: &str, derivation_path: &str) -> Result<SignatureResult, String> {
-    let path = parse_path(derivation_path)?;
-
+/// UC-1: Fetch the first `count` P2TR addresses at `m/86'/0'/73'/0/{n}` (BIP86 Taproot).
+///
+/// Opens a single HID session and loops `count` `get_public_key` calls with
+/// `InputScriptType::SPENDTAPROOT`. Returns on the first error encountered.
+pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String> {
     let mut trezor = open_trezor()?;
+    let mut entries = Vec::with_capacity(count);
 
-    let xpub = resolve(
-        trezor
-            .get_public_key(
-                &path,
-                InputScriptType::SPENDTAPROOT,
-                bitcoin::Network::Bitcoin,
-                false,
-            )
-            .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
-    )?;
+    for n in 0..count {
+        let path_str = format!("m/86'/0'/73'/0/{n}");
+        let path = parse_path(&path_str)?;
 
-    let public_key_hex = hex::encode(xpub.public_key.serialize());
+        let xpub: Xpub = resolve(
+            trezor
+                .get_public_key(
+                    &path,
+                    InputScriptType::SPENDTAPROOT,
+                    Network::Bitcoin,
+                    false,
+                )
+                .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
+        )?;
 
-    let (_address, recoverable_sig): (bitcoin::Address, RecoverableSignature) = resolve(
-        trezor
-            .sign_message(
-                sighash_hex.to_string(),
-                &path,
-                InputScriptType::SPENDTAPROOT,
-                bitcoin::Network::Bitcoin,
-            )
-            .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
-    )?;
+        let compressed_bytes = xpub.public_key.serialize();
+        let public_key_hex = hex::encode(compressed_bytes);
 
-    // Compact r+s (64 bytes)
-    let (_, compact): (_, [u8; 64]) = recoverable_sig.serialize_compact();
-    let signature_hex = hex::encode(compact);
+        // BIP86 key-path P2TR: strip the parity byte and treat as an x-only key.
+        // `dangerous_assume_tweaked` is correct here — BIP86 prescribes no script-tree tweak
+        // for the standard key-path spend, so the x-only key IS the tweaked output key.
+        let xonly = XOnlyPublicKey::from(xpub.public_key);
+        let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
+        let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
 
-    Ok(SignatureResult {
-        public_key_hex,
-        signature_hex,
-    })
+        entries.push(HwAddressEntry {
+            index: n as u32,
+            derivation_path: path_str,
+            address: address.to_string(),
+            public_key_hex,
+        });
+    }
+
+    Ok(entries)
 }

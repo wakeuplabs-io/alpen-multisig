@@ -2,6 +2,8 @@
 members = ['orchestator-be', 'desktop-app/src-tauri', 'e2e-tests']
 resolver = '2'
 
+# Vendored `trezor-client` 0.1.5: SLIP-0132 xpub normalization (see vendor README if present) and
+# sign_tx fixes for modern Trezor firmware (`script_pubkey` on TxAck inputs, P2TR → SPENDTAPROOT).
 [workspace.dependencies]
 # Alpen crates — see docs/architecture/adrs/001-alpen-crate-dependencies.md
 # From alpenlabs/alpen (rev-pinned, no suitable tag available yet)

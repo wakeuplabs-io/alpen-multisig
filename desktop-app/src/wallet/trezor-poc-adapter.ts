@@ -1,8 +1,13 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { SignSighashResult, SignTestPayloadResult, WalletAccountInfo, WalletAdapter } from './types'
+import type {
+	SignSighashResult,
+	SignTestPayloadResult,
+	WalletAccountInfo,
+	WalletAdapter,
+} from './types'
 
-/** BIP-86 first receive address — Taproot (P2TR, bc1p...). Must match the Rust DEFAULT_PATH. */
-const DEFAULT_DERIVATION_PATH = "m/86'/0'/0'/0/0"
+/** Product default path. Must match Rust `DEFAULT_PATH`. */
+const DEFAULT_DERIVATION_PATH = "m/86'/0'/73'/0/0"
 
 type HwWalletInfo = {
 	deviceLabel: string
@@ -54,7 +59,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			if (!result.ok) throw new Error(result.error)
 			return {
 				signatureHex: result.data.signatureHex,
-				note: 'Bitcoin Signed Message (BIP-137) via Trezor — Rust HID. Confirm on device.',
+				note: 'Trezor PSBT sign_tx: ECDSA over BIP143 P2WPKH sighash; payload digest is OP_RETURN–bound (not BIP-137).',
 			}
 		},
 
@@ -65,7 +70,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			return {
 				publicKeyHex: result.data.publicKeyHex,
 				signatureHex: result.data.signatureHex,
-				signatureFormat: 'bitcoin-message',
+				signatureFormat: 'p2wpkh-tx-binding',
 			}
 		},
 	}

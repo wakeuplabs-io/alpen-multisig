@@ -4,3 +4,4 @@
 pub mod auth;
 pub mod hw_wallet;
 pub mod proposals;
+pub mod signing;

@@ -20,7 +20,7 @@ fn main() {
             commands::auth::delete_session,
             commands::proposals::list_proposals,
             commands::hw_wallet::get_trezor_info,
-            commands::hw_wallet::sign_with_trezor,
+            commands::hw_wallet::list_hw_addresses,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

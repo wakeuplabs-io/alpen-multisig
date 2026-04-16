@@ -1,133 +1,262 @@
-# Spec: POC-5 — Trezor Hardware Wallet Integration
+# Spec: UC-1 — Hardware Wallet Connect & Address Selection
 
 ## Objective
 
-Prove that the desktop app can communicate with a physical Trezor device (or emulator) via HID to: read a public key and address at a BIP-84 derivation path, and produce a signature over an SPS-65 sighash — all bridged from the React frontend through Tauri IPC to a Rust HID driver.
+Implement the first user-facing flow of the production app: connect a hardware wallet (Trezor, via HID/Tauri) and present the first 20 addresses at the `m/86'/0'/73'/0/n` derivation path (BIP86 Taproot, account `73'` hardened) so the user can select the address whose private key will sign administrative transactions.
+
+This spec replaces the POC-5 skeleton, which originally proved HID transport and PSBT signing in a BIP84
+shape before the product path converged on `m/86'/0'/73'/0/n`. That context is preserved in
+`docs/2-discovery/10-poc5-trezor-findings.md`.
+
+**PRD requirements covered:** 6.2, 6.3, 6.4, 6.5.
 
 ## Scope
 
 ### Included
 
-- `trezor-client = "0.1.5"` dependency in `desktop-app/src-tauri/Cargo.toml`
-- `infrastructure/hw_wallet/` module with `trezor` submodule and shared `HwWalletInfo` struct
-- Two Tauri commands: `get_trezor_info`, `sign_with_trezor`
-- TypeScript `WalletAdapter` interface and `createTrezorPocAdapter()` factory
-- Integration test binary `trezor_test` (requires emulator + trezord)
-- `wallet/types.ts` with `WalletVendor`, `WalletAdapter`, `SignatureFormat` domain types
-- `wallet/create-poc-wallet-adapter.ts` factory dispatching across mock/mnemonic/trezor/ledger
+- New Rust function `trezor::list_addresses(count)` — fetches `count` P2TR addresses at `m/86'/0'/73'/0/{n}`
+- New struct `HwAddressEntry` in `hw_wallet/mod.rs`
+- New Tauri command `list_hw_addresses` in `commands/hw_wallet.rs`
+- New Tauri command `verify_address_on_device` in `commands/hw_wallet.rs`
+- New TypeScript type `HwAddressEntry` in `wallet/types.ts`
+- New `listAddresses()` method on `WalletAdapter` (optional, Trezor only for now)
+- New React component `HwWalletConnect` — connect → pick → confirm address flow
+- Copy-to-clipboard and "verify on device" actions on the selected address view
 
 ### NOT included
 
-- PIN entry or passphrase entry (returns descriptive error — not supported in this build)
-- Ledger implementation (stub only, pending Speculos validation)
-- Raw ECDSA signing via Trezor (blocked by BIP-137 prefix — see open issue below)
-- Backend integration or session-bound signing
-- UI flow beyond the POC `App.tsx` demo
+- Ledger support (stub remains, pending Speculos validation)
+- PIN entry or passphrase entry (returns descriptive error — unchanged from POC-5)
+- Signing — `sign_with_trezor` / `sign_admin_sps65_binding` are untouched
+- Backend session or nonce signing (UC-2)
+- Multisig selection screen (UC-3)
+
+### POC-5 artifacts preserved (do not delete)
+
+- `trezor::connect()` / `get_trezor_info` — current single-path connect defaults to `m/86'/0'/73'/0/0`
+- `trezor::sign_admin_sps65_binding()` — PSBT signing, wired to `sign_with_trezor`
+- `trezor::sign_message_poc_bip137()` — BIP-137 helper, POC only
+- `trezor::open_trezor()`, `trezor::resolve()` — shared infrastructure
+
+## Design Decisions
+
+### BIP86 Taproot path (`m/86'/0'/73'/0/n`)
+
+The product derivation path uses account `73'` (hardened) as the Strata admin key namespace. Each index `n`
+(0–19) represents a distinct signer address the user may have enrolled on a multisig. The path uses BIP86
+semantics: x-only Schnorr key, P2TR (bech32m) address. This differs from earlier POC BIP84/P2WPKH assumptions.
+
+### `SPENDTAPROOT` script type
+
+Taproot address derivation on Trezor requires `InputScriptType::SPENDTAPROOT` in `get_public_key`. The device returns an xpub from which the x-only pubkey is extracted; the address is then `p2tr_tweaked` (key-path spend, no script tree). Note: `sign_message` with `SPENDTAPROOT` is rejected by current Trezor firmware — this is a known limitation documented in the findings doc and is out of scope here.
+
+### Sequential HID calls (20 round-trips)
+
+`list_addresses` opens one HID session and loops 20 `get_public_key` calls. All calls share the same `Trezor` handle. If any call fails, the function returns the error immediately and the user sees the device error message.
+
+### `spawn_blocking` for all HID work
+
+Tauri async commands must not block the executor. All HID calls are dispatched through `tokio::task::spawn_blocking`.
+
+### Address display format
+
+Full bech32m address is shown after selection. The picker truncates to `first_8…last_6` chars for readability. Derivation path is always shown in full alongside each row.
 
 ## Technical Design
 
 ### Layer diagram
 
 ```
-React (App.tsx)
-  └── createTrezorPocAdapter()          wallet/trezor-poc-adapter.ts
-        └── tauriCall('get_trezor_info' | 'sign_with_trezor')
-              └── commands/hw_wallet.rs  (Tauri IPC boundary)
-                    └── infrastructure/hw_wallet/trezor.rs
-                          └── trezor-client crate (HID → device)
+React — HwWalletConnect.tsx
+  ├── listAddresses()          → invoke('list_hw_addresses')
+  └── verifyOnDevice()         → invoke('verify_address_on_device')
+        └── commands/hw_wallet.rs   (Tauri IPC boundary)
+              └── infrastructure/hw_wallet/trezor.rs
+                    └── trezor-client crate (HID → device)
 ```
 
-### Key components
+### New types
 
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| `open_trezor()` | `trezor.rs` | Opens unique HID connection, initializes device |
-| `resolve()` | `trezor.rs` | Drives `TrezorResponse` state machine, handles ButtonRequest/Ack |
-| `connect()` | `trezor.rs` | Reads compressed pubkey + P2WPKH address at derivation path |
-| `sign_message()` | `trezor.rs` | Gets pubkey + signs hex string via BIP-137 format |
-| `HwWalletInfo` | `hw_wallet/mod.rs` | Shared device info type; `camelCase` for JS serialization |
-| `get_trezor_info` | `commands/hw_wallet.rs` | Tauri command → `connect()` |
-| `sign_with_trezor` | `commands/hw_wallet.rs` | Tauri command → `sign_message()` |
-| `createTrezorPocAdapter()` | `trezor-poc-adapter.ts` | `WalletAdapter` implementation for Trezor |
-| `WalletAdapter` | `wallet/types.ts` | Interface for all hardware wallet adapters |
+**Rust** (`hw_wallet/mod.rs`):
 
-### BIP-84 derivation path
-
-Default: `m/84'/0'/0'/0/0` (first native SegWit receive address). Matches the JS POC adapter constant. Overridable per call via `derivation_path` parameter.
-
-### `resolve()` — ButtonRequest loop
-
-Trezor communicates interactively: when the device shows a confirmation screen it sends a `ButtonRequest` and waits for a `ButtonAck` before continuing. `resolve()` is a generic helper that drives this protocol:
-
-```
-TrezorResponse::Ok(data)           → done, return data
-TrezorResponse::ButtonRequest(req) → send ack, loop again
-TrezorResponse::Failure(f)         → return error
-TrezorResponse::PinMatrixRequest   → unsupported, return error
-TrezorResponse::PassphraseRequest  → unsupported, return error
+```rust
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HwAddressEntry {
+    pub index: u32,
+    pub derivation_path: String,  // "m/86'/0'/73'/0/{index}"
+    pub address: String,          // bech32m P2TR address
+    pub public_key_hex: String,   // compressed 33-byte pubkey as hex
+}
 ```
 
-This is correct for an emulator-only build where no PIN or passphrase protection is used.
+**TypeScript** (`wallet/types.ts`):
 
-### Open issue: BIP-137 vs raw ECDSA
+```ts
+export type HwAddressEntry = {
+  index: number;
+  derivationPath: string;
+  address: string;
+  publicKeyHex: string;
+};
+```
 
-Trezor's `sign_message` API applies a `"Bitcoin Signed Message:\n"` prefix and double-SHA256 before signing. This means the resulting signature covers a **different hash** than the bare SPS-65 sighash. Concretely:
+### New Rust functions (`trezor.rs`)
 
-- `verify_threshold()` (from POC-3) expects: `ECDSA.verify(sighash, sig, pubkey)`
-- Trezor produces: `ECDSA.verify(SHA256d("Bitcoin Signed Message:\n" + sighash_hex), sig, pubkey)`
+```
+pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String>
+```
 
-These are incompatible. The signature is valid BIP-137 but cannot be fed directly into the on-chain ASM verification.
+- Base path: `m/86'/0'/73'/0`
+- For `n` in `0..count`:
+  - Build path string `"m/86'/0'/73'/0/{n}"`, parse with `DerivationPath::from_str`.
+  - Call `trezor.get_public_key(&path, InputScriptType::SPENDTAPROOT, Network::Bitcoin, /*display=*/false)` → `resolve()`.
+  - Extract x-only pubkey from `xpub.public_key` (drop even/odd byte), construct `XOnlyPublicKey`, call `TweakedPublicKey::dangerous_assume_tweaked`, then `Address::p2tr_tweaked(..., KnownHrp::Mainnet)`.
+  - Push `HwAddressEntry { index: n as u32, derivation_path, address, public_key_hex }`.
+- Returns the full vec or the first error encountered.
 
-**Resolution options (for the next phase):**
+```
+pub fn verify_address_on_device(derivation_path: String) -> Result<(), String>
+```
 
-| Option | Description | Tradeoff |
-|--------|-------------|----------|
-| A | Verify with BIP-137 prefix server-side | Backend must know the format; breaks protocol uniformity |
-| B | Use `sign_tx` / PSBT path | Trezor signs a Bitcoin input directly — raw ECDSA over a tx sighash | Requires constructing a PSBT; more complex but protocol-correct |
-| C | Use Trezor's `sign_identity` | Experimental, not guaranteed on all firmware versions | |
+- Parses the path, calls `get_public_key` with `display = true` so the device shows the address on screen.
+- Returns `Ok(())` on success; the UI overlays a "Check your device" message while this call is in-flight.
 
-Option B (PSBT/`sign_tx`) is the correct production path for SPS-65 compatibility. Option A is acceptable for auth nonce signing (where the server controls verification).
+### New Tauri commands (`commands/hw_wallet.rs`)
 
-### Error handling
+```rust
+#[tauri::command]
+pub async fn list_hw_addresses(
+    _state: State<'_, AppState>,
+    count: Option<u32>,
+) -> Result<Vec<HwAddressEntry>, String> {
+    tokio::task::spawn_blocking(move || trezor::list_addresses(count.unwrap_or(20) as usize))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-All public functions return `Result<T, String>`. This is intentional for the POC:
-- Tauri command return types must implement `serde::Serialize`; `String` satisfies this without a custom error type
-- All error strings are human-readable and surfaced directly in the frontend
-- Production hardening would introduce a typed `HwWalletError` enum
+#[tauri::command]
+pub async fn verify_address_on_device(
+    _state: State<'_, AppState>,
+    derivation_path: String,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || trezor::verify_address_on_device(derivation_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+```
 
-## Test Binary
+Both commands must be added to `generate_handler![]` in `main.rs`.
 
-`cargo run -p desktop-app --bin trezor_test` validates the full emulator flow:
+### TypeScript adapter (`wallet/trezor-poc-adapter.ts`)
 
-**Prerequisites:**
-1. Trezor emulator running (`trezor-user-env` Docker or `trezor-emu-core`)
-2. Trezor Bridge: `trezord -e 21324`
-3. Emulator seeded: `trezorctl -p udp:127.0.0.1:21324 debug load-device --mnemonic "all all all..." --pin "" --passphrase-protection false`
+Add `listAddresses(count = 20)` to the returned adapter object:
 
-**Steps validated:**
-1. Connect → read pubkey + address at default path
-2. Compute SPS-65 sighash for a demo `MultisigAction`
-3. Sign via Trezor (`sign_message`) — confirms BIP-137 format in output
+```ts
+async listAddresses(count = 20): Promise<HwAddressEntry[]> {
+    const result = await tauriCall<HwAddressEntry[]>('list_hw_addresses', { count })
+    if (!result.ok) throw new Error(result.error)
+    return result.data
+},
+```
 
-The binary explicitly notes the BIP-137 incompatibility in its output, making it a self-documenting probe.
+Update `WalletAdapter` in `wallet/types.ts` with an optional method:
 
-## TypeScript Adapter
+```ts
+listAddresses?(count?: number): Promise<HwAddressEntry[]>
+```
 
-`createTrezorPocAdapter()` implements `WalletAdapter` with closures over `derivationPath` and `publicKeyHex` state:
+### React component (`components/HwWalletConnect.tsx`)
 
-- `connect()` — calls `get_trezor_info`, stores derivation path returned by device
-- `signTestPayload(utf8)` — SHA-256 hashes the payload client-side, signs via `sign_with_trezor`
-- `signSighash(hex)` — requires prior `connect()`, signs via `sign_with_trezor`; returns `signatureFormat: 'bitcoin-message'` to signal BIP-137 format to callers
+Three logical phases, one component:
 
-The `xpubOrFingerprint` field received from Rust is a truncated display string (first 8 bytes of the compressed pubkey in hex + ellipsis), not a full xpub. The full key is only used server-side for verification — never stored in JS state.
+**Phase 1 — Connect**
 
-## Protocol Checklist
+- "Connect hardware wallet" button (or auto-trigger).
+- On click: calls `adapter.listAddresses(20)`.
+- Loading state: spinner + "Reading addresses from device…".
+- Error state: error string from Rust, retry button.
 
-- [x] Device never receives private key material — signing happens on-device
-- [x] User confirmation required for every signing operation (ButtonRequest)
-- [x] Derivation path is explicit and matches between Rust and TypeScript adapters
-- [x] Signature format is tagged (`signatureFormat: 'bitcoin-message'`) so callers know how to verify
-- [x] BIP-137 incompatibility is documented and not hidden
-- [ ] Raw ECDSA signing — not yet achieved via Trezor (blocked, see open issue)
-- [ ] PIN / passphrase support — not in scope for this POC
-- [ ] Ledger parity — stub only
+**Phase 2 — Address picker**
+
+- Scrollable list of 20 rows. Each row:
+  - Index badge (`#0` … `#19`)
+  - Full derivation path (`m/86'/0'/73'/0/0`)
+  - Truncated address (`bc1pXXXXXXXX…XXXXXX`)
+- Row is selectable (single selection).
+- "Use this address" button — enabled when a row is selected.
+
+**Phase 3 — Selected address**
+
+- Full bech32m address in a read-only monospace field.
+- "Copy" button — `navigator.clipboard.writeText(address)` with brief confirmation ("Copied!").
+- "Verify on device" button:
+  - Calls `tauriCall('verify_address_on_device', { derivationPath })`.
+  - While in-flight: overlay or button spinner + "Check your Trezor screen and confirm the address matches."
+  - On success: brief success note.
+  - On error: show error string.
+- "Change address" link — returns to Phase 2 with list already loaded (no re-fetch).
+- "Disconnect" link — resets all state back to Phase 1.
+
+### Key component table
+
+| Component                    | File                             | Responsibility                                                      |
+| ---------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `list_addresses()`           | `trezor.rs`                      | 20 SPENDTAPROOT `get_public_key` calls, builds `HwAddressEntry` vec |
+| `verify_address_on_device()` | `trezor.rs`                      | `get_public_key` with `display=true`                                |
+| `HwAddressEntry`             | `hw_wallet/mod.rs`               | Shared Rust type, camelCase serialization                           |
+| `list_hw_addresses`          | `commands/hw_wallet.rs`          | Tauri command wrapping `list_addresses` in `spawn_blocking`         |
+| `verify_address_on_device`   | `commands/hw_wallet.rs`          | Tauri command wrapping `verify_address_on_device`                   |
+| `HwAddressEntry`             | `wallet/types.ts`                | TypeScript mirror type                                              |
+| `listAddresses()`            | `trezor-poc-adapter.ts`          | `WalletAdapter` optional method                                     |
+| `HwWalletConnect`            | `components/HwWalletConnect.tsx` | Full connect → pick → confirm UI flow                               |
+
+## Constraints
+
+- Do not modify `sign_admin_sps65_binding`, `sign_with_trezor`, `connect()`, or `get_trezor_info` — they remain for backward compat and future use.
+- Do not add BIP84-only path guards to functions handling `m/86'` paths.
+- All HID calls in async Tauri commands go through `tokio::task::spawn_blocking`.
+- No `unwrap()` in new production code paths — propagate as `Result<_, String>`.
+- `cargo clippy -- -D warnings` must pass. `npm run lint` and `npm run format:check` must pass.
+- Use `InputScriptType::SPENDTAPROOT` for all `m/86'` paths.
+- Frontend: tabs, single quotes, ~120 char lines.
+
+## Acceptance Criteria (manual test — emulator)
+
+1. App displays 20 rows, all with bech32m addresses (`bc1p…`) and paths `m/86'/0'/73'/0/0` through `m/86'/0'/73'/0/19`.
+2. Selecting row index 5 stores path `m/86'/0'/73'/0/5` as the active derivation path.
+3. Full address shown in Phase 3 matches the address in the selected row.
+4. Copy button writes the full address to clipboard.
+5. "Verify on device" triggers a ButtonRequest on the emulator (visible in emulator UI or trezord logs).
+6. "Change address" returns to the picker without re-fetching from device.
+7. "Disconnect" resets to Phase 1.
+8. If device is disconnected mid-fetch, a clear error message is shown.
+
+## Open Questions (carry-forward from POC-5)
+
+These are not blockers for UC-1 but must be resolved before production signing:
+
+| #   | Question                                                                                                          | Owner   |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ------- |
+| Q1  | Must SPS-65 on-chain verification accept a Bitcoin sighash (PSBT binding) or exactly the tagged admin digest?     | Alpen   |
+| Q2  | Is `m/86'/0'/73'/0/n` the final canonical path, or is account index subject to change?                            | Alpen   |
+| Q3  | Must every cosigner use the same signing semantics (all HW, all software, or mixed)?                              | Alpen   |
+| Q4  | Is PIN/passphrase support required before production, or is emulator/pinless device acceptable for alpha signers? | Product |
+
+## Emulator Quick Reference
+
+```bash
+# Start bridge
+trezord -e 21324
+
+# Seed emulator
+trezorctl -p udp:127.0.0.1:21324 debug load-device \
+  --mnemonic "all all all all all all all all all all all all" \
+  --pin "" \
+  --passphrase-protection false
+
+# Full Tauri app
+cd desktop-app && npm run tauri dev
+```
+
+Expected: 20 rows with `bc1p…` addresses (bech32m, P2TR) at paths `m/86'/0'/73'/0/0` through `m/86'/0'/73'/0/19`.

@@ -2,7 +2,7 @@ import { tauriCall } from '@/api/tauri-bridge'
 import type { SignSighashResult, SignTestPayloadResult, WalletAccountInfo, WalletAdapter } from './types'
 
 /** BIP-84 first receive address — must match the Rust DEFAULT_PATH. */
-const DEFAULT_DERIVATION_PATH = "84'/0'/0'/0/0"
+const DEFAULT_DERIVATION_PATH = "86'/0'/73'/0/0"
 
 type HwWalletInfo = {
 	deviceLabel: string

@@ -17,9 +17,12 @@ reqwest = { version = '0.12', features = ['json'] }
 tokio = { version = '1', features = ['full'] }
 
 # Alpen crates (see docs/architecture/adrs/001-alpen-crate-dependencies.md)
-strata-asm-txs-admin = { workspace = true }
+strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
+strata-asm-common = { workspace = true }
+strata-asm-txs-test-utils = { workspace = true }
 strata-crypto = { workspace = true }
 strata-asm-params = { workspace = true }
+strata-l1-txfmt = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
@@ -34,10 +37,6 @@ trezor-client = "0.1.5"
 [lib]
 name = "desktop_app"
 path = "src/lib.rs"
-
-[[bin]]
-name = "trezor_test"
-path = "src/bin/trezor_test.rs"
 
 [features]
 custom-protocol = ['tauri/custom-protocol']

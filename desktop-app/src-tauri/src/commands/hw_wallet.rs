@@ -1,8 +1,7 @@
 //! Hardware wallet Tauri commands.
 
 use crate::state::AppState;
-use desktop_app::infrastructure::hw_wallet::{trezor, HwWalletInfo};
-use desktop_app::signing::SignatureResult;
+use desktop_app::infrastructure::hw_wallet::{trezor, HwAddressEntry, HwWalletInfo};
 use tauri::State;
 
 #[tauri::command]
@@ -14,10 +13,12 @@ pub async fn get_trezor_info(
 }
 
 #[tauri::command]
-pub async fn sign_with_trezor(
+pub async fn list_hw_addresses(
     _state: State<'_, AppState>,
-    sighash_hex: String,
-    derivation_path: String,
-) -> Result<SignatureResult, String> {
-    trezor::sign_message(&sighash_hex, &derivation_path)
+    count: Option<u32>,
+) -> Result<Vec<HwAddressEntry>, String> {
+    let n = count.unwrap_or(20) as usize;
+    tokio::task::spawn_blocking(move || trezor::list_addresses(n))
+        .await
+        .map_err(|e| e.to_string())?
 }
