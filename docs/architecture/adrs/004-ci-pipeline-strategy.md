@@ -27,7 +27,7 @@ The desktop-app binary build requires Linux system libraries (`libgtk-3-dev`, `l
 
 The e2e tests (`e2e-tests/tests/e2e_propose_sign.rs`) compile the orchestrator binary and spawn it as a subprocess. Running them in the same job as `cargo build` avoids artifact passing overhead — the binary is already compiled.
 
-The e2e-tests crate is excluded from the workspace, so it requires a separate `cargo test` invocation from the `e2e-tests/` directory.
+The e2e-tests crate is a workspace member, so `cargo test --workspace` covers it alongside the other crates.
 
 ### Caching
 

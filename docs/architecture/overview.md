@@ -24,7 +24,7 @@ Alpen Multisig is a desktop application that enables authorized signers to manag
                                                     ▼
                                      ┌──────────────────────────┐
                                      │   Orchestrator Backend   │
-                                     │   (Axum + Postgres)      │
+                                     │   (Axum, in-memory repo) │
                                      │   - Proposal CRUD        │
                                      │   - Signature aggregation│
                                      │   - Lifecycle tracking   │
@@ -74,7 +74,7 @@ Each authority is an independent multisig with its own signer set, threshold, an
 
 ```
 orchestator-be/src/
-├── main.rs              # Axum app setup, router, middleware stack
+├── main.rs              # Axum app setup, router, CORS + tracing layers
 ├── config.rs            # Env-based configuration (host, port)
 ├── state.rs             # AppState (config + shared repo)
 ├── error.rs             # AppError → HTTP status mapping
@@ -194,18 +194,24 @@ state ExecutedImmediate {
 desktop-app/src-tauri/src/
 ├── lib.rs               # Library crate: exposes domain + application + infrastructure + signing
 ├── main.rs              # Tauri binary: registers commands, manages AppState
-├── state.rs             # AppState (backend_url only)
+├── state.rs             # AppState (session_token, backend_url)
 ├── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
 ├── commands/
 │   └── proposals.rs         # #[tauri::command] proposal wrappers
 ├── domain/
-│   └── proposal.rs          # Proposal, ProposalSignature, Signature
+│   ├── authority.rs         # Authority enum (wire (de)serialization), AuthorityParseError
+│   ├── action.rs            # Action, MultisigUpdate, CompressedPubKey, PubKeyError
+│   ├── proposal.rs          # Proposal, ProposalSignature, Signature
+│   └── session.rs
 ├── application/
 │   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
-│   └── proposals.rs         # create/approve/get proposals via the trait
+│   └── proposals.rs         # create/approve/get proposals via the trait (takes domain Action)
 └── infrastructure/
+    ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction borsh — ONLY crossing point to strata_* crates
     └── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
 ```
+
+**Strata crate isolation:** `infrastructure/action_codec.rs` is the single module in the desktop app that imports `strata_asm_params`, `strata_asm_txs_admin`, and `strata_crypto`. All other layers (`domain/`, `application/`, commands, UI) talk in client-owned domain types (`Authority`, `Action`, `MultisigUpdate`, `CompressedPubKey`). A codec test asserts byte-level borsh compatibility with the direct Strata call, guaranteeing the SPS-65 signed form stays identical.
 
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). Commands are thin (extract State → call application → map errors). Business logic lives in `application/`; transport DTOs live with the trait; the real HTTP client is in `infrastructure/`. `domain/` holds pure client-side types (see [ADR-003](adrs/003-desktop-application-layer-api.md) for entry-point semantics). `signing.rs` is standalone and decoupled from all layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
@@ -249,16 +255,16 @@ Wallet Connect → Address Select → Authority Select → Dashboard
 
 ### 3. E2E Tests (`e2e-tests`)
 
-Separate crate (excluded from workspace) with its own `rust-toolchain.toml` (nightly). Contains two test suites:
+Workspace member crate, using the root `rust-toolchain.toml` (nightly). Contains two test suites:
 
 **`e2e_admin_subprotocol`** — Full admin action flow against real Alpen/Strata crates:
 1. Generate signer keys → 2. Build `MultisigAction` → 3. Compute SPS-65 sighash → 4. ECDSA sign (threshold) → 5. Construct Bitcoin tx (SPS-50 OP_RETURN + SPS-51 witness) → 6. Parse back and verify signatures
 
 **`e2e_propose_sign`** — Desktop ↔ Orchestrator integration:
-Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing.
+Exercises the real desktop `application::proposals` layer making real HTTP calls to a real orchestrator subprocess. Happy path test: create → get → approve → get → verify_threshold with real cryptographic signing. Builds the `MultisigUpdate` action through `desktop_app::domain` + `action_codec` — does not import Strata crates directly.
 
 **Dependencies:**
-- `desktop-app` (path) — imports `application::proposals`, `domain::proposal`, `infrastructure::orchestrator_client`, `signing`
+- `desktop-app` (path) — imports `application::proposals`, `domain::{authority, action, proposal}`, `infrastructure::{action_codec, orchestrator_client}`, `signing`
 - `alpenlabs/alpen` @ rev `308211f` — `strata-asm-txs-admin`, `strata-crypto`, `strata-asm-params`, `strata-primitives`, `strata-asm-common`, test utils
 - `alpenlabs/strata-common` @ tag `v0.1.0-alpha-rc11` — `strata-l1-txfmt`
 
@@ -325,11 +331,11 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 
 **Implemented:**
 - Domain types and API surface definition (backend + frontend)
-- Backend: Axum router, working handlers (create/get/list/approve proposals), domain models, auth middleware extractor, error mapping, in-memory repository (24 tests)
-- Desktop application layer: `proposals.rs` with `create_update_action`, `approve_action`, `get_update_action` via `OrchestratorClient` trait (17 tests)
+- Backend: Axum router, working handlers (create/get/list/approve proposals), domain models, error mapping, in-memory repository (24 tests)
+- Desktop application layer: `proposals.rs` with `create_update_action`, `approve_action`, `get_update_action` via `OrchestratorClient` trait (7 tests)
 - Desktop `lib.rs` exposing `application` and `signing` modules publicly for e2e test consumption
-- Tauri IPC layer: auth commands proxying to backend with session token stored securely in Rust (never exposed to JS)
-- Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 13 tests
+- Tauri IPC layer: `list_proposals` command wired, session token placeholder in Rust AppState (never exposed to JS)
+- Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 10 tests
 - Typed API client, Tauri bridge, and hook state machines (frontend)
 - E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
 - CI pipeline: GitHub Actions with 2 parallel jobs — Rust (lint/build/test + e2e), frontend (lint/format/build) (ADR-004)
@@ -337,8 +343,8 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
 
 **Pending implementation:**
-- Backend: persistence layer (Postgres), auth verification against ASM signer set, proposal lifecycle enforcement (expiry, cancel, quorum detection)
+- Backend: persistence layer (Postgres), session authentication (ephemeral-key auth), auth verification against ASM signer set, proposal lifecycle enforcement (expiry, cancel, quorum detection)
 - Desktop: HWI integration, wallet connection flow, proposal creation/signing UI, broadcast flow
-- Tauri: remaining proposal commands (create_proposal, approve_action, get_proposal)
+- Tauri: remaining proposal commands (create_proposal, approve_action, get_proposal), auth commands
 - Bitcoin tx construction: SPS-50 OP_RETURN + SPS-51 witness envelope building (currently only in e2e-tests)
 - Payout flows: manual + automatic `block_payout` construction

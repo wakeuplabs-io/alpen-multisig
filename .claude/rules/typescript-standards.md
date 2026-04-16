@@ -1,5 +1,13 @@
+---
+paths:
+  - "desktop-app/src/**/*.{ts,tsx}"
+---
+
 # TypeScript Standards
 
+- Favor named exports for functions and components
+- Use descriptive boolean names (`isLoading`, `hasError`, `canSubmit`)
+- Omit semicolons unless required for correctness
 - Use TypeScript for all frontend/client code and keep explicit types at API and component boundaries
 - Prefer `type` for domain modeling; use `interface` only when declaration merging or extension ergonomics matter
 - Model multisig domains with narrow unions (authority, lifecycle status, action kind) instead of loose strings

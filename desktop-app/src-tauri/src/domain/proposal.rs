@@ -2,12 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::authority::Authority;
+
 /// A proposal as seen by the desktop client.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Proposal {
     pub action_id: String,
     pub seq_no: u64,
-    pub authority: String,
+    pub authority: Authority,
     pub status: String,
     pub action_hex: String,
     pub signatures: Vec<ProposalSignature>,

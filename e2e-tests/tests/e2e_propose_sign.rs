@@ -6,20 +6,18 @@
 //! Happy path: create → get → approve → get → verify_threshold
 
 use std::net::TcpListener;
-use std::num::NonZero;
+use std::num::NonZeroU8;
 use std::process::{Child, Command};
 use std::time::Duration;
 
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use rand::rngs::OsRng;
-use strata_asm_params::Role;
-use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
-use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
 use desktop_app::application::proposals;
+use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::authority::Authority;
 use desktop_app::domain::proposal::Signature;
+use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use desktop_app::signing;
 
@@ -124,15 +122,17 @@ fn generate_keypair() -> (String, String) {
     (hex::encode(sk.secret_bytes()), hex::encode(pk.serialize()))
 }
 
-fn build_demo_action_hex() -> String {
+fn build_demo_action() -> Action {
     let demo_bytes = [0x42u8; 32];
     let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
-    let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, &demo_sk));
-    let config_update =
-        ThresholdConfigUpdate::new(vec![new_signer], vec![], NonZero::new(2).expect("non-zero"));
-    let multisig_update = MultisigUpdate::new(config_update, Role::StrataAdministrator);
-    let action = MultisigAction::Update(UpdateAction::Multisig(multisig_update));
-    hex::encode(borsh::to_vec(&action).expect("action borsh-serializes"))
+    let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
+    let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+    Action::MultisigUpdate(MultisigUpdate {
+        role: Authority::StrataAdmin,
+        add_keys: vec![new_signer],
+        remove_keys: vec![],
+        new_threshold: NonZeroU8::new(2).expect("non-zero"),
+    })
 }
 
 fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
@@ -154,19 +154,20 @@ async fn test_e2e_propose_approve_verify() {
 
     // 2. Signer A: generate keypair, build action, sign
     let (sk_a, _pk_a) = generate_keypair();
-    let action_hex = build_demo_action_hex();
+    let action = build_demo_action();
+    let action_hex = action_codec::encode_hex(&action).expect("encode action");
     let seq_no = 1u64;
     let sig_a = sign_action(&sk_a, seq_no, &action_hex);
 
     // 3. Create proposal via desktop application layer
     let created =
-        proposals::create_update_action(&client, "strata_admin", &action_hex, seq_no, &sig_a)
+        proposals::create_update_action(&client, Authority::StrataAdmin, &action, seq_no, &sig_a)
             .await
             .expect("create_update_action should succeed");
 
     assert_eq!(created.status, "pending");
     assert_eq!(created.seq_no, seq_no);
-    assert_eq!(created.authority, "strata_admin");
+    assert_eq!(created.authority, Authority::StrataAdmin);
     assert_eq!(created.action_hex, action_hex);
     assert_eq!(created.signatures.len(), 1);
     assert_eq!(created.signatures[0].signer_pubkey, sig_a.signer_pubkey);
@@ -181,7 +182,7 @@ async fn test_e2e_propose_approve_verify() {
 
     assert_eq!(fetched.action_id, *action_id);
     assert_eq!(fetched.seq_no, seq_no);
-    assert_eq!(fetched.authority, "strata_admin");
+    assert_eq!(fetched.authority, Authority::StrataAdmin);
     assert_eq!(fetched.action_hex, action_hex);
     assert_eq!(fetched.signatures.len(), 1);
 
