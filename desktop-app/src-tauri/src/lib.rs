@@ -1,9 +1,7 @@
-//! Desktop application library — exposes the application and domain layers for external consumers.
+//! Desktop application library — exposes layered modules for external consumers.
 //!
-//! - `domain` holds pure client-side types (proposals, sessions, authority).
-//! - `application` holds business logic (proposal operations, auth lifecycle).
-//! - `infrastructure` holds concrete implementations (HTTP client, hardware wallets).
-//! - `signing` provides cryptographic signing utilities.
+//! Layers follow ADR-005: `domain` (pure types), `application` (business logic + traits),
+//! `infrastructure` (concrete implementations), and `signing` (standalone crypto).
 
 pub mod application;
 pub mod domain;

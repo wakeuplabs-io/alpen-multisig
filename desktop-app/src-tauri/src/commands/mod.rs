@@ -1,6 +1,4 @@
-//! Thin Tauri command wrappers. Each command extracts State, delegates to
-//! the application layer, and maps errors to String for the IPC boundary.
+//! Tauri IPC command boundary — thin wrappers that delegate to the application layer.
 
-pub mod auth;
-pub mod hw_wallet;
-pub mod proposals;
+pub(crate) mod hw_wallet;
+pub(crate) mod proposals;

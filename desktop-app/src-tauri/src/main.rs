@@ -15,9 +15,6 @@ fn main() {
             backend_url,
         })
         .invoke_handler(tauri::generate_handler![
-            commands::auth::get_challenge,
-            commands::auth::create_session,
-            commands::auth::delete_session,
             commands::proposals::list_proposals,
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
