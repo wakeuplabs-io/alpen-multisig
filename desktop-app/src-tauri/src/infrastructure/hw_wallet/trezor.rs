@@ -150,3 +150,16 @@ pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String> {
 
     Ok(entries)
 }
+
+pub fn verify_address_on_device(derivation_path: String) -> Result<(), String> {
+    let path = parse_path(&derivation_path)?;
+    let mut trezor = open_trezor()?;
+
+    resolve(
+        trezor
+            .get_public_key(&path, InputScriptType::SPENDTAPROOT, Network::Bitcoin, true)
+            .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
+    )?;
+
+    Ok(())
+}

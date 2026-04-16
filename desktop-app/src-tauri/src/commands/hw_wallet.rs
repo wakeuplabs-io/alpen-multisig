@@ -22,3 +22,13 @@ pub async fn list_hw_addresses(
         .await
         .map_err(|e| e.to_string())?
 }
+
+#[tauri::command]
+pub async fn verify_address_on_device(
+    _state: State<'_, AppState>,
+    derivation_path: String,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || trezor::verify_address_on_device(derivation_path))
+        .await
+        .map_err(|e| e.to_string())?
+}

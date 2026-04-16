@@ -21,6 +21,7 @@ fn main() {
             commands::proposals::list_proposals,
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
+            commands::hw_wallet::verify_address_on_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,6 @@
 import { tauriCall } from '@/api/tauri-bridge'
 import type {
+	HwAddressEntry,
 	SignSighashResult,
 	SignTestPayloadResult,
 	WalletAccountInfo,
@@ -72,6 +73,12 @@ export function createTrezorPocAdapter(): WalletAdapter {
 				signatureHex: result.data.signatureHex,
 				signatureFormat: 'p2wpkh-tx-binding',
 			}
+		},
+
+		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
+			const result = await tauriCall<HwAddressEntry[]>('list_hw_addresses', { count })
+			if (!result.ok) throw new Error(result.error)
+			return result.data
 		},
 	}
 }

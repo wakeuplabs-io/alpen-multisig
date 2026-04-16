@@ -29,6 +29,13 @@ export type SignSighashResult = {
 	signatureFormat: SignatureFormat
 }
 
+export type HwAddressEntry = {
+	index: number
+	derivationPath: string
+	address: string
+	publicKeyHex: string
+}
+
 export type WalletAdapter = {
 	readonly vendor: WalletVendor
 	readonly supportsSighashSigning: boolean
@@ -36,4 +43,5 @@ export type WalletAdapter = {
 	disconnect(): Promise<void>
 	signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult>
 	signSighash(sighashHex: string): Promise<SignSighashResult>
+	listAddresses?(count?: number): Promise<HwAddressEntry[]>
 }
