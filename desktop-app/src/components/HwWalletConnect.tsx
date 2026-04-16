@@ -112,7 +112,7 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 							return (
 								<button
 									key={entry.index}
-									type='button'
+									type="button"
 									style={{ ...s.row, ...(isSelected ? s.rowSelected : {}) }}
 									onClick={() => setSelectedIndex(entry.index)}
 								>
@@ -158,13 +158,9 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 							Disconnect
 						</button>
 					</div>
-					{isVerifyingAddress && (
-						<p style={s.helper}>Check your Trezor screen and confirm the selected address.</p>
-					)}
+					{isVerifyingAddress && <p style={s.helper}>Check your Trezor screen and confirm the selected address.</p>}
 					{verifyMessage && (
-						<p style={verifyMessage.startsWith('Verification failed') ? s.errorText : s.successText}>
-							{verifyMessage}
-						</p>
+						<p style={verifyMessage.startsWith('Verification failed') ? s.errorText : s.successText}>{verifyMessage}</p>
 					)}
 				</>
 			)}

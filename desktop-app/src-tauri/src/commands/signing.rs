@@ -38,4 +38,3 @@ pub async fn verify_threshold(
 ) -> Result<VerifyResult, String> {
     signing::verify_threshold(&public_keys_hex, threshold, &signatures_hex, &sighash_hex)
 }
-

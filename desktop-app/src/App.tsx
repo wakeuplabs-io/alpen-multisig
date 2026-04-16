@@ -39,15 +39,15 @@ export default function App() {
 							SPS-65 digest (32-byte hex)
 							<input
 								style={styles.input}
-								type='text'
+								type="text"
 								value={sighashHex}
 								onChange={(e) => setSighashHex(e.target.value)}
-								placeholder='64 hex chars'
+								placeholder="64 hex chars"
 								spellCheck={false}
 							/>
 						</label>
 						<button
-							type='button'
+							type="button"
 							style={styles.signButton}
 							onClick={() => void handleSignWithHw()}
 							disabled={isSigning || sighashHex.trim().length === 0}

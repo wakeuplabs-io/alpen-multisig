@@ -40,7 +40,9 @@ pub async fn sign_with_trezor(
     sighash_hex: String,
     derivation_path: String,
 ) -> Result<SignatureResult, String> {
-    tokio::task::spawn_blocking(move || trezor::sign_admin_sps65_binding(&sighash_hex, &derivation_path))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        trezor::sign_admin_sps65_binding(&sighash_hex, &derivation_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

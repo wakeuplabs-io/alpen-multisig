@@ -23,4 +23,3 @@ pub struct HwAddressEntry {
     pub address: String,
     pub public_key_hex: String,
 }
-

@@ -11,9 +11,9 @@ use bitcoin::secp256k1::ecdsa::Signature as EcdsaSignature;
 use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
+use bitcoin::Network;
 use bitcoin::{absolute::LockTime, key::CompressedPublicKey, transaction::Version};
 use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness};
-use bitcoin::Network;
 use trezor_client::client::handle_interaction;
 use trezor_client::{InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
@@ -254,8 +254,9 @@ fn sign_tx_with_trezor(trezor: &mut Trezor, psbt: &Psbt) -> Result<Vec<u8>, Stri
             collected_signature = Some(sig.to_vec());
         }
         if progress.finished() {
-            return collected_signature
-                .ok_or_else(|| "Trezor sign_tx finished without returning a signature".to_string());
+            return collected_signature.ok_or_else(|| {
+                "Trezor sign_tx finished without returning a signature".to_string()
+            });
         }
         response = progress
             .ack_psbt(psbt, Network::Bitcoin)
@@ -293,10 +294,15 @@ fn verify_binding_signature(
     prev_script: &ScriptBuf,
 ) -> Result<(), String> {
     let sighash = SighashCache::new(tx.clone())
-        .p2wpkh_signature_hash(0, prev_script.as_script(), DUMMY_INPUT_VALUE, EcdsaSighashType::All)
+        .p2wpkh_signature_hash(
+            0,
+            prev_script.as_script(),
+            DUMMY_INPUT_VALUE,
+            EcdsaSighashType::All,
+        )
         .map_err(|e| format!("could not compute segwit sighash: {e:?}"))?;
-    let message =
-        Message::from_digest_slice(&sighash.to_byte_array()).map_err(|e| format!("sighash message: {e}"))?;
+    let message = Message::from_digest_slice(&sighash.to_byte_array())
+        .map_err(|e| format!("sighash message: {e}"))?;
     let signature = EcdsaSignature::from_compact(&signature_compact)
         .map_err(|e| format!("invalid compact signature: {e}"))?;
     bitcoin::secp256k1::SECP256K1
@@ -315,7 +321,12 @@ pub fn sign_admin_sps65_binding(
 
     let xpub: Xpub = resolve(
         trezor
-            .get_public_key(&path, InputScriptType::SPENDTAPROOT, Network::Bitcoin, false)
+            .get_public_key(
+                &path,
+                InputScriptType::SPENDTAPROOT,
+                Network::Bitcoin,
+                false,
+            )
             .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
     )?;
 
