@@ -66,11 +66,15 @@ Alpen/Strata crates are not on crates.io — consumed as git dependencies. Share
 - **Manual fallback**: Users can aggregate signatures and broadcast if backend unavailable
 - **Error handling**: `anyhow::Result` for binaries, `thiserror` for libraries
 - **Frontend**: Use tabs, single quotes, ~120 char lines, strict equality
+- **Naming**: Use kebab-case for directories and file names
+- **Patterns**: Match existing project patterns before introducing new abstractions
+- **CI**: All generated code must pass CI checks — verify locally before considering work done
 
-## Additional Rule Files
+## Rule Files
 
-- `.claude/rules/general.md` — Global defaults and formatting
-- `.claude/rules/rust-backend-standards.md` — Backend-specific Rust rules
-- `.claude/rules/backend-api-conventions.md` — API, auth, and data lifecycle rules
-- `.claude/rules/typescript-standards.md` — TypeScript conventions
-- `.claude/rules/react-frontend-patterns.md` — React patterns
+Rules in `.claude/rules/` auto-load based on `paths` frontmatter — only the rules relevant to the files being edited are loaded into context:
+
+- `typescript-standards.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
+- `react-frontend-patterns.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
+- `rust-backend-standards.md` — Loaded for `orchestator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs`
+- `backend-api-conventions.md` — Loaded for `orchestator-be/**/*.rs`
