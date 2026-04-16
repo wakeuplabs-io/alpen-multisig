@@ -41,6 +41,7 @@ export type WalletAdapter = {
 	readonly supportsSighashSigning: boolean
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
+	setDerivationPath?(derivationPath: string): void
 	signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult>
 	signSighash(sighashHex: string): Promise<SignSighashResult>
 	listAddresses?(count?: number): Promise<HwAddressEntry[]>

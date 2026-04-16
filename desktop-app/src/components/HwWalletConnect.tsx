@@ -47,6 +47,7 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 	function handleUseAddress() {
 		if (selectedIndex === null || !account) return
 		const entry = addresses[selectedIndex]
+		adapter.setDerivationPath?.(entry.derivationPath)
 		setSelectedEntry(entry)
 		setVerifyMessage(null)
 		setPhase('selected')

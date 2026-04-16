@@ -49,6 +49,9 @@ export function createTrezorPocAdapter(): WalletAdapter {
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 		},
+		setDerivationPath(nextPath: string): void {
+			derivationPath = nextPath
+		},
 
 		async signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult> {
 			const encoded: Uint8Array<ArrayBuffer> = new Uint8Array(new TextEncoder().encode(payloadUtf8))

@@ -22,6 +22,7 @@ fn main() {
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
             commands::hw_wallet::verify_address_on_device,
+            commands::hw_wallet::sign_with_trezor,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
