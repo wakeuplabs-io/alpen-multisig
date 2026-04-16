@@ -1,6 +1,30 @@
 {
   "type": "workspace_readwrite",
-  "additionalReadwritePaths": [],
+  "additionalReadwritePaths": [
+    "/home/elmol/.cargo",
+    "/home/elmol/.rustup",
+    "/home/elmol/.npm",
+    "/home/elmol/.cache",
+    "/home/elmol/.docker"
+  ],
   "additionalReadonlyPaths": [],
-  "enableSharedBuildCache": true
+  "enableSharedBuildCache": true,
+  "networkPolicy": {
+    "default": "deny",
+    "allow": [
+      "registry.npmjs.org",
+      "registry.yarnpkg.com",
+      "pypi.org",
+      "files.pythonhosted.org",
+      "crates.io",
+      "static.crates.io",
+      "github.com",
+      "raw.githubusercontent.com",
+      "objects.githubusercontent.com",
+      "ghcr.io",
+      "*.docker.io",
+      "gitlab.com"
+    ],
+    "deny": []
+  }
 }
