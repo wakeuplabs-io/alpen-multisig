@@ -1,6 +1,6 @@
 ---
 description: React frontend conventions for multisig desktop flows
-globs: **/frontend/*.{tsx,jsx}
+globs: desktop-app/src/**/*.{ts,tsx}
 alwaysApply: false
 ---
 

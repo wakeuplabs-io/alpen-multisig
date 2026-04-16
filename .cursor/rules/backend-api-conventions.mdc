@@ -1,6 +1,6 @@
 ---
 description: Rust backend API, auth, and coordination-layer conventions
-globs: **/backend/*.{rs}
+globs: orchestator-be/**/*.rs
 alwaysApply: false
 ---
 
