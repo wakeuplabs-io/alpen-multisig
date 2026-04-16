@@ -1,3 +1,7 @@
+---
+globs: ["desktop-app/src/**/*.{ts,tsx}"]
+---
+
 # TypeScript Standards
 
 - Use TypeScript for all frontend/client code and keep explicit types at API and component boundaries

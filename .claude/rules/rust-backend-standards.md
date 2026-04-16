@@ -1,3 +1,7 @@
+---
+globs: ["orchestator-be/**/*.rs", "desktop-app/src-tauri/**/*.rs"]
+---
+
 # Rust Backend Standards
 
 - Use idiomatic Rust module boundaries (`mod`, `pub(crate)`) to keep internal APIs narrow
