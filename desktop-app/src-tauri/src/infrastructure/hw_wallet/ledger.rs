@@ -1,5 +1,5 @@
 use super::HwWalletInfo;
-use crate::signing::SignatureResult;
+use crate::infrastructure::signing::SignatureResult;
 
 // Ledger implementation is pending Speculos emulator validation.
 // The ledger-transport-hid v0.11 API changed significantly from v0.4 (APDUCommand is no longer

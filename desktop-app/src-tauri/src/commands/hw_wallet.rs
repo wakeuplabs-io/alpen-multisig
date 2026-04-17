@@ -2,7 +2,7 @@
 
 use crate::state::AppState;
 use desktop_app::infrastructure::hw_wallet::{trezor, HwAddressEntry, HwWalletInfo};
-use desktop_app::signing::SignatureResult;
+use desktop_app::infrastructure::signing::SignatureResult;
 use tauri::State;
 
 #[tauri::command]
