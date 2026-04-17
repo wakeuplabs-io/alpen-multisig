@@ -364,7 +364,8 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig).await;
+        let result =
+            create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig).await;
 
         assert!(matches!(
             result.unwrap_err(),

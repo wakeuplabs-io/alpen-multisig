@@ -19,7 +19,7 @@ use desktop_app::domain::authority::Authority;
 use desktop_app::domain::proposal::Signature;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
-use desktop_app::signing;
+use desktop_app::infrastructure::signing;
 
 // ─── Test server ───────────────────────────────────────────────────────────
 
@@ -160,10 +160,15 @@ async fn test_e2e_propose_approve_verify() {
     let sig_a = sign_action(&sk_a, seq_no, &action_hex);
 
     // 3. Create proposal via desktop application layer
-    let created =
-        proposals::create_update_action(&client, Authority::StrataAdmin, &action, seq_no, &sig_a)
-            .await
-            .expect("create_update_action should succeed");
+    let created = proposals::create_update_action(
+        &client,
+        Authority::StrataAdmin,
+        action_hex.as_str(),
+        seq_no,
+        &sig_a,
+    )
+    .await
+    .expect("create_update_action should succeed");
 
     assert_eq!(created.status, "pending");
     assert_eq!(created.seq_no, seq_no);
