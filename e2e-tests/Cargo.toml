@@ -14,10 +14,6 @@ strata-asm-txs-test-utils.workspace = true
 strata-crypto = { workspace = true, features = ["test-utils"] }
 strata-l1-txfmt.workspace = true
 
-# From alpenlabs/alpen (to be removed once unused)
-strata-primitives.workspace = true
-strata-test-utils.workspace = true
-
 # Desktop app (application layer)
 desktop-app = { path = "../desktop-app/src-tauri" }
 
