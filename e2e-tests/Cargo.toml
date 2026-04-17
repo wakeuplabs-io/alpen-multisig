@@ -19,7 +19,6 @@ desktop-app = { path = "../desktop-app/src-tauri" }
 
 # Third-party
 bitcoin.workspace = true
-borsh.workspace = true
 secp256k1 = { workspace = true, features = ["recovery"] }
 rand.workspace = true
 hex.workspace = true

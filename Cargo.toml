@@ -21,7 +21,6 @@ ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }
 
 # Third-party (versions matched to Alpen workspace to avoid type duplication)
 bitcoin = { version = "0.32.6", features = ["serde"] }
-borsh = { version = "1.5.0", features = ["derive"] }
 secp256k1 = { version = "0.29.1", features = ["global-context", "std"] }
 rand = "0.8"
 hex = "0.4"

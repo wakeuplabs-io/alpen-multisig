@@ -37,7 +37,6 @@ name = "alpen-multisig-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "bitcoin",
- "borsh",
  "desktop-app",
  "hex",
  "rand 0.8.5",
@@ -913,12 +912,9 @@ dependencies = [
  "serde",
  "serde_json",
  "ssz",
- "strata-asm-common",
  "strata-asm-params",
  "strata-asm-txs-admin",
- "strata-asm-txs-test-utils",
  "strata-crypto",
- "strata-l1-txfmt",
  "tauri",
  "tauri-build",
  "thiserror 2.0.18",
