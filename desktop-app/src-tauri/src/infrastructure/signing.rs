@@ -10,7 +10,8 @@ use strata_crypto::threshold_signature::ThresholdConfig;
 // Types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SighashResult {
     pub sighash_hex: String,
     pub seqno: u64,
@@ -23,7 +24,8 @@ pub struct SignatureResult {
     pub signature_hex: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyResult {
     pub valid: bool,
     pub signatures_verified: u32,

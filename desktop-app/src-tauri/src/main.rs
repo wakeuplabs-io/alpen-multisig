@@ -20,6 +20,8 @@ fn main() {
             commands::hw_wallet::list_hw_addresses,
             commands::hw_wallet::verify_address_on_device,
             commands::hw_wallet::sign_with_trezor,
+            commands::signing::compute_sighash,
+            commands::signing::verify_threshold,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -125,7 +125,7 @@ mod tests {
     use crate::domain::proposal::{
         Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
     };
-    use crate::signing;
+    use crate::infrastructure::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;
     use std::num::NonZeroU8;

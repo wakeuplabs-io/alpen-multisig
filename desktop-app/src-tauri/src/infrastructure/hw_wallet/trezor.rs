@@ -18,7 +18,7 @@ use trezor_client::client::handle_interaction;
 use trezor_client::{InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
 use super::{HwAddressEntry, HwWalletInfo};
-use crate::signing::SignatureResult;
+use crate::infrastructure::signing::SignatureResult;
 
 /// Product default derivation path (BIP86 Taproot).
 const DEFAULT_PATH: &str = "m/86'/0'/73'/0/0";

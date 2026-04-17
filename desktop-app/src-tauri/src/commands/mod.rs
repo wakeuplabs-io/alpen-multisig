@@ -2,3 +2,4 @@
 
 pub(crate) mod hw_wallet;
 pub(crate) mod proposals;
+pub(crate) mod signing;
