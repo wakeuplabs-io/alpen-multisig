@@ -6,19 +6,21 @@ resolver = '2'
 # sign_tx fixes for modern Trezor firmware (`script_pubkey` on TxAck inputs, P2TR → SPENDTAPROOT).
 [workspace.dependencies]
 # Alpen crates — see docs/architecture/adrs/001-alpen-crate-dependencies.md
-# From alpenlabs/alpen (rev-pinned, no suitable tag available yet)
-strata-asm-txs-admin = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-crypto = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-asm-params = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-primitives = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-asm-common = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+# From alpenlabs/asm (rev-pinned — main HEAD == tag v0.1-alpha.5; no stable tag adopted yet)
+strata-asm-txs-admin = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 
 # From alpenlabs/strata-common (tag-pinned)
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc11" }
+strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
 
-# SSZ serialization (will replace Borsh for admin tx wire format — see commit B)
+# From alpenlabs/alpen (rev-pinned) — to be removed once unused (see follow-up commit)
+strata-primitives = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+strata-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+
+# SSZ serialization (replaces Borsh for admin tx wire format after upstream PR alpenlabs/asm#8)
 ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }
 
 # Third-party (versions matched to Alpen workspace to avoid type duplication)

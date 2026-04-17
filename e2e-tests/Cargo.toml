@@ -4,17 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# From alpenlabs/alpen
+# From alpenlabs/asm
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
-strata-crypto = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
-strata-primitives.workspace = true
 strata-asm-common.workspace = true
 strata-asm-txs-test-utils.workspace = true
-strata-test-utils.workspace = true
 
 # From alpenlabs/strata-common
+strata-crypto = { workspace = true, features = ["test-utils"] }
 strata-l1-txfmt.workspace = true
+
+# From alpenlabs/alpen (to be removed once unused)
+strata-primitives.workspace = true
+strata-test-utils.workspace = true
 
 # Desktop app (application layer)
 desktop-app = { path = "../desktop-app/src-tauri" }

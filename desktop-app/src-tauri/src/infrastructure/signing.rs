@@ -1,7 +1,7 @@
 use std::num::NonZero;
 
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
-use borsh::BorshDeserialize;
+use ssz::Decode;
 use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfig;
@@ -37,11 +37,11 @@ pub struct VerifyResult {
 // ---------------------------------------------------------------------------
 
 /// Compute the SPS-65 tagged sighash for a given action and sequence number.
-/// The action is passed as Borsh-serialized hex (MultisigAction uses Borsh, not serde).
+/// The action is passed as SSZ-serialized hex (MultisigAction uses SSZ, not serde).
 pub fn compute_sighash(seqno: u64, action_hex: &str) -> Result<SighashResult, String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
-    let action = MultisigAction::try_from_slice(&action_bytes)
-        .map_err(|e| format!("invalid borsh-encoded action: {e}"))?;
+    let action = MultisigAction::from_ssz_bytes(&action_bytes)
+        .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
     let sighash = action.compute_sighash(seqno);
 
     Ok(SighashResult {
@@ -129,6 +129,7 @@ pub fn verify_threshold(
 mod tests {
     use super::*;
     use rand::rngs::OsRng;
+    use ssz::Encode;
     use strata_asm_params::Role;
     use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
     use strata_asm_txs_admin::actions::UpdateAction;
@@ -168,7 +169,7 @@ mod tests {
     }
 
     fn demo_action_hex() -> String {
-        hex::encode(borsh::to_vec(&build_demo_action()).expect("action borsh-serializes"))
+        hex::encode(build_demo_action().as_ssz_bytes())
     }
 
     // -- compute_sighash tests -----------------------------------------------
