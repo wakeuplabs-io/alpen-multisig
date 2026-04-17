@@ -1,20 +1,18 @@
 //! Proposal management — application layer entry point for the desktop app.
 //!
 //! Public API mirrors the PRD's `MultisigBackend` trait semantics:
-//! - `create_update_action(action, seq_no, signature)` — propose + first signature
+//! - `create_update_action(action_hex, seq_no, signature)` — propose + first signature
 //! - `approve_action(action_id, signature)` — add approval signature
 //! - `get_update_action(action_id)` — fetch proposal detail
 //!
 //! Authority is implicit — bound to the authenticated session, not passed per call.
-//! Signing happens externally (HW wallet, software signer) before reaching this layer.
+//! Signing and action encoding happen before reaching this layer.
 
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
 };
-use crate::domain::action::Action;
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{Proposal, Signature};
-use crate::infrastructure::action_codec::{self, CodecError};
 use std::sync::Mutex;
 
 /// Errors that can occur during proposal operations.
@@ -22,8 +20,6 @@ use std::sync::Mutex;
 pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
-    #[error("Codec error: {0}")]
-    Codec(#[from] CodecError),
 }
 
 /// Session-authenticated listing endpoint used by the desktop UI.
@@ -65,20 +61,19 @@ pub async fn fetch_proposals(
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
 ///
-/// Takes domain types (`Authority`, `Action`) and encodes them to the canonical borsh
-/// form at the boundary — callers never touch Strata crates directly.
+/// Callers are responsible for encoding the action to borsh hex before calling this
+/// function (`infrastructure::action_codec::encode_hex`).
 pub async fn create_update_action(
     client: &dyn OrchestratorClient,
     authority: Authority,
-    action: &Action,
+    action_hex: &str,
     seq_no: u64,
     signature: &Signature,
 ) -> Result<Proposal, ProposalError> {
-    let action_hex = action_codec::encode_hex(action)?;
     let request = CreateProposalRequest {
         authority: authority.as_str().to_string(),
         seq_no,
-        action_hex,
+        action_hex: action_hex.to_string(),
         signer_pubkey: signature.signer_pubkey.clone(),
         signature_hex: signature.signature_hex.clone(),
     };
@@ -121,10 +116,10 @@ pub async fn get_update_action(
 mod tests {
     use super::*;
     use crate::application::orchestrator_client::OrchestratorError;
-    use crate::domain::action::{CompressedPubKey, MultisigUpdate};
-    use crate::domain::proposal::{
-        Proposal as OrcProposal, ProposalSignature as OrcProposalSignature,
-    };
+    use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+    use crate::domain::authority::Authority;
+    use crate::domain::proposal::{Proposal as OrcProposal, ProposalSignature};
+    use crate::infrastructure::action_codec;
     use crate::infrastructure::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;
@@ -216,7 +211,7 @@ mod tests {
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
-                signatures: vec![OrcProposalSignature {
+                signatures: vec![ProposalSignature {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
                 }],
@@ -271,11 +266,10 @@ mod tests {
     async fn test_create_update_action() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
-        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
+        let result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -324,11 +318,10 @@ mod tests {
     async fn test_create_then_get_consistent() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
-        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let created = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
+        let created = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -344,11 +337,10 @@ mod tests {
     async fn test_signature_is_verifiable() {
         let mock = MockOrchestratorClient::new();
         let (sk, _pk) = generate_test_keypair();
-        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let _result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig)
+        let _result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -369,11 +361,10 @@ mod tests {
     async fn test_create_backend_error_propagates() {
         let mock = MockOrchestratorClient::failing();
         let (sk, _pk) = generate_test_keypair();
-        let action = demo_action();
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, Authority::StrataAdmin, &action, 1, &sig).await;
+        let result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig).await;
 
         assert!(matches!(
             result.unwrap_err(),
