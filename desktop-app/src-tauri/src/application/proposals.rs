@@ -61,7 +61,7 @@ pub async fn fetch_proposals(
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
 ///
-/// Callers are responsible for encoding the action to borsh hex before calling this
+/// Callers are responsible for encoding the action to SSZ hex before calling this
 /// function (`infrastructure::action_codec::encode_hex`).
 pub async fn create_update_action(
     client: &dyn OrchestratorClient,

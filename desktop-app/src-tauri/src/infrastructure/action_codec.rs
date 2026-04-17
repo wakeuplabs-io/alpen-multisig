@@ -1,11 +1,12 @@
 //! Codec between the client domain `Action` and the Strata-owned `MultisigAction`
-//! borsh form.
+//! SSZ form.
 //!
 //! This is the **only** module that imports `strata_asm_*` / `strata_crypto` crates.
 //! Everything else in the desktop application talks in domain types.
 
 use std::num::NonZeroU8;
 
+use ssz::{Decode, Encode};
 use strata_asm_params::Role;
 use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate as StrataMultisigUpdate;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
@@ -18,9 +19,9 @@ use crate::domain::authority::Authority;
 /// Errors produced when encoding/decoding an `Action`.
 #[derive(Debug, thiserror::Error)]
 pub enum CodecError {
-    #[error("borsh serialization failed: {0}")]
+    #[error("ssz serialization failed: {0}")]
     Encode(String),
-    #[error("borsh deserialization failed: {0}")]
+    #[error("ssz deserialization failed: {0}")]
     Decode(String),
     #[error("invalid hex: {0}")]
     Hex(String),
@@ -32,16 +33,16 @@ pub enum CodecError {
     InvalidThreshold,
 }
 
-/// Encodes a domain `Action` to canonical borsh bytes (the signed form).
+/// Encodes a domain `Action` to canonical SSZ bytes (the signed form).
 pub fn encode(action: &Action) -> Result<Vec<u8>, CodecError> {
     let strata = to_strata_action(action)?;
-    borsh::to_vec(&strata).map_err(|e| CodecError::Encode(e.to_string()))
+    Ok(strata.as_ssz_bytes())
 }
 
-/// Decodes canonical borsh bytes into a domain `Action`.
+/// Decodes canonical SSZ bytes into a domain `Action`.
 pub fn decode(bytes: &[u8]) -> Result<Action, CodecError> {
-    let strata: MultisigAction =
-        borsh::from_slice(bytes).map_err(|e| CodecError::Decode(e.to_string()))?;
+    let strata =
+        MultisigAction::from_ssz_bytes(bytes).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
     from_strata_action(strata)
 }
 
@@ -191,9 +192,9 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_matches_direct_strata_borsh() {
+    fn test_encode_matches_direct_strata_ssz() {
         // Guarantee the encoding stays byte-compatible with the direct Strata call
-        // — this is what goes into the SPS-65 sighash.
+        // — what the upstream crate produces for the same `MultisigAction`.
         let pk_bytes = hex::decode(VALID_HEX).unwrap();
         let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
         let strata_pk = CompressedPublicKey::from(secp_pk);
@@ -201,7 +202,7 @@ mod tests {
             ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
         let strata_update = StrataMultisigUpdate::new(config_update, Role::StrataAdministrator);
         let strata_action = MultisigAction::Update(UpdateAction::Multisig(strata_update));
-        let direct_bytes = borsh::to_vec(&strata_action).unwrap();
+        let direct_bytes = strata_action.as_ssz_bytes();
 
         let domain_bytes = encode(&sample_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);

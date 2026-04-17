@@ -4,16 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# From alpenlabs/alpen
+# From alpenlabs/asm
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
-strata-crypto = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
-strata-primitives.workspace = true
 strata-asm-common.workspace = true
 strata-asm-txs-test-utils.workspace = true
-strata-test-utils.workspace = true
 
 # From alpenlabs/strata-common
+strata-crypto = { workspace = true, features = ["test-utils"] }
 strata-l1-txfmt.workspace = true
 
 # Desktop app (application layer)
@@ -21,7 +19,6 @@ desktop-app = { path = "../desktop-app/src-tauri" }
 
 # Third-party
 bitcoin.workspace = true
-borsh.workspace = true
 secp256k1 = { workspace = true, features = ["recovery"] }
 rand.workspace = true
 hex.workspace = true

@@ -9,7 +9,7 @@
 //!   3. Compute the sighash (SPS-65 tagged hash)
 //!   4. Collect ECDSA signatures from a threshold of signers
 //!   5. Pack into SignedPayload
-//!   6. Borsh-serialize and build the Bitcoin transaction (SPS-50 tag + SPS-51 envelope)
+//!   6. SSZ-serialize and build the Bitcoin transaction (SPS-50 tag + SPS-51 envelope)
 //!   7. Parse back and verify signatures against the threshold config
 //!
 //! Step 8 (broadcast) is intentionally skipped — in production, the reveal tx
@@ -88,7 +88,7 @@ fn e2e_build_and_verify_admin_signer_update() {
     //   - Signs the sighash with the selected private keys
     //   - Packs signatures into a SignatureSet
     //   - Creates a SignedPayload { seqno, action, signatures }
-    //   - Borsh-serializes the payload
+    //   - SSZ-serializes the payload
     //   - Builds the SPS-51 witness envelope (chunked at 520 bytes)
     //   - Adds the SPS-50 OP_RETURN tag
     //   - Returns a complete Bitcoin reveal transaction

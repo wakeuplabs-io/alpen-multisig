@@ -17,16 +17,15 @@ reqwest = { version = '0.12', features = ['json'] }
 tokio = { version = '1', features = ['full'] }
 
 # Alpen crates (see docs/architecture/adrs/001-alpen-crate-dependencies.md)
+# From alpenlabs/asm
 strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
-strata-asm-common = { workspace = true }
-strata-asm-txs-test-utils = { workspace = true }
-strata-crypto = { workspace = true }
 strata-asm-params = { workspace = true }
-strata-l1-txfmt = { workspace = true }
+# From alpenlabs/strata-common
+strata-crypto = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
-borsh = { workspace = true }
+ssz = { workspace = true }
 secp256k1 = { workspace = true }
 rand = "0.8"
 hex = "0.4"

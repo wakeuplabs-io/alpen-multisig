@@ -1,16 +1,17 @@
 # Finding — Alpen Crate Coverage vs PRD Requirements
 
 > **Status:** In progress — investigation ongoing
+> **Re-validated:** 2026-04-17 against `alpenlabs/asm` rev `a8559d3` (== tag `v0.1-alpha.5`). None of the coverage gaps listed below are closed by the ASM repo migration; `Role` enum, `AdminTxType` discriminants, and `sighash_payload` bytes are identical to the pre-migration version. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) for migration details.
 
 ## Overview
 
-This document maps every update type and authority role required by the PRD against the types currently available in the Alpen/Strata crates (pinned at `alpenlabs/alpen` rev `308211f`). The goal is to identify what can be built today, what is blocked on upstream Alpen crate additions, and what requires a fundamentally different approach.
+This document maps every update type and authority role required by the PRD against the types currently available in the Alpen/Strata crates (pinned at `alpenlabs/asm` rev `a8559d3`, `alpenlabs/strata-common` tag `v0.1.0-alpha-rc16`). The goal is to identify what can be built today, what is blocked on upstream Alpen crate additions, and what requires a fundamentally different approach.
 
 ### Sources
 
 - **PRD** — [`docs/0-prd/01-multisig-ui.md`](../0-prd/01-multisig-ui.md) (requirements 11–20)
 - **Backend PRD** — [`docs/0-prd/02-multisig-backend.md`](../0-prd/02-multisig-backend.md)
-- **Alpen crate source** — `~/.cargo/git/checkouts/alpen-c4210c7eb647f715/308211f/`
+- **Alpen crate source** — `https://github.com/alpenlabs/asm` rev `a8559d3` (`crates/params/src/subprotocols/admin.rs`, `crates/txs/admin/src/`)
 - **ADR-001** — [`docs/architecture/adrs/001-alpen-crate-dependencies.md`](../architecture/adrs/001-alpen-crate-dependencies.md)
 
 ---
@@ -19,14 +20,14 @@ This document maps every update type and authority role required by the PRD agai
 
 ### `Role` enum (2 variants)
 
-Defined in `crates/asm/params/src/subprotocols/admin.rs`:
+Defined in `crates/params/src/subprotocols/admin.rs` (upstream path in `alpenlabs/asm`):
 
 - `StrataAdministrator`
 - `StrataSequencerManager`
 
 ### `AdminTxType` enum (7 variants)
 
-Defined in `crates/asm/txs/admin/src/constants.rs`:
+Defined in `crates/txs/admin/src/constants.rs` (upstream path in `alpenlabs/asm`):
 
 | Variant | u8 | Sighash tag |
 |---|---|---|
@@ -126,13 +127,13 @@ The bridge-v1 subprotocol (`crates/asm/subprotocols/bridge-v1/`) handles deposit
 
 ### Why none are replaceable
 
-All crates define the **canonical Borsh serialization layout** that the ASM on-chain parser expects. A single byte difference in enum discriminant, field ordering, or hash tag produces a different sighash, and the ASM rejects the transaction. These crates are the protocol definition, not utility libraries.
+All crates define the **canonical SSZ serialization layout** that the ASM on-chain parser expects. A single byte difference in enum discriminant, field ordering, or hash tag produces a different sighash, and the ASM rejects the transaction. These crates are the protocol definition, not utility libraries. (Until upstream PR `alpenlabs/asm#8` on 2026-03-25 the format was Borsh; the discriminants and `sighash_payload` bytes carried across unchanged.)
 
 ### Crates that should be added
 
 | Crate | Source | Needed for |
 |---|---|---|
-| `strata-asm-subprotocols-admin` | `alpenlabs/alpen` | Reading canonical signer sets from ASM state (`AdministrationSubprotoState`, `MultisigAuthority`). Required by the backend for access control per PRD §3. |
+| `strata-asm-proto-administration` | `alpenlabs/asm` | Reading canonical signer sets from ASM state (`AdministrationSubprotoState`, `MultisigAuthority`). Required by the backend for access control per PRD §3. (Renamed upstream from `strata-asm-subprotocols-admin` when the repo was split.) |
 | `strata-l1-envelope-fmt` | `alpenlabs/strata-common` | SPS-51 envelope construction for production Bitcoin transactions (currently only a transitive dependency). |
 
 ---
