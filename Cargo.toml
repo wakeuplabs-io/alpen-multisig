@@ -18,6 +18,9 @@ strata-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f
 # From alpenlabs/strata-common (tag-pinned)
 strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc11" }
 
+# SSZ serialization (will replace Borsh for admin tx wire format — see commit B)
+ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }
+
 # Third-party (versions matched to Alpen workspace to avoid type duplication)
 bitcoin = { version = "0.32.6", features = ["serde"] }
 borsh = { version = "1.5.0", features = ["derive"] }
