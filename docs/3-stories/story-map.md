@@ -33,12 +33,12 @@ The backbone is the user's journey, left to right. One signer traverses roughly 
 
 | Slice | Intent | Scope |
 |---|---|---|
-| **0 — Walking Skeleton** | Prove one E2E path end-to-end with the authority+action combo fully covered today (Strata Admin signer update). Software signer or basic HW. No in-app broadcast — export sigs only. | US-A1, B1, C1, D1, D2, E1, F5, G1, H1 |
-| **1 — Real HW + in-app broadcast** | Full HW wallet flow (list 20 addresses, on-device verify), in-app Bitcoin broadcast, manual fee control. | C2, C3, C4, D5, F1, H4, I1, I4 |
+| **0 — Walking Skeleton** | Prove one E2E path end-to-end with the authority+action combo fully covered today (Strata Admin signer update). Software signer or basic HW. No in-app broadcast — raw tx export only. | US-A1, B1, C1, C2, D1, E1, F1, H1 |
+| **1 — Real HW + in-app broadcast** | Full HW wallet flow (list 20 addresses, on-device verify), in-app Bitcoin broadcast, manual fee control. | C3, C4, D5, H4, H6, I1, I4 |
 | **2 — All authorities & update types** | Expand to remaining 4 authorities and all 12 update types. Depends on upstream Alpen crate support (8 types still missing — see risks). | F2, F3, F4, F6, F7, F8, F9, F10, F11, F12, F13 |
 | **3 — Approved state, cancellation, past view** | Post-quorum lifecycle: approved/past views, cancellation flow, optional auto-broadcast on quorum. | D3, D4, F14, G1 (cancel variant), H2, I2, I3 |
 | **4 — Payout Administrator** | `block_payout` operations: pending/past views, manual + automatic construction, sign, broadcast. | J1..J9 |
-| **5 — Manual fallback & access control** | Full offline fallback (compose tx without backend), denied-access paths, session/wallet disconnect. | C5, C6, C7, H3, H5, H6 |
+| **5 — Manual fallback & access control** | Full offline fallback (compose tx without backend), denied-access paths, session/wallet disconnect. | C5, C6, C7, G1, H3, H5 |
 
 > Slices are iteration boundaries, not strict phases — details may shift when confronted with implementation reality. Walking skeleton is the non-negotiable first step.
 
@@ -220,7 +220,8 @@ Shared acceptance signals for all US-E*:
 - **Classification:** Functional
 - **Acceptance signals:** Copy action exports all available approval signatures for the selected pending update.
 - **Source:** UI PRD §1.13.2.1.
-- **Slice:** 0.
+- **Slice:** 5.
+- **Note:** Redundant with US-H1 for the online coordination path; retained as a helper for the offline/manual fallback scenario (see US-H5).
 
 #### US-G2 · Export all collected cancellation signatures
 - **Story:** As a Signer, I want to copy all cancellation signatures collected so far for an approved proposal to my clipboard, so that I can coordinate the cancellation broadcast.
@@ -238,12 +239,16 @@ Shared acceptance signals for all US-E*:
 
 ### Activity H — Broadcast on Bitcoin
 
-#### US-H1 · Create and broadcast an approval transaction
-- **Story:** As a Signer, I want to paste the quorum of approval signatures and broadcast the approval transaction, so that the pending update is confirmed on Bitcoin and queued for enactment.
+#### US-H1 · Export raw approval transaction for external broadcast
+- **Story:** As a Signer, I want the app to assemble the raw approval transaction for a pending proposal once quorum of approval signatures has been reached, and copy it to my clipboard, so that I can broadcast it manually using external tooling.
 - **Classification:** Functional
-- **Acceptance signals:** Approval transaction built for any pending update; quorum signatures pasted in; broadcast via the app's Bitcoin RPC **or** by copying raw transaction to clipboard for external broadcast.
+- **Acceptance signals:**
+  - Action available only when the proposal has reached quorum of approval signatures.
+  - Raw transaction is assembled automatically using signatures already collected by the backend (no manual signature paste).
+  - Raw transaction copied to clipboard in a broadcast-ready encoding.
+  - No in-app broadcast, no fee rate control.
 - **Source:** UI PRD §1.13.2.2.
-- **Slice:** 1.
+- **Slice:** 0.
 
 #### US-H2 · Create and broadcast a cancellation transaction
 - **Story:** As a Signer, I want to paste the quorum of cancellation signatures and broadcast the cancellation transaction, so that an approved update is blocked before enactment.
@@ -272,6 +277,15 @@ Shared acceptance signals for all US-E*:
 - **Acceptance signals:** Signers can aggregate signatures offline; construct a valid approval or cancellation transaction locally; broadcast directly to Bitcoin. No backend dependency for correctness.
 - **Source:** Backend PRD (manual fallback).
 - **Slice:** 5.
+
+#### US-H6 · Broadcast an approval transaction via app Bitcoin RPC
+- **Story:** As a Signer, I want to broadcast the approval transaction directly from the app using its Bitcoin RPC connection, so that I can finalize the update without external tooling.
+- **Classification:** Functional
+- **Acceptance signals:**
+  - Broadcast is triggered from the app; raw transaction is assembled from backend-collected signatures (same as US-H1).
+  - Fee rate configurable per US-H4.
+- **Source:** UI PRD §1.13.2.2.
+- **Slice:** 1.
 
 ### Activity I — Payout operations (Payout Admin swimlane)
 
@@ -364,8 +378,7 @@ Slice 0 is complete when a Strata Admin Signer can:
 4. See a pending proposal (US-D1).
 5. Create a Strata Admin signer update proposal with their own signature (US-E1).
 6. Approve a pending proposal by signing it (US-F1).
-7. Export the collected signatures to the clipboard (US-G1).
-8. Hand the signatures off to another signer who completes quorum and broadcasts externally.
+7. Once quorum is reached, export the raw approval transaction from the app and broadcast it externally (US-H1).
 
 No in-app broadcast, no fee control, no other authorities, no cancellation, no payout — all deferred to later slices.
 

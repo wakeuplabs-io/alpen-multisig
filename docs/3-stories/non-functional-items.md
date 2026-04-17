@@ -41,30 +41,35 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 - **Requirement:** The backend must not re-define, re-interpret, or enforce any canonical SPS-65 rule (threshold checks, sequence validation, replay protection, update lifecycle, cancellation semantics, confirmation depth). All protocol validity is enforced on-chain.
 - **Source:** Backend PRD; Proposal §Technical Approach 3.
 - **Needed by:** Slice 0 — foundational invariant for every backend spec.
+- **Disposition:** Architectural invariant. Captured in `architecture/` (ADR pending). No backlog item.
 
 ### NF-6 · Proposal storage model
 - **Concern:** Persistence.
 - **Requirement:** Store at minimum three maps: `actions_by_seqno`, `action_by_id`, `sigs_by_id`. Data must be durable and recoverable after restart.
 - **Source:** Backend PRD §Data model.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-E1. Walking skeleton uses the existing in-memory repository (`orchestator-be/src/infrastructure/memory_repo.rs`); durable/recoverable storage is deferred beyond the skeleton.
 
 ### NF-7 · Idempotent proposal creation
 - **Concern:** API contract.
 - **Requirement:** `ActionId = hash(MultisigAction, SeqNo)` is stable. Duplicate creation requests for an existing ActionId must be rejected without mutating state.
 - **Source:** Backend PRD §ActionId + idempotency.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-E1. Already implemented in `memory_repo::save_proposal` (duplicate rejection without mutating state).
 
 ### NF-8 · Flexible SeqNo ordering
 - **Concern:** Lifecycle.
 - **Requirement:** The backend must not enforce strict sequential ordering across proposals. Voluntary metadata-based coordination is acceptable.
 - **Source:** Backend PRD §SeqNo handling.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-E1.
 
 ### NF-9 · Non-authoritative hygiene validation
 - **Concern:** API contract.
 - **Requirement:** Backend may validate signature shape, duplicate signer indices, and structural integrity. These are hygiene only, never authoritative protocol validation.
 - **Source:** Backend PRD §Hygiene checks; Proposal §Technical Approach 3.
 - **Needed by:** Slice 0.
+- **Disposition:** Deferred — not part of the walking skeleton. To reconsider in a later slice.
 
 ### NF-10 · High availability / no single point of failure
 - **Concern:** Operations.
@@ -81,24 +86,28 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 - **Requirement:** The backend must derive the canonical signer set per authority from the ASM State Transition Function. Signer-set changes on-chain must be reflected in access control.
 - **Source:** Backend PRD §Canonical signer set.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-C1 and US-C2.
 
 ### NF-12 · Authority isolation
 - **Concern:** Auth / confidentiality.
 - **Requirement:** A signer of one authority is a non-signer for all others. Sessions must be scoped to exactly one authority. No proposal data may leak across authorities.
 - **Source:** Backend PRD §Isolation.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-C1.
 
 ### NF-13 · Bounded session validity
 - **Concern:** Auth.
 - **Requirement:** Ephemeral sessions must have bounded validity (explicit expiration and/or revocation capability). Sessions must not persist indefinitely.
 - **Source:** Backend PRD §Session model; Proposal §Technical Approach 2.
 - **Needed by:** Slice 0.
+- **Disposition:** Covered as DoD on US-C2.
 
 ### NF-14 · Private keys never touch the application layer
 - **Concern:** Security invariant.
 - **Requirement:** The React frontend never observes private keys, session tokens, or raw sighash bytes. All key-adjacent material is held exclusively in the Tauri Rust process (or the hardware wallet). React sees only session metadata (authority, pubkey, expiry).
 - **Source:** `architecture/overview.md`; Proposal §Technical Approach 1.
 - **Needed by:** Slice 0.
+- **Disposition:** Architectural invariant. Already implicit in the Tauri Rust-backend / React-frontend split (ADR pending). No backlog item.
 
 ---
 
@@ -116,6 +125,7 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 - **Requirement:** No consumer device signs a raw 32-byte SPS-65 digest natively. A binding mechanism (synthetic PSBT approach validated in POC-5, or equivalent) is required and must produce signatures that on-chain ASM verification accepts.
 - **Source:** `2-discovery/07-hardware-wallet-library-analysis.md`, `10-poc5-trezor-findings.md`; Proposal §Technical Approach 3.
 - **Needed by:** Slice 0 — this gates every signing story.
+- **Disposition:** Tracked as its own spike/POC item on the sprint board (pending creation). Research + implementation that spans US-F1 and US-H1.
 
 ### NF-17 · HWI subprocess bundling
 - **Concern:** Deployment.
