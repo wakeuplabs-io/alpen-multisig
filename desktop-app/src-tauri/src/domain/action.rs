@@ -1,7 +1,7 @@
 //! Governance actions that a signer can propose — client-side domain.
 //!
 //! These types mirror (a subset of) the protocol's `MultisigAction` without depending
-//! on Strata crates. Translation to/from the canonical borsh form lives in
+//! on Strata crates. Translation to/from the canonical SSZ form lives in
 //! `crate::infrastructure::action_codec`.
 
 use std::num::NonZeroU8;

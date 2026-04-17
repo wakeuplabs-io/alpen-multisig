@@ -41,8 +41,8 @@ pub fn encode(action: &Action) -> Result<Vec<u8>, CodecError> {
 
 /// Decodes canonical SSZ bytes into a domain `Action`.
 pub fn decode(bytes: &[u8]) -> Result<Action, CodecError> {
-    let strata = MultisigAction::from_ssz_bytes(bytes)
-        .map_err(|e| CodecError::Decode(format!("{e:?}")))?;
+    let strata =
+        MultisigAction::from_ssz_bytes(bytes).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
     from_strata_action(strata)
 }
 

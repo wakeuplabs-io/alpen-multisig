@@ -7,9 +7,9 @@ This document is the consolidated Phase 1 deliverable for the Alpen Multisig pro
 
 ## 1. Alpen Admin Crate Integration Assessment
 
-The Alpen/Strata ecosystem publishes its protocol types as internal Rust crates, not on crates.io. The desktop app and backend must therefore consume these crates directly from `alpenlabs/alpen` (currently pinned at rev `308211f`) and `alpenlabs/strata-common` (tag `v0.1.0-alpha-rc11`) in the workspace `Cargo.toml`, following the strategy defined in [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md).
+The Alpen/Strata ecosystem publishes its protocol types as internal Rust crates, not on crates.io. The desktop app and backend consume them as git dependencies from `alpenlabs/asm` (rev `a8559d3`, == tag `v0.1-alpha.5`), `alpenlabs/strata-common` (tag `v0.1.0-alpha-rc16`), and `alpenlabs/ssz-gen` (tag `v0.15.0`), following the strategy defined in [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md). Prior to 2026-04-17 these crates lived on `alpenlabs/alpen` and used Borsh; see [`docs/2-discovery/11-asm-repo-migration.md`](../2-discovery/11-asm-repo-migration.md) for the migration record.
 
-The central constraint of this integration is **Borsh serialization compatibility**. The canonical wire format for `MultisigAction`, `SignedPayload`, and all admin transaction types is defined by these crates and must match, byte-for-byte, what the ASM onchain subprotocol expects. A single discriminant, field-ordering, or sighash-tag difference produces a transaction the ASM will reject. None of the core protocol crates are replaceable — the project must track them upstream, and every upstream change may require a coordinated workspace pin update.
+The central constraint of this integration is **SSZ serialization compatibility**. The canonical wire format for `MultisigAction`, `SignedPayload`, and all admin transaction types is defined by these crates and must match, byte-for-byte, what the ASM onchain subprotocol expects. A single discriminant, field-ordering, or sighash-tag difference produces a transaction the ASM will reject. None of the core protocol crates are replaceable — the project must track them upstream, and every upstream change may require a coordinated workspace pin update. The `sighash_payload()` bytes are hand-coded in upstream (SPS-65) and remained byte-identical across the upstream Borsh→SSZ transition, so signatures produced against either version verify on-chain.
 
 This section answers three questions:
 1. Which crates are confirmed and in use today?
@@ -20,17 +20,18 @@ This section answers three questions:
 
 ### 1.1 Crate Inventory
 
-**Confirmed and in use** (pinned in workspace `Cargo.toml`, rev `308211f` / tag `v0.1.0-alpha-rc11`):
+**Confirmed and in use** (pinned in workspace `Cargo.toml`, `alpenlabs/asm` rev `a8559d3` / `alpenlabs/strata-common` tag `v0.1.0-alpha-rc16`):
 
-| Crate                       | Key types / functions                                                                                                            | Used by                  | Replaceable?                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------- |
-| `strata-asm-txs-admin`      | `MultisigAction`, `UpdateAction`, `CancelAction`, `Sighash::compute_sighash()`, `parser::parse_tx()`, `SignedPayload`            | desktop-app, e2e-tests   | No — canonical Borsh layout and sighash tags |
-| `strata-crypto`             | `CompressedPublicKey`, `ThresholdConfig`, `ThresholdConfigUpdate`, `verify_threshold_signatures()`, `SignatureSet`, `IndexedSignature` | desktop-app, e2e-tests   | No — types embedded in Borsh serialization   |
-| `strata-asm-params`         | `Role` enum — **2 variants today**: `StrataAdministrator`, `StrataSequencerManager`                                              | desktop-app, e2e-tests   | No — Borsh discriminant must match ASM       |
-| `strata-primitives`         | `Buf32` (sighash return type)                                                                                                    | e2e-tests (transitively) | No — return type of `compute_sighash()`      |
-| `strata-asm-common`         | `TxInputRef`                                                                                                                     | e2e-tests                | No — required by `parser::parse_tx()`        |
-| `strata-l1-txfmt`           | `ParseConfig`, `TagData` (SPS-50 parsing)                                                                                        | e2e-tests                | No — protocol header format                  |
-| `strata-asm-txs-test-utils` | `TEST_MAGIC_BYTES`, reveal-tx construction helpers                                                                               | e2e-tests                | No — builds exact witness envelope structure |
+| Crate                       | Source                      | Key types / functions                                                                                                            | Used by                  | Replaceable?                                 |
+| --------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------- |
+| `strata-asm-txs-admin`      | `alpenlabs/asm`             | `MultisigAction`, `UpdateAction`, `CancelAction`, `Sighash::compute_sighash()`, `parser::parse_tx()`, `SignedPayload`            | desktop-app, e2e-tests   | No — canonical SSZ layout and sighash tags   |
+| `strata-asm-params`         | `alpenlabs/asm`             | `Role` enum — **2 variants today**: `StrataAdministrator`, `StrataSequencerManager`                                              | desktop-app, e2e-tests   | No — SSZ discriminant must match ASM         |
+| `strata-asm-common`         | `alpenlabs/asm`             | `TxInputRef`                                                                                                                     | e2e-tests                | No — required by `parser::parse_tx()`        |
+| `strata-asm-txs-test-utils` | `alpenlabs/asm`             | `TEST_MAGIC_BYTES`, reveal-tx construction helpers                                                                               | e2e-tests                | No — builds exact witness envelope structure |
+| `strata-crypto`             | `alpenlabs/strata-common`   | `CompressedPublicKey`, `ThresholdConfig`, `ThresholdConfigUpdate`, `verify_threshold_signatures()`, `SignatureSet`, `IndexedSignature` | desktop-app, e2e-tests   | No — types embedded in SSZ serialization     |
+| `strata-l1-txfmt`           | `alpenlabs/strata-common`   | `ParseConfig`, `TagData` (SPS-50 parsing)                                                                                        | e2e-tests                | No — protocol header format                  |
+| `strata-identifiers`        | `alpenlabs/strata-common`   | `Buf32` (sighash return type)                                                                                                    | transitive               | No — return type of `compute_sighash()`      |
+| `ssz`                       | `alpenlabs/ssz-gen` v0.15.0 | `Encode`, `Decode` traits used by our codec                                                                                      | desktop-app              | No — must match the upstream derive output   |
 
 **Required for the final delivery, not yet integrated in the workspace:**
 
@@ -131,16 +132,16 @@ These questions must be resolved before the blocked update types can be scoped i
 - `AsmStfVkUpdate` (type 31) exists upstream but has no PRD mapping; its intended exposure is unclear.
 
 **Risks:**
-- All Alpen crates are git dependencies without crates.io releases — upstream breaking changes require manual workspace pin updates with no automated notice. Pin bumps must be gated by the Borsh roundtrip test already established in the desktop client codec.
-- Mid-phase upstream changes to `MultisigAction`, `SignedPayload`, or `ThresholdConfig` Borsh layout would invalidate off-chain signatures already collected against the previous layout. A signature rotation / re-collection procedure must be defined.
+- All Alpen crates are git dependencies without crates.io releases — upstream breaking changes require manual workspace pin updates with no automated notice. Pin bumps must be gated by the SSZ roundtrip test (`test_encode_matches_direct_strata_ssz`) already established in the desktop client codec. The 2026-04-17 migration documented in [`docs/2-discovery/11-asm-repo-migration.md`](../2-discovery/11-asm-repo-migration.md) is a live example of this risk and how it is handled.
+- Mid-phase upstream changes to `MultisigAction`, `SignedPayload`, or `ThresholdConfig` SSZ layout would invalidate off-chain signatures already collected against the previous layout. A signature rotation / re-collection procedure must be defined. Note: the Borsh→SSZ migration was the exception, not the rule — `sighash_payload()` was handcoded and remained byte-identical, so collected signatures survived. Future format changes may not be as lucky.
 - If Alpen Labs defines the missing roles and update types late in the project, Phase 3 scope may need to extend substantially or defer those types to a follow-up milestone.
 - The Strata node RPC surface for `AdministrationSubprotoState` is unidentified. If no client crate exists, the backend must implement its own RPC adapter — an unscoped integration.
 - The `block_payout` path requires a distinct Bitcoin-native PSBT + RPC implementation with no prototype yet; its complexity is not bounded by the current architecture.
 - The whole workspace is forced onto nightly Rust because `strata-asm-params` pulls in `ssz` transitively, and `ssz` depends on `generic_const_exprs`, a nightly feature with no stabilization timeline. We pin a specific nightly date in `rust-toolchain.toml` to avoid surprise breakage, but every pin bump needs a full build and test pass. The backend does not use any Strata crate today, yet it inherits the same toolchain constraint from the workspace. There is no realistic path to stable Rust until Alpen replaces SSZ or the feature stabilizes upstream. See [`docs/2-discovery/07-nightly-dependency-finding.md`](../2-discovery/07-nightly-dependency-finding.md) for the full dependency chain and mitigation options.
 
 **POC status:**
-- End-to-end sighash computation validated in `e2e-tests` against `strata-asm-txs-admin` and `strata-crypto` at pin `308211f`.
-- Desktop client domain ↔ protocol Borsh roundtrip is isolated in a single `infrastructure/action_codec.rs` module, with a byte-level compatibility test (POC-4) that fails fast on upstream layout drift.
+- End-to-end sighash computation validated in `e2e-tests` against `strata-asm-txs-admin` and `strata-crypto` at `alpenlabs/asm` rev `a8559d3` / `alpenlabs/strata-common` tag `v0.1.0-alpha-rc16` (re-validated 2026-04-17). `Role` enum, `AdminTxType` discriminants, and `sighash_payload` bytes are identical to the pre-SSZ version; the migration does not close any PRD coverage gap.
+- Desktop client domain ↔ protocol SSZ roundtrip is isolated in a single `infrastructure/action_codec.rs` module, with a byte-level compatibility test (POC-4, `test_encode_matches_direct_strata_ssz`) that fails fast on upstream layout drift.
 - Backend proposal CRUD with deterministic `ActionId` and duplicate rejection is implemented in [`orchestator-be/src/application/proposals.rs`](../../orchestator-be/src/application/proposals.rs), mirroring the backend PRD's minimal API sketch (`create_update_action`, `approve_action`, `get_update_action`, `list_proposals`).
 - `strata-asm-subprotocols-admin`, `strata-l1-envelope-fmt`, `strata-btcio`, and `bitcoind-async-client` are not yet compiled or exercised in the workspace.
 
