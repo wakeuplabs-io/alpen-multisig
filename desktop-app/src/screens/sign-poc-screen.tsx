@@ -6,13 +6,13 @@ import type { SignSighashResult } from '@/wallet/types'
 
 export function SignPocScreen() {
 	const navigate = useNavigate()
-	const { wallet, clearSession, adapter } = useWalletSession()
+	const { wallet, selectedAuthority, clearSession, adapter } = useWalletSession()
 	const [sighashHex, setSighashHex] = useState('')
 	const [isSigning, setIsSigning] = useState(false)
 	const [signError, setSignError] = useState<string | null>(null)
 	const [signResult, setSignResult] = useState<SignSighashResult | null>(null)
 
-	if (wallet === null) {
+	if (wallet === null || selectedAuthority === null) {
 		return <Navigate to="/" replace />
 	}
 
@@ -43,6 +43,9 @@ export function SignPocScreen() {
 			<section style={styles.panel}>
 				<p style={styles.hint}>
 					Active signer: <code>{wallet.derivationPath}</code>
+				</p>
+				<p style={styles.hint}>
+					Authority: <code>{selectedAuthority}</code>
 				</p>
 				<label style={styles.label}>
 					SPS-65 digest (32-byte hex)

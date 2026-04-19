@@ -12,8 +12,8 @@ export function WalletConnectScreen() {
 		<ScreenShell>
 			<HwWalletConnect adapter={adapter} onConnected={setConnectedWallet} />
 			{wallet !== null && (
-				<button type="button" style={styles.continueBtn} onClick={() => navigate('/dev/sign')}>
-					Continue to SPS-65 signing (PoC)
+				<button type="button" style={styles.continueBtn} onClick={() => navigate('/authorities')}>
+					Continue to authority selection
 				</button>
 			)}
 		</ScreenShell>

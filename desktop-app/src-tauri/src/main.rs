@@ -6,6 +6,7 @@ mod state;
 use std::sync::Mutex;
 
 fn main() {
+    dotenvy::dotenv().ok();
     let backend_url =
         std::env::var("BACKEND_URL").unwrap_or_else(|_| "http://127.0.0.1:3000/api/v1".to_string());
 
@@ -16,6 +17,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::proposals::list_proposals,
+            commands::authority::check_strata_admin_signer,
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
             commands::hw_wallet::verify_address_on_device,

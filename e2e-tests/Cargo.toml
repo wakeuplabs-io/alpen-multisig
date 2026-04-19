@@ -8,6 +8,8 @@ edition = "2021"
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
 strata-asm-common.workspace = true
+strata-asm-proto-administration.workspace = true
+strata-asm-spec.workspace = true
 strata-asm-txs-test-utils.workspace = true
 
 # From alpenlabs/strata-common
@@ -18,10 +20,12 @@ strata-l1-txfmt.workspace = true
 desktop-app = { path = "../desktop-app/src-tauri" }
 
 # Third-party
+anyhow = "1"
 bitcoin.workspace = true
 secp256k1 = { workspace = true, features = ["recovery"] }
 rand.workspace = true
 hex.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
+serde = { workspace = true }
 serde_json.workspace = true

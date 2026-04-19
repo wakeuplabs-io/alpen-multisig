@@ -11,6 +11,8 @@ strata-asm-txs-admin = { git = "https://github.com/alpenlabs/asm", rev = "a8559d
 strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-proto-administration = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 
 # From alpenlabs/strata-common (tag-pinned)
 strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }

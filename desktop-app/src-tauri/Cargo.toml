@@ -32,6 +32,7 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 trezor-client = "0.1.5"
+dotenvy = "0.15"
 
 [lib]
 name = "desktop_app"
