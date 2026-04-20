@@ -39,7 +39,7 @@ If the working tree had uncommitted changes before switching, make sure they lan
 ## 4. Push and open PR
 
 - `git push -u origin <branch>`.
-- Create the PR against `develop` with `gh pr create`, using a HEREDOC body:
+- Create the PR against `develop` with `gh pr create --base develop`, using a HEREDOC body:
 
 ```
 ## Summary
@@ -51,7 +51,7 @@ If the working tree had uncommitted changes before switching, make sure they lan
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-- Add reviewer: pass `--reviewer juandhal` to `gh pr create` (or `gh pr edit --add-reviewer juandhal` if creation didn't accept it).
+- Add reviewer: pass `--reviewer juandahl` to `gh pr create` (or `gh pr edit --add-reviewer juandahl` if creation didn't accept it).
 - Keep the PR title ≤70 chars.
 
 ## 5. Report back
