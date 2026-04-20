@@ -10,6 +10,11 @@ export const AUTHORITY_LABELS: Record<Authority, string> = {
 	payout_admin: 'Payout Administrator',
 }
 
+export type AuthorityEligibility = {
+	authority: Authority
+	eligible: boolean
+}
+
 // ─── Proposal ────────────────────────────────────────────────────────────────
 
 export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired'

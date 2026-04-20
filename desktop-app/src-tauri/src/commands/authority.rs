@@ -1,8 +1,12 @@
 use bitcoin::secp256k1::PublicKey;
+use desktop_app::domain::authority::Authority;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use strata_crypto::keys::compressed::CompressedPublicKey;
+use tauri::State;
+
+use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct AuthorityEligibility {
@@ -33,9 +37,9 @@ struct JsonRpcError {
 }
 
 #[tauri::command]
-pub(crate) async fn check_strata_admin_signer(
+pub(crate) async fn list_selectable_authorities(
     signer_pubkey_hex: String,
-) -> Result<AuthorityEligibility, String> {
+) -> Result<Vec<AuthorityEligibility>, String> {
     let rpc_url = std::env::var("STRATA_ADMIN_STATE_RPC_URL").map_err(|_| {
         "STRATA_ADMIN_STATE_RPC_URL is required to check canonical signer membership".to_string()
     })?;
@@ -75,12 +79,27 @@ pub(crate) async fn check_strata_admin_signer(
         .result
         .ok_or_else(|| "Strata admin RPC response missing result".to_string())?;
     let admin_keys = extract_admin_keys(&result)?;
-    let eligible = admin_keys.iter().any(|key| key == &signer);
+    let is_strata_admin_signer = admin_keys.iter().any(|key| key == &signer);
 
-    Ok(AuthorityEligibility {
-        authority: "strata_admin".to_string(),
-        eligible,
-    })
+    Ok(build_selectable_authorities(is_strata_admin_signer))
+}
+
+#[tauri::command]
+pub(crate) fn set_selected_authority(
+    state: State<'_, AppState>,
+    authority: Option<String>,
+) -> Result<(), String> {
+    let parsed = authority
+        .as_deref()
+        .map(Authority::from_wire)
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let mut selected = state
+        .selected_authority
+        .lock()
+        .map_err(|_| "selected_authority lock poisoned".to_string())?;
+    *selected = parsed.map(|value| value.as_str().to_string());
+    Ok(())
 }
 
 fn extract_admin_keys(snapshot: &Value) -> Result<Vec<CompressedPublicKey>, String> {
@@ -136,9 +155,19 @@ fn normalize_signer_pubkey(pubkey_hex: &str) -> Result<CompressedPublicKey, Stri
     Ok(CompressedPublicKey::from(parsed))
 }
 
+fn build_selectable_authorities(is_strata_admin_signer: bool) -> Vec<AuthorityEligibility> {
+    if !is_strata_admin_signer {
+        return vec![];
+    }
+    vec![AuthorityEligibility {
+        authority: "strata_admin".to_string(),
+        eligible: true,
+    }]
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_admin_keys, normalize_signer_pubkey};
+    use super::{build_selectable_authorities, extract_admin_keys, normalize_signer_pubkey};
     use serde_json::json;
 
     #[test]
@@ -174,5 +203,19 @@ mod tests {
         });
         let keys = extract_admin_keys(&snapshot).expect("must extract keys");
         assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn selectable_authorities_returns_strata_for_member() {
+        let authorities = build_selectable_authorities(true);
+        assert_eq!(authorities.len(), 1);
+        assert_eq!(authorities[0].authority, "strata_admin");
+        assert!(authorities[0].eligible);
+    }
+
+    #[test]
+    fn selectable_authorities_returns_empty_for_non_member() {
+        let authorities = build_selectable_authorities(false);
+        assert!(authorities.is_empty());
     }
 }

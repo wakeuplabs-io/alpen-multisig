@@ -6,5 +6,6 @@ use std::sync::Mutex;
 /// All authenticated requests read it from this state and inject it as a Bearer header.
 pub(crate) struct AppState {
     pub(crate) session_token: Mutex<Option<String>>,
+    pub(crate) selected_authority: Mutex<Option<String>>,
     pub(crate) backend_url: String,
 }

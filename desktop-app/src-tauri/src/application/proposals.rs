@@ -29,6 +29,7 @@ pub enum ProposalError {
 pub async fn fetch_proposals(
     backend_url: &str,
     session_token: &Mutex<Option<String>>,
+    selected_authority: &Mutex<Option<String>>,
     status: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let token = session_token
@@ -36,11 +37,17 @@ pub async fn fetch_proposals(
         .unwrap()
         .clone()
         .ok_or("Not authenticated")?;
+    let authority = selected_authority
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("No selected authority")?;
 
     let client = reqwest::Client::new();
     let mut req = client
         .get(format!("{backend_url}/proposals"))
-        .bearer_auth(token);
+        .bearer_auth(token)
+        .header("x-session-authority", authority);
 
     if let Some(s) = status {
         req = req.query(&[("status", s)]);

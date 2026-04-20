@@ -1,20 +1,32 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { tauriCall } from '@/api/tauri-bridge'
-import { AUTHORITY_LABELS, type Authority } from '@/types'
+import { AUTHORITY_LABELS, type Authority, type AuthorityEligibility } from '@/types'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { ScreenShell } from '@/screens/screen-shell'
 
-type AuthorityEligibility = {
-	authority: Authority
-	eligible: boolean
+const MOCK_ENABLED = import.meta.env.DEV && import.meta.env.VITE_AUTHORITY_SELECTION_MOCK === 'true'
+const MOCK_PROFILE = (import.meta.env.VITE_AUTHORITY_SELECTION_MOCK_PROFILE ?? 'eligible').toLowerCase()
+
+function mockAuthoritiesForProfile(): AuthorityEligibility[] {
+	if (MOCK_PROFILE === 'empty') {
+		return []
+	}
+	if (MOCK_PROFILE === 'mixed') {
+		return [
+			{ authority: 'strata_admin', eligible: true },
+			{ authority: 'security_council', eligible: false },
+		]
+	}
+	return [{ authority: 'strata_admin', eligible: true }]
 }
 
 export function AuthoritySelectionScreen() {
 	const navigate = useNavigate()
 	const { wallet, selectedAuthority, setSelectedAuthority } = useWalletSession()
 	const [checking, setChecking] = useState(false)
-	const [eligibility, setEligibility] = useState<AuthorityEligibility | null>(null)
+	const [eligibility, setEligibility] = useState<AuthorityEligibility[]>([])
+	const [selectingAuthority, setSelectingAuthority] = useState<Authority | null>(null)
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
@@ -22,20 +34,39 @@ export function AuthoritySelectionScreen() {
 			return
 		}
 
+		if (MOCK_ENABLED) {
+			const mockAuthorities = mockAuthoritiesForProfile()
+			setEligibility(mockAuthorities)
+			if (
+				selectedAuthority !== null &&
+				!mockAuthorities.some((item) => item.authority === selectedAuthority && item.eligible)
+			) {
+				setSelectedAuthority(null)
+				void tauriCall('set_selected_authority', { authority: null })
+			}
+			setError(null)
+			setChecking(false)
+			return
+		}
+
 		setChecking(true)
 		setError(null)
-		void tauriCall<AuthorityEligibility>('check_strata_admin_signer', {
+		void tauriCall<AuthorityEligibility[]>('list_selectable_authorities', {
 			signerPubkeyHex: wallet.xpubOrFingerprint,
 		}).then((result) => {
 			setChecking(false)
 			if (!result.ok) {
 				setError(result.error)
-				setEligibility(null)
+				setEligibility([])
 				return
 			}
 			setEligibility(result.data)
-			if (!result.data.eligible && selectedAuthority === result.data.authority) {
+			if (
+				selectedAuthority !== null &&
+				!result.data.some((item) => item.authority === selectedAuthority && item.eligible)
+			) {
 				setSelectedAuthority(null)
+				void tauriCall('set_selected_authority', { authority: null })
 			}
 		})
 	}, [wallet?.xpubOrFingerprint, selectedAuthority, setSelectedAuthority])
@@ -44,8 +75,16 @@ export function AuthoritySelectionScreen() {
 		return <Navigate to="/" replace />
 	}
 
-	function handleSelectAuthority(authority: Authority) {
+	async function handleSelectAuthority(authority: Authority) {
+		setSelectingAuthority(authority)
+		const result = await tauriCall<null>('set_selected_authority', { authority })
+		if (!result.ok) {
+			setSelectingAuthority(null)
+			setError(result.error)
+			return
+		}
 		setSelectedAuthority(authority)
+		setSelectingAuthority(null)
 		navigate('/dev/sign')
 	}
 
@@ -56,17 +95,30 @@ export function AuthoritySelectionScreen() {
 				<p style={styles.subtitle}>Only authorities where this signer is in the canonical ASM set are available.</p>
 				{checking && <p style={styles.helper}>Checking canonical signer membership…</p>}
 				{error && <p style={styles.error}>{error}</p>}
-				{eligibility !== null && (
+				{MOCK_ENABLED && <p style={styles.helper}>Mock mode active (dev only).</p>}
+				{!checking && !error && eligibility.length === 0 && (
+					<p style={styles.helper}>No selectable authorities for this signer.</p>
+				)}
+				{eligibility.length > 0 && (
 					<div style={styles.list}>
-						<button
-							type="button"
-							style={{ ...styles.row, ...(eligibility.eligible ? styles.rowEligible : styles.rowDisabled) }}
-							onClick={() => handleSelectAuthority(eligibility.authority)}
-							disabled={!eligibility.eligible}
-						>
-							<span>{AUTHORITY_LABELS[eligibility.authority]}</span>
-							<span style={styles.status}>{eligibility.eligible ? 'Eligible' : 'Not signer'}</span>
-						</button>
+						{eligibility.map((item) => (
+							<button
+								key={item.authority}
+								type="button"
+								style={{ ...styles.row, ...(item.eligible ? styles.rowEligible : styles.rowDisabled) }}
+								onClick={() => void handleSelectAuthority(item.authority)}
+								disabled={!item.eligible || selectingAuthority !== null}
+							>
+								<span>{AUTHORITY_LABELS[item.authority]}</span>
+								<span style={styles.status}>
+									{item.eligible
+										? selectingAuthority === item.authority
+											? 'Selecting...'
+											: 'Eligible'
+										: 'Not signer'}
+								</span>
+							</button>
+						))}
 					</div>
 				)}
 			</section>

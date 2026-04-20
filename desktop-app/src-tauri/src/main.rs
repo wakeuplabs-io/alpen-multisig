@@ -13,11 +13,13 @@ fn main() {
     tauri::Builder::default()
         .manage(state::AppState {
             session_token: Mutex::new(None),
+            selected_authority: Mutex::new(None),
             backend_url,
         })
         .invoke_handler(tauri::generate_handler![
             commands::proposals::list_proposals,
-            commands::authority::check_strata_admin_signer,
+            commands::authority::list_selectable_authorities,
+            commands::authority::set_selected_authority,
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
             commands::hw_wallet::verify_address_on_device,
