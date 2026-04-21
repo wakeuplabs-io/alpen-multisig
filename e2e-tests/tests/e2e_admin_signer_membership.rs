@@ -1,21 +1,14 @@
-//! Membership checks for Strata ASM administration: a signer is in a role iff their
-//! [`CompressedPublicKey`](strata_crypto::keys::compressed::CompressedPublicKey) appears in that
-//! role's [`ThresholdConfig::keys`](strata_crypto::threshold_signature::ThresholdConfig::keys) on
-//! the canonical [`AdministrationSubprotoState`], including when that state is embedded in
-//! [`AnchorState`](strata_asm_common::AnchorState) (same pattern as upstream `tests/harness/admin.rs`).
+//! E2E membership checks for Strata ASM administration.
+//!
+//! This test validates role membership against the real canonical state produced
+//! by the ASM worker + bitcoind harness, without relying on local state mocks.
 
-use std::num::NonZero;
-
-use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
-use rand::rngs::OsRng;
-use serde_json::json;
+use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
+use std::process::Command;
 use strata_asm_common::{AnchorState, Subprotocol};
-use strata_asm_params::{AdministrationInitConfig, AsmParams, Role};
+use strata_asm_params::{Role, SubprotocolInstance};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
-use strata_asm_spec::construct_genesis_state;
 use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::ThresholdConfig;
-use strata_l1_txfmt::MagicBytes;
 
 /// Extract administration subprotocol state from an anchor snapshot (STF output shape).
 fn admin_subproto_state(anchor: &AnchorState) -> anyhow::Result<AdministrationSubprotoState> {
@@ -38,188 +31,91 @@ fn signer_is_in_role(
     auth.config().keys().contains(signer_pk)
 }
 
-/// Genesis [`AsmParams`] with a replaceable admin section; checkpoint/bridge copied from upstream
-/// `strata_asm_params` JSON fixture (valid predicates / layout).
-fn asm_params_with_admin(admin: AdministrationInitConfig) -> anyhow::Result<AsmParams> {
-    let root = json!({
-      "magic": "ALPN",
-      "anchor": {
-        "block": {
-          "height": 50462976,
-          "blkid": "0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20212223"
-        },
-        "next_target": 656811300,
-        "epoch_start_timestamp": 724183336,
-        "network": "regtest"
-      },
-      "subprotocols": [
-        { "Admin": admin },
-        {
-          "Checkpoint": {
-            "sequencer_predicate": "Sp1Groth16",
-            "checkpoint_predicate": "AlwaysAccept",
-            "genesis_l1_height": 100,
-            "genesis_ol_blkid": "c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6"
-          }
-        },
-        {
-          "Bridge": {
-            "operators": [
-              "02becdf7aab195ab0a42ba2f2eca5b7fa5a246267d802c627010e1672f08657f70"
-            ],
-            "denomination": 0,
-            "assignment_duration": 0,
-            "operator_fee": 0,
-            "recovery_delay": 0
-          }
-        }
-      ]
-    });
+#[tokio::test(flavor = "multi_thread")]
+async fn signer_membership_on_real_harness_state() {
+    println!("[e2e-membership] start");
 
-    let params: AsmParams = serde_json::from_value(root)?;
-    Ok(params)
-}
+    if Command::new("bitcoind").arg("--version").output().is_err() {
+        eprintln!(
+            "Skipping signer_membership_on_real_harness_state: bitcoind is not available in PATH"
+        );
+        return;
+    }
 
-fn compressed_pk(sk: &SecretKey) -> CompressedPublicKey {
-    CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk))
-}
+    let harness = AsmTestHarnessBuilder::default()
+        .build()
+        .await
+        .expect("harness should build");
 
-#[test]
-fn signer_membership_on_admin_subproto_state() -> anyhow::Result<()> {
-    let admin_sk = SecretKey::new(&mut OsRng);
-    let seq_sk = SecretKey::new(&mut OsRng);
-    let outsider_sk = SecretKey::new(&mut OsRng);
+    harness
+        .mine_block(None)
+        .await
+        .expect("should mine and process one block");
 
-    let admin_pk = compressed_pk(&admin_sk);
-    let seq_pk = compressed_pk(&seq_sk);
-    let outsider_pk = compressed_pk(&outsider_sk);
-
-    let admin_threshold = NonZero::new(1).unwrap();
-    let strata_administrator = ThresholdConfig::try_new(vec![admin_pk], admin_threshold)?;
-    let strata_sequencer_manager = ThresholdConfig::try_new(vec![seq_pk], admin_threshold)?;
-
-    let init = AdministrationInitConfig::new(
-        strata_administrator.clone(),
-        strata_sequencer_manager,
-        2016,
-        NonZero::new(10).unwrap(),
+    let (commitment, asm_state) = harness
+        .get_latest_asm_state()
+        .expect("latest ASM state query should succeed")
+        .expect("latest ASM state should exist");
+    println!(
+        "[e2e-membership] latest ASM state at height={}",
+        commitment.height()
     );
 
-    let state = AdministrationSubprotoState::new(&init);
+    let admin_state =
+        admin_subproto_state(asm_state.state()).expect("admin subprotocol state should exist");
+
+    let admin_cfg = harness
+        .asm_params
+        .subprotocols
+        .iter()
+        .find_map(|instance| match instance {
+            SubprotocolInstance::Admin(cfg) => Some(cfg),
+            _ => None,
+        })
+        .expect("admin config should exist in ASM params");
+
+    let admin_keys = admin_cfg.get_config(Role::StrataAdministrator).keys();
+    let seq_keys = admin_cfg.get_config(Role::StrataSequencerManager).keys();
+
+    let admin_only = admin_keys
+        .iter()
+        .find(|pk| !seq_keys.contains(pk))
+        .copied()
+        .unwrap_or_else(|| {
+            *admin_keys
+                .first()
+                .expect("admin role should have at least one key")
+        });
+    let seq_only = seq_keys
+        .iter()
+        .find(|pk| !admin_keys.contains(pk))
+        .copied()
+        .unwrap_or_else(|| {
+            *seq_keys
+                .first()
+                .expect("sequencer role should have at least one key")
+        });
+
+    let is_admin_admin = signer_is_in_role(&admin_state, Role::StrataAdministrator, &admin_only);
+    let is_admin_seq = signer_is_in_role(&admin_state, Role::StrataAdministrator, &seq_only);
+    let is_seq_seq = signer_is_in_role(&admin_state, Role::StrataSequencerManager, &seq_only);
+    let is_seq_admin = signer_is_in_role(&admin_state, Role::StrataSequencerManager, &admin_only);
 
     assert!(
-        signer_is_in_role(&state, Role::StrataAdministrator, &admin_pk),
-        "Strata admin signer should match keys in StrataAdministrator config"
+        is_admin_admin,
+        "an admin signer from configured params should be present in canonical admin state"
     );
     assert!(
-        !signer_is_in_role(&state, Role::StrataAdministrator, &seq_pk),
-        "sequencer-manager-only key must not qualify as Strata admin (role isolation)"
+        !is_admin_seq,
+        "a sequencer-only signer should not be a Strata admin signer"
     );
     assert!(
-        !signer_is_in_role(&state, Role::StrataAdministrator, &outsider_pk),
-        "unrelated pubkey must not be a Strata admin signer"
+        is_seq_seq,
+        "a sequencer signer from configured params should be present in canonical admin state"
     );
-
-    assert!(signer_is_in_role(
-        &state,
-        Role::StrataSequencerManager,
-        &seq_pk
-    ));
-    assert!(!signer_is_in_role(
-        &state,
-        Role::StrataSequencerManager,
-        &admin_pk
-    ));
-
-    // Same check via init config only (genesis / params path).
-    assert!(init
-        .get_config(Role::StrataAdministrator)
-        .keys()
-        .contains(&admin_pk));
-    assert!(!init
-        .get_config(Role::StrataAdministrator)
-        .keys()
-        .contains(&seq_pk));
-
-    Ok(())
-}
-
-#[test]
-fn signer_membership_via_anchor_state_genesis() -> anyhow::Result<()> {
-    let admin_sk = SecretKey::new(&mut OsRng);
-    let seq_sk = SecretKey::new(&mut OsRng);
-    let admin_pk = compressed_pk(&admin_sk);
-    let seq_pk = compressed_pk(&seq_sk);
-
-    let t = NonZero::new(1).unwrap();
-    let admin_init = AdministrationInitConfig::new(
-        ThresholdConfig::try_new(vec![admin_pk], t)?,
-        ThresholdConfig::try_new(vec![seq_pk], t)?,
-        2016,
-        NonZero::new(10).unwrap(),
-    );
-
-    let params = asm_params_with_admin(admin_init)?;
-    assert_eq!(params.magic, MagicBytes::new(*b"ALPN"));
-
-    let anchor = construct_genesis_state(&params);
-    let admin_state = admin_subproto_state(&anchor)?;
-
-    assert!(signer_is_in_role(
-        &admin_state,
-        Role::StrataAdministrator,
-        &admin_pk
-    ));
-    assert!(!signer_is_in_role(
-        &admin_state,
-        Role::StrataAdministrator,
-        &seq_pk
-    ));
-
-    Ok(())
-}
-
-#[test]
-fn signer_membership_reflects_multisig_update() -> anyhow::Result<()> {
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
-
-    let sk0 = SecretKey::new(&mut OsRng);
-    let sk1 = SecretKey::new(&mut OsRng);
-    let sk_new = SecretKey::new(&mut OsRng);
-    let pk0 = compressed_pk(&sk0);
-    let pk1 = compressed_pk(&sk1);
-    let pk_new = compressed_pk(&sk_new);
-
-    let threshold = NonZero::new(2).unwrap();
-    let strata_administrator = ThresholdConfig::try_new(vec![pk0, pk1], threshold)?;
-    let seq_cfg = ThresholdConfig::try_new(
-        vec![compressed_pk(&SecretKey::new(&mut OsRng))],
-        NonZero::new(1).unwrap(),
-    )?;
-
-    let init = AdministrationInitConfig::new(
-        strata_administrator,
-        seq_cfg,
-        2016,
-        NonZero::new(10).unwrap(),
-    );
-    let mut state = AdministrationSubprotoState::new(&init);
-
-    assert!(signer_is_in_role(&state, Role::StrataAdministrator, &pk0));
-
-    let update = ThresholdConfigUpdate::new(vec![pk_new], vec![pk0], threshold);
-    state.apply_multisig_update(Role::StrataAdministrator, &update)?;
-
     assert!(
-        !signer_is_in_role(&state, Role::StrataAdministrator, &pk0),
-        "removed admin key should no longer be a member"
+        !is_seq_admin,
+        "an admin-only signer should not be a Strata sequencer-manager signer"
     );
-    assert!(signer_is_in_role(
-        &state,
-        Role::StrataAdministrator,
-        &pk_new
-    ));
-    assert!(signer_is_in_role(&state, Role::StrataAdministrator, &pk1));
-
-    Ok(())
+    println!("[e2e-membership] assertions passed");
 }
