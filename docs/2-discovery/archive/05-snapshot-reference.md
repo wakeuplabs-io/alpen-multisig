@@ -1,6 +1,6 @@
 # Reference — Snapshot: Governance Analogy & Learning Resources
 
-> **Status:** Superseded — educational reference. The governance model was absorbed into [`docs/3-stories/story-map.md`](../3-stories/story-map.md), [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md), and [`docs/architecture/overview.md`](../architecture/overview.md). Kept here as a mental model for onboarding engineers coming from an Ethereum background.
+> **Archived (2026-04-17) — Status: Superseded.** Educational reference. The governance model was absorbed into [`docs/3-stories/story-map.md`](../../3-stories/story-map.md), [`docs/3-stories/non-functional-items.md`](../../3-stories/non-functional-items.md), and [`docs/architecture/overview.md`](../../architecture/overview.md). Kept here as a mental model for onboarding engineers coming from an Ethereum background. Other relative links inside may not fully resolve from this archive location; see the [phase-1 index](../README.md) for the current layout.
 
 ## Purpose
 
@@ -133,7 +133,7 @@ Key difference: in Alpen/Strata the off-chain phase and the on-chain phase are *
 | **Governance scope** | Signal + optional on-chain execution | Always produces a Bitcoin transaction; execution is mandatory, not optional |
 | **Trust model** | Snapshot Hub is a single point of trust (though IPFS mitigates some of this) | `orchestator-be` is similar, but ASM on Bitcoin is the final arbiter |
 | **Chain** | Ethereum / EVM | Bitcoin (OP_RETURN + witness envelope) |
-| **Signing scheme** | EIP-712 (keccak256, Ethereum addresses) | SPS-65 (double-SHA256 over `tag_hash \|\| seqno_be \|\| sighash_payload`, secp256k1 recoverable ECDSA — *not* BIP-137 / BIP-322, see [`07-hardware-wallet-library-analysis.md`](./07-hardware-wallet-library-analysis.md)) |
+| **Signing scheme** | EIP-712 (keccak256, Ethereum addresses) | SPS-65 (double-SHA256 over `tag_hash \|\| seqno_be \|\| sighash_payload`, secp256k1 recoverable ECDSA — *not* BIP-137 / BIP-322, see [`07-hardware-wallet-library-analysis.md`](../07-hardware-wallet-library-analysis.md)) |
 | **Hardware wallet UX** | Any EVM wallet (MetaMask, Ledger, Trezor via web) | HWI-compatible, Taproot, `m/86'/0'/73'/0/n`, on-device message display |
 | **Sequence numbers** | None — proposals are unordered | Explicit `SeqNo: u64`, replay protection, gap limit |
 | **Strict ordering** | N/A | Deliberately non-enforced — seqno gaps are allowed (unlike Gnosis Safe's strict nonce ordering) |
@@ -160,7 +160,7 @@ This is a deliberate divergence from Safe's strict nonce ordering. The Strata mo
 ### 4.2 For Understanding EIP-712 vs. SPS-65 Signing
 
 - **EIP-712 spec** — `eips.ethereum.org/EIPS/eip-712`: the Ethereum standard for typed structured data hashing. The domain separator + struct hash pattern maps directly to the tag + sighash_payload pattern in SPS-65. Reading EIP-712 will solidify understanding of *why* the SPS-65 sighash is constructed the way it is.
-- **`signing.rs`** in this repo — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs): the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/specs/poc3-signing-lib.md`.
+- **`signing.rs`** in this repo — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../../desktop-app/src-tauri/src/infrastructure/signing.rs): the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/specs/poc3-signing-lib.md`.
 
 ### 4.3 For Understanding Multisig On-Chain Execution (Gnosis Safe)
 

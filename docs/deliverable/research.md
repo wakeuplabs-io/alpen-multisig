@@ -147,7 +147,7 @@ These cannot be implemented without new roles, new action types, or additional p
 - Mid-phase upstream changes to `MultisigAction`, `SignedPayload`, or `ThresholdConfig` SSZ layout would invalidate off-chain signatures already collected against the previous layout. A signature rotation / re-collection procedure must be defined. Note: the Borsh→SSZ migration was the exception, not the rule — `sighash_payload()` was handcoded and remained byte-identical, so collected signatures survived. Future format changes may not be as lucky.
 - The Strata node RPC surface for `AdministrationSubprotoState` is unidentified. If no client crate exists, the backend must implement its own RPC adapter — an unscoped integration.
 - The `block_payout` path requires a distinct Bitcoin-native PSBT + RPC implementation with no prototype yet; its complexity is not bounded by the current architecture.
-- The whole workspace is forced onto nightly Rust because `strata-asm-params` pulls in `ssz` transitively, and `ssz` depends on `generic_const_exprs`, a nightly feature with no stabilization timeline. We pin a specific nightly date in `rust-toolchain.toml` to avoid surprise breakage, but every pin bump needs a full build and test pass. The backend does not use any Strata crate today, yet it inherits the same toolchain constraint from the workspace. There is no realistic path to stable Rust until Alpen replaces SSZ or the feature stabilizes upstream. See [`docs/2-discovery/07-nightly-dependency-finding.md`](../2-discovery/07-nightly-dependency-finding.md) for the full dependency chain and mitigation options.
+- The whole workspace is forced onto nightly Rust because `strata-asm-params` pulls in `ssz` transitively, and `ssz` depends on `generic_const_exprs`, a nightly feature with no stabilization timeline. We pin a specific nightly date in `rust-toolchain.toml` to avoid surprise breakage, but every pin bump needs a full build and test pass. The backend does not use any Strata crate today, yet it inherits the same toolchain constraint from the workspace. There is no realistic path to stable Rust until Alpen replaces SSZ or the feature stabilizes upstream. See [`docs/2-discovery/14-nightly-dependency-finding.md`](../2-discovery/14-nightly-dependency-finding.md) for the full dependency chain and mitigation options.
 
 ## 2. Hardware Wallet Compatibility
 
@@ -460,6 +460,6 @@ The following questions must be clarified with Alpen Labs to unblock Phase 3 imp
 
 - [Conceptual overview](../2-discovery/01-conceptual-overview.md)
 - [Alpen crate coverage vs PRD](../2-discovery/08-alpen-crate-prd-coverage.md)
-- [Functional analysis](../2-discovery/09-functional-analysis.md)
+- [Functional analysis](../2-discovery/archive/09-functional-analysis.md)
 - [Hardware wallet architecture](../2-discovery/06-hardware-wallet-architecture.md)
 - [Hardware wallet library analysis](../2-discovery/07-hardware-wallet-library-analysis.md)

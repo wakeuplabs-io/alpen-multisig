@@ -2,7 +2,7 @@
 
 ## Objective
 
-Add proposal coordination capabilities to the desktop app's application layer, enabling the full propose → approve flow tested against a mocked orchestrator. This is Step 1 of POC-4 (Mini Coordination Flow) as defined in `docs/2-discovery/06-poc4-plan.md`.
+Add proposal coordination capabilities to the desktop app's application layer, enabling the full propose → approve flow tested against a mocked orchestrator. This is Step 1 of POC-4 (Mini Coordination Flow) as defined in `docs/2-discovery/archive/06-poc4-plan.md`.
 
 See [ADR-003](../architecture/adrs/003-desktop-application-layer-api.md) for the full API design rationale, PRD terminology analysis, and evolution path.
 

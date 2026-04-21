@@ -1,5 +1,7 @@
 # Discovery — Iteration 1: Alpen Strata Multisig Admin Flow
 
+> **Archived (2026-04-17).** This is the original POC scoping doc from the very start of discovery. Its proposed POCs 1–4 were executed and the findings live in [`03-poc1-findings.md`](../03-poc1-findings.md), [`04-poc2-findings.md`](../04-poc2-findings.md), [`05-poc3-findings.md`](../05-poc3-findings.md), and the [`docs/specs/poc4-*`](../../specs/) specs. The consolidated index is in [`docs/2-discovery/README.md`](../README.md).
+
 ## Overview
 
 This document captures the findings from the first discovery iteration focused on understanding the admin/proposal/signing flow between Strata, Alpen, and BTC. The goal was to assess technical feasibility, end-to-end integration, and identify which areas to validate first through targeted POCs.
@@ -52,7 +54,7 @@ This document captures the findings from the first discovery iteration focused o
 
 ## Proposed POCs
 
-To reduce uncertainty, we proposed four focused POCs. **POC 1 is prioritized** as it directly aligns with Phase 1 (Protocol Research & Architecture) of the [project proposal](01-alpen-multisig-proposal.md).
+To reduce uncertainty, we proposed four focused POCs. **POC 1 is prioritized** as it directly aligns with Phase 1 (Protocol Research & Architecture) of the [project proposal](../../1-proposal/01-alpen-multisig-proposal.md).
 
 ### POC 1 — Admin / Subprotocol Integration (Prioritized)
 

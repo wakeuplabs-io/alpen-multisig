@@ -6,7 +6,7 @@ Implement the first user-facing flow of the production app: connect a hardware w
 
 This spec replaces the POC-5 skeleton, which originally proved HID transport and PSBT signing in a BIP84
 shape before the product path converged on `m/86'/0'/73'/0/n`. That context is preserved in
-`docs/2-discovery/10-poc5-trezor-findings.md`.
+`docs/2-discovery/15-poc5-trezor-findings.md`.
 
 **PRD requirements covered:** 6.2, 6.3, 6.4, 6.5.
 

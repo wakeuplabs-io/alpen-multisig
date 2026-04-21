@@ -35,7 +35,7 @@ types directly.
 **Documentation updates (included):**
 - Review and update `docs/architecture/overview.md` if the new `domain/` + `infrastructure/action_codec` layering changes the documented module layout or dependency diagram.
 - Review and update `docs/architecture/adrs/` — if this introduces a new abstraction boundary (domain vs. Strata-owned types via a single codec crossing point), record it as a new ADR or extend an existing one (e.g., ADR-005 layered architecture, ADR-001 Alpen crate dependencies).
-- Review and update `docs/2-discovery/09-functional-analysis.md` if the domain entities (`Authority`, `Action`, `MultisigUpdate`, `Proposal`) introduced here refine or contradict the entities described in §2 and §6.1. Keep the functional analysis aligned with the client-side model actually being built.
+- Review and update `docs/2-discovery/archive/09-functional-analysis.md` if the domain entities (`Authority`, `Action`, `MultisigUpdate`, `Proposal`) introduced here refine or contradict the entities described in §2 and §6.1. (Note: 09 is archived; the canonical domain model now lives in the story-map + ADRs.)
 - Only touch docs that are actually affected. Do not create new documentation files unless the change introduces a concept not covered by existing docs.
 
 **NOT included:**
