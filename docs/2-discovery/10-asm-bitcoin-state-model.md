@@ -1,5 +1,7 @@
 # ASM & Bitcoin L1 — State Representation and Transition Model
 
+> **Post-discovery note (2026-04-17).** Upstream migrated `MultisigAction` / `SignedPayload` from Borsh to SSZ in `alpenlabs/asm` (rev `a8559d3`). References to "Borsh-serialized" below should be read as SSZ-serialized; the conceptual model and byte layout of `sighash_payload` are unchanged. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md).
+
 ## Overview
 
 This document explains, at a conceptual level, how the Anchor State Machine (ASM) represents governance state using Bitcoin L1 as its foundation. It covers how state is derived (not stored) from Bitcoin, how governance actions produce state transitions, and how the commit-reveal transaction pattern works.

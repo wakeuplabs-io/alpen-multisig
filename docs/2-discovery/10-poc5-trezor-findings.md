@@ -7,8 +7,8 @@ This document consolidates **POC-5 implementation results** (Trezor over HID, Ta
 ### Sources
 
 - **Trezor driver** — [`desktop-app/src-tauri/src/infrastructure/hw_wallet/trezor.rs`](../../desktop-app/src-tauri/src/infrastructure/hw_wallet/trezor.rs)
-- **Signing / verify helpers** — [`desktop-app/src-tauri/src/signing.rs`](../../desktop-app/src-tauri/src/signing.rs) (e.g. `verify_threshold`, `p2wpkh_segwit_sighash_hex`)
-- **Shared types** — [`desktop-app/src-tauri/src/infrastructure/hw_wallet/mod.rs`](../../desktop-app/src/infrastructure/hw_wallet/mod.rs)
+- **Signing / verify helpers** — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs) (e.g. `verify_threshold`, `p2wpkh_segwit_sighash_hex`)
+- **Shared types** — [`desktop-app/src-tauri/src/infrastructure/hw_wallet/mod.rs`](../../desktop-app/src-tauri/src/infrastructure/hw_wallet/mod.rs)
 - **Tauri commands** — [`desktop-app/src-tauri/src/commands/hw_wallet.rs`](../../desktop-app/src-tauri/src/commands/hw_wallet.rs)
 - **TypeScript adapter** — [`desktop-app/src/wallet/trezor-poc-adapter.ts`](../../desktop-app/src/wallet/trezor-poc-adapter.ts)
 - **Wallet types** — [`desktop-app/src/wallet/types.ts`](../../desktop-app/src/wallet/types.ts)

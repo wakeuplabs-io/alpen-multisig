@@ -1,5 +1,7 @@
 # Reference — Snapshot: Governance Analogy & Learning Resources
 
+> **Status:** Superseded — educational reference. The governance model was absorbed into [`docs/3-stories/story-map.md`](../3-stories/story-map.md), [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md), and [`docs/architecture/overview.md`](../architecture/overview.md). Kept here as a mental model for onboarding engineers coming from an Ethereum background.
+
 ## Purpose
 
 This document explains how Snapshot works (proposal creation, voting, and multisig integration), maps it against the Alpen/Strata multisig system, and identifies useful references for developers working on this project.
@@ -44,7 +46,7 @@ Voter → signs EIP-712 message { proposalId, choice, voter, timestamp } → POS
 | Snapshot (EIP-712) | Alpen/Strata (SPS-65) |
 |---|---|
 | `domain separator` (chain ID + contract address) | `tag = "strata/admin/<type_name>"` |
-| typed struct hash | `sighash_payload` (Borsh-serialized action) |
+| typed struct hash | `sighash_payload` (SSZ-serialized action; Borsh pre-migration) |
 | `seqno` implicit via timestamp | explicit `seqno_be_bytes` (8 bytes, u64) |
 | ECDSA over keccak256 | ECDSA over SHA256 |
 
@@ -79,7 +81,7 @@ Dispute → Kleros arbitration resolves it
 | Layer | Snapshot | Alpen/Strata Multisig |
 |---|---|---|
 | **Proposal identity** | IPFS CID (content hash of proposal JSON) | `ActionId = hash(MultisigAction, SeqNo)` |
-| **Off-chain coordination** | Snapshot Hub (centralized, IPFS fallback) | `orchestator-be` (Axum + Postgres, manual fallback) |
+| **Off-chain coordination** | Snapshot Hub (centralized, IPFS fallback) | `orchestator-be` (Axum + in-memory repo today; Postgres deferred — see NF-6 — manual fallback) |
 | **Voting/signing** | EIP-712 via any EVM wallet | SPS-65 ECDSA via hardware wallet (HWI, `m/86'/0'/73'/0/n`) |
 | **Signature store** | Hub database per proposalId | `sigs_by_id: Map<ActionId, Vec<Signature>>` |
 | **Quorum tracking** | `for/against/abstain` tallied by voting power | `QuorumStatus { collected, required, is_reached }` |
@@ -131,7 +133,7 @@ Key difference: in Alpen/Strata the off-chain phase and the on-chain phase are *
 | **Governance scope** | Signal + optional on-chain execution | Always produces a Bitcoin transaction; execution is mandatory, not optional |
 | **Trust model** | Snapshot Hub is a single point of trust (though IPFS mitigates some of this) | `orchestator-be` is similar, but ASM on Bitcoin is the final arbiter |
 | **Chain** | Ethereum / EVM | Bitcoin (OP_RETURN + witness envelope) |
-| **Signing scheme** | EIP-712 (keccak256, Ethereum addresses) | SPS-65 (SHA256, secp256k1 pubkeys, BIP-137) |
+| **Signing scheme** | EIP-712 (keccak256, Ethereum addresses) | SPS-65 (double-SHA256 over `tag_hash \|\| seqno_be \|\| sighash_payload`, secp256k1 recoverable ECDSA — *not* BIP-137 / BIP-322, see [`07-hardware-wallet-library-analysis.md`](./07-hardware-wallet-library-analysis.md)) |
 | **Hardware wallet UX** | Any EVM wallet (MetaMask, Ledger, Trezor via web) | HWI-compatible, Taproot, `m/86'/0'/73'/0/n`, on-device message display |
 | **Sequence numbers** | None — proposals are unordered | Explicit `SeqNo: u64`, replay protection, gap limit |
 | **Strict ordering** | N/A | Deliberately non-enforced — seqno gaps are allowed (unlike Gnosis Safe's strict nonce ordering) |
@@ -158,7 +160,7 @@ This is a deliberate divergence from Safe's strict nonce ordering. The Strata mo
 ### 4.2 For Understanding EIP-712 vs. SPS-65 Signing
 
 - **EIP-712 spec** — `eips.ethereum.org/EIPS/eip-712`: the Ethereum standard for typed structured data hashing. The domain separator + struct hash pattern maps directly to the tag + sighash_payload pattern in SPS-65. Reading EIP-712 will solidify understanding of *why* the SPS-65 sighash is constructed the way it is.
-- **`signing.rs`** in this repo — `desktop-app/src-tauri/src/signing.rs`: the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/specs/poc3-signing-lib.md`.
+- **`signing.rs`** in this repo — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs): the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/specs/poc3-signing-lib.md`.
 
 ### 4.3 For Understanding Multisig On-Chain Execution (Gnosis Safe)
 

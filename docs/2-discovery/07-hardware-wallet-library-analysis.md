@@ -113,7 +113,7 @@ let response = transport.exchange(&apdu)?;
 
 ### 3.1 Requirement recap
 
-Under **strict SPS-65**, a hardware signature is acceptable only if it verifies as **ECDSA over the 32-byte tagged admin sighash** — the same `sighash_hex` produced in Rust and checked by `verify_threshold` in `desktop-app/src-tauri/src/signing.rs` (and protocol-side equivalents). There is **no** step that re-hashes the sighash through BIP-137.
+Under **strict SPS-65**, a hardware signature is acceptable only if it verifies as **ECDSA over the 32-byte tagged admin sighash** — the same `sighash_hex` produced in Rust and checked by `verify_threshold` in [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs) (and protocol-side equivalents). There is **no** step that re-hashes the sighash through BIP-137.
 
 **`SignMessage` / `sign_message` is out of scope for this requirement.** Trezor’s message-signing API applies the Bitcoin Signed Message prefix and double-SHA256; the resulting compact signature is valid BIP-137 but **wrong message** for SPS-65 threshold checks.
 
@@ -268,7 +268,7 @@ The gate for **strict SPS-65** is not “does the device return bytes?” but:
 
 **Acceptance rule:** A Trezor (or Ledger) adapter is **not** production-correct for admin actions unless `verify_threshold(&pubkeys, threshold, &[sig_hex], &sighash.sighash_hex)` succeeds **without** any BIP-137 preimage or alternate message transformation. Signatures from `sign_message` / BIP-137 **must fail** this check when passed the SPS-65 sighash — use that as a negative test once a BIP-137 probe exists.
 
-Baseline today: mock / software `sign_sighash` in `signing.rs` already satisfies this. When hardware adapters exist, swap only the signing step:
+Baseline today: mock / software `sign_sighash` in [`infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs) already satisfies this. When hardware adapters exist, swap only the signing step:
 
 ```rust
 #[tokio::test]

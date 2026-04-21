@@ -1,6 +1,7 @@
 # Finding — Alpen Crate Coverage vs PRD Requirements
 
-> **Status:** In progress — investigation ongoing
+> **Status:** Complete — all coverage gaps mapped and classified.
+> **Upstream gaps tracked in:** [`12-questions-alpen-labs.md`](./12-questions-alpen-labs.md) and [`13-pending-implementations-alpen-labs.md`](./13-pending-implementations-alpen-labs.md).
 > **Re-validated:** 2026-04-17 against `alpenlabs/asm` rev `a8559d3` (== tag `v0.1-alpha.5`). None of the coverage gaps listed below are closed by the ASM repo migration; `Role` enum, `AdminTxType` discriminants, and `sighash_payload` bytes are identical to the pre-migration version. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) for migration details.
 
 ## Overview
@@ -116,9 +117,9 @@ The bridge-v1 subprotocol (`crates/asm/subprotocols/bridge-v1/`) handles deposit
 
 | Crate | Key types/functions used | Used by | Replaceable? |
 |---|---|---|---|
-| `strata-asm-txs-admin` | `MultisigAction`, `UpdateAction`, `CancelAction`, `Sighash`, `compute_sighash()`, `parser::parse_tx()`, `SignedPayload` | desktop-app, e2e-tests | No — canonical Borsh layout and sighash tags |
-| `strata-crypto` | `CompressedPublicKey`, `ThresholdConfig`, `ThresholdConfigUpdate`, `verify_threshold_signatures()`, `SignatureSet` | desktop-app, e2e-tests | No — types embedded in Borsh serialization |
-| `strata-asm-params` | `Role` enum | desktop-app (tests), e2e-tests | No — Borsh discriminant must match ASM |
+| `strata-asm-txs-admin` | `MultisigAction`, `UpdateAction`, `CancelAction`, `Sighash`, `compute_sighash()`, `parser::parse_tx()`, `SignedPayload` | desktop-app, e2e-tests | No — canonical SSZ layout and sighash tags |
+| `strata-crypto` | `CompressedPublicKey`, `ThresholdConfig`, `ThresholdConfigUpdate`, `verify_threshold_signatures()`, `SignatureSet` | desktop-app, e2e-tests | No — types embedded in SSZ serialization |
+| `strata-asm-params` | `Role` enum | desktop-app (tests), e2e-tests | No — SSZ discriminant must match ASM |
 | `strata-primitives` | `Buf32` (sighash return type) | e2e-tests (transitively) | No — return type of `compute_sighash()` |
 | `strata-asm-common` | `TxInputRef` | e2e-tests | No — required by `parser::parse_tx()` |
 | `strata-l1-txfmt` | `ParseConfig`, `TagData` (SPS-50 parsing) | e2e-tests | No — protocol header format |
