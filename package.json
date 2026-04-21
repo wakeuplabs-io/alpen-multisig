@@ -1,0 +1,12 @@
+{
+  "name": "alpen-multisig",
+  "private": true,
+  "workspaces": [
+    "desktop-app"
+  ],
+  "scripts": {
+    "dev:desktop-app": "npm run dev --workspace desktop-app",
+    "build:desktop-app": "npm run build --workspace desktop-app",
+    "tauri:desktop-app": "npm run tauri --workspace desktop-app"
+  }
+}

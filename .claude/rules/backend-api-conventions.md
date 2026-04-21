@@ -1,3 +1,8 @@
+---
+paths:
+  - "orchestator-be/**/*.rs"
+---
+
 # Rust Backend Conventions
 
 ## Architecture Boundaries

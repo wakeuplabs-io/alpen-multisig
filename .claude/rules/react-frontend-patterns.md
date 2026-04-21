@@ -1,3 +1,8 @@
+---
+paths:
+  - "desktop-app/src/**/*.{ts,tsx}"
+---
+
 # React Frontend Patterns
 
 ## Component and State Design

@@ -4,20 +4,24 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# From alpenlabs/alpen
-strata-asm-txs-admin = { git = "https://github.com/alpenlabs/alpen", rev = "308211f", features = ["test-utils"] }
-strata-crypto = { git = "https://github.com/alpenlabs/alpen", rev = "308211f", features = ["test-utils"] }
-strata-asm-params = { git = "https://github.com/alpenlabs/alpen", rev = "308211f", features = ["arbitrary"] }
-strata-primitives = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-asm-common = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
-strata-test-utils = { git = "https://github.com/alpenlabs/alpen", rev = "308211f" }
+# From alpenlabs/asm
+strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
+strata-asm-params = { workspace = true, features = ["arbitrary"] }
+strata-asm-common.workspace = true
+strata-asm-txs-test-utils.workspace = true
 
 # From alpenlabs/strata-common
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc11" }
+strata-crypto = { workspace = true, features = ["test-utils"] }
+strata-l1-txfmt.workspace = true
 
-# Third-party (versions matched to alpen workspace)
-bitcoin = { version = "0.32.6", features = ["serde"] }
-borsh = { version = "1.5.0", features = ["derive"] }
-secp256k1 = { version = "0.29.1", features = ["global-context", "std", "recovery"] }
-rand = "0.8"
+# Desktop app (application layer)
+desktop-app = { path = "../desktop-app/src-tauri" }
+
+# Third-party
+bitcoin.workspace = true
+secp256k1 = { workspace = true, features = ["recovery"] }
+rand.workspace = true
+hex.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true

@@ -1,5 +1,12 @@
 # POC 1 Findings — Admin / Subprotocol Integration
 
+> **Post-discovery note (2026-04-17).** This document describes the system as it was observed during POC-1. Two substantive changes have happened upstream since:
+>
+> 1. **Wire format migrated from Borsh to SSZ** for `MultisigAction` and every nested admin type (upstream PR `alpenlabs/asm#8`, 2026-03-25). The `sighash_payload` bytes are hand-coded and byte-identical across both versions — every sighash / signature claim in this document still holds. References to "Borsh" below should be read as "SSZ" in the current workspace. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md).
+> 2. **Crate layout changed.** The ASM subprotocols crate was renamed `strata-asm-subprotocols-admin` → `strata-asm-proto-administration` and lives at `alpenlabs/asm` (rev `a8559d3`) instead of `alpenlabs/alpen`. See [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md) §4 and [`11-asm-repo-migration.md`](./11-asm-repo-migration.md).
+>
+> The backend stack references below ("Axum + Postgres") describe the *target* PRD architecture. The walking skeleton runs on Axum + in-memory repo today; Postgres is deferred (see [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) §NF-6).
+
 ## Overview
 
 This document captures findings from POC 1: understanding the Alpen Administration Subprotocol — its topology, how the layers connect, and how an admin action flows through the system end-to-end.
@@ -99,7 +106,7 @@ ALPEN (EVM rollup) — receives relayed config changes
 1. A signer opens the desktop app, connects their hardware wallet, selects the Strata Administrator multisig.
 2. They create a proposal: "Add key X, remove key Y, new threshold = 3."
 3. The app computes `ActionId = hash(MultisigAction, SeqNo)` where SeqNo > last confirmed sequence number.
-4. The proposal is stored in the **off-chain backend** (Axum + Postgres). The backend is purely a coordination tool — it holds the proposal and collects signatures. Proposals expire after 7 days.
+4. The proposal is stored in the **off-chain backend** (Axum; in-memory repository today, Postgres deferred — see NF-6). The backend is purely a coordination tool — it holds the proposal and collects signatures. Proposals expire after 7 days.
 
 #### Phase 2: Signature Collection (Off-chain)
 
@@ -221,7 +228,7 @@ Unlike Ethereum's Safe multisig where proposal N+1 cannot execute until N is exe
 |-----------|---------|-------|
 | **Bitcoin RPC** | Broadcast transactions, monitor confirmations | Must support local Strata node or trusted remote endpoint on `stratabtc.org` |
 | **Strata Node RPC** | Read current ASM state (signer sets, sequence numbers, queued updates) | **Exact RPC methods not yet verified** — this is the primary integration unknown |
-| **Off-chain Backend API** | Proposal CRUD, signature aggregation | Built by us (Axum + Postgres). See `MultisigBackend` trait in PRD |
+| **Off-chain Backend API** | Proposal CRUD, signature aggregation | Built by us (Axum; in-memory repo today, Postgres deferred — NF-6). See `MultisigBackend` trait in PRD |
 
 ### 3.3 Backend Storage Model
 
@@ -288,7 +295,7 @@ sigs_by_id: Map<ActionId, Vec<Signature>>
 ```
  ┌─────────────────────────────────────────────────────────────┐
  │  Step 1: READ ASM STATE                                     │
- │  crate: strata-asm-subprotocols-admin                       │
+ │  crate: strata-asm-proto-administration                     │
  │  types: AdministrationSubprotoState, MultisigAuthority       │
  └──────────────────────────┬──────────────────────────────────┘
                             v
@@ -348,7 +355,7 @@ sigs_by_id: Map<ActionId, Vec<Signature>>
                             v
  ┌─────────────────────────────────────────────────────────────┐
  │  Step 11: ASM PICKS UP TX (on-chain, automatic)             │
- │  crate: strata-asm-subprotocols-admin                       │
+ │  crate: strata-asm-proto-administration                     │
  │  funcs: parse_tx -> handle_action -> enqueue/cancel/apply   │
  └─────────────────────────────────────────────────────────────┘
 ```
@@ -358,9 +365,9 @@ sigs_by_id: Map<ActionId, Vec<Signature>>
 #### Step 1 — Read ASM State
 
 ```rust
-// crate: strata-asm-subprotocols-admin
-use strata_asm_subprotocols_admin::state::AdministrationSubprotoState;
-use strata_asm_subprotocols_admin::authority::MultisigAuthority;
+// crate: strata-asm-proto-administration (previously strata-asm-subprotocols-admin)
+use strata_asm_proto_administration::state::AdministrationSubprotoState;
+use strata_asm_proto_administration::authority::MultisigAuthority;
 use strata_asm_params::Role;
 
 let auth = state.authority(Role::StrataAdministrator).unwrap();
@@ -507,7 +514,7 @@ wallet.send_raw_transaction(&reveal_tx).await?;
 This step happens inside the Strata node — we don't call it, but it's useful to understand:
 
 ```rust
-// crate: strata-asm-subprotocols-admin
+// crate: strata-asm-proto-administration
 // 1. Parse tx from Bitcoin block
 let payload = parse_tx(&tx_input)?;
 
@@ -561,15 +568,15 @@ The UI and backend use very different slices of the Alpen/Strata crate ecosystem
 
 The UI touches nearly every crate — from domain types all the way down to Bitcoin transaction construction and broadcast.
 
-### Backend (Axum + Postgres) — Domain Types Only
+### Backend (Axum; in-memory today, Postgres deferred) — Domain Types Only
 
 | Purpose | Crates | Key Types / Calls |
 |---------|--------|-------------------|
 | **Auth & access control** (verify signer is in canonical set) | `strata-asm-params`, `strata-crypto`, `secp256k1` | `Role`, `ThresholdConfig`, nonce signature verification |
 | **Store proposals** (CRUD + dedup) | `strata-asm-txs-admin` | `MultisigAction`, `ActionId = hash(action, seqno)` |
 | **Collect signatures** (with basic hygiene checks) | `strata-crypto` | `IndexedSignature`, `SignatureSet` |
-| **Serialize/deserialize** (for Postgres storage) | `borsh` | `borsh::to_vec`, `borsh::from_slice` |
-| **Sync on-chain state** (signer sets, seqnos, queued updates) | `strata-asm-subprotocols-admin` | `AdministrationSubprotoState`, `MultisigAuthority` |
+| **Serialize/deserialize** (for repo storage) | `ssz` (`borsh` pre-migration) | `ssz::Encode` / `ssz::Decode` |
+| **Sync on-chain state** (signer sets, seqnos, queued updates) | `strata-asm-proto-administration` | `AdministrationSubprotoState`, `MultisigAuthority` |
 
 The backend does **not** use: `strata-l1-txfmt`, `strata-l1-envelope-fmt`, `strata-btcio`, or `bitcoind-async-client`. It never constructs or broadcasts Bitcoin transactions.
 
