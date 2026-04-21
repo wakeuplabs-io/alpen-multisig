@@ -158,16 +158,13 @@ The integration is also split across two distinct signing contexts with differen
 - **Session authentication** — a signer proves key ownership to the backend to gain access to their authority's proposals. The backend controls both sides, so BIP-137 is acceptable here.
 - **Proposal signing** — a signer produces a signature over an admin action sighash that will be embedded in a Bitcoin transaction and validated onchain by the ASM. This requires raw ECDSA; BIP-137 will be rejected.
 
-The PSBT path (Option B in section 4) solves the proposal signing problem by constructing a minimal Bitcoin transaction and using the device's `sign_tx` API, which returns raw ECDSA. This adds significant complexity but is the only protocol-correct path.
-
 ### 2.1 Required Capabilities
 
-| Capability                | Protocol requirement                      | Notes                                  |
-| ------------------------- | ----------------------------------------- | -------------------------------------- |
-| Taproot key derivation    | `m/86'/0'/73'/0/n` (first 20 addresses)   | BIP-86 — Taproot                       |
-| secp256k1 ECDSA signing   | SPS-65 raw sighash (no prefix)            | NOT Bitcoin message signing (BIP-137)  |
-| On-device payload display | Signer must review action before signing  | UX safety requirement                  |
-| PSBT support              | Needed for raw ECDSA output via `sign_tx` | Workaround for BIP-137 format mismatch |
+| Capability                | Protocol requirement                     | Notes                                 |
+| ------------------------- | ---------------------------------------- | ------------------------------------- |
+| Taproot key derivation    | `m/86'/0'/73'/0/n` (first 20 addresses)  | BIP-86 — Taproot                      |
+| secp256k1 ECDSA signing   | SPS-65 raw sighash (no prefix)           | NOT Bitcoin message signing (BIP-137) |
+| On-device payload display | Signer must review action before signing | UX safety requirement                 |
 
 ### 2.2 Signing Format Gap — BIP-137 vs Raw ECDSA
 
@@ -188,7 +185,6 @@ Both Trezor and Ledger expose a `sign_message` API that applies the BIP-137 pref
 **Risks:**
 
 - Firmware differences across Trezor models (Model T, Safe 3) may require per-firmware handling or fallback logic.
-- Ledger Rust transport crate (`ledger-transport-hidapi`) maturity is unknown — if insufficient, it becomes the blocking dependency for the Option B recommendation.
 
 ## 3. Architecture Document
 
@@ -393,8 +389,6 @@ Each signer signs this 32-byte hash with raw secp256k1 ECDSA (not BIP-137).
 **Limitations:**
 
 - The Strata node RPC interface for querying `AdministrationSubprotoState` has not been identified — ASM state sync is architecturally required for access control but the implementation path is unknown.
-- Postgres integration is planned but not started — the only persistence implementation is an in-memory repository.
-- Session authentication is designed but not implemented — all endpoints are currently unprotected.
 - The `block_payout` flow (Payout Admin) requires a separate Bitcoin RPC client; it is not represented in the current architecture.
 
 **Risks:**
@@ -402,12 +396,6 @@ Each signer signs this 32-byte hash with raw secp256k1 ECDSA (not BIP-137).
 - ASM state sync latency creates a window where stale signer sets could allow or deny access incorrectly — invalidation strategy needs to be defined.
 - Backend downtime must not block signers from manually aggregating signatures and broadcasting directly to Bitcoin (spec requirement). This offline path has not been validated end-to-end.
 - Sequence number gaps are protocol-valid but can cause coordination confusion without explicit metadata support in the UI.
-
-**POC Status:**
-
-- Domain types, `ActionId` computation, and `ProposalStatus` lifecycle validated in unit tests.
-- Layered architecture implemented per ADR-005 (handlers → application → domain → infrastructure).
-- Postgres migrations, repository trait implementation, and session middleware are the next concrete steps.
 
 ## 4. Blockers/Questions summary
 
@@ -440,7 +428,6 @@ The following questions must be clarified with Alpen Labs to unblock Phase 3 imp
 
 - Which crate or spec defines the bridge script required for `block_payout`?
 - Is there an existing helper for building commit + reveal transactions, or should we rely directly on `strata-btcio`?
-- What is the expected flow for transaction broadcast (direct Bitcoin RPC vs Strata node)?
 
 ---
 
@@ -454,8 +441,6 @@ The following questions must be clarified with Alpen Labs to unblock Phase 3 imp
 ### Hardware Wallet Integration
 
 - Is raw ECDSA over the SPS-65 sighash the expected signing format for all devices?
-- Is the PSBT (`sign_tx`) path the recommended approach for hardware wallet compatibility?
-- Are there known constraints or tested configurations for Ledger devices?
 
 ---
 
