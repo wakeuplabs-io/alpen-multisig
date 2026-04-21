@@ -1,5 +1,7 @@
 # Plan: Basic Flow — Propose and Sign
 
+> **Post-discovery note (2026-04-17).** This document is the **plan** as written at the start of POC-4. The plan was executed: POC-4 closed successfully, Hardware Wallet Integration (Slice 3) was delivered via POC-5, and `application.rs` evolved from a single file into the [`desktop-app/src-tauri/src/application/`](../../desktop-app/src-tauri/src/application/) and [`orchestator-be/src/application/`](../../orchestator-be/src/application/) module directories. See the updated slice statuses in §3 below and the consolidated findings in [`docs/specs/poc4-e2e-propose-sign-flow.md`](../specs/poc4-e2e-propose-sign-flow.md).
+
 ## Context — Discovery Phase Closure
 
 This plan defines the implementation strategy for **POC-4: Mini Coordination Flow**, the final proof-of-concept in the discovery phase. It validates that the building blocks proven in POC 1–3 connect into a working end-to-end flow.
@@ -33,11 +35,11 @@ After POC-4, the architecture is validated and the foundation is ready for featu
 
 | Slice | Description | Status |
 |-------|-------------|--------|
-| **Slice 1 (POC-4)** | Basic flow: propose → sign → quorum (detailed below) | Planning |
-| Slice 2 | Bitcoin tx construction (SPS-50/51 envelope) + broadcast | Not started |
-| Slice 3 | Hardware wallet integration (HWI subprocess) | Not started |
-| Slice 4 | Cancellations + expiry + past states | Not started |
-| Slice 5 | Payout Administrator flow (`block_payout`) | Not started |
+| **Slice 1 (POC-4)** | Basic flow: propose → sign → quorum (detailed below) | **Done** — see [`docs/specs/poc4-e2e-propose-sign-flow.md`](../specs/poc4-e2e-propose-sign-flow.md) |
+| Slice 2 | Bitcoin tx construction (SPS-50/51 envelope) + broadcast | Not started — Phase 3 |
+| Slice 3 | Hardware wallet integration (HWI subprocess) | **Done** (Trezor via `trezor-client`, Rust-native) — see [`10-poc5-trezor-findings.md`](./10-poc5-trezor-findings.md) |
+| Slice 4 | Cancellations + expiry + past states | Not started — Phase 3 |
+| Slice 5 | Payout Administrator flow (`block_payout`) | Not started — Phase 3 |
 | Slice 6 | Real auth (ephemeral session keys, nonce signing) | Not started |
 | Slice 7 | Postgres persistence | Not started |
 
@@ -71,20 +73,20 @@ Each slice is a horizontal cut — end-to-end functionality that can be demonstr
 **Goal:** The desktop app can create a proposal and sign it, tested against a mocked orchestrator.
 
 **What gets built:**
-- `application.rs` gains business logic functions: create proposal (orchestrating `signing.rs` + backend call), sign existing proposal, list proposals
+- The `application` module gains business logic functions: create proposal (orchestrating `signing.rs` + backend call), sign existing proposal, list proposals <br/>*(post-implementation: this is now the [`desktop-app/src-tauri/src/application/`](../../desktop-app/src-tauri/src/application/) module directory.)*
 - A backend client abstraction (trait) is introduced — the test uses a mock implementation, the real implementation (reqwest) is adapted behind it
 - Application layer is tested in isolation: real signing (`signing.rs` already works) + mocked backend
 
 **What is NOT touched:** Tauri, commands, state, frontend
 
-**Architecture evolution:** First real abstraction — the backend client trait. `application.rs` starts having testable orchestration logic.
+**Architecture evolution:** First real abstraction — the backend client trait. The `application` module starts having testable orchestration logic.
 
 ### Step 2: Orchestrator — Application Layer
 
 **Goal:** The orchestrator can receive proposals, accumulate signatures, and detect quorum, tested against mocked repositories.
 
 **What gets built:**
-- `application.rs` implements real logic (replaces `todo!()` stubs): create proposal, receive signature, list proposals, detect quorum
+- The `application` module implements real logic (replaces `todo!()` stubs): create proposal, receive signature, list proposals, detect quorum
 - A proposal repository abstraction (trait) is introduced — in-memory implementation for tests
 - A signer set provider abstraction (trait) is introduced — static/hardcoded implementation for tests
 - Application layer is tested in isolation: in-memory repos + static signer set
@@ -97,7 +99,7 @@ Each slice is a horizontal cut — end-to-end functionality that can be demonstr
 - Quorum detection (collected >= threshold)
 - Authority isolation (signer of authority A cannot see proposals of authority B)
 
-**Architecture evolution:** Repository and signer set provider abstractions emerge. `application.rs` grows with real coordination logic.
+**Architecture evolution:** Repository and signer set provider abstractions emerge. The `application` module grows with real coordination logic.
 
 ### Step 3: Orchestrator — HTTP Handlers
 
@@ -144,11 +146,13 @@ Each slice is a horizontal cut — end-to-end functionality that can be demonstr
 
 | Step | Abstraction introduced | Where |
 |------|----------------------|-------|
-| 1 | Backend client trait | desktop `application.rs` |
-| 2 | Proposal repository trait, signer set provider trait | orchestrator `application.rs` |
+| 1 | Backend client trait | desktop `application/` module |
+| 2 | Proposal repository trait, signer set provider trait | orchestrator `application/` module |
 | 3 | — (HTTP wiring only) | orchestrator `handlers/` |
-| 4 | Real impl of backend client | desktop `application.rs` |
+| 4 | Real impl of backend client | desktop `application/` module |
 | 5 | — (validation) | `e2e-tests/` |
+
+> Post-implementation: both `application` layers are now module directories (`desktop-app/src-tauri/src/application/` and `orchestator-be/src/application/`), not single files. The original plan's use of `application.rs` reflects the single-file scaffold at the start of POC-4.
 
 Each abstraction appears when testing demands it. Each step is independently committable. The architecture grows from concrete to abstract as complexity requires.
 

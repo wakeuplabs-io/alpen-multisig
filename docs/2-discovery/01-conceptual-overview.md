@@ -292,7 +292,7 @@ This is the application being built — a **Tauri-based desktop app** (Rust back
 7. **Cancel** queued updates before they are enacted
 8. Manage **block_payout** transactions for the Payout Administrator role
 
-The app is supported by an **off-chain coordination backend** (Axum + Postgres) that aggregates signatures and tracks proposal state — but it is not a single point of failure. Signers can always construct and broadcast transactions manually if the backend is unavailable.
+The app is supported by an **off-chain coordination backend** (Axum; in-memory repository today, Postgres deferred — see [`non-functional-items.md` NF-6](../3-stories/non-functional-items.md)) that aggregates signatures and tracks proposal state — but it is not a single point of failure. Signers can always construct and broadcast transactions manually if the backend is unavailable.
 
 ---
 

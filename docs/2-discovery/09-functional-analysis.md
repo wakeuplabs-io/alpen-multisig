@@ -1,6 +1,15 @@
 # Functional Analysis — Alpen Multisig Application
 
-> **Status:** In progress — for validation and review
+> **Status:** Superseded — kept as historical record of the phase-1 functional breakdown.
+>
+> The content has been absorbed by more authoritative documents:
+> - Actors, use cases, and proposal lifecycle → [`docs/3-stories/story-map.md`](../3-stories/story-map.md)
+> - Non-functional requirements → [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md)
+> - System architecture & tech stack → [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/)
+> - Hardware wallet architecture → [`06-hardware-wallet-architecture.md`](./06-hardware-wallet-architecture.md), [`07-hardware-wallet-library-analysis.md`](./07-hardware-wallet-library-analysis.md), [`10-poc5-trezor-findings.md`](./10-poc5-trezor-findings.md)
+> - Crate / PRD coverage → [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md)
+>
+> Any reference to Borsh in this document should be read as **SSZ** per the [ASM repo migration](./11-asm-repo-migration.md). Any reference to "Axum + Postgres" describes the PRD target stack; the walking skeleton runs Axum + in-memory repo (Postgres deferred, see NF-6).
 
 ## 1. System Overview
 

@@ -1,12 +1,16 @@
 # POC 3 Findings — Signing Library with Alpen Crate Integration
 
+> **Post-discovery note (2026-04-17).** When this POC ran, the ASM crates used Borsh and were pinned to `alpenlabs/alpen` rev `308211f`. Upstream has since migrated to SSZ (`alpenlabs/asm` rev `a8559d3`, `alpenlabs/strata-common` tag `v0.1.0-alpha-rc16`). The `compute_sighash` byte layout is byte-identical across both — all signing claims in this document still hold. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) and current pins in root `Cargo.toml`.
+>
+> The signing library has also moved to `desktop-app/src-tauri/src/infrastructure/signing.rs` (layered architecture, ADR-005).
+
 ## Overview
 
 This document captures findings from POC 3: validating that the desktop app can compute SPS-65 sighashes, sign them with ECDSA keys, and verify threshold signatures — all using Alpen/Strata crates as the canonical implementation.
 
 ### Sources
 
-- **Signing library** — [`desktop-app/src-tauri/src/signing.rs`](../../desktop-app/src-tauri/src/signing.rs) (288 lines, 10 tests)
+- **Signing library** — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs) (288 lines, 10 tests)
 - **Alpen crate dependency strategy** — [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md)
 - **E2E admin subprotocol test** — [`e2e-tests/tests/e2e_admin_subprotocol.rs`](../../e2e-tests/tests/e2e_admin_subprotocol.rs) (POC-1, validates full tx construction + verification)
 
@@ -38,18 +42,20 @@ POC-3 introduced direct dependencies on Alpen crates in the desktop app. The ful
 
 ### Crates used by signing.rs
 
-| Crate | Source | Purpose |
+> Pins below are the ones observed at POC-3 time. Current workspace pins (post-migration) are `alpenlabs/asm` rev `a8559d3` and `alpenlabs/strata-common` tag `v0.1.0-alpha-rc16`; see [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) and root `Cargo.toml`.
+
+| Crate | Source (POC-3 time) | Purpose |
 |-------|--------|---------|
 | `strata-asm-txs-admin` | `alpenlabs/alpen` (rev: `308211f`) | `MultisigAction`, `Sighash`, `compute_sighash()` |
 | `strata-crypto` | `alpenlabs/alpen` (rev: `308211f`) | `CompressedPublicKey`, `ThresholdConfig` |
 | `secp256k1` | crates.io (version-aligned with Alpen) | ECDSA signing and verification |
-| `borsh` | crates.io (version-aligned with Alpen) | `BorshDeserialize` for `MultisigAction` |
+| `borsh` | crates.io (version-aligned with Alpen) | `BorshDeserialize` for `MultisigAction` (replaced by `ssz::Decode` post-migration) |
 
 ### Implications discovered
 
 - **Nightly Rust required** — Alpen crates have transitive dependencies (`ssz`) that require `#![feature]`. The entire workspace uses nightly, pinned via `rust-toolchain.toml`. See ADR-001 for details.
-- **Version alignment is critical** — Third-party crates (`bitcoin`, `borsh`, `secp256k1`) must match Alpen's versions exactly to avoid duplicate types at compile time. Centralized in `[workspace.dependencies]`.
-- **Git dependencies only** — Alpen crates are not on crates.io. Consumed via `rev` pin because the required features are past the latest tag (`v0.2.0-rc9`).
+- **Version alignment is critical** — Third-party crates (`bitcoin`, `secp256k1`, and formerly `borsh`) must match Alpen's versions exactly to avoid duplicate types at compile time. Centralized in `[workspace.dependencies]`.
+- **Git dependencies only** — Alpen crates are not on crates.io. Consumed via `rev` pin. (At POC-3 time the pin tag was `v0.2.0-rc9` on the old monorepo; current workspace uses `alpenlabs/asm` pins — see ADR-001.)
 
 ---
 
