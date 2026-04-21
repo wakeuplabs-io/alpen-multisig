@@ -1,5 +1,5 @@
 ---
-description: Review pending changes, create a branch, commit, and open a PR with juandhal as reviewer
+description: Review pending changes, create a branch, commit, and open a PR with juandahl and elmol as reviewer
 ---
 
 Ship the current working-tree changes as a PR. Follow these steps strictly; stop and ask the user if any step is ambiguous.
@@ -7,6 +7,7 @@ Ship the current working-tree changes as a PR. Follow these steps strictly; stop
 ## 1. Review changes
 
 Run in parallel:
+
 - `git status` (no `-uall`)
 - `git diff` (unstaged)
 - `git diff --staged`
@@ -29,7 +30,7 @@ If the working tree had uncommitted changes before switching, make sure they lan
 
 - Stage only the intended files by name (avoid `git add -A` / `git add .`).
 - Do not stage anything that looks like a secret (`.env`, credentials, tokens).
-- Write a conventional-style commit message: short subject (≤72 chars), then a body focused on the *why* when useful.
+- Write a conventional-style commit message: short subject (≤72 chars), then a body focused on the _why_ when useful.
 - End the message with:
   ```
   Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
