@@ -60,4 +60,4 @@ npm run build
 
 ## Project Status
 
-Phase 1 discovery and pre-main consolidation are complete on `develop`; Slice 0 (walking skeleton) work starts from this consolidated baseline.
+Phase 1 discovery and pre-main consolidation are complete on `develop`; implementation work resumes on top of this consolidated baseline.
