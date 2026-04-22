@@ -37,7 +37,7 @@ After POC-4, the architecture is validated and the foundation is ready for featu
 |-------|-------------|--------|
 | **Slice 1 (POC-4)** | Basic flow: propose → sign → quorum (detailed below) | **Done** — see [`docs/specs/poc4-e2e-propose-sign-flow.md`](../specs/poc4-e2e-propose-sign-flow.md) |
 | Slice 2 | Bitcoin tx construction (SPS-50/51 envelope) + broadcast | Not started — Phase 3 |
-| Slice 3 | Hardware wallet integration (HWI subprocess) | **Done** (Trezor via `trezor-client`, Rust-native) — see [`10-poc5-trezor-findings.md`](./10-poc5-trezor-findings.md) |
+| Slice 3 | Hardware wallet integration (HWI subprocess) | **Done** (Trezor via `trezor-client`, Rust-native) — see [`16-poc5-trezor-findings.md`](./16-poc5-trezor-findings.md) |
 | Slice 4 | Cancellations + expiry + past states | Not started — Phase 3 |
 | Slice 5 | Payout Administrator flow (`block_payout`) | Not started — Phase 3 |
 | Slice 6 | Real auth (ephemeral session keys, nonce signing) | Not started |

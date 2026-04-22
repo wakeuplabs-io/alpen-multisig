@@ -325,7 +325,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 | HW Wallet | Planned: HWI subprocess, Taproot (BIP-137), derivation `m/86'/0'/73'/0/n` |
 | Protocol | SPS-50/51/65, Borsh serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
 | E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
-| CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](architecture/adrs/004-ci-pipeline-strategy.md) |
+| CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](adrs/004-ci-pipeline-strategy.md) |
 
 ## Current State
 

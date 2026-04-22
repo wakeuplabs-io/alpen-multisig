@@ -2,7 +2,7 @@
 
 ## Objective
 
-Implement the orchestrator's application layer with real business logic (replacing `todo!()` stubs) for proposal CRUD and signature collection. Tested against an in-memory repository. This is Step 2 of POC-4 as defined in `docs/2-discovery/06-poc4-plan.md`.
+Implement the orchestrator's application layer with real business logic (replacing `todo!()` stubs) for proposal CRUD and signature collection. Tested against an in-memory repository. This is Step 2 of POC-4 as defined in `docs/2-discovery/14-poc4-plan.md`.
 
 ## Scope
 
