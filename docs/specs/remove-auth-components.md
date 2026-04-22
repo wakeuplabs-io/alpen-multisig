@@ -1,5 +1,7 @@
 # Spec: Remove Unused Authentication Components and Dead Code
 
+> Status: Implemented on `develop` (2026-04-22).
+
 ## Objective
 Remove unused authentication flow components and all other dead code from `orchestrator-be` and `desktop-app`. The core `Authority` domain concept used by proposals will be preserved.
 

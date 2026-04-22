@@ -1,5 +1,7 @@
 # Spec: Migrate ASM dependencies from `alpenlabs/alpen` to `alpenlabs/asm`
 
+> Status: Implemented on `develop` (2026-04-22).
+
 > **Issue:** [#36](https://github.com/wakeuplabs-io/alpen-multisig/issues/36)
 > **Branch:** `feature/migrate-asm-deps-to-alpenlabs-asm`
 > **Scope:** one PR, replace one crate source with another, drop anything unused, adjust the minimum code needed because upstream replaced Borsh with SSZ for the admin wire format.

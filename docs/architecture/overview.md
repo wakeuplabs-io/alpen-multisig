@@ -14,11 +14,11 @@ Alpen Multisig is a desktop application that enables authorized signers to manag
 │  │  React Frontend (UI)  │────────────>│  Tauri Rust Shell        │  │
 │  │  - Proposal mgmt      │  invoke()   │  - Signing library       │  │
 │  │  - Signature collect.  │             │  - Backend proxy (reqwest│) │
-│  │  - Wallet connect     │             │  - HWI subprocess (planned│) │
+│  │  - Wallet connect     │             │  - HW wallet adapters     │  │
 │  └───────────────────────┘             └─────────┬────────────────┘  │
 │                                                   │                   │
-│   Token NEVER leaves Rust — React sees only       │ HTTP (reqwest)    │
-│   session metadata (authority, pubkey, expiry)     │                   │
+│   Key material stays in Rust/device boundary;      │ HTTP (reqwest)    │
+│   React receives only non-secret response fields    │                   │
 └───────────────────────────────────────────────────┼──────────────────┘
                                                     │
                                                     ▼
@@ -45,10 +45,11 @@ Alpen Multisig is a desktop application that enables authorized signers to manag
 │   └────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 
-Hardware Wallet (HWI) — planned, not yet integrated
-  - Taproot signing (m/86'/0'/73'/0/n)
-  - BIP-137 ECDSA attestation for auth
-  - Will be managed as subprocess by Tauri Rust shell
+Hardware Wallet integration — partially implemented (Trezor PoC)
+  - Taproot-style account discovery flow via Tauri commands (m/86'/0'/73'/0/n)
+  - Device address listing and on-device address verification
+  - SPS-65 signing via synthetic tx binding PoC path
+  - Ledger path remains documented but not wired to UI flows yet
 ```
 
 ## Governance Model — Five Authorities
@@ -76,10 +77,10 @@ Each authority is an independent multisig with its own signer set, threshold, an
 orchestrator-be/src/
 ├── main.rs              # Axum app setup, router, CORS + tracing layers
 ├── config.rs            # Env-based configuration (host, port)
-├── state.rs             # AppState (config + shared repo)
+├── state.rs             # AppState (shared in-memory repo)
 ├── error.rs             # AppError → HTTP status mapping
 ├── domain/
-│   ├── authority.rs     # Authority enum (5 roles), SignerPubkey, SignerSet
+│   ├── authority.rs     # Authority enum (5 roles)
 │   └── proposal.rs      # Proposal, ActionId, ProposalStatus, QuorumStatus, compute_action_id
 ├── application/
 │   ├── proposals.rs     # Business logic: create, approve, get, list proposals
@@ -194,21 +195,21 @@ state ExecutedImmediate {
 desktop-app/src-tauri/src/
 ├── lib.rs               # Library crate: exposes domain + application + infrastructure + signing
 ├── main.rs              # Tauri binary: registers commands, manages AppState
-├── state.rs             # AppState (session_token, backend_url)
-├── signing.rs           # Signing library: compute_sighash, sign_sighash, verify_threshold
 ├── commands/
-│   └── proposals.rs         # #[tauri::command] proposal wrappers
+│   ├── hw_wallet.rs         # get_trezor_info/list_hw_addresses/verify_address_on_device/sign_with_trezor
+│   └── signing.rs           # compute_sighash/verify_threshold
 ├── domain/
 │   ├── authority.rs         # Authority enum (wire (de)serialization), AuthorityParseError
 │   ├── action.rs            # Action, MultisigUpdate, CompressedPubKey, PubKeyError
-│   ├── proposal.rs          # Proposal, ProposalSignature, Signature
-│   └── session.rs
+│   └── proposal.rs          # Proposal, ProposalSignature, Signature
 ├── application/
 │   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
-│   └── proposals.rs         # create/approve/get proposals via the trait (takes domain Action)
+│   └── proposals.rs         # create/approve/get proposals via the trait
 └── infrastructure/
-    ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction borsh — ONLY crossing point to strata_* crates
-    └── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
+    ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction SSZ codec
+    ├── signing.rs           # compute_sighash/sign_sighash/verify_threshold
+    ├── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
+    └── hw_wallet/           # Trezor integration + Ledger placeholder module
 ```
 
 **Strata crate isolation:** `infrastructure/action_codec.rs` is the single module in the desktop app that imports `strata_asm_params`, `strata_asm_txs_admin`, and `strata_crypto`. All other layers (`domain/`, `application/`, commands, UI) talk in client-owned domain types (`Authority`, `Action`, `MultisigUpdate`, `CompressedPubKey`). A codec test asserts byte-level borsh compatibility with the direct Strata call, guaranteeing the SPS-65 signed form stays identical.
@@ -216,10 +217,15 @@ desktop-app/src-tauri/src/
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). Commands are thin (extract State → call application → map errors). Business logic lives in `application/`; transport DTOs live with the trait; the real HTTP client is in `infrastructure/`. `domain/` holds pure client-side types (see [ADR-003](adrs/003-desktop-application-layer-api.md) for entry-point semantics). `signing.rs` is standalone and decoupled from all layers. The application layer never receives private keys — signing happens externally (HW wallet or software signer).
 
 **Implemented Tauri commands:**
-- `list_proposals` — Proxies `GET /proposals`
+- `get_trezor_info`
+- `list_hw_addresses`
+- `verify_address_on_device`
+- `sign_with_trezor`
+- `compute_sighash`
+- `verify_threshold`
 
 **Signing library** (`signing.rs`): Production-ready, Tauri-decoupled functions with 13 tests:
-- `compute_sighash(seqno, action_hex)` — Borsh-decode action, compute SPS-65 tagged sighash
+- `compute_sighash(seqno, action_hex)` — SSZ-decode action, compute SPS-65 tagged sighash
 - `sign_sighash(secret_key_hex, sighash_hex)` — ECDSA sign with secp256k1
 - `verify_threshold(public_keys_hex, threshold, signatures_hex, sighash_hex)` — Threshold signature verification via `strata-crypto`
 
@@ -228,15 +234,23 @@ desktop-app/src-tauri/src/
 ```
 desktop-app/src/
 ├── main.tsx             # React mount
-├── App.tsx              # Root component (currently hello world stub)
-├── types/index.ts       # Domain types (Authority, Proposal, QuorumStatus, etc.)
+├── App.tsx              # Root routes (wallet connect + signing PoC screens)
+├── types/index.ts       # Shared frontend API result type
 ├── api/
-│   ├── client.ts        # Typed HTTP fetch wrapper (unused — kept for non-Tauri dev mode)
-│   ├── tauri-bridge.ts  # Generic Tauri IPC wrapper → ApiResult<T> (all API calls go through here)
-│   └── proposals.ts     # Proposal/signature API calls (via Tauri commands)
-└── hooks/
-    ├── useWallet.ts     # Wallet connection state (disconnected → connecting → connected)
-    └── useProposals.ts  # Proposal loading with status filter
+│   ├── tauri-bridge.ts  # Generic Tauri IPC wrapper → ApiResult<T>
+│   └── signing.ts       # Signing helpers mapped to Tauri commands
+├── components/
+│   └── HwWalletConnect.tsx
+├── contexts/
+│   ├── wallet-session-context.ts
+│   └── wallet-session-provider.tsx
+├── hooks/
+│   └── use-wallet-session.ts
+├── screens/
+│   ├── wallet-connect-screen.tsx
+│   ├── sign-poc-screen.tsx
+│   └── screen-shell.tsx
+└── wallet/              # Wallet adapter abstractions + Trezor/Ledger/Mock/Mnemonic PoC adapters
 ```
 
 **Required Navigation Flow:**
@@ -282,7 +296,7 @@ OP_RETURN <magic(4)> <subprotocol_id(1)> <tx_type(1)> <aux(≤74 bytes)>
 ### SPS-51 — Witness Envelope
 
 ```
-OP_FALSE OP_IF <520-byte chunks of Borsh-serialized SignedPayload> OP_ENDIF
+OP_FALSE OP_IF <520-byte chunks of SSZ-serialized SignedPayload> OP_ENDIF
 ```
 
 - Max payload ~395KB
@@ -321,9 +335,9 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 | Backend | Rust, Axum 0.7, Tokio, Postgres (planned), `serde`, `tracing`, `tower-http` |
 | Desktop Shell | Tauri 2, Rust, reqwest 0.12 (backend proxy), `strata-asm-txs-admin`, `strata-crypto` |
 | Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6, `@tauri-apps/api`, ESLint 9, Prettier 3 |
-| Signing | ECDSA (secp256k1 0.29.1), Borsh-encoded `MultisigAction`, SPS-65 tagged sighash |
-| HW Wallet | Planned: HWI subprocess, Taproot (BIP-137), derivation `m/86'/0'/73'/0/n` |
-| Protocol | SPS-50/51/65, Borsh serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
+| Signing | ECDSA (secp256k1 0.29.1), SSZ-encoded `MultisigAction`, SPS-65 tagged sighash |
+| HW Wallet | Trezor PoC integrated via Tauri commands; Ledger path still placeholder |
+| Protocol | SPS-50/51/65, SSZ serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
 | E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
 | CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](adrs/004-ci-pipeline-strategy.md) |
 
@@ -334,17 +348,17 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Backend: Axum router, working handlers (create/get/list/approve proposals), domain models, error mapping, in-memory repository (24 tests)
 - Desktop application layer: `proposals.rs` with `create_update_action`, `approve_action`, `get_update_action` via `OrchestratorClient` trait (7 tests)
 - Desktop `lib.rs` exposing `application` and `signing` modules publicly for e2e test consumption
-- Tauri IPC layer: `list_proposals` command wired, session token placeholder in Rust AppState (never exposed to JS)
+- Tauri IPC layer: hardware-wallet and signing commands wired (`get_trezor_info`, `list_hw_addresses`, `verify_address_on_device`, `sign_with_trezor`, `compute_sighash`, `verify_threshold`)
 - Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 10 tests
-- Typed API client, Tauri bridge, and hook state machines (frontend)
+- Frontend wallet-connect and sign-screen PoC flow with session context + wallet adapter abstraction
 - E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
 - CI pipeline: GitHub Actions with 2 parallel jobs — Rust (lint/build/test + e2e), frontend (lint/format/build) (ADR-004)
 - Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
 - Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
 
 **Pending implementation:**
-- Backend: persistence layer (Postgres), session authentication (ephemeral-key auth), auth verification against ASM signer set, proposal lifecycle enforcement (expiry, cancel, quorum detection)
-- Desktop: HWI integration, wallet connection flow, proposal creation/signing UI, broadcast flow
-- Tauri: remaining proposal commands (create_proposal, approve_action, get_proposal), auth commands
+- Backend: persistence layer (Postgres), signer verification against ASM signer set, proposal lifecycle enforcement (expiry, cancel, quorum detection)
+- Desktop: full proposal creation/signing UX, authority/action selection UX, broadcast flow
+- Tauri: proposal command surface for create/get/approve and end-to-end orchestration integration
 - Bitcoin tx construction: SPS-50 OP_RETURN + SPS-51 witness envelope building (currently only in e2e-tests)
 - Payout flows: manual + automatic `block_payout` construction
