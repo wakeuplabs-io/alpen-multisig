@@ -1,6 +1,6 @@
 ---
 paths:
-  - "orchestator-be/**/*.rs"
+  - "orchestrator-be/**/*.rs"
   - "desktop-app/src-tauri/**/*.rs"
 ---
 

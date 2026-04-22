@@ -94,10 +94,10 @@ fn orchestrator_binary() -> String {
 
             let status = Command::new("cargo")
                 .current_dir(workspace_root)
-                .args(["build", "-p", "orchestator-be"])
+                .args(["build", "-p", "orchestrator-be"])
                 .status()
                 .expect("cargo build failed");
-            assert!(status.success(), "cargo build -p orchestator-be failed");
+            assert!(status.success(), "cargo build -p orchestrator-be failed");
 
             let output = Command::new("cargo")
                 .current_dir(workspace_root)

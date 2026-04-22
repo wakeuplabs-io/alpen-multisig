@@ -255,7 +255,7 @@ flowchart LR
 
 ### 3.2 Data Model
 
-The orchestrator backend does not own protocol state. It coordinates around it. The canonical source of truth is always the onchain ASM (signer sets, enacted actions, sequence numbers). The backend's data model reflects only what is needed to run the offchain lifecycle: collecting signatures, tracking proposal status, and enforcing authority-scoped access. The shapes below match the current code in [`orchestator-be/src/domain/proposal.rs`](../../orchestator-be/src/domain/proposal.rs) and [`desktop-app/src-tauri/src/domain/`](../../desktop-app/src-tauri/src/domain/), which both follow the layering defined in [ADR-005](../architecture/adrs/005-layered-architecture.md).
+The orchestrator backend does not own protocol state. It coordinates around it. The canonical source of truth is always the onchain ASM (signer sets, enacted actions, sequence numbers). The backend's data model reflects only what is needed to run the offchain lifecycle: collecting signatures, tracking proposal status, and enforcing authority-scoped access. The shapes below match the current code in [`orchestrator-be/src/domain/proposal.rs`](../../orchestrator-be/src/domain/proposal.rs) and [`desktop-app/src-tauri/src/domain/`](../../desktop-app/src-tauri/src/domain/), which both follow the layering defined in [ADR-005](../architecture/adrs/005-layered-architecture.md).
 
 **Governance state** (read from the onchain ASM via the Strata node, cached locally):
 
@@ -270,7 +270,7 @@ Authority
 
 > Only `StrataAdmin` and `StrataSequencerManager` exist in the upstream `Role` enum today (see §1.4). The other three variants are the backend-side representation the system will adopt once Alpen ships them.
 
-**Coordination state** (owned by the backend, in `orchestator-be/src/domain/proposal.rs`):
+**Coordination state** (owned by the backend, in `orchestrator-be/src/domain/proposal.rs`):
 
 ```
 Proposal
@@ -339,7 +339,7 @@ erDiagram
 
 ### 3.4 API Contract
 
-The backend exposes a versioned HTTP surface under `/api/v1`, wired in [`orchestator-be/src/main.rs`](../../orchestator-be/src/main.rs) and [`orchestator-be/src/handlers/mod.rs`](../../orchestator-be/src/handlers/mod.rs). Handlers are thin wrappers around `application::proposals`, which is the only layer allowed to mutate domain state. This is the ADR-005 rule applied in practice.
+The backend exposes a versioned HTTP surface under `/api/v1`, wired in [`orchestrator-be/src/main.rs`](../../orchestrator-be/src/main.rs) and [`orchestrator-be/src/handlers/mod.rs`](../../orchestrator-be/src/handlers/mod.rs). Handlers are thin wrappers around `application::proposals`, which is the only layer allowed to mutate domain state. This is the ADR-005 rule applied in practice.
 
 **Implemented today:**
 
@@ -351,7 +351,7 @@ The backend exposes a versioned HTTP surface under `/api/v1`, wired in [`orchest
 | GET    | `/api/v1/proposals/:action_id`         | —                                                                 | Fetch a proposal by its deterministic action id      |
 | POST   | `/api/v1/proposals/:action_id/approve` | `{ signer_pubkey, signature_hex }`                                | Append an approval signature                         |
 
-Error responses are mapped from `AppError` in [`orchestator-be/src/error.rs`](../../orchestator-be/src/error.rs): `400 Bad Request` for invalid hex or malformed Borsh, `404 Not Found` for unknown `action_id`, `409 Conflict` for duplicate `(seq_no, action_hex)` or duplicate signer on the same proposal, `500 Internal Server Error` for repository-level failures. All of these are covered by the integration tests in `handlers::tests`.
+Error responses are mapped from `AppError` in [`orchestrator-be/src/error.rs`](../../orchestrator-be/src/error.rs): `400 Bad Request` for invalid hex or malformed Borsh, `404 Not Found` for unknown `action_id`, `409 Conflict` for duplicate `(seq_no, action_hex)` or duplicate signer on the same proposal, `500 Internal Server Error` for repository-level failures. All of these are covered by the integration tests in `handlers::tests`.
 
 **Authentication: as designed vs. as implemented.** The target model, required by the backend PRD and already assumed by the desktop client's `fetch_proposals`, uses an ephemeral-key session. A signer authenticates with their canonical key, receives a short-lived session bound to a single authority, and signs subsequent requests with the session key. None of that is in the backend code today. There is no `POST /sessions` route, no bearer-token middleware, and no session extractor. The desktop client already calls `bearer_auth(token)` against endpoints that silently ignore the header. Closing this gap is the single most visible drift between the two apps and is tracked under §3.8.
 

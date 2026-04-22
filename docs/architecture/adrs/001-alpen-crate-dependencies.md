@@ -29,7 +29,7 @@ The workspace declares `ssz = { git = "https://github.com/alpenlabs/ssz-gen", ta
 
 ### Workspace-level centralization
 
-Shared dependencies are declared once in the root `Cargo.toml` under `[workspace.dependencies]`. Workspace members reference them with `{ workspace = true }`. This prevents version drift across `orchestator-be`, `desktop-app/src-tauri`, and any future crates.
+Shared dependencies are declared once in the root `Cargo.toml` under `[workspace.dependencies]`. Workspace members reference them with `{ workspace = true }`. This prevents version drift across `orchestrator-be`, `desktop-app/src-tauri`, and any future crates.
 
 ```toml
 # Root Cargo.toml

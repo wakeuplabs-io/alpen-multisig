@@ -115,7 +115,7 @@ No code change required. The test calls upstream `create_test_admin_tx` and `par
 - Add `ssz = { workspace = true }`.
 - Drop `borsh` if unused after the code migration.
 
-**`orchestator-be/Cargo.toml`:** no changes.
+**`orchestrator-be/Cargo.toml`:** no changes.
 
 ### Production code vs. test helpers
 

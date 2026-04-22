@@ -1,5 +1,5 @@
 [package]
-name = "orchestator-be"
+name = "orchestrator-be"
 version = "0.1.0"
 edition = "2021"
 

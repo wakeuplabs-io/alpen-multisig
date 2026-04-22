@@ -65,7 +65,7 @@ Each authority is an independent multisig with its own signer set, threshold, an
 
 ## Component Architecture
 
-### 1. Orchestrator Backend (`orchestator-be`)
+### 1. Orchestrator Backend (`orchestrator-be`)
 
 **Role:** Off-chain coordination service only. It does NOT enforce protocol validity rules — that is the ASM's job.
 
@@ -73,7 +73,7 @@ Each authority is an independent multisig with its own signer set, threshold, an
 **Forbidden:** Re-implementing signature threshold verification, sequence number validation, or any canonical SPS-65 logic.
 
 ```
-orchestator-be/src/
+orchestrator-be/src/
 ├── main.rs              # Axum app setup, router, CORS + tracing layers
 ├── config.rs            # Env-based configuration (host, port)
 ├── state.rs             # AppState (config + shared repo)
@@ -177,8 +177,8 @@ state ExecutedImmediate {
 
 | State | Layer | Description | Visible to |
 |---|---|---|---|
-| **Pending** | Off-chain (`orchestator-be`) | Proposal created, signatures being collected. Expires after 7 days from creation if quorum is not reached. | Signers of that authority only |
-| **Quorum Met** | Off-chain (`orchestator-be`) | Threshold of signatures collected. "Send" button available. Still within the 7-day window — if no one broadcasts before it elapses, transitions to Expired. | Signers of that authority only |
+| **Pending** | Off-chain (`orchestrator-be`) | Proposal created, signatures being collected. Expires after 7 days from creation if quorum is not reached. | Signers of that authority only |
+| **Quorum Met** | Off-chain (`orchestrator-be`) | Threshold of signatures collected. "Send" button available. Still within the 7-day window — if no one broadcasts before it elapses, transitions to Expired. | Signers of that authority only |
 | **Approved** | On-chain (Bitcoin + ASM queue) | Bitcoin tx confirmed in a block. Update is queued in the ASM waiting for its activation height. Can still be canceled during this window. | Signers of that authority only |
 | **Enacted** | On-chain (ASM final state) | `activation_height` reached. ASM applied the governance change. Irreversible. | Signers — Past view |
 | **Executed (immediate)** | On-chain (ASM) | Applies only to Sequencer Manager and Security Council updates. No confirmation queue — change takes effect in the same block the tx is mined. No Approved or on-chain Canceled states exist for these roles. | Signers — Past view |

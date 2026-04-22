@@ -1,6 +1,6 @@
 # Plan: Basic Flow — Propose and Sign
 
-> **Post-discovery note (2026-04-17).** This document is the **plan** as written at the start of POC-4. The plan was executed: POC-4 closed successfully, Hardware Wallet Integration (Slice 3) was delivered via POC-5, and `application.rs` evolved from a single file into the [`desktop-app/src-tauri/src/application/`](../../desktop-app/src-tauri/src/application/) and [`orchestator-be/src/application/`](../../orchestator-be/src/application/) module directories. See the updated slice statuses in §3 below and the consolidated findings in [`docs/specs/poc4-e2e-propose-sign-flow.md`](../specs/poc4-e2e-propose-sign-flow.md).
+> **Post-discovery note (2026-04-17).** This document is the **plan** as written at the start of POC-4. The plan was executed: POC-4 closed successfully, Hardware Wallet Integration (Slice 3) was delivered via POC-5, and `application.rs` evolved from a single file into the [`desktop-app/src-tauri/src/application/`](../../desktop-app/src-tauri/src/application/) and [`orchestrator-be/src/application/`](../../orchestrator-be/src/application/) module directories. See the updated slice statuses in §3 below and the consolidated findings in [`docs/specs/poc4-e2e-propose-sign-flow.md`](../specs/poc4-e2e-propose-sign-flow.md).
 
 ## Context — Discovery Phase Closure
 
@@ -152,7 +152,7 @@ Each slice is a horizontal cut — end-to-end functionality that can be demonstr
 | 4 | Real impl of backend client | desktop `application/` module |
 | 5 | — (validation) | `e2e-tests/` |
 
-> Post-implementation: both `application` layers are now module directories (`desktop-app/src-tauri/src/application/` and `orchestator-be/src/application/`), not single files. The original plan's use of `application.rs` reflects the single-file scaffold at the start of POC-4.
+> Post-implementation: both `application` layers are now module directories (`desktop-app/src-tauri/src/application/` and `orchestrator-be/src/application/`), not single files. The original plan's use of `application.rs` reflects the single-file scaffold at the start of POC-4.
 
 Each abstraction appears when testing demands it. Each step is independently committable. The architecture grows from concrete to abstract as complexity requires.
 

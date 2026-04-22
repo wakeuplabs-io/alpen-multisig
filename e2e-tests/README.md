@@ -9,7 +9,7 @@ This crate is a member of the Cargo workspace and is gated by the workspace `rus
 | Test | What it covers | External requirements |
 |---|---|---|
 | [`e2e_admin_subprotocol`](./tests/e2e_admin_subprotocol.rs) | Full admin action flow against the upstream Alpen/Strata crates: generate signer keys → build `MultisigAction` → SPS-65 tagged sighash → ECDSA threshold signatures → SSZ-encoded SPS-50+51 transaction → parse back and verify. Stops before broadcast. Background in [`docs/2-discovery/03-poc1-findings.md`](../docs/2-discovery/03-poc1-findings.md). | None |
-| [`e2e_propose_sign`](./tests/e2e_propose_sign.rs) | Desktop ↔ orchestrator integration. Spawns the real `orchestator-be` binary as a subprocess and drives the desktop `application::proposals` layer over real HTTP (create → get → approve → verify_threshold). Exercises domain + action_codec + signing without pulling Strata crates into the desktop app. | None (builds and launches the orchestrator binary on a random port) |
+| [`e2e_propose_sign`](./tests/e2e_propose_sign.rs) | Desktop ↔ orchestrator integration. Spawns the real `orchestrator-be` binary as a subprocess and drives the desktop `application::proposals` layer over real HTTP (create → get → approve → verify_threshold). Exercises domain + action_codec + signing without pulling Strata crates into the desktop app. | None (builds and launches the orchestrator binary on a random port) |
 | [`e2e_harness_hello_world`](./tests/e2e_harness_hello_world.rs) | Smoke test for the reusable ASM test harness (`src/test_harness.rs`). Boots Bitcoin regtest, launches the ASM worker, mines one block, and asserts that the processed height advances. Skipped at runtime if `bitcoind` is not in `PATH`. | `bitcoind` available in `PATH` |
 
 ## Requirements

@@ -104,7 +104,7 @@ Existing frontend code must be formatted with Prettier before enabling the check
 ### Warning cleanup
 
 If any clippy or build warnings exist in the workspace, they must be resolved before the workflow is added. This includes:
-- Dead code in `orchestator-be` (domain types, middleware, error variants)
+- Dead code in `orchestrator-be` (domain types, middleware, error variants)
 - Any other warnings surfaced by `cargo clippy -- -D warnings`
 
 Resolution options per warning type:
