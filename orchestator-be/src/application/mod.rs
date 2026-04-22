@@ -2,5 +2,6 @@
 //!
 //! Handlers delegate here. Traits defined here are implemented in `crate::infrastructure`.
 
+pub(crate) mod auth;
 pub(crate) mod proposals;
 pub(crate) mod traits;

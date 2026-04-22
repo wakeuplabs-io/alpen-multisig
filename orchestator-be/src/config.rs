@@ -4,6 +4,9 @@ use anyhow::Context;
 pub struct Config {
     pub server_host: String,
     pub server_port: u16,
+    /// Required for auth endpoint — can be None in dev/test if auth is never called.
+    pub strata_rpc_url: Option<String>,
+    pub strata_rpc_method: String,
 }
 
 impl Config {
@@ -14,6 +17,9 @@ impl Config {
                 .unwrap_or_else(|_| "3000".to_string())
                 .parse()
                 .context("SERVER_PORT must be a valid port number")?,
+            strata_rpc_url: std::env::var("STRATA_ADMIN_STATE_RPC_URL").ok(),
+            strata_rpc_method: std::env::var("STRATA_ADMIN_STATE_RPC_METHOD")
+                .unwrap_or_else(|_| "strata_getAdminState".to_string()),
         })
     }
 }

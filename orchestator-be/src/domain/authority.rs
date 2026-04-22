@@ -11,6 +11,29 @@ pub enum Authority {
     PayoutAdmin,
 }
 
+impl Authority {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Authority::AlpenAdmin => "alpen_admin",
+            Authority::StrataAdmin => "strata_admin",
+            Authority::SequencerManager => "sequencer_manager",
+            Authority::SecurityCouncil => "security_council",
+            Authority::PayoutAdmin => "payout_admin",
+        }
+    }
+
+    pub fn from_wire(s: &str) -> Result<Self, String> {
+        match s {
+            "alpen_admin" => Ok(Authority::AlpenAdmin),
+            "strata_admin" => Ok(Authority::StrataAdmin),
+            "sequencer_manager" => Ok(Authority::SequencerManager),
+            "security_council" => Ok(Authority::SecurityCouncil),
+            "payout_admin" => Ok(Authority::PayoutAdmin),
+            other => Err(format!("unknown authority: {other}")),
+        }
+    }
+}
+
 /// A public key identifying a signer within an authority's signer set.
 #[allow(dead_code)] // Planned: signer verification against ASM state
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

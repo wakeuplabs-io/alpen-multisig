@@ -15,8 +15,11 @@ fn main() {
             session_token: Mutex::new(None),
             selected_authority: Mutex::new(None),
             backend_url,
+            ephemeral_secret_key: Mutex::new(None),
+            ephemeral_pubkey_hex: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
+            commands::auth::authenticate,
             commands::proposals::list_proposals,
             commands::authority::list_selectable_authorities,
             commands::authority::set_selected_authority,

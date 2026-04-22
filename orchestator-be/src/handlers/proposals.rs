@@ -5,6 +5,7 @@ use crate::{
         proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
     },
     error::{AppError, Result},
+    middleware::ValidSession,
     state::AppState,
 };
 use axum::{
@@ -44,6 +45,7 @@ pub struct ProposalListResponse {
 // ─── Handlers ───────────────────────────────────────────────────────────────
 
 pub async fn create_proposal(
+    _session: ValidSession,
     State(state): State<AppState>,
     Json(body): Json<CreateProposalRequest>,
 ) -> Result<(StatusCode, Json<Proposal>)> {
@@ -69,6 +71,7 @@ pub async fn create_proposal(
 }
 
 pub async fn list_proposals(
+    _session: ValidSession,
     State(state): State<AppState>,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
@@ -83,6 +86,7 @@ pub async fn list_proposals(
 }
 
 pub async fn get_proposal(
+    _session: ValidSession,
     State(state): State<AppState>,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
@@ -97,6 +101,7 @@ pub async fn get_proposal(
 }
 
 pub async fn approve_action(
+    _session: ValidSession,
     State(state): State<AppState>,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,

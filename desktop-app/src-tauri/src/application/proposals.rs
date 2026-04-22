@@ -8,12 +8,15 @@
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing and action encoding happen before reaching this layer.
 
+use bitcoin::secp256k1::{Message, SecretKey, SECP256K1};
+use sha2::{Digest, Sha256};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
 };
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{Proposal, Signature};
-use std::sync::Mutex;
 
 /// Errors that can occur during proposal operations.
 #[derive(Debug, thiserror::Error)]
@@ -24,30 +27,37 @@ pub enum ProposalError {
 
 /// Session-authenticated listing endpoint used by the desktop UI.
 ///
-/// Uses a raw HTTP call (not the trait) because listing is gated by the
-/// user's bearer token, not the trait's unauthenticated client.
+/// Requires an active session: `session_token`, `authority`, and `ephemeral_secret_key`
+/// are extracted from Tauri state before calling this function.
 pub async fn fetch_proposals(
     backend_url: &str,
-    session_token: &Mutex<Option<String>>,
-    selected_authority: &Mutex<Option<String>>,
+    session_token: &str,
+    selected_authority: &str,
+    ephemeral_secret_key: &SecretKey,
     status: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    let token = session_token
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("Not authenticated")?;
-    let authority = selected_authority
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("No selected authority")?;
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("system clock error: {e}"))?
+        .as_millis() as i64;
+
+    let mut hasher = Sha256::new();
+    hasher.update(b"alpen-request:v1");
+    hasher.update(session_token.as_bytes());
+    hasher.update(timestamp_ms.to_be_bytes());
+    let hash = hasher.finalize();
+
+    let msg = Message::from_digest_slice(&hash).map_err(|e| format!("request hash error: {e}"))?;
+    let sig = SECP256K1.sign_ecdsa(&msg, ephemeral_secret_key);
+    let sig_hex = hex::encode(sig.serialize_compact());
 
     let client = reqwest::Client::new();
     let mut req = client
         .get(format!("{backend_url}/proposals"))
-        .bearer_auth(token)
-        .header("x-session-authority", authority);
+        .bearer_auth(session_token)
+        .header("x-session-authority", selected_authority)
+        .header("x-session-timestamp", timestamp_ms.to_string())
+        .header("x-request-sig", sig_hex);
 
     if let Some(s) = status {
         req = req.query(&[("status", s)]);
