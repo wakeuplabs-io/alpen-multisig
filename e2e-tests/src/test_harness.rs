@@ -1,32 +1,26 @@
-//! Test harness for running ASM worker as a service with Bitcoin regtest
+//! Test harness for running the ASM worker as a service against Bitcoin regtest.
 //!
-//! This module provides core infrastructure for integration tests:
-//! - Bitcoin regtest node management
+//! This module provides subprotocol-agnostic integration-test infrastructure:
+//! - Bitcoin regtest node and RPC client (via `strata-test-utils-btcio`)
 //! - ASM worker service lifecycle
-//! - Block mining and submission
-//! - State query utilities
-//! - Generic SPS-50 transaction building
+//! - Block mining and submission to the worker
+//! - ASM state queries (processed height, latest state, manifests, MMR leaves)
+//! - Generic SPS-50 envelope transaction building (optionally SPS-51 with a keypair)
 //!
-//! # Architecture
-//!
-//! The harness provides subprotocol-agnostic infrastructure. Subprotocol-specific
-//! functionality is added via extension traits in separate modules:
-//! - `AdminExt` in `admin.rs` - admin subprotocol operations
-//! - `CheckpointExt` in `checkpoint.rs` - checkpoint subprotocol operations
-//! - (future) `BridgeExt` in `bridge.rs` - bridge subprotocol operations
+//! Subprotocol-specific helpers (admin action submission, checkpoint ops, bridge
+//! deposit processing, …) are intentionally NOT part of this harness. They will
+//! land as extension traits in dedicated modules once there are tests that need
+//! them. Today the only harness consumer is `e2e_harness_hello_world`, which
+//! exercises the core builder + block mining + state query surface.
 //!
 //! # Example
 //!
 //! ```ignore
-//! use harness::test_harness::AsmTestHarnessBuilder;
-//! use harness::admin::{create_test_admin_setup, sequencer_update, AdminExt};
+//! use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 //!
-//! let (admin_config, mut ctx) = create_test_admin_setup(2);
-//! let harness = AsmTestHarnessBuilder::default()
-//!     .with_admin_config(admin_config)
-//!     .build()
-//!     .await?;
-//! harness.submit_admin_action(&mut ctx, sequencer_update([1u8; 32])).await?;
+//! let harness = AsmTestHarnessBuilder::default().build().await?;
+//! let _hash = harness.mine_block(None).await?;
+//! let processed_height = harness.get_processed_height()?;
 //! ```
 
 use std::sync::Arc;
