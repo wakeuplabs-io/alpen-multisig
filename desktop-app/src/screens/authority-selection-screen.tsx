@@ -111,11 +111,7 @@ export function AuthoritySelectionScreen() {
 							>
 								<span>{AUTHORITY_LABELS[item.authority]}</span>
 								<span style={styles.status}>
-									{item.eligible
-										? selectingAuthority === item.authority
-											? 'Selecting...'
-											: 'Eligible'
-										: 'Not signer'}
+									{item.eligible ? (selectingAuthority === item.authority ? 'Selecting...' : 'Eligible') : 'Not signer'}
 								</span>
 							</button>
 						))}
