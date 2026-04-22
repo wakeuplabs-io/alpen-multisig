@@ -1,6 +1,6 @@
 # Reference — Snapshot: Governance Analogy & Learning Resources
 
-> **Status:** Superseded — educational reference. The governance model was absorbed into [`docs/3-stories/story-map.md`](../3-stories/story-map.md), [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md), and [`docs/architecture/overview.md`](../architecture/overview.md). Kept here as a mental model for onboarding engineers coming from an Ethereum background.
+> **Status:** Reference — standalone mental model for engineers coming from an Ethereum background. The Snapshot/SafeSnap/EIP-712/Reality.eth comparison in this document is not duplicated elsewhere. For the direct description of the Alpen/Strata system itself, see [`docs/architecture/overview.md`](../architecture/overview.md), [`docs/3-stories/story-map.md`](../3-stories/story-map.md), and [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md).
 
 ## Purpose
 
