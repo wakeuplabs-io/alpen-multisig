@@ -15,11 +15,6 @@ export type WalletAccountInfo = {
 	keyLabel?: string
 }
 
-export type SignTestPayloadResult = {
-	signatureHex: string
-	note?: string
-}
-
 export type SignatureFormat = 'raw-ecdsa' | 'bitcoin-message' | 'p2wpkh-tx-binding'
 
 export type SignSighashResult = {
@@ -42,7 +37,6 @@ export type WalletAdapter = {
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
 	setDerivationPath?(derivationPath: string): void
-	signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult>
 	signSighash(sighashHex: string): Promise<SignSighashResult>
 	listAddresses?(count?: number): Promise<HwAddressEntry[]>
 }

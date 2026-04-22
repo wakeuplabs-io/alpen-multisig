@@ -1,5 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { WalletAccountInfo, WalletAdapter, SignTestPayloadResult } from './types'
+import type { WalletAccountInfo, WalletAdapter } from './types'
 
 function bytesToHex(bytes: Uint8Array): string {
 	return Array.from(bytes)
@@ -42,19 +42,6 @@ export function createMockPocAdapter(): WalletAdapter {
 			connected = false
 			secretKeyHex = null
 			cachedPublicKeyHex = null
-		},
-
-		async signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult> {
-			if (!connected) {
-				throw new Error('Connect the Mock wallet first.')
-			}
-			const encoded: Uint8Array<ArrayBuffer> = new Uint8Array(new TextEncoder().encode(payloadUtf8))
-			const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
-			const hashHex = bytesToHex(new Uint8Array(hashBuffer))
-			return {
-				signatureHex: `mock:${hashHex}`,
-				note: 'Deterministic mock signature (sha256 payload) for local UI testing.',
-			}
 		},
 
 		async signSighash(sighashHex: string) {
