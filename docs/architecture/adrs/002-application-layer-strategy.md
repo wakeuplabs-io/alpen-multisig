@@ -17,7 +17,7 @@ Each application adds a single `application.rs` file between the framework layer
 **Orchestrator Backend:**
 
 ```
-orchestator-be/src/
+orchestrator-be/src/
 ├── main.rs
 ├── config.rs
 ├── state.rs

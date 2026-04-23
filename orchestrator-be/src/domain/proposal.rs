@@ -47,15 +47,6 @@ pub struct ProposalSignature {
     pub signature_hex: String,
 }
 
-/// Quorum progress for a proposal.
-#[allow(dead_code)] // Planned: quorum detection
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuorumStatus {
-    pub collected: u32,
-    pub required: u32,
-    pub is_reached: bool,
-}
-
 /// Compute ActionId = hex(sha256(seq_no_be_bytes || action_hex_bytes)).
 ///
 /// Deterministic: same (seq_no, action_hex) always produces the same ActionId.

@@ -1,11 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type {
-	HwAddressEntry,
-	SignSighashResult,
-	SignTestPayloadResult,
-	WalletAccountInfo,
-	WalletAdapter,
-} from './types'
+import type { HwAddressEntry, SignSighashResult, WalletAccountInfo, WalletAdapter } from './types'
 
 /** Product default path. Must match Rust `DEFAULT_PATH`. */
 const DEFAULT_DERIVATION_PATH = "m/86'/0'/73'/0/0"
@@ -51,20 +45,6 @@ export function createTrezorPocAdapter(): WalletAdapter {
 		},
 		setDerivationPath(nextPath: string): void {
 			derivationPath = nextPath
-		},
-
-		async signTestPayload(payloadUtf8: string): Promise<SignTestPayloadResult> {
-			const encoded: Uint8Array<ArrayBuffer> = new Uint8Array(new TextEncoder().encode(payloadUtf8))
-			const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
-			const sighashHex = Array.from(new Uint8Array(hashBuffer))
-				.map((b) => b.toString(16).padStart(2, '0'))
-				.join('')
-			const result = await tauriCall<SignatureResult>('sign_with_trezor', { sighashHex, derivationPath })
-			if (!result.ok) throw new Error(result.error)
-			return {
-				signatureHex: result.data.signatureHex,
-				note: 'Trezor PSBT sign_tx: ECDSA over BIP143 P2WPKH sighash; payload digest is OP_RETURN–bound (not BIP-137).',
-			}
 		},
 
 		async signSighash(sighashHex: string): Promise<SignSighashResult> {

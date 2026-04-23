@@ -1,7 +1,7 @@
 # Finding — Alpen Crate Coverage vs PRD Requirements
 
 > **Status:** Complete — all coverage gaps mapped and classified.
-> **Upstream gaps tracked in:** [`12-questions-alpen-labs.md`](./12-questions-alpen-labs.md) and [`13-pending-implementations-alpen-labs.md`](./13-pending-implementations-alpen-labs.md).
+> **Executive summary of upstream readiness:** [`12-upstream-readiness-findings.md`](./12-upstream-readiness-findings.md).
 > **Re-validated:** 2026-04-17 against `alpenlabs/asm` rev `a8559d3` (== tag `v0.1-alpha.5`). None of the coverage gaps listed below are closed by the ASM repo migration; `Role` enum, `AdminTxType` discriminants, and `sighash_payload` bytes are identical to the pre-migration version. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) for migration details.
 
 ## Overview

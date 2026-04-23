@@ -79,7 +79,7 @@ Without this feature, you cannot express "an array whose size is computed from a
 | Component | Needs strata crates with SSZ? | Forced to nightly? |
 |-----------|-------------------------------|---------------------|
 | `desktop-app/src-tauri` | Yes (`strata-asm-params`, `strata-crypto`) | Yes — direct transitive dependency |
-| `orchestator-be` | **No** (zero strata crate dependencies currently) | Yes — shares `rust-toolchain.toml` with workspace |
+| `orchestrator-be` | **No** (zero strata crate dependencies currently) | Yes — shares `rust-toolchain.toml` with workspace |
 | `e2e-tests` | Yes (all strata crates) | Yes — separate `rust-toolchain.toml` |
 
 Notable: **the backend does not depend on any strata crate** and could compile on stable Rust if it were in a separate workspace.
@@ -150,9 +150,9 @@ The main CI cost is double compilation: clippy (check mode) and test (test mode)
 
 ### Potential (not yet implemented)
 
-- **`default-members`** — Add `default-members = ["orchestator-be"]` to root `Cargo.toml` so `cargo build` only builds the backend by default, skipping Tauri/GTK (~150s savings for backend-only work).
+- **`default-members`** — Add `default-members = ["orchestrator-be"]` to root `Cargo.toml` so `cargo build` only builds the backend by default, skipping Tauri/GTK (~150s savings for backend-only work).
 - **`sccache`** — Cache compiled artifacts across clean builds. Saves 50-80% on rebuilds.
 - **`mold` linker** — Faster linking via `.cargo/config.toml` configuration.
-- **Separate backend workspace** — Since `orchestator-be` has no strata crate dependencies, it could be extracted into its own workspace with a stable toolchain. This would reduce the blast radius of nightly issues to only the desktop app.
+- **Separate backend workspace** — Since `orchestrator-be` has no strata crate dependencies, it could be extracted into its own workspace with a stable toolchain. This would reduce the blast radius of nightly issues to only the desktop app.
 - **Split CI jobs** — Separate backend-only job (no Tauri deps) from full workspace job. Backend changes would get faster feedback.
 - **Monitor upstream** — Track `alpenlabs/ssz-gen` and `rust-lang/rust#76560` for changes. If `generic_const_exprs` stabilizes or Alpen rewrites SSZ to avoid it, the workspace can migrate to stable.

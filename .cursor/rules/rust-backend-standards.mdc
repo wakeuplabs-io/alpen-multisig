@@ -1,6 +1,6 @@
 ---
 description: Rust backend coding standards for Axum services
-globs: orchestator-be/**/*.rs, desktop-app/src-tauri/**/*.rs
+globs: orchestrator-be/**/*.rs, desktop-app/src-tauri/**/*.rs
 alwaysApply: false
 ---
 

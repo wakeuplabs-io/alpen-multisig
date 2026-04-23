@@ -131,7 +131,7 @@ flowchart LR
   SEQ --> VER
   DESKTOP -->|"aggregated k-of-n payload"| PROP
 
-  BE["orchestator-be<br/>coordination only<br/>no authentication authority"]
+  BE["orchestrator-be<br/>coordination only<br/>no authentication authority"]
   DESKTOP -. "optional — distribute proposals,<br/>collect signatures, anti-abuse" .-> BE
 ```
 

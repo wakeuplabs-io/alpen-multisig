@@ -13,48 +13,12 @@ use crate::application::orchestrator_client::{
 };
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{Proposal, Signature};
-use std::sync::Mutex;
 
 /// Errors that can occur during proposal operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
-}
-
-/// Session-authenticated listing endpoint used by the desktop UI.
-///
-/// Uses a raw HTTP call (not the trait) because listing is gated by the
-/// user's bearer token, not the trait's unauthenticated client.
-pub async fn fetch_proposals(
-    backend_url: &str,
-    session_token: &Mutex<Option<String>>,
-    status: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let token = session_token
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("Not authenticated")?;
-
-    let client = reqwest::Client::new();
-    let mut req = client
-        .get(format!("{backend_url}/proposals"))
-        .bearer_auth(token);
-
-    if let Some(s) = status {
-        req = req.query(&[("status", s)]);
-    }
-
-    let res = req.send().await.map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        return Err(format!("Request failed: {}", res.status()));
-    }
-
-    res.json::<serde_json::Value>()
-        .await
-        .map_err(|e| e.to_string())
 }
 
 /// Create a new action and store the creator's signature.

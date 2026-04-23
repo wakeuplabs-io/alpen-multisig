@@ -79,4 +79,4 @@ Lives in desktop-app's test module. Starts a real orchestrator (tokio::spawn + a
 No new modules. Existing files modified:
 - `orchestrator_client.rs` — simplified trait + DTOs + HTTP impl
 - `proposals.rs` — updated to use simplified types, approve returns Proposal
-- `orchestator-be/src/handlers/proposals.rs` — create returns Proposal directly
+- `orchestrator-be/src/handlers/proposals.rs` — create returns Proposal directly

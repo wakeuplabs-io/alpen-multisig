@@ -8,7 +8,7 @@ Introduce a minimal `application.rs` in both the orchestrator backend and the de
 
 ### Included
 
-- **Backend:** Create `orchestator-be/src/application.rs` with public functions matching each handler. Update handlers to delegate to application functions.
+- **Backend:** Create `orchestrator-be/src/application.rs` with public functions matching each handler. Update handlers to delegate to application functions.
 - **Desktop:** Extract `AppState` to `src/state.rs`, create `src/application.rs` with logic extracted from `main.rs`, create `src/commands.rs` with thin `#[tauri::command]` wrappers, reduce `main.rs` to Tauri setup only.
 - Update `mod` declarations in both apps.
 
@@ -178,7 +178,7 @@ All changes are production code (structural refactor). No new test helpers neede
 This is a structural refactor with no behavioral changes. Testing focuses on compilation and existing test preservation:
 
 1. `cargo build` — entire workspace compiles
-2. `cargo test -p orchestator-be` — passes (no tests exist yet, but compilation must succeed)
+2. `cargo test -p orchestrator-be` — passes (no tests exist yet, but compilation must succeed)
 3. `cargo test` in desktop-app/src-tauri — signing tests (13) still pass
 4. `cargo clippy` — no new warnings
 5. `cargo fmt --check` — properly formatted
@@ -187,7 +187,7 @@ This is a structural refactor with no behavioral changes. Testing focuses on com
 ## Module structure
 
 ```
-orchestator-be/src/
+orchestrator-be/src/
 ├── main.rs              # Axum setup (adds: mod application)
 ├── config.rs
 ├── state.rs

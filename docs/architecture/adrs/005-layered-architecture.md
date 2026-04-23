@@ -17,10 +17,10 @@ Adopt a **lightweight layered architecture** with 3–4 layers per app. Dependen
 | Vertical Slices | Rejected | The domain is narrow (proposals + auth across 5 authorities). Slicing by feature would fragment code that shares 80% of its types |
 | Alpen-style crate-per-module | Reference only | Designed for 144-crate workspaces. Our scope (2 apps, bounded domain) doesn't justify the crate overhead |
 
-### Orchestrator Backend (`orchestator-be`)
+### Orchestrator Backend (`orchestrator-be`)
 
 ```
-orchestator-be/src/
+orchestrator-be/src/
 ├── main.rs                    # Bootstrap: config, router, middleware, server
 ├── config.rs                  # Env-based configuration
 ├── error.rs                   # AppError enum → HTTP response mapping

@@ -48,7 +48,7 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 - **Requirement:** Store at minimum three maps: `actions_by_seqno`, `action_by_id`, `sigs_by_id`. Data must be durable and recoverable after restart.
 - **Source:** Backend PRD §Data model.
 - **Needed by:** Slice 0.
-- **Disposition:** Covered as DoD on US-E1. Walking skeleton uses the existing in-memory repository (`orchestator-be/src/infrastructure/memory_repo.rs`); durable/recoverable storage is deferred beyond the skeleton.
+- **Disposition:** Covered as DoD on US-E1. Walking skeleton uses the existing in-memory repository (`orchestrator-be/src/infrastructure/memory_repo.rs`); durable/recoverable storage is deferred beyond the skeleton.
 
 ### NF-7 · Idempotent proposal creation
 - **Concern:** API contract.
@@ -123,7 +123,7 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 ### NF-16 · SPS-65 digest handling on device
 - **Concern:** Protocol compatibility.
 - **Requirement:** No consumer device signs a raw 32-byte SPS-65 digest natively. A binding mechanism (synthetic PSBT approach validated in POC-5, or equivalent) is required and must produce signatures that on-chain ASM verification accepts.
-- **Source:** `2-discovery/07-hardware-wallet-library-analysis.md`, `10-poc5-trezor-findings.md`; Proposal §Technical Approach 3.
+- **Source:** `2-discovery/07-hardware-wallet-library-analysis.md`, `2-discovery/16-poc5-trezor-findings.md`; Proposal §Technical Approach 3.
 - **Needed by:** Slice 0 — this gates every signing story.
 - **Disposition:** Tracked as its own spike/POC item on the sprint board (pending creation). Research + implementation that spans US-F1 and US-H1.
 

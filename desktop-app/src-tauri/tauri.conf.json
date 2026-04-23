@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Alpen Multisig Hello",
+	"productName": "Alpen Multisig",
 	"version": "0.1.0",
-	"identifier": "com.alpen.multisig.hello",
+	"identifier": "com.alpen.multisig",
 	"build": {
 		"beforeDevCommand": "npm run dev",
 		"beforeBuildCommand": "npm run build",
@@ -12,7 +12,7 @@
 	"app": {
 		"windows": [
 			{
-				"title": "Alpen Multisig Hello",
+				"title": "Alpen Multisig",
 				"width": 900,
 				"height": 700,
 				"resizable": true

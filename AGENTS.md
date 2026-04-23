@@ -21,9 +21,9 @@ docs/
 ```bash
 cargo build                                # Build entire workspace
 cargo test                                 # Run all tests
-cargo test -p orchestator-be               # Test backend only
+cargo test -p orchestrator-be               # Test backend only
 cargo test -p alpen-multisig-e2e-tests     # Run e2e tests only
-cargo test -p orchestator-be -- test_name  # Run a single test
+cargo test -p orchestrator-be -- test_name  # Run a single test
 cargo clippy                               # Lint
 cargo fmt --check                          # Format check
 ```
@@ -39,18 +39,18 @@ cd desktop-app && npm run tauri dev   # Full desktop app (Rust + React)
 
 ### Running the System
 
-1. Backend: `cargo run -p orchestator-be` (starts Axum server on port 3000)
+1. Backend: `cargo run -p orchestrator-be` (starts Axum server on port 3000)
 2. Desktop: `cd desktop-app && npm run tauri dev`
 
 ## Architecture
 
-**Cargo workspace** with 3 members: `orchestator-be`, `desktop-app/src-tauri`, `e2e-tests`
+**Cargo workspace** with 3 members: `orchestrator-be`, `desktop-app/src-tauri`, `e2e-tests`
 
-- **`orchestator-be`** — Offchain coordination backend (Axum HTTP). Domain-driven layout: `domain/`, `handlers/`, `middleware/`, `state.rs`, `config.rs`, `error.rs`. Entry: `src/main.rs`
+- **`orchestrator-be`** — Offchain coordination backend (Axum HTTP). Domain-driven layout: `domain/`, `application/`, `infrastructure/`, `handlers/`, `state.rs`, `config.rs`, `error.rs`. Entry: `src/main.rs`
 - **`desktop-app/src-tauri`** — Tauri 2 desktop shell. Rust backend process communicates with React frontend via IPC (`invoke()`). Entry: `src/main.rs`
 - **`e2e-tests`** — Workspace member. Integration tests against Alpen/Strata protocol crates. See `docs/architecture/adrs/001-alpen-crate-dependencies.md` for dependency strategy.
 
-**Frontend** (`desktop-app/src/`): React 18 + TypeScript + TailwindCSS + Vite + react-router-dom. Layout: `api/`, `hooks/`, `types/`, `App.tsx`, `main.tsx`
+**Frontend** (`desktop-app/src/`): React 18 + TypeScript + Vite + react-router-dom. Current layout: `components/`, `contexts/`, `hooks/`, `screens/`, `wallet/`, `api/tauri-bridge.ts`, `api/signing.ts`, `types/`, `App.tsx`, `main.tsx`
 
 **Full architecture:** `docs/architecture/overview.md`
 
@@ -76,5 +76,5 @@ Rules in `.claude/rules/` auto-load based on `paths` frontmatter — only the ru
 
 - `typescript-standards.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
 - `react-frontend-patterns.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
-- `rust-backend-standards.md` — Loaded for `orchestator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs`
-- `backend-api-conventions.md` — Loaded for `orchestator-be/**/*.rs`
+- `rust-backend-standards.md` — Loaded for `orchestrator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs`
+- `backend-api-conventions.md` — Loaded for `orchestrator-be/**/*.rs`

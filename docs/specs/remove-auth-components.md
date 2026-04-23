@@ -1,19 +1,21 @@
 # Spec: Remove Unused Authentication Components and Dead Code
 
+> Status: Implemented on `develop` (2026-04-22).
+
 ## Objective
-Remove unused authentication flow components and all other dead code from `orchestator-be` and `desktop-app`. The core `Authority` domain concept used by proposals will be preserved.
+Remove unused authentication flow components and all other dead code from `orchestrator-be` and `desktop-app`. The core `Authority` domain concept used by proposals will be preserved.
 
 ## Scope
 **Included:**
-- `orchestator-be/src/handlers/auth.rs` — handler functions
-- `orchestator-be/src/application/auth.rs` — business logic
-- `orchestator-be/src/middleware/auth.rs` — middleware
-- `orchestator-be/src/main.rs` — auth routes registration
-- `orchestator-be/src/error.rs` — Unauthorized/Forbidden variants
-- `orchestator-be/src/domain/session.rs` — AuthChallenge/SessionInfo types
-- `orchestator-be/src/application/mod.rs` — auth module declaration
-- `orchestator-be/src/handlers/mod.rs` — auth module declaration
-- `orchestator-be/src/middleware/mod.rs` — auth module declaration
+- `orchestrator-be/src/handlers/auth.rs` — handler functions
+- `orchestrator-be/src/application/auth.rs` — business logic
+- `orchestrator-be/src/middleware/auth.rs` — middleware
+- `orchestrator-be/src/main.rs` — auth routes registration
+- `orchestrator-be/src/error.rs` — Unauthorized/Forbidden variants
+- `orchestrator-be/src/domain/session.rs` — AuthChallenge/SessionInfo types
+- `orchestrator-be/src/application/mod.rs` — auth module declaration
+- `orchestrator-be/src/handlers/mod.rs` — auth module declaration
+- `orchestrator-be/src/middleware/mod.rs` — auth module declaration
 - `desktop-app/src-tauri/src/commands/auth.rs` — Tauri commands
 - `desktop-app/src-tauri/src/application/auth.rs` — orchestrator client calls
 - `desktop-app/src-tauri/src/commands/mod.rs` — auth module declaration

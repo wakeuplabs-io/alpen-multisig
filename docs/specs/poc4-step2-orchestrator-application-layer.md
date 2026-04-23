@@ -2,7 +2,7 @@
 
 ## Objective
 
-Implement the orchestrator's application layer with real business logic (replacing `todo!()` stubs) for proposal CRUD and signature collection. Tested against an in-memory repository. This is Step 2 of POC-4 as defined in `docs/2-discovery/06-poc4-plan.md`.
+Implement the orchestrator's application layer with real business logic (replacing `todo!()` stubs) for proposal CRUD and signature collection. Tested against an in-memory repository. This is Step 2 of POC-4 as defined in `docs/2-discovery/14-poc4-plan.md`.
 
 ## Scope
 
@@ -65,7 +65,7 @@ pub struct ProposalSignature {
 Per ADR-002, `application.rs` will exceed ~300 lines. Split into `application/` directory:
 
 ```
-orchestator-be/src/
+orchestrator-be/src/
 ├── application/
 │   ├── mod.rs           # Re-exports + auth stubs (unchanged todo!())
 │   ├── proposals.rs     # Business logic: create, approve, get, list
@@ -183,7 +183,7 @@ Reuse existing `AppError`:
 ## Module structure
 
 ```
-orchestator-be/src/application/
+orchestrator-be/src/application/
 ├── mod.rs           — Re-exports public API + unchanged auth stubs
 ├── proposals.rs     — Business logic for proposal CRUD (single responsibility: orchestration)
 └── repository.rs    — ProposalRepository trait + InMemoryProposalRepository (single responsibility: persistence contract)

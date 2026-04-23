@@ -35,12 +35,7 @@ mod tests {
     use tower::util::ServiceExt;
 
     fn test_app() -> Router {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
-        router(state)
+        router(AppState::new())
     }
 
     fn json_request(method: &str, uri: &str, body: Option<Value>) -> Request<Body> {
@@ -91,11 +86,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_proposal_duplicate_rejected() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
         let app = router(state.clone());
 
         // First create
@@ -141,11 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_proposals_returns_all() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
 
         // Create 2 proposals
         let app = router(state.clone());
@@ -175,11 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_proposals_filter_by_status() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
 
         let app = router(state.clone());
         let req = json_request("POST", "/proposals", Some(create_body()));
@@ -204,11 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_proposal_happy_path() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
 
         let app = router(state.clone());
         let req = json_request("POST", "/proposals", Some(create_body()));
@@ -239,11 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_approve_action_happy_path() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
 
         let app = router(state.clone());
         let req = json_request("POST", "/proposals", Some(create_body()));
@@ -270,11 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_approve_action_duplicate_signer_rejected() {
-        let config = crate::config::Config {
-            server_host: "127.0.0.1".to_string(),
-            server_port: 0,
-        };
-        let state = AppState::new(config);
+        let state = AppState::new();
 
         let app = router(state.clone());
         let req = json_request("POST", "/proposals", Some(create_body()));

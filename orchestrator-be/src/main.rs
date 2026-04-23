@@ -10,7 +10,6 @@ mod domain;
 mod error;
 mod handlers;
 mod infrastructure;
-
 mod state;
 
 #[tokio::main]
@@ -26,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = config::Config::from_env().context("failed to load config")?;
 
-    let state = state::AppState::new(config.clone());
+    let state = state::AppState::new();
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])

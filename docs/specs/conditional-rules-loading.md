@@ -26,8 +26,8 @@ Claude (`paths`) and Cursor (`globs`) use different field names but the same glo
 |------|-------|-----------|
 | `typescript-standards` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React/TS frontend code |
 | `react-frontend-patterns` | `desktop-app/src/**/*.{ts,tsx}` | Only relevant when editing React components/hooks |
-| `rust-backend-standards` | `orchestator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs` | Applies to all Rust service code (backend + Tauri shell) |
-| `backend-api-conventions` | `orchestator-be/**/*.rs` | Specific to the orchestrator HTTP API — not Tauri |
+| `rust-backend-standards` | `orchestrator-be/**/*.rs`, `desktop-app/src-tauri/**/*.rs` | Applies to all Rust service code (backend + Tauri shell) |
+| `backend-api-conventions` | `orchestrator-be/**/*.rs` | Specific to the orchestrator HTTP API — not Tauri |
 
 ### Frontmatter format differences
 
@@ -69,8 +69,8 @@ Previous Cursor globs did not match the actual project structure:
 |------|-----------------|-----------------|
 | `typescript-standards.mdc` | `**/*.{ts,tsx}` | `desktop-app/src/**/*.{ts,tsx}` |
 | `react-frontend-patterns.mdc` | `**/frontend/*.{tsx,jsx}` | `desktop-app/src/**/*.{ts,tsx}` |
-| `rust-backend-standards.mdc` | `**/*.rs` | `orchestator-be/**/*.rs, desktop-app/src-tauri/**/*.rs` |
-| `backend-api-conventions.mdc` | `**/backend/*.{rs}` | `orchestator-be/**/*.rs` |
+| `rust-backend-standards.mdc` | `**/*.rs` | `orchestrator-be/**/*.rs, desktop-app/src-tauri/**/*.rs` |
+| `backend-api-conventions.mdc` | `**/backend/*.{rs}` | `orchestrator-be/**/*.rs` |
 
 ## Test Cases
 

@@ -1,6 +1,6 @@
 # Reference — Snapshot: Governance Analogy & Learning Resources
 
-> **Status:** Superseded — educational reference. The governance model was absorbed into [`docs/3-stories/story-map.md`](../3-stories/story-map.md), [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md), and [`docs/architecture/overview.md`](../architecture/overview.md). Kept here as a mental model for onboarding engineers coming from an Ethereum background.
+> **Status:** Reference — standalone mental model for engineers coming from an Ethereum background. The Snapshot/SafeSnap/EIP-712/Reality.eth comparison in this document is not duplicated elsewhere. For the direct description of the Alpen/Strata system itself, see [`docs/architecture/overview.md`](../architecture/overview.md), [`docs/3-stories/story-map.md`](../3-stories/story-map.md), and [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md).
 
 ## Purpose
 
@@ -39,7 +39,7 @@ Voter → signs EIP-712 message { proposalId, choice, voter, timestamp } → POS
 - **Entirely off-chain.** No transaction, no gas.
 - The Hub validates: signature is valid, voter had sufficient power at the snapshot block, vote is within the time window.
 - Votes are stored in the Hub database (and optionally on IPFS for spaces that enable it).
-- The Hub is a centralized server — analogous to `orchestator-be` in this project.
+- The Hub is a centralized server — analogous to `orchestrator-be` in this project.
 
 **EIP-712 typed structured data** — Ethereum's standard for signing human-readable, domain-separated structured messages with a wallet. The concept is directly analogous to the SPS-65 sighash scheme used here:
 
@@ -81,7 +81,7 @@ Dispute → Kleros arbitration resolves it
 | Layer | Snapshot | Alpen/Strata Multisig |
 |---|---|---|
 | **Proposal identity** | IPFS CID (content hash of proposal JSON) | `ActionId = hash(MultisigAction, SeqNo)` |
-| **Off-chain coordination** | Snapshot Hub (centralized, IPFS fallback) | `orchestator-be` (Axum + in-memory repo today; Postgres deferred — see NF-6 — manual fallback) |
+| **Off-chain coordination** | Snapshot Hub (centralized, IPFS fallback) | `orchestrator-be` (Axum + in-memory repo today; Postgres deferred — see NF-6 — manual fallback) |
 | **Voting/signing** | EIP-712 via any EVM wallet | SPS-65 ECDSA via hardware wallet (HWI, `m/86'/0'/73'/0/n`) |
 | **Signature store** | Hub database per proposalId | `sigs_by_id: Map<ActionId, Vec<Signature>>` |
 | **Quorum tracking** | `for/against/abstain` tallied by voting power | `QuorumStatus { collected, required, is_reached }` |
@@ -121,7 +121,7 @@ Key difference: in Alpen/Strata the off-chain phase and the on-chain phase are *
 
 - Both are **off-chain coordination layers** decoupled from the execution layer. Neither is required for the final action — in Snapshot, someone can always submit a Safe tx directly; in this system, signers can aggregate signatures and broadcast manually without the backend.
 - Both use **content-addressed proposal identity** — Snapshot via IPFS CID, this system via deterministic hash of action + seqno. Both guarantee that re-submitting the same proposal produces the same ID (idempotent).
-- Both treat the **coordination server as non-authoritative**. The Hub does not enforce Gnosis Safe threshold rules; `orchestator-be` does not enforce ASM validity rules. Canonical validity lives exclusively on-chain.
+- Both treat the **coordination server as non-authoritative**. The Hub does not enforce Gnosis Safe threshold rules; `orchestrator-be` does not enforce ASM validity rules. Canonical validity lives exclusively on-chain.
 - Both support **copy/paste signature workflows** as a fallback — the PRD explicitly requires signers to be able to copy all approval signatures for manual broadcast.
 - Both use **time-bounded proposals** to prevent stale governance actions from executing unexpectedly.
 
@@ -131,7 +131,7 @@ Key difference: in Alpen/Strata the off-chain phase and the on-chain phase are *
 |---|---|---|
 | **Permission model** | Permissionless — any token holder can vote, power is proportional to holdings | Permissioned — fixed signer sets per authority, equal weight per signer |
 | **Governance scope** | Signal + optional on-chain execution | Always produces a Bitcoin transaction; execution is mandatory, not optional |
-| **Trust model** | Snapshot Hub is a single point of trust (though IPFS mitigates some of this) | `orchestator-be` is similar, but ASM on Bitcoin is the final arbiter |
+| **Trust model** | Snapshot Hub is a single point of trust (though IPFS mitigates some of this) | `orchestrator-be` is similar, but ASM on Bitcoin is the final arbiter |
 | **Chain** | Ethereum / EVM | Bitcoin (OP_RETURN + witness envelope) |
 | **Signing scheme** | EIP-712 (keccak256, Ethereum addresses) | SPS-65 (double-SHA256 over `tag_hash \|\| seqno_be \|\| sighash_payload`, secp256k1 recoverable ECDSA — *not* BIP-137 / BIP-322, see [`07-hardware-wallet-library-analysis.md`](./07-hardware-wallet-library-analysis.md)) |
 | **Hardware wallet UX** | Any EVM wallet (MetaMask, Ledger, Trezor via web) | HWI-compatible, Taproot, `m/86'/0'/73'/0/n`, on-device message display |
@@ -154,7 +154,7 @@ This is a deliberate divergence from Safe's strict nonce ordering. The Strata mo
 
 ### 4.1 For Understanding Snapshot's Off-Chain Coordination Model
 
-- **Snapshot Hub source** — `github.com/snapshot-labs/snapshot`: the centralized API that receives and validates vote submissions. Compare its proposal/vote storage pattern against `orchestator-be`'s `action_by_id` / `sigs_by_id` maps.
+- **Snapshot Hub source** — `github.com/snapshot-labs/snapshot`: the centralized API that receives and validates vote submissions. Compare its proposal/vote storage pattern against `orchestrator-be`'s `action_by_id` / `sigs_by_id` maps.
 - **Snapshot.js SDK** — `github.com/snapshot-labs/snapshot.js`: shows how proposals and votes are constructed, signed (EIP-712), and submitted from a TypeScript client. Compare against `desktop-app/src/api/proposals.ts` and the auth flow in `useAuth.ts`.
 
 ### 4.2 For Understanding EIP-712 vs. SPS-65 Signing
@@ -165,11 +165,11 @@ This is a deliberate divergence from Safe's strict nonce ordering. The Strata mo
 ### 4.3 For Understanding Multisig On-Chain Execution (Gnosis Safe)
 
 - **Gnosis Safe contracts** — `github.com/safe-global/safe-smart-account`: specifically `GnosisSafe.sol`'s `execTransaction` function and the nonce-based replay protection. Compare the nonce model against `ActionId = hash(MultisigAction, SeqNo)` and the `last_seqno` tracking in `MultisigAuthority`.
-- **Safe TypeScript SDK** — `github.com/safe-global/safe-core-sdk`: shows how signatures are collected off-chain (via `signTransaction`) and aggregated before the on-chain call. This is the closest analog to the `submitSignature` → `QuorumStatus` flow in `orchestator-be`.
+- **Safe TypeScript SDK** — `github.com/safe-global/safe-core-sdk`: shows how signatures are collected off-chain (via `signTransaction`) and aggregated before the on-chain call. This is the closest analog to the `submitSignature` → `QuorumStatus` flow in `orchestrator-be`.
 
 ### 4.4 For Understanding Snapshot X (Trustless On-Chain Vote Verification)
 
-- **Snapshot X monorepo** — `github.com/snapshot-labs/sx-monorepo`: the successor to SafeSnap that eliminates the optimistic oracle by proving vote results cryptographically on-chain via StarkNet. Conceptually relevant if the project ever considers reducing trust in `orchestator-be` — though the ASM already provides on-chain finality via Bitcoin, making this largely solved differently here.
+- **Snapshot X monorepo** — `github.com/snapshot-labs/sx-monorepo`: the successor to SafeSnap that eliminates the optimistic oracle by proving vote results cryptographically on-chain via StarkNet. Conceptually relevant if the project ever considers reducing trust in `orchestrator-be` — though the ASM already provides on-chain finality via Bitcoin, making this largely solved differently here.
 
 ### 4.5 For Understanding Reality.eth (Optimistic Oracle Pattern)
 

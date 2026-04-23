@@ -1,8 +1,8 @@
 [package]
 name = 'desktop-app'
 version = '0.1.0'
-description = 'Tauri hello world'
-authors = ['you']
+description = 'Alpen Multisig desktop application (Tauri + React)'
+authors = ['WakeUp Labs']
 edition = '2021'
 default-run = 'desktop-app'
 

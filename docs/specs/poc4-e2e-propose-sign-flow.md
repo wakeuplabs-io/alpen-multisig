@@ -54,7 +54,7 @@ pub mod application {
 Lives in `e2e-tests/tests/e2e_propose_sign.rs`. Depends on `desktop-app` lib.
 
 ```
-1. cargo build -p orchestator-be
+1. cargo build -p orchestrator-be
 2. Start server subprocess on random port, wait for health check
 3. Create HttpOrchestratorClient(base_url)
 4. Signer A: generate keypair, build MultisigAction, compute sighash, sign
