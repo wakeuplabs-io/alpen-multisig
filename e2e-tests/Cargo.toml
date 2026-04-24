@@ -10,6 +10,9 @@ strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
 strata-asm-common.workspace = true
+strata-asm-proto-administration = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-proto-bridge-v1 = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
@@ -39,3 +42,4 @@ hex.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
+ssz.workspace = true
