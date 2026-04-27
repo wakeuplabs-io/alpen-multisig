@@ -7,6 +7,7 @@
   "scripts": {
     "dev:desktop-app": "npm run dev --workspace desktop-app",
     "build:desktop-app": "npm run build --workspace desktop-app",
-    "tauri:desktop-app": "npm run tauri --workspace desktop-app"
+    "tauri:desktop-app": "npm run tauri --workspace desktop-app",
+    "validate": "cargo fmt --check && npm run format:check --workspace desktop-app && cargo build --workspace --all-targets && cargo clippy --workspace --all-targets -- -D warnings"
   }
 }

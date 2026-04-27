@@ -19,11 +19,11 @@ export function WalletConnectScreen() {
 		setIsAuthenticating(true)
 		try {
 			await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
-			setAuthOkMessage('OK: autenticado correctamente.')
+			setAuthOkMessage('Success: authenticated.')
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
-				setAuthError('No tiene permisos para el rol seleccionado.')
+				setAuthError('You do not have permissions for the selected role.')
 			} else {
 				setAuthError(message)
 			}
@@ -43,8 +43,14 @@ export function WalletConnectScreen() {
 							style={styles.select}
 							value={selectedRole}
 							onChange={(e) => {
-								setSelectedRole(e.target.value as typeof selectedRole)
-								setAuthError(null)
+								const nextRole = e.target.value as typeof selectedRole
+								const roleChanged = nextRole !== selectedRole
+								setSelectedRole(nextRole)
+								if (isAuthenticated && roleChanged) {
+									setAuthError('Role changed. Re-authenticate to continue.')
+								} else {
+									setAuthError(null)
+								}
 								setAuthOkMessage(null)
 							}}
 						>

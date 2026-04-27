@@ -18,6 +18,13 @@ This spec targets the desktop app first and does not require orchestrator-be par
 - Security controls: nonce, expiry, single-use challenge, domain separation
 - Fallback strategy when RPC is unavailable
 
+### Current rollout policy (hybrid)
+
+- Authentication is **fail-closed** if ASM membership RPC is unavailable. The UI must block auth and show
+  a high-signal dependency error.
+- The current release scope remains limited to roles already implemented in V1. Expansion to additional PRD
+  roles is tracked as a follow-up milestone.
+
 **NOT included (V1):**
 - Orchestrator-be auth endpoints/middleware/session issuance
 - Backend-enforced authorization

@@ -32,6 +32,14 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 		})()
 	}, [refreshSession])
 
+	useEffect(() => {
+		if (session === null || session.role === selectedRole) {
+			return
+		}
+		setSession(null)
+		void authLogout()
+	}, [selectedRole, session])
+
 	const authenticate = useCallback(
 		async (signChallenge: (challengeHex: string) => Promise<SignSighashResult>) => {
 			const challengeResult = await authStartChallenge({ role: selectedRole })

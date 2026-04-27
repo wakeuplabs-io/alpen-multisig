@@ -9,7 +9,7 @@ use crate::domain::auth::{
 use crate::infrastructure::{asm_status_rpc, challenge_verifier};
 
 const CHALLENGE_TTL_MS: u64 = 120_000;
-const SESSION_TTL_MS: u64 = 600_000;
+const SESSION_TTL_MS: u64 = 240_000;
 const MEMBERSHIP_MAX_AGE_MS: u64 = 300_000;
 const SIG_FORMAT_P2WPKH_TX_BINDING: &str = "p2wpkh-tx-binding";
 const SIG_FORMAT_BITCOIN_MESSAGE: &str = "bitcoin-message";
@@ -58,8 +58,17 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
         .map(str::to_string)
         .unwrap_or_else(asm_status_rpc::default_rpc_url);
 
-    let (role_to_keys, fetched_at_unix_ms) =
-        asm_status_rpc::fetch_role_membership(&rpc_url).await?;
+    let membership = asm_status_rpc::fetch_role_membership(&rpc_url)
+        .await
+        .map_err(|e| rpc_dependency_error(&rpc_url, &e))?;
+    start_challenge_with_membership(input, membership)
+}
+
+fn start_challenge_with_membership(
+    input: StartChallengeInput,
+    membership: (HashMap<AuthRole, Vec<String>>, u64),
+) -> Result<AuthChallenge, String> {
+    let (role_to_keys, fetched_at_unix_ms) = membership;
     if role_to_keys
         .get(&input.role)
         .is_none_or(|keys| keys.is_empty())
@@ -96,6 +105,13 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
     let mut state = auth_state()
         .lock()
         .map_err(|_| "auth state lock poisoned".to_string())?;
+    if state
+        .session
+        .as_ref()
+        .is_some_and(|current| current.role != input.role)
+    {
+        state.session = None;
+    }
     state.pending.insert(
         challenge_id,
         PendingChallenge {
@@ -109,6 +125,12 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
     });
 
     Ok(challenge)
+}
+
+fn rpc_dependency_error(rpc_url: &str, details: &str) -> String {
+    format!(
+        "authentication requires live role membership from ASM RPC; verify node/RPC availability (`{rpc_url}`). Details: {details}"
+    )
 }
 
 pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
@@ -149,7 +171,7 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
         .as_ref()
         .ok_or_else(|| "membership cache unavailable; restart auth flow".to_string())?;
     let membership_fetched_at_unix_ms = membership.fetched_at_unix_ms;
-    if now.saturating_sub(membership.fetched_at_unix_ms) > MEMBERSHIP_MAX_AGE_MS {
+    if !membership_is_fresh(now, membership.fetched_at_unix_ms) {
         return Err("membership cache is stale; start auth again".to_string());
     }
 
@@ -233,4 +255,197 @@ fn now_unix_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     duration.as_millis() as u64
+}
+
+fn membership_is_fresh(now_unix_ms: u64, fetched_at_unix_ms: u64) -> bool {
+    now_unix_ms.saturating_sub(fetched_at_unix_ms) <= MEMBERSHIP_MAX_AGE_MS
+}
+
+#[cfg(test)]
+fn reset_auth_state_for_tests() {
+    if let Ok(mut state) = auth_state().lock() {
+        state.pending.clear();
+        state.session = None;
+        state.membership_cache = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+    use std::sync::{Mutex, OnceLock};
+
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("test lock must be available")
+    }
+
+    fn test_membership(
+        role: AuthRole,
+        signer_pubkey_hex: String,
+        fetched_at_unix_ms: u64,
+    ) -> (HashMap<AuthRole, Vec<String>>, u64) {
+        let mut role_to_keys = HashMap::new();
+        role_to_keys.insert(role, vec![signer_pubkey_hex]);
+        (role_to_keys, fetched_at_unix_ms)
+    }
+
+    fn sign_challenge_for_tests(challenge_hex: &str, secret_key_bytes: [u8; 32]) -> (String, String) {
+        let secp = Secp256k1::new();
+        let sk = SecretKey::from_slice(&secret_key_bytes).expect("valid key");
+        let pk = PublicKey::from_secret_key(&secp, &sk);
+
+        let digest = hex::decode(challenge_hex).expect("valid challenge hex");
+        let msg = Message::from_digest_slice(&digest).expect("32-byte digest");
+        let signature = secp.sign_ecdsa(&msg, &sk);
+        (
+            hex::encode(pk.serialize()),
+            hex::encode(signature.serialize_compact()),
+        )
+    }
+
+    #[test]
+    fn start_challenge_fails_closed_when_rpc_unavailable() {
+        let _guard = test_lock();
+        reset_auth_state_for_tests();
+        let err = rpc_dependency_error("http://127.0.0.1:8080", "rpc down");
+        assert!(err.contains("requires live role membership"));
+        assert!(err.contains("http://127.0.0.1:8080"));
+    }
+
+    #[test]
+    fn start_challenge_recovers_after_rpc_error() {
+        let _guard = test_lock();
+        reset_auth_state_for_tests();
+        let rpc_error = rpc_dependency_error("http://127.0.0.1:8080", "rpc down");
+        assert!(!rpc_error.is_empty());
+
+        let secp = Secp256k1::new();
+        let sk = SecretKey::from_slice(&[9u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&secp, &sk);
+        let signer_hex = hex::encode(pk.serialize());
+        let now = now_unix_ms();
+        let second = start_challenge_with_membership(
+            StartChallengeInput {
+                role: AuthRole::StrataAdministrator,
+                rpc_url: None,
+            },
+            test_membership(AuthRole::StrataAdministrator, signer_hex, now),
+        );
+        assert!(second.is_ok(), "auth flow should recover once RPC is back");
+    }
+
+    #[test]
+    fn replayed_challenge_is_rejected() {
+        let _guard = test_lock();
+        reset_auth_state_for_tests();
+
+        let secp = Secp256k1::new();
+        let sk = SecretKey::from_slice(&[10u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&secp, &sk);
+        let signer_hex = hex::encode(pk.serialize());
+        let now = now_unix_ms();
+        let challenge = start_challenge_with_membership(
+            StartChallengeInput {
+                role: AuthRole::StrataAdministrator,
+                rpc_url: None,
+            },
+            test_membership(AuthRole::StrataAdministrator, signer_hex.clone(), now),
+        )
+        .expect("challenge should start");
+
+        let (_, signature_hex) = sign_challenge_for_tests(&challenge.challenge_hex, [10u8; 32]);
+        let first = complete_auth(CompleteAuthInput {
+            challenge_id: challenge.challenge_id.clone(),
+            signer_pubkey_hex: signer_hex.clone(),
+            signature_hex: signature_hex.clone(),
+            signature_format: SIG_FORMAT_P2WPKH_TX_BINDING.to_string(),
+        });
+        assert!(first.is_ok(), "expected first auth to succeed, got: {first:?}");
+
+        let second = complete_auth(CompleteAuthInput {
+            challenge_id: challenge.challenge_id,
+            signer_pubkey_hex: signer_hex,
+            signature_hex,
+            signature_format: SIG_FORMAT_P2WPKH_TX_BINDING.to_string(),
+        });
+        let err = second.expect_err("replayed challenge must be rejected");
+        assert!(err.contains("already used"));
+    }
+
+    #[test]
+    fn expired_challenge_is_rejected() {
+        let _guard = test_lock();
+        reset_auth_state_for_tests();
+        let secp = Secp256k1::new();
+        let sk = SecretKey::from_slice(&[11u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&secp, &sk);
+        let signer_hex = hex::encode(pk.serialize());
+        let now = now_unix_ms();
+
+        let challenge = start_challenge_with_membership(
+            StartChallengeInput {
+                role: AuthRole::StrataAdministrator,
+                rpc_url: None,
+            },
+            test_membership(AuthRole::StrataAdministrator, signer_hex.clone(), now),
+        )
+        .expect("challenge should start");
+
+        {
+            let mut state = auth_state().lock().expect("auth lock");
+            let pending = state
+                .pending
+                .get_mut(&challenge.challenge_id)
+                .expect("pending challenge exists");
+            pending.challenge.expires_at_unix_ms = now_unix_ms().saturating_sub(1);
+        }
+
+        let (_, signature_hex) = sign_challenge_for_tests(&challenge.challenge_hex, [11u8; 32]);
+        let result = complete_auth(CompleteAuthInput {
+            challenge_id: challenge.challenge_id,
+            signer_pubkey_hex: signer_hex,
+            signature_hex,
+            signature_format: SIG_FORMAT_P2WPKH_TX_BINDING.to_string(),
+        });
+        let err = result.expect_err("expired challenge must be rejected");
+        assert!(err.contains("expired"));
+    }
+
+    #[test]
+    fn start_challenge_clears_session_when_role_changes() {
+        let _guard = test_lock();
+        reset_auth_state_for_tests();
+        let now = now_unix_ms();
+        {
+            let mut state = auth_state().lock().expect("auth lock");
+            state.session = Some(AuthSession {
+                role: AuthRole::StrataAdministrator,
+                signer_pubkey_hex: "02aa".to_string(),
+                authenticated_at_unix_ms: now,
+                expires_at_unix_ms: now + SESSION_TTL_MS,
+                membership_fetched_at_unix_ms: now,
+            });
+        }
+
+        let secp = Secp256k1::new();
+        let sk = SecretKey::from_slice(&[12u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&secp, &sk);
+        let signer_hex = hex::encode(pk.serialize());
+
+        start_challenge_with_membership(
+            StartChallengeInput {
+                role: AuthRole::StrataSequencerManager,
+                rpc_url: None,
+            },
+            test_membership(AuthRole::StrataSequencerManager, signer_hex, now),
+        )
+        .expect("challenge should start for new role");
+
+        let session = get_session().expect("session query");
+        assert!(!session.authenticated, "role change should invalidate previous session");
+    }
 }
