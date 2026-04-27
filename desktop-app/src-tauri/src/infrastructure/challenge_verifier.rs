@@ -1,5 +1,7 @@
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{ecdsa::RecoverableSignature, ecdsa::RecoveryId, ecdsa::Signature, Message, PublicKey, SECP256K1};
+use bitcoin::secp256k1::{
+    ecdsa::RecoverableSignature, ecdsa::RecoveryId, ecdsa::Signature, Message, PublicKey, SECP256K1,
+};
 use bitcoin::sign_message::signed_msg_hash;
 use rand::RngCore;
 
@@ -35,16 +37,20 @@ pub fn verify_signature(
     signer_pubkey_hex: &str,
     signature_hex: &str,
 ) -> Result<(), String> {
-    let digest = hex::decode(challenge_digest_hex).map_err(|e| format!("invalid challenge hex: {e}"))?;
+    let digest =
+        hex::decode(challenge_digest_hex).map_err(|e| format!("invalid challenge hex: {e}"))?;
     let msg = Message::from_digest_slice(&digest)
         .map_err(|e| format!("challenge digest must be 32 bytes: {e}"))?;
 
-    let signature_bytes = hex::decode(signature_hex).map_err(|e| format!("invalid signature hex: {e}"))?;
-    let signature =
-        Signature::from_compact(&signature_bytes).map_err(|e| format!("invalid compact signature: {e}"))?;
+    let signature_bytes =
+        hex::decode(signature_hex).map_err(|e| format!("invalid signature hex: {e}"))?;
+    let signature = Signature::from_compact(&signature_bytes)
+        .map_err(|e| format!("invalid compact signature: {e}"))?;
 
-    let pubkey_bytes = hex::decode(signer_pubkey_hex).map_err(|e| format!("invalid public key hex: {e}"))?;
-    let pubkey = PublicKey::from_slice(&pubkey_bytes).map_err(|e| format!("invalid public key: {e}"))?;
+    let pubkey_bytes =
+        hex::decode(signer_pubkey_hex).map_err(|e| format!("invalid public key hex: {e}"))?;
+    let pubkey =
+        PublicKey::from_slice(&pubkey_bytes).map_err(|e| format!("invalid public key: {e}"))?;
 
     SECP256K1
         .verify_ecdsa(&msg, &signature, &pubkey)
@@ -56,7 +62,8 @@ pub fn verify_bitcoin_message_signature(
     signer_pubkey_hex: &str,
     signature_hex: &str,
 ) -> Result<(), String> {
-    let signature_bytes = hex::decode(signature_hex).map_err(|e| format!("invalid signature hex: {e}"))?;
+    let signature_bytes =
+        hex::decode(signature_hex).map_err(|e| format!("invalid signature hex: {e}"))?;
     if signature_bytes.len() != 65 {
         return Err(format!(
             "invalid bitcoin-message signature length: expected 65 bytes, got {}",
@@ -65,8 +72,8 @@ pub fn verify_bitcoin_message_signature(
     }
 
     let recid_byte = *signature_bytes.last().ok_or("missing recovery id byte")?;
-    let recid =
-        RecoveryId::from_i32(recid_byte as i32).map_err(|e| format!("invalid recovery id byte: {e}"))?;
+    let recid = RecoveryId::from_i32(recid_byte as i32)
+        .map_err(|e| format!("invalid recovery id byte: {e}"))?;
     let recoverable = RecoverableSignature::from_compact(&signature_bytes[..64], recid)
         .map_err(|e| format!("invalid recoverable signature: {e}"))?;
 

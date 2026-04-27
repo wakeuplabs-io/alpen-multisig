@@ -3,7 +3,9 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::auth::{AuthChallenge, AuthRole, AuthSession, MembershipCache, PendingChallenge};
+use crate::domain::auth::{
+    AuthChallenge, AuthRole, AuthSession, MembershipCache, PendingChallenge,
+};
 use crate::infrastructure::{asm_status_rpc, challenge_verifier};
 
 const CHALLENGE_TTL_MS: u64 = 120_000;
@@ -56,8 +58,12 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
         .map(str::to_string)
         .unwrap_or_else(asm_status_rpc::default_rpc_url);
 
-    let (role_to_keys, fetched_at_unix_ms) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
-    if role_to_keys.get(&input.role).is_none_or(|keys| keys.is_empty()) {
+    let (role_to_keys, fetched_at_unix_ms) =
+        asm_status_rpc::fetch_role_membership(&rpc_url).await?;
+    if role_to_keys
+        .get(&input.role)
+        .is_none_or(|keys| keys.is_empty())
+    {
         return Err(format!(
             "no signer keys available for role `{:?}` in current admin state",
             input.role
@@ -87,7 +93,9 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
         session_id,
     };
 
-    let mut state = auth_state().lock().map_err(|_| "auth state lock poisoned".to_string())?;
+    let mut state = auth_state()
+        .lock()
+        .map_err(|_| "auth state lock poisoned".to_string())?;
     state.pending.insert(
         challenge_id,
         PendingChallenge {
@@ -105,7 +113,9 @@ pub async fn start_challenge(input: StartChallengeInput) -> Result<AuthChallenge
 
 pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
     let signature_format = input.signature_format.as_str();
-    if signature_format != SIG_FORMAT_P2WPKH_TX_BINDING && signature_format != SIG_FORMAT_BITCOIN_MESSAGE {
+    if signature_format != SIG_FORMAT_P2WPKH_TX_BINDING
+        && signature_format != SIG_FORMAT_BITCOIN_MESSAGE
+    {
         return Err(format!(
             "unsupported signature format `{}`; expected one of: `{}`, `{}`",
             input.signature_format, SIG_FORMAT_P2WPKH_TX_BINDING, SIG_FORMAT_BITCOIN_MESSAGE
@@ -113,7 +123,9 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
     }
 
     let now = now_unix_ms();
-    let mut state = auth_state().lock().map_err(|_| "auth state lock poisoned".to_string())?;
+    let mut state = auth_state()
+        .lock()
+        .map_err(|_| "auth state lock poisoned".to_string())?;
     let (challenge_hex, role) = {
         let pending = state
             .pending
@@ -126,7 +138,10 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
         if now > pending.challenge.expires_at_unix_ms {
             return Err("challenge expired; request a new one".to_string());
         }
-        (pending.challenge.challenge_hex.clone(), pending.challenge.role)
+        (
+            pending.challenge.challenge_hex.clone(),
+            pending.challenge.role,
+        )
     };
 
     let membership = state
@@ -179,7 +194,9 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
 
 pub fn get_session() -> Result<SessionResult, String> {
     let now = now_unix_ms();
-    let mut state = auth_state().lock().map_err(|_| "auth state lock poisoned".to_string())?;
+    let mut state = auth_state()
+        .lock()
+        .map_err(|_| "auth state lock poisoned".to_string())?;
     if let Some(session) = state.session.as_ref() {
         if now <= session.expires_at_unix_ms {
             return Ok(SessionResult {
@@ -196,7 +213,9 @@ pub fn get_session() -> Result<SessionResult, String> {
 }
 
 pub fn logout() -> Result<(), String> {
-    let mut state = auth_state().lock().map_err(|_| "auth state lock poisoned".to_string())?;
+    let mut state = auth_state()
+        .lock()
+        .map_err(|_| "auth state lock poisoned".to_string())?;
     state.session = None;
     Ok(())
 }
