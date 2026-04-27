@@ -52,7 +52,12 @@ export function WalletConnectScreen() {
 							<option value="strata_sequencer_manager">Strata Sequencer Manager</option>
 						</select>
 					</label>
-					<button type="button" style={styles.continueBtn} onClick={() => void handleAuthenticate()} disabled={isAuthenticating}>
+					<button
+						type="button"
+						style={styles.continueBtn}
+						onClick={() => void handleAuthenticate()}
+						disabled={isAuthenticating}
+					>
 						{isAuthenticating ? 'Authenticating…' : 'Authenticate signer'}
 					</button>
 					{authOkMessage && <p style={styles.success}>{authOkMessage}</p>}
