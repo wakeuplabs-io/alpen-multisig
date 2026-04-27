@@ -1056,6 +1056,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bitcoin",
+ "dotenvy",
  "hex",
  "rand 0.8.5",
  "reqwest 0.12.28",
@@ -1063,7 +1064,9 @@ dependencies = [
  "serde",
  "serde_json",
  "ssz",
+ "strata-asm-common",
  "strata-asm-params",
+ "strata-asm-proto-administration",
  "strata-asm-txs-admin",
  "strata-crypto",
  "tauri",

@@ -54,7 +54,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			return {
 				publicKeyHex: result.data.publicKeyHex,
 				signatureHex: result.data.signatureHex,
-				signatureFormat: 'p2wpkh-tx-binding',
+				signatureFormat: 'bitcoin-message',
 			}
 		},
 

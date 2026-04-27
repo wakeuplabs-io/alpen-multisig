@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { useAuthSession } from '@/hooks/use-auth-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
@@ -7,6 +8,7 @@ import type { SignSighashResult } from '@/wallet/types'
 export function SignPocScreen() {
 	const navigate = useNavigate()
 	const { wallet, clearSession, adapter } = useWalletSession()
+	const { logout } = useAuthSession()
 	const [sighashHex, setSighashHex] = useState('')
 	const [isSigning, setIsSigning] = useState(false)
 	const [signError, setSignError] = useState<string | null>(null)
@@ -17,6 +19,7 @@ export function SignPocScreen() {
 	}
 
 	function handleBackToWallet() {
+		void logout()
 		clearSession()
 		navigate('/', { replace: true })
 	}

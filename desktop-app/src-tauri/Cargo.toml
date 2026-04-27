@@ -15,11 +15,14 @@ serde = { version = '1', features = ['derive'] }
 serde_json = '1'
 reqwest = { version = '0.12', features = ['json'] }
 tokio = { version = '1', features = ['full'] }
+dotenvy = "0.15"
 
 # Alpen crates (see docs/architecture/adrs/001-alpen-crate-dependencies.md)
 # From alpenlabs/asm
 strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
 strata-asm-params = { workspace = true }
+strata-asm-common = { workspace = true }
+strata-asm-proto-administration = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }
 
