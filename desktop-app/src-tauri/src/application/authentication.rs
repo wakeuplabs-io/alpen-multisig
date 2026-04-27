@@ -293,7 +293,10 @@ mod tests {
         (role_to_keys, fetched_at_unix_ms)
     }
 
-    fn sign_challenge_for_tests(challenge_hex: &str, secret_key_bytes: [u8; 32]) -> (String, String) {
+    fn sign_challenge_for_tests(
+        challenge_hex: &str,
+        secret_key_bytes: [u8; 32],
+    ) -> (String, String) {
         let secp = Secp256k1::new();
         let sk = SecretKey::from_slice(&secret_key_bytes).expect("valid key");
         let pk = PublicKey::from_secret_key(&secp, &sk);
@@ -364,7 +367,10 @@ mod tests {
             signature_hex: signature_hex.clone(),
             signature_format: SIG_FORMAT_P2WPKH_TX_BINDING.to_string(),
         });
-        assert!(first.is_ok(), "expected first auth to succeed, got: {first:?}");
+        assert!(
+            first.is_ok(),
+            "expected first auth to succeed, got: {first:?}"
+        );
 
         let second = complete_auth(CompleteAuthInput {
             challenge_id: challenge.challenge_id,
@@ -446,6 +452,9 @@ mod tests {
         .expect("challenge should start for new role");
 
         let session = get_session().expect("session query");
-        assert!(!session.authenticated, "role change should invalidate previous session");
+        assert!(
+            !session.authenticated,
+            "role change should invalidate previous session"
+        );
     }
 }
