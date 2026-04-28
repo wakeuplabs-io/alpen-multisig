@@ -2,4 +2,5 @@
 
 pub(crate) mod authentication;
 pub(crate) mod hw_wallet;
+pub(crate) mod orchestrator_auth;
 pub(crate) mod signing;

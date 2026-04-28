@@ -5,5 +5,6 @@
 //! the implementation lives in `crate::infrastructure`.
 
 pub mod authentication;
+pub mod orchestrator_auth;
 pub mod orchestrator_client;
 pub mod proposals;

@@ -3034,9 +3034,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bitcoin",
  "dotenvy",
  "hex",
  "http-body-util",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",

@@ -2,6 +2,7 @@
 //!
 //! Concrete implementations live in `crate::infrastructure`.
 
+use crate::domain::authority::Authority;
 use crate::domain::proposal::{ActionId, Proposal, ProposalStatus};
 use crate::error::AppError;
 
@@ -18,4 +19,14 @@ pub(crate) trait ProposalRepository: Send + Sync {
 
     /// List proposals, optionally filtered by status.
     fn list_by_status(&self, status: Option<ProposalStatus>) -> Vec<&Proposal>;
+}
+
+/// Read-only contract for canonical signer membership by authority.
+pub(crate) trait SignerSetRepository: Send + Sync {
+    /// Returns true when signer belongs to the canonical set of `authority`.
+    fn is_signer_for_authority(
+        &self,
+        authority: Authority,
+        signer_pubkey: &str,
+    ) -> Result<bool, AppError>;
 }
