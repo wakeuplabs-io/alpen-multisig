@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { AuthSessionProvider } from '@/contexts/auth-session-provider'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
+import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
 import { SignPocScreen } from '@/screens/sign-poc-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 
@@ -24,6 +25,14 @@ export default function App() {
 				<WalletSessionProvider>
 					<Routes>
 						<Route path="/" element={<WalletConnectScreen />} />
+						<Route
+							path="/dev/proposal"
+							element={
+								<RequireAuth>
+									<ProposalPocScreen />
+								</RequireAuth>
+							}
+						/>
 						<Route
 							path="/dev/sign"
 							element={

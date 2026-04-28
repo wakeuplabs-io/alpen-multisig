@@ -33,6 +33,11 @@ pub struct ApproveActionRequest {
     pub signature_hex: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ProposalListResponse {
+    pub proposals: Vec<Proposal>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct StartOrchestratorAuthRequest {
     pub authority: String,
@@ -92,4 +97,10 @@ pub trait OrchestratorClient: Send + Sync {
         action_id: &str,
         request: ApproveActionRequest,
     ) -> Result<Proposal, OrchestratorError>;
+
+    /// List proposals, optionally filtered by status.
+    async fn list_proposals(
+        &self,
+        status: Option<&str>,
+    ) -> Result<Vec<Proposal>, OrchestratorError>;
 }

@@ -3,7 +3,7 @@
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
     OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient, OrchestratorError,
-    StartOrchestratorAuthRequest,
+    ProposalListResponse, StartOrchestratorAuthRequest,
 };
 use crate::domain::proposal::Proposal;
 
@@ -131,6 +131,16 @@ impl OrchestratorClient for HttpOrchestratorClient {
                 .json(&request),
         )?;
         self.send_and_parse(req).await
+    }
+
+    async fn list_proposals(&self, status: Option<&str>) -> Result<Vec<Proposal>, OrchestratorError> {
+        let mut req = self.client.get(format!("{}/proposals", self.base_url));
+        if let Some(status) = status {
+            req = req.query(&[("status", status)]);
+        }
+        let req = self.with_auth_headers(req)?;
+        let response: ProposalListResponse = self.send_and_parse(req).await?;
+        Ok(response.proposals)
     }
 }
 

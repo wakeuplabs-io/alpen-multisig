@@ -12,10 +12,9 @@ pub(crate) struct InMemorySignerSetRepository {
 
 impl InMemorySignerSetRepository {
     pub(crate) fn new() -> Self {
-        // Deterministic fixture key for local/dev/test authorization:
-        // sk=1 -> 0279be...f81798, sk=2 -> 02c604...09ee5.
+        // Deterministic fixture keys for local/dev/test authorization.
         let signer_a =
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string();
+            "028c0ea5beee14a1aedeb7b6139f506321015708310eb686d1010477ef80fb6f3e".to_string();
         let signer_b_fixture =
             "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string();
         let signer_b_from_sk2 = {
@@ -26,11 +25,10 @@ impl InMemorySignerSetRepository {
             hex::encode(pk.serialize())
         };
 
+        let strata_admin_signers = HashSet::from([signer_a, signer_b_fixture, signer_b_from_sk2]);
+
         let mut memberships: HashMap<Authority, HashSet<String>> = HashMap::new();
-        memberships.insert(
-            Authority::StrataAdmin,
-            HashSet::from([signer_a, signer_b_fixture, signer_b_from_sk2]),
-        );
+        memberships.insert(Authority::StrataAdmin, strata_admin_signers);
         memberships.insert(Authority::SequencerManager, HashSet::new());
         memberships.insert(Authority::SecurityCouncil, HashSet::new());
         memberships.insert(Authority::AlpenAdmin, HashSet::new());

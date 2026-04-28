@@ -71,6 +71,15 @@ pub async fn get_update_action(
     Ok(proposal)
 }
 
+/// List proposals, optionally filtered by status.
+pub async fn list_proposals(
+    client: &dyn OrchestratorClient,
+    status: Option<&str>,
+) -> Result<Vec<Proposal>, ProposalError> {
+    let proposals = client.list_proposals(status).await?;
+    Ok(proposals)
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -241,6 +250,26 @@ mod tests {
                 signatures: vec![],
             })
         }
+
+        async fn list_proposals(
+            &self,
+            _status: Option<&str>,
+        ) -> Result<Vec<OrcProposal>, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            Ok(vec![OrcProposal {
+                action_id: "action_1".to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: "pending".to_string(),
+                signatures: vec![],
+            }])
+        }
     }
 
     // ─── Tests ──────────────────────────────────────────────────────────────
@@ -367,5 +396,15 @@ mod tests {
             result.unwrap_err(),
             ProposalError::Orchestrator(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn test_list_proposals() {
+        let mock = MockOrchestratorClient::new();
+        let proposals = list_proposals(&mock, Some("pending"))
+            .await
+            .expect("should succeed");
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].action_id, "action_1");
     }
 }
