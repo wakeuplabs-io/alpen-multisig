@@ -10,3 +10,12 @@ target/
 Thumbs.db
 node_modules
 dist/
+
+# Environment variables
+/desktop-app/src-tauri/.env
+
+# Claude settings
+/.claude/settings.local.json
+
+# Scripts
+scripts/config.json

@@ -76,7 +76,7 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 			setVerifyMessage(`Verification failed: ${result.error}`)
 			return
 		}
-		setVerifyMessage('Address confirmed on device.')
+		setVerifyMessage('Path/public key confirmed on device.')
 	}
 
 	function handleDisconnect() {
@@ -146,10 +146,14 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 						<Mono>{selectedEntry.derivationPath}</Mono>
 						<Label style={{ marginTop: '0.5rem' }}>Selected address</Label>
 						<Mono>{selectedEntry.address}</Mono>
+						<Label style={{ marginTop: '0.5rem' }}>Signer public key (for ASM keys)</Label>
+						<Mono>{selectedEntry.publicKeyHex}</Mono>
+						<Label style={{ marginTop: '0.5rem' }}>ASM config snippet (copy/paste)</Label>
+						<Mono>{buildAsmConfigSnippet(selectedEntry.publicKeyHex)}</Mono>
 					</div>
 					<div style={s.rowActions}>
 						<button style={s.btn} onClick={handleVerifyOnDevice} disabled={isVerifyingAddress}>
-							{isVerifyingAddress ? 'Check device…' : 'Verify on device'}
+							{isVerifyingAddress ? 'Check device…' : 'Verify key/path on device'}
 						</button>
 						<button style={s.btn} onClick={handleChangeAddress}>
 							Change address
@@ -158,7 +162,11 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 							Disconnect
 						</button>
 					</div>
-					{isVerifyingAddress && <p style={s.helper}>Check your Trezor screen and confirm the selected address.</p>}
+					{isVerifyingAddress && (
+						<p style={s.helper}>
+							Check your Trezor screen and confirm the selected path/public key shown by the device.
+						</p>
+					)}
 					{verifyMessage && (
 						<p style={verifyMessage.startsWith('Verification failed') ? s.errorText : s.successText}>{verifyMessage}</p>
 					)}
@@ -171,6 +179,19 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 function truncateAddr(addr: string): string {
 	if (addr.length <= 16) return addr
 	return `${addr.slice(0, 8)}…${addr.slice(-6)}`
+}
+
+function buildAsmConfigSnippet(publicKeyHex: string): string {
+	return `{
+  "authorities": {
+    "strata_administrator": {
+      "config": {
+        "keys": ["${publicKeyHex}"],
+        "threshold": 1
+      }
+    }
+  }
+}`
 }
 
 function Label({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
