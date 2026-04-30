@@ -1,3 +1,4 @@
+import { AuthoritySelectionPhase, type AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
@@ -7,16 +8,28 @@ import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
 type Props = {
 	adapter: WalletAdapter
 	onConnected: (info: WalletAccountInfo | null) => void
+	authoritySelection: {
+		selectedAuthorityId: string | null
+		options: AuthorityOption[]
+		isAuthenticating: boolean
+		isAuthenticated: boolean
+		authError: string | null
+		authOkMessage: string | null
+		onSelectAuthority: (authorityId: string) => void
+		onAuthenticate: () => void
+		onContinueProposal: () => void
+		onContinueSigning: () => void
+	} | null
 }
 
-export function HwWalletConnect({ adapter, onConnected }: Props) {
+export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
-	const isPickingPhase = state.phase === 'picking'
+	const isWidePhase = state.phase === 'picking' || (state.phase === 'selected' && authoritySelection !== null)
 
 	return (
 		<section
 			className={`w-full ${
-				isPickingPhase
+				isWidePhase
 					? 'max-w-[900px] rounded-none border-none bg-transparent p-0 shadow-none'
 					: 'max-w-[520px] rounded-2xl border border-[#e5e7eb] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
 			}`}
@@ -39,7 +52,23 @@ export function HwWalletConnect({ adapter, onConnected }: Props) {
 					onDisconnect={actions.disconnect}
 				/>
 			)}
-			{state.phase === 'selected' && state.selectedEntry && state.account && (
+			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection !== null && (
+				<AuthoritySelectionPhase
+					selectedAuthorityId={authoritySelection.selectedAuthorityId}
+					options={authoritySelection.options}
+					isAuthenticating={authoritySelection.isAuthenticating}
+					isAuthenticated={authoritySelection.isAuthenticated}
+					authError={authoritySelection.authError}
+					authOkMessage={authoritySelection.authOkMessage}
+					onSelectAuthority={authoritySelection.onSelectAuthority}
+					onAuthenticate={authoritySelection.onAuthenticate}
+					onBackToAddresses={actions.changeAddress}
+					onDisconnect={actions.disconnect}
+					onContinueProposal={authoritySelection.onContinueProposal}
+					onContinueSigning={authoritySelection.onContinueSigning}
+				/>
+			)}
+			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection === null && (
 				<SelectedPhase
 					account={state.account}
 					selectedEntry={state.selectedEntry}

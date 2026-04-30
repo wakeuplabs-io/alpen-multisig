@@ -5,13 +5,43 @@ paths:
 
 # React Frontend Patterns
 
+## Architecture by Domain
+
+- Organize frontend code by feature context under `desktop-app/src/domain/<feature>/`
+- Keep `desktop-app/src/screens/` as route roots only (entry point for each route)
+- Keep `desktop-app/src/components/` for shared branding/design-system primitives only
+- Keep feature-specific UI in `desktop-app/src/domain/<feature>/components/`
+- Keep feature state and side effects in `desktop-app/src/domain/<feature>/hooks/`
+- Keep feature type/model mapping near the feature context (`model/`, `services/`, or equivalent)
+
 ## Component and State Design
 
 - Use function components and declarative JSX
-- Keep components focused and extract reusable logic into hooks (`use*`) for wallet, session, and proposal flows
+- Keep visual components presentational: receive prepared props and emit intent through callbacks
+- Move reusable logic and state orchestration into hooks (`use*`) for wallet, session, and proposal flows
 - Prefer explicit state machines/reducers for lifecycle-heavy screens (Pending, Approved, Past, Expired, Canceled)
 - Keep multisig authority context explicit in state to prevent cross-authority data leakage in the UI
 - Prefix handlers with `handle` and keep side effects in well-scoped `useEffect` cleanup blocks
+
+## Styling
+
+- Use Tailwind CSS utility classes as the default styling approach in `desktop-app/src/**/*.{ts,tsx}`
+- Prefer composing Tailwind utility classes over adding feature-local CSS, except for global branding tokens/styles
+
+## Separation of Responsibilities
+
+- Screens compose routes: call domain hooks, wire handlers, and render domain/global components
+- Domain hooks own state, async effects, validation, and DTO-to-view-model mapping
+- Presentational components do not call APIs directly or implement business rules
+- Keep transport concerns at boundaries; do not leak backend payload shapes into presentational props
+
+## What Goes Where (Quick Reference)
+
+- `screens/*`: route-level composition only
+- `domain/<feature>/components/*`: UI specific to a single feature context
+- `domain/<feature>/hooks/use*.ts`: stateful business flow and side effects for that feature
+- `components/*`: shared UI primitives and branded reusable building blocks
+- `domain/<feature>/services/*`: typed adapters/use-case calls for external communication
 
 ## Product Flow Requirements
 

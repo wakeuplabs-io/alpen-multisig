@@ -1,7 +1,4 @@
 import type { HwAddressEntry, WalletAccountInfo } from '@/wallet/types'
-import { Label, Mono } from '@/domain/connect-wallet/components/hw-wallet-connect-shared'
-import { buildAsmConfigSnippet } from '@/domain/connect-wallet/utils/hw-wallet-connect-utils'
-
 type Props = {
 	account: WalletAccountInfo
 	selectedEntry: HwAddressEntry
@@ -13,8 +10,8 @@ type Props = {
 }
 
 export function SelectedPhase({
-	account,
-	selectedEntry,
+	account: _account,
+	selectedEntry: _selectedEntry,
 	isVerifyingAddress,
 	verifyMessage,
 	onVerifyOnDevice,
@@ -23,18 +20,6 @@ export function SelectedPhase({
 }: Props) {
 	return (
 		<>
-			<div className="mt-4 flex flex-col gap-1 rounded-lg bg-[#f9f9f9] px-4 py-3">
-				<Label>Device</Label>
-				<Mono>{account.deviceLabel}</Mono>
-				<Label className="mt-2">Selected path</Label>
-				<Mono>{selectedEntry.derivationPath}</Mono>
-				<Label className="mt-2">Selected address</Label>
-				<Mono>{selectedEntry.address}</Mono>
-				<Label className="mt-2">Signer public key (for ASM keys)</Label>
-				<Mono>{selectedEntry.publicKeyHex}</Mono>
-				<Label className="mt-2">ASM config snippet (copy/paste)</Label>
-				<Mono>{buildAsmConfigSnippet(selectedEntry.publicKeyHex)}</Mono>
-			</div>
 			<div className="flex flex-wrap gap-2">
 				<button
 					className="mt-4 w-full rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-[0.7rem] text-[0.92rem] font-medium text-white disabled:cursor-not-allowed disabled:opacity-45"
