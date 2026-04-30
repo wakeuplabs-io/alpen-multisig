@@ -10,33 +10,22 @@ export type AuthorityOption = {
 type Props = {
 	selectedAuthorityId: string | null
 	options: AuthorityOption[]
-	isAuthenticating: boolean
-	isAuthenticated: boolean
-	authError: string | null
-	authOkMessage: string | null
 	onSelectAuthority: (authorityId: string) => void
-	onAuthenticate: () => void
+	onContinueToAuthenticate: () => void
 	onBackToAddresses: () => void
 	onDisconnect: () => void
-	onContinueProposal: () => void
-	onContinueSigning: () => void
 }
 
 export function AuthoritySelectionPhase({
 	selectedAuthorityId,
 	options,
-	isAuthenticating,
-	isAuthenticated,
-	authError,
-	authOkMessage,
 	onSelectAuthority,
-	onAuthenticate,
+	onContinueToAuthenticate,
 	onBackToAddresses,
 	onDisconnect,
-	onContinueProposal,
-	onContinueSigning,
 }: Props) {
 	const selectedOption = options.find((option) => option.id === selectedAuthorityId) ?? null
+	const canContinue = selectedOption?.enabled === true
 
 	return (
 		<div className="w-full max-w-[760px] pb-28">
@@ -98,9 +87,6 @@ export function AuthoritySelectionPhase({
 				})}
 			</div>
 
-			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
-			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
-
 			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-[#fbfbfd]/95 px-4 py-3 backdrop-blur-sm">
 				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-between rounded-xl border border-[#e5e7eb] bg-[#fbfbfd] px-4 py-3">
 					<div>
@@ -113,10 +99,10 @@ export function AuthoritySelectionPhase({
 						<button
 							type="button"
 							className="rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-70 enabled:bg-[#0a0a0a]"
-							onClick={onAuthenticate}
-							disabled={selectedOption === null || isAuthenticating}
+							onClick={onContinueToAuthenticate}
+							disabled={!canContinue}
 						>
-							{isAuthenticating ? 'Authenticating...' : 'Select ->'}
+							Select {'->'}
 						</button>
 						<button
 							type="button"
@@ -124,22 +110,6 @@ export function AuthoritySelectionPhase({
 							onClick={onDisconnect}
 						>
 							Disconnect
-						</button>
-						<button
-							type="button"
-							className="rounded-lg border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#4b5563] transition hover:bg-[#f7f7f8] disabled:cursor-not-allowed disabled:opacity-60"
-							onClick={onContinueProposal}
-							disabled={!isAuthenticated}
-						>
-							Proposal PoC
-						</button>
-						<button
-							type="button"
-							className="rounded-lg border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#4b5563] transition hover:bg-[#f7f7f8] disabled:cursor-not-allowed disabled:opacity-60"
-							onClick={onContinueSigning}
-							disabled={!isAuthenticated}
-						>
-							Signing PoC
 						</button>
 					</div>
 				</div>

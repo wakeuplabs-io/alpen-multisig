@@ -47,7 +47,9 @@ export function SelectedPhase({
 				</p>
 			)}
 			{verifyMessage && (
-				<p className={`mt-3 text-[0.85rem] ${verifyMessage.startsWith('Verification failed') ? 'text-[#c0392b]' : 'text-[#1d7a34]'}`}>
+				<p
+					className={`mt-3 text-[0.85rem] ${verifyMessage.startsWith('Verification failed') ? 'text-[#c0392b]' : 'text-[#1d7a34]'}`}
+				>
 					{verifyMessage}
 				</p>
 			)}

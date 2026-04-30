@@ -31,8 +31,8 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 				Select your signer address
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Choose which BIP-86 derived address represents you in this session. Your authority permissions are keyed
-				to this address.
+				Choose which BIP-86 derived address represents you in this session. Your authority permissions are keyed to this
+				address.
 			</p>
 
 			<div className="mt-5 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white">

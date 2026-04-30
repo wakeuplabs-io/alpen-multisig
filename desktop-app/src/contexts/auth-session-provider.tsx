@@ -13,7 +13,7 @@ import type { SignSighashResult } from '@/wallet/types'
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
 	const [session, setSession] = useState<AuthSession | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
-	const [selectedRole, setSelectedRole] = useState<AuthRole>('strata_administrator')
+	const [selectedRole, setSelectedRole] = useState<AuthRole>(AuthRole.StrataAdministrator)
 
 	const refreshSession = useCallback(async () => {
 		const result = await authGetSession()

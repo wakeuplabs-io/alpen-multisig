@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { AuthRole } from '@/api/authentication'
+import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
@@ -19,7 +19,7 @@ type AuthorityOption = {
 const AUTHORITY_OPTIONS: AuthorityOption[] = [
 	{
 		id: 'strata-administrator',
-		role: 'strata_administrator',
+		role: AuthRole.StrataAdministrator,
 		label: 'Strata Administrator',
 		description: 'Strata protocol parameters (verification key, signers, operators, bridge, safe harbor).',
 		signerSetSource: 'Strata ASM state',
@@ -28,7 +28,7 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 	},
 	{
 		id: 'strata-sequencer-manager',
-		role: null,
+		role: AuthRole.StrataSequencerManager,
 		label: 'Strata Sequencer Manager',
 		description: 'Sequencer configuration (signers, sequencer pubkey).',
 		signerSetSource: 'Strata ASM state',
@@ -59,13 +59,31 @@ export function WalletConnectScreen() {
 	const navigate = useNavigate()
 	const { wallet, setConnectedWallet, adapter } = useWalletSession()
 	const { isAuthenticated, authenticate, selectedRole, setSelectedRole } = useAuthSession()
+	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>('select-authority')
 	const [authError, setAuthError] = useState<string | null>(null)
 	const [authOkMessage, setAuthOkMessage] = useState<string | null>(null)
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
+	const defaultEnabledAuthority = useMemo(
+		() => AUTHORITY_OPTIONS.find((option) => option.enabled && option.role !== null) ?? null,
+		[],
+	)
 	const selectedAuthorityId = useMemo(
 		() => AUTHORITY_OPTIONS.find((option) => option.role === selectedRole)?.id ?? null,
 		[selectedRole],
 	)
+	const selectedAuthorityLabel = useMemo(
+		() => AUTHORITY_OPTIONS.find((option) => option.id === selectedAuthorityId)?.label ?? null,
+		[selectedAuthorityId],
+	)
+
+	useEffect(() => {
+		if (selectedAuthorityId !== null) {
+			return
+		}
+		if (defaultEnabledAuthority?.role) {
+			setSelectedRole(defaultEnabledAuthority.role)
+		}
+	}, [defaultEnabledAuthority, selectedAuthorityId, setSelectedRole])
 
 	async function handleAuthenticate() {
 		setAuthError(null)
@@ -74,6 +92,7 @@ export function WalletConnectScreen() {
 		try {
 			await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
 			setAuthOkMessage('Success: authenticated.')
+			navigate('/proposals')
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -103,6 +122,18 @@ export function WalletConnectScreen() {
 		setAuthOkMessage(null)
 	}
 
+	function handleContinueToAuthenticate() {
+		const selectedAuthority = AUTHORITY_OPTIONS.find((option) => option.id === selectedAuthorityId)
+		if (!selectedAuthority || !selectedAuthority.enabled || selectedAuthority.role === null) {
+			return
+		}
+		setAuthorityStep('authenticate-session')
+	}
+
+	function handleBackToAuthoritySelection() {
+		setAuthorityStep('select-authority')
+	}
+
 	return (
 		<ScreenShell>
 			<HwWalletConnect
@@ -111,16 +142,18 @@ export function WalletConnectScreen() {
 				authoritySelection={
 					wallet !== null
 						? {
+								step: authorityStep,
 								selectedAuthorityId,
+								selectedAuthorityLabel,
 								options: AUTHORITY_OPTIONS,
 								isAuthenticating,
 								isAuthenticated,
 								authError,
 								authOkMessage,
 								onSelectAuthority: handleSelectAuthority,
+								onContinueToAuthenticate: handleContinueToAuthenticate,
+								onBackToAuthority: handleBackToAuthoritySelection,
 								onAuthenticate: () => void handleAuthenticate(),
-								onContinueProposal: () => navigate('/dev/proposal'),
-								onContinueSigning: () => navigate('/dev/sign'),
 							}
 						: null
 				}

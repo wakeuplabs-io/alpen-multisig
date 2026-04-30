@@ -1,8 +1,9 @@
 import type { ApiResult } from '@/types'
+import { AuthRole } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
 import type { SignatureFormat } from '@/wallet/types'
 
-export type AuthRole = 'strata_administrator' | 'strata_sequencer_manager'
+export { AuthRole } from '@/types'
 
 export type StartChallengeInput = {
 	role: AuthRole

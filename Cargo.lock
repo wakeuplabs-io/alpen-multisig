@@ -46,6 +46,7 @@ dependencies = [
  "reqwest 0.12.28",
  "secp256k1",
  "serde_json",
+ "ssz",
  "strata-asm-common",
  "strata-asm-manifest-types",
  "strata-asm-params",

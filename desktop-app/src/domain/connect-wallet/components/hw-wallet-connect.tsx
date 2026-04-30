@@ -1,4 +1,8 @@
-import { AuthoritySelectionPhase, type AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
+import {
+	AuthoritySelectionPhase,
+	type AuthorityOption,
+} from '@/domain/connect-wallet/components/authority-selection-phase'
+import { AuthenticateSessionPhase } from '@/domain/connect-wallet/components/authenticate-session-phase'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
@@ -9,16 +13,18 @@ type Props = {
 	adapter: WalletAdapter
 	onConnected: (info: WalletAccountInfo | null) => void
 	authoritySelection: {
+		step: 'select-authority' | 'authenticate-session'
 		selectedAuthorityId: string | null
+		selectedAuthorityLabel: string | null
 		options: AuthorityOption[]
 		isAuthenticating: boolean
 		isAuthenticated: boolean
 		authError: string | null
 		authOkMessage: string | null
 		onSelectAuthority: (authorityId: string) => void
+		onContinueToAuthenticate: () => void
+		onBackToAuthority: () => void
 		onAuthenticate: () => void
-		onContinueProposal: () => void
-		onContinueSigning: () => void
 	} | null
 }
 
@@ -52,22 +58,35 @@ export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Pr
 					onDisconnect={actions.disconnect}
 				/>
 			)}
-			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection !== null && (
-				<AuthoritySelectionPhase
-					selectedAuthorityId={authoritySelection.selectedAuthorityId}
-					options={authoritySelection.options}
-					isAuthenticating={authoritySelection.isAuthenticating}
-					isAuthenticated={authoritySelection.isAuthenticated}
-					authError={authoritySelection.authError}
-					authOkMessage={authoritySelection.authOkMessage}
-					onSelectAuthority={authoritySelection.onSelectAuthority}
-					onAuthenticate={authoritySelection.onAuthenticate}
-					onBackToAddresses={actions.changeAddress}
-					onDisconnect={actions.disconnect}
-					onContinueProposal={authoritySelection.onContinueProposal}
-					onContinueSigning={authoritySelection.onContinueSigning}
-				/>
-			)}
+			{state.phase === 'selected' &&
+				state.selectedEntry &&
+				state.account &&
+				authoritySelection !== null &&
+				authoritySelection.step === 'select-authority' && (
+					<AuthoritySelectionPhase
+						selectedAuthorityId={authoritySelection.selectedAuthorityId}
+						options={authoritySelection.options}
+						onSelectAuthority={authoritySelection.onSelectAuthority}
+						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
+						onBackToAddresses={actions.changeAddress}
+						onDisconnect={actions.disconnect}
+					/>
+				)}
+			{state.phase === 'selected' &&
+				state.selectedEntry &&
+				state.account &&
+				authoritySelection !== null &&
+				authoritySelection.step === 'authenticate-session' && (
+					<AuthenticateSessionPhase
+						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
+						signerAddress={state.selectedEntry.address}
+						isAuthenticating={authoritySelection.isAuthenticating}
+						authError={authoritySelection.authError}
+						authOkMessage={authoritySelection.authOkMessage}
+						onBackToAuthority={authoritySelection.onBackToAuthority}
+						onAuthenticate={authoritySelection.onAuthenticate}
+					/>
+				)}
 			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection === null && (
 				<SelectedPhase
 					account={state.account}
