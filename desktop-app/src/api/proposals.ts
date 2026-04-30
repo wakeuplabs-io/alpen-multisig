@@ -1,11 +1,13 @@
 import type { ApiResult } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
 
+export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired'
+
 export type Proposal = {
 	actionId: string
 	seqNo: number
 	authority: string
-	status: string
+	status: ProposalStatus
 	actionHex: string
 	signatures: Array<{
 		signerPubkey: string
@@ -23,7 +25,7 @@ export type CreateProposalInput = {
 
 export type ListProposalsInput = {
 	baseUrl: string
-	status?: string
+	status?: ProposalStatus
 }
 
 export function createProposal(input: CreateProposalInput): Promise<ApiResult<Proposal>> {

@@ -17,6 +17,10 @@ export function AuthenticateSessionPhase({
 	onBackToAuthority,
 	onAuthenticate,
 }: Props) {
+	const authenticateButtonClassName = isAuthenticating
+		? 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
+		: 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
+
 	return (
 		<div className="w-full max-w-[760px] pb-28">
 			<div className="mb-3 flex items-center justify-between">
@@ -67,11 +71,11 @@ export function AuthenticateSessionPhase({
 			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
 			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
 
-			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-[#fbfbfd]/95 px-4 py-3 backdrop-blur-sm">
-				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-end gap-2 rounded-xl border border-[#e5e7eb] bg-[#fbfbfd] px-4 py-3">
+			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur-sm">
+				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-end gap-2">
 					<button
 						type="button"
-						className="rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-70 enabled:bg-[#0a0a0a]"
+						className={authenticateButtonClassName}
 						onClick={onAuthenticate}
 						disabled={isAuthenticating}
 					>

@@ -1,11 +1,11 @@
+use crate::application::traits::ProposalRepository;
 use crate::domain::auth::{AuthSession, PendingAuthChallenge};
-use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub repo: Arc<RwLock<InMemoryProposalRepository>>,
+    pub repo: Arc<dyn ProposalRepository>,
     pub asm_rpc_url: Arc<String>,
     pub challenges: Arc<RwLock<HashMap<String, PendingAuthChallenge>>>,
     pub sessions: Arc<RwLock<HashMap<String, AuthSession>>>,
@@ -14,9 +14,14 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(asm_rpc_url: String, auth_challenge_ttl_ms: u64, auth_session_ttl_ms: u64) -> Self {
+    pub fn new(
+        repo: Arc<dyn ProposalRepository>,
+        asm_rpc_url: String,
+        auth_challenge_ttl_ms: u64,
+        auth_session_ttl_ms: u64,
+    ) -> Self {
         Self {
-            repo: Arc::new(RwLock::new(InMemoryProposalRepository::new())),
+            repo,
             asm_rpc_url: Arc::new(asm_rpc_url),
             challenges: Arc::new(RwLock::new(HashMap::new())),
             sessions: Arc::new(RwLock::new(HashMap::new())),

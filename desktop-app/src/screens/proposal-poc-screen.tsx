@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { buildAdminMultisigUpdateHex } from '@/api/action-builder'
-import { createProposal, listProposals, type Proposal } from '@/api/proposals'
+import { createProposal, listProposals, type Proposal, type ProposalStatus } from '@/api/proposals'
 import { computeSighash, signSighashMock, type SignatureResult } from '@/api/signing'
 import { tauriCall } from '@/api/tauri-bridge'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -19,6 +19,7 @@ type RawOrchestratorAuthSession = {
 }
 
 export function ProposalPocScreen() {
+	const navigate = useNavigate()
 	const { wallet, adapter } = useWalletSession()
 	const [baseUrl, setBaseUrl] = useState('http://127.0.0.1:3000/api/v1')
 	const trimmedBaseUrl = useMemo(() => baseUrl.trim(), [baseUrl])
@@ -167,7 +168,7 @@ export function ProposalPocScreen() {
 		try {
 			const listRes = await listProposals({
 				baseUrl: trimmedBaseUrl,
-				status: statusFilter.trim() === '' ? undefined : statusFilter.trim(),
+				status: parseStatusFilter(statusFilter),
 			})
 			if (!listRes.ok) {
 				throw new Error(listRes.error)
@@ -182,6 +183,11 @@ export function ProposalPocScreen() {
 
 	return (
 		<ScreenShell>
+			<section style={styles.panel}>
+				<button type="button" style={styles.secondaryButton} onClick={() => navigate('/proposals')}>
+					← Back to proposals
+				</button>
+			</section>
 			<section style={styles.panel}>
 				<h3 style={styles.title}>Proposal UI PoC (create + list)</h3>
 				<label style={styles.label}>
@@ -333,6 +339,23 @@ export function ProposalPocScreen() {
 	)
 }
 
+function parseStatusFilter(value: string): ProposalStatus | undefined {
+	const candidate = value.trim()
+	if (candidate === '') {
+		return undefined
+	}
+	if (
+		candidate === 'pending' ||
+		candidate === 'approved' ||
+		candidate === 'enacted' ||
+		candidate === 'canceled' ||
+		candidate === 'expired'
+	) {
+		return candidate
+	}
+	return undefined
+}
+
 const styles = {
 	panel: {
 		width: '100%',
@@ -388,6 +411,18 @@ const styles = {
 		borderRadius: 8,
 		cursor: 'pointer',
 		fontSize: '0.9rem',
+	} as CSSProperties,
+	secondaryButton: {
+		display: 'inline-flex',
+		alignItems: 'center',
+		padding: '0.5rem 0.85rem',
+		background: '#f8fafc',
+		color: '#0f172a',
+		border: '1px solid #cbd5e1',
+		borderRadius: 8,
+		cursor: 'pointer',
+		fontSize: '0.85rem',
+		fontWeight: 500,
 	} as CSSProperties,
 	success: {
 		marginTop: '0.5rem',

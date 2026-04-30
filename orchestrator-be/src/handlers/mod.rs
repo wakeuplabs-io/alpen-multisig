@@ -34,10 +34,12 @@ pub fn router(state: AppState) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::memory_repo::InMemoryProposalRepository;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use serde_json::{json, Value};
+    use std::sync::Arc;
     use tower::util::ServiceExt;
 
     const SIGNER_A_SK: &str = "0000000000000000000000000000000000000000000000000000000000000001";
@@ -47,7 +49,8 @@ mod tests {
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn test_app_with_rpc_url(rpc_url: &str) -> Router {
-        router(AppState::new(rpc_url.to_string(), 120_000, 240_000))
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        router(AppState::new(repo, rpc_url.to_string(), 120_000, 240_000))
     }
 
     fn test_app() -> Router {

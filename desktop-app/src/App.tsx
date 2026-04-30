@@ -35,6 +35,14 @@ export default function App() {
 							}
 						/>
 						<Route
+							path="/proposals/create"
+							element={
+								<RequireAuth>
+									<ProposalPocScreen />
+								</RequireAuth>
+							}
+						/>
+						<Route
 							path="/dev/proposal"
 							element={
 								<RequireAuth>

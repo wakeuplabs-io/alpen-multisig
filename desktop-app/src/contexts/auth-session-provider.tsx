@@ -4,7 +4,7 @@ import {
 	authGetSession,
 	authLogout,
 	authStartChallenge,
-	type AuthRole,
+	AuthRole,
 	type AuthSession,
 } from '@/api/authentication'
 import { AuthSessionContext } from '@/contexts/auth-session-context'

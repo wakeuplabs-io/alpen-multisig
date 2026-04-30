@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+	authorityFromRole,
+	orchestratorAuthComplete,
+	orchestratorAuthStart,
+	ORCHESTRATOR_BASE_URL,
+} from '@/api/orchestrator-auth'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import { useAuthSession } from '@/hooks/use-auth-session'
@@ -91,6 +97,24 @@ export function WalletConnectScreen() {
 		setIsAuthenticating(true)
 		try {
 			await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
+			const challengeResult = await orchestratorAuthStart({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				authority: authorityFromRole(selectedRole),
+			})
+			if (!challengeResult.ok) {
+				throw new Error(challengeResult.error)
+			}
+			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
+			const completeResult = await orchestratorAuthComplete({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				challengeId: challengeResult.data.challengeId,
+				signerPubkey: signature.publicKeyHex,
+				signatureHex: signature.signatureHex,
+				signatureFormat: signature.signatureFormat,
+			})
+			if (!completeResult.ok) {
+				throw new Error(completeResult.error)
+			}
 			setAuthOkMessage('Success: authenticated.')
 			navigate('/proposals')
 		} catch (e) {
@@ -135,7 +159,7 @@ export function WalletConnectScreen() {
 	}
 
 	return (
-		<ScreenShell>
+		<ScreenShell centerContent>
 			<HwWalletConnect
 				adapter={adapter}
 				onConnected={setConnectedWallet}

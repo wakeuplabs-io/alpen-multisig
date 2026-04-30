@@ -26,6 +26,9 @@ export function AuthoritySelectionPhase({
 }: Props) {
 	const selectedOption = options.find((option) => option.id === selectedAuthorityId) ?? null
 	const canContinue = selectedOption?.enabled === true
+	const continueButtonClassName = canContinue
+		? 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
+		: 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
 
 	return (
 		<div className="w-full max-w-[760px] pb-28">
@@ -87,8 +90,8 @@ export function AuthoritySelectionPhase({
 				})}
 			</div>
 
-			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-[#fbfbfd]/95 px-4 py-3 backdrop-blur-sm">
-				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-between rounded-xl border border-[#e5e7eb] bg-[#fbfbfd] px-4 py-3">
+			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur-sm">
+				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-between">
 					<div>
 						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Authority</p>
 						<p className="m-0 mt-1 text-sm text-[#334155]">
@@ -98,7 +101,7 @@ export function AuthoritySelectionPhase({
 					<div className="flex items-center gap-2">
 						<button
 							type="button"
-							className="rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-70 enabled:bg-[#0a0a0a]"
+							className={continueButtonClassName}
 							onClick={onContinueToAuthenticate}
 							disabled={!canContinue}
 						>

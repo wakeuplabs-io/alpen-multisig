@@ -19,8 +19,8 @@ pub(crate) struct SessionContext<'a> {
 /// Create a new proposal with first signature. Rejects duplicate ActionId.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
-pub(crate) fn create_update_action(
-    repo: &mut dyn ProposalRepository,
+pub(crate) async fn create_update_action(
+    repo: &dyn ProposalRepository,
     session: SessionContext<'_>,
     seq_no: SeqNo,
     action_hex: &str,
@@ -44,7 +44,7 @@ pub(crate) fn create_update_action(
         signatures: vec![sig.clone()],
     };
 
-    repo.save_proposal(proposal.clone())?;
+    repo.save_proposal(proposal.clone()).await?;
 
     Ok(proposal)
 }
@@ -52,8 +52,8 @@ pub(crate) fn create_update_action(
 /// Add a signature to an existing proposal. Rejects duplicate signer.
 ///
 /// Mirrors PRD: `approve_action(id, sig)`.
-pub(crate) fn approve_action(
-    repo: &mut dyn ProposalRepository,
+pub(crate) async fn approve_action(
+    repo: &dyn ProposalRepository,
     session: SessionContext<'_>,
     action_id: &ActionId,
     sig: &ProposalSignature,
@@ -64,9 +64,8 @@ pub(crate) fn approve_action(
     {
         return Err(AppError::Unauthorized);
     }
-    let proposal = repo
-        .find_by_action_id_mut(action_id)
-        .ok_or(AppError::NotFound)?;
+    let existing = repo.find_by_action_id(action_id).await?;
+    let proposal = existing.ok_or(AppError::NotFound)?;
     if proposal.authority != session.authority {
         return Err(AppError::Unauthorized);
     }
@@ -80,27 +79,29 @@ pub(crate) fn approve_action(
         return Err(AppError::Conflict("signer already signed".to_string()));
     }
 
-    proposal.signatures.push(sig.clone());
+    let updated = repo
+        .add_signature(action_id, &sig.signer_pubkey, &sig.signature_hex)
+        .await?;
 
-    Ok(proposal.clone())
+    updated.ok_or(AppError::NotFound)
 }
 
 /// Get proposal by ActionId.
-pub(crate) fn get_update_action(
+pub(crate) async fn get_update_action(
     repo: &dyn ProposalRepository,
     action_id: &ActionId,
 ) -> Result<Proposal, AppError> {
     repo.find_by_action_id(action_id)
-        .cloned()
+        .await?
         .ok_or(AppError::NotFound)
 }
 
 /// List proposals, optionally filtered by status.
-pub(crate) fn list_proposals(
+pub(crate) async fn list_proposals(
     repo: &dyn ProposalRepository,
     status: Option<ProposalStatus>,
-) -> Vec<Proposal> {
-    repo.list_by_status(status).into_iter().cloned().collect()
+) -> Result<Vec<Proposal>, AppError> {
+    repo.list_by_status(status).await
 }
 
 #[cfg(test)]
@@ -130,16 +131,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_create_update_action() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_create_update_action() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let proposal = create_update_action(&mut repo, session, 1, ACTION_HEX, &sig).unwrap();
+        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+            .await
+            .unwrap();
 
         assert_eq!(proposal.seq_no, 1);
         assert_eq!(
@@ -155,39 +158,44 @@ mod tests {
         assert_eq!(proposal.action_id, expected_id);
     }
 
-    #[test]
-    fn test_create_duplicate_action_rejected() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_create_duplicate_action_rejected() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&mut repo, session.clone(), 1, ACTION_HEX, &sig).unwrap();
+        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+            .await
+            .unwrap();
 
-        let result = create_update_action(&mut repo, session, 1, ACTION_HEX, &sig);
+        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig).await;
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
 
-    #[test]
-    fn test_approve_action() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_approve_action() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created =
-            create_update_action(&mut repo, session.clone(), 1, ACTION_HEX, &sig).unwrap();
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+            .await
+            .unwrap();
 
         let session_b = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig_b().signer_pubkey,
         };
-        let updated = approve_action(&mut repo, session_b, &created.action_id, &sig_b()).unwrap();
+        let updated = approve_action(&repo, session_b, &created.action_id, &sig_b())
+            .await
+            .unwrap();
 
         assert_eq!(updated.signatures.len(), 2);
         assert_eq!(
@@ -196,115 +204,132 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_approve_duplicate_signer_rejected() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_approve_duplicate_signer_rejected() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created =
-            create_update_action(&mut repo, session.clone(), 1, ACTION_HEX, &sig).unwrap();
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+            .await
+            .unwrap();
 
         let dup_sig = ProposalSignature {
             signer_pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
                 .to_string(),
             signature_hex: "different_sig".to_string(),
         };
-        let result = approve_action(&mut repo, session, &created.action_id, &dup_sig);
+        let result = approve_action(&repo, session, &created.action_id, &dup_sig).await;
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
 
-    #[test]
-    fn test_approve_nonexistent_proposal() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_approve_nonexistent_proposal() {
+        let repo = new_repo();
         let fake_id = ActionId("nonexistent".to_string());
 
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig_a().signer_pubkey,
         };
-        let result = approve_action(&mut repo, session, &fake_id, &sig_a());
+        let result = approve_action(&repo, session, &fake_id, &sig_a()).await;
 
         assert!(matches!(result.unwrap_err(), AppError::NotFound));
     }
 
-    #[test]
-    fn test_get_update_action() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_get_update_action() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&mut repo, session, 1, ACTION_HEX, &sig).unwrap();
+        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+            .await
+            .unwrap();
 
-        let fetched = get_update_action(&repo, &created.action_id).unwrap();
+        let fetched = get_update_action(&repo, &created.action_id).await.unwrap();
 
         assert_eq!(fetched.action_id, created.action_id);
         assert_eq!(fetched.action_hex, created.action_hex);
         assert_eq!(fetched.seq_no, created.seq_no);
     }
 
-    #[test]
-    fn test_get_nonexistent_proposal() {
+    #[tokio::test]
+    async fn test_get_nonexistent_proposal() {
         let repo = new_repo();
         let fake_id = ActionId("nonexistent".to_string());
 
-        let result = get_update_action(&repo, &fake_id);
+        let result = get_update_action(&repo, &fake_id).await;
 
         assert!(matches!(result.unwrap_err(), AppError::NotFound));
     }
 
-    #[test]
-    fn test_list_proposals() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_list_proposals() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&mut repo, session.clone(), 1, "aa", &sig).unwrap();
-        create_update_action(&mut repo, session, 2, "bb", &sig).unwrap();
+        create_update_action(&repo, session.clone(), 1, "aa", &sig)
+            .await
+            .unwrap();
+        create_update_action(&repo, session, 2, "bb", &sig)
+            .await
+            .unwrap();
 
-        let all = list_proposals(&repo, None);
+        let all = list_proposals(&repo, None).await.unwrap();
         assert_eq!(all.len(), 2);
     }
 
-    #[test]
-    fn test_list_proposals_with_status_filter() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_list_proposals_with_status_filter() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&mut repo, session.clone(), 1, "aa", &sig).unwrap();
-        create_update_action(&mut repo, session, 2, "bb", &sig).unwrap();
+        create_update_action(&repo, session.clone(), 1, "aa", &sig)
+            .await
+            .unwrap();
+        create_update_action(&repo, session, 2, "bb", &sig)
+            .await
+            .unwrap();
 
-        let pending = list_proposals(&repo, Some(ProposalStatus::Pending));
+        let pending = list_proposals(&repo, Some(ProposalStatus::Pending))
+            .await
+            .unwrap();
         assert_eq!(pending.len(), 2);
 
-        let approved = list_proposals(&repo, Some(ProposalStatus::Approved));
+        let approved = list_proposals(&repo, Some(ProposalStatus::Approved))
+            .await
+            .unwrap();
         assert_eq!(approved.len(), 0);
     }
 
-    #[test]
-    fn test_create_rejects_signer_mismatch_against_session() {
-        let mut repo = new_repo();
+    #[tokio::test]
+    async fn test_create_rejects_signer_mismatch_against_session() {
+        let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         };
 
-        let err = create_update_action(&mut repo, session, 1, ACTION_HEX, &sig).unwrap_err();
+        let err = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+            .await
+            .unwrap_err();
         assert!(matches!(err, AppError::Unauthorized));
     }
 }

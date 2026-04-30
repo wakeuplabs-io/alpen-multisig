@@ -12,6 +12,10 @@ type Props = {
 
 export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, onUseAddress, onDisconnect }: Props) {
 	const selectedEntry = addresses.find((entry) => entry.index === selectedIndex) ?? null
+	const continueButtonClassName =
+		selectedEntry === null
+			? 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
+			: 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
 
 	return (
 		<div className="w-full max-w-[760px] pb-28">
@@ -62,8 +66,8 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 				</div>
 			</div>
 
-			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-[#fbfbfd]/95 px-4 py-3 backdrop-blur-sm">
-				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-between rounded-xl border border-[#e5e7eb] bg-[#fbfbfd] px-4 py-3">
+			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur-sm">
+				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-between">
 					<div>
 						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Signing as</p>
 						<p className="m-0 mt-1 font-mono text-xs text-[#334155]">
@@ -80,7 +84,7 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 						</button>
 						<button
 							type="button"
-							className="rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-70 enabled:bg-[#0a0a0a]"
+							className={continueButtonClassName}
 							onClick={onUseAddress}
 							disabled={selectedEntry === null}
 						>
