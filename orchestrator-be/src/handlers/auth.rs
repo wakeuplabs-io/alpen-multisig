@@ -2,11 +2,10 @@ use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    application::traits::SignerSetRepository,
     domain::auth::{AuthSession, PendingAuthChallenge},
     domain::authority::Authority,
     error::{AppError, Result},
-    infrastructure::auth_crypto,
+    infrastructure::{asm_role_membership, auth_crypto},
     state::AppState,
 };
 
@@ -120,9 +119,12 @@ pub async fn auth_verify(
         challenge.authority
     };
 
-    let is_member = state
-        .signer_set_repo
-        .is_signer_for_authority(authority, &body.signer_pubkey)?;
+    let is_member = asm_role_membership::is_signer_member_for_authority(
+        &state.asm_rpc_url,
+        authority,
+        &body.signer_pubkey,
+    )
+    .await?;
     if !is_member {
         return Err(AppError::Unauthorized);
     }

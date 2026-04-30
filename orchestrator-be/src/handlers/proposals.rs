@@ -57,7 +57,6 @@ pub async fn create_proposal(
 
     let proposal = proposals::create_update_action(
         &mut *repo,
-        state.signer_set_repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
             signer_pubkey: &auth.signer_pubkey,
@@ -121,7 +120,6 @@ pub async fn approve_action(
 
     let proposal = proposals::approve_action(
         &mut *repo,
-        state.signer_set_repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
             signer_pubkey: &auth.signer_pubkey,

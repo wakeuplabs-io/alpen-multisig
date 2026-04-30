@@ -46,8 +46,12 @@ mod tests {
     const NON_MEMBER_PK: &str =
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+    fn test_app_with_rpc_url(rpc_url: &str) -> Router {
+        router(AppState::new(rpc_url.to_string(), 120_000, 240_000))
+    }
+
     fn test_app() -> Router {
-        router(AppState::new(120_000, 240_000))
+        test_app_with_rpc_url("mock://asm-membership")
     }
 
     fn json_request(
@@ -151,6 +155,75 @@ mod tests {
         );
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_auth_verify_signer_a_fixture_accepted() {
+        let app = test_app();
+        let token = login(app, SIGNER_A_SK, SIGNER_A_PK).await;
+        assert!(!token.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_auth_verify_unmapped_authority_is_fail_closed() {
+        let app = test_app();
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "alpen_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let challenge = response_json(resp).await;
+        let challenge_id = challenge["challenge_id"].as_str().unwrap();
+        let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+        let signature_hex = sign_digest(SIGNER_A_SK, challenge_hex);
+
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge_id,
+                "signer_pubkey": SIGNER_A_PK,
+                "signature_hex": signature_hex,
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_auth_verify_fails_closed_when_rpc_unavailable() {
+        let app = test_app_with_rpc_url("http://127.0.0.1:1");
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "strata_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let challenge = response_json(resp).await;
+        let challenge_id = challenge["challenge_id"].as_str().unwrap();
+        let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+        let signature_hex = sign_digest(SIGNER_A_SK, challenge_hex);
+
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge_id,
+                "signer_pubkey": SIGNER_A_PK,
+                "signature_hex": signature_hex,
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

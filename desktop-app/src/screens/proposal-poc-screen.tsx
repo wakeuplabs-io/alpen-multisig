@@ -194,7 +194,12 @@ export function ProposalPocScreen() {
 						spellCheck={false}
 					/>
 				</label>
-				<button type="button" style={styles.button} onClick={() => void handleOrchestratorAuth()} disabled={isAuthenticating}>
+				<button
+					type="button"
+					style={styles.button}
+					onClick={() => void handleOrchestratorAuth()}
+					disabled={isAuthenticating}
+				>
 					{isAuthenticating ? 'Authenticating…' : 'Authenticate orchestrator session'}
 				</button>
 				{authSession && (
@@ -239,7 +244,12 @@ export function ProposalPocScreen() {
 							onChange={(e) => setBuilderThreshold(e.target.value)}
 						/>
 					</label>
-					<button type="button" style={styles.button} onClick={() => void handleBuildActionHex()} disabled={isBuildingHex}>
+					<button
+						type="button"
+						style={styles.button}
+						onClick={() => void handleBuildActionHex()}
+						disabled={isBuildingHex}
+					>
 						{isBuildingHex ? 'Building actionHex…' : 'Build actionHex'}
 					</button>
 					{builderError && <p style={styles.error}>{builderError}</p>}
@@ -250,7 +260,12 @@ export function ProposalPocScreen() {
 				</label>
 				<label style={styles.label}>
 					Action Hex
-					<textarea style={styles.textarea} value={actionHex} onChange={(e) => setActionHex(e.target.value)} spellCheck={false} />
+					<textarea
+						style={styles.textarea}
+						value={actionHex}
+						onChange={(e) => setActionHex(e.target.value)}
+						spellCheck={false}
+					/>
 				</label>
 				<label style={styles.checkboxLabel}>
 					<input type="checkbox" checked={useMockSigner} onChange={(e) => setUseMockSigner(e.target.checked)} />
@@ -295,7 +310,7 @@ export function ProposalPocScreen() {
 						type="text"
 						value={statusFilter}
 						onChange={(e) => setStatusFilter(e.target.value)}
-						placeholder='pending'
+						placeholder="pending"
 					/>
 				</label>
 				<button type="button" style={styles.button} onClick={() => void handleListProposals()} disabled={isListing}>

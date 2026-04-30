@@ -26,8 +26,8 @@ pub fn build_admin_multisig_update_hex(
 ) -> Result<BuildActionHexResponse, String> {
     let authority = Authority::from_wire(input.role.trim())
         .map_err(|e| format!("invalid role `{}`: {e}", input.role))?;
-    let new_threshold =
-        NonZeroU8::new(input.new_threshold).ok_or_else(|| "newThreshold must be > 0".to_string())?;
+    let new_threshold = NonZeroU8::new(input.new_threshold)
+        .ok_or_else(|| "newThreshold must be > 0".to_string())?;
 
     let add_keys = input
         .add_keys

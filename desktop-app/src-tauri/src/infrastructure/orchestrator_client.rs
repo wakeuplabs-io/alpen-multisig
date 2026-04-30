@@ -133,7 +133,10 @@ impl OrchestratorClient for HttpOrchestratorClient {
         self.send_and_parse(req).await
     }
 
-    async fn list_proposals(&self, status: Option<&str>) -> Result<Vec<Proposal>, OrchestratorError> {
+    async fn list_proposals(
+        &self,
+        status: Option<&str>,
+    ) -> Result<Vec<Proposal>, OrchestratorError> {
         let mut req = self.client.get(format!("{}/proposals", self.base_url));
         if let Some(status) = status {
             req = req.query(&[("status", status)]);
