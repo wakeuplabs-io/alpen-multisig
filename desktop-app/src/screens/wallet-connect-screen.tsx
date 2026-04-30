@@ -71,6 +71,14 @@ export function WalletConnectScreen() {
 					<button
 						type="button"
 						style={{ ...styles.continueBtn, ...(isAuthenticated ? {} : styles.disabled) }}
+						onClick={() => navigate('/dev/proposal')}
+						disabled={!isAuthenticated}
+					>
+						Continue to proposal creation/listing (PoC)
+					</button>
+					<button
+						type="button"
+						style={{ ...styles.continueBtn, ...(isAuthenticated ? {} : styles.disabled) }}
 						onClick={() => navigate('/dev/sign')}
 						disabled={!isAuthenticated}
 					>

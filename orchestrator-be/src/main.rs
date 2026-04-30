@@ -25,7 +25,11 @@ async fn main() -> anyhow::Result<()> {
 
     let config = config::Config::from_env().context("failed to load config")?;
 
-    let state = state::AppState::new();
+    let state = state::AppState::new(
+        config.strata_admin_state_rpc_url.clone(),
+        config.auth_challenge_ttl_ms,
+        config.auth_session_ttl_ms,
+    );
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])

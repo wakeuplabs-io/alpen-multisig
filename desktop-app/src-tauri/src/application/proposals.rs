@@ -11,7 +11,6 @@
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
 };
-use crate::domain::authority::Authority;
 use crate::domain::proposal::{Proposal, Signature};
 
 /// Errors that can occur during proposal operations.
@@ -29,13 +28,11 @@ pub enum ProposalError {
 /// function (`infrastructure::action_codec::encode_hex`).
 pub async fn create_update_action(
     client: &dyn OrchestratorClient,
-    authority: Authority,
     action_hex: &str,
     seq_no: u64,
     signature: &Signature,
 ) -> Result<Proposal, ProposalError> {
     let request = CreateProposalRequest {
-        authority: authority.as_str().to_string(),
         seq_no,
         action_hex: action_hex.to_string(),
         signer_pubkey: signature.signer_pubkey.clone(),
@@ -74,12 +71,25 @@ pub async fn get_update_action(
     Ok(proposal)
 }
 
+/// List proposals, optionally filtered by status.
+pub async fn list_proposals(
+    client: &dyn OrchestratorClient,
+    status: Option<&str>,
+) -> Result<Vec<Proposal>, ProposalError> {
+    let proposals = client.list_proposals(status).await?;
+    Ok(proposals)
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::application::orchestrator_client::OrchestratorError;
+    use crate::application::orchestrator_client::{
+        CompleteOrchestratorAuthRequest, OrchestratorAuthChallenge, OrchestratorAuthSession,
+        StartOrchestratorAuthRequest,
+    };
     use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
     use crate::domain::authority::Authority;
     use crate::domain::proposal::{Proposal as OrcProposal, ProposalSignature};
@@ -159,6 +169,24 @@ mod tests {
 
     #[async_trait::async_trait]
     impl OrchestratorClient for MockOrchestratorClient {
+        async fn auth_challenge(
+            &self,
+            _request: StartOrchestratorAuthRequest,
+        ) -> Result<OrchestratorAuthChallenge, OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
+        }
+
+        async fn auth_verify(
+            &self,
+            _request: CompleteOrchestratorAuthRequest,
+        ) -> Result<OrchestratorAuthSession, OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
+        }
+
+        async fn auth_logout(&self) -> Result<(), OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
+        }
+
         async fn create_proposal(
             &self,
             request: CreateProposalRequest,
@@ -222,6 +250,26 @@ mod tests {
                 signatures: vec![],
             })
         }
+
+        async fn list_proposals(
+            &self,
+            _status: Option<&str>,
+        ) -> Result<Vec<OrcProposal>, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            Ok(vec![OrcProposal {
+                action_id: "action_1".to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: "pending".to_string(),
+                signatures: vec![],
+            }])
+        }
     }
 
     // ─── Tests ──────────────────────────────────────────────────────────────
@@ -233,7 +281,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
+        let result = create_update_action(&mock, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -245,7 +293,6 @@ mod tests {
         let req = mock.last_create_request().expect("request sent");
         assert_eq!(req.seq_no, 1);
         assert_eq!(req.action_hex, action_hex);
-        assert_eq!(req.authority, "strata_admin");
     }
 
     #[tokio::test]
@@ -285,7 +332,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let created = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
+        let created = create_update_action(&mock, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -304,7 +351,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let _result = create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig)
+        let _result = create_update_action(&mock, &action_hex, 1, &sig)
             .await
             .expect("should succeed");
 
@@ -328,8 +375,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result =
-            create_update_action(&mock, Authority::StrataAdmin, &action_hex, 1, &sig).await;
+        let result = create_update_action(&mock, &action_hex, 1, &sig).await;
 
         assert!(matches!(
             result.unwrap_err(),
@@ -350,5 +396,15 @@ mod tests {
             result.unwrap_err(),
             ProposalError::Orchestrator(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn test_list_proposals() {
+        let mock = MockOrchestratorClient::new();
+        let proposals = list_proposals(&mock, Some("pending"))
+            .await
+            .expect("should succeed");
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].action_id, "action_1");
     }
 }

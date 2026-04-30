@@ -1,0 +1,19 @@
+import type { ApiResult } from '@/types'
+import { tauriCall } from '@/api/tauri-bridge'
+
+export type BuildAdminMultisigUpdateHexInput = {
+	role: 'strata_admin'
+	addKeys: string[]
+	removeKeys: string[]
+	newThreshold: number
+}
+
+export type BuildActionHexResponse = {
+	actionHex: string
+}
+
+export function buildAdminMultisigUpdateHex(
+	input: BuildAdminMultisigUpdateHexInput,
+): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall<BuildActionHexResponse>('build_admin_multisig_update_hex', { input })
+}

@@ -1,13 +1,16 @@
 //! HTTP implementation of the `OrchestratorClient` trait.
 
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
+    ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
+    OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient, OrchestratorError,
+    ProposalListResponse, StartOrchestratorAuthRequest,
 };
 use crate::domain::proposal::Proposal;
 
 pub struct HttpOrchestratorClient {
     base_url: String,
     client: reqwest::Client,
+    token: Option<String>,
 }
 
 impl HttpOrchestratorClient {
@@ -15,7 +18,26 @@ impl HttpOrchestratorClient {
         Self {
             base_url,
             client: reqwest::Client::new(),
+            token: None,
         }
+    }
+
+    pub fn with_bearer_token(mut self, token: String) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    fn with_auth_headers(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<reqwest::RequestBuilder, OrchestratorError> {
+        let Some(token) = &self.token else {
+            return Err(OrchestratorError::Request(
+                "missing orchestrator bearer token".to_string(),
+            ));
+        };
+
+        Ok(request.header("authorization", format!("Bearer {token}")))
     }
 
     async fn send_and_parse<T: serde::de::DeserializeOwned>(
@@ -41,21 +63,60 @@ impl HttpOrchestratorClient {
 
 #[async_trait::async_trait]
 impl OrchestratorClient for HttpOrchestratorClient {
-    async fn create_proposal(
+    async fn auth_challenge(
         &self,
-        request: CreateProposalRequest,
-    ) -> Result<Proposal, OrchestratorError> {
+        request: StartOrchestratorAuthRequest,
+    ) -> Result<OrchestratorAuthChallenge, OrchestratorError> {
         let req = self
             .client
-            .post(format!("{}/proposals", self.base_url))
+            .post(format!("{}/auth/challenge", self.base_url))
             .json(&request);
         self.send_and_parse(req).await
     }
 
-    async fn get_proposal(&self, action_id: &str) -> Result<Proposal, OrchestratorError> {
+    async fn auth_verify(
+        &self,
+        request: CompleteOrchestratorAuthRequest,
+    ) -> Result<OrchestratorAuthSession, OrchestratorError> {
         let req = self
             .client
-            .get(format!("{}/proposals/{}", self.base_url, action_id));
+            .post(format!("{}/auth/verify", self.base_url))
+            .json(&request);
+        self.send_and_parse(req).await
+    }
+
+    async fn auth_logout(&self) -> Result<(), OrchestratorError> {
+        let req =
+            self.with_auth_headers(self.client.post(format!("{}/auth/logout", self.base_url)))?;
+        let res = req
+            .send()
+            .await
+            .map_err(|e| OrchestratorError::Request(e.to_string()))?;
+        if !res.status().is_success() {
+            let status = res.status().as_u16();
+            let message = res.text().await.unwrap_or_default();
+            return Err(OrchestratorError::Backend { status, message });
+        }
+        Ok(())
+    }
+
+    async fn create_proposal(
+        &self,
+        request: CreateProposalRequest,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .post(format!("{}/proposals", self.base_url))
+                .json(&request),
+        )?;
+        self.send_and_parse(req).await
+    }
+
+    async fn get_proposal(&self, action_id: &str) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .get(format!("{}/proposals/{}", self.base_url, action_id)),
+        )?;
         self.send_and_parse(req).await
     }
 
@@ -64,10 +125,63 @@ impl OrchestratorClient for HttpOrchestratorClient {
         action_id: &str,
         request: ApproveActionRequest,
     ) -> Result<Proposal, OrchestratorError> {
-        let req = self
-            .client
-            .post(format!("{}/proposals/{}/approve", self.base_url, action_id))
-            .json(&request);
+        let req = self.with_auth_headers(
+            self.client
+                .post(format!("{}/proposals/{}/approve", self.base_url, action_id))
+                .json(&request),
+        )?;
         self.send_and_parse(req).await
+    }
+
+    async fn list_proposals(
+        &self,
+        status: Option<&str>,
+    ) -> Result<Vec<Proposal>, OrchestratorError> {
+        let mut req = self.client.get(format!("{}/proposals", self.base_url));
+        if let Some(status) = status {
+            req = req.query(&[("status", status)]);
+        }
+        let req = self.with_auth_headers(req)?;
+        let response: ProposalListResponse = self.send_and_parse(req).await?;
+        Ok(response.proposals)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn create_proposal_requires_bearer_context() {
+        let client = HttpOrchestratorClient::new("http://127.0.0.1:9".to_string());
+
+        let err = client
+            .create_proposal(CreateProposalRequest {
+                seq_no: 1,
+                action_hex: "deadbeef".to_string(),
+                signer_pubkey: "02aa".to_string(),
+                signature_hex: "sig".to_string(),
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, OrchestratorError::Request(_)));
+    }
+
+    #[tokio::test]
+    async fn create_proposal_with_bearer_attempts_http_request() {
+        let client = HttpOrchestratorClient::new("http://127.0.0.1:9".to_string())
+            .with_bearer_token("test-token".to_string());
+
+        let err = client
+            .create_proposal(CreateProposalRequest {
+                seq_no: 1,
+                action_hex: "deadbeef".to_string(),
+                signer_pubkey: "02aa".to_string(),
+                signature_hex: "sig".to_string(),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, OrchestratorError::Request(_)));
     }
 }

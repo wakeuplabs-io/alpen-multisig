@@ -1,10 +1,8 @@
 use crate::{
     application::proposals,
-    domain::{
-        authority::Authority,
-        proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
-    },
+    domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
     error::{AppError, Result},
+    handlers::auth_session::AuthenticatedSession,
     state::AppState,
 };
 use axum::{
@@ -18,7 +16,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProposalRequest {
-    pub authority: Authority,
     pub seq_no: u64,
     pub action_hex: String,
     pub signer_pubkey: String,
@@ -45,6 +42,7 @@ pub struct ProposalListResponse {
 
 pub async fn create_proposal(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Json(body): Json<CreateProposalRequest>,
 ) -> Result<(StatusCode, Json<Proposal>)> {
     let sig = ProposalSignature {
@@ -59,7 +57,10 @@ pub async fn create_proposal(
 
     let proposal = proposals::create_update_action(
         &mut *repo,
-        body.authority,
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
         body.seq_no,
         &body.action_hex,
         &sig,
@@ -70,6 +71,7 @@ pub async fn create_proposal(
 
 pub async fn list_proposals(
     State(state): State<AppState>,
+    _auth: AuthenticatedSession,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
     let repo = state
@@ -84,6 +86,7 @@ pub async fn list_proposals(
 
 pub async fn get_proposal(
     State(state): State<AppState>,
+    _auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
     let repo = state
@@ -98,9 +101,13 @@ pub async fn get_proposal(
 
 pub async fn approve_action(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
 ) -> Result<Json<Proposal>> {
+    if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
+        return Err(AppError::Unauthorized);
+    }
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -111,7 +118,15 @@ pub async fn approve_action(
         .write()
         .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
 
-    let proposal = proposals::approve_action(&mut *repo, &ActionId(action_id), &sig)?;
+    let proposal = proposals::approve_action(
+        &mut *repo,
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &ActionId(action_id),
+        &sig,
+    )?;
 
     Ok(Json(proposal))
 }
