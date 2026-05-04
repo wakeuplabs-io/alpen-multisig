@@ -37,7 +37,7 @@ export function ProposalsDashboard({
 		quorumReached.length + pending.length + executedOrCanceled.length + expiredOrSkipped.length === 0
 
 	return (
-		<section className="w-full max-w-[800px]">
+		<section className="mx-auto w-full max-w-[800px]">
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
 					<h1 className="m-0 font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">

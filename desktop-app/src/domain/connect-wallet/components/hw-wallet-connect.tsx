@@ -61,7 +61,7 @@ export function HwWalletConnect({
 		<section
 			className={`mx-auto w-full ${
 				isWidePhase
-					? 'max-w-[900px] rounded-none border-none bg-transparent p-0 shadow-none'
+					? 'max-w-[840px] rounded-none border-none bg-transparent p-0 shadow-none'
 					: 'max-w-[520px] rounded-2xl border border-[#e5e7eb] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
 			}`}
 		>

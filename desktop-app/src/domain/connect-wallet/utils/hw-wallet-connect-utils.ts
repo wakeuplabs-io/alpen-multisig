@@ -1,6 +1,8 @@
-export function truncateAddr(addr: string): string {
-	if (addr.length <= 16) return addr
-	return `${addr.slice(0, 8)}…${addr.slice(-6)}`
+export function truncateAddr(addr: string, opts?: { headChars?: number; tailChars?: number }): string {
+	const headChars = opts?.headChars ?? 8
+	const tailChars = opts?.tailChars ?? 6
+	if (addr.length <= headChars + tailChars) return addr
+	return `${addr.slice(0, headChars)}…${addr.slice(-tailChars)}`
 }
 
 export function buildAsmConfigSnippet(publicKeyHex: string): string {
