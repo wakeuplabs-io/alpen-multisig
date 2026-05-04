@@ -23,7 +23,10 @@ pub struct MultisigConfig {
     pub threshold: u8,
 }
 
-pub async fn fetch_multisig_config(rpc_url: &str, role: AuthRole) -> Result<MultisigConfig, String> {
+pub async fn fetch_multisig_config(
+    rpc_url: &str,
+    role: AuthRole,
+) -> Result<MultisigConfig, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)

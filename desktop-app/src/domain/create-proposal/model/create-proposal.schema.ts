@@ -77,11 +77,7 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 					message: 'Threshold must be an integer between 1 and 255',
 				})
 			} else if (currentMultisigSigners !== null) {
-				const resultingSignerCount = countSignersAfterUpdate(
-					currentMultisigSigners,
-					data.keysToRemove,
-					data.keysToAdd,
-				)
+				const resultingSignerCount = countSignersAfterUpdate(currentMultisigSigners, data.keysToRemove, data.keysToAdd)
 				if (thN > resultingSignerCount) {
 					ctx.addIssue({
 						code: 'custom',

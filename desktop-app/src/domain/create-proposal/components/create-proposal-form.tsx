@@ -84,9 +84,7 @@ export function CreateProposalForm({
 		reset({
 			...current,
 			keysToRemove:
-				multisigConfig.signers.length > 0
-					? multisigConfig.signers.map((s) => ({ value: s }))
-					: [{ value: '' }],
+				multisigConfig.signers.length > 0 ? multisigConfig.signers.map((s) => ({ value: s })) : [{ value: '' }],
 			threshold: String(multisigConfig.threshold),
 		})
 	}, [multisigConfigVersion, multisigConfig, reset, getValues])
@@ -117,9 +115,7 @@ export function CreateProposalForm({
 									title="Verification key update"
 									description="Rotate the Alpen VK."
 									selected={actionType === 'vk_update'}
-									onClick={() =>
-										form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })
-									}
+									onClick={() => form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })}
 								/>
 								<ActionTypeCard
 									title="Signer update"
@@ -137,16 +133,8 @@ export function CreateProposalForm({
 								label="Sequence number"
 								tooltip="The monotonically increasing sequence number for this proposal. Must match the expected next value on-chain."
 							/>
-							<input
-								type="number"
-								min={0}
-								className={numberInputClass}
-								{...form.register('seqNo')}
-								placeholder="0"
-							/>
-							{formState.errors.seqNo?.message && (
-								<p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>
-							)}
+							<input type="number" min={0} className={numberInputClass} {...form.register('seqNo')} placeholder="0" />
+							{formState.errors.seqNo?.message && <p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>}
 						</div>
 
 						<div>
@@ -157,9 +145,7 @@ export function CreateProposalForm({
 								{...form.register('title')}
 								placeholder="e.g. Rotate verification key (Q2 2026)"
 							/>
-							{formState.errors.title?.message && (
-								<p className={fieldErrorClass}>{formState.errors.title.message}</p>
-							)}
+							{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
 						</div>
 
 						{actionType === 'signer_update' ? (

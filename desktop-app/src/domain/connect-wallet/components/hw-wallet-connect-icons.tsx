@@ -6,13 +6,7 @@ export function ConnectionIcon({ state }: { state: ConnectViewState }) {
 		return <SuccessIcon tone="emerald" />
 	}
 
-	return (
-		<UsbTridentIcon
-			width={48}
-			height={48}
-			className="block max-h-full max-w-full object-contain text-[#6b7280]"
-		/>
-	)
+	return <UsbTridentIcon width={48} height={48} className="block max-h-full max-w-full object-contain text-[#6b7280]" />
 }
 
 export function SuccessIcon({ tone }: { tone: 'emerald' | 'white' }) {

@@ -116,13 +116,7 @@ export function ProposalsDashboard({
 	)
 }
 
-function EmptyState({
-	authorityLabel,
-	onCreateProposal,
-}: {
-	authorityLabel: string
-	onCreateProposal: () => void
-}) {
+function EmptyState({ authorityLabel, onCreateProposal }: { authorityLabel: string; onCreateProposal: () => void }) {
 	return (
 		<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-16 text-center">
 			<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] text-[#9ca3af]">
@@ -131,9 +125,7 @@ function EmptyState({
 			<p className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">
 				No proposals for {authorityLabel}
 			</p>
-			<p className="m-0 mt-2 text-[13px] text-[#6b7280]">
-				Create the first proposal to begin collecting signatures.
-			</p>
+			<p className="m-0 mt-2 text-[13px] text-[#6b7280]">Create the first proposal to begin collecting signatures.</p>
 			<button
 				type="button"
 				className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]"
@@ -237,16 +229,14 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
 	)
 }
 
-const STATUS_CONFIG: Record<
-	ProposalStatus,
-	{ bg: string; text: string; border: string; dot: string; label: string }
-> = {
-	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-}
+const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =
+	{
+		pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
+		approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
+		enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
+		canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
+		expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
+	}
 
 function StatusBadge({ status }: { status: ProposalStatus }) {
 	const s = STATUS_CONFIG[status]

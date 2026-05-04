@@ -58,9 +58,7 @@ export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
 						</div>
 					))}
 				</div>
-				{typeof errors.keysToAdd?.message === 'string' && (
-					<p className={fieldErrorClass}>{errors.keysToAdd.message}</p>
-				)}
+				{typeof errors.keysToAdd?.message === 'string' && <p className={fieldErrorClass}>{errors.keysToAdd.message}</p>}
 				<button
 					type="button"
 					className="mt-2 flex items-center gap-1 text-sm font-medium text-[#5b44c9] hover:text-[#4736a3]"
@@ -125,17 +123,8 @@ export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
 			</div>
 
 			<div className="max-w-[160px]">
-				<LabelWithTooltip
-					label="New threshold"
-					tooltip="Minimum number of signers required to approve a proposal."
-				/>
-				<input
-					type="number"
-					min={1}
-					max={255}
-					className={numberInputClass}
-					{...register('threshold')}
-				/>
+				<LabelWithTooltip label="New threshold" tooltip="Minimum number of signers required to approve a proposal." />
+				<input type="number" min={1} max={255} className={numberInputClass} {...register('threshold')} />
 				{errors.threshold?.message && <p className={fieldErrorClass}>{errors.threshold.message}</p>}
 			</div>
 		</>

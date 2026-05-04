@@ -18,14 +18,8 @@ import { ScreenShell } from '@/screens/screen-shell'
 
 export function ProposalsDashboardScreen() {
 	const navigate = useNavigate()
-	const {
-		wallet,
-		selectedRole,
-		sessionTimeLabel,
-		sessionWarning,
-		disconnectSession,
-		ensureOrchestratorSession,
-	} = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, ensureOrchestratorSession } =
+		useSession()
 	const [proposals, setProposals] = useState<Proposal[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -82,11 +76,7 @@ export function ProposalsDashboardScreen() {
 						{authorityLabel}
 					</span>
 
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-					/>
+					<SessionChip timeLabel={sessionTimeLabel} signerLabel={signerLabel} warning={sessionWarning} />
 
 					<button
 						type="button"
@@ -159,11 +149,7 @@ function SessionChip({
 				<ClockSessionDefaultIcon width={12} height={12} className="block shrink-0" />
 			)}
 			<span className="font-mono text-[11px] font-medium">Session · {timeLabel}</span>
-			<span
-				className="h-3 w-px"
-				style={{ background: warning ? '#fde68a' : '#e5e7eb' }}
-				aria-hidden="true"
-			/>
+			<span className="h-3 w-px" style={{ background: warning ? '#fde68a' : '#e5e7eb' }} aria-hidden="true" />
 			{warning ? (
 				<UsbSessionWarningIcon width={12} height={12} className="block shrink-0" />
 			) : (

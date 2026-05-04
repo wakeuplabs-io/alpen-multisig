@@ -3,8 +3,7 @@ import { AuthRole } from '@/types'
 import type { SignatureFormat } from '@/wallet/types'
 import { tauriCall } from '@/api/tauri-bridge'
 
-export const ORCHESTRATOR_BASE_URL =
-	import.meta.env.VITE_ORCHESTRATOR_BASE_URL ?? 'http://127.0.0.1:3000/api/v1'
+export const ORCHESTRATOR_BASE_URL = import.meta.env.VITE_ORCHESTRATOR_BASE_URL ?? 'http://127.0.0.1:3000/api/v1'
 
 export type OrchestratorAuthChallenge = {
 	challengeId: string
@@ -54,7 +53,9 @@ export function authorityFromRole(role: AuthRole): string {
 	}
 }
 
-export function orchestratorAuthStart(input: StartOrchestratorAuthInput): Promise<ApiResult<OrchestratorAuthChallenge>> {
+export function orchestratorAuthStart(
+	input: StartOrchestratorAuthInput,
+): Promise<ApiResult<OrchestratorAuthChallenge>> {
 	return tauriCall<RawOrchestratorAuthChallenge>('orchestrator_auth_start', { input }).then((result) => {
 		if (!result.ok) {
 			return result
@@ -69,7 +70,9 @@ export function orchestratorAuthStart(input: StartOrchestratorAuthInput): Promis
 	})
 }
 
-export function orchestratorAuthComplete(input: CompleteOrchestratorAuthInput): Promise<ApiResult<OrchestratorAuthSession>> {
+export function orchestratorAuthComplete(
+	input: CompleteOrchestratorAuthInput,
+): Promise<ApiResult<OrchestratorAuthSession>> {
 	return tauriCall<RawOrchestratorAuthSession>('orchestrator_auth_complete', { input }).then((result) => {
 		if (!result.ok) {
 			return result
