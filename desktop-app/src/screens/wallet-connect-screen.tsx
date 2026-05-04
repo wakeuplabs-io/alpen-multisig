@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-	authorityFromRole,
-	orchestratorAuthComplete,
-	orchestratorAuthStart,
-	ORCHESTRATOR_BASE_URL,
-} from '@/api/orchestrator-auth'
+import { LogOutMutedIcon, LogOutRedIcon } from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
-import { useAuthSession } from '@/hooks/use-auth-session'
-import { useWalletSession } from '@/hooks/use-wallet-session'
+import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 
 type AuthorityOption = {
@@ -63,8 +57,18 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 
 export function WalletConnectScreen() {
 	const navigate = useNavigate()
-	const { wallet, setConnectedWallet, adapter } = useWalletSession()
-	const { isAuthenticated, authenticate, selectedRole, setSelectedRole } = useAuthSession()
+	const {
+		wallet,
+		setConnectedWallet,
+		adapter,
+		isAuthenticated,
+		selectedRole,
+		setSelectedRole,
+		connectSession,
+		disconnectSession,
+	} = useSession()
+	const disconnectRef = useRef<(() => void) | null>(null)
+	const [showTopBarDisconnect, setShowTopBarDisconnect] = useState(false)
 	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>('select-authority')
 	const [authError, setAuthError] = useState<string | null>(null)
 	const [authOkMessage, setAuthOkMessage] = useState<string | null>(null)
@@ -96,25 +100,7 @@ export function WalletConnectScreen() {
 		setAuthOkMessage(null)
 		setIsAuthenticating(true)
 		try {
-			await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
-			const challengeResult = await orchestratorAuthStart({
-				baseUrl: ORCHESTRATOR_BASE_URL,
-				authority: authorityFromRole(selectedRole),
-			})
-			if (!challengeResult.ok) {
-				throw new Error(challengeResult.error)
-			}
-			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
-			const completeResult = await orchestratorAuthComplete({
-				baseUrl: ORCHESTRATOR_BASE_URL,
-				challengeId: challengeResult.data.challengeId,
-				signerPubkey: signature.publicKeyHex,
-				signatureHex: signature.signatureHex,
-				signatureFormat: signature.signatureFormat,
-			})
-			if (!completeResult.ok) {
-				throw new Error(completeResult.error)
-			}
+			await connectSession()
 			setAuthOkMessage('Success: authenticated.')
 			navigate('/proposals')
 		} catch (e) {
@@ -158,11 +144,43 @@ export function WalletConnectScreen() {
 		setAuthorityStep('select-authority')
 	}
 
+	async function handleHeaderDisconnect() {
+		disconnectRef.current?.()
+		await disconnectSession()
+	}
+
 	return (
-		<ScreenShell centerContent>
+		<ScreenShell
+			centerContent
+			headerContent={
+				showTopBarDisconnect ? (
+					<button
+						type="button"
+						className="group/disconnect inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						onClick={() => void handleHeaderDisconnect()}
+					>
+						<span className="relative inline-flex h-3 w-3 shrink-0">
+							<LogOutMutedIcon
+								width={12}
+								height={12}
+								className="absolute left-0 top-0 transition-opacity group-hover/disconnect:opacity-0"
+							/>
+							<LogOutRedIcon
+								width={12}
+								height={12}
+								className="absolute left-0 top-0 opacity-0 transition-opacity group-hover/disconnect:opacity-100"
+							/>
+						</span>
+						Disconnect
+					</button>
+				) : null
+			}
+		>
 			<HwWalletConnect
 				adapter={adapter}
 				onConnected={setConnectedWallet}
+				disconnectRef={disconnectRef}
+				onHardwareSessionChange={setShowTopBarDisconnect}
 				authoritySelection={
 					wallet !== null
 						? {

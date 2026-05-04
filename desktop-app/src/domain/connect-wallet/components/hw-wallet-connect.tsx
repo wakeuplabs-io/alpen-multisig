@@ -1,3 +1,4 @@
+import { useEffect, type MutableRefObject } from 'react'
 import {
 	AuthoritySelectionPhase,
 	type AuthorityOption,
@@ -12,6 +13,9 @@ import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
 type Props = {
 	adapter: WalletAdapter
 	onConnected: (info: WalletAccountInfo | null) => void
+	/** Wired to the shell header so Disconnect lives only in the top bar. */
+	disconnectRef?: MutableRefObject<(() => void) | null>
+	onHardwareSessionChange?: (active: boolean) => void
 	authoritySelection: {
 		step: 'select-authority' | 'authenticate-session'
 		selectedAuthorityId: string | null
@@ -28,9 +32,30 @@ type Props = {
 	} | null
 }
 
-export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Props) {
+export function HwWalletConnect({
+	adapter,
+	onConnected,
+	disconnectRef,
+	onHardwareSessionChange,
+	authoritySelection,
+}: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
 	const isWidePhase = state.phase === 'picking' || (state.phase === 'selected' && authoritySelection !== null)
+
+	// TODO: Refactor this to use a context
+	useEffect(() => {
+		if (!disconnectRef) {
+			return
+		}
+		disconnectRef.current = actions.disconnect
+		return () => {
+			disconnectRef.current = null
+		}
+	}, [disconnectRef, actions.disconnect])
+
+	useEffect(() => {
+		onHardwareSessionChange?.(state.phase !== 'connect')
+	}, [state.phase, onHardwareSessionChange])
 
 	return (
 		<section
@@ -55,7 +80,6 @@ export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Pr
 					onSelectIndex={actions.selectAddressIndex}
 					onBack={actions.goBackToConnect}
 					onUseAddress={actions.useAddress}
-					onDisconnect={actions.disconnect}
 				/>
 			)}
 			{state.phase === 'selected' &&
@@ -69,7 +93,6 @@ export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Pr
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
 						onBackToAddresses={actions.changeAddress}
-						onDisconnect={actions.disconnect}
 					/>
 				)}
 			{state.phase === 'selected' &&
@@ -95,7 +118,6 @@ export function HwWalletConnect({ adapter, onConnected, authoritySelection }: Pr
 					verifyMessage={state.verifyMessage}
 					onVerifyOnDevice={() => void actions.verifyOnDevice()}
 					onChangeAddress={actions.changeAddress}
-					onDisconnect={actions.disconnect}
 				/>
 			)}
 		</section>

@@ -86,6 +86,10 @@ export function orchestratorAuthComplete(input: CompleteOrchestratorAuthInput): 
 	})
 }
 
+export function orchestratorAuthLogout(baseUrl: string): Promise<ApiResult<null>> {
+	return tauriCall<null>('orchestrator_auth_logout', { baseUrl })
+}
+
 export function orchestratorAuthGetSession(): Promise<ApiResult<OrchestratorAuthSession | null>> {
 	return tauriCall<RawOrchestratorAuthSession | null>('orchestrator_auth_get_session').then((result) => {
 		if (!result.ok) {

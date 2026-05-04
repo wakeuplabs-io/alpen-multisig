@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { tauriCall } from '@/api/tauri-bridge'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
@@ -126,7 +126,7 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		setVerifyMessage('Path/public key confirmed on device.')
 	}
 
-	function disconnect() {
+	const disconnect = useCallback(() => {
 		adapter.disconnect()
 		setPhase('connect')
 		setAccount(null)
@@ -137,7 +137,7 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		setVerifyMessage(null)
 		setError(null)
 		onConnected(null)
-	}
+	}, [adapter, onConnected])
 
 	return {
 		state: {

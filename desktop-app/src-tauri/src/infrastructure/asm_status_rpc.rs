@@ -18,6 +18,32 @@ pub fn default_rpc_url() -> String {
         .unwrap_or_else(|| DEFAULT_RPC_URL.to_string())
 }
 
+pub struct MultisigConfig {
+    pub signers: Vec<String>,
+    pub threshold: u8,
+}
+
+pub async fn fetch_multisig_config(rpc_url: &str, role: AuthRole) -> Result<MultisigConfig, String> {
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    let admin = decode_admin_state(&anchor)
+        .ok_or_else(|| "admin state section is missing from AnchorState".to_string())?;
+
+    let authority = admin
+        .authority(role.to_upstream_role())
+        .ok_or_else(|| format!("admin state missing authority for role `{role:?}`"))?;
+
+    Ok(MultisigConfig {
+        signers: authority
+            .config()
+            .keys()
+            .iter()
+            .map(|k| hex::encode(k.serialize()))
+            .collect(),
+        threshold: authority.config().threshold(),
+    })
+}
+
 pub async fn fetch_role_membership(
     rpc_url: &str,
 ) -> Result<(HashMap<AuthRole, Vec<String>>, u64), String> {

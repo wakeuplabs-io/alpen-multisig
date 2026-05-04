@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { AuthSessionProvider } from '@/contexts/auth-session-provider'
+import { SessionProvider } from '@/contexts/session-provider'
 import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
@@ -24,42 +25,44 @@ export default function App() {
 		<BrowserRouter>
 			<AuthSessionProvider>
 				<WalletSessionProvider>
-					<Routes>
-						<Route path="/" element={<WalletConnectScreen />} />
-						<Route
-							path="/proposals"
-							element={
-								<RequireAuth>
-									<ProposalsDashboardScreen />
-								</RequireAuth>
-							}
-						/>
-						<Route
-							path="/proposals/create"
-							element={
-								<RequireAuth>
-									<ProposalPocScreen />
-								</RequireAuth>
-							}
-						/>
-						<Route
-							path="/dev/proposal"
-							element={
-								<RequireAuth>
-									<ProposalPocScreen />
-								</RequireAuth>
-							}
-						/>
-						<Route
-							path="/dev/sign"
-							element={
-								<RequireAuth>
-									<SignPocScreen />
-								</RequireAuth>
-							}
-						/>
-						<Route path="*" element={<Navigate to="/" replace />} />
-					</Routes>
+					<SessionProvider>
+						<Routes>
+							<Route path="/" element={<WalletConnectScreen />} />
+							<Route
+								path="/proposals"
+								element={
+									<RequireAuth>
+										<ProposalsDashboardScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/create"
+								element={
+									<RequireAuth>
+										<ProposalPocScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/dev/proposal"
+								element={
+									<RequireAuth>
+										<ProposalPocScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/dev/sign"
+								element={
+									<RequireAuth>
+										<SignPocScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route path="*" element={<Navigate to="/" replace />} />
+						</Routes>
+					</SessionProvider>
 				</WalletSessionProvider>
 			</AuthSessionProvider>
 		</BrowserRouter>

@@ -7,10 +7,9 @@ type Props = {
 	onSelectIndex: (index: number) => void
 	onBack: () => void
 	onUseAddress: () => void
-	onDisconnect: () => void
 }
 
-export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, onUseAddress, onDisconnect }: Props) {
+export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, onUseAddress }: Props) {
 	const selectedEntry = addresses.find((entry) => entry.index === selectedIndex) ?? null
 	const continueButtonClassName =
 		selectedEntry === null
@@ -75,13 +74,6 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 						</p>
 					</div>
 					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							className="rounded-lg border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#4b5563] transition hover:bg-[#f7f7f8]"
-							onClick={onDisconnect}
-						>
-							Disconnect
-						</button>
 						<button
 							type="button"
 							className={continueButtonClassName}

@@ -6,7 +6,6 @@ type Props = {
 	verifyMessage: string | null
 	onVerifyOnDevice: () => void
 	onChangeAddress: () => void
-	onDisconnect: () => void
 }
 
 export function SelectedPhase({
@@ -16,7 +15,6 @@ export function SelectedPhase({
 	verifyMessage,
 	onVerifyOnDevice,
 	onChangeAddress,
-	onDisconnect,
 }: Props) {
 	return (
 		<>
@@ -33,12 +31,6 @@ export function SelectedPhase({
 					onClick={onChangeAddress}
 				>
 					Change address
-				</button>
-				<button
-					className="mt-4 w-full rounded-lg border border-[#0a0a0a] bg-white px-4 py-[0.7rem] text-[0.92rem] font-medium text-[#222]"
-					onClick={onDisconnect}
-				>
-					Disconnect
 				</button>
 			</div>
 			{isVerifyingAddress && (

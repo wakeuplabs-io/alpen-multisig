@@ -13,7 +13,6 @@ type Props = {
 	onSelectAuthority: (authorityId: string) => void
 	onContinueToAuthenticate: () => void
 	onBackToAddresses: () => void
-	onDisconnect: () => void
 }
 
 export function AuthoritySelectionPhase({
@@ -22,7 +21,6 @@ export function AuthoritySelectionPhase({
 	onSelectAuthority,
 	onContinueToAuthenticate,
 	onBackToAddresses,
-	onDisconnect,
 }: Props) {
 	const selectedOption = options.find((option) => option.id === selectedAuthorityId) ?? null
 	const canContinue = selectedOption?.enabled === true
@@ -106,13 +104,6 @@ export function AuthoritySelectionPhase({
 							disabled={!canContinue}
 						>
 							Select {'->'}
-						</button>
-						<button
-							type="button"
-							className="rounded-lg border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#4b5563] transition hover:bg-[#f7f7f8]"
-							onClick={onDisconnect}
-						>
-							Disconnect
 						</button>
 					</div>
 				</div>

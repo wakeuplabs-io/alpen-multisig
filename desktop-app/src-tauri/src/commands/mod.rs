@@ -1,5 +1,6 @@
 //! Tauri IPC command boundary — thin wrappers that delegate to the application layer.
 
+pub(crate) mod asm_state;
 pub(crate) mod action_builder;
 pub(crate) mod authentication;
 pub(crate) mod hw_wallet;

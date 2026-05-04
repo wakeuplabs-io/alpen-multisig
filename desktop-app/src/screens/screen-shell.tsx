@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AlpenMark } from '@/assets/icons'
 
 type Props = {
 	children: ReactNode
@@ -25,14 +26,5 @@ export function ScreenShell({ children, headerContent, centerContent = false }: 
 				<div className="flex w-full max-w-[1360px] flex-col gap-5">{children}</div>
 			</main>
 		</div>
-	)
-}
-
-function AlpenMark() {
-	return (
-		<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-			<path d="M4.5 19.5L10.1 4.5h3.8l-5.5 15H4.5Z" fill="#0A0A0A" />
-			<path d="M12.2 19.5l3.7-10h3.8l-3.8 10h-3.7Z" fill="#0A0A0A" />
-		</svg>
 	)
 }
