@@ -50,13 +50,8 @@ pub async fn create_proposal(
         signature_hex: body.signature_hex,
     };
 
-    let mut repo = state
-        .repo
-        .write()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-
     let proposal = proposals::create_update_action(
-        &mut *repo,
+        state.repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
             signer_pubkey: &auth.signer_pubkey,
@@ -64,7 +59,8 @@ pub async fn create_proposal(
         body.seq_no,
         &body.action_hex,
         &sig,
-    )?;
+    )
+    .await?;
 
     Ok((StatusCode::CREATED, Json(proposal)))
 }
@@ -74,12 +70,7 @@ pub async fn list_proposals(
     _auth: AuthenticatedSession,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
-    let repo = state
-        .repo
-        .read()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-
-    let proposals = proposals::list_proposals(&*repo, query.status);
+    let proposals = proposals::list_proposals(state.repo.as_ref(), query.status).await?;
 
     Ok(Json(ProposalListResponse { proposals }))
 }
@@ -89,12 +80,7 @@ pub async fn get_proposal(
     _auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    let repo = state
-        .repo
-        .read()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-
-    let proposal = proposals::get_update_action(&*repo, &ActionId(action_id))?;
+    let proposal = proposals::get_update_action(state.repo.as_ref(), &ActionId(action_id)).await?;
 
     Ok(Json(proposal))
 }
@@ -113,20 +99,16 @@ pub async fn approve_action(
         signature_hex: body.signature_hex,
     };
 
-    let mut repo = state
-        .repo
-        .write()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-
     let proposal = proposals::approve_action(
-        &mut *repo,
+        state.repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
             signer_pubkey: &auth.signer_pubkey,
         },
         &ActionId(action_id),
         &sig,
-    )?;
+    )
+    .await?;
 
     Ok(Json(proposal))
 }

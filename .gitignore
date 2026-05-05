@@ -19,3 +19,5 @@ dist/
 
 # Scripts
 scripts/config.json
+orchestrator-be/.env
+branding/**/*

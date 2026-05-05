@@ -7,6 +7,7 @@ fn main() {
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            commands::asm_state::get_multisig_config,
             commands::action_builder::build_admin_multisig_update_hex,
             commands::authentication::auth_start_challenge,
             commands::authentication::auth_complete,

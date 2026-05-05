@@ -1,0 +1,115 @@
+import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
+import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
+import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+
+type Props = {
+	loading: boolean
+	connectViewState: ConnectViewState
+	error: string | null
+	onConnect: () => void
+}
+
+export function ConnectPhase({ loading, connectViewState, error, onConnect }: Props) {
+	const isDetecting = loading && connectViewState !== 'success'
+	const isSuccess = connectViewState === 'success'
+
+	return (
+		<>
+			{/* Device icon area */}
+			<div
+				className={`relative mb-5 flex h-33 items-center justify-center rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] ${
+					isDetecting ? 'hw-detect-pulse' : ''
+				}`}
+			>
+				<div
+					className={`relative z-10 flex h-14 w-14 items-center justify-center rounded-[14px] border bg-white transition-all duration-200 ${
+						isSuccess
+							? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#059669]'
+							: isDetecting
+								? 'border-[#ddd8ff]'
+								: 'border-[#e5e7eb]'
+					}`}
+				>
+					<ConnectionIcon state={connectViewState} />
+				</div>
+			</div>
+
+			{/* Heading */}
+			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[32px] font-normal leading-[1.2] tracking-[-0.01em] text-[#0a0a0a]">
+				{isSuccess ? 'Device connected' : 'Connect your hardware wallet'}
+			</h1>
+
+			{/* Subtitle */}
+			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
+				{isSuccess
+					? 'Trezor detected. Loading available addresses…'
+					: 'Plug in your Trezor and unlock it. We will detect the device automatically — no password or seed is ever shared.'}
+			</p>
+
+			{/* Status message */}
+			{isDetecting && (
+				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#ddd8ff] bg-[#f8f7ff] px-3.5 py-3 text-[13px]">
+					<span
+						className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2"
+						style={{ borderColor: '#ddd8ff', borderTopColor: '#9480f5' }}
+						aria-hidden="true"
+					/>
+					<div className="flex-1">
+						<div className="font-medium text-[#0a0a0a]">Detecting device…</div>
+						<div className="mt-0.5 text-[12px] text-[#6b7280]">Looking for a Trezor on USB.</div>
+					</div>
+				</div>
+			)}
+
+			{isSuccess && (
+				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] px-3.5 py-3 text-[13px]">
+					<SuccessIcon tone="emerald" />
+					<div className="flex-1">
+						<div className="font-medium text-[#059669]">Trezor Model T detected</div>
+						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to address selection…</div>
+					</div>
+				</div>
+			)}
+
+			{/* Action button */}
+			<button
+				className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-[14px] font-medium transition active:scale-[0.98] ${
+					isSuccess || isDetecting
+						? 'cursor-not-allowed border border-[#a3a3a3] bg-[#a3a3a3] text-white opacity-70'
+						: 'border border-[#0a0a0a] bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
+				}`}
+				onClick={onConnect}
+				disabled={loading || isSuccess}
+			>
+				{isSuccess ? (
+					<>
+						<SuccessIcon tone="white" />
+						Connected
+					</>
+				) : isDetecting ? (
+					'Detecting…'
+				) : (
+					<>
+						<UsbStrokeWhiteIcon width={20} height={20} className="block shrink-0" />
+						Connect wallet
+					</>
+				)}
+			</button>
+
+			{/* Security note */}
+			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-[12px] text-[#9ca3af]">
+				<ShieldCheckMutedIcon width={16} height={16} className="block shrink-0" />
+				Your keys never leave the device. Alpen only receives signatures.
+			</p>
+
+			{/* Ledger note */}
+			{!isSuccess && (
+				<p className="mb-0 mt-4 text-center text-[12px] text-[#9ca3af]">
+					Ledger support · <span className="font-medium text-[#6b7280]">Coming Soon</span>
+				</p>
+			)}
+
+			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
+		</>
+	)
+}

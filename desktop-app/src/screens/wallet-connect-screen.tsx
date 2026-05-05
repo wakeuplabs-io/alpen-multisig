@@ -1,25 +1,108 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HwWalletConnect } from '@/components/HwWalletConnect'
-import { useAuthSession } from '@/hooks/use-auth-session'
-import { useWalletSession } from '@/hooks/use-wallet-session'
+import { LogOutMutedIcon, LogOutRedIcon } from '@/assets/icons'
+import { AuthRole } from '@/types'
+import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
+import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
+
+type AuthorityOption = {
+	id: string
+	role: AuthRole | null
+	label: string
+	description: string
+	signerSetSource: string
+	availabilityLabel: string
+	enabled: boolean
+}
+
+const AUTHORITY_OPTIONS: AuthorityOption[] = [
+	{
+		id: 'strata-administrator',
+		role: AuthRole.StrataAdministrator,
+		label: 'Strata Administrator',
+		description: 'Strata protocol parameters (verification key, signers, operators, bridge, safe harbor).',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Available',
+		enabled: true,
+	},
+	{
+		id: 'strata-sequencer-manager',
+		role: AuthRole.StrataSequencerManager,
+		label: 'Strata Sequencer Manager',
+		description: 'Sequencer configuration (signers, sequencer pubkey).',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Not in v0.1',
+		enabled: false,
+	},
+	{
+		id: 'security-council',
+		role: null,
+		label: 'Security Council',
+		description: 'Emergency actions and recovery controls.',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Not in v0.1',
+		enabled: false,
+	},
+	{
+		id: 'payout-administrator',
+		role: null,
+		label: 'Payout Administrator',
+		description: 'Bridge payout spending rules and payout control.',
+		signerSetSource: 'Bridge multisig script',
+		availabilityLabel: 'Not in v0.1',
+		enabled: false,
+	},
+]
 
 export function WalletConnectScreen() {
 	const navigate = useNavigate()
-	const { wallet, setConnectedWallet, adapter } = useWalletSession()
-	const { isAuthenticated, authenticate, selectedRole, setSelectedRole } = useAuthSession()
+	const {
+		wallet,
+		setConnectedWallet,
+		adapter,
+		isAuthenticated,
+		selectedRole,
+		setSelectedRole,
+		connectSession,
+		disconnectSession,
+	} = useSession()
+	const disconnectRef = useRef<(() => void) | null>(null)
+	const [showTopBarDisconnect, setShowTopBarDisconnect] = useState(false)
+	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>('select-authority')
 	const [authError, setAuthError] = useState<string | null>(null)
 	const [authOkMessage, setAuthOkMessage] = useState<string | null>(null)
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
+	const defaultEnabledAuthority = useMemo(
+		() => AUTHORITY_OPTIONS.find((option) => option.enabled && option.role !== null) ?? null,
+		[],
+	)
+	const selectedAuthorityId = useMemo(
+		() => AUTHORITY_OPTIONS.find((option) => option.role === selectedRole)?.id ?? null,
+		[selectedRole],
+	)
+	const selectedAuthorityLabel = useMemo(
+		() => AUTHORITY_OPTIONS.find((option) => option.id === selectedAuthorityId)?.label ?? null,
+		[selectedAuthorityId],
+	)
+
+	useEffect(() => {
+		if (selectedAuthorityId !== null) {
+			return
+		}
+		if (defaultEnabledAuthority?.role) {
+			setSelectedRole(defaultEnabledAuthority.role)
+		}
+	}, [defaultEnabledAuthority, selectedAuthorityId, setSelectedRole])
 
 	async function handleAuthenticate() {
 		setAuthError(null)
 		setAuthOkMessage(null)
 		setIsAuthenticating(true)
 		try {
-			await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
+			await connectSession()
 			setAuthOkMessage('Success: authenticated.')
+			navigate('/proposals')
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -32,101 +115,91 @@ export function WalletConnectScreen() {
 		}
 	}
 
+	function handleSelectAuthority(nextAuthorityId: string) {
+		const selectedAuthority = AUTHORITY_OPTIONS.find((option) => option.id === nextAuthorityId)
+		if (!selectedAuthority || selectedAuthority.role === null || !selectedAuthority.enabled) {
+			return
+		}
+
+		const roleChanged = selectedAuthority.role !== selectedRole
+		setSelectedRole(selectedAuthority.role)
+
+		if (isAuthenticated && roleChanged) {
+			setAuthError('Authority changed. Re-authenticate to continue.')
+		} else {
+			setAuthError(null)
+		}
+		setAuthOkMessage(null)
+	}
+
+	function handleContinueToAuthenticate() {
+		const selectedAuthority = AUTHORITY_OPTIONS.find((option) => option.id === selectedAuthorityId)
+		if (!selectedAuthority || !selectedAuthority.enabled || selectedAuthority.role === null) {
+			return
+		}
+		setAuthorityStep('authenticate-session')
+	}
+
+	function handleBackToAuthoritySelection() {
+		setAuthorityStep('select-authority')
+	}
+
+	async function handleHeaderDisconnect() {
+		disconnectRef.current?.()
+		await disconnectSession()
+	}
+
 	return (
-		<ScreenShell>
-			<HwWalletConnect adapter={adapter} onConnected={setConnectedWallet} />
-			{wallet !== null && (
-				<>
-					<label style={styles.label}>
-						Authority role
-						<select
-							style={styles.select}
-							value={selectedRole}
-							onChange={(e) => {
-								const nextRole = e.target.value as typeof selectedRole
-								const roleChanged = nextRole !== selectedRole
-								setSelectedRole(nextRole)
-								if (isAuthenticated && roleChanged) {
-									setAuthError('Role changed. Re-authenticate to continue.')
-								} else {
-									setAuthError(null)
-								}
-								setAuthOkMessage(null)
-							}}
-						>
-							<option value="strata_administrator">Strata Administrator</option>
-							<option value="strata_sequencer_manager">Strata Sequencer Manager</option>
-						</select>
-					</label>
+		<ScreenShell
+			centerContent={!showTopBarDisconnect}
+			headerContent={
+				showTopBarDisconnect ? (
 					<button
 						type="button"
-						style={styles.continueBtn}
-						onClick={() => void handleAuthenticate()}
-						disabled={isAuthenticating}
+						className="group/disconnect inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						onClick={() => void handleHeaderDisconnect()}
 					>
-						{isAuthenticating ? 'Authenticating…' : 'Authenticate signer'}
+						<span className="relative inline-flex h-3 w-3 shrink-0">
+							<LogOutMutedIcon
+								width={12}
+								height={12}
+								className="absolute left-0 top-0 transition-opacity group-hover/disconnect:opacity-0"
+							/>
+							<LogOutRedIcon
+								width={12}
+								height={12}
+								className="absolute left-0 top-0 opacity-0 transition-opacity group-hover/disconnect:opacity-100"
+							/>
+						</span>
+						Disconnect
 					</button>
-					{authOkMessage && <p style={styles.success}>{authOkMessage}</p>}
-					{authError && <p style={styles.error}>{authError}</p>}
-					<button
-						type="button"
-						style={{ ...styles.continueBtn, ...(isAuthenticated ? {} : styles.disabled) }}
-						onClick={() => navigate('/dev/proposal')}
-						disabled={!isAuthenticated}
-					>
-						Continue to proposal creation/listing (PoC)
-					</button>
-					<button
-						type="button"
-						style={{ ...styles.continueBtn, ...(isAuthenticated ? {} : styles.disabled) }}
-						onClick={() => navigate('/dev/sign')}
-						disabled={!isAuthenticated}
-					>
-						Continue to SPS-65 signing (PoC)
-					</button>
-				</>
-			)}
+				) : null
+			}
+		>
+			<HwWalletConnect
+				adapter={adapter}
+				onConnected={setConnectedWallet}
+				disconnectRef={disconnectRef}
+				onHardwareSessionChange={setShowTopBarDisconnect}
+				authoritySelection={
+					wallet !== null
+						? {
+								step: authorityStep,
+								selectedAuthorityId,
+								selectedAuthorityLabel,
+								options: AUTHORITY_OPTIONS,
+								isAuthenticating,
+								isAuthenticated,
+								authError,
+								authOkMessage,
+								onSelectAuthority: handleSelectAuthority,
+								onContinueToAuthenticate: handleContinueToAuthenticate,
+								onBackToAuthority: handleBackToAuthoritySelection,
+								onAuthenticate: () => void handleAuthenticate(),
+							}
+						: null
+				}
+			/>
 		</ScreenShell>
 	)
-}
-
-const styles = {
-	label: {
-		display: 'block',
-		marginTop: '0.75rem',
-		fontSize: '0.85rem',
-		color: '#334155',
-	} as CSSProperties,
-	select: {
-		display: 'block',
-		marginTop: '0.35rem',
-		padding: '0.45rem 0.5rem',
-		borderRadius: 8,
-		border: '1px solid #cbd5e1',
-	} as CSSProperties,
-	continueBtn: {
-		display: 'block',
-		marginTop: '0.75rem',
-		padding: '0.55rem 1rem',
-		background: '#1d4ed8',
-		color: '#fff',
-		border: 'none',
-		borderRadius: 8,
-		cursor: 'pointer',
-		fontSize: '0.9rem',
-	} as CSSProperties,
-	error: {
-		marginTop: '0.5rem',
-		fontSize: '0.85rem',
-		color: '#b91c1c',
-	} as CSSProperties,
-	success: {
-		marginTop: '0.5rem',
-		fontSize: '0.85rem',
-		color: '#166534',
-	} as CSSProperties,
-	disabled: {
-		opacity: 0.5,
-		cursor: 'not-allowed',
-	} as CSSProperties,
 }

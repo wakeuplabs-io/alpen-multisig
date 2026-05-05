@@ -6,16 +6,25 @@ use crate::domain::proposal::{ActionId, Proposal, ProposalStatus};
 use crate::error::AppError;
 
 /// Persistence contract for proposals.
+#[async_trait::async_trait]
 pub(crate) trait ProposalRepository: Send + Sync {
     /// Store a new proposal. Fails if ActionId already exists.
-    fn save_proposal(&mut self, proposal: Proposal) -> Result<(), AppError>;
+    async fn save_proposal(&self, proposal: Proposal) -> Result<(), AppError>;
 
-    /// Find a proposal by ActionId (immutable reference).
-    fn find_by_action_id(&self, action_id: &ActionId) -> Option<&Proposal>;
+    /// Find a proposal by ActionId.
+    async fn find_by_action_id(&self, action_id: &ActionId) -> Result<Option<Proposal>, AppError>;
 
-    /// Find a proposal by ActionId (mutable reference, for adding signatures).
-    fn find_by_action_id_mut(&mut self, action_id: &ActionId) -> Option<&mut Proposal>;
+    /// Append one signature to an existing proposal.
+    async fn add_signature(
+        &self,
+        action_id: &ActionId,
+        signer_pubkey: &str,
+        signature_hex: &str,
+    ) -> Result<Option<Proposal>, AppError>;
 
     /// List proposals, optionally filtered by status.
-    fn list_by_status(&self, status: Option<ProposalStatus>) -> Vec<&Proposal>;
+    async fn list_by_status(
+        &self,
+        status: Option<ProposalStatus>,
+    ) -> Result<Vec<Proposal>, AppError>;
 }

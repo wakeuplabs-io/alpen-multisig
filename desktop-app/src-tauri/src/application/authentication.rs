@@ -9,7 +9,7 @@ use crate::domain::auth::{
 use crate::infrastructure::{asm_status_rpc, challenge_verifier};
 
 const CHALLENGE_TTL_MS: u64 = 120_000;
-const SESSION_TTL_MS: u64 = 240_000;
+const SESSION_TTL_MS: u64 = 1_800_000;
 const MEMBERSHIP_MAX_AGE_MS: u64 = 300_000;
 const SIG_FORMAT_P2WPKH_TX_BINDING: &str = "p2wpkh-tx-binding";
 const SIG_FORMAT_BITCOIN_MESSAGE: &str = "bitcoin-message";
