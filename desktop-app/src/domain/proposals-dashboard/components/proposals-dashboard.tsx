@@ -196,14 +196,21 @@ function ProposalGroup({
 
 function ProposalCard({ proposal }: { proposal: Proposal }) {
 	const [hovered, setHovered] = useState(false)
+	const requiredSignatures = proposal.status === 'approved' ? proposal.signatures.length : proposal.signatures.length + 1
+	const collectedSignatures = proposal.signatures.length
+	const signaturesProgress = requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
+	const proposalTitle = buildProposalTitle(proposal)
+	const proposalTypeLabel = inferProposalType(proposal)
+	const hasQuorum = proposal.status === 'approved' || collectedSignatures >= requiredSignatures
 
 	return (
 		<div
+			className="group"
 			style={{
 				background: '#fff',
 				border: `1px solid ${hovered ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
 				borderRadius: 12,
-				padding: '18px 20px',
+				padding: '18px 18px 16px',
 				cursor: 'pointer',
 				transition: 'all 150ms ease',
 				transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
@@ -214,19 +221,68 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
 		>
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
-					<p className="m-0 font-mono text-[11px] text-[#9ca3af]">
-						#{proposal.seqNo} · {proposal.authority}
+					<p className="m-0 font-['BIZ_UDPMincho'] text-[24px] leading-[1.2] text-[#121212]">{proposalTitle}</p>
+					<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+						#{proposal.seqNo} · {proposalTypeLabel} · {proposal.authority}
 					</p>
-					<p className="m-0 mt-1 break-all font-mono text-xs text-[#374151]">{proposal.actionId}</p>
 				</div>
 				<StatusBadge status={proposal.status} />
 			</div>
-			<p className="m-0 mt-2.5 flex items-center gap-1 text-xs text-[#6b7280]">
-				<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
-				{proposal.signatures.length} {proposal.signatures.length === 1 ? 'signature' : 'signatures'} collected
-			</p>
+
+			<div className="mt-5">
+				<div className="mb-1.5 flex items-center justify-between gap-3">
+					<p className="m-0 text-[14px] font-medium text-[#121212]">Signatures</p>
+					<p className="m-0 text-[30px] font-medium leading-none text-[#121212]">
+						{collectedSignatures} / {requiredSignatures} <span className="text-[18px]">signed</span>
+					</p>
+				</div>
+
+				<div className="h-[7px] rounded-full bg-[#ebedf0]">
+					<div
+						className="h-[7px] rounded-full transition-all"
+						style={{
+							width: `${signaturesProgress}%`,
+							background: hasQuorum ? '#0f9d7a' : '#d97706',
+						}}
+					/>
+				</div>
+			</div>
+
+			{hasQuorum ? (
+				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
+					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
+						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
+						Quorum reached - ready to broadcast
+					</p>
+					<button
+						type="button"
+						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+					>
+						Broadcast
+					</button>
+				</div>
+			) : (
+				<p className="m-0 mt-4 flex items-center gap-1 text-xs text-[#6b7280]">
+					<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
+					{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
+				</p>
+			)}
 		</div>
 	)
+}
+
+function buildProposalTitle(proposal: Proposal): string {
+	return `Proposal #${proposal.seqNo} - ${inferProposalType(proposal)}`
+}
+
+function inferProposalType(proposal: Proposal): string {
+	if (proposal.authority.toLowerCase().includes('sequencer')) {
+		return 'Sequencer update'
+	}
+	if (proposal.actionHex.toLowerCase().startsWith('0x01')) {
+		return 'Verification key update'
+	}
+	return 'Signer update'
 }
 
 const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =

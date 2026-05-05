@@ -1,6 +1,7 @@
 type Props = {
 	authorityLabel: string
 	signerAddress: string
+	compressedPublicKey: string
 	isAuthenticating: boolean
 	authError: string | null
 	authOkMessage: string | null
@@ -11,6 +12,7 @@ type Props = {
 export function AuthenticateSessionPhase({
 	authorityLabel,
 	signerAddress,
+	compressedPublicKey,
 	isAuthenticating,
 	authError,
 	authOkMessage,
@@ -18,11 +20,11 @@ export function AuthenticateSessionPhase({
 	onAuthenticate,
 }: Props) {
 	const authenticateButtonClassName = isAuthenticating
-		? 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
-		: 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
+		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
+		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
 
 	return (
-		<div className="w-full max-w-[760px] pb-28">
+		<div className="mx-auto w-full max-w-[680px]">
 			<div className="mb-3 flex items-center justify-between">
 				<button
 					type="button"
@@ -55,6 +57,10 @@ export function AuthenticateSessionPhase({
 						<p className="m-0 text-xs text-[#9ca3af]">Signer address</p>
 						<p className="m-0 mt-1 font-mono text-xs text-[#111827]">{signerAddress}</p>
 					</div>
+					<div>
+						<p className="m-0 text-xs text-[#9ca3af]">Compressed public key</p>
+						<p className="m-0 mt-1 break-all font-mono text-xs text-[#111827]">{compressedPublicKey}</p>
+					</div>
 					<div className="grid grid-cols-2 gap-3">
 						<div>
 							<p className="m-0 text-xs text-[#9ca3af]">Session expiry</p>
@@ -71,17 +77,15 @@ export function AuthenticateSessionPhase({
 			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
 			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
 
-			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur-sm">
-				<div className="mx-auto flex w-full max-w-[1000px] items-center justify-end gap-2">
-					<button
-						type="button"
-						className={authenticateButtonClassName}
-						onClick={onAuthenticate}
-						disabled={isAuthenticating}
-					>
-						{isAuthenticating ? 'Authenticating...' : 'Authenticate with Trezor'}
-					</button>
-				</div>
+			<div className="mt-4">
+				<button
+					type="button"
+					className={`${authenticateButtonClassName} w-full`}
+					onClick={onAuthenticate}
+					disabled={isAuthenticating}
+				>
+					{isAuthenticating ? 'Authenticating...' : 'Authenticate with Trezor'}
+				</button>
 			</div>
 		</div>
 	)

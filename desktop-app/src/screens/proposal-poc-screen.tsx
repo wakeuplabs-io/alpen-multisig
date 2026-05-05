@@ -7,7 +7,7 @@ import { ScreenShell } from '@/screens/screen-shell'
 
 export function ProposalPocScreen() {
 	const navigate = useNavigate()
-	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession, connectSession } = useSession()
 	const createProposal = useCreateProposal()
 
 	if (wallet === null) {
@@ -68,7 +68,9 @@ export function ProposalPocScreen() {
 					error={createProposal.error}
 					createdProposal={createProposal.createdProposal}
 					onCancel={() => navigate('/proposals')}
+					onPreviewValid={(data) => createProposal.computeProposalPreview(data)}
 					onSubmitValid={(data) => createProposal.submitCreateProposal(data)}
+					onReauthenticate={connectSession}
 				/>
 			</div>
 		</ScreenShell>

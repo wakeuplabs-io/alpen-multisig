@@ -1,14 +1,24 @@
 import { MinusHoverIcon, MinusMutedIcon } from '@/assets/icons'
-import { useFieldArray, useFormContext } from 'react-hook-form'
+import { useMemo } from 'react'
+import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass, numberInputClass } from '../model/create-proposal-form-styles'
 import { LabelWithTooltip } from './create-proposal-form-primitives'
 
 type Props = {
 	isLoadingConfig: boolean
+	currentSigners: string[]
+	currentThreshold: number
 }
 
-export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
+function normalizeSignerKey(value: string): string {
+	const trimmed = value.trim()
+	const withoutPrefix =
+		trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
+	return withoutPrefix.toLowerCase()
+}
+
+export function SignerUpdateFormFields({ isLoadingConfig, currentSigners, currentThreshold }: Props) {
 	const {
 		register,
 		control,
@@ -17,9 +27,36 @@ export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
 
 	const keysToAddArray = useFieldArray({ control, name: 'keysToAdd' })
 	const keysToRemoveArray = useFieldArray({ control, name: 'keysToRemove' })
+	const keysToAdd = useWatch({ control, name: 'keysToAdd' }) ?? []
+	const keysToRemove = useWatch({ control, name: 'keysToRemove' }) ?? []
+
+	const resultingSignerCount = useMemo(() => {
+		const removeSet = new Set(keysToRemove.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0))
+		const addSet = new Set(keysToAdd.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0))
+		const remainingCurrent = currentSigners.filter((signer) => !removeSet.has(normalizeSignerKey(signer)))
+		return new Set([...remainingCurrent.map((signer) => normalizeSignerKey(signer)), ...Array.from(addSet)]).size
+	}, [currentSigners, keysToAdd, keysToRemove])
 
 	return (
 		<>
+			<div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-4">
+				<p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Current signer set</p>
+				<p className="m-0 mt-2 text-sm text-[#6b7280]">
+					<span className="text-[#9ca3af]">Threshold:</span> {currentThreshold}
+					<span className="mx-2 text-[#d1d5db]">|</span>
+					<span className="text-[#9ca3af]">Signers:</span> {currentSigners.length}
+					<span className="mx-2 text-[#d1d5db]">|</span>
+					<span className="text-[#9ca3af]">Resulting signers:</span> {resultingSignerCount}
+				</p>
+				<div className="mt-3 max-h-40 space-y-1 overflow-auto">
+					{currentSigners.map((signer) => (
+						<p key={signer} className="m-0 break-all rounded bg-white px-2 py-1 font-mono text-xs text-[#374151]">
+							{signer}
+						</p>
+					))}
+				</div>
+			</div>
+
 			<div>
 				<label className="text-sm font-medium text-[#111827]">Keys to add</label>
 				<div className="mt-1.5 flex flex-col gap-2">
@@ -30,9 +67,12 @@ export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
 									type="text"
 									className={monoInputClass}
 									{...register(`keysToAdd.${index}.value`)}
-									placeholder="bc1p..."
+									placeholder="02..."
 									spellCheck={false}
 								/>
+								{errors.keysToAdd?.[index]?.value?.message && (
+									<p className={fieldErrorClass}>{errors.keysToAdd[index]?.value?.message}</p>
+								)}
 							</div>
 							{keysToAddArray.fields.length > 1 && (
 								<button
@@ -81,9 +121,12 @@ export function SignerUpdateFormFields({ isLoadingConfig }: Props) {
 										type="text"
 										className={monoInputClass}
 										{...register(`keysToRemove.${index}.value`)}
-										placeholder="bc1p..."
+										placeholder="02..."
 										spellCheck={false}
 									/>
+									{errors.keysToRemove?.[index]?.value?.message && (
+										<p className={fieldErrorClass}>{errors.keysToRemove[index]?.value?.message}</p>
+									)}
 								</div>
 								{keysToRemoveArray.fields.length > 1 && (
 									<button

@@ -1,12 +1,21 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { Proposal } from '@/api/proposals'
-import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
-import { useEffect, useMemo } from 'react'
+import { EyeGrayIcon, PencilWhiteIcon, SignaturePenMutedIcon } from '@/assets/icons'
+import { useEffect, useMemo, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
+import {
+	isSessionExpiredReauthError,
+	SESSION_EXPIRED_REAUTH_MESSAGE,
+} from '@/domain/create-proposal/hooks/use-create-proposal'
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
-import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
+import {
+	buildCreateProposalFormSchema,
+	countSignersAfterUpdate,
+	type CreateProposalFormValues,
+} from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
+import { CreateProposalPreview } from './create-proposal-preview'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
@@ -19,7 +28,9 @@ type Props = {
 	error: string | null
 	createdProposal: Proposal | null
 	onCancel: () => void
+	onPreviewValid: (data: CreateProposalFormValues) => Promise<string | null>
 	onSubmitValid: (data: CreateProposalFormValues) => Promise<void>
+	onReauthenticate: () => Promise<void>
 }
 
 const defaultFormValues: CreateProposalFormValues = {
@@ -41,8 +52,17 @@ export function CreateProposalForm({
 	error,
 	createdProposal,
 	onCancel,
+	onPreviewValid,
 	onSubmitValid,
+	onReauthenticate,
 }: Props) {
+	const [isPreviewMode, setIsPreviewMode] = useState(false)
+	const [previewSighashHex, setPreviewSighashHex] = useState<string | null>(null)
+	const [showReauthModal, setShowReauthModal] = useState(false)
+	const [reauthError, setReauthError] = useState<string | null>(null)
+	const [isReauthenticating, setIsReauthenticating] = useState(false)
+	const [pendingAction, setPendingAction] = useState<'preview' | 'submit' | null>(null)
+
 	const createProposalSchema = useMemo(
 		() =>
 			buildCreateProposalFormSchema({
@@ -83,11 +103,67 @@ export function CreateProposalForm({
 		const current = getValues()
 		reset({
 			...current,
-			keysToRemove:
-				multisigConfig.signers.length > 0 ? multisigConfig.signers.map((s) => ({ value: s })) : [{ value: '' }],
+			keysToRemove: [{ value: '' }],
 			threshold: String(multisigConfig.threshold),
 		})
 	}, [multisigConfigVersion, multisigConfig, reset, getValues])
+
+	const previewData = getValues()
+	const previewAddingKeys = previewData.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
+	const previewRemovingKeys = previewData.keysToRemove
+		.map((row) => row.value.trim())
+		.filter((value) => value.length > 0)
+	const previewResultingSignerCount =
+		previewData.actionType === 'signer_update' && multisigConfig !== null
+			? countSignersAfterUpdate(multisigConfig.signers, previewData.keysToRemove, previewData.keysToAdd)
+			: null
+
+	async function handlePreviewClick() {
+		const isValid = await trigger(undefined, { shouldFocus: true })
+		if (!isValid) return
+		try {
+			const sighashHex = await onPreviewValid(getValues())
+			if (sighashHex === null) return
+			setPreviewSighashHex(sighashHex)
+			setIsPreviewMode(true)
+		} catch (error) {
+			if (!isSessionExpiredReauthError(error)) return
+			setPendingAction('preview')
+			setReauthError(null)
+			setShowReauthModal(true)
+		}
+	}
+
+	async function handleSubmitAttempt(data: CreateProposalFormValues) {
+		try {
+			await onSubmitValid(data)
+		} catch (error) {
+			if (!isSessionExpiredReauthError(error)) return
+			setPendingAction('submit')
+			setReauthError(null)
+			setShowReauthModal(true)
+		}
+	}
+
+	async function handleReauthenticateAndRetry() {
+		setReauthError(null)
+		setIsReauthenticating(true)
+		try {
+			await onReauthenticate()
+			setShowReauthModal(false)
+			const actionToRetry = pendingAction
+			setPendingAction(null)
+			if (actionToRetry === 'preview') {
+				await handlePreviewClick()
+			} else if (actionToRetry === 'submit') {
+				await handleSubmitAttempt(getValues())
+			}
+		} catch (error) {
+			setReauthError(String(error))
+		} finally {
+			setIsReauthenticating(false)
+		}
+	}
 
 	return (
 		<FormProvider {...form}>
@@ -104,56 +180,76 @@ export function CreateProposalForm({
 
 				<form
 					className="rounded-2xl border border-[#e5e7eb] bg-white p-8"
-					onSubmit={handleSubmit((data) => void onSubmitValid(data))}
+					onSubmit={handleSubmit((data) => void handleSubmitAttempt(data))}
 					noValidate
 				>
-					<div className="flex flex-col gap-6">
-						<div>
-							<p className="mb-3 text-sm font-medium text-[#111827]">Action type</p>
-							<div className="grid grid-cols-2 gap-3">
-								<ActionTypeCard
-									title="Verification key update"
-									description="Rotate the Alpen VK."
-									selected={actionType === 'vk_update'}
-									onClick={() => form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })}
-								/>
-								<ActionTypeCard
-									title="Signer update"
-									description="Add / remove signers or change threshold."
-									selected={actionType === 'signer_update'}
-									onClick={() =>
-										form.setValue('actionType', 'signer_update', { shouldValidate: true, shouldDirty: true })
-									}
-								/>
+					{isPreviewMode ? (
+						<CreateProposalPreview
+							title={previewData.title}
+							actionType={previewData.actionType}
+							seqNo={previewData.seqNo}
+							keysToAdd={previewAddingKeys}
+							keysToRemove={previewRemovingKeys}
+							threshold={previewData.threshold}
+							resultingSignerCount={previewResultingSignerCount}
+							newVkHex={previewData.newVkHex}
+							sighashHex={previewSighashHex}
+						/>
+					) : (
+						<div className="flex flex-col gap-6">
+							<div>
+								<p className="mb-3 text-sm font-medium text-[#111827]">Action type</p>
+								<div className="grid grid-cols-2 gap-3">
+									<ActionTypeCard
+										title="Verification key update"
+										description="Rotate the Alpen VK."
+										selected={actionType === 'vk_update'}
+										onClick={() =>
+											form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })
+										}
+									/>
+									<ActionTypeCard
+										title="Signer update"
+										description="Add / remove signers or change threshold."
+										selected={actionType === 'signer_update'}
+										onClick={() =>
+											form.setValue('actionType', 'signer_update', { shouldValidate: true, shouldDirty: true })
+										}
+									/>
+								</div>
 							</div>
-						</div>
 
-						<div className="max-w-[180px]">
-							<LabelWithTooltip
-								label="Sequence number"
-								tooltip="The monotonically increasing sequence number for this proposal. Must match the expected next value on-chain."
-							/>
-							<input type="number" min={0} className={numberInputClass} {...form.register('seqNo')} placeholder="0" />
-							{formState.errors.seqNo?.message && <p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>}
-						</div>
+							<div className="max-w-[180px]">
+								<LabelWithTooltip
+									label="Sequence number"
+									tooltip="The monotonically increasing sequence number for this proposal. Must match the expected next value on-chain."
+								/>
+								<input type="number" min={0} className={numberInputClass} {...form.register('seqNo')} placeholder="0" />
+								{formState.errors.seqNo?.message && <p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>}
+							</div>
 
-						<div>
-							<label className="text-sm font-medium text-[#111827]">Title</label>
-							<input
-								type="text"
-								className={textInputClass}
-								{...form.register('title')}
-								placeholder="e.g. Rotate verification key (Q2 2026)"
-							/>
-							{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
-						</div>
+							<div>
+								<label className="text-sm font-medium text-[#111827]">Title</label>
+								<input
+									type="text"
+									className={textInputClass}
+									{...form.register('title')}
+									placeholder="e.g. Rotate verification key (Q2 2026)"
+								/>
+								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
+							</div>
 
-						{actionType === 'signer_update' ? (
-							<SignerUpdateFormFields isLoadingConfig={isLoadingConfig} />
-						) : (
-							<VkUpdateFormFields />
-						)}
-					</div>
+							{actionType === 'signer_update' ? (
+								<SignerUpdateFormFields
+									isLoadingConfig={isLoadingConfig}
+									currentSigners={multisigConfig?.signers ?? []}
+									currentThreshold={multisigConfig?.threshold ?? 0}
+								/>
+							) : (
+								<VkUpdateFormFields />
+							)}
+						</div>
+					)}
 
 					{error && (
 						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#991b1b]">
@@ -180,12 +276,22 @@ export function CreateProposalForm({
 							</button>
 							<button
 								type="button"
-								className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-5 py-2.5 text-sm font-medium text-[#374151] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
+								className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-sm font-medium text-[#111827] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
 								disabled={isSubmitting}
-								onClick={() => void trigger(undefined, { shouldFocus: true })}
+								onClick={() => {
+									if (isPreviewMode) {
+										setIsPreviewMode(false)
+										return
+									}
+									void handlePreviewClick()
+								}}
 							>
-								<EyeGrayIcon width={15} height={15} className="block shrink-0" />
-								Preview
+								{isPreviewMode ? (
+									<SignaturePenMutedIcon width={15} height={15} className="block shrink-0" />
+								) : (
+									<EyeGrayIcon width={15} height={15} className="block shrink-0" />
+								)}
+								{isPreviewMode ? 'Edit' : 'Preview'}
 							</button>
 							<button
 								type="submit"
@@ -199,6 +305,36 @@ export function CreateProposalForm({
 					</div>
 				</form>
 			</div>
+			{showReauthModal && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4">
+					<div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+						<p className="m-0 text-lg font-semibold text-[#111827]">Session expired</p>
+						<p className="m-0 mt-2 text-sm text-[#6b7280]">{SESSION_EXPIRED_REAUTH_MESSAGE}</p>
+						{reauthError && <p className="m-0 mt-3 text-sm text-[#b91c1c]">{reauthError}</p>}
+						<div className="mt-6 flex items-center justify-end gap-3">
+							<button
+								type="button"
+								className="rounded-full border border-[#0a0a0a] bg-white px-5 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb] disabled:opacity-50"
+								onClick={() => {
+									setPendingAction(null)
+									setShowReauthModal(false)
+								}}
+								disabled={isReauthenticating}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className="rounded-lg bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:bg-[#9ca3af]"
+								onClick={() => void handleReauthenticateAndRetry()}
+								disabled={isReauthenticating}
+							>
+								{isReauthenticating ? 'Re-authenticating...' : 'Re-authenticate'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</FormProvider>
 	)
 }

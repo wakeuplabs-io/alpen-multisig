@@ -103,6 +103,7 @@ export function HwWalletConnect({
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
 						signerAddress={state.selectedEntry.address}
+						compressedPublicKey={state.selectedEntry.publicKeyHex}
 						isAuthenticating={authoritySelection.isAuthenticating}
 						authError={authoritySelection.authError}
 						authOkMessage={authoritySelection.authOkMessage}

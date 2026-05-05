@@ -151,7 +151,7 @@ export function WalletConnectScreen() {
 
 	return (
 		<ScreenShell
-			centerContent
+			centerContent={!showTopBarDisconnect}
 			headerContent={
 				showTopBarDisconnect ? (
 					<button
