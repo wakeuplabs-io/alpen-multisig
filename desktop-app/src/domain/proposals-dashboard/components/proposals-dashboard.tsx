@@ -196,9 +196,11 @@ function ProposalGroup({
 
 function ProposalCard({ proposal }: { proposal: Proposal }) {
 	const [hovered, setHovered] = useState(false)
-	const requiredSignatures = proposal.status === 'approved' ? proposal.signatures.length : proposal.signatures.length + 1
+	const requiredSignatures =
+		proposal.status === 'approved' ? proposal.signatures.length : proposal.signatures.length + 1
 	const collectedSignatures = proposal.signatures.length
-	const signaturesProgress = requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
+	const signaturesProgress =
+		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalType(proposal)
 	const hasQuorum = proposal.status === 'approved' || collectedSignatures >= requiredSignatures

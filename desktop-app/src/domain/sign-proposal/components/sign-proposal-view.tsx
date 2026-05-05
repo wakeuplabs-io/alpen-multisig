@@ -52,7 +52,9 @@ export function SignProposalView({
 			</div>
 
 			<div className="mt-5">
-				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">Verification key change</p>
+				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+					Verification key change
+				</p>
 				<div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
 					<div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">Before</p>
@@ -66,9 +68,13 @@ export function SignProposalView({
 			</div>
 
 			<div className="mt-5">
-				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">SPS-65 Sighash (32 bytes)</p>
+				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+					SPS-65 Sighash (32 bytes)
+				</p>
 				<div className="mt-2 flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2.5">
-					<code className="block min-w-0 flex-1 break-all font-mono text-[12px] leading-5 text-[#334155]">{sighashHex}</code>
+					<code className="block min-w-0 flex-1 break-all font-mono text-[12px] leading-5 text-[#334155]">
+						{sighashHex}
+					</code>
 					<button
 						type="button"
 						className="group inline-flex items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-white px-2 py-1 text-[11px] font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#374151]"
@@ -114,7 +120,9 @@ export function SignProposalView({
 
 			{signResult ? (
 				<div className="mt-4 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
-					<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#166534]">Signature collected</p>
+					<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#166534]">
+						Signature collected
+					</p>
 					<code className="mt-2 block break-all font-mono text-[12px] leading-5 text-[#166534]">
 						{shortenHex(signResult.signatureHex)}
 					</code>

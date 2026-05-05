@@ -73,7 +73,9 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 					{addresses.map((entry) => {
 						const isSelected = selectedIndex === entry.index
 						const rowBg = isSelected ? 'bg-[#f3f0ff] text-[#5b44c9]' : 'bg-white text-[#334155] hover:bg-[#fafafa]'
-						const copyMuted = isSelected ? 'text-[#5b44c9]/80 hover:text-[#5b44c9]' : 'text-[#94a3b8] hover:text-[#64748b]'
+						const copyMuted = isSelected
+							? 'text-[#5b44c9]/80 hover:text-[#5b44c9]'
+							: 'text-[#94a3b8] hover:text-[#64748b]'
 						const isCopied = copiedIndex === entry.index
 						return (
 							<div

@@ -9,8 +9,7 @@ const compressedPubKeyHexPattern = /^(?:0x)?(?:02|03)[0-9a-fA-F]{64}$/
 
 function normalizeSignerKey(value: string): string {
 	const trimmed = value.trim()
-	const withoutPrefix =
-		trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
+	const withoutPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
 	return withoutPrefix.toLowerCase()
 }
 

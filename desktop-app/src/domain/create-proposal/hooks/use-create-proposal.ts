@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getMultisigConfig } from '@/api/asm-state'
 import { buildAdminMultisigUpdateHex } from '@/api/action-builder'
-import {
-	authorityFromRole,
-	orchestratorAuthGetSession,
-	ORCHESTRATOR_BASE_URL,
-} from '@/api/orchestrator-auth'
+import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { createProposal, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'

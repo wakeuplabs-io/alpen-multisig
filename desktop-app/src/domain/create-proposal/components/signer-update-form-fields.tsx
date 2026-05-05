@@ -13,8 +13,7 @@ type Props = {
 
 function normalizeSignerKey(value: string): string {
 	const trimmed = value.trim()
-	const withoutPrefix =
-		trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
+	const withoutPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
 	return withoutPrefix.toLowerCase()
 }
 
@@ -31,7 +30,9 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners, curren
 	const keysToRemove = useWatch({ control, name: 'keysToRemove' }) ?? []
 
 	const resultingSignerCount = useMemo(() => {
-		const removeSet = new Set(keysToRemove.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0))
+		const removeSet = new Set(
+			keysToRemove.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0),
+		)
 		const addSet = new Set(keysToAdd.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0))
 		const remainingCurrent = currentSigners.filter((signer) => !removeSet.has(normalizeSignerKey(signer)))
 		return new Set([...remainingCurrent.map((signer) => normalizeSignerKey(signer)), ...Array.from(addSet)]).size
