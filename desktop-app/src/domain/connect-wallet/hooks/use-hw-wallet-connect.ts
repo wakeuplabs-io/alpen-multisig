@@ -43,17 +43,36 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 	}, [])
 
 	async function connect() {
-		if (!adapter.listAddresses) {
-			setError('This wallet does not support address listing.')
-			return
-		}
-
 		setLoading(true)
 		setConnectViewState('loading')
 		setError(null)
 
 		try {
 			const info = await adapter.connect()
+			if (!adapter.listAddresses) {
+				const fallbackEntry = {
+					index: 0,
+					derivationPath: info.derivationPath,
+					address: info.addressSample ?? 'Mnemonic signer',
+					publicKeyHex: info.xpubOrFingerprint ?? '',
+				}
+
+				setAccount(info)
+				setAddresses([fallbackEntry])
+				setSelectedIndex(0)
+				setSelectedEntry(fallbackEntry)
+				setVerifyMessage(null)
+				onConnected({
+					...info,
+					addressSample: fallbackEntry.address,
+					xpubOrFingerprint: fallbackEntry.publicKeyHex,
+				})
+				setConnectViewState('success')
+				successTransitionTimeoutRef.current = window.setTimeout(() => {
+					setPhase('selected')
+				}, 400)
+				return
+			}
 			const entries = await adapter.listAddresses(20)
 
 			setAccount(info)

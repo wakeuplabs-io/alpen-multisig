@@ -61,6 +61,7 @@ export function WalletConnectScreen() {
 		wallet,
 		setConnectedWallet,
 		adapter,
+		selectAdapter,
 		isAuthenticated,
 		selectedRole,
 		setSelectedRole,
@@ -149,6 +150,17 @@ export function WalletConnectScreen() {
 		await disconnectSession()
 	}
 
+	function handleSelectWalletMethod(method: 'trezor' | 'mnemonic', mnemonic?: string) {
+		if (method === 'trezor') {
+			selectAdapter('trezor')
+			return
+		}
+		if (!mnemonic?.trim()) {
+			return
+		}
+		selectAdapter('mnemonic', { mnemonic: mnemonic.trim() })
+	}
+
 	return (
 		<ScreenShell
 			centerContent={!showTopBarDisconnect}
@@ -178,6 +190,8 @@ export function WalletConnectScreen() {
 		>
 			<HwWalletConnect
 				adapter={adapter}
+				walletVendor={adapter.vendor}
+				onSelectWalletMethod={handleSelectWalletMethod}
 				onConnected={setConnectedWallet}
 				disconnectRef={disconnectRef}
 				onHardwareSessionChange={setShowTopBarDisconnect}

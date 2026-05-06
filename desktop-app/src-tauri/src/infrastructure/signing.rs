@@ -1,6 +1,12 @@
 use std::num::NonZero;
+use std::str::FromStr;
 
+use bip39::Mnemonic;
+use bitcoin::address::KnownHrp;
+use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
+use bitcoin::sign_message::signed_msg_hash;
+use bitcoin::{key::TweakedPublicKey, secp256k1::XOnlyPublicKey};
 use ssz::Decode;
 use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -22,6 +28,15 @@ pub struct SighashResult {
 pub struct SignatureResult {
     pub public_key_hex: String,
     pub signature_hex: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MnemonicAddressEntry {
+    pub index: u32,
+    pub derivation_path: String,
+    pub address: String,
+    pub public_key_hex: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -66,6 +81,78 @@ pub fn sign_sighash(secret_key_hex: &str, sighash_hex: &str) -> Result<Signature
     Ok(SignatureResult {
         public_key_hex: hex::encode(pk.serialize()),
         signature_hex: hex::encode(sig.serialize_compact()),
+    })
+}
+
+fn derive_secret_key_from_mnemonic_path(
+    mnemonic: &str,
+    passphrase: &str,
+    derivation_path: &str,
+) -> Result<SecretKey, String> {
+    let normalized = mnemonic.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return Err("mnemonic is required".to_string());
+    }
+
+    let mnemonic =
+        Mnemonic::parse(&normalized).map_err(|e| format!("invalid BIP39 mnemonic: {e}"))?;
+    let seed = mnemonic.to_seed(passphrase);
+    let path = DerivationPath::from_str(derivation_path)
+        .map_err(|e| format!("invalid derivation path: {e}"))?;
+
+    let master = Xpriv::new_master(bitcoin::Network::Bitcoin, &seed)
+        .map_err(|e| format!("failed to create BIP32 master key: {e}"))?;
+    let derived = master
+        .derive_priv(SECP256K1, &path)
+        .map_err(|e| format!("failed to derive path {derivation_path}: {e}"))?;
+
+    Ok(derived.private_key)
+}
+
+pub fn list_mnemonic_addresses(
+    mnemonic: &str,
+    passphrase: &str,
+    count: u32,
+) -> Result<Vec<MnemonicAddressEntry>, String> {
+    let mut out = Vec::with_capacity(count as usize);
+    for n in 0..count {
+        let derivation_path = format!("m/86'/0'/73'/0/{n}");
+        let secret_key =
+            derive_secret_key_from_mnemonic_path(mnemonic, passphrase, &derivation_path)?;
+        let pubkey = PublicKey::from_secret_key(SECP256K1, &secret_key);
+        let xonly = XOnlyPublicKey::from(pubkey);
+        let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
+        let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
+        out.push(MnemonicAddressEntry {
+            index: n,
+            derivation_path,
+            address: address.to_string(),
+            public_key_hex: hex::encode(pubkey.serialize()),
+        });
+    }
+    Ok(out)
+}
+
+pub fn sign_with_mnemonic_path(
+    mnemonic: &str,
+    passphrase: &str,
+    derivation_path: &str,
+    sighash_hex: &str,
+) -> Result<SignatureResult, String> {
+    let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, derivation_path)?;
+    let message_hash = signed_msg_hash(sighash_hex);
+    let message = Message::from_digest_slice(message_hash.as_ref())
+        .map_err(|e| format!("invalid bitcoin message digest: {e}"))?;
+    let recoverable_signature = SECP256K1.sign_ecdsa_recoverable(&message, &secret_key);
+    let (recovery_id, compact_signature) = recoverable_signature.serialize_compact();
+    let mut signature_with_recid = [0u8; 65];
+    signature_with_recid[..64].copy_from_slice(&compact_signature);
+    signature_with_recid[64] = recovery_id.to_i32() as u8;
+    let public_key = PublicKey::from_secret_key(SECP256K1, &secret_key);
+
+    Ok(SignatureResult {
+        public_key_hex: hex::encode(public_key.serialize()),
+        signature_hex: hex::encode(signature_with_recid),
     })
 }
 

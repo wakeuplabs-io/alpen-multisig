@@ -27,6 +27,9 @@ fn main() {
             commands::hw_wallet::sign_with_trezor,
             commands::signing::compute_sighash,
             commands::signing::verify_threshold,
+            commands::signing::sign_action_sighash,
+            commands::signing::list_mnemonic_addresses,
+            commands::signing::sign_with_mnemonic_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

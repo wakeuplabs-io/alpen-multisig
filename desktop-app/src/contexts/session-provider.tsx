@@ -13,7 +13,7 @@ import { useWalletSession } from '@/hooks/use-wallet-session'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
 	const { session, isAuthenticated, isLoading, selectedRole, setSelectedRole, authenticate, logout } = useAuthSession()
-	const { wallet, setConnectedWallet, clearSession, adapter } = useWalletSession()
+	const { wallet, setConnectedWallet, clearSession, adapter, selectAdapter } = useWalletSession()
 
 	/** Wall clock for session countdown; updated every second (effects may call Date.now). */
 	const [nowMs, setNowMs] = useState(() => Date.now())
@@ -105,6 +105,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			wallet,
 			setConnectedWallet,
 			adapter,
+			selectAdapter,
 			clearSession,
 		}),
 		[
@@ -122,6 +123,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			wallet,
 			setConnectedWallet,
 			adapter,
+			selectAdapter,
 			clearSession,
 		],
 	)
