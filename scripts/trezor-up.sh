@@ -94,17 +94,24 @@ MAX_ATTEMPTS=20
 ATTEMPT=1
 
 while (( ATTEMPT <= MAX_ATTEMPTS )); do
-	if (
+	if LOAD_OUTPUT="$(
 		cd "$TREZORCTL_DIR"
 		uv run trezorctl -p "udp:127.0.0.1:$PORT" load-device \
 			--mnemonic "$MNEMONIC" \
-			--pin "$PIN"
-	); then
+			--pin "$PIN" 2>&1
+	)"; then
+		break
+	fi
+
+	if [[ "$LOAD_OUTPUT" == *"Device is initialized already"* ]]; then
+		echo "Device is already initialized. Reusing existing emulator state."
 		break
 	fi
 
 	if (( ATTEMPT == MAX_ATTEMPTS )); then
 		echo "Could not connect to emulator at udp:127.0.0.1:$PORT after $MAX_ATTEMPTS attempts."
+		echo "Last trezorctl error:"
+		echo "$LOAD_OUTPUT"
 		echo "Check logs:"
 		echo "  /tmp/trezord-go.log"
 		echo "  /tmp/trezor-emu.log"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import {
 	ClockSessionDefaultIcon,
@@ -23,6 +23,7 @@ export function ProposalsDashboardScreen() {
 	const [proposals, setProposals] = useState<Proposal[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
@@ -36,6 +37,11 @@ export function ProposalsDashboardScreen() {
 		setError(null)
 		try {
 			await ensureOrchestratorSession()
+			const currentSession = await orchestratorAuthGetSession()
+			if (!currentSession.ok) {
+				throw new Error(currentSession.error)
+			}
+			setSignerPubkey(currentSession.data?.signerPubkey ?? null)
 			const response = await listProposals({ baseUrl: ORCHESTRATOR_BASE_URL })
 			if (!response.ok) {
 				throw new Error(response.error)
@@ -52,8 +58,14 @@ export function ProposalsDashboardScreen() {
 		void loadProposals()
 	}, [loadProposals, selectedRole])
 
-	const quorumReached = useMemo(() => proposals.filter((proposal) => proposal.status === 'approved'), [proposals])
-	const pending = useMemo(() => proposals.filter((proposal) => proposal.status === 'pending'), [proposals])
+	const quorumReached = useMemo(
+		() => proposals.filter((proposal) => proposal.status === 'approved' || hasReachedQuorum(proposal)),
+		[proposals],
+	)
+	const pending = useMemo(
+		() => proposals.filter((proposal) => proposal.status === 'pending' && !hasReachedQuorum(proposal)),
+		[proposals],
+	)
 	const executedOrCanceled = useMemo(
 		() => proposals.filter((proposal) => proposal.status === 'enacted' || proposal.status === 'canceled'),
 		[proposals],
@@ -102,6 +114,7 @@ export function ProposalsDashboardScreen() {
 		>
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
+				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}
 				executedOrCanceled={executedOrCanceled}
@@ -112,9 +125,16 @@ export function ProposalsDashboardScreen() {
 				onCreateProposal={() => {
 					navigate('/proposals/create')
 				}}
+				onSignProposal={(actionId) => {
+					navigate(`/proposals/${actionId}/sign`)
+				}}
 			/>
 		</ScreenShell>
 	)
+}
+
+function hasReachedQuorum(proposal: Proposal): boolean {
+	return proposal.status === 'pending' && proposal.signatures.length >= proposal.requiredSignatures
 }
 
 function SessionChip({

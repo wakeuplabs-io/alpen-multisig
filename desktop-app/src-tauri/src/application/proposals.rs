@@ -203,6 +203,7 @@ mod tests {
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
+                required_signatures: 2,
                 signatures: vec![ProposalSignature {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
@@ -225,6 +226,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
+                required_signatures: 2,
                 signatures: vec![],
             })
         }
@@ -247,6 +249,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
+                required_signatures: 2,
                 signatures: vec![],
             })
         }
@@ -267,6 +270,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
+                required_signatures: 2,
                 signatures: vec![],
             }])
         }

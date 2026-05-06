@@ -25,6 +25,7 @@ pub(crate) async fn create_update_action(
     seq_no: SeqNo,
     action_hex: &str,
     sig: &ProposalSignature,
+    required_signatures: u16,
 ) -> Result<Proposal, AppError> {
     if !sig
         .signer_pubkey
@@ -40,6 +41,7 @@ pub(crate) async fn create_update_action(
         seq_no,
         authority: session.authority,
         status: ProposalStatus::Pending,
+        required_signatures,
         action_hex: action_hex.to_string(),
         signatures: vec![sig.clone()],
     };
@@ -140,7 +142,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
 
@@ -151,6 +153,7 @@ mod tests {
         );
         assert_eq!(proposal.action_hex, ACTION_HEX);
         assert_eq!(proposal.status, ProposalStatus::Pending);
+        assert_eq!(proposal.required_signatures, 2);
         assert_eq!(proposal.signatures.len(), 1);
         assert_eq!(proposal.signatures[0].signer_pubkey, sig.signer_pubkey);
 
@@ -167,11 +170,11 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
 
-        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig).await;
+        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2).await;
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
@@ -185,7 +188,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
 
@@ -213,7 +216,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
 
@@ -250,7 +253,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
 
@@ -280,10 +283,10 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, "aa", &sig)
+        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2)
             .await
             .unwrap();
-        create_update_action(&repo, session, 2, "bb", &sig)
+        create_update_action(&repo, session, 2, "bb", &sig, 2)
             .await
             .unwrap();
 
@@ -300,10 +303,10 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, "aa", &sig)
+        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2)
             .await
             .unwrap();
-        create_update_action(&repo, session, 2, "bb", &sig)
+        create_update_action(&repo, session, 2, "bb", &sig, 2)
             .await
             .unwrap();
 
@@ -327,7 +330,7 @@ mod tests {
             signer_pubkey: "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         };
 
-        let err = create_update_action(&repo, session, 1, ACTION_HEX, &sig)
+        let err = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Unauthorized));

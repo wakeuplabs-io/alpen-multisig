@@ -11,6 +11,7 @@ pub struct Proposal {
     pub seq_no: u64,
     pub authority: Authority,
     pub status: String,
+    pub required_signatures: u16,
     pub action_hex: String,
     pub signatures: Vec<ProposalSignature>,
 }
