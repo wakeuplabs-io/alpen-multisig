@@ -23,6 +23,22 @@ pub struct ListProposalsInput {
     pub status: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetProposalInput {
+    pub base_url: String,
+    pub action_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApproveProposalInput {
+    pub base_url: String,
+    pub action_id: String,
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalSignatureDto {
@@ -37,6 +53,7 @@ pub struct ProposalDto {
     pub seq_no: u64,
     pub authority: String,
     pub status: String,
+    pub required_signatures: u16,
     pub action_hex: String,
     pub signatures: Vec<ProposalSignatureDto>,
 }
@@ -54,6 +71,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         seq_no: proposal.seq_no,
         authority: proposal.authority.as_str().to_string(),
         status: proposal.status,
+        required_signatures: proposal.required_signatures,
         action_hex: proposal.action_hex,
         signatures: proposal.signatures.into_iter().map(map_signature).collect(),
     }
@@ -99,4 +117,26 @@ pub async fn proposals_list(input: ListProposalsInput) -> Result<Vec<ProposalDto
         .await
         .map_err(map_proposal_error)?;
     Ok(proposals.into_iter().map(map_proposal).collect())
+}
+
+#[tauri::command]
+pub async fn proposals_get(input: GetProposalInput) -> Result<ProposalDto, String> {
+    let client = build_client(input.base_url)?;
+    let proposal = proposals::get_update_action(&client, &input.action_id)
+        .await
+        .map_err(map_proposal_error)?;
+    Ok(map_proposal(proposal))
+}
+
+#[tauri::command]
+pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDto, String> {
+    let client = build_client(input.base_url)?;
+    let signature = Signature {
+        signer_pubkey: input.signer_pubkey,
+        signature_hex: input.signature_hex,
+    };
+    let proposal = proposals::approve_action(&client, &input.action_id, &signature)
+        .await
+        .map_err(map_proposal_error)?;
+    Ok(map_proposal(proposal))
 }

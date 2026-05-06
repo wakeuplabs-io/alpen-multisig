@@ -35,6 +35,7 @@ pub struct Proposal {
     pub seq_no: SeqNo,
     pub authority: Authority,
     pub status: ProposalStatus,
+    pub required_signatures: u16,
     /// Hex-encoded MultisigAction payload (opaque to backend).
     pub action_hex: String,
     pub signatures: Vec<ProposalSignature>,

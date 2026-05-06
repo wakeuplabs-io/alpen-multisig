@@ -14,8 +14,7 @@ pub(crate) async fn is_signer_member_for_authority(
     authority: Authority,
     signer_pubkey: &str,
 ) -> Result<bool, AppError> {
-    #[cfg(test)]
-    if let Some(is_member) = mock_membership_for_tests(rpc_url, authority, signer_pubkey) {
+    if let Some(is_member) = mock_membership(rpc_url, authority, signer_pubkey) {
         return Ok(is_member);
     }
 
@@ -32,6 +31,31 @@ pub(crate) async fn is_signer_member_for_authority(
     Ok(keys
         .iter()
         .any(|key| key.eq_ignore_ascii_case(signer_pubkey)))
+}
+
+pub(crate) async fn threshold_for_authority(
+    rpc_url: &str,
+    authority: Authority,
+) -> Result<u16, AppError> {
+    if let Some(threshold) = mock_threshold(rpc_url, authority) {
+        return Ok(threshold);
+    }
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).ok_or_else(|| {
+        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
+    })?;
+    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+    let authority_config = admin.authority(role).ok_or_else(|| {
+        AppError::BadRequest(format!(
+            "admin state missing authority for role `{:?}`",
+            role
+        ))
+    })?;
+    Ok(u16::from(authority_config.config().threshold()))
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
@@ -155,12 +179,7 @@ fn authority_keys_hex(
         .collect())
 }
 
-#[cfg(test)]
-fn mock_membership_for_tests(
-    rpc_url: &str,
-    authority: Authority,
-    signer_pubkey: &str,
-) -> Option<bool> {
+fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
     if rpc_url != "mock://asm-membership" {
         return None;
     }
@@ -179,6 +198,18 @@ fn mock_membership_for_tests(
     Some(is_member)
 }
 
+fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+
+    match authority {
+        Authority::StrataAdmin => Some(2),
+        Authority::SequencerManager => Some(2),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,7 +225,7 @@ mod tests {
 
     #[test]
     fn mock_membership_matches_signers_case_insensitive() {
-        let is_member = mock_membership_for_tests(
+        let is_member = mock_membership(
             "mock://asm-membership",
             Authority::StrataAdmin,
             "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",

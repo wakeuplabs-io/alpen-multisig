@@ -53,6 +53,14 @@ export default function App() {
 								}
 							/>
 							<Route
+								path="/proposals/:actionId/sign"
+								element={
+									<RequireAuth>
+										<SignPocScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
 								path="/dev/sign"
 								element={
 									<RequireAuth>

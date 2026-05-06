@@ -10,6 +10,7 @@ import {
 
 type Props = {
 	authorityLabel: string
+	signerPubkey: string | null
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	executedOrCanceled: Proposal[]
@@ -18,10 +19,12 @@ type Props = {
 	error: string | null
 	onRetry: () => void
 	onCreateProposal: () => void
+	onSignProposal: (actionId: string) => void
 }
 
 export function ProposalsDashboard({
 	authorityLabel,
+	signerPubkey,
 	quorumReached,
 	pending,
 	executedOrCanceled,
@@ -30,6 +33,7 @@ export function ProposalsDashboard({
 	error,
 	onRetry,
 	onCreateProposal,
+	onSignProposal,
 }: Props) {
 	const isEmpty =
 		!isLoading &&
@@ -85,6 +89,8 @@ export function ProposalsDashboard({
 						initialOpen
 						emptyMessage="No proposal has reached quorum yet."
 						proposals={quorumReached}
+						signerPubkey={signerPubkey}
+						onSignProposal={onSignProposal}
 					/>
 					<ProposalGroup
 						title="Pending"
@@ -93,6 +99,8 @@ export function ProposalsDashboard({
 						initialOpen
 						emptyMessage="No proposals are currently collecting signatures."
 						proposals={pending}
+						signerPubkey={signerPubkey}
+						onSignProposal={onSignProposal}
 					/>
 					<ProposalGroup
 						title="Executed & Canceled"
@@ -101,6 +109,8 @@ export function ProposalsDashboard({
 						initialOpen={false}
 						emptyMessage="No executed or canceled proposals yet."
 						proposals={executedOrCanceled}
+						signerPubkey={signerPubkey}
+						onSignProposal={onSignProposal}
 					/>
 					<ProposalGroup
 						title="Expired / Skipped"
@@ -109,6 +119,8 @@ export function ProposalsDashboard({
 						initialOpen={false}
 						emptyMessage="No expired proposals."
 						proposals={expiredOrSkipped}
+						signerPubkey={signerPubkey}
+						onSignProposal={onSignProposal}
 					/>
 				</div>
 			)}
@@ -145,6 +157,8 @@ function ProposalGroup({
 	initialOpen,
 	emptyMessage,
 	proposals,
+	signerPubkey,
+	onSignProposal,
 }: {
 	title: string
 	count: number
@@ -152,6 +166,8 @@ function ProposalGroup({
 	initialOpen: boolean
 	emptyMessage: string
 	proposals: Proposal[]
+	signerPubkey: string | null
+	onSignProposal: (actionId: string) => void
 }) {
 	const [open, setOpen] = useState(initialOpen)
 
@@ -186,7 +202,12 @@ function ProposalGroup({
 				) : (
 					<div className="flex flex-col gap-2.5">
 						{proposals.map((proposal) => (
-							<ProposalCard key={proposal.actionId} proposal={proposal} />
+							<ProposalCard
+								key={proposal.actionId}
+								proposal={proposal}
+								signerPubkey={signerPubkey}
+								onSignProposal={onSignProposal}
+							/>
 						))}
 					</div>
 				))}
@@ -194,16 +215,27 @@ function ProposalGroup({
 	)
 }
 
-function ProposalCard({ proposal }: { proposal: Proposal }) {
+function ProposalCard({
+	proposal,
+	signerPubkey,
+	onSignProposal,
+}: {
+	proposal: Proposal
+	signerPubkey: string | null
+	onSignProposal: (actionId: string) => void
+}) {
 	const [hovered, setHovered] = useState(false)
-	const requiredSignatures =
-		proposal.status === 'approved' ? proposal.signatures.length : proposal.signatures.length + 1
+	const requiredSignatures = proposal.requiredSignatures
 	const collectedSignatures = proposal.signatures.length
 	const signaturesProgress =
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalType(proposal)
 	const hasQuorum = proposal.status === 'approved' || collectedSignatures >= requiredSignatures
+	const signerAlreadySigned =
+		signerPubkey !== null &&
+		proposal.signatures.some((signature) => signature.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+	const canSign = proposal.status === 'pending' && !signerAlreadySigned
 
 	return (
 		<div
@@ -261,6 +293,20 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
 						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
 					>
 						Broadcast
+					</button>
+				</div>
+			) : canSign ? (
+				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
+					<p className="m-0 flex items-center gap-1 text-xs text-[#6b7280]">
+						<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
+						{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
+					</p>
+					<button
+						type="button"
+						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+						onClick={() => onSignProposal(proposal.actionId)}
+					>
+						Sign
 					</button>
 				</div>
 			) : (

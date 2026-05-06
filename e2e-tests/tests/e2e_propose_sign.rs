@@ -40,6 +40,7 @@ impl TestServer {
             .env("SERVER_HOST", "127.0.0.1")
             .env("SERVER_PORT", port.to_string())
             .env("RUST_LOG", "warn")
+            .env("STRATA_ADMIN_STATE_RPC_URL", "mock://asm-membership")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
             .spawn()

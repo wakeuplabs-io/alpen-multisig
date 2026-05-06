@@ -98,8 +98,8 @@ impl ProposalRepository for PostgresProposalRepository {
 
         let proposal_insert = sqlx::query(
             r#"
-            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex, required_signatures)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
         )
         .bind(&proposal.action_id.0)
@@ -107,6 +107,7 @@ impl ProposalRepository for PostgresProposalRepository {
         .bind(authority_to_db(proposal.authority))
         .bind(status_to_db(proposal.status))
         .bind(&proposal.action_hex)
+        .bind(proposal.required_signatures as i16)
         .execute(&mut *tx)
         .await;
 
@@ -155,7 +156,7 @@ impl ProposalRepository for PostgresProposalRepository {
     async fn find_by_action_id(&self, action_id: &ActionId) -> Result<Option<Proposal>, AppError> {
         let row = sqlx::query(
             r#"
-            SELECT action_id, seq_no, authority, status, action_hex
+            SELECT action_id, seq_no, authority, status, action_hex, required_signatures
             FROM proposals
             WHERE action_id = $1
             "#,
@@ -179,6 +180,7 @@ impl ProposalRepository for PostgresProposalRepository {
             seq_no: row.get::<i64, _>("seq_no") as u64,
             authority: authority_from_db(&authority)?,
             status: status_from_db(&status)?,
+            required_signatures: row.get::<i16, _>("required_signatures") as u16,
             action_hex: row.get("action_hex"),
             signatures,
         }))
@@ -196,7 +198,7 @@ impl ProposalRepository for PostgresProposalRepository {
             .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to begin tx: {e}")))?;
 
-        let exists = sqlx::query_scalar::<_, i64>("SELECT 1 FROM proposals WHERE action_id = $1")
+        let exists = sqlx::query_scalar::<_, i32>("SELECT 1 FROM proposals WHERE action_id = $1")
             .bind(&action_id.0)
             .fetch_optional(&mut *tx)
             .await
@@ -246,7 +248,7 @@ impl ProposalRepository for PostgresProposalRepository {
         let rows = if let Some(status) = status {
             sqlx::query(
                 r#"
-                SELECT action_id, seq_no, authority, status, action_hex
+                SELECT action_id, seq_no, authority, status, action_hex, required_signatures
                 FROM proposals
                 WHERE status = $1
                 ORDER BY created_at DESC
@@ -258,7 +260,7 @@ impl ProposalRepository for PostgresProposalRepository {
         } else {
             sqlx::query(
                 r#"
-                SELECT action_id, seq_no, authority, status, action_hex
+                SELECT action_id, seq_no, authority, status, action_hex, required_signatures
                 FROM proposals
                 ORDER BY created_at DESC
                 "#,
@@ -279,6 +281,7 @@ impl ProposalRepository for PostgresProposalRepository {
                 seq_no: row.get::<i64, _>("seq_no") as u64,
                 authority: authority_from_db(&authority)?,
                 status: status_from_db(&status)?,
+                required_signatures: row.get::<i16, _>("required_signatures") as u16,
                 action_hex: row.get("action_hex"),
                 signatures,
             });

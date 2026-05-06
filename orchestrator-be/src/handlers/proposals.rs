@@ -3,6 +3,7 @@ use crate::{
     domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
     error::{AppError, Result},
     handlers::auth_session::AuthenticatedSession,
+    infrastructure::asm_role_membership,
     state::AppState,
 };
 use axum::{
@@ -50,6 +51,9 @@ pub async fn create_proposal(
         signature_hex: body.signature_hex,
     };
 
+    let required_signatures =
+        asm_role_membership::threshold_for_authority(&state.asm_rpc_url, auth.authority).await?;
+
     let proposal = proposals::create_update_action(
         state.repo.as_ref(),
         proposals::SessionContext {
@@ -59,6 +63,7 @@ pub async fn create_proposal(
         body.seq_no,
         &body.action_hex,
         &sig,
+        required_signatures,
     )
     .await?;
 
