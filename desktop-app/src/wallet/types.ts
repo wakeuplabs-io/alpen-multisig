@@ -3,6 +3,7 @@ export type WalletVendor = 'mock' | 'ledger' | 'trezor' | 'mnemonic'
 export type WalletAdapterOptions = {
 	/** Required when vendor is 'mnemonic'. */
 	mnemonic?: string
+	passphrase?: string
 	derivationPath?: string
 }
 

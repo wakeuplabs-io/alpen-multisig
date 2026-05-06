@@ -1,17 +1,44 @@
+import { useState } from 'react'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+import type { WalletVendor } from '@/wallet/types'
 
 type Props = {
 	loading: boolean
 	connectViewState: ConnectViewState
 	error: string | null
 	onConnect: () => void
+	walletVendor: WalletVendor
+	onSelectWalletMethod: (method: 'trezor' | 'mnemonic', mnemonic?: string) => void
 }
 
-export function ConnectPhase({ loading, connectViewState, error, onConnect }: Props) {
+export function ConnectPhase({
+	loading,
+	connectViewState,
+	error,
+	onConnect,
+	walletVendor,
+	onSelectWalletMethod,
+}: Props) {
 	const isDetecting = loading && connectViewState !== 'success'
 	const isSuccess = connectViewState === 'success'
+	const [mnemonicInput, setMnemonicInput] = useState('')
+	const [mnemonicError, setMnemonicError] = useState<string | null>(null)
+
+	function handleUseTrezor() {
+		onSelectWalletMethod('trezor')
+		setMnemonicError(null)
+	}
+
+	function handleUseMnemonic() {
+		if (!mnemonicInput.trim()) {
+			setMnemonicError('Enter your mnemonic words first.')
+			return
+		}
+		onSelectWalletMethod('mnemonic', mnemonicInput)
+		setMnemonicError(null)
+	}
 
 	return (
 		<>
@@ -43,8 +70,46 @@ export function ConnectPhase({ loading, connectViewState, error, onConnect }: Pr
 			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
 				{isSuccess
 					? 'Trezor detected. Loading available addresses…'
-					: 'Plug in your Trezor and unlock it. We will detect the device automatically — no password or seed is ever shared.'}
+					: walletVendor === 'mnemonic'
+						? 'Mnemonic mode selected. Connect to continue with the words provided below.'
+						: 'Plug in your Trezor and unlock it. We will detect the device automatically — no password or seed is ever shared.'}
 			</p>
+
+			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3">
+				<p className="m-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[#9ca3af]">Connection method</p>
+				<div className="mt-2 flex items-center gap-2">
+					<button
+						type="button"
+						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+							walletVendor === 'trezor'
+								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
+								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+						}`}
+						onClick={handleUseTrezor}
+					>
+						Trezor
+					</button>
+					<button
+						type="button"
+						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+							walletVendor === 'mnemonic'
+								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
+								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+						}`}
+						onClick={handleUseMnemonic}
+					>
+						Palabras
+					</button>
+				</div>
+				<textarea
+					className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-xs text-[#111827] outline-none focus:border-[#9ca3af]"
+					rows={2}
+					placeholder="seed words..."
+					value={mnemonicInput}
+					onChange={(event) => setMnemonicInput(event.target.value)}
+				/>
+				{mnemonicError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{mnemonicError}</p>}
+			</div>
 
 			{/* Status message */}
 			{isDetecting && (
@@ -91,7 +156,7 @@ export function ConnectPhase({ loading, connectViewState, error, onConnect }: Pr
 				) : (
 					<>
 						<UsbStrokeWhiteIcon width={20} height={20} className="block shrink-0" />
-						Connect wallet
+						{walletVendor === 'mnemonic' ? 'Connect with words' : 'Connect wallet'}
 					</>
 				)}
 			</button>

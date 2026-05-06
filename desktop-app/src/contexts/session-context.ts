@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 import type { AuthRole, AuthSession } from '@/api/authentication'
-import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
+import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVendor } from '@/wallet/types'
 
 export type SessionContextValue = {
 	remainingMs: number
@@ -17,6 +17,7 @@ export type SessionContextValue = {
 	wallet: WalletAccountInfo | null
 	setConnectedWallet: (info: WalletAccountInfo | null) => void
 	adapter: WalletAdapter
+	selectAdapter: (vendor: WalletVendor, options?: WalletAdapterOptions) => void
 	clearSession: () => void
 }
 

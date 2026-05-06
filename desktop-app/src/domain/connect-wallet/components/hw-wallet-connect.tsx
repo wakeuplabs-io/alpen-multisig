@@ -8,10 +8,12 @@ import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
-import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
+import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/types'
 
 type Props = {
 	adapter: WalletAdapter
+	walletVendor: WalletVendor
+	onSelectWalletMethod: (method: 'trezor' | 'mnemonic', mnemonic?: string) => void
 	onConnected: (info: WalletAccountInfo | null) => void
 	/** Wired to the shell header so Disconnect lives only in the top bar. */
 	disconnectRef?: MutableRefObject<(() => void) | null>
@@ -34,6 +36,8 @@ type Props = {
 
 export function HwWalletConnect({
 	adapter,
+	walletVendor,
+	onSelectWalletMethod,
 	onConnected,
 	disconnectRef,
 	onHardwareSessionChange,
@@ -71,6 +75,8 @@ export function HwWalletConnect({
 					connectViewState={state.connectViewState}
 					error={state.error}
 					onConnect={() => void actions.connect()}
+					walletVendor={walletVendor}
+					onSelectWalletMethod={onSelectWalletMethod}
 				/>
 			)}
 			{state.phase === 'picking' && (
