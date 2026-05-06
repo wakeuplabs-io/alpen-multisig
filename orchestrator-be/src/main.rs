@@ -27,23 +27,33 @@ async fn main() -> anyhow::Result<()> {
 
     let config = config::Config::from_env().context("failed to load config")?;
 
-    let pool = PgPoolOptions::new()
-        .max_connections(10)
-        .connect(&config.database_url)
-        .await
-        .context("failed to connect to postgres")?;
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .context("failed to run database migrations")?;
-
-    let repo = Arc::new(infrastructure::postgres_repo::PostgresProposalRepository::new(pool));
-    let state = state::AppState::new(
-        repo,
-        config.strata_admin_state_rpc_url.clone(),
-        config.auth_challenge_ttl_ms,
-        config.auth_session_ttl_ms,
-    );
+    let state = if let Some(database_url) = &config.database_url {
+        let pool = PgPoolOptions::new()
+            .max_connections(10)
+            .connect(database_url)
+            .await
+            .context("failed to connect to postgres")?;
+        sqlx::migrate!()
+            .run(&pool)
+            .await
+            .context("failed to run database migrations")?;
+        let repo = Arc::new(infrastructure::postgres_repo::PostgresProposalRepository::new(pool));
+        state::AppState::new(
+            repo,
+            config.strata_admin_state_rpc_url.clone(),
+            config.auth_challenge_ttl_ms,
+            config.auth_session_ttl_ms,
+        )
+    } else {
+        tracing::warn!("DATABASE_URL not set — using in-memory storage (data will not persist)");
+        let repo = Arc::new(infrastructure::memory_repo::InMemoryProposalRepository::new());
+        state::AppState::new(
+            repo,
+            config.strata_admin_state_rpc_url.clone(),
+            config.auth_challenge_ttl_ms,
+            config.auth_session_ttl_ms,
+        )
+    };
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])

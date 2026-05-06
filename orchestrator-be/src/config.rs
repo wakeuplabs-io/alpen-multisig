@@ -7,7 +7,7 @@ pub struct Config {
     pub auth_challenge_ttl_ms: u64,
     pub auth_session_ttl_ms: u64,
     pub strata_admin_state_rpc_url: String,
-    pub database_url: String,
+    pub database_url: Option<String>,
 }
 
 impl Config {
@@ -30,10 +30,7 @@ impl Config {
                 .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string())
                 .trim()
                 .to_string(),
-            database_url: std::env::var("DATABASE_URL")
-                .context("DATABASE_URL is required")?
-                .trim()
-                .to_string(),
+            database_url: std::env::var("DATABASE_URL").ok().map(|s| s.trim().to_string()),
         })
     }
 }
