@@ -12,11 +12,14 @@ export function WalletSessionProvider({ children }: { children: ReactNode }) {
 		setWallet(info)
 	}, [])
 
-	const selectAdapter = useCallback((vendor: WalletVendor, options: WalletAdapterOptions = {}) => {
-		void adapter.disconnect()
-		setWallet(null)
-		setAdapter(createWalletAdapter(vendor, options))
-	}, [adapter])
+	const selectAdapter = useCallback(
+		(vendor: WalletVendor, options: WalletAdapterOptions = {}) => {
+			void adapter.disconnect()
+			setWallet(null)
+			setAdapter(createWalletAdapter(vendor, options))
+		},
+		[adapter],
+	)
 
 	const clearSession = useCallback(() => {
 		setWallet(null)

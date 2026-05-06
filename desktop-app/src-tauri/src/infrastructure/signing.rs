@@ -1,12 +1,12 @@
 use std::num::NonZero;
 use std::str::FromStr;
 
+use bip39::Mnemonic;
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
 use bitcoin::sign_message::signed_msg_hash;
 use bitcoin::{key::TweakedPublicKey, secp256k1::XOnlyPublicKey};
-use bip39::Mnemonic;
 use ssz::Decode;
 use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -117,7 +117,8 @@ pub fn list_mnemonic_addresses(
     let mut out = Vec::with_capacity(count as usize);
     for n in 0..count {
         let derivation_path = format!("m/86'/0'/73'/0/{n}");
-        let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, &derivation_path)?;
+        let secret_key =
+            derive_secret_key_from_mnemonic_path(mnemonic, passphrase, &derivation_path)?;
         let pubkey = PublicKey::from_secret_key(SECP256K1, &secret_key);
         let xonly = XOnlyPublicKey::from(pubkey);
         let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
