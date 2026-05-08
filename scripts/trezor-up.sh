@@ -53,6 +53,13 @@ PORT="21324"
 MODEL="T2B1"
 PIN="1234"
 
+if [[ -f "$CONFIG_FILE" ]]; then
+	CONFIG_PORT="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('trezor_port',''))" "$CONFIG_FILE" 2>/dev/null || true)"
+	if [[ -n "$CONFIG_PORT" ]]; then
+		PORT="$CONFIG_PORT"
+	fi
+fi
+
 if [[ ! -d "$CORE_DIR" ]]; then
 	echo "Directory does not exist: $CORE_DIR"
 	exit 1
@@ -80,7 +87,7 @@ fi
 echo "[4/5] Starting emulator..."
 (
 	cd "$CORE_DIR"
-	TREZOR_MODEL="$MODEL" uv run ./emu.py >/tmp/trezor-emu.log 2>&1 &
+	TREZOR_MODEL="$MODEL" uv run ./emu.py -t -P "$PORT" >/tmp/trezor-emu.log 2>&1 &
 )
 sleep 2
 
@@ -103,7 +110,7 @@ while (( ATTEMPT <= MAX_ATTEMPTS )); do
 		break
 	fi
 
-	if [[ "$LOAD_OUTPUT" == *"Device is initialized already"* ]]; then
+	if [[ "$LOAD_OUTPUT" == *"initialized already"* ]]; then
 		echo "Device is already initialized. Reusing existing emulator state."
 		break
 	fi

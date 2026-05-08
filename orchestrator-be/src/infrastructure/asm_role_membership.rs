@@ -33,6 +33,28 @@ pub(crate) async fn is_signer_member_for_authority(
         .any(|key| key.eq_ignore_ascii_case(signer_pubkey)))
 }
 
+/// Return the ordered list of hex-encoded compressed public keys for an authority's signer set.
+///
+/// The order is canonical (as stored in ASM state) and determines the signer index used in
+/// `IndexedSignature`. Called during broadcast to map stored pubkeys to their indices.
+pub(crate) async fn ordered_keys_for_authority(
+    rpc_url: &str,
+    authority: Authority,
+) -> Result<Vec<String>, AppError> {
+    if let Some(keys) = mock_ordered_keys(rpc_url, authority) {
+        return Ok(keys);
+    }
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).ok_or_else(|| {
+        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
+    })?;
+    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+    authority_keys_hex(&admin, role).map_err(AppError::BadRequest)
+}
+
 pub(crate) async fn threshold_for_authority(
     rpc_url: &str,
     authority: Authority,
@@ -177,6 +199,19 @@ fn authority_keys_hex(
         .iter()
         .map(|k| hex::encode(k.serialize()))
         .collect())
+}
+
+fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+    match authority {
+        Authority::StrataAdmin => Some(vec![
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
+        ]),
+        _ => None,
+    }
 }
 
 fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {

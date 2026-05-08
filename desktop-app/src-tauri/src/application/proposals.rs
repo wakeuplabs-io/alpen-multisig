@@ -8,16 +8,248 @@
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing and action encoding happen before reaching this layer.
 
+use bitcoin::{key::UntweakedKeypair, Network};
+use ssz::Decode;
+use strata_asm_txs_admin::actions::MultisigAction;
+use strata_l1_txfmt::MagicBytes;
+
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
 };
 use crate::domain::proposal::{Proposal, Signature};
+use crate::infrastructure::asm_role_membership;
+use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
+use crate::infrastructure::broadcast_tx;
 
 /// Errors that can occur during proposal operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProposalError {
     #[error("Orchestrator error: {0}")]
     Orchestrator(#[from] OrchestratorError),
+}
+
+/// Errors that can occur during direct broadcast from Tauri.
+#[derive(Debug, thiserror::Error)]
+pub enum BroadcastError {
+    #[error("failed to fetch proposal: {0}")]
+    ProposalFetch(#[from] OrchestratorError),
+    #[error("broadcast setup error: {0}")]
+    Setup(String),
+    #[error("bitcoin RPC error: {0}")]
+    BitcoinRpc(String),
+    #[error("confirmation timeout for txid {txid}")]
+    Timeout { txid: String },
+}
+
+/// Dust + protocol minimum sats locked in the commit output.
+const COMMIT_DUST_SATS: u64 = 1500;
+/// Estimated vbytes for an SPS-51 reveal transaction (conservative upper bound).
+const REVEAL_TX_VBYTES: u64 = 350;
+
+/// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
+///
+/// Returns `(commit_address, commit_amount_sats, estimated_fee_sats)`.
+pub async fn prepare_broadcast_bundle(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    operator_keypair: &UntweakedKeypair,
+    network: Network,
+    action_id: &str,
+) -> Result<(String, u64, u64), BroadcastError> {
+    let proposal = client.get_proposal(action_id).await?;
+
+    if proposal.status != "approved" {
+        return Err(BroadcastError::Setup(format!(
+            "proposal must be in 'approved' state to broadcast (current: {})",
+            proposal.status
+        )));
+    }
+
+    let canonical_keys =
+        asm_role_membership::ordered_keys_for_authority(asm_rpc_url, proposal.authority)
+            .await
+            .map_err(BroadcastError::Setup)?;
+
+    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex)
+        .map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        proposal.seq_no,
+        &proposal.action_hex,
+        &proposal.signatures,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let (commit_address, _, _) =
+        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
+
+    Ok((
+        commit_address.to_string(),
+        commit_amount_sats,
+        estimated_fee_sats,
+    ))
+}
+
+/// Execute the full commit → confirm → reveal sequence for an approved proposal directly
+/// from the desktop app, bypassing the orchestrator backend.
+///
+/// Returns `(commit_txid, reveal_txid)` on success.
+#[allow(clippy::too_many_arguments)]
+pub async fn broadcast_commit_then_reveal(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    operator_keypair: &UntweakedKeypair,
+    magic_bytes: MagicBytes,
+    network: Network,
+    action_id: &str,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+) -> Result<(String, String), BroadcastError> {
+    let proposal = client.get_proposal(action_id).await?;
+
+    if proposal.status != "approved" {
+        return Err(BroadcastError::Setup(format!(
+            "proposal must be in 'approved' state to broadcast (current: {})",
+            proposal.status
+        )));
+    }
+
+    let canonical_keys =
+        asm_role_membership::ordered_keys_for_authority(asm_rpc_url, proposal.authority)
+            .await
+            .map_err(BroadcastError::Setup)?;
+
+    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex)
+        .map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        proposal.seq_no,
+        &proposal.action_hex,
+        &proposal.signatures,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let (commit_address, reveal_script, taproot_spend_info) =
+        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
+
+    // Step 1: Broadcast commit.
+    let commit_txid = btc_rpc
+        .send_to_address(&commit_address.to_string(), commit_amount_sats, fee_rate)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+
+    // In regtest blocks never auto-mine — generate one so confirmation is immediate.
+    if network == Network::Regtest {
+        btc_rpc
+            .mine_blocks(1)
+            .await
+            .map_err(BroadcastError::BitcoinRpc)?;
+    }
+
+    // Step 2: Wait for commit confirmation.
+    wait_for_confirmation(
+        btc_rpc,
+        &commit_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+    )
+    .await?;
+
+    // Step 3: Build and broadcast reveal.
+    let commit_tx = btc_rpc
+        .get_raw_transaction(&commit_txid)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+
+    let commit_address_script = commit_address.script_pubkey();
+
+    let action_bytes = hex::decode(&proposal.action_hex)
+        .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
+    let action = MultisigAction::from_ssz_bytes(&action_bytes)
+        .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+
+    let reveal_tx = broadcast_tx::build_reveal_tx(
+        operator_keypair,
+        &reveal_script,
+        &taproot_spend_info,
+        &commit_tx,
+        &commit_address_script,
+        &action,
+        magic_bytes,
+        network,
+        reveal_fee_sats,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);
+    let reveal_txid = btc_rpc
+        .send_raw_transaction(&reveal_tx_hex)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+
+    if network == Network::Regtest {
+        btc_rpc
+            .mine_blocks(1)
+            .await
+            .map_err(BroadcastError::BitcoinRpc)?;
+    }
+
+    // Step 4: Wait for reveal confirmation.
+    wait_for_confirmation(
+        btc_rpc,
+        &reveal_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+    )
+    .await?;
+
+    Ok((commit_txid, reveal_txid))
+}
+
+async fn wait_for_confirmation(
+    btc_rpc: &dyn BitcoinRpcClient,
+    txid: &str,
+    poll_interval_ms: u64,
+    timeout_ms: u64,
+) -> Result<(), BroadcastError> {
+    let start = std::time::Instant::now();
+    loop {
+        let confs = btc_rpc
+            .get_transaction_confirmations(txid)
+            .await
+            .map_err(BroadcastError::BitcoinRpc)?;
+        if confs >= 1 {
+            return Ok(());
+        }
+        if start.elapsed().as_millis() as u64 >= timeout_ms {
+            return Err(BroadcastError::Timeout {
+                txid: txid.to_string(),
+            });
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
+    }
 }
 
 /// Create a new action and store the creator's signature.
@@ -208,6 +440,10 @@ mod tests {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
                 }],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
@@ -228,6 +464,10 @@ mod tests {
                 status: "pending".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
             })
         }
 
@@ -251,6 +491,10 @@ mod tests {
                 status: "pending".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
             })
         }
 
@@ -272,6 +516,10 @@ mod tests {
                 status: "pending".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
             }])
         }
     }

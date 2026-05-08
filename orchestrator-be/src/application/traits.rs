@@ -2,7 +2,7 @@
 //!
 //! Concrete implementations live in `crate::infrastructure`.
 
-use crate::domain::proposal::{ActionId, Proposal, ProposalStatus};
+use crate::domain::proposal::{ActionId, BroadcastStatus, Proposal, ProposalStatus};
 use crate::error::AppError;
 
 /// Persistence contract for proposals.
@@ -27,4 +27,15 @@ pub(crate) trait ProposalRepository: Send + Sync {
         &self,
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError>;
+
+    /// Update broadcast sub-status and related txids/error for an approved proposal.
+    async fn update_broadcast_status(
+        &self,
+        action_id: &ActionId,
+        status: BroadcastStatus,
+        proposal_status: Option<ProposalStatus>,
+        commit_txid: Option<&str>,
+        reveal_txid: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<Option<Proposal>, AppError>;
 }

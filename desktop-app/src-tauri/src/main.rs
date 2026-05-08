@@ -21,6 +21,8 @@ fn main() {
             commands::proposals::proposals_list,
             commands::proposals::proposals_get,
             commands::proposals::proposals_approve,
+            commands::proposals::proposals_prepare_broadcast,
+            commands::proposals::proposals_broadcast,
             commands::hw_wallet::get_trezor_info,
             commands::hw_wallet::list_hw_addresses,
             commands::hw_wallet::verify_address_on_device,

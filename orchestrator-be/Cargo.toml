@@ -29,6 +29,10 @@ ssz = { workspace = true }
 strata-asm-common = { workspace = true }
 strata-asm-params = { workspace = true }
 strata-asm-proto-administration = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-txs-admin = { workspace = true }
+strata-crypto = { workspace = true }
+strata-l1-txfmt = { workspace = true }
+strata-l1-envelope-fmt = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

@@ -1,6 +1,10 @@
+use std::str::FromStr;
+
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
-use crate::domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus};
+use crate::domain::proposal::{
+    ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+};
 use crate::error::AppError;
 use sqlx::{PgPool, Row};
 
@@ -87,6 +91,33 @@ async fn load_signatures(
         .collect())
 }
 
+fn row_to_proposal_no_sigs(
+    row: &sqlx::postgres::PgRow,
+    action_id: String,
+) -> Result<Proposal, AppError> {
+    let authority: String = row.get("authority");
+    let status: String = row.get("status");
+    let broadcast_status: String = row.get("broadcast_status");
+    Ok(Proposal {
+        action_id: ActionId(action_id),
+        seq_no: row.get::<i64, _>("seq_no") as u64,
+        authority: authority_from_db(&authority)?,
+        status: status_from_db(&status)?,
+        required_signatures: row.get::<i16, _>("required_signatures") as u16,
+        action_hex: row.get("action_hex"),
+        signatures: Vec::new(),
+        broadcast_status: BroadcastStatus::from_str(&broadcast_status)?,
+        commit_txid: row.get("commit_txid"),
+        reveal_txid: row.get("reveal_txid"),
+        broadcast_error: row.get("broadcast_error"),
+    })
+}
+
+const SELECT_PROPOSAL_COLS: &str = r#"
+    action_id, seq_no, authority, status, action_hex, required_signatures,
+    broadcast_status, commit_txid, reveal_txid, broadcast_error
+"#;
+
 #[async_trait::async_trait]
 impl ProposalRepository for PostgresProposalRepository {
     async fn save_proposal(&self, proposal: Proposal) -> Result<(), AppError> {
@@ -154,13 +185,9 @@ impl ProposalRepository for PostgresProposalRepository {
     }
 
     async fn find_by_action_id(&self, action_id: &ActionId) -> Result<Option<Proposal>, AppError> {
-        let row = sqlx::query(
-            r#"
-            SELECT action_id, seq_no, authority, status, action_hex, required_signatures
-            FROM proposals
-            WHERE action_id = $1
-            "#,
-        )
+        let row = sqlx::query(&format!(
+            "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE action_id = $1"
+        ))
         .bind(&action_id.0)
         .fetch_optional(&self.pool)
         .await
@@ -170,20 +197,11 @@ impl ProposalRepository for PostgresProposalRepository {
             return Ok(None);
         };
 
-        let action_id: String = row.get("action_id");
-        let signatures = load_signatures(&self.pool, &action_id).await?;
-        let authority: String = row.get("authority");
-        let status: String = row.get("status");
-
-        Ok(Some(Proposal {
-            action_id: ActionId(action_id),
-            seq_no: row.get::<i64, _>("seq_no") as u64,
-            authority: authority_from_db(&authority)?,
-            status: status_from_db(&status)?,
-            required_signatures: row.get::<i16, _>("required_signatures") as u16,
-            action_hex: row.get("action_hex"),
-            signatures,
-        }))
+        let action_id_str: String = row.get("action_id");
+        let signatures = load_signatures(&self.pool, &action_id_str).await?;
+        let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
+        proposal.signatures = signatures;
+        Ok(Some(proposal))
     }
 
     async fn add_signature(
@@ -246,25 +264,16 @@ impl ProposalRepository for PostgresProposalRepository {
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError> {
         let rows = if let Some(status) = status {
-            sqlx::query(
-                r#"
-                SELECT action_id, seq_no, authority, status, action_hex, required_signatures
-                FROM proposals
-                WHERE status = $1
-                ORDER BY created_at DESC
-                "#,
-            )
+            sqlx::query(&format!(
+                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE status = $1 ORDER BY created_at DESC"
+            ))
             .bind(status_to_db(status))
             .fetch_all(&self.pool)
             .await
         } else {
-            sqlx::query(
-                r#"
-                SELECT action_id, seq_no, authority, status, action_hex, required_signatures
-                FROM proposals
-                ORDER BY created_at DESC
-                "#,
-            )
+            sqlx::query(&format!(
+                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals ORDER BY created_at DESC"
+            ))
             .fetch_all(&self.pool)
             .await
         }
@@ -272,21 +281,52 @@ impl ProposalRepository for PostgresProposalRepository {
 
         let mut proposals = Vec::with_capacity(rows.len());
         for row in rows {
-            let action_id: String = row.get("action_id");
-            let authority: String = row.get("authority");
-            let status: String = row.get("status");
-            let signatures = load_signatures(&self.pool, &action_id).await?;
-            proposals.push(Proposal {
-                action_id: ActionId(action_id),
-                seq_no: row.get::<i64, _>("seq_no") as u64,
-                authority: authority_from_db(&authority)?,
-                status: status_from_db(&status)?,
-                required_signatures: row.get::<i16, _>("required_signatures") as u16,
-                action_hex: row.get("action_hex"),
-                signatures,
-            });
+            let action_id_str: String = row.get("action_id");
+            let signatures = load_signatures(&self.pool, &action_id_str).await?;
+            let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
+            proposal.signatures = signatures;
+            proposals.push(proposal);
         }
 
         Ok(proposals)
+    }
+
+    async fn update_broadcast_status(
+        &self,
+        action_id: &ActionId,
+        status: BroadcastStatus,
+        proposal_status: Option<ProposalStatus>,
+        commit_txid: Option<&str>,
+        reveal_txid: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<Option<Proposal>, AppError> {
+        let proposal_status_db = proposal_status.map(status_to_db);
+
+        sqlx::query(
+            r#"
+            UPDATE proposals
+            SET
+                broadcast_status  = $1,
+                status            = COALESCE($2, status),
+                commit_txid       = COALESCE($3, commit_txid),
+                reveal_txid       = COALESCE($4, reveal_txid),
+                broadcast_error   = $5,
+                updated_at        = NOW()
+            WHERE action_id = $6
+            "#,
+        )
+        .bind(status.to_string())
+        .bind(proposal_status_db)
+        .bind(commit_txid)
+        .bind(reveal_txid)
+        .bind(error)
+        .bind(&action_id.0)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("failed to update broadcast status: {e}"))
+        })?;
+
+        self.find_by_action_id(action_id).await
     }
 }

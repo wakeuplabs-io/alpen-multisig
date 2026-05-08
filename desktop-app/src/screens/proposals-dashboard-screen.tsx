@@ -128,6 +128,9 @@ export function ProposalsDashboardScreen() {
 				onSignProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/sign`)
 				}}
+				onBroadcastProposal={(actionId) => {
+					navigate(`/proposals/${actionId}/broadcast`)
+				}}
 			/>
 		</ScreenShell>
 	)

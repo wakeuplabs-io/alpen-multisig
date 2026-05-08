@@ -46,11 +46,29 @@ pub async fn complete_auth(
 }
 
 pub fn get_session() -> Result<Option<OrchestratorAuthSession>, String> {
-    Ok(state()
+    let mut lock = state()
         .lock()
-        .map_err(|_| "orchestrator auth state lock poisoned".to_string())?
+        .map_err(|_| "orchestrator auth state lock poisoned".to_string())?;
+
+    let expired = lock
         .session
-        .clone())
+        .as_ref()
+        .map(|s| now_unix_ms() >= s.expires_at_unix_ms)
+        .unwrap_or(false);
+
+    if expired {
+        lock.session = None;
+    }
+
+    Ok(lock.session.clone())
+}
+
+fn now_unix_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 pub async fn logout(base_url: &str) -> Result<(), String> {

@@ -1,7 +1,9 @@
 //! In-memory proposal repository for POC and testing.
 
 use crate::application::traits::ProposalRepository;
-use crate::domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus};
+use crate::domain::proposal::{
+    ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+};
 use crate::error::AppError;
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -75,5 +77,35 @@ impl ProposalRepository for InMemoryProposalRepository {
             .filter(|p| status.is_none_or(|s| p.status == s))
             .cloned()
             .collect())
+    }
+
+    async fn update_broadcast_status(
+        &self,
+        action_id: &ActionId,
+        status: BroadcastStatus,
+        proposal_status: Option<ProposalStatus>,
+        commit_txid: Option<&str>,
+        reveal_txid: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<Option<Proposal>, AppError> {
+        let mut proposals = self
+            .proposals
+            .write()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        let Some(proposal) = proposals.get_mut(action_id) else {
+            return Ok(None);
+        };
+        proposal.broadcast_status = status;
+        if let Some(s) = proposal_status {
+            proposal.status = s;
+        }
+        if let Some(txid) = commit_txid {
+            proposal.commit_txid = Some(txid.to_string());
+        }
+        if let Some(txid) = reveal_txid {
+            proposal.reveal_txid = Some(txid.to_string());
+        }
+        proposal.broadcast_error = error.map(|s| s.to_string());
+        Ok(Some(proposal.clone()))
     }
 }
