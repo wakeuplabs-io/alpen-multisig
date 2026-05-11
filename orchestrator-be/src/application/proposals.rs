@@ -247,15 +247,11 @@ pub(crate) async fn broadcast_commit_then_reveal(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let proposal = require_approved(repo, raw, action_id).await?;
+    let _proposal = require_approved(repo, raw, action_id).await?;
 
-    // Idempotency guard: only allow broadcast from idle state.
-    if proposal.broadcast_status != BroadcastStatus::Idle {
-        return Err(AppError::Conflict(format!(
-            "broadcast already in progress or completed (current broadcast_status: {:?})",
-            proposal.broadcast_status
-        )));
-    }
+    // Atomically claim broadcast rights: transitions idle → commit_broadcasted.
+    // Returns Conflict if another caller already claimed (race-safe).
+    let proposal = repo.claim_broadcast(action_id).await?;
 
     // --- Derive broadcast artifacts ---
     let canonical_keys = ordered_keys_for_authority(asm_rpc_url, proposal.authority).await?;
@@ -374,6 +370,7 @@ async fn do_broadcast(
     let action = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| AppError::BadRequest(format!("invalid SSZ action: {e:?}")))?;
 
+    let reveal_fee_sats = fee_rate_sats_per_vb * REVEAL_TX_VBYTES;
     let reveal_tx = broadcast_tx::build_reveal_tx(
         operator_keypair,
         reveal_script,
@@ -383,6 +380,7 @@ async fn do_broadcast(
         &action,
         magic_bytes,
         network,
+        reveal_fee_sats,
     )?;
 
     let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);

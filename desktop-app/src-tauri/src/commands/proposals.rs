@@ -1,5 +1,5 @@
 use desktop_app::application::orchestrator_auth;
-use desktop_app::application::orchestrator_client::OrchestratorError;
+use desktop_app::application::orchestrator_client::{OrchestratorClient, OrchestratorError};
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::domain::proposal::{Proposal, ProposalSignature, Signature};
@@ -15,6 +15,12 @@ pub struct CreateProposalInput {
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetNextSeqNoInput {
+    pub base_url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,6 +183,15 @@ fn parse_magic_bytes(hex_str: &str) -> Result<strata_l1_txfmt::MagicBytes, Strin
         .try_into()
         .map_err(|_| "magic bytes must be exactly 4 bytes".to_string())?;
     Ok(strata_l1_txfmt::MagicBytes::new(arr))
+}
+
+#[tauri::command]
+pub async fn proposals_get_next_seq_no(input: GetNextSeqNoInput) -> Result<u64, String> {
+    let client = build_client(input.base_url)?;
+    client
+        .get_next_seq_no()
+        .await
+        .map_err(|e: OrchestratorError| e.to_string())
 }
 
 #[tauri::command]

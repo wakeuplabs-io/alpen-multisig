@@ -79,6 +79,23 @@ impl ProposalRepository for InMemoryProposalRepository {
             .collect())
     }
 
+    async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError> {
+        let mut proposals = self
+            .proposals
+            .write()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        let Some(proposal) = proposals.get_mut(action_id) else {
+            return Err(AppError::NotFound);
+        };
+        if proposal.broadcast_status != BroadcastStatus::Idle {
+            return Err(AppError::Conflict(
+                "broadcast already in progress or completed".to_string(),
+            ));
+        }
+        proposal.broadcast_status = BroadcastStatus::CommitBroadcasted;
+        Ok(proposal.clone())
+    }
+
     async fn update_broadcast_status(
         &self,
         action_id: &ActionId,

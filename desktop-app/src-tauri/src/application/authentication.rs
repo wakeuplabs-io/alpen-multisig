@@ -13,6 +13,7 @@ const SESSION_TTL_MS: u64 = 1_800_000;
 const MEMBERSHIP_MAX_AGE_MS: u64 = 300_000;
 const SIG_FORMAT_P2WPKH_TX_BINDING: &str = "p2wpkh-tx-binding";
 const SIG_FORMAT_BITCOIN_MESSAGE: &str = "bitcoin-message";
+const SIG_FORMAT_RAW_ECDSA: &str = "raw-ecdsa";
 
 #[derive(Default)]
 struct AuthState {
@@ -137,10 +138,14 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
     let signature_format = input.signature_format.as_str();
     if signature_format != SIG_FORMAT_P2WPKH_TX_BINDING
         && signature_format != SIG_FORMAT_BITCOIN_MESSAGE
+        && signature_format != SIG_FORMAT_RAW_ECDSA
     {
         return Err(format!(
-            "unsupported signature format `{}`; expected one of: `{}`, `{}`",
-            input.signature_format, SIG_FORMAT_P2WPKH_TX_BINDING, SIG_FORMAT_BITCOIN_MESSAGE
+            "unsupported signature format `{}`; expected one of: `{}`, `{}`, `{}`",
+            input.signature_format,
+            SIG_FORMAT_P2WPKH_TX_BINDING,
+            SIG_FORMAT_BITCOIN_MESSAGE,
+            SIG_FORMAT_RAW_ECDSA
         ));
     }
 
@@ -182,6 +187,11 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
 
     match signature_format {
         SIG_FORMAT_BITCOIN_MESSAGE => challenge_verifier::verify_bitcoin_message_signature(
+            &challenge_hex,
+            &input.signer_pubkey_hex,
+            &input.signature_hex,
+        )?,
+        SIG_FORMAT_RAW_ECDSA => challenge_verifier::verify_signature(
             &challenge_hex,
             &input.signer_pubkey_hex,
             &input.signature_hex,

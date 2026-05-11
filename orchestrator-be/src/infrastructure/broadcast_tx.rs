@@ -181,6 +181,7 @@ pub(crate) fn build_reveal_tx(
     action: &MultisigAction,
     magic_bytes: MagicBytes,
     network: Network,
+    fee_sats: u64,
 ) -> Result<Transaction, AppError> {
     // Locate the vout in the commit tx that pays to our P2TR address.
     let (commit_vout, commit_output) = commit_tx
@@ -205,7 +206,7 @@ pub(crate) fn build_reveal_tx(
         .map_err(|e| AppError::Internal(anyhow::anyhow!("encode_script_buf: {e:?}")))?;
 
     // Fee and change: keep it simple — send change to a P2TR from the operator key.
-    let fee = Amount::from_sat(2000);
+    let fee = Amount::from_sat(fee_sats);
     let secp = Secp256k1::new();
     let (internal_key, _) = XOnlyPublicKey::from_keypair(operator_keypair);
     let change_address = Address::p2tr(&secp, internal_key, None, network);

@@ -17,6 +17,7 @@ fn main() {
             commands::orchestrator_auth::orchestrator_auth_complete,
             commands::orchestrator_auth::orchestrator_auth_get_session,
             commands::orchestrator_auth::orchestrator_auth_logout,
+            commands::proposals::proposals_get_next_seq_no,
             commands::proposals::proposals_create,
             commands::proposals::proposals_list,
             commands::proposals::proposals_get,

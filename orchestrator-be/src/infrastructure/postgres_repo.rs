@@ -291,6 +291,33 @@ impl ProposalRepository for PostgresProposalRepository {
         Ok(proposals)
     }
 
+    async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError> {
+        let row = sqlx::query(&format!(
+            r#"
+            UPDATE proposals
+            SET broadcast_status = 'commit_broadcasted', updated_at = NOW()
+            WHERE action_id = $1 AND broadcast_status = 'idle'
+            RETURNING {SELECT_PROPOSAL_COLS}
+            "#
+        ))
+        .bind(&action_id.0)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to claim broadcast: {e}")))?;
+
+        let Some(row) = row else {
+            return Err(AppError::Conflict(
+                "broadcast already in progress or completed".to_string(),
+            ));
+        };
+
+        let action_id_str: String = row.get("action_id");
+        let signatures = load_signatures(&self.pool, &action_id_str).await?;
+        let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
+        proposal.signatures = signatures;
+        Ok(proposal)
+    }
+
     async fn update_broadcast_status(
         &self,
         action_id: &ActionId,

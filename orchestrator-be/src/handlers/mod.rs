@@ -21,6 +21,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/verify", post(auth::auth_verify))
         .route("/auth/logout", post(auth::auth_logout))
         // Proposals
+        .route("/proposals/next-seq-no", get(proposals::get_next_seq_no))
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))

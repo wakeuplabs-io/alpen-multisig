@@ -43,6 +43,10 @@ export type BroadcastResult = {
 	revealTxid: string
 }
 
+export type GetNextSeqNoInput = {
+	baseUrl: string
+}
+
 export type CreateProposalInput = {
 	baseUrl: string
 	seqNo: number
@@ -66,6 +70,10 @@ export type ApproveProposalInput = {
 	actionId: string
 	signerPubkey: string
 	signatureHex: string
+}
+
+export function getNextSeqNo(input: GetNextSeqNoInput): Promise<ApiResult<number>> {
+	return tauriCall<number>('proposals_get_next_seq_no', { input })
 }
 
 export function createProposal(input: CreateProposalInput): Promise<ApiResult<Proposal>> {

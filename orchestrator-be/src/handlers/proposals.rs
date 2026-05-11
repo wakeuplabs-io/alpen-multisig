@@ -6,6 +6,11 @@ use crate::{
     infrastructure::asm_role_membership,
     state::AppState,
 };
+
+#[derive(Debug, Serialize)]
+pub struct NextSeqNoResponse {
+    pub next_seq_no: u64,
+}
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -87,6 +92,17 @@ pub async fn create_proposal(
     .await?;
 
     Ok((StatusCode::CREATED, Json(proposal)))
+}
+
+pub async fn get_next_seq_no(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+) -> Result<Json<NextSeqNoResponse>> {
+    let last_seqno =
+        asm_role_membership::last_seqno_for_authority(&state.asm_rpc_url, auth.authority).await?;
+    Ok(Json(NextSeqNoResponse {
+        next_seq_no: last_seqno + 1,
+    }))
 }
 
 pub async fn list_proposals(

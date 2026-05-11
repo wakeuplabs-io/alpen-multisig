@@ -67,6 +67,11 @@ pub struct OrchestratorAuthSession {
     pub expires_at_unix_ms: u64,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct NextSeqNoResponse {
+    pub next_seq_no: u64,
+}
+
 /// Abstracts the orchestrator HTTP API.
 #[async_trait::async_trait]
 pub trait OrchestratorClient: Send + Sync {
@@ -103,4 +108,7 @@ pub trait OrchestratorClient: Send + Sync {
         &self,
         status: Option<&str>,
     ) -> Result<Vec<Proposal>, OrchestratorError>;
+
+    /// Get the next valid sequence number for the authenticated authority.
+    async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError>;
 }

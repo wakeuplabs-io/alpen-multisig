@@ -28,6 +28,12 @@ pub(crate) trait ProposalRepository: Send + Sync {
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError>;
 
+    /// Atomically transition broadcast_status from `Idle` to `CommitBroadcasted`.
+    ///
+    /// Returns `Ok(proposal)` on success, `Err(Conflict)` if the proposal is not
+    /// in the `Idle` state (i.e. another caller already claimed it).
+    async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError>;
+
     /// Update broadcast sub-status and related txids/error for an approved proposal.
     async fn update_broadcast_status(
         &self,

@@ -55,6 +55,32 @@ pub(crate) async fn ordered_keys_for_authority(
     authority_keys_hex(&admin, role).map_err(AppError::BadRequest)
 }
 
+// TODO: decouple mock from implementation
+pub(crate) async fn last_seqno_for_authority(
+    rpc_url: &str,
+    authority: Authority,
+) -> Result<u64, AppError> {
+    if let Some(seqno) = mock_last_seqno(rpc_url, authority) {
+        return Ok(seqno);
+    }
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).ok_or_else(|| {
+        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
+    })?;
+    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+    let authority_config = admin.authority(role).ok_or_else(|| {
+        AppError::BadRequest(format!(
+            "admin state missing authority for role `{:?}`",
+            role
+        ))
+    })?;
+    Ok(authority_config.last_seqno())
+}
+
 pub(crate) async fn threshold_for_authority(
     rpc_url: &str,
     authority: Authority,
@@ -231,6 +257,17 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
         _ => return None,
     };
     Some(is_member)
+}
+
+fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+    match authority {
+        Authority::StrataAdmin => Some(0),
+        Authority::SequencerManager => Some(0),
+        _ => None,
+    }
 }
 
 fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {

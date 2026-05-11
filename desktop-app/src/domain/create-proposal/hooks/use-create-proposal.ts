@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getMultisigConfig } from '@/api/asm-state'
 import { buildAdminMultisigUpdateHex } from '@/api/action-builder'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
-import { createProposal, type Proposal } from '@/api/proposals'
+import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
@@ -25,6 +25,8 @@ export type UseCreateProposalReturn = {
 	multisigConfig: MultisigConfigSnapshot | null
 	multisigConfigVersion: number
 	isLoadingConfig: boolean
+	nextSeqNo: number | null
+	isLoadingSeqNo: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -39,6 +41,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const [multisigConfig, setMultisigConfig] = useState<MultisigConfigSnapshot | null>(null)
 	const [multisigConfigVersion, setMultisigConfigVersion] = useState(0)
 	const [isLoadingConfig, setIsLoadingConfig] = useState(true)
+	const [nextSeqNo, setNextSeqNo] = useState<number | null>(null)
+	const [isLoadingSeqNo, setIsLoadingSeqNo] = useState(true)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [createdProposal, setCreatedProposal] = useState<Proposal | null>(null)
@@ -89,6 +93,19 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			cancelled = true
 		}
 	}, [selectedRole])
+
+	useEffect(() => {
+		let cancelled = false
+		setIsLoadingSeqNo(true)
+		getNextSeqNo({ baseUrl: ORCHESTRATOR_BASE_URL }).then((result) => {
+			if (cancelled) return
+			setIsLoadingSeqNo(false)
+			if (result.ok) setNextSeqNo(result.data)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [])
 
 	async function submitCreateProposal(formData: CreateProposalFormValues) {
 		setError(null)
@@ -152,6 +169,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		multisigConfig,
 		multisigConfigVersion,
 		isLoadingConfig,
+		nextSeqNo,
+		isLoadingSeqNo,
 		isSubmitting,
 		error,
 		createdProposal,

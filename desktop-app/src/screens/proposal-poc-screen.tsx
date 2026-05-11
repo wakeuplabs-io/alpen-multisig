@@ -64,6 +64,8 @@ export function ProposalPocScreen() {
 					multisigConfig={createProposal.multisigConfig}
 					multisigConfigVersion={createProposal.multisigConfigVersion}
 					isLoadingConfig={createProposal.isLoadingConfig}
+					nextSeqNo={createProposal.nextSeqNo}
+					isLoadingSeqNo={createProposal.isLoadingSeqNo}
 					isSubmitting={createProposal.isSubmitting}
 					error={createProposal.error}
 					createdProposal={createProposal.createdProposal}

@@ -24,6 +24,8 @@ type Props = {
 	multisigConfig: MultisigConfigSnapshot | null
 	multisigConfigVersion: number
 	isLoadingConfig: boolean
+	nextSeqNo: number | null
+	isLoadingSeqNo: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -48,6 +50,8 @@ export function CreateProposalForm({
 	multisigConfig,
 	multisigConfigVersion,
 	isLoadingConfig,
+	nextSeqNo,
+	isLoadingSeqNo,
 	isSubmitting,
 	error,
 	createdProposal,
@@ -107,6 +111,14 @@ export function CreateProposalForm({
 			threshold: String(multisigConfig.threshold),
 		})
 	}, [multisigConfigVersion, multisigConfig, reset, getValues])
+
+	useEffect(() => {
+		if (nextSeqNo === null) return
+		const current = getValues('seqNo')
+		if (current.trim() === '') {
+			form.setValue('seqNo', String(nextSeqNo), { shouldValidate: false })
+		}
+	}, [nextSeqNo, form, getValues])
 
 	const previewData = getValues()
 	const previewAddingKeys = previewData.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
@@ -224,7 +236,22 @@ export function CreateProposalForm({
 									label="Sequence number"
 									tooltip="The monotonically increasing sequence number for this proposal. Must match the expected next value on-chain."
 								/>
-								<input type="number" min={0} className={numberInputClass} {...form.register('seqNo')} placeholder="0" />
+								<div className="relative">
+									<input
+										type="number"
+										min={0}
+										className={numberInputClass}
+										{...form.register('seqNo')}
+										placeholder={isLoadingSeqNo ? 'Loading…' : '0'}
+										disabled={isLoadingSeqNo}
+									/>
+									{isLoadingSeqNo && (
+										<span className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-[#6b7280]">...</span>
+									)}
+								</div>
+								{!isLoadingSeqNo && nextSeqNo !== null && !formState.dirtyFields.seqNo && (
+									<p className="mt-1 text-xs text-[#6b7280]">Auto-detected from chain</p>
+								)}
 								{formState.errors.seqNo?.message && <p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>}
 							</div>
 
