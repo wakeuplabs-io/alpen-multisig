@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { Proposal } from '@/api/proposals'
-import { EyeGrayIcon, PencilWhiteIcon, SignaturePenMutedIcon } from '@/assets/icons'
+import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import {
@@ -10,7 +10,6 @@ import {
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
 import {
 	buildCreateProposalFormSchema,
-	countSignersAfterUpdate,
 	type CreateProposalFormValues,
 } from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
@@ -125,12 +124,7 @@ export function CreateProposalForm({
 	const previewRemovingKeys = previewData.keysToRemove
 		.map((row) => row.value.trim())
 		.filter((value) => value.length > 0)
-	const previewResultingSignerCount =
-		previewData.actionType === 'signer_update' && multisigConfig !== null
-			? countSignersAfterUpdate(multisigConfig.signers, previewData.keysToRemove, previewData.keysToAdd)
-			: null
-
-	async function handlePreviewClick() {
+async function handlePreviewClick() {
 		const isValid = await trigger(undefined, { shouldFocus: true })
 		if (!isValid) return
 		try {
@@ -181,13 +175,41 @@ export function CreateProposalForm({
 		<FormProvider {...form}>
 			<div className="w-full max-w-[760px]">
 				<div className="mb-6">
-					<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
-						Create {authorityLabel} proposal
-					</h1>
-					<p className="m-0 mt-2 text-sm text-[#6b7280]">
-						Authority: <span className="font-semibold text-[#111827]">{authorityLabel}</span> · You will sign this
-						proposal immediately after creation.
-					</p>
+					{isPreviewMode ? (
+						<>
+							<button
+								type="button"
+								className="mb-4 flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
+								onClick={() => setIsPreviewMode(false)}
+							>
+								<span>←</span> Back to new proposal
+							</button>
+							<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
+								Review &amp; Sign
+							</h1>
+							<p className="m-0 mt-2 text-sm text-[#6b7280]">
+								You are signing the proposal you just drafted. Review the payload, then confirm on your Trezor.
+								Nothing is sent until you sign.
+							</p>
+						</>
+					) : (
+						<>
+							<button
+								type="button"
+								className="mb-4 flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
+								onClick={onCancel}
+							>
+								← Back to proposals
+							</button>
+							<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
+								Create {authorityLabel} proposal
+							</h1>
+							<p className="m-0 mt-2 text-sm text-[#6b7280]">
+								Authority: <span className="font-semibold text-[#111827]">{authorityLabel}</span> · You will sign
+								this proposal immediately after creation.
+							</p>
+						</>
+					)}
 				</div>
 
 				<form
@@ -203,9 +225,12 @@ export function CreateProposalForm({
 							keysToAdd={previewAddingKeys}
 							keysToRemove={previewRemovingKeys}
 							threshold={previewData.threshold}
-							resultingSignerCount={previewResultingSignerCount}
 							newVkHex={previewData.newVkHex}
 							sighashHex={previewSighashHex}
+							authorityLabel={authorityLabel}
+							currentSigners={multisigConfig?.signers ?? []}
+							currentThreshold={multisigConfig?.threshold ?? 0}
+							createdProposal={createdProposal}
 						/>
 					) : (
 						<div className="flex flex-col gap-6">
@@ -278,56 +303,59 @@ export function CreateProposalForm({
 						</div>
 					)}
 
-					{error && (
+					{error && !isPreviewMode && (
 						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#991b1b]">
 							{error}
 						</div>
 					)}
 
-					{createdProposal && (
-						<div className="mt-6 rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3">
-							<p className="m-0 text-sm font-medium text-[#166534]">Proposal created successfully</p>
-							<p className="m-0 mt-1 font-mono text-xs text-[#15803d]">{createdProposal.actionId}</p>
-						</div>
-					)}
-
 					<div className="mt-8 border-t border-[#e5e7eb] pt-5">
 						<div className="flex items-center justify-end gap-3">
-							<button
-								type="button"
-								className="rounded-full border border-[#0a0a0a] bg-white px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
-								onClick={onCancel}
-								disabled={isSubmitting}
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-sm font-medium text-[#111827] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
-								disabled={isSubmitting}
-								onClick={() => {
-									if (isPreviewMode) {
-										setIsPreviewMode(false)
-										return
-									}
-									void handlePreviewClick()
-								}}
-							>
-								{isPreviewMode ? (
-									<SignaturePenMutedIcon width={15} height={15} className="block shrink-0" />
+							{isPreviewMode ? (
+								createdProposal ? (
+									<button
+										type="button"
+										className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a]"
+										onClick={onCancel}
+									>
+										Continue →
+									</button>
 								) : (
-									<EyeGrayIcon width={15} height={15} className="block shrink-0" />
-								)}
-								{isPreviewMode ? 'Edit' : 'Preview'}
-							</button>
-							<button
-								type="submit"
-								className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
-								disabled={isSubmitting || isLoadingConfig || !formState.isValid}
-							>
-								<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
-								{isSubmitting ? 'Signing...' : 'Create & sign'}
-							</button>
+									<>
+										{error && (
+											<p className="mr-auto text-sm text-[#b91c1c]">{error}</p>
+										)}
+										<button
+											type="submit"
+											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+										>
+											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
+											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
+										</button>
+									</>
+								)
+							) : (
+								<>
+									<button
+										type="button"
+										className="rounded-full border border-[#0a0a0a] bg-white px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
+										onClick={onCancel}
+										disabled={isSubmitting}
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-sm font-medium text-[#111827] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
+										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+										onClick={() => void handlePreviewClick()}
+									>
+										<EyeGrayIcon width={15} height={15} className="block shrink-0" />
+										Preview and Create
+									</button>
+								</>
+							)}
 						</div>
 					</div>
 				</form>

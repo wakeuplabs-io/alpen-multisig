@@ -1,8 +1,8 @@
-import { MinusHoverIcon, MinusMutedIcon } from '@/assets/icons'
-import { useMemo } from 'react'
+import { TrashIcon, UndoIcon } from '@/assets/icons'
+import { useState } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
-import { fieldErrorClass, monoInputClass, numberInputClass } from '../model/create-proposal-form-styles'
+import { fieldErrorClass, numberInputClass } from '../model/create-proposal-form-styles'
 import { LabelWithTooltip } from './create-proposal-form-primitives'
 
 type Props = {
@@ -11,162 +11,172 @@ type Props = {
 	currentThreshold: number
 }
 
-function normalizeSignerKey(value: string): string {
-	const trimmed = value.trim()
-	const withoutPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
-	return withoutPrefix.toLowerCase()
-}
-
-export function SignerUpdateFormFields({ isLoadingConfig, currentSigners, currentThreshold }: Props) {
+export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Props) {
 	const {
 		register,
 		control,
 		formState: { errors },
+		setValue,
 	} = useFormContext<CreateProposalFormValues>()
+
+	const [newSignerInput, setNewSignerInput] = useState('')
 
 	const keysToAddArray = useFieldArray({ control, name: 'keysToAdd' })
 	const keysToRemoveArray = useFieldArray({ control, name: 'keysToRemove' })
 	const keysToAdd = useWatch({ control, name: 'keysToAdd' }) ?? []
 	const keysToRemove = useWatch({ control, name: 'keysToRemove' }) ?? []
 
-	const resultingSignerCount = useMemo(() => {
-		const removeSet = new Set(
-			keysToRemove.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0),
-		)
-		const addSet = new Set(keysToAdd.map((row) => normalizeSignerKey(row.value)).filter((value) => value.length > 0))
-		const remainingCurrent = currentSigners.filter((signer) => !removeSet.has(normalizeSignerKey(signer)))
-		return new Set([...remainingCurrent.map((signer) => normalizeSignerKey(signer)), ...Array.from(addSet)]).size
-	}, [currentSigners, keysToAdd, keysToRemove])
+	const removedSet = new Set(keysToRemove.map((r) => r.value.trim()).filter((v) => v.length > 0))
+	const visibleAddedSigners = keysToAdd
+		.map((r, i) => ({ value: r.value.trim(), index: i }))
+		.filter((r) => r.value.length > 0)
+
+	function handleRemoveCurrent(signer: string) {
+		const emptyIdx = keysToRemove.findIndex((r) => r.value.trim() === '')
+		if (emptyIdx !== -1) {
+			setValue(`keysToRemove.${emptyIdx}.value`, signer, { shouldValidate: true })
+		} else {
+			keysToRemoveArray.append({ value: signer })
+		}
+	}
+
+	function handleUndoRemove(signer: string) {
+		const matchIdx = keysToRemove.findIndex((r) => r.value.trim() === signer.trim())
+		if (matchIdx === -1) return
+		if (keysToRemoveArray.fields.length > 1) {
+			keysToRemoveArray.remove(matchIdx)
+		} else {
+			setValue('keysToRemove.0.value', '', { shouldValidate: true })
+		}
+	}
+
+	function handleRemoveAdded(fieldIndex: number) {
+		if (keysToAddArray.fields.length > 1) {
+			keysToAddArray.remove(fieldIndex)
+		} else {
+			setValue('keysToAdd.0.value', '', { shouldValidate: true })
+		}
+	}
+
+	function handleAddSigner() {
+		const trimmed = newSignerInput.trim()
+		if (!trimmed) return
+		const emptyIdx = keysToAdd.findIndex((r) => r.value.trim() === '')
+		if (emptyIdx !== -1) {
+			setValue(`keysToAdd.${emptyIdx}.value`, trimmed, { shouldValidate: true })
+		} else {
+			keysToAddArray.append({ value: trimmed })
+		}
+		setNewSignerInput('')
+	}
+
+	const hasNoSigners = currentSigners.length === 0 && visibleAddedSigners.length === 0
 
 	return (
 		<>
-			<div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-4">
-				<p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Current signer set</p>
-				<p className="m-0 mt-2 text-sm text-[#6b7280]">
-					<span className="text-[#9ca3af]">Threshold:</span> {currentThreshold}
-					<span className="mx-2 text-[#d1d5db]">|</span>
-					<span className="text-[#9ca3af]">Signers:</span> {currentSigners.length}
-					<span className="mx-2 text-[#d1d5db]">|</span>
-					<span className="text-[#9ca3af]">Resulting signers:</span> {resultingSignerCount}
-				</p>
-				<div className="mt-3 max-h-40 space-y-1 overflow-auto">
-					{currentSigners.map((signer) => (
-						<p key={signer} className="m-0 break-all rounded bg-white px-2 py-1 font-mono text-xs text-[#374151]">
-							{signer}
-						</p>
-					))}
-				</div>
-			</div>
-
 			<div>
-				<label className="text-sm font-medium text-[#111827]">Keys to add</label>
-				<div className="mt-1.5 flex flex-col gap-2">
-					{keysToAddArray.fields.map((field, index) => (
-						<div key={field.id} className="flex items-start gap-2">
-							<div className="min-w-0 flex-1">
-								<input
-									type="text"
-									className={monoInputClass}
-									{...register(`keysToAdd.${index}.value`)}
-									placeholder="02..."
-									spellCheck={false}
-								/>
-								{errors.keysToAdd?.[index]?.value?.message && (
-									<p className={fieldErrorClass}>{errors.keysToAdd[index]?.value?.message}</p>
-								)}
-							</div>
-							{keysToAddArray.fields.length > 1 && (
-								<button
-									type="button"
-									className="group/remove-key relative mt-2 shrink-0 rounded-md p-1.5 text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
-									onClick={() => keysToAddArray.remove(index)}
-									aria-label="Remove key"
-								>
-									<span className="relative inline-flex h-3.5 w-3.5">
-										<MinusMutedIcon
-											width={14}
-											height={14}
-											className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-opacity group-hover/remove-key:opacity-0"
-										/>
-										<MinusHoverIcon
-											width={14}
-											height={14}
-											className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/remove-key:opacity-100"
-										/>
-									</span>
-								</button>
-							)}
-						</div>
-					))}
-				</div>
-				{typeof errors.keysToAdd?.message === 'string' && <p className={fieldErrorClass}>{errors.keysToAdd.message}</p>}
-				<button
-					type="button"
-					className="mt-2 flex items-center gap-1 text-sm font-medium text-[#5b44c9] hover:text-[#4736a3]"
-					onClick={() => keysToAddArray.append({ value: '' })}
-				>
-					<span className="text-base leading-none">+</span> Add another
-				</button>
-			</div>
-
-			<div>
-				<label className="text-sm font-medium text-[#111827]">Keys to remove</label>
-				<div className="mt-1.5 flex flex-col gap-2">
-					{isLoadingConfig ? (
-						<div className="h-10 animate-pulse rounded-lg bg-[#f3f4f6]" />
-					) : (
-						keysToRemoveArray.fields.map((field, index) => (
-							<div key={field.id} className="flex items-start gap-2">
-								<div className="min-w-0 flex-1">
-									<input
-										type="text"
-										className={monoInputClass}
-										{...register(`keysToRemove.${index}.value`)}
-										placeholder="02..."
-										spellCheck={false}
-									/>
-									{errors.keysToRemove?.[index]?.value?.message && (
-										<p className={fieldErrorClass}>{errors.keysToRemove[index]?.value?.message}</p>
-									)}
-								</div>
-								{keysToRemoveArray.fields.length > 1 && (
+				<p className="mb-3 text-sm font-medium text-[#6b7280]">Update Signers</p>
+				{isLoadingConfig ? (
+					<div className="space-y-2">
+						{[1, 2, 3].map((i) => (
+							<div key={i} className="h-12 animate-pulse rounded-lg bg-[#f3f4f6]" />
+						))}
+					</div>
+				) : (
+					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
+						<div className="flex flex-col gap-2">
+							{currentSigners.map((signer) => {
+								const isPendingRemoval = removedSet.has(signer.trim())
+								return (
+									<div
+										key={signer}
+										className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
+									>
+										{isPendingRemoval ? (
+											<span className="shrink-0 text-sm font-medium text-[#dc2626]">–</span>
+										) : (
+											<span className="h-4 w-4 shrink-0 rounded-full border border-[#d1d5db]" />
+										)}
+										<span
+											className={`min-w-0 flex-1 break-all font-mono text-sm ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+										>
+											{signer}
+										</span>
+										{isPendingRemoval ? (
+											<button
+												type="button"
+												className="shrink-0 rounded-md border border-[#3b82f6] p-1 text-[#3b82f6] hover:bg-[#eff6ff]"
+												onClick={() => handleUndoRemove(signer)}
+												aria-label="Undo remove signer"
+											>
+												<UndoIcon width={14} height={14} />
+											</button>
+										) : (
+											<button
+												type="button"
+												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												onClick={() => handleRemoveCurrent(signer)}
+												aria-label="Remove signer"
+											>
+												<TrashIcon width={16} height={16} />
+											</button>
+										)}
+									</div>
+								)
+							})}
+							{visibleAddedSigners.map(({ value, index }) => (
+								<div key={index} className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3">
+									<span className="h-4 w-4 shrink-0 rounded-full border border-[#d97706]" />
+									<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#374151]">{value}</span>
 									<button
 										type="button"
-										className="group/remove-key relative mt-2 shrink-0 rounded-md p-1.5 text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#374151]"
-										onClick={() => keysToRemoveArray.remove(index)}
-										aria-label="Remove key"
+										className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+										onClick={() => handleRemoveAdded(index)}
+										aria-label="Remove added signer"
 									>
-										<span className="relative inline-flex h-3.5 w-3.5">
-											<MinusMutedIcon
-												width={14}
-												height={14}
-												className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-opacity group-hover/remove-key:opacity-0"
-											/>
-											<MinusHoverIcon
-												width={14}
-												height={14}
-												className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/remove-key:opacity-100"
-											/>
-										</span>
+										<TrashIcon width={16} height={16} />
 									</button>
-								)}
-							</div>
-						))
-					)}
-				</div>
-				{typeof errors.keysToRemove?.message === 'string' && (
-					<p className={fieldErrorClass}>{errors.keysToRemove.message}</p>
+								</div>
+							))}
+							{hasNoSigners && (
+								<div className="py-4 text-center text-sm text-[#9ca3af]">No signers remaining.</div>
+							)}
+						</div>
+					</div>
 				)}
-				<button
-					type="button"
-					className="mt-2 flex items-center gap-1 text-sm font-medium text-[#5b44c9] hover:text-[#4736a3]"
-					onClick={() => keysToRemoveArray.append({ value: '' })}
-				>
-					<span className="text-base leading-none">+</span> Add another
-				</button>
+				{typeof errors.keysToAdd?.message === 'string' && (
+					<p className={fieldErrorClass}>{errors.keysToAdd.message}</p>
+				)}
 			</div>
 
-			<div className="max-w-[160px]">
+			<div>
+				<label className="text-sm font-medium text-[#6b7280]">Add new signer address</label>
+				<div className="mt-1.5 flex gap-2">
+					<input
+						type="text"
+						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
+						placeholder="bc1p..."
+						value={newSignerInput}
+						onChange={(e) => setNewSignerInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault()
+								handleAddSigner()
+							}
+						}}
+						spellCheck={false}
+					/>
+					<button
+						type="button"
+						className="shrink-0 rounded-lg border border-[#0a0a0a] px-4 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
+						onClick={handleAddSigner}
+					>
+						+ Add
+					</button>
+				</div>
+			</div>
+
+			<div className="max-w-40">
 				<LabelWithTooltip label="New threshold" tooltip="Minimum number of signers required to approve a proposal." />
 				<input type="number" min={1} max={255} className={numberInputClass} {...register('threshold')} />
 				{errors.threshold?.message && <p className={fieldErrorClass}>{errors.threshold.message}</p>}
