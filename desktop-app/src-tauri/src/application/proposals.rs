@@ -522,6 +522,16 @@ mod tests {
                 broadcast_error: None,
             }])
         }
+
+        async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            Ok(1)
+        }
     }
 
     // ─── Tests ──────────────────────────────────────────────────────────────

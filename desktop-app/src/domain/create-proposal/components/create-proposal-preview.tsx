@@ -78,17 +78,13 @@ export function CreateProposalPreview({
 					</div>
 					<div>
 						<p className="m-0 font-semibold text-[#065f46]">Signature collected</p>
-						<p className="m-0 mt-0.5 text-sm text-[#6b7280]">
-							Your signature has been submitted to the backend.
-						</p>
+						<p className="m-0 mt-0.5 text-sm text-[#6b7280]">Your signature has been submitted to the backend.</p>
 					</div>
 				</div>
 
 				{signatureHex && (
 					<div>
-						<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
-							Your Signature
-						</p>
+						<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Your Signature</p>
 						<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-4 py-3">
 							<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#111827]">{signatureHex}</span>
 							<CopyButton text={signatureHex} />
@@ -115,9 +111,7 @@ export function CreateProposalPreview({
 
 			{actionType === 'signer_update' ? (
 				<div>
-					<p className="m-0 mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
-						Signer Set Change
-					</p>
+					<p className="m-0 mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Signer Set Change</p>
 					<div className="overflow-hidden rounded-xl border border-[#e5e7eb]">
 						<div className="grid grid-cols-2">
 							<div className="border-b border-r border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">

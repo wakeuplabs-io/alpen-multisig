@@ -139,8 +139,7 @@ pub fn sign_with_mnemonic_path(
     sighash_hex: &str,
 ) -> Result<SignatureResult, String> {
     let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, derivation_path)?;
-    let hash_bytes =
-        hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
+    let hash_bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
     let message = Message::from_digest_slice(&hash_bytes)
         .map_err(|e| format!("invalid sighash (must be 32 bytes): {e}"))?;
     let sig = SECP256K1.sign_ecdsa(&message, &secret_key);
@@ -365,12 +364,16 @@ mod tests {
         let path = "m/86'/0'/73'/0/0";
         let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
 
-        let result = sign_with_mnemonic_path(mnemonic, "", path, &sighash.sighash_hex)
-            .expect("sign ok");
+        let result =
+            sign_with_mnemonic_path(mnemonic, "", path, &sighash.sighash_hex).expect("sign ok");
 
         // 64-byte compact r||s — verify directly against raw sighash bytes.
         let sig_bytes = hex::decode(&result.signature_hex).expect("hex ok");
-        assert_eq!(sig_bytes.len(), 64, "mnemonic path must produce 64-byte compact sig");
+        assert_eq!(
+            sig_bytes.len(),
+            64,
+            "mnemonic path must produce 64-byte compact sig"
+        );
 
         let pk_bytes = hex::decode(&result.public_key_hex).expect("hex ok");
         let pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).expect("pk ok");
@@ -378,7 +381,9 @@ mod tests {
         let msg = Message::from_digest_slice(&hash_bytes).expect("msg ok");
         let sig = bitcoin::secp256k1::ecdsa::Signature::from_compact(&sig_bytes).expect("sig ok");
 
-        SECP256K1.verify_ecdsa(&msg, &sig, &pk).expect("signature must verify against raw sighash");
+        SECP256K1
+            .verify_ecdsa(&msg, &sig, &pk)
+            .expect("signature must verify against raw sighash");
     }
 
     #[test]

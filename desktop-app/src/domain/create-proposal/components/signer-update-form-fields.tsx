@@ -125,7 +125,10 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								)
 							})}
 							{visibleAddedSigners.map(({ value, index }) => (
-								<div key={index} className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3">
+								<div
+									key={index}
+									className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
+								>
 									<span className="h-4 w-4 shrink-0 rounded-full border border-[#d97706]" />
 									<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#374151]">{value}</span>
 									<button
@@ -138,15 +141,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 									</button>
 								</div>
 							))}
-							{hasNoSigners && (
-								<div className="py-4 text-center text-sm text-[#9ca3af]">No signers remaining.</div>
-							)}
+							{hasNoSigners && <div className="py-4 text-center text-sm text-[#9ca3af]">No signers remaining.</div>}
 						</div>
 					</div>
 				)}
-				{typeof errors.keysToAdd?.message === 'string' && (
-					<p className={fieldErrorClass}>{errors.keysToAdd.message}</p>
-				)}
+				{typeof errors.keysToAdd?.message === 'string' && <p className={fieldErrorClass}>{errors.keysToAdd.message}</p>}
 			</div>
 
 			<div>

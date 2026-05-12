@@ -8,10 +8,7 @@ import {
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
-import {
-	buildCreateProposalFormSchema,
-	type CreateProposalFormValues,
-} from '../model/create-proposal.schema'
+import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
@@ -124,7 +121,7 @@ export function CreateProposalForm({
 	const previewRemovingKeys = previewData.keysToRemove
 		.map((row) => row.value.trim())
 		.filter((value) => value.length > 0)
-async function handlePreviewClick() {
+	async function handlePreviewClick() {
 		const isValid = await trigger(undefined, { shouldFocus: true })
 		if (!isValid) return
 		try {
@@ -188,8 +185,8 @@ async function handlePreviewClick() {
 								Review &amp; Sign
 							</h1>
 							<p className="m-0 mt-2 text-sm text-[#6b7280]">
-								You are signing the proposal you just drafted. Review the payload, then confirm on your Trezor.
-								Nothing is sent until you sign.
+								You are signing the proposal you just drafted. Review the payload, then confirm on your Trezor. Nothing
+								is sent until you sign.
 							</p>
 						</>
 					) : (
@@ -205,8 +202,8 @@ async function handlePreviewClick() {
 								Create {authorityLabel} proposal
 							</h1>
 							<p className="m-0 mt-2 text-sm text-[#6b7280]">
-								Authority: <span className="font-semibold text-[#111827]">{authorityLabel}</span> · You will sign
-								this proposal immediately after creation.
+								Authority: <span className="font-semibold text-[#111827]">{authorityLabel}</span> · You will sign this
+								proposal immediately after creation.
 							</p>
 						</>
 					)}
@@ -322,9 +319,7 @@ async function handlePreviewClick() {
 									</button>
 								) : (
 									<>
-										{error && (
-											<p className="mr-auto text-sm text-[#b91c1c]">{error}</p>
-										)}
+										{error && <p className="mr-auto text-sm text-[#b91c1c]">{error}</p>}
 										<button
 											type="submit"
 											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
