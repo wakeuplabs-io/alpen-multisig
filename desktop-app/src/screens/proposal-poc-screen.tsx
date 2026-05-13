@@ -51,19 +51,13 @@ export function ProposalPocScreen() {
 			}
 		>
 			<div className="mx-auto flex w-full max-w-[760px] flex-col gap-5">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
-					onClick={() => navigate('/proposals')}
-				>
-					← Back to proposals
-				</button>
-
 				<CreateProposalForm
 					authorityLabel={authorityLabel}
 					multisigConfig={createProposal.multisigConfig}
 					multisigConfigVersion={createProposal.multisigConfigVersion}
 					isLoadingConfig={createProposal.isLoadingConfig}
+					nextSeqNo={createProposal.nextSeqNo}
+					isLoadingSeqNo={createProposal.isLoadingSeqNo}
 					isSubmitting={createProposal.isSubmitting}
 					error={createProposal.error}
 					createdProposal={createProposal.createdProposal}

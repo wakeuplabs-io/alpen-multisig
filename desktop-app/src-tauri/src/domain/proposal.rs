@@ -14,6 +14,10 @@ pub struct Proposal {
     pub required_signatures: u16,
     pub action_hex: String,
     pub signatures: Vec<ProposalSignature>,
+    pub broadcast_status: String,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
 }
 
 /// A signature attached to a proposal.

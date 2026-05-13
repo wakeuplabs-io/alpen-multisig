@@ -13,6 +13,7 @@ dist/
 
 # Environment variables
 /desktop-app/src-tauri/.env
+/desktop-app/.env
 
 # Claude settings
 /.claude/settings.local.json

@@ -21,6 +21,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/verify", post(auth::auth_verify))
         .route("/auth/logout", post(auth::auth_logout))
         // Proposals
+        .route("/proposals/next-seq-no", get(proposals::get_next_seq_no))
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))
@@ -28,13 +29,20 @@ pub fn router(state: AppState) -> Router {
             "/proposals/:action_id/approve",
             post(proposals::approve_action),
         )
+        .route(
+            "/proposals/:action_id/broadcast/prepare",
+            post(proposals::prepare_broadcast),
+        )
+        .route(
+            "/proposals/:action_id/broadcast",
+            post(proposals::execute_broadcast),
+        )
         .with_state(state)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::memory_repo::InMemoryProposalRepository;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use http_body_util::BodyExt;
@@ -49,8 +57,37 @@ mod tests {
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn test_app_with_rpc_url(rpc_url: &str) -> Router {
+        use crate::infrastructure::{
+            bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
+        };
+        use bitcoin::{
+            key::UntweakedKeypair,
+            secp256k1::{SecretKey, SECP256K1},
+            Network,
+        };
+        use strata_l1_txfmt::MagicBytes;
+
         let repo = Arc::new(InMemoryProposalRepository::new());
-        router(AppState::new(repo, rpc_url.to_string(), 120_000, 240_000))
+        let sk = SecretKey::from_slice(&[1u8; 32]).unwrap();
+        let keypair = UntweakedKeypair::from_secret_key(SECP256K1, &sk);
+        let btc_client = Arc::new(HttpBitcoinRpcClient::new(
+            "http://127.0.0.1:18443",
+            None,
+            "user",
+            "pass",
+        ));
+        router(AppState::new(
+            repo,
+            rpc_url.to_string(),
+            120_000,
+            240_000,
+            btc_client,
+            keypair,
+            5_000,
+            600_000,
+            MagicBytes::new([0x41, 0x4c, 0x50, 0x4e]),
+            Network::Regtest,
+        ))
     }
 
     fn test_app() -> Router {

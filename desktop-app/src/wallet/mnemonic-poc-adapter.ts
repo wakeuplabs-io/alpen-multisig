@@ -69,7 +69,7 @@ export function createMnemonicPocAdapter(opts: MnemonicAdapterOptions): WalletAd
 			return {
 				publicKeyHex: result.data.publicKeyHex,
 				signatureHex: result.data.signatureHex,
-				signatureFormat: 'bitcoin-message',
+				signatureFormat: 'raw-ecdsa',
 			}
 		},
 

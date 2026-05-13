@@ -2,8 +2,8 @@
 
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
-    OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient, OrchestratorError,
-    ProposalListResponse, StartOrchestratorAuthRequest,
+    NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient,
+    OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
 };
 use crate::domain::proposal::Proposal;
 
@@ -144,6 +144,15 @@ impl OrchestratorClient for HttpOrchestratorClient {
         let req = self.with_auth_headers(req)?;
         let response: ProposalListResponse = self.send_and_parse(req).await?;
         Ok(response.proposals)
+    }
+
+    async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .get(format!("{}/proposals/next-seq-no", self.base_url)),
+        )?;
+        let response: NextSeqNoResponse = self.send_and_parse(req).await?;
+        Ok(response.next_seq_no)
     }
 }
 

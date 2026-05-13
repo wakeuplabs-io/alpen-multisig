@@ -5,7 +5,6 @@ use bip39::Mnemonic;
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
-use bitcoin::sign_message::signed_msg_hash;
 use bitcoin::{key::TweakedPublicKey, secp256k1::XOnlyPublicKey};
 use ssz::Decode;
 use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
@@ -140,19 +139,15 @@ pub fn sign_with_mnemonic_path(
     sighash_hex: &str,
 ) -> Result<SignatureResult, String> {
     let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, derivation_path)?;
-    let message_hash = signed_msg_hash(sighash_hex);
-    let message = Message::from_digest_slice(message_hash.as_ref())
-        .map_err(|e| format!("invalid bitcoin message digest: {e}"))?;
-    let recoverable_signature = SECP256K1.sign_ecdsa_recoverable(&message, &secret_key);
-    let (recovery_id, compact_signature) = recoverable_signature.serialize_compact();
-    let mut signature_with_recid = [0u8; 65];
-    signature_with_recid[..64].copy_from_slice(&compact_signature);
-    signature_with_recid[64] = recovery_id.to_i32() as u8;
+    let hash_bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
+    let message = Message::from_digest_slice(&hash_bytes)
+        .map_err(|e| format!("invalid sighash (must be 32 bytes): {e}"))?;
+    let sig = SECP256K1.sign_ecdsa(&message, &secret_key);
     let public_key = PublicKey::from_secret_key(SECP256K1, &secret_key);
 
     Ok(SignatureResult {
         public_key_hex: hex::encode(public_key.serialize()),
-        signature_hex: hex::encode(signature_with_recid),
+        signature_hex: hex::encode(sig.serialize_compact()),
     })
 }
 
@@ -359,6 +354,36 @@ mod tests {
 
         assert!(!result.valid);
         assert_eq!(result.signatures_verified, 0);
+    }
+
+    #[test]
+    fn test_mnemonic_signature_verifies_against_raw_sighash() {
+        // Regression: sign_with_mnemonic_path previously used signed_msg_hash (Bitcoin message
+        // prefix), producing a signature that the ASM validator would silently reject.
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let path = "m/86'/0'/73'/0/0";
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+
+        let result =
+            sign_with_mnemonic_path(mnemonic, "", path, &sighash.sighash_hex).expect("sign ok");
+
+        // 64-byte compact r||s — verify directly against raw sighash bytes.
+        let sig_bytes = hex::decode(&result.signature_hex).expect("hex ok");
+        assert_eq!(
+            sig_bytes.len(),
+            64,
+            "mnemonic path must produce 64-byte compact sig"
+        );
+
+        let pk_bytes = hex::decode(&result.public_key_hex).expect("hex ok");
+        let pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).expect("pk ok");
+        let hash_bytes = hex::decode(&sighash.sighash_hex).expect("hex ok");
+        let msg = Message::from_digest_slice(&hash_bytes).expect("msg ok");
+        let sig = bitcoin::secp256k1::ecdsa::Signature::from_compact(&sig_bytes).expect("sig ok");
+
+        SECP256K1
+            .verify_ecdsa(&msg, &sig, &pk)
+            .expect("signature must verify against raw sighash");
     }
 
     #[test]

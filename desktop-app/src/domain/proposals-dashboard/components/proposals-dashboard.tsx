@@ -20,6 +20,7 @@ type Props = {
 	onRetry: () => void
 	onCreateProposal: () => void
 	onSignProposal: (actionId: string) => void
+	onBroadcastProposal: (actionId: string) => void
 }
 
 export function ProposalsDashboard({
@@ -34,6 +35,7 @@ export function ProposalsDashboard({
 	onRetry,
 	onCreateProposal,
 	onSignProposal,
+	onBroadcastProposal,
 }: Props) {
 	const isEmpty =
 		!isLoading &&
@@ -91,6 +93,7 @@ export function ProposalsDashboard({
 						proposals={quorumReached}
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
+						onBroadcastProposal={onBroadcastProposal}
 					/>
 					<ProposalGroup
 						title="Pending"
@@ -101,6 +104,7 @@ export function ProposalsDashboard({
 						proposals={pending}
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
+						onBroadcastProposal={onBroadcastProposal}
 					/>
 					<ProposalGroup
 						title="Executed & Canceled"
@@ -111,6 +115,7 @@ export function ProposalsDashboard({
 						proposals={executedOrCanceled}
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
+						onBroadcastProposal={onBroadcastProposal}
 					/>
 					<ProposalGroup
 						title="Expired / Skipped"
@@ -121,6 +126,7 @@ export function ProposalsDashboard({
 						proposals={expiredOrSkipped}
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
+						onBroadcastProposal={onBroadcastProposal}
 					/>
 				</div>
 			)}
@@ -159,6 +165,7 @@ function ProposalGroup({
 	proposals,
 	signerPubkey,
 	onSignProposal,
+	onBroadcastProposal,
 }: {
 	title: string
 	count: number
@@ -168,6 +175,7 @@ function ProposalGroup({
 	proposals: Proposal[]
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
+	onBroadcastProposal: (actionId: string) => void
 }) {
 	const [open, setOpen] = useState(initialOpen)
 
@@ -207,6 +215,7 @@ function ProposalGroup({
 								proposal={proposal}
 								signerPubkey={signerPubkey}
 								onSignProposal={onSignProposal}
+								onBroadcastProposal={onBroadcastProposal}
 							/>
 						))}
 					</div>
@@ -219,10 +228,12 @@ function ProposalCard({
 	proposal,
 	signerPubkey,
 	onSignProposal,
+	onBroadcastProposal,
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
+	onBroadcastProposal: (actionId: string) => void
 }) {
 	const [hovered, setHovered] = useState(false)
 	const requiredSignatures = proposal.requiredSignatures
@@ -291,6 +302,7 @@ function ProposalCard({
 					<button
 						type="button"
 						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+						onClick={() => onBroadcastProposal(proposal.actionId)}
 					>
 						Broadcast
 					</button>

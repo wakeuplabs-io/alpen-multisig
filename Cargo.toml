@@ -15,6 +15,7 @@ strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/asm", rev = "a
 # From alpenlabs/strata-common (tag-pinned)
 strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
 strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
 
 # SSZ serialization (replaces Borsh for admin tx wire format after upstream PR alpenlabs/asm#8)
 ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }

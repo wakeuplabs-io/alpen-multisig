@@ -1,3 +1,7 @@
+import type { Proposal } from '@/api/proposals'
+import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
+import { useState } from 'react'
+
 type Props = {
 	title: string
 	actionType: 'signer_update' | 'vk_update'
@@ -5,9 +9,32 @@ type Props = {
 	keysToAdd: string[]
 	keysToRemove: string[]
 	threshold: string
-	resultingSignerCount: number | null
 	newVkHex: string
 	sighashHex: string | null
+	authorityLabel: string
+	currentSigners: string[]
+	currentThreshold: number
+	createdProposal: Proposal | null
+}
+
+function CopyButton({ text }: { text: string }) {
+	const [copied, setCopied] = useState(false)
+	function handleCopy() {
+		void navigator.clipboard.writeText(text).then(() => {
+			setCopied(true)
+			setTimeout(() => setCopied(false), 1500)
+		})
+	}
+	return (
+		<button
+			type="button"
+			onClick={handleCopy}
+			className="flex shrink-0 items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f9fafb]"
+		>
+			<CopyClipboardIcon width={13} height={13} />
+			{copied ? 'Copied!' : 'Copy'}
+		</button>
+	)
 }
 
 export function CreateProposalPreview({
@@ -17,64 +44,144 @@ export function CreateProposalPreview({
 	keysToAdd,
 	keysToRemove,
 	threshold,
-	resultingSignerCount,
 	newVkHex,
 	sighashHex,
+	authorityLabel,
+	currentSigners,
+	currentThreshold,
+	createdProposal,
 }: Props) {
-	const previewActionLabel = actionType === 'signer_update' ? 'Signer update' : 'Verification key update'
+	const actionTypeLabel = actionType === 'signer_update' ? 'Signer update' : 'Verification key update'
+
+	const removeSet = new Set(keysToRemove.map((k) => k.trim()).filter((k) => k.length > 0))
+	const afterSigners = [
+		...currentSigners.filter((s) => !removeSet.has(s.trim())),
+		...keysToAdd.filter((k) => k.trim().length > 0),
+	]
+
+	const tableRows = [
+		...currentSigners.map((s) => ({ before: s, after: removeSet.has(s.trim()) ? null : s })),
+		...keysToAdd.filter((k) => k.trim().length > 0).map((k) => ({ before: null, after: k })),
+	]
+
+	const newThreshold = Number(threshold)
+	const thresholdChanged = newThreshold !== currentThreshold || afterSigners.length !== currentSigners.length
+
+	const signatureHex = createdProposal?.signatures[0]?.signatureHex ?? null
+
+	if (createdProposal !== null) {
+		return (
+			<div className="flex flex-col gap-6">
+				<div className="flex items-start gap-4 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] p-4">
+					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#a7f3d0] bg-white">
+						<CheckCircleEmeraldIcon width={20} height={20} />
+					</div>
+					<div>
+						<p className="m-0 font-semibold text-[#065f46]">Signature collected</p>
+						<p className="m-0 mt-0.5 text-sm text-[#6b7280]">Your signature has been submitted to the backend.</p>
+					</div>
+				</div>
+
+				{signatureHex && (
+					<div>
+						<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Your Signature</p>
+						<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-4 py-3">
+							<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#111827]">{signatureHex}</span>
+							<CopyButton text={signatureHex} />
+						</div>
+					</div>
+				)}
+			</div>
+		)
+	}
 
 	return (
-		<div className="rounded-2xl border border-[#d8d9e7] bg-[#f5f5fb] p-6">
-			<p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Preview</p>
-			<div className="mt-4 space-y-3">
-				<p className="m-0 text-[1.75rem] font-semibold leading-none text-[#111827]">{title || '-'}</p>
-				<p className="m-0 text-sm text-[#6b7280]">
-					<span className="text-[#9ca3af]">Action:</span> {previewActionLabel}
+		<div className="flex flex-col gap-6">
+			<div>
+				<p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Proposal</p>
+				<p className="m-0 mt-2 font-['BIZ_UDPMincho'] text-[1.75rem] font-normal leading-tight text-[#0a0a0a]">
+					{title || '—'}
 				</p>
-				<p className="m-0 text-sm text-[#6b7280]">
-					<span className="text-[#9ca3af]">Seqno:</span> {seqNo || '-'}
+				<p className="m-0 mt-2 text-sm text-[#6b7280]">
+					#{seqNo} · {authorityLabel} · {actionTypeLabel}
 				</p>
 			</div>
 
+			<div className="border-t border-[#e5e7eb]" />
+
 			{actionType === 'signer_update' ? (
-				<div className="mt-5 space-y-3 text-sm">
-					{keysToAdd.length > 0 && (
-						<div>
-							<p className="m-0 mb-1 text-[#9ca3af]">Adding:</p>
-							{keysToAdd.map((key) => (
-								<p key={`add-${key}`} className="m-0 break-all font-mono text-[#0f766e]">
-									+ {key}
-								</p>
-							))}
+				<div>
+					<p className="m-0 mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Signer Set Change</p>
+					<div className="overflow-hidden rounded-xl border border-[#e5e7eb]">
+						<div className="grid grid-cols-2">
+							<div className="border-b border-r border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
+								<span className="text-xs font-semibold uppercase tracking-widest text-[#9ca3af]">Before</span>
+							</div>
+							<div className="border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
+								<span className="text-xs font-semibold uppercase tracking-widest text-[#9ca3af]">After</span>
+							</div>
 						</div>
-					)}
-					{keysToRemove.length > 0 && (
-						<div>
-							<p className="m-0 mb-1 text-[#9ca3af]">Removing:</p>
-							{keysToRemove.map((key) => (
-								<p key={`remove-${key}`} className="m-0 break-all font-mono text-[#b91c1c]">
-									- {key}
-								</p>
-							))}
+						{tableRows.map((row, i) => (
+							<div key={i} className="grid grid-cols-2 border-b border-[#e5e7eb] last:border-b-0">
+								<div className="border-r border-[#e5e7eb] px-4 py-3">
+									<span className="break-all font-mono text-sm text-[#374151]">{row.before ?? ''}</span>
+								</div>
+								<div className="px-4 py-3">
+									<span className="break-all font-mono text-sm text-[#374151]">{row.after ?? ''}</span>
+								</div>
+							</div>
+						))}
+						<div className="grid grid-cols-2">
+							<div className="border-r border-[#e5e7eb] px-4 py-3">
+								<span className="text-sm text-[#9ca3af]">
+									Threshold{' '}
+									<span className="font-semibold text-[#374151]">
+										{currentThreshold} of {currentSigners.length}
+									</span>
+								</span>
+							</div>
+							<div className="px-4 py-3">
+								<span className={`text-sm ${thresholdChanged ? 'text-[#059669]' : 'text-[#9ca3af]'}`}>
+									Threshold{' '}
+									<span className="font-semibold">
+										{threshold} of {afterSigners.length}
+									</span>
+								</span>
+							</div>
 						</div>
-					)}
-					<p className="m-0 text-[#6b7280]">
-						<span className="text-[#9ca3af]">New threshold:</span> {threshold || '-'}
-					</p>
-					<p className="m-0 text-[#6b7280]">
-						<span className="text-[#9ca3af]">Resulting signer count:</span> {resultingSignerCount ?? '-'}
-					</p>
+					</div>
 				</div>
 			) : (
-				<div className="mt-5 text-sm text-[#6b7280]">
-					<p className="m-0 text-[#9ca3af]">New verification key:</p>
-					<p className="m-0 mt-1 break-all font-mono text-[#111827]">{newVkHex || '-'}</p>
+				<div>
+					<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+						New Verification Key
+					</p>
+					<p className="m-0 break-all rounded-lg border border-[#e5e7eb] px-4 py-3 font-mono text-sm text-[#111827]">
+						{newVkHex || '—'}
+					</p>
 				</div>
 			)}
 
-			<div className="mt-6 border-t border-[#d8d9e7] pt-4">
-				<p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Computed sighash</p>
-				<p className="m-0 mt-2 break-all font-mono text-sm text-[#111827]">{sighashHex ?? '-'}</p>
+			<div>
+				<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+					SPS-65 Sighash (32 bytes)
+				</p>
+				<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-4 py-3">
+					<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#111827]">{sighashHex ?? '—'}</span>
+					{sighashHex && <CopyButton text={sighashHex} />}
+				</div>
+			</div>
+
+			<div className="flex items-start gap-4 rounded-xl border border-[#d97706] bg-[#fffbeb] p-4">
+				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white">
+					<UsbTridentIcon width={24} height={24} className="text-[#c2773b]" />
+				</div>
+				<div>
+					<p className="m-0 font-semibold text-[#111827]">Confirm on device</p>
+					<p className="m-0 mt-1 text-sm text-[#6b7280]">
+						The sighash above will appear on the device screen. Verify it matches before approving.
+					</p>
+				</div>
 			</div>
 		</div>
 	)

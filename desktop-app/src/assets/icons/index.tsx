@@ -210,3 +210,40 @@ export function CopyClipboardIcon({ width = 18, height = 18, className, ...rest 
 		</svg>
 	)
 }
+
+/** Circular arrow (undo/restore); pair with parent `text-*` for stroke color. */
+export function UndoIcon({ width = 16, height = 16, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 16 16" fill="none" width={width} height={height} aria-hidden {...rest}>
+			<path
+				d="M2.667 5.333A5.333 5.333 0 1 1 2 8"
+				stroke="currentColor"
+				strokeWidth="1.333"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M2.667 2v3.333H6"
+				stroke="currentColor"
+				strokeWidth="1.333"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}
+
+/** Trash can; pair with parent `text-*` for stroke color. */
+export function TrashIcon({ width = 16, height = 16, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 16 16" fill="none" width={width} height={height} aria-hidden {...rest}>
+			<path
+				d="M2 4h12M5.333 4V2.667A.667.667 0 0 1 6 2h4a.667.667 0 0 1 .667.667V4M6.667 7.333v4M9.333 7.333v4M2.667 4l.666 8.667a.667.667 0 0 0 .667.666h8a.667.667 0 0 0 .667-.666L13.333 4"
+				stroke="currentColor"
+				strokeWidth="1.333"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}

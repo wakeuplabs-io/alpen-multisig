@@ -5,6 +5,7 @@ import { SessionProvider } from '@/contexts/session-provider'
 import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
+import { BroadcastProposalScreen } from '@/screens/broadcast-proposal-screen'
 import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
 import { SignPocScreen } from '@/screens/sign-poc-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
@@ -57,6 +58,14 @@ export default function App() {
 								element={
 									<RequireAuth>
 										<SignPocScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/:actionId/broadcast"
+								element={
+									<RequireAuth>
+										<BroadcastProposalScreen />
 									</RequireAuth>
 								}
 							/>

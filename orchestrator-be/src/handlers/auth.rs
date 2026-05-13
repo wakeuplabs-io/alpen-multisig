@@ -11,6 +11,7 @@ use crate::{
 
 const SIG_FORMAT_P2WPKH_TX_BINDING: &str = "p2wpkh-tx-binding";
 const SIG_FORMAT_BITCOIN_MESSAGE: &str = "bitcoin-message";
+const SIG_FORMAT_RAW_ECDSA: &str = "raw-ecdsa";
 
 #[derive(Debug, Deserialize)]
 pub struct StartAuthChallengeRequest {
@@ -83,6 +84,7 @@ pub async fn auth_verify(
 ) -> Result<(StatusCode, Json<AuthSessionResponse>)> {
     if body.signature_format != SIG_FORMAT_P2WPKH_TX_BINDING
         && body.signature_format != SIG_FORMAT_BITCOIN_MESSAGE
+        && body.signature_format != SIG_FORMAT_RAW_ECDSA
     {
         return Err(AppError::Unauthorized);
     }
@@ -108,6 +110,7 @@ pub async fn auth_verify(
             )
             .map_err(|_| AppError::Unauthorized)?;
         } else {
+            // raw-ecdsa and p2wpkh-tx-binding both use plain ECDSA on the raw challenge digest.
             auth_crypto::verify_signature(
                 &challenge.challenge_hex,
                 &body.signer_pubkey,
