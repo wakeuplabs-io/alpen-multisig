@@ -153,7 +153,10 @@ export function SignPocScreen() {
 		setSignError(null)
 		setSignResult(null)
 		try {
-			const signed = await adapter.signSighash(sighashHex)
+			const signed = await adapter.signSighash(sighashHex, {
+				seqno: proposal.seqNo,
+				actionHex: decodedActionHex,
+			})
 			const approved = await approveProposal({
 				baseUrl: ORCHESTRATOR_BASE_URL,
 				actionId: proposal.actionId,

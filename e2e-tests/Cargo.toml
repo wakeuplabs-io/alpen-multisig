@@ -5,25 +5,25 @@ edition = "2021"
 
 [dependencies]
 # From alpenlabs/asm
-strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
 strata-asm-common.workspace = true
-strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-txs-test-utils.workspace = true
 
 # From alpenlabs/strata-common
-strata-btc-types = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+strata-btc-types = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 strata-crypto = { workspace = true, features = ["test-utils"] }
-strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
-strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 strata-l1-txfmt.workspace = true
-strata-merkle = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
-strata-tasks = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+strata-merkle = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-tasks = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 
 # Desktop app (application layer)
 desktop-app = { path = "../desktop-app/src-tauri" }

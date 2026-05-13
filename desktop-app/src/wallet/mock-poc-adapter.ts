@@ -32,7 +32,7 @@ export function createMockPocAdapter(): WalletAdapter {
 			cachedPublicKeyHex = warmup.data.public_key_hex
 			return {
 				deviceLabel: 'Mock Wallet',
-				derivationPath: "m/86'/0'/73'/0/0",
+				derivationPath: "m/84'/0'/73'/0/0",
 				addressSample: 'bc1p0q0wnl9lhp92uh65589uu0sdf62j2ea2n8203eddumps3sjr00hqc4shtx',
 				xpubOrFingerprint: `${cachedPublicKeyHex.slice(0, 16)}…`,
 			}

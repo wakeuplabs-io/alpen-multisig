@@ -9,7 +9,7 @@ export type MnemonicAdapterOptions = {
 
 export function createMnemonicPocAdapter(opts: MnemonicAdapterOptions): WalletAdapter {
 	let publicKeyHex: string | null = null
-	let derivationPath = opts.derivationPath ?? "m/86'/0'/73'/0/0"
+	let derivationPath = opts.derivationPath ?? "m/84'/0'/73'/0/0"
 	let selectedAddress: string | null = null
 
 	return {

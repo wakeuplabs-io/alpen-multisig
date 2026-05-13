@@ -7,13 +7,15 @@ import {
 	orchestratorAuthStart,
 	ORCHESTRATOR_BASE_URL,
 } from '@/api/orchestrator-auth'
-import { SessionContext } from '@/contexts/session-context'
+import { SessionContext, type SigningStepInfo } from '@/contexts/session-context'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
 	const { session, isAuthenticated, isLoading, selectedRole, setSelectedRole, authenticate, logout } = useAuthSession()
 	const { wallet, setConnectedWallet, clearSession, adapter, selectAdapter } = useWalletSession()
+
+	const [signingStep, setSigningStep] = useState<SigningStepInfo | null>(null)
 
 	/** Wall clock for session countdown; updated every second (effects may call Date.now). */
 	const [nowMs, setNowMs] = useState(() => Date.now())
@@ -62,24 +64,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	}, [adapter, selectedRole])
 
 	const connectSession = useCallback(async () => {
-		await authenticate((challengeHex: string) => adapter.signSighash(challengeHex))
-		const challengeResult = await orchestratorAuthStart({
-			baseUrl: ORCHESTRATOR_BASE_URL,
-			authority: authorityFromRole(selectedRole),
-		})
-		if (!challengeResult.ok) {
-			throw new Error(challengeResult.error)
-		}
-		const signature = await adapter.signSighash(challengeResult.data.challengeHex)
-		const completeResult = await orchestratorAuthComplete({
-			baseUrl: ORCHESTRATOR_BASE_URL,
-			challengeId: challengeResult.data.challengeId,
-			signerPubkey: signature.publicKeyHex,
-			signatureHex: signature.signatureHex,
-			signatureFormat: signature.signatureFormat,
-		})
-		if (!completeResult.ok) {
-			throw new Error(completeResult.error)
+		try {
+			await authenticate((challengeHex: string) => {
+				setSigningStep({ challengeHex, step: 1, totalSteps: 2 })
+				return adapter.signSighash(challengeHex)
+			})
+			const challengeResult = await orchestratorAuthStart({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				authority: authorityFromRole(selectedRole),
+			})
+			if (!challengeResult.ok) {
+				throw new Error(challengeResult.error)
+			}
+			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 2, totalSteps: 2 })
+			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
+			const completeResult = await orchestratorAuthComplete({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				challengeId: challengeResult.data.challengeId,
+				signerPubkey: signature.publicKeyHex,
+				signatureHex: signature.signatureHex,
+				signatureFormat: signature.signatureFormat,
+			})
+			if (!completeResult.ok) {
+				throw new Error(completeResult.error)
+			}
+		} finally {
+			setSigningStep(null)
 		}
 	}, [adapter, authenticate, selectedRole])
 
@@ -107,6 +117,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			adapter,
 			selectAdapter,
 			clearSession,
+			signingStep,
 		}),
 		[
 			remainingMs,
@@ -125,6 +136,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			adapter,
 			selectAdapter,
 			clearSession,
+			signingStep,
 		],
 	)
 

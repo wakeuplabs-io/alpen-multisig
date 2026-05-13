@@ -22,3 +22,7 @@ dist/
 scripts/config.json
 orchestrator-be/.env
 branding/**/*
+
+
+/desktop-app/src-tauri/gen/
+scripts/asm-params.json

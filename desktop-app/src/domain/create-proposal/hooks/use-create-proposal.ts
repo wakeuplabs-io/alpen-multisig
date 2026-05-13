@@ -17,8 +17,8 @@ export function isSessionExpiredReauthError(error: unknown): boolean {
 
 function normalizePubKeyHex(value: string): string {
 	const trimmed = value.trim()
-	if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) return trimmed.slice(2)
-	return trimmed
+	const no0x = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
+	return no0x.toLowerCase()
 }
 
 export type UseCreateProposalReturn = {
@@ -123,7 +123,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			const sighashResult = await computeSighash(seqNo, actionHex)
 			if (!sighashResult.ok) throw new Error(sighashResult.error)
 
-			const sig = await adapter.signSighash(sighashResult.data.sighashHex)
+			const sig = await adapter.signSighash(sighashResult.data.sighashHex, { seqno: seqNo, actionHex })
 
 			const createResult = await createProposal({
 				baseUrl: ORCHESTRATOR_BASE_URL,

@@ -422,12 +422,15 @@ async fn do_broadcast(
 /// Compute the SPS-65 sighash for a proposal's action and sequence number.
 fn compute_sighash_for_proposal(proposal: &Proposal) -> Result<[u8; 32], AppError> {
     use ssz::Decode;
-    use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
+    use strata_asm_txs_admin::actions::MultisigAction;
+    use strata_asm_txs_admin::signing_message::SigningMessage;
     let action_bytes = hex::decode(&proposal.action_hex)
         .map_err(|e| AppError::BadRequest(format!("invalid action hex: {e}")))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| AppError::BadRequest(format!("invalid SSZ action: {e:?}")))?;
-    Ok(action.compute_sighash(proposal.seq_no).0)
+    Ok(SigningMessage::for_action(&action, proposal.seq_no)
+        .compute_sighash()
+        .0)
 }
 
 /// Poll until a transaction has at least one confirmation or the timeout is exceeded.

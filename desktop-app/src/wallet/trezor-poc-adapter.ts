@@ -1,8 +1,8 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, WalletAccountInfo, WalletAdapter } from './types'
+import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
 
-/** Product default path. Must match Rust `DEFAULT_PATH`. */
-const DEFAULT_DERIVATION_PATH = "m/86'/0'/73'/0/0"
+/** BIP-84 Admin ID path (P2WPKH) for message signing — non-Payout-Admin multisigs. */
+const ADMIN_ID_PATH = "m/84'/0'/73'/0/0"
 
 type HwWalletInfo = {
 	deviceLabel: string
@@ -18,7 +18,6 @@ type SignatureResult = {
 }
 
 export function createTrezorPocAdapter(): WalletAdapter {
-	let derivationPath = DEFAULT_DERIVATION_PATH
 	let publicKeyHex: string | null = null
 
 	return {
@@ -26,10 +25,9 @@ export function createTrezorPocAdapter(): WalletAdapter {
 		supportsSighashSigning: true,
 
 		async connect(): Promise<WalletAccountInfo> {
-			const result = await tauriCall<HwWalletInfo>('get_trezor_info', { derivationPath })
+			const result = await tauriCall<HwWalletInfo>('get_trezor_info', { derivationPath: ADMIN_ID_PATH })
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
-			derivationPath = info.derivationPath
 			publicKeyHex = info.xpubOrFingerprint ?? null
 			return {
 				deviceLabel: info.deviceLabel,
@@ -43,13 +41,30 @@ export function createTrezorPocAdapter(): WalletAdapter {
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 		},
-		setDerivationPath(nextPath: string): void {
-			derivationPath = nextPath
+
+		setDerivationPath(_nextPath: string): void {
+			// Admin ID path is fixed at ADMIN_ID_PATH; wallet path changes are for display only.
 		},
 
-		async signSighash(sighashHex: string): Promise<SignSighashResult> {
+		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
 			if (!publicKeyHex) throw new Error('Connect the Trezor first.')
-			const result = await tauriCall<SignatureResult>('sign_with_trezor', { sighashHex, derivationPath })
+			if (!context) {
+				const result = await tauriCall<SignatureResult>('sign_challenge_with_trezor', {
+					challengeHex: sighashHex,
+					derivationPath: ADMIN_ID_PATH,
+				})
+				if (!result.ok) throw new Error(result.error)
+				return {
+					publicKeyHex: result.data.publicKeyHex,
+					signatureHex: result.data.signatureHex,
+					signatureFormat: 'bitcoin-message',
+				}
+			}
+			const result = await tauriCall<SignatureResult>('sign_with_trezor', {
+				seqno: context.seqno,
+				actionHex: context.actionHex,
+				derivationPath: ADMIN_ID_PATH,
+			})
 			if (!result.ok) throw new Error(result.error)
 			return {
 				publicKeyHex: result.data.publicKeyHex,

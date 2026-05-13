@@ -7,8 +7,7 @@
 use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
-use strata_asm_params::Role;
-use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate as StrataMultisigUpdate;
+use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
@@ -63,15 +62,21 @@ pub fn decode_hex(s: &str) -> Result<Action, CodecError> {
 fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
     match action {
         Action::MultisigUpdate(update) => {
-            let strata_update = to_strata_multisig_update(update)?;
-            Ok(MultisigAction::Update(UpdateAction::Multisig(
-                strata_update,
-            )))
+            let config_update = threshold_config_update_from_domain(update)?;
+            match update.role {
+                Authority::StrataAdmin => Ok(MultisigAction::Update(
+                    UpdateAction::StrataAdminMultisig(StrataAdminMultisigUpdate::new(
+                        config_update,
+                    )),
+                )),
+            }
         }
     }
 }
 
-fn to_strata_multisig_update(update: &MultisigUpdate) -> Result<StrataMultisigUpdate, CodecError> {
+fn threshold_config_update_from_domain(
+    update: &MultisigUpdate,
+) -> Result<ThresholdConfigUpdate, CodecError> {
     let add_keys = update
         .add_keys
         .iter()
@@ -84,11 +89,7 @@ fn to_strata_multisig_update(update: &MultisigUpdate) -> Result<StrataMultisigUp
         .collect::<Result<Vec<_>, _>>()?;
     let threshold =
         std::num::NonZero::new(update.new_threshold.get()).ok_or(CodecError::InvalidThreshold)?;
-    let config_update = ThresholdConfigUpdate::new(add_keys, remove_keys, threshold);
-    Ok(StrataMultisigUpdate::new(
-        config_update,
-        to_strata_role(update.role),
-    ))
+    Ok(ThresholdConfigUpdate::new(add_keys, remove_keys, threshold))
 }
 
 fn to_strata_pubkey(pk: &CompressedPubKey) -> Result<CompressedPublicKey, CodecError> {
@@ -96,19 +97,19 @@ fn to_strata_pubkey(pk: &CompressedPubKey) -> Result<CompressedPublicKey, CodecE
         .map_err(|e| CodecError::Encode(format!("invalid pubkey: {e}")))
 }
 
-fn to_strata_role(authority: Authority) -> Role {
-    match authority {
-        Authority::StrataAdmin => Role::StrataAdministrator,
-    }
-}
-
 // ─── Strata → Domain ────────────────────────────────────────────────────────
 
 fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
     match action {
-        MultisigAction::Update(UpdateAction::Multisig(update)) => {
-            let domain_update = from_strata_multisig_update(update)?;
+        MultisigAction::Update(UpdateAction::StrataAdminMultisig(update)) => {
+            let domain_update = multisig_update_from_strata_admin(update)?;
             Ok(Action::MultisigUpdate(domain_update))
+        }
+        MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(_)) => Err(
+            CodecError::UnsupportedVariant("StrataSeqManagerMultisig"),
+        ),
+        MultisigAction::Update(UpdateAction::AlpenAdminMultisig(_)) => {
+            Err(CodecError::UnsupportedVariant("AlpenAdminMultisig"))
         }
         MultisigAction::Update(UpdateAction::OperatorSet(_)) => {
             Err(CodecError::UnsupportedVariant("OperatorSet"))
@@ -116,15 +117,19 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::Sequencer(_)) => {
             Err(CodecError::UnsupportedVariant("Sequencer"))
         }
-        MultisigAction::Update(UpdateAction::VerifyingKey(_)) => {
-            Err(CodecError::UnsupportedVariant("VerifyingKey"))
+        MultisigAction::Update(UpdateAction::OlStfVk(_)) => Err(CodecError::UnsupportedVariant("OlStfVk")),
+        MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
+            Err(CodecError::UnsupportedVariant("AsmStfVk"))
         }
+        MultisigAction::Update(UpdateAction::EeStfVk(_)) => Err(CodecError::UnsupportedVariant("EeStfVk")),
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
 }
 
-fn from_strata_multisig_update(update: StrataMultisigUpdate) -> Result<MultisigUpdate, CodecError> {
-    let role = from_strata_role(update.role())?;
+fn multisig_update_from_strata_admin(
+    update: StrataAdminMultisigUpdate,
+) -> Result<MultisigUpdate, CodecError> {
+    let role = Authority::StrataAdmin;
     let config = update.config();
     let add_keys = config
         .add_members()
@@ -148,13 +153,6 @@ fn from_strata_multisig_update(update: StrataMultisigUpdate) -> Result<MultisigU
 
 fn from_strata_pubkey(pk: &CompressedPublicKey) -> Result<CompressedPubKey, CodecError> {
     Ok(CompressedPubKey::new(pk.serialize()))
-}
-
-fn from_strata_role(role: Role) -> Result<Authority, CodecError> {
-    match role {
-        Role::StrataAdministrator => Ok(Authority::StrataAdmin),
-        _ => Err(CodecError::UnsupportedVariant("non-StrataAdmin role")),
-    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -200,8 +198,9 @@ mod tests {
         let strata_pk = CompressedPublicKey::from(secp_pk);
         let config_update =
             ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
-        let strata_update = StrataMultisigUpdate::new(config_update, Role::StrataAdministrator);
-        let strata_action = MultisigAction::Update(UpdateAction::Multisig(strata_update));
+        let strata_update = StrataAdminMultisigUpdate::new(config_update);
+        let strata_action =
+            MultisigAction::Update(UpdateAction::StrataAdminMultisig(strata_update));
         let direct_bytes = strata_action.as_ssz_bytes();
 
         let domain_bytes = encode(&sample_action()).unwrap();

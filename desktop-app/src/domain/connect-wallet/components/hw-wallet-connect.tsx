@@ -4,6 +4,7 @@ import {
 	type AuthorityOption,
 } from '@/domain/connect-wallet/components/authority-selection-phase'
 import { AuthenticateSessionPhase } from '@/domain/connect-wallet/components/authenticate-session-phase'
+import type { SigningStepInfo } from '@/contexts/session-context'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
@@ -27,6 +28,7 @@ type Props = {
 		isAuthenticated: boolean
 		authError: string | null
 		authOkMessage: string | null
+		signingStep: SigningStepInfo | null
 		onSelectAuthority: (authorityId: string) => void
 		onContinueToAuthenticate: () => void
 		onBackToAuthority: () => void
@@ -113,6 +115,7 @@ export function HwWalletConnect({
 						isAuthenticating={authoritySelection.isAuthenticating}
 						authError={authoritySelection.authError}
 						authOkMessage={authoritySelection.authOkMessage}
+						signingStep={authoritySelection.signingStep}
 						onBackToAuthority={authoritySelection.onBackToAuthority}
 						onAuthenticate={authoritySelection.onAuthenticate}
 					/>

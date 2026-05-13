@@ -16,9 +16,10 @@ use bitcoin::key::UntweakedKeypair;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey, SECP256K1};
 use rand::rngs::OsRng;
 use ssz::encode::Encode;
-use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
-use strata_asm_txs_admin::actions::{MultisigAction, Sighash, UpdateAction};
+use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
+use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
+use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_asm_txs_admin::test_utils::create_signature_set;
 use strata_asm_txs_test_utils::TEST_MAGIC_BYTES;
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -56,16 +57,15 @@ async fn e2e_admin_commit_reveal_broadcast_and_verify() {
         &SecretKey::new(&mut OsRng),
     ));
     let config_update = ThresholdConfigUpdate::new(vec![new_signer], vec![], threshold);
-    let action = MultisigAction::Update(UpdateAction::Multisig(MultisigUpdate::new(
-        config_update,
-        strata_asm_params::Role::StrataAdministrator,
-    )));
+    let action = MultisigAction::Update(UpdateAction::StrataAdminMultisig(
+        StrataAdminMultisigUpdate::new(config_update),
+    ));
 
     // Step 3: sign payload (2-of-3 signatures over SPS-65 sighash).
     let seqno = 1u64;
-    let sighash = action.compute_sighash(seqno);
+    let sighash = SigningMessage::for_action(&action, seqno).compute_sighash();
     let signer_indices: Vec<u8> = vec![0, 2];
-    let signatures = create_signature_set(&privkeys, &signer_indices, sighash);
+    let signatures = create_signature_set(&privkeys, &signer_indices, &action, seqno);
     let payload = SignedPayload::new(seqno, action.clone(), signatures).as_ssz_bytes();
 
     // Step 4: build reveal tx with real commit funding output.

@@ -48,9 +48,7 @@ pub(crate) async fn ordered_keys_for_authority(
         .await
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).ok_or_else(|| {
-        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
-    })?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     authority_keys_hex(&admin, role).map_err(AppError::BadRequest)
 }
@@ -68,9 +66,7 @@ pub(crate) async fn last_seqno_for_authority(
         .await
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).ok_or_else(|| {
-        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
-    })?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     let authority_config = admin.authority(role).ok_or_else(|| {
         AppError::BadRequest(format!(
@@ -93,9 +89,7 @@ pub(crate) async fn threshold_for_authority(
         .await
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).ok_or_else(|| {
-        AppError::BadRequest("admin state section is missing from AnchorState".to_string())
-    })?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     let authority_config = admin.authority(role).ok_or_else(|| {
         AppError::BadRequest(format!(
@@ -119,8 +113,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String>>, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
-    let admin = decode_admin_state(&anchor)
-        .ok_or_else(|| "admin state section is missing from AnchorState".to_string())?;
+    let admin = decode_admin_state(&anchor)?;
 
     let mut role_to_keys = HashMap::new();
     role_to_keys.insert(
@@ -205,10 +198,22 @@ fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState,
         .map_err(|err| format!("failed to SSZ-decode AnchorState from status state bytes: {err}"))
 }
 
-fn decode_admin_state(anchor: &AnchorState) -> Option<AdministrationSubprotoState> {
-    anchor
-        .find_section(AdministrationSubprotocol::ID)
-        .and_then(|section| section.try_to_state::<AdministrationSubprotocol>().ok())
+fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {
+    let id = AdministrationSubprotocol::ID;
+    let section = anchor.find_section(id).ok_or_else(|| {
+        format!(
+            "AnchorState has no administration subprotocol section (expected id {id}). \
+             The RPC returned a decodable `AnchorState`, but it does not include admin — \
+             often wrong `strata-asm-runner` spec/params, or state from an incompatible DB snapshot."
+        )
+    })?;
+    section.try_to_state::<AdministrationSubprotocol>().map_err(|e| {
+        format!(
+            "Administration section (id {id}) is present but its SSZ payload does not decode with this app ({e:?}). \
+             Rebuild `strata-asm-runner` from the same `alpenlabs/asm` commit as this workspace and delete the runner DB \
+             (see `[database].path` in orchestrator ASM config / asm-config.toml, e.g. /tmp/asm-runner-db) so genesis is recreated."
+        )
+    })
 }
 
 fn authority_keys_hex(

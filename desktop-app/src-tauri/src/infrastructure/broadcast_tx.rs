@@ -11,6 +11,7 @@ use bitcoin::{
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_asm_txs_admin::parser::SignedPayload;
+use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::{IndexedSignature, SignatureSet};
 use strata_l1_envelope_fmt::builder::EnvelopeScriptBuilder;
@@ -119,11 +120,10 @@ pub fn build_signed_payload_bytes(
 
 /// Compute the SPS-65 sighash for a proposal's action and sequence number.
 pub fn compute_sighash(seq_no: u64, action_hex: &str) -> Result<[u8; 32], String> {
-    use strata_asm_txs_admin::actions::Sighash;
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ action: {e:?}"))?;
-    Ok(action.compute_sighash(seq_no).0)
+    Ok(SigningMessage::for_action(&action, seq_no).compute_sighash().0)
 }
 
 /// Derive the P2TR commit address for the given operator keypair and envelope payload.
