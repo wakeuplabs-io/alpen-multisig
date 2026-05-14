@@ -17,6 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Default ubuntu-latest images reserve a lot of disk for unused toolchains; reclaim so
+      # `cargo build` + `rust-cache` post-step (`cargo metadata`) do not hit ENOSPC.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-01-01
@@ -39,6 +46,8 @@ jobs:
           sudo install -m 0755 "bitcoin-${BITCOIN_CORE_VERSION}/bin/bitcoind" /usr/local/bin/bitcoind
           sudo install -m 0755 "bitcoin-${BITCOIN_CORE_VERSION}/bin/bitcoin-cli" /usr/local/bin/bitcoin-cli
           bitcoind --version
+          rm -f "bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz"
+          rm -rf "bitcoin-${BITCOIN_CORE_VERSION}"
 
       - uses: Swatinem/rust-cache@v2
         with:
