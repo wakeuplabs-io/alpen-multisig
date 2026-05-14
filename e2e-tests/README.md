@@ -22,7 +22,7 @@ Deterministic JSON + mnemonic profiles live in the library crate so integration 
 
 - **Rust nightly** pinned via the workspace `rust-toolchain.toml`.
 - Internet access on first build (git dependencies from `alpenlabs/asm` and `alpenlabs/strata-common`).
-- **`bitcoind` in `PATH`** for any test that boots regtest (`e2e_harness_hello_world`, `e2e_admin_commit_reveal`, `e2e_signer_update_enacted_light`). GitHub Actions installs the `bitcoind` package before `cargo test --workspace`.
+- **`bitcoind` in `PATH`** for any test that boots regtest (`e2e_harness_hello_world`, `e2e_admin_commit_reveal`, `e2e_signer_update_enacted_light`). GitHub Actions installs **Bitcoin Core 29.0** from [bitcoincore.org](https://bitcoincore.org/en/download/) (Ubuntu 24.04 runners do not provide an apt `bitcoind` package). Locally, install `bitcoind` however you prefer (distro package when available, or the same tarball) and ensure it is on `PATH`.
 
 ## Run
 
