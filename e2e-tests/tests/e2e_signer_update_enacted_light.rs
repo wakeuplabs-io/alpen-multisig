@@ -128,9 +128,10 @@ async fn e2e_signer_update_enacted_lightweight() {
     // 3. Build AdministrationInitConfig directly from the JSON admin section.
     let admin_cfg: AdministrationInitConfig = serde_json::from_value(admin_section.clone())
         .expect("admin section deserializes into AdministrationInitConfig");
-    let confirmation_depth: u16 = admin_section["confirmation_depths"]["strata_admin_multisig_update"]
-        .as_u64()
-        .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16;
+    let confirmation_depth: u16 =
+        admin_section["confirmation_depths"]["strata_admin_multisig_update"]
+            .as_u64()
+            .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16;
 
     // 4. Boot the harness with the configured admin authority.
     let harness = AsmTestHarnessBuilder::default()
