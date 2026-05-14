@@ -33,14 +33,20 @@ export function countSignersAfterUpdate(
 	keysToAdd: { value: string }[],
 ): number {
 	const removeSet = new Set(
-		keysToRemove.map((r) => r.value.trim()).filter((v) => v.length > 0).map(normalizeSignerKey),
+		keysToRemove
+			.map((r) => r.value.trim())
+			.filter((v) => v.length > 0)
+			.map(normalizeSignerKey),
 	)
 	const remaining = currentSigners
 		.map((s) => s.trim())
 		.filter((s) => s.length > 0)
 		.filter((s) => !removeSet.has(normalizeSignerKey(s)))
 		.map(normalizeSignerKey)
-	const added = keysToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0).map(normalizeSignerKey)
+	const added = keysToAdd
+		.map((r) => r.value.trim())
+		.filter((v) => v.length > 0)
+		.map(normalizeSignerKey)
 	return new Set([...remaining, ...added]).size
 }
 

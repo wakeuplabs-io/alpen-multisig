@@ -64,11 +64,11 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
         Action::MultisigUpdate(update) => {
             let config_update = threshold_config_update_from_domain(update)?;
             match update.role {
-                Authority::StrataAdmin => Ok(MultisigAction::Update(
-                    UpdateAction::StrataAdminMultisig(StrataAdminMultisigUpdate::new(
-                        config_update,
-                    )),
-                )),
+                Authority::StrataAdmin => {
+                    Ok(MultisigAction::Update(UpdateAction::StrataAdminMultisig(
+                        StrataAdminMultisigUpdate::new(config_update),
+                    )))
+                }
             }
         }
     }
@@ -105,9 +105,9 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
             let domain_update = multisig_update_from_strata_admin(update)?;
             Ok(Action::MultisigUpdate(domain_update))
         }
-        MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(_)) => Err(
-            CodecError::UnsupportedVariant("StrataSeqManagerMultisig"),
-        ),
+        MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(_)) => {
+            Err(CodecError::UnsupportedVariant("StrataSeqManagerMultisig"))
+        }
         MultisigAction::Update(UpdateAction::AlpenAdminMultisig(_)) => {
             Err(CodecError::UnsupportedVariant("AlpenAdminMultisig"))
         }
@@ -117,11 +117,15 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::Sequencer(_)) => {
             Err(CodecError::UnsupportedVariant("Sequencer"))
         }
-        MultisigAction::Update(UpdateAction::OlStfVk(_)) => Err(CodecError::UnsupportedVariant("OlStfVk")),
+        MultisigAction::Update(UpdateAction::OlStfVk(_)) => {
+            Err(CodecError::UnsupportedVariant("OlStfVk"))
+        }
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
         }
-        MultisigAction::Update(UpdateAction::EeStfVk(_)) => Err(CodecError::UnsupportedVariant("EeStfVk")),
+        MultisigAction::Update(UpdateAction::EeStfVk(_)) => {
+            Err(CodecError::UnsupportedVariant("EeStfVk"))
+        }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
 }

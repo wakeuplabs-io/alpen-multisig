@@ -36,9 +36,10 @@ use rand::rngs::OsRng;
 use ssz::Decode;
 use strata_asm_common::Subprotocol;
 use strata_asm_params::{AdministrationInitConfig, Role};
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_admin::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_asm_worker::AsmState;
+use strata_crypto::keys::compressed::CompressedPublicKey;
 
 use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
@@ -263,7 +264,7 @@ async fn e2e_signer_update_enacted_lightweight() {
         .config()
         .keys()
         .iter()
-        .map(|k| hex::encode(k.serialize()))
+        .map(|k: &CompressedPublicKey| hex::encode(k.serialize()))
         .collect();
     assert!(
         canonical_hex.contains(&d_hex),

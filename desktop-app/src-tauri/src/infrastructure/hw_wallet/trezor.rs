@@ -111,7 +111,10 @@ fn get_xpub<'a>(
     req.set_script_type(script_type);
     req.set_ignore_xpub_magic(true);
     trezor
-        .call(req, Box::new(|_, m: protos::PublicKey| Ok(m.xpub().parse()?)))
+        .call(
+            req,
+            Box::new(|_, m: protos::PublicKey| Ok(m.xpub().parse()?)),
+        )
         .map_err(|e: trezor_client::Error| e.to_string())
 }
 
@@ -142,8 +145,14 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
     let mut trezor = open_trezor()?;
 
     let xpub = resolve(
-        get_xpub(&mut trezor, &path, InputScriptType::SPENDWITNESS, Network::Bitcoin, false)
-            .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            false,
+        )
+        .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
     )?;
 
     let pubkey_hex = hex::encode(xpub.public_key.serialize());
@@ -172,8 +181,14 @@ pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String> {
         let path = parse_path(&path_str)?;
 
         let xpub: Xpub = resolve(
-            get_xpub(&mut trezor, &path, InputScriptType::SPENDWITNESS, Network::Bitcoin, false)
-                .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
+            get_xpub(
+                &mut trezor,
+                &path,
+                InputScriptType::SPENDWITNESS,
+                Network::Bitcoin,
+                false,
+            )
+            .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
         )?;
 
         let public_key_hex = hex::encode(xpub.public_key.serialize());
@@ -196,8 +211,14 @@ pub fn verify_address_on_device(derivation_path: String) -> Result<(), String> {
     let mut trezor = open_trezor()?;
 
     resolve(
-        get_xpub(&mut trezor, &path, InputScriptType::SPENDWITNESS, Network::Bitcoin, true)
-            .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            true,
+        )
+        .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
     )?;
 
     Ok(())
@@ -218,13 +239,25 @@ pub fn sign_admin_sps65_binding(
     let mut trezor = open_trezor()?;
 
     let xpub: Xpub = resolve(
-        get_xpub(&mut trezor, &path, InputScriptType::SPENDWITNESS, Network::Bitcoin, false)
-            .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            false,
+        )
+        .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
     )?;
 
     let recoverable_sig = resolve(
-        sign_message_recoverable(&mut trezor, message, &path, InputScriptType::SPENDWITNESS, Network::Bitcoin)
-            .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
+        sign_message_recoverable(
+            &mut trezor,
+            message,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+        )
+        .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
     )?;
 
     Ok(SignatureResult {
