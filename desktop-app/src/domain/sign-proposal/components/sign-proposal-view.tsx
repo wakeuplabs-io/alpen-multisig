@@ -1,4 +1,5 @@
 import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
+import type { DecodedAction } from '@/api/signing'
 import type { SignSighashResult } from '@/wallet/types'
 
 type SignProposalViewProps = {
@@ -6,8 +7,7 @@ type SignProposalViewProps = {
 	proposalIdLabel: string
 	proposalTypeLabel: string
 	proposalTitle: string
-	beforeValue: string
-	afterValue: string
+	decodedAction: DecodedAction | null
 	sighashHex: string
 	signResult: SignSighashResult | null
 	isSigning: boolean
@@ -25,13 +25,73 @@ function shortenHex(hex: string) {
 	return `${cleanHex.slice(0, 20)}...${cleanHex.slice(-20)}`
 }
 
+function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'multisig_update' }> }) {
+	return (
+		<div className="mt-5">
+			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+				Multisig configuration change
+			</p>
+			<div className="mt-2 grid gap-3">
+				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2.5">
+					<span className="text-[12px] text-[#6b7280]">New threshold</span>
+					<span className="font-mono text-[13px] font-semibold text-[#111827]">{action.newThreshold}</span>
+				</div>
+
+				{action.addKeys.length > 0 && (
+					<div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
+						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#16a34a]">
+							Members to add · {action.addKeys.length}
+						</p>
+						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
+							{action.addKeys.map((key) => (
+								<li key={key}>
+									<code className="block break-all font-mono text-[11px] leading-5 text-[#166534]">{key}</code>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+
+				{action.removeKeys.length > 0 && (
+					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] p-3">
+						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#dc2626]">
+							Members to remove · {action.removeKeys.length}
+						</p>
+						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
+							{action.removeKeys.map((key) => (
+								<li key={key}>
+									<code className="block break-all font-mono text-[11px] leading-5 text-[#991b1b]">{key}</code>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+
+				{action.addKeys.length === 0 && action.removeKeys.length === 0 && (
+					<p className="m-0 text-[12px] text-[#9ca3af]">Threshold-only change — no members added or removed.</p>
+				)}
+			</div>
+		</div>
+	)
+}
+
+function UnknownActionDetails({ rawHex }: { rawHex: string }) {
+	return (
+		<div className="mt-5">
+			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">Raw action payload</p>
+			<div className="mt-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3">
+				<code className="block break-all font-mono text-[12px] leading-5 text-[#6b7280]">{rawHex}</code>
+			</div>
+		</div>
+	)
+}
+
 export function SignProposalView({
 	authorityLabel,
 	proposalIdLabel,
 	proposalTypeLabel,
 	proposalTitle,
-	beforeValue,
-	afterValue,
+	decodedAction,
 	sighashHex,
 	signResult,
 	isSigning,
@@ -51,21 +111,11 @@ export function SignProposalView({
 				</p>
 			</div>
 
-			<div className="mt-5">
-				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
-					Verification key change
-				</p>
-				<div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
-					<div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3">
-						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">Before</p>
-						<code className="mt-2 block break-all font-mono text-[12px] leading-5 text-[#6b7280]">{beforeValue}</code>
-					</div>
-					<div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
-						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#16a34a]">After</p>
-						<code className="mt-2 block break-all font-mono text-[12px] leading-5 text-[#166534]">{afterValue}</code>
-					</div>
-				</div>
-			</div>
+			{decodedAction === null ? null : decodedAction.kind === 'multisig_update' ? (
+				<MultisigUpdateDetails action={decodedAction} />
+			) : (
+				<UnknownActionDetails rawHex={decodedAction.rawHex} />
+			)}
 
 			<div className="mt-5">
 				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">

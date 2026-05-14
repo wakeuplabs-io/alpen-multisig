@@ -19,6 +19,7 @@ type SignatureResult = {
 
 export function createTrezorPocAdapter(): WalletAdapter {
 	let publicKeyHex: string | null = null
+	let currentDerivationPath = ADMIN_ID_PATH
 
 	return {
 		vendor: 'trezor',
@@ -29,6 +30,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
 			publicKeyHex = info.xpubOrFingerprint ?? null
+			currentDerivationPath = ADMIN_ID_PATH
 			return {
 				deviceLabel: info.deviceLabel,
 				derivationPath: info.derivationPath,
@@ -40,10 +42,11 @@ export function createTrezorPocAdapter(): WalletAdapter {
 
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
+			currentDerivationPath = ADMIN_ID_PATH
 		},
 
-		setDerivationPath(_nextPath: string): void {
-			// Admin ID path is fixed at ADMIN_ID_PATH; wallet path changes are for display only.
+		setDerivationPath(nextPath: string): void {
+			currentDerivationPath = nextPath
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
@@ -51,7 +54,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			if (!context) {
 				const result = await tauriCall<SignatureResult>('sign_challenge_with_trezor', {
 					challengeHex: sighashHex,
-					derivationPath: ADMIN_ID_PATH,
+					derivationPath: currentDerivationPath,
 				})
 				if (!result.ok) throw new Error(result.error)
 				return {
@@ -63,7 +66,7 @@ export function createTrezorPocAdapter(): WalletAdapter {
 			const result = await tauriCall<SignatureResult>('sign_with_trezor', {
 				seqno: context.seqno,
 				actionHex: context.actionHex,
-				derivationPath: ADMIN_ID_PATH,
+				derivationPath: currentDerivationPath,
 			})
 			if (!result.ok) throw new Error(result.error)
 			return {

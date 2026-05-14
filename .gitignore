@@ -26,3 +26,4 @@ branding/**/*
 
 /desktop-app/src-tauri/gen/
 scripts/asm-params.json
+/.claude/settings.json

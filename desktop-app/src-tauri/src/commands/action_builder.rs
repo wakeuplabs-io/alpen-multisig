@@ -5,6 +5,37 @@ use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind")]
+pub enum DecodedAction {
+    #[serde(rename = "multisig_update", rename_all = "camelCase")]
+    MultisigUpdate {
+        role: String,
+        add_keys: Vec<String>,
+        remove_keys: Vec<String>,
+        new_threshold: u8,
+    },
+    #[serde(rename = "unknown", rename_all = "camelCase")]
+    Unknown { raw_hex: String },
+}
+
+#[tauri::command]
+pub fn decode_action_hex(action_hex: String) -> DecodedAction {
+    let hex = action_hex
+        .strip_prefix("0x")
+        .unwrap_or(&action_hex)
+        .to_string();
+    match action_codec::decode_hex(&hex) {
+        Ok(Action::MultisigUpdate(update)) => DecodedAction::MultisigUpdate {
+            role: update.role.as_str().to_string(),
+            add_keys: update.add_keys.iter().map(|k| k.to_hex()).collect(),
+            remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
+            new_threshold: update.new_threshold.get(),
+        },
+        Err(_) => DecodedAction::Unknown { raw_hex: hex },
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAdminMultisigUpdateHexInput {
