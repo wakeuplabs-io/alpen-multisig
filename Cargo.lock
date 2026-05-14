@@ -56,6 +56,7 @@ dependencies = [
  "strata-asm-common",
  "strata-asm-manifest-types",
  "strata-asm-params",
+ "strata-asm-proto-administration",
  "strata-asm-spec",
  "strata-asm-txs-admin",
  "strata-asm-txs-test-utils",
