@@ -9,14 +9,20 @@ This crate is a member of the Cargo workspace and is gated by the workspace `rus
 | Test | What it covers | External requirements |
 |---|---|---|
 | [`e2e_admin_subprotocol`](./tests/e2e_admin_subprotocol.rs) | Full admin action flow against the upstream Alpen/Strata crates: generate signer keys → build `MultisigAction` → SPS-65 tagged sighash → ECDSA threshold signatures → SSZ-encoded SPS-50+51 transaction → parse back and verify. Stops before broadcast. Background in [`docs/2-discovery/03-poc1-findings.md`](../docs/2-discovery/03-poc1-findings.md). | None |
+| [`e2e_admin_commit_reveal`](./tests/e2e_admin_commit_reveal.rs) | On-chain commit → reveal with regtest + harness: funded envelope, mined commit, reveal tx, parse SPS payload and verify threshold signatures. | `bitcoind` in `PATH` |
 | [`e2e_propose_sign`](./tests/e2e_propose_sign.rs) | Desktop ↔ orchestrator integration. Spawns the real `orchestrator-be` binary as a subprocess and drives the desktop `application::proposals` layer over real HTTP (create → get → approve → verify_threshold). Exercises domain + action_codec + signing without pulling Strata crates into the desktop app. | None (builds and launches the orchestrator binary on a random port) |
-| [`e2e_harness_hello_world`](./tests/e2e_harness_hello_world.rs) | Smoke test for the reusable ASM test harness (`src/test_harness.rs`). Boots Bitcoin regtest, launches the ASM worker, mines one block, and asserts that the processed height advances. Skipped at runtime if `bitcoind` is not in `PATH`. | `bitcoind` available in `PATH` |
+| [`e2e_harness_hello_world`](./tests/e2e_harness_hello_world.rs) | Smoke test for the reusable ASM test harness (`src/test_harness.rs`). Boots Bitcoin regtest, launches the ASM worker, mines one block, and asserts that the processed height advances. Skipped at runtime if `bitcoind` is not in `PATH`. | `bitcoind` in `PATH` |
+| [`e2e_signer_update_enacted_light`](./tests/e2e_signer_update_enacted_light.rs) | Desktop signing + `broadcast_tx` against regtest + ASM: multisig update is committed, revealed, mined past confirmation depth, and **enacted** state is asserted via `AdministrationSubprotoState`. Uses shared fixtures in [`src/fixtures/`](./src/fixtures/). Two cases: `DEFAULT_REPO_ASM` (confirmation depth 144) and `FAST_ENACTMENT` (depth 5). Skipped if `bitcoind` is missing. | `bitcoind` in `PATH` |
+
+## Shared fixtures (`src/fixtures`)
+
+Deterministic JSON + mnemonic profiles live in the library crate so integration tests stay thin. [`fixtures::signer_update_enacted`](./src/fixtures/signer_update_enacted.rs) defines `DEFAULT_REPO_ASM` and `FAST_ENACTMENT`; the derivation prefix must stay aligned with `desktop_app::infrastructure::signing::list_mnemonic_addresses` (`m/84'/0'/73'/0/{n}`).
 
 ## Requirements
 
 - **Rust nightly** pinned via the workspace `rust-toolchain.toml`.
 - Internet access on first build (git dependencies from `alpenlabs/asm` and `alpenlabs/strata-common`).
-- A `bitcoind` binary in `PATH` to exercise `e2e_harness_hello_world`; other tests do not need it.
+- **`bitcoind` in `PATH`** for any test that boots regtest (`e2e_harness_hello_world`, `e2e_admin_commit_reveal`, `e2e_signer_update_enacted_light`). GitHub Actions installs the `bitcoind` package before `cargo test --workspace`.
 
 ## Run
 
@@ -28,4 +34,10 @@ Run a single test:
 
 ```sh
 cargo test -p alpen-multisig-e2e-tests --test e2e_admin_subprotocol
+```
+
+Enacted signer-update tests (default + fast confirmation fixture):
+
+```sh
+cargo test -p alpen-multisig-e2e-tests --test e2e_signer_update_enacted_light -- --nocapture
 ```
