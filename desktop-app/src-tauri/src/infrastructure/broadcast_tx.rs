@@ -123,7 +123,9 @@ pub fn compute_sighash(seq_no: u64, action_hex: &str) -> Result<[u8; 32], String
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ action: {e:?}"))?;
-    Ok(SigningMessage::for_action(&action, seq_no).compute_sighash().0)
+    Ok(SigningMessage::for_action(&action, seq_no)
+        .compute_sighash()
+        .0)
 }
 
 /// Derive the P2TR commit address for the given operator keypair and envelope payload.

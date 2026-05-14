@@ -27,7 +27,10 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 	const keysToRemove = useWatch({ control, name: 'keysToRemove' }) ?? []
 
 	const removedSet = new Set(
-		keysToRemove.map((r) => r.value.trim()).filter((v) => v.length > 0).map(normalizeSignerKey),
+		keysToRemove
+			.map((r) => r.value.trim())
+			.filter((v) => v.length > 0)
+			.map(normalizeSignerKey),
 	)
 	const visibleAddedSigners = keysToAdd
 		.map((r, i) => ({ value: r.value.trim(), index: i }))

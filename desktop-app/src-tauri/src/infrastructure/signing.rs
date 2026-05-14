@@ -137,7 +137,9 @@ pub fn render_signing_message(seqno: u64, action_hex: &str) -> Result<String, St
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
-    Ok(SigningMessage::for_action(&action, seqno).as_str().to_string())
+    Ok(SigningMessage::for_action(&action, seqno)
+        .as_str()
+        .to_string())
 }
 
 pub fn sign_with_mnemonic_path(

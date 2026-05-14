@@ -55,7 +55,10 @@ export function CreateProposalPreview({
 	const actionTypeLabel = actionType === 'signer_update' ? 'Signer update' : 'Verification key update'
 
 	const removeNorm = new Set(
-		keysToRemove.map((k) => k.trim()).filter((k) => k.length > 0).map(normalizeSignerKey),
+		keysToRemove
+			.map((k) => k.trim())
+			.filter((k) => k.length > 0)
+			.map(normalizeSignerKey),
 	)
 	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
 	const keysToAddRows = keysToAdd.map((k) => ({ value: k }))
