@@ -67,6 +67,7 @@ export function WalletConnectScreen() {
 		setSelectedRole,
 		connectSession,
 		disconnectSession,
+		signingStep,
 	} = useSession()
 	const disconnectRef = useRef<(() => void) | null>(null)
 	const [showTopBarDisconnect, setShowTopBarDisconnect] = useState(false)
@@ -206,6 +207,7 @@ export function WalletConnectScreen() {
 								isAuthenticated,
 								authError,
 								authOkMessage,
+								signingStep: signingStep ?? null,
 								onSelectAuthority: handleSelectAuthority,
 								onContinueToAuthenticate: handleContinueToAuthenticate,
 								onBackToAuthority: handleBackToAuthoritySelection,

@@ -5,9 +5,9 @@ use bip39::Mnemonic;
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
-use bitcoin::{key::TweakedPublicKey, secp256k1::XOnlyPublicKey};
 use ssz::Decode;
-use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
+use strata_asm_txs_admin::actions::MultisigAction;
+use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfig;
 
@@ -56,10 +56,10 @@ pub fn compute_sighash(seqno: u64, action_hex: &str) -> Result<SighashResult, St
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
-    let sighash = action.compute_sighash(seqno);
+    let digest = SigningMessage::for_action(&action, seqno).compute_sighash();
 
     Ok(SighashResult {
-        sighash_hex: hex::encode(sighash.0),
+        sighash_hex: hex::encode(digest.0),
         seqno,
     })
 }
@@ -115,13 +115,12 @@ pub fn list_mnemonic_addresses(
 ) -> Result<Vec<MnemonicAddressEntry>, String> {
     let mut out = Vec::with_capacity(count as usize);
     for n in 0..count {
-        let derivation_path = format!("m/86'/0'/73'/0/{n}");
+        let derivation_path = format!("m/84'/0'/73'/0/{n}");
         let secret_key =
             derive_secret_key_from_mnemonic_path(mnemonic, passphrase, &derivation_path)?;
         let pubkey = PublicKey::from_secret_key(SECP256K1, &secret_key);
-        let xonly = XOnlyPublicKey::from(pubkey);
-        let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
-        let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
+        let compressed = bitcoin::CompressedPublicKey(pubkey);
+        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
         out.push(MnemonicAddressEntry {
             index: n,
             derivation_path,
@@ -130,6 +129,17 @@ pub fn list_mnemonic_addresses(
         });
     }
     Ok(out)
+}
+
+/// Return the canonical human-readable signing message for a given action and sequence number.
+/// This is the string Trezor (and any Bitcoin `signMessage`-compatible wallet) must sign.
+pub fn render_signing_message(seqno: u64, action_hex: &str) -> Result<String, String> {
+    let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
+    let action = MultisigAction::from_ssz_bytes(&action_bytes)
+        .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
+    Ok(SigningMessage::for_action(&action, seqno)
+        .as_str()
+        .to_string())
 }
 
 pub fn sign_with_mnemonic_path(
@@ -212,8 +222,7 @@ mod tests {
     use super::*;
     use rand::rngs::OsRng;
     use ssz::Encode;
-    use strata_asm_params::Role;
-    use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
+    use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
     use strata_asm_txs_admin::actions::UpdateAction;
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
@@ -246,8 +255,8 @@ mod tests {
             vec![],
             NonZero::new(2).expect("non-zero"),
         );
-        let multisig_update = MultisigUpdate::new(config_update, Role::StrataAdministrator);
-        MultisigAction::Update(UpdateAction::Multisig(multisig_update))
+        let multisig_update = StrataAdminMultisigUpdate::new(config_update);
+        MultisigAction::Update(UpdateAction::StrataAdminMultisig(multisig_update))
     }
 
     fn demo_action_hex() -> String {

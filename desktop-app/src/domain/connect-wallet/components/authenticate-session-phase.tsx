@@ -1,3 +1,5 @@
+import type { SigningStepInfo } from '@/contexts/session-context'
+
 type Props = {
 	authorityLabel: string
 	signerAddress: string
@@ -5,6 +7,7 @@ type Props = {
 	isAuthenticating: boolean
 	authError: string | null
 	authOkMessage: string | null
+	signingStep: SigningStepInfo | null
 	onBackToAuthority: () => void
 	onAuthenticate: () => void
 }
@@ -16,12 +19,21 @@ export function AuthenticateSessionPhase({
 	isAuthenticating,
 	authError,
 	authOkMessage,
+	signingStep,
 	onBackToAuthority,
 	onAuthenticate,
 }: Props) {
 	const authenticateButtonClassName = isAuthenticating
 		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
 		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
+
+	function getButtonLabel() {
+		if (!isAuthenticating) return 'Authenticate with Trezor'
+		if (signingStep) {
+			return `Signing authentication (${signingStep.step} of ${signingStep.totalSteps})…`
+		}
+		return 'Authenticating…'
+	}
 
 	return (
 		<div className="mx-auto w-full max-w-[680px]">
@@ -41,7 +53,9 @@ export function AuthenticateSessionPhase({
 				Authenticate session
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Your Trezor will sign a structured challenge to prove control of this address. No password, no biometrics.
+				Your Trezor will sign an authentication challenge to prove control of this address. This requires{' '}
+				<strong className="font-medium text-[#374151]">2 signatures</strong>: one for the on-chain session and one for
+				the coordination backend.
 			</p>
 
 			<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-5 py-4">
@@ -74,6 +88,20 @@ export function AuthenticateSessionPhase({
 				</div>
 			</div>
 
+			{signingStep && (
+				<div className="mt-4 rounded-lg border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+					<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#059669]">
+						Signing on device — step {signingStep.step} of {signingStep.totalSteps}
+					</p>
+					<p className="m-0 mt-1 text-[0.75rem] text-[#6b7280]">
+						Confirm this hash on your Trezor — it must match exactly:
+					</p>
+					<p className="m-0 mt-2 break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
+						{signingStep.challengeHex}
+					</p>
+				</div>
+			)}
+
 			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
 			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
 
@@ -84,7 +112,7 @@ export function AuthenticateSessionPhase({
 					onClick={onAuthenticate}
 					disabled={isAuthenticating}
 				>
-					{isAuthenticating ? 'Authenticating...' : 'Authenticate with Trezor'}
+					{getButtonLabel()}
 				</button>
 			</div>
 		</div>

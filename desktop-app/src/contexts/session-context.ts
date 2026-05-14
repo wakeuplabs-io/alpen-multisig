@@ -2,6 +2,12 @@ import { createContext } from 'react'
 import type { AuthRole, AuthSession } from '@/api/authentication'
 import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVendor } from '@/wallet/types'
 
+export type SigningStepInfo = {
+	challengeHex: string
+	step: number
+	totalSteps: number
+}
+
 export type SessionContextValue = {
 	remainingMs: number
 	sessionTimeLabel: string
@@ -19,6 +25,7 @@ export type SessionContextValue = {
 	adapter: WalletAdapter
 	selectAdapter: (vendor: WalletVendor, options?: WalletAdapterOptions) => void
 	clearSession: () => void
+	signingStep: SigningStepInfo | null
 }
 
 export const SessionContext = createContext<SessionContextValue | null>(null)

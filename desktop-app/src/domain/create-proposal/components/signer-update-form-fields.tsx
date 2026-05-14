@@ -1,7 +1,7 @@
 import { TrashIcon, UndoIcon } from '@/assets/icons'
 import { useState } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
-import type { CreateProposalFormValues } from '../model/create-proposal.schema'
+import { normalizeSignerKey, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass } from '../model/create-proposal-form-styles'
 import { LabelWithTooltip } from './create-proposal-form-primitives'
 
@@ -26,7 +26,12 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 	const keysToAdd = useWatch({ control, name: 'keysToAdd' }) ?? []
 	const keysToRemove = useWatch({ control, name: 'keysToRemove' }) ?? []
 
-	const removedSet = new Set(keysToRemove.map((r) => r.value.trim()).filter((v) => v.length > 0))
+	const removedSet = new Set(
+		keysToRemove
+			.map((r) => r.value.trim())
+			.filter((v) => v.length > 0)
+			.map(normalizeSignerKey),
+	)
 	const visibleAddedSigners = keysToAdd
 		.map((r, i) => ({ value: r.value.trim(), index: i }))
 		.filter((r) => r.value.length > 0)
@@ -41,7 +46,8 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 	}
 
 	function handleUndoRemove(signer: string) {
-		const matchIdx = keysToRemove.findIndex((r) => r.value.trim() === signer.trim())
+		const target = normalizeSignerKey(signer)
+		const matchIdx = keysToRemove.findIndex((r) => normalizeSignerKey(r.value) === target)
 		if (matchIdx === -1) return
 		if (keysToRemoveArray.fields.length > 1) {
 			keysToRemoveArray.remove(matchIdx)
@@ -86,7 +92,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
 						<div className="flex flex-col gap-2">
 							{currentSigners.map((signer) => {
-								const isPendingRemoval = removedSet.has(signer.trim())
+								const isPendingRemoval = removedSet.has(normalizeSignerKey(signer))
 								return (
 									<div
 										key={signer}
@@ -149,12 +155,12 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 			</div>
 
 			<div>
-				<label className="text-sm font-medium text-[#6b7280]">Add new signer address</label>
+				<label className="text-sm font-medium text-[#6b7280]">Add new signer (compressed pubkey hex)</label>
 				<div className="mt-1.5 flex gap-2">
 					<input
 						type="text"
 						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
-						placeholder="bc1p..."
+						placeholder="02… or 03… (33-byte hex)"
 						value={newSignerInput}
 						onChange={(e) => setNewSignerInput(e.target.value)}
 						onKeyDown={(e) => {

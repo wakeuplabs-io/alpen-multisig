@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
-import { computeSighash } from '@/api/signing'
+import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useSession } from '@/hooks/use-session'
@@ -23,6 +23,7 @@ export function SignPocScreen() {
 	const [signResult, setSignResult] = useState<SignSighashResult | null>(null)
 	const [copyFeedbackVisible, setCopyFeedbackVisible] = useState(false)
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
+	const [decodedAction, setDecodedAction] = useState<DecodedAction | null>(null)
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
@@ -62,9 +63,6 @@ export function SignPocScreen() {
 		}
 		return proposal.actionHex.startsWith('0x') ? proposal.actionHex.slice(2) : proposal.actionHex
 	}, [proposal])
-
-	const beforeValue = decodedActionHex.length > 0 ? `0x${decodedActionHex.slice(0, 64)}` : 'Unavailable'
-	const afterValue = decodedActionHex.length > 64 ? `0x${decodedActionHex.slice(64, 128)}` : 'Unavailable'
 
 	useEffect(() => {
 		let mounted = true
@@ -109,6 +107,13 @@ export function SignPocScreen() {
 
 				setProposal(nextProposal)
 				setSighashHex(sighashResult.data.sighashHex)
+
+				const decodedResult = await decodeActionHex(nextProposal.actionHex)
+				setDecodedAction(
+					decodedResult.ok
+						? decodedResult.data
+						: { kind: 'unknown', rawHex: nextProposal.actionHex.replace(/^0x/i, '') },
+				)
 			} catch (error) {
 				if (!mounted) {
 					return
@@ -153,7 +158,10 @@ export function SignPocScreen() {
 		setSignError(null)
 		setSignResult(null)
 		try {
-			const signed = await adapter.signSighash(sighashHex)
+			const signed = await adapter.signSighash(sighashHex, {
+				seqno: proposal.seqNo,
+				actionHex: decodedActionHex,
+			})
 			const approved = await approveProposal({
 				baseUrl: ORCHESTRATOR_BASE_URL,
 				actionId: proposal.actionId,
@@ -272,8 +280,7 @@ export function SignPocScreen() {
 							proposalIdLabel={`#${proposal.seqNo}`}
 							proposalTypeLabel={proposalTypeLabel}
 							proposalTitle={proposalTitle}
-							beforeValue={beforeValue}
-							afterValue={afterValue}
+							decodedAction={decodedAction}
 							sighashHex={sighashHex}
 							signResult={signResult}
 							isSigning={isSigning}

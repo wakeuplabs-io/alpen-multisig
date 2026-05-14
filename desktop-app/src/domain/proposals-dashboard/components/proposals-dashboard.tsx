@@ -243,10 +243,9 @@ function ProposalCard({
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalType(proposal)
 	const hasQuorum = proposal.status === 'approved' || collectedSignatures >= requiredSignatures
-	const signerAlreadySigned =
+	const alreadySigned =
 		signerPubkey !== null &&
-		proposal.signatures.some((signature) => signature.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
-	const canSign = proposal.status === 'pending' && !signerAlreadySigned
+		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
 
 	return (
 		<div
@@ -307,25 +306,22 @@ function ProposalCard({
 						Broadcast
 					</button>
 				</div>
-			) : canSign ? (
+			) : (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
 					<p className="m-0 flex items-center gap-1 text-xs text-[#6b7280]">
 						<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
 						{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
 					</p>
-					<button
-						type="button"
-						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						onClick={() => onSignProposal(proposal.actionId)}
-					>
-						Sign
-					</button>
+					{!alreadySigned && (
+						<button
+							type="button"
+							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+							onClick={() => onSignProposal(proposal.actionId)}
+						>
+							Sign
+						</button>
+					)}
 				</div>
-			) : (
-				<p className="m-0 mt-4 flex items-center gap-1 text-xs text-[#6b7280]">
-					<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
-					{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
-				</p>
 			)}
 		</div>
 	)

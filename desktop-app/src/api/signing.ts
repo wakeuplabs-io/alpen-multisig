@@ -27,6 +27,14 @@ type RawSignatureResult = {
 	signatureHex: string
 }
 
+export type DecodedAction =
+	| { kind: 'multisig_update'; role: string; addKeys: string[]; removeKeys: string[]; newThreshold: number }
+	| { kind: 'unknown'; rawHex: string }
+
+export function decodeActionHex(actionHex: string): Promise<ApiResult<DecodedAction>> {
+	return tauriCall<DecodedAction>('decode_action_hex', { actionHex })
+}
+
 export function computeSighash(seqno: number, actionHex: string): Promise<ApiResult<SighashResult>> {
 	return tauriCall<RawSighashResult>('compute_sighash', { seqno, actionHex }).then((result) => {
 		if (!result.ok) {

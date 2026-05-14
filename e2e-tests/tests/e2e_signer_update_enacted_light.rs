@@ -4,7 +4,7 @@
 //! ASM harness, **without** spinning up the orchestrator backend or HTTP layer.
 //!
 //! Flow:
-//!   1. Derive A, B, D from a known mnemonic on BIP-86 `m/86'/0'/73'/0/n`.
+//!   1. Derive A, B, D from a known mnemonic on BIP-84 `m/84'/0'/73'/0/n`.
 //!   2. Assert A and B match the canonical `strata_administrator` keys in the
 //!      inlined `asm-params.json` snippet.
 //!   3. Boot the harness with `AdministrationInitConfig` parsed from the JSON.
@@ -36,9 +36,10 @@ use rand::rngs::OsRng;
 use ssz::Decode;
 use strata_asm_common::Subprotocol;
 use strata_asm_params::{AdministrationInitConfig, Role};
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_admin::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_asm_worker::AsmState;
+use strata_crypto::keys::compressed::CompressedPublicKey;
 
 use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
@@ -48,7 +49,7 @@ use desktop_app::infrastructure::{action_codec, broadcast_tx, signing};
 const MNEMONIC: &str =
     "multiply toss magic exclude crawl obey garden black apart room village neglect";
 const PASSPHRASE: &str = "";
-const PATH_PREFIX: &str = "m/86'/0'/73'/0";
+const PATH_PREFIX: &str = "m/84'/0'/73'/0";
 
 const SEQ_NO: u64 = 1;
 
@@ -58,18 +59,33 @@ const SEQ_NO: u64 = 1;
 const ASM_PARAMS_ADMIN_JSON: &str = r#"{
   "strata_administrator": {
     "keys": [
-      "028c0ea5beee14a1aedeb7b6139f506321015708310eb686d1010477ef80fb6f3e",
-      "024c736a5023983a039661061e7a6aedd1a2bf2704a9407767268ca21e597e2ac9"
+      "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
+      "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
     ],
     "threshold": 2
   },
   "strata_sequencer_manager": {
     "keys": [
-      "028c0ea5beee14a1aedeb7b6139f506321015708310eb686d1010477ef80fb6f3e"
+      "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
     ],
     "threshold": 1
   },
-  "confirmation_depth": 144,
+  "alpen_administrator": {
+    "keys": [
+      "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+    ],
+    "threshold": 1
+  },
+  "confirmation_depths": {
+    "strata_admin_multisig_update": 144,
+    "strata_seq_manager_multisig_update": 144,
+    "alpen_admin_multisig_update": 144,
+    "operator_update": 144,
+    "sequencer_update": 144,
+    "ol_stf_vk_update": 144,
+    "asm_stf_vk_update": 144,
+    "ee_stf_vk_update": 144
+  },
   "max_seqno_gap": 10
 }"#;
 
@@ -112,9 +128,10 @@ async fn e2e_signer_update_enacted_lightweight() {
     // 3. Build AdministrationInitConfig directly from the JSON admin section.
     let admin_cfg: AdministrationInitConfig = serde_json::from_value(admin_section.clone())
         .expect("admin section deserializes into AdministrationInitConfig");
-    let confirmation_depth: u16 = admin_section["confirmation_depth"]
-        .as_u64()
-        .expect("confirmation_depth is u64") as u16;
+    let confirmation_depth: u16 =
+        admin_section["confirmation_depths"]["strata_admin_multisig_update"]
+            .as_u64()
+            .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16;
 
     // 4. Boot the harness with the configured admin authority.
     let harness = AsmTestHarnessBuilder::default()
@@ -263,7 +280,7 @@ async fn e2e_signer_update_enacted_lightweight() {
         .config()
         .keys()
         .iter()
-        .map(|k| hex::encode(k.serialize()))
+        .map(|k: &CompressedPublicKey| hex::encode(k.serialize()))
         .collect();
     assert!(
         canonical_hex.contains(&d_hex),

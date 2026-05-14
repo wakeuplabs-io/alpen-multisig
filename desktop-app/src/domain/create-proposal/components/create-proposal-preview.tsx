@@ -1,6 +1,7 @@
 import type { Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
 import { useState } from 'react'
+import { countSignersAfterUpdate, normalizeSignerKey } from '../model/create-proposal.schema'
 
 type Props = {
 	title: string
@@ -53,19 +54,27 @@ export function CreateProposalPreview({
 }: Props) {
 	const actionTypeLabel = actionType === 'signer_update' ? 'Signer update' : 'Verification key update'
 
-	const removeSet = new Set(keysToRemove.map((k) => k.trim()).filter((k) => k.length > 0))
-	const afterSigners = [
-		...currentSigners.filter((s) => !removeSet.has(s.trim())),
-		...keysToAdd.filter((k) => k.trim().length > 0),
-	]
+	const removeNorm = new Set(
+		keysToRemove
+			.map((k) => k.trim())
+			.filter((k) => k.length > 0)
+			.map(normalizeSignerKey),
+	)
+	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
+	const keysToAddRows = keysToAdd.map((k) => ({ value: k }))
+	const afterSignerCount = countSignersAfterUpdate(currentSigners, keysToRemoveRows, keysToAddRows)
+	const beforeSignerCount = new Set(currentSigners.map((s) => normalizeSignerKey(s))).size
 
 	const tableRows = [
-		...currentSigners.map((s) => ({ before: s, after: removeSet.has(s.trim()) ? null : s })),
+		...currentSigners.map((s) => ({
+			before: s,
+			after: removeNorm.has(normalizeSignerKey(s)) ? null : s,
+		})),
 		...keysToAdd.filter((k) => k.trim().length > 0).map((k) => ({ before: null, after: k })),
 	]
 
 	const newThreshold = Number(threshold)
-	const thresholdChanged = newThreshold !== currentThreshold || afterSigners.length !== currentSigners.length
+	const thresholdChanged = newThreshold !== currentThreshold || afterSignerCount !== beforeSignerCount
 
 	const signatureHex = createdProposal?.signatures[0]?.signatureHex ?? null
 
@@ -136,7 +145,7 @@ export function CreateProposalPreview({
 								<span className="text-sm text-[#9ca3af]">
 									Threshold{' '}
 									<span className="font-semibold text-[#374151]">
-										{currentThreshold} of {currentSigners.length}
+										{currentThreshold} of {beforeSignerCount}
 									</span>
 								</span>
 							</div>
@@ -144,7 +153,7 @@ export function CreateProposalPreview({
 								<span className={`text-sm ${thresholdChanged ? 'text-[#059669]' : 'text-[#9ca3af]'}`}>
 									Threshold{' '}
 									<span className="font-semibold">
-										{threshold} of {afterSigners.length}
+										{threshold} of {afterSignerCount}
 									</span>
 								</span>
 							</div>

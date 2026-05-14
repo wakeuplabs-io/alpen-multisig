@@ -7,7 +7,8 @@ const keyRowSchema = z.object({
 
 const compressedPubKeyHexPattern = /^(?:0x)?(?:02|03)[0-9a-fA-F]{64}$/
 
-function normalizeSignerKey(value: string): string {
+/** Canonical form for comparing compressed pubkeys (matches RPC `hex::encode` / signed payload). */
+export function normalizeSignerKey(value: string): string {
 	const trimmed = value.trim()
 	const withoutPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
 	return withoutPrefix.toLowerCase()
@@ -31,10 +32,22 @@ export function countSignersAfterUpdate(
 	keysToRemove: { value: string }[],
 	keysToAdd: { value: string }[],
 ): number {
-	const removeSet = new Set(keysToRemove.map((r) => r.value.trim()).filter((v) => v.length > 0))
-	const remaining = currentSigners.filter((s) => !removeSet.has(s.trim()))
-	const added = keysToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)
-	return new Set([...remaining.map((s) => s.trim()), ...added]).size
+	const removeSet = new Set(
+		keysToRemove
+			.map((r) => r.value.trim())
+			.filter((v) => v.length > 0)
+			.map(normalizeSignerKey),
+	)
+	const remaining = currentSigners
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0)
+		.filter((s) => !removeSet.has(normalizeSignerKey(s)))
+		.map(normalizeSignerKey)
+	const added = keysToAdd
+		.map((r) => r.value.trim())
+		.filter((v) => v.length > 0)
+		.map(normalizeSignerKey)
+	return new Set([...remaining, ...added]).size
 }
 
 export type BuildCreateProposalFormSchemaArgs = {
@@ -182,10 +195,24 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 				})
 			} else if (currentMultisigSigners !== null) {
 				const resultingSignerCount = countSignersAfterUpdate(currentMultisigSigners, data.keysToRemove, data.keysToAdd)
-				const removedSet = new Set(data.keysToRemove.map((row) => row.value.trim()).filter((value) => value.length > 0))
-				const remainingCurrentSigners = currentMultisigSigners.filter((signer) => !removedSet.has(signer.trim())).length
-				const addedSet = new Set(data.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0))
-				const addedSignersNotRemoved = Array.from(addedSet).filter((signer) => !removedSet.has(signer)).length
+				const removedSet = new Set(
+					data.keysToRemove
+						.map((row) => row.value.trim())
+						.filter((value) => value.length > 0)
+						.map(normalizeSignerKey),
+				)
+				const remainingCurrentSigners = currentMultisigSigners.filter(
+					(signer) => !removedSet.has(normalizeSignerKey(signer)),
+				).length
+				const addedNormalized = [
+					...new Set(
+						data.keysToAdd
+							.map((row) => row.value.trim())
+							.filter((value) => value.length > 0)
+							.map(normalizeSignerKey),
+					),
+				]
+				const addedSignersNotRemoved = addedNormalized.filter((signer) => !removedSet.has(signer)).length
 				if (thN > resultingSignerCount) {
 					ctx.addIssue({
 						code: 'custom',
