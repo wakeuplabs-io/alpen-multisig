@@ -59,14 +59,14 @@ const SEQ_NO: u64 = 1;
 const ASM_PARAMS_ADMIN_JSON: &str = r#"{
   "strata_administrator": {
     "keys": [
-      "028c0ea5beee14a1aedeb7b6139f506321015708310eb686d1010477ef80fb6f3e",
-      "024c736a5023983a039661061e7a6aedd1a2bf2704a9407767268ca21e597e2ac9"
+      "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
+      "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
     ],
     "threshold": 2
   },
   "strata_sequencer_manager": {
     "keys": [
-      "028c0ea5beee14a1aedeb7b6139f506321015708310eb686d1010477ef80fb6f3e"
+      "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
     ],
     "threshold": 1
   },
