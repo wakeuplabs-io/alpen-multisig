@@ -4,7 +4,7 @@
 //! ASM harness, **without** spinning up the orchestrator backend or HTTP layer.
 //!
 //! Flow:
-//!   1. Derive A, B, D from a known mnemonic on BIP-86 `m/86'/0'/73'/0/n`.
+//!   1. Derive A, B, D from a known mnemonic on BIP-84 `m/84'/0'/73'/0/n`.
 //!   2. Assert A and B match the canonical `strata_administrator` keys in the
 //!      inlined `asm-params.json` snippet.
 //!   3. Boot the harness with `AdministrationInitConfig` parsed from the JSON.
@@ -49,7 +49,7 @@ use desktop_app::infrastructure::{action_codec, broadcast_tx, signing};
 const MNEMONIC: &str =
     "multiply toss magic exclude crawl obey garden black apart room village neglect";
 const PASSPHRASE: &str = "";
-const PATH_PREFIX: &str = "m/86'/0'/73'/0";
+const PATH_PREFIX: &str = "m/84'/0'/73'/0";
 
 const SEQ_NO: u64 = 1;
 
@@ -70,7 +70,22 @@ const ASM_PARAMS_ADMIN_JSON: &str = r#"{
     ],
     "threshold": 1
   },
-  "confirmation_depth": 144,
+  "alpen_administrator": {
+    "keys": [
+      "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+    ],
+    "threshold": 1
+  },
+  "confirmation_depths": {
+    "strata_admin_multisig_update": 144,
+    "strata_seq_manager_multisig_update": 144,
+    "alpen_admin_multisig_update": 144,
+    "operator_update": 144,
+    "sequencer_update": 144,
+    "ol_stf_vk_update": 144,
+    "asm_stf_vk_update": 144,
+    "ee_stf_vk_update": 144
+  },
   "max_seqno_gap": 10
 }"#;
 
@@ -113,9 +128,9 @@ async fn e2e_signer_update_enacted_lightweight() {
     // 3. Build AdministrationInitConfig directly from the JSON admin section.
     let admin_cfg: AdministrationInitConfig = serde_json::from_value(admin_section.clone())
         .expect("admin section deserializes into AdministrationInitConfig");
-    let confirmation_depth: u16 = admin_section["confirmation_depth"]
+    let confirmation_depth: u16 = admin_section["confirmation_depths"]["strata_admin_multisig_update"]
         .as_u64()
-        .expect("confirmation_depth is u64") as u16;
+        .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16;
 
     // 4. Boot the harness with the configured admin authority.
     let harness = AsmTestHarnessBuilder::default()
