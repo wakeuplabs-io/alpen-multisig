@@ -99,6 +99,7 @@ export function AuthoritySelectionPhase({
 					<div className="flex items-center gap-2">
 						<button
 							type="button"
+							data-testid="e2e-authority-select-continue"
 							className={continueButtonClassName}
 							onClick={onContinueToAuthenticate}
 							disabled={!canContinue}
