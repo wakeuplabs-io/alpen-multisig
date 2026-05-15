@@ -5,13 +5,13 @@
 #   ./scripts/bitcoind-asm-runner.sh start|stop|restart|status
 #
 # Environment:
-#   ASM_RUNNER_CONFIG   Path to config.toml (default: asm/config.toml)
+#   ASM_RUNNER_CONFIG   Path to config.toml (default: scripts/asm-config.toml)
 #   BITCOIND_DATADIR    Bitcoin datadir for this node (default: ~/.bitcoin/asm-runner-regtest)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG="${ASM_RUNNER_CONFIG:-$ROOT/asm/config.toml}"
+CONFIG="${ASM_RUNNER_CONFIG:-$ROOT/scripts/asm-config.toml}"
 DATADIR="${BITCOIND_DATADIR:-$HOME/.bitcoin/asm-runner-regtest}"
 
 RPC_HOST="127.0.0.1"
