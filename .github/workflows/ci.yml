@@ -17,6 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Default ubuntu-latest images reserve a lot of disk for unused toolchains; reclaim so
+      # `cargo build` + `rust-cache` post-step (`cargo metadata`) do not hit ENOSPC.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-01-01
@@ -26,6 +33,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libappindicator3-dev
+
+      # Ubuntu 24.04+ runners do not ship a `bitcoind` apt package; use a pinned release tarball
+      # (aligns with `bitcoind-async-client` / corepc `29_0` features in this workspace).
+      - name: Install Bitcoin Core (bitcoind) for regtest e2e
+        env:
+          BITCOIN_CORE_VERSION: "29.0"
+        run: |
+          set -euxo pipefail
+          wget -q "https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}/bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz"
+          tar -xzf "bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz"
+          sudo install -m 0755 "bitcoin-${BITCOIN_CORE_VERSION}/bin/bitcoind" /usr/local/bin/bitcoind
+          sudo install -m 0755 "bitcoin-${BITCOIN_CORE_VERSION}/bin/bitcoin-cli" /usr/local/bin/bitcoin-cli
+          bitcoind --version
+          rm -f "bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz"
+          rm -rf "bitcoin-${BITCOIN_CORE_VERSION}"
 
       - uses: Swatinem/rust-cache@v2
         with:
