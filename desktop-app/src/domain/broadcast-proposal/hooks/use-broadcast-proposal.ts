@@ -25,10 +25,7 @@ type UseBroadcastProposalReturn = {
 }
 
 /** Merge broadcast IPC result with a fresh orchestrator proposal row. */
-export function mergeBroadcastWithProposal(
-	broadcast: BroadcastResult,
-	proposal: Proposal,
-): BroadcastResult {
+export function mergeBroadcastWithProposal(broadcast: BroadcastResult, proposal: Proposal): BroadcastResult {
 	return {
 		actionId: proposal.actionId,
 		proposalStatus: proposal.status,
