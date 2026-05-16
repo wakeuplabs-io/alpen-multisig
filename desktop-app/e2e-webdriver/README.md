@@ -29,14 +29,14 @@ If `npm run test:e2e` cannot find it, either add `~/.cargo/bin` to your **`PATH`
 export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 ```
 
-| Requirement | Notes |
-|-------------|--------|
-| `WebKitWebDriver` on `PATH` | `which WebKitWebDriver` — often package **`webkit2gtk-driver`** (Debian/Ubuntu) |
-| `tauri-driver` | `cargo install tauri-driver --locked` |
-| Node 18+ | `npm` in this directory |
-| Graphical session | Run from your desktop session (not SSH-only without display) |
-| **Real backend stack** | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E |
-| **Env files** | `orchestrator-be/.env`, `desktop-app/.env`, `desktop-app/src-tauri/.env` must point RPC/asm/orchestrator at your running services |
+| Requirement                 | Notes                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `WebKitWebDriver` on `PATH` | `which WebKitWebDriver` — often package **`webkit2gtk-driver`** (Debian/Ubuntu)                                                   |
+| `tauri-driver`              | `cargo install tauri-driver --locked`                                                                                             |
+| Node 18+                    | `npm` in this directory                                                                                                           |
+| Graphical session           | Run from your desktop session (not SSH-only without display)                                                                      |
+| **Real backend stack**      | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E                                                |
+| **Env files**               | `orchestrator-be/.env`, `desktop-app/.env`, `desktop-app/src-tauri/.env` must point RPC/asm/orchestrator at your running services |
 
 ## Build the app under test
 
@@ -53,17 +53,32 @@ Binary output: **`target/debug/desktop-app`** (workspace root).
 
 ## Run tests
 
+Specs are **not** all run by default: `npm run test:e2e` runs only the wallet smoke spec. Run other flows **one at a time** with the scripts below (they each trigger a Tauri build unless `SKIP_E2E_BUILD=1`).
+
 ```bash
 cd desktop-app/e2e-webdriver
 npm install
-npm run test:e2e
+npm run test:e2e                    # wallet smoke only (address row #0)
+npm run test:e2e:all                # every *.e2e.js spec in one run (discouraged for heavy flows)
+npm run test:e2e:wallet-smoke       # same as default test:e2e
+npm run test:e2e:proposal-add-signer   # create signer-update proposal (row #0)
+npm run test:e2e:proposal-co-sign-row1 # co-sign first pending proposal as row #1 (manual step 2)
 ```
 
 Skip the automatic Tauri build (if you already ran `npm run tauri build -- --debug --no-bundle`):
 
 ```bash
 SKIP_E2E_BUILD=1 npm run test:e2e
+SKIP_E2E_BUILD=1 npm run test:e2e:proposal-add-signer
+SKIP_E2E_BUILD=1 npm run test:e2e:proposal-co-sign-row1
 ```
+
+### Manual two-step: creator then co-signer
+
+1. **`npm run test:e2e:proposal-add-signer`** — connects as **address #0**, creates and signs the draft (first signature).
+2. **`npm run test:e2e:proposal-co-sign-row1`** — connects as **address #1** (`e2e-picking-row-1`), opens the first **Sign** on the dashboard, completes **Sign with Trezor**, and waits until the app returns to **`/proposals`** (orchestrator records the second signature).
+
+Requires a **pending** proposal with **Sign** still visible for the #1 pubkey (same multisig as in your ASM config). If several proposals are pending, the test clicks the **first** `e2e-proposal-sign-button` in the DOM.
 
 ## What the tests do
 
@@ -82,17 +97,21 @@ Shared steps live in [`test/helpers/login-mnemonic.mjs`](test/helpers/login-mnem
 
 After the same login helper, clicks **Create proposal** on the dashboard (client-side route to **`/proposals/create`** — avoid `browser.url(…/proposals/create)` in Tauri builds: the custom protocol has no SPA fallback and returns “asset not found”). Then keeps **Signer update**, sets a title, adds compressed pubkey **`03dd6d7…427c`** via **+ Add**, opens **Preview and Create**, then **Sign and Create Proposal**, and waits for the **Signature collected** success panel (`data-testid="e2e-proposal-signature-success"`).
 
+### [`test/specs/proposal-co-sign-row1.e2e.js`](test/specs/proposal-co-sign-row1.e2e.js)
+
+Same mnemonic, **derivation row #1** (`loginMnemonicToProposals(..., { pickingRowIndex: 1 })`), then **Sign** on the first pending card and **Sign with Trezor** on the sign screen. Intended to run **alone** after `proposal-add-signer` left a proposal needing more signatures.
+
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 
 ## Troubleshooting
 
-| Symptom | Likely fix |
-|---------|------------|
-| `tauri-driver` not found | `cargo install tauri-driver --locked` or set **`TAURI_DRIVER_PATH`** to the binary |
-| Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444** |
-| Binary not found | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle` |
-| Test hangs at connect | Stack not running (ASM/orchestrator), or wrong `.env` URLs |
-| `-28` / RPC errors | Bitcoin Core still loading — unrelated to WebDriver; fix bitcoind first |
+| Symptom                     | Likely fix                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `tauri-driver` not found    | `cargo install tauri-driver --locked` or set **`TAURI_DRIVER_PATH`** to the binary                                   |
+| Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444**                                         |
+| Binary not found            | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle`                                                    |
+| Test hangs at connect       | Stack not running (ASM/orchestrator), or wrong `.env` URLs                                                           |
+| No **Sign** on co-sign spec | Run **`npm run test:e2e:proposal-add-signer`** first; row #1 must be a multisig member with a pending signature slot |
 
 ## Further reading
 

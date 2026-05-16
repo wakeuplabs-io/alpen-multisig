@@ -153,6 +153,7 @@ export function SignProposalView({
 			<div className="mt-5 flex justify-end">
 				<button
 					type="button"
+					data-testid="e2e-sign-proposal-submit"
 					className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
 					onClick={onSign}
 					disabled={isSigning}
