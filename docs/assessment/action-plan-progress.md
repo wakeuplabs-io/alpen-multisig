@@ -17,8 +17,8 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-014 | done | e51daa7 | pending | HTTPS on orchestrator URL |
 | P-035 | done | becf9fe | pending | Threshold drift at broadcast |
 | P-020 | done | 1261980 | pending | Broadcast in-flight guard |
-| P-004 | in-progress | | | Strict CSP |
-| P-008 | todo | | | Zod at Tauri bridge |
+| P-004 | done | 809789a | pending | Strict CSP |
+| P-008 | in-progress | | | Zod at Tauri bridge |
 | P-009 | todo | | | Session bound to authority |
 | P-010 | todo | | | Sign deep-link authority guard |
 | P-007 | todo | | | Freeze sighash at preview |

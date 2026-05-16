@@ -1,5 +1,7 @@
 import type { ApiResult } from '@/types'
+import { broadcastResultSchema, proposalSchema } from '@/api/ipc-schemas'
 import { tauriCall } from '@/api/tauri-bridge'
+import { z } from 'zod'
 
 export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired'
 
@@ -77,19 +79,19 @@ export function getNextSeqNo(input: GetNextSeqNoInput): Promise<ApiResult<number
 }
 
 export function createProposal(input: CreateProposalInput): Promise<ApiResult<Proposal>> {
-	return tauriCall<Proposal>('proposals_create', { input })
+	return tauriCall('proposals_create', { input }, proposalSchema)
 }
 
 export function listProposals(input: ListProposalsInput): Promise<ApiResult<Proposal[]>> {
-	return tauriCall<Proposal[]>('proposals_list', { input })
+	return tauriCall('proposals_list', { input }, z.array(proposalSchema))
 }
 
 export function getProposalByActionId(input: GetProposalInput): Promise<ApiResult<Proposal>> {
-	return tauriCall<Proposal>('proposals_get', { input })
+	return tauriCall('proposals_get', { input }, proposalSchema)
 }
 
 export function approveProposal(input: ApproveProposalInput): Promise<ApiResult<Proposal>> {
-	return tauriCall<Proposal>('proposals_approve', { input })
+	return tauriCall('proposals_approve', { input }, proposalSchema)
 }
 
 export type BroadcastInput = {
@@ -102,5 +104,5 @@ export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<Prepa
 }
 
 export function broadcastProposal(input: BroadcastInput): Promise<ApiResult<BroadcastResult>> {
-	return tauriCall<BroadcastResult>('proposals_broadcast', { input })
+	return tauriCall('proposals_broadcast', { input }, broadcastResultSchema)
 }
