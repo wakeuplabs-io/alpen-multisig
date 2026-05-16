@@ -22,7 +22,7 @@ Broadcast boundary (SSOT): [§2.1 + §5.2](action-plan-2026-05-14.md#21-broadcas
 | P-ID | Status | Commit | E2E | Notes |
 |------|--------|--------|-----|-------|
 | P-061 | superseded | 3981e0c (reverted in P-066) | — | Do not use server `POST …/broadcast` execute path |
-| **P-066** | done | (this commit) | yes | Tauri: local commit/reveal; BE: `claim` + `PATCH` only |
+| **P-066** | done | f8d0ccd | yes | Tauri: local commit/reveal; BE: `claim` + `PATCH` only |
 | P-062 | done | fc3fbb9 | tip* | Re-fetch proposal; persisted status in UI |
 | P-002 | done | 8178b15 | tip* | Authority on list/get + broadcast coordination |
 | P-001 | partial | 31b9f5a | tip* | BE rejects test key; **operator key now desktop-only** for broadcast |
