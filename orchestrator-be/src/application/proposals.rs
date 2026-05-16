@@ -24,6 +24,11 @@ pub(crate) struct SessionContext<'a> {
     pub signer_pubkey: &'a str,
 }
 
+/// Canonical lowercase hex for signer pubkeys at every ingress (P-063).
+pub(crate) fn normalize_signer_pubkey_hex(hex: &str) -> String {
+    hex.trim().to_lowercase()
+}
+
 /// Create a new proposal with first signature. Rejects duplicate ActionId.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
@@ -44,6 +49,9 @@ pub(crate) async fn create_update_action(
 
     let action_id = compute_action_id(seq_no, action_hex)?;
 
+    let mut first_sig = sig.clone();
+    first_sig.signer_pubkey = normalize_signer_pubkey_hex(&sig.signer_pubkey);
+
     let proposal = Proposal {
         action_id,
         seq_no,
@@ -51,7 +59,7 @@ pub(crate) async fn create_update_action(
         status: ProposalStatus::Pending,
         required_signatures,
         action_hex: action_hex.to_string(),
-        signatures: vec![sig.clone()],
+        signatures: vec![first_sig],
         broadcast_status: BroadcastStatus::default(),
         commit_txid: None,
         reveal_txid: None,
@@ -84,17 +92,19 @@ pub(crate) async fn approve_action(
         return Err(AppError::Unauthorized);
     }
 
+    let signer_pubkey = normalize_signer_pubkey_hex(&sig.signer_pubkey);
+
     let already_signed = proposal
         .signatures
         .iter()
-        .any(|s| s.signer_pubkey == sig.signer_pubkey);
+        .any(|s| s.signer_pubkey.eq_ignore_ascii_case(&signer_pubkey));
 
     if already_signed {
         return Err(AppError::Conflict("signer already signed".to_string()));
     }
 
     let updated = repo
-        .add_signature(action_id, &sig.signer_pubkey, &sig.signature_hex)
+        .add_signature(action_id, &signer_pubkey, &sig.signature_hex)
         .await?;
 
     let proposal = updated.ok_or(AppError::NotFound)?;
@@ -793,6 +803,29 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(approved.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_approve_rejects_duplicate_signer_case_insensitive() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+
+        let upper_pubkey = sig.signer_pubkey.to_uppercase();
+        let second = ProposalSignature {
+            signer_pubkey: upper_pubkey,
+            signature_hex: "other_sig".to_string(),
+        };
+        let result = approve_action(&repo, session, &created.action_id, &second).await;
+
+        assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
 
     #[tokio::test]
