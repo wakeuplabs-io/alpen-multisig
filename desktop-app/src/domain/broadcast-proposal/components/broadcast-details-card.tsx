@@ -29,6 +29,7 @@ export function BroadcastDetailsCard({ bundle, onBroadcast, isBroadcasting }: Pr
 			</dl>
 			<button
 				type="button"
+				data-testid="e2e-broadcast-confirm"
 				disabled={isBroadcasting}
 				onClick={onBroadcast}
 				className="mt-6 w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"

@@ -91,6 +91,7 @@ export function ConnectPhase({
 					</button>
 					<button
 						type="button"
+						data-testid="e2e-connect-palabras"
 						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
 							walletVendor === 'mnemonic'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
@@ -102,6 +103,7 @@ export function ConnectPhase({
 					</button>
 				</div>
 				<textarea
+					data-testid="e2e-connect-mnemonic-textarea"
 					className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-xs text-[#111827] outline-none focus:border-[#9ca3af]"
 					rows={2}
 					placeholder="seed words..."
@@ -138,6 +140,7 @@ export function ConnectPhase({
 
 			{/* Action button */}
 			<button
+				data-testid="e2e-connect-with-words"
 				className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-[14px] font-medium transition active:scale-[0.98] ${
 					isSuccess || isDetecting
 						? 'cursor-not-allowed border border-[#a3a3a3] bg-[#a3a3a3] text-white opacity-70'

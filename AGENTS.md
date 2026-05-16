@@ -37,6 +37,8 @@ cd desktop-app && npm run build   # TypeScript + Vite build
 cd desktop-app && npm run tauri dev   # Full desktop app (Rust + React)
 ```
 
+**WebDriver smoke (real Tauri binary, real services):** see [desktop-app/e2e-webdriver/README.md](desktop-app/e2e-webdriver/README.md) — requires `tauri-driver`, `WebKitWebDriver` (Linux), and the usual local stack. In `desktop-app/e2e-webdriver`, **`npm run test:e2e`** runs only the wallet smoke spec; use **`npm run test:e2e:all`** or the **`test:e2e:*`** scripts in that package to run other flows one at a time.
+
 ### Running the System
 
 1. Backend: `cargo run -p orchestrator-be` (starts Axum server on port 3000)

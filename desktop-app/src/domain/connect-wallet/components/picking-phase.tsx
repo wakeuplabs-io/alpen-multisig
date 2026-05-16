@@ -84,6 +84,7 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 							>
 								<button
 									type="button"
+									data-testid={`e2e-picking-row-${entry.index}`}
 									className={`col-span-3 grid ${ROW_INNER_COLS} items-center px-4 py-3 text-left outline-none transition ${rowBg}`}
 									onClick={() => onSelectIndex(entry.index)}
 								>
@@ -125,6 +126,7 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 					<div className="flex shrink-0 items-center gap-2">
 						<button
 							type="button"
+							data-testid="e2e-picking-continue"
 							className={continueButtonClassName}
 							onClick={onUseAddress}
 							disabled={selectedEntry === null}

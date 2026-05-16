@@ -108,6 +108,7 @@ export function AuthenticateSessionPhase({
 			<div className="mt-4">
 				<button
 					type="button"
+					data-testid="e2e-authenticate-submit"
 					className={`${authenticateButtonClassName} w-full`}
 					onClick={onAuthenticate}
 					disabled={isAuthenticating}
