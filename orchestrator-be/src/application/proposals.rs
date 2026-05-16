@@ -817,10 +817,13 @@ mod tests {
             .unwrap();
         assert_eq!(pending.len(), 2);
 
-        let approved =
-            list_proposals(&repo, Authority::StrataAdmin, Some(ProposalStatus::Approved))
-            .await
-            .unwrap();
+        let approved = list_proposals(
+            &repo,
+            Authority::StrataAdmin,
+            Some(ProposalStatus::Approved),
+        )
+        .await
+        .unwrap();
         assert_eq!(approved.len(), 0);
     }
 
