@@ -58,6 +58,7 @@ export function CreateProposalForm({
 }: Props) {
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
 	const [previewSighashHex, setPreviewSighashHex] = useState<string | null>(null)
+	const [frozenAtPreview, setFrozenAtPreview] = useState<CreateProposalFormValues | null>(null)
 	const [showReauthModal, setShowReauthModal] = useState(false)
 	const [reauthError, setReauthError] = useState<string | null>(null)
 	const [isReauthenticating, setIsReauthenticating] = useState(false)
@@ -81,9 +82,10 @@ export function CreateProposalForm({
 	})
 
 	const { handleSubmit, reset, formState, getValues, control, trigger } = form
-	const actionType = useWatch({ control, name: 'actionType' })
-	const keysToAddWatched = useWatch({ control, name: 'keysToAdd' })
-	const keysToRemoveWatched = useWatch({ control, name: 'keysToRemove' })
+	const watchedValues = useWatch({ control })
+	const actionType = watchedValues?.actionType
+	const keysToAddWatched = watchedValues?.keysToAdd
+	const keysToRemoveWatched = watchedValues?.keysToRemove
 	const signerKeysDigest =
 		actionType === 'signer_update'
 			? [
@@ -116,7 +118,18 @@ export function CreateProposalForm({
 		}
 	}, [nextSeqNo, form, getValues])
 
-	const previewData = getValues()
+	useEffect(() => {
+		if (!isPreviewMode || frozenAtPreview === null || watchedValues === undefined) {
+			return
+		}
+		if (JSON.stringify(watchedValues) !== JSON.stringify(frozenAtPreview)) {
+			setIsPreviewMode(false)
+			setPreviewSighashHex(null)
+			setFrozenAtPreview(null)
+		}
+	}, [watchedValues, isPreviewMode, frozenAtPreview])
+
+	const previewData = frozenAtPreview ?? getValues()
 	const previewAddingKeys = previewData.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
 	const previewRemovingKeys = previewData.keysToRemove
 		.map((row) => row.value.trim())
@@ -125,8 +138,10 @@ export function CreateProposalForm({
 		const isValid = await trigger(undefined, { shouldFocus: true })
 		if (!isValid) return
 		try {
-			const sighashHex = await onPreviewValid(getValues())
+			const snapshot = getValues()
+			const sighashHex = await onPreviewValid(snapshot)
 			if (sighashHex === null) return
+			setFrozenAtPreview(snapshot)
 			setPreviewSighashHex(sighashHex)
 			setIsPreviewMode(true)
 		} catch (error) {
@@ -138,8 +153,14 @@ export function CreateProposalForm({
 	}
 
 	async function handleSubmitAttempt(data: CreateProposalFormValues) {
+		if (frozenAtPreview === null || JSON.stringify(data) !== JSON.stringify(frozenAtPreview)) {
+			setIsPreviewMode(false)
+			setPreviewSighashHex(null)
+			setFrozenAtPreview(null)
+			return
+		}
 		try {
-			await onSubmitValid(data)
+			await onSubmitValid(frozenAtPreview)
 		} catch (error) {
 			if (!isSessionExpiredReauthError(error)) return
 			setPendingAction('submit')
@@ -177,7 +198,11 @@ export function CreateProposalForm({
 							<button
 								type="button"
 								className="mb-4 flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
-								onClick={() => setIsPreviewMode(false)}
+								onClick={() => {
+									setIsPreviewMode(false)
+									setPreviewSighashHex(null)
+									setFrozenAtPreview(null)
+								}}
 							>
 								<span>←</span> Back to new proposal
 							</button>
