@@ -2,7 +2,6 @@ use anyhow::Context;
 use axum::{http::Method, Router};
 use bitcoin::key::UntweakedKeypair;
 use bitcoin::secp256k1::{SecretKey, SECP256K1};
-use bitcoin::Network;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use strata_l1_txfmt::MagicBytes;
@@ -46,14 +45,7 @@ async fn main() -> anyhow::Result<()> {
     })?;
     let bitcoin_magic_bytes = MagicBytes::new(magic_arr);
 
-    // Determine Bitcoin network from RPC URL (regtest port 18443, testnet port 18332, else mainnet).
-    let bitcoin_network = if config.bitcoin_rpc_url.contains("18443") {
-        Network::Regtest
-    } else if config.bitcoin_rpc_url.contains("18332") {
-        Network::Testnet
-    } else {
-        Network::Bitcoin
-    };
+    let bitcoin_network = config.bitcoin_network;
 
     // Build Bitcoin RPC client.
     let btc_client = Arc::new(infrastructure::bitcoin_rpc::HttpBitcoinRpcClient::new(

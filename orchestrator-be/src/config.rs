@@ -1,4 +1,5 @@
 use anyhow::Context;
+use bitcoin::Network;
 
 /// Publicly documented regtest operator key — must not be used without explicit opt-in.
 pub const WELL_KNOWN_TEST_OPERATOR_KEY_HEX: &str =
@@ -23,6 +24,7 @@ pub struct Config {
     pub bitcoin_magic_bytes_hex: String,
     pub confirm_poll_interval_ms: u64,
     pub confirm_timeout_ms: u64,
+    pub bitcoin_network: Network,
 }
 
 impl Config {
@@ -69,7 +71,23 @@ impl Config {
                 .unwrap_or_else(|_| "600000".to_string())
                 .parse()
                 .context("CONFIRM_TIMEOUT_MS must be a valid u64")?,
+            bitcoin_network: parse_bitcoin_network(
+                &std::env::var("BITCOIN_NETWORK")
+                    .context("BITCOIN_NETWORK must be set (bitcoin|testnet|signet|regtest)")?,
+            )?,
         })
+    }
+}
+
+pub(crate) fn parse_bitcoin_network(name: &str) -> anyhow::Result<Network> {
+    match name.trim() {
+        "bitcoin" | "mainnet" => Ok(Network::Bitcoin),
+        "testnet" => Ok(Network::Testnet),
+        "signet" => Ok(Network::Signet),
+        "regtest" => Ok(Network::Regtest),
+        other => anyhow::bail!(
+            "unknown BITCOIN_NETWORK '{other}'; expected bitcoin|testnet|signet|regtest"
+        ),
     }
 }
 
@@ -118,5 +136,12 @@ mod tests {
             "0000000000000000000000000000000000000000000000000000000000000002",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn parse_bitcoin_network_requires_explicit_name() {
+        assert!(parse_bitcoin_network("regtest").is_ok());
+        assert!(parse_bitcoin_network("").is_err());
+        assert!(parse_bitcoin_network("mainnet2").is_err());
     }
 }
