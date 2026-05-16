@@ -87,12 +87,12 @@ export function BroadcastProposalScreen() {
 						</div>
 					)}
 
-					{bundle !== null && phase === 'confirming' && (
-						<BroadcastDetailsCard bundle={bundle} onBroadcast={() => void broadcast()} isBroadcasting={false} />
-					)}
-
-					{phase === 'broadcasting' && bundle !== null && (
-						<BroadcastDetailsCard bundle={bundle} onBroadcast={() => void broadcast()} isBroadcasting />
+					{bundle !== null && (phase === 'confirming' || phase === 'broadcasting') && (
+						<BroadcastDetailsCard
+							bundle={bundle}
+							onBroadcast={() => void broadcast()}
+							isBroadcasting={phase === 'broadcasting'}
+						/>
 					)}
 
 					{(phase === 'broadcasting' || phase === 'done' || phase === 'error') && (
