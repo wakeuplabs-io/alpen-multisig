@@ -153,9 +153,9 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
     }
 
     async fn get_transaction_confirmations(&self, txid: &str) -> Result<u32, AppError> {
-        let result = self
-            .call("gettransaction", json!([txid, false, false]))
-            .await?;
+        // Reveal txs are broadcast via sendrawtransaction and are not wallet-owned;
+        // gettransaction would return "Invalid or non-wallet transaction id".
+        let result = self.call("getrawtransaction", json!([txid, true])).await?;
         let confs = result
             .get("confirmations")
             .and_then(|v| v.as_i64())
