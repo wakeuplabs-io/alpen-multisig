@@ -80,7 +80,7 @@ export function CreateProposalPreview({
 
 	if (createdProposal !== null) {
 		return (
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-6" data-testid="e2e-proposal-signature-success">
 				<div className="flex items-start gap-4 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] p-4">
 					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#a7f3d0] bg-white">
 						<CheckCircleEmeraldIcon width={20} height={20} />

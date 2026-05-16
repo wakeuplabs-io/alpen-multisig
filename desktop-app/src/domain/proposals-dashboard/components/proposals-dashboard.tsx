@@ -55,6 +55,7 @@ export function ProposalsDashboard({
 				</div>
 				<button
 					type="button"
+					data-testid="e2e-dashboard-create-proposal"
 					className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 					onClick={onCreateProposal}
 				>

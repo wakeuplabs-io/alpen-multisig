@@ -283,6 +283,7 @@ export function CreateProposalForm({
 									type="text"
 									className={textInputClass}
 									{...form.register('title')}
+									data-testid="e2e-create-proposal-title"
 									placeholder="e.g. Rotate verification key (Q2 2026)"
 								/>
 								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
@@ -322,6 +323,7 @@ export function CreateProposalForm({
 										{error && <p className="mr-auto text-sm text-[#b91c1c]">{error}</p>}
 										<button
 											type="submit"
+											data-testid="e2e-create-proposal-sign-submit"
 											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
 											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										>
@@ -342,6 +344,7 @@ export function CreateProposalForm({
 									</button>
 									<button
 										type="button"
+										data-testid="e2e-create-proposal-preview"
 										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-sm font-medium text-[#111827] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
 										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										onClick={() => void handlePreviewClick()}

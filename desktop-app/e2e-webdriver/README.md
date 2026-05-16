@@ -65,9 +65,11 @@ Skip the automatic Tauri build (if you already ran `npm run tauri build -- --deb
 SKIP_E2E_BUILD=1 npm run test:e2e
 ```
 
-## What the smoke test does
+## What the tests do
 
-[`test/specs/wallet-smoke.e2e.js`](test/specs/wallet-smoke.e2e.js):
+### [`test/specs/wallet-smoke.e2e.js`](test/specs/wallet-smoke.e2e.js)
+
+Shared steps live in [`test/helpers/login-mnemonic.mjs`](test/helpers/login-mnemonic.mjs). The smoke spec:
 
 1. Fills the mnemonic textarea (demo regtest phrase).
 2. Clicks **Palabras** then **Connect with words**.
@@ -75,6 +77,10 @@ SKIP_E2E_BUILD=1 npm run test:e2e
 4. Confirms authority step and **Select ->**.
 5. Clicks **Authenticate with Trezor** (label is Trezor-specific; button has `data-testid="e2e-authenticate-submit"`).
 6. Waits until the window URL contains **`/proposals`**.
+
+### [`test/specs/proposal-add-signer.e2e.js`](test/specs/proposal-add-signer.e2e.js)
+
+After the same login helper, clicks **Create proposal** on the dashboard (client-side route to **`/proposals/create`** — avoid `browser.url(…/proposals/create)` in Tauri builds: the custom protocol has no SPA fallback and returns “asset not found”). Then keeps **Signer update**, sets a title, adds compressed pubkey **`03dd6d7…427c`** via **+ Add**, opens **Preview and Create**, then **Sign and Create Proposal**, and waits for the **Signature collected** success panel (`data-testid="e2e-proposal-signature-success"`).
 
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 

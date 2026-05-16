@@ -136,7 +136,12 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 									className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
 								>
 									<span className="h-4 w-4 shrink-0 rounded-full border border-[#d97706]" />
-									<span className="min-w-0 flex-1 break-all font-mono text-sm text-[#374151]">{value}</span>
+									<span
+										className="min-w-0 flex-1 break-all font-mono text-sm text-[#374151]"
+										data-testid="e2e-added-signer-value"
+									>
+										{value}
+									</span>
 									<button
 										type="button"
 										className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
@@ -159,6 +164,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 				<div className="mt-1.5 flex gap-2">
 					<input
 						type="text"
+						data-testid="e2e-new-signer-pubkey-input"
 						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
 						placeholder="02… or 03… (33-byte hex)"
 						value={newSignerInput}
@@ -173,6 +179,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 					/>
 					<button
 						type="button"
+						data-testid="e2e-new-signer-add-button"
 						className="shrink-0 rounded-lg border border-[#0a0a0a] px-4 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
 						onClick={handleAddSigner}
 					>
