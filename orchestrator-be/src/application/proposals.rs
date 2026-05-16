@@ -14,7 +14,9 @@ use crate::domain::proposal::{
     ProposalStatus, SeqNo,
 };
 use crate::error::AppError;
-use crate::infrastructure::asm_role_membership::ordered_keys_for_authority;
+use crate::infrastructure::asm_role_membership::{
+    ordered_keys_for_authority, threshold_for_authority,
+};
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 use crate::infrastructure::broadcast_tx;
 
@@ -135,6 +137,21 @@ fn require_proposal_authority(proposal: &Proposal, authority: Authority) -> Resu
     Ok(())
 }
 
+/// Refuse broadcast when the proposal snapshot disagrees with live ASM threshold (P-035).
+pub(crate) async fn ensure_threshold_snapshot_current(
+    proposal: &Proposal,
+    asm_rpc_url: &str,
+) -> Result<(), AppError> {
+    let live = threshold_for_authority(asm_rpc_url, proposal.authority).await?;
+    if proposal.required_signatures != live {
+        return Err(AppError::Conflict(format!(
+            "proposal required_signatures ({}) does not match current ASM threshold ({live})",
+            proposal.required_signatures
+        )));
+    }
+    Ok(())
+}
+
 /// Get proposal by ActionId scoped to the session authority.
 pub(crate) async fn get_update_action(
     repo: &dyn ProposalRepository,
@@ -224,6 +241,7 @@ pub(crate) async fn prepare_broadcast_bundle(
     require_proposal_authority(&raw, session_authority)?;
 
     let proposal = require_approved(repo, raw, action_id).await?;
+    ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
 
     let canonical_keys = ordered_keys_for_authority(asm_rpc_url, proposal.authority).await?;
 
@@ -273,7 +291,8 @@ pub(crate) async fn broadcast_commit_then_reveal(
         .ok_or(AppError::NotFound)?;
     require_proposal_authority(&raw, session_authority)?;
 
-    let _proposal = require_approved(repo, raw, action_id).await?;
+    let proposal = require_approved(repo, raw, action_id).await?;
+    ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
 
     // Atomically claim broadcast rights: transitions idle → commit_broadcasted.
     // Returns Conflict if another caller already claimed (race-safe).
@@ -803,6 +822,29 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(approved.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_rejects_threshold_drift() {
+        let proposal = Proposal {
+            action_id: ActionId("a".to_string()),
+            seq_no: 1,
+            authority: Authority::StrataAdmin,
+            status: ProposalStatus::Approved,
+            required_signatures: 99,
+            action_hex: ACTION_HEX.to_string(),
+            signatures: vec![sig_a()],
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        };
+
+        let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
     }
 
     #[tokio::test]
