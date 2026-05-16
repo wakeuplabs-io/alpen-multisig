@@ -7,7 +7,7 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 
 | P-ID | Status | Commit | E2E | Notes |
 |------|--------|--------|-----|-------|
-| P-061 | todo | | | Route broadcast via orchestrator HTTP |
+| P-061 | done | (pending) | pending | Route broadcast via orchestrator HTTP; cargo test pass |
 | P-062 | todo | | | Persisted broadcast status; no hard-coded literals |
 | P-002 | todo | | | Authority filter on list/get/broadcast |
 | P-001 | todo | | | Reject missing/test operator secret key |

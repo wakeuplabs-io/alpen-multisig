@@ -14,7 +14,8 @@ use strata_asm_txs_admin::actions::MultisigAction;
 use strata_l1_txfmt::MagicBytes;
 
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
+    ApproveActionRequest, BroadcastResponse, CreateProposalRequest, OrchestratorClient,
+    OrchestratorError, PrepareBroadcastResponse,
 };
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
@@ -312,6 +313,28 @@ pub async fn list_proposals(
     Ok(proposals)
 }
 
+/// Prepare a broadcast bundle through the orchestrator (no local Bitcoin RPC).
+pub async fn prepare_broadcast(
+    client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<PrepareBroadcastResponse, ProposalError> {
+    client
+        .prepare_broadcast(action_id)
+        .await
+        .map_err(Into::into)
+}
+
+/// Execute commit/reveal broadcast through the orchestrator state machine.
+pub async fn execute_broadcast(
+    client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<BroadcastResponse, ProposalError> {
+    client
+        .execute_broadcast(action_id)
+        .await
+        .map_err(Into::into)
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -370,6 +393,8 @@ mod tests {
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
         last_approve_request: Mutex<Option<(String, ApproveActionRequest)>>,
+        prepare_broadcast_called: Mutex<bool>,
+        execute_broadcast_called: Mutex<bool>,
         should_fail: bool,
     }
 
@@ -378,6 +403,8 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                prepare_broadcast_called: Mutex::new(false),
+                execute_broadcast_called: Mutex::new(false),
                 should_fail: false,
             }
         }
@@ -386,8 +413,18 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                prepare_broadcast_called: Mutex::new(false),
+                execute_broadcast_called: Mutex::new(false),
                 should_fail: true,
             }
+        }
+
+        fn prepare_broadcast_called(&self) -> bool {
+            *self.prepare_broadcast_called.lock().unwrap()
+        }
+
+        fn execute_broadcast_called(&self) -> bool {
+            *self.execute_broadcast_called.lock().unwrap()
         }
 
         fn last_create_request(&self) -> Option<CreateProposalRequest> {
@@ -532,6 +569,45 @@ mod tests {
             }
             Ok(1)
         }
+
+        async fn prepare_broadcast(
+            &self,
+            action_id: &str,
+        ) -> Result<PrepareBroadcastResponse, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            *self.prepare_broadcast_called.lock().unwrap() = true;
+            Ok(PrepareBroadcastResponse {
+                action_id: action_id.to_string(),
+                commit_address: "bcrt1mockcommit".to_string(),
+                commit_amount_sats: 2000,
+                estimated_fee_sats: 500,
+            })
+        }
+
+        async fn execute_broadcast(
+            &self,
+            action_id: &str,
+        ) -> Result<BroadcastResponse, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            *self.execute_broadcast_called.lock().unwrap() = true;
+            Ok(BroadcastResponse {
+                action_id: action_id.to_string(),
+                proposal_status: "enacted".to_string(),
+                broadcast_status: "reveal_confirmed".to_string(),
+                commit_txid: "commit_mock".to_string(),
+                reveal_txid: "reveal_mock".to_string(),
+            })
+        }
     }
 
     // ─── Tests ──────────────────────────────────────────────────────────────
@@ -668,5 +744,28 @@ mod tests {
             .expect("should succeed");
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].action_id, "action_1");
+    }
+
+    #[tokio::test]
+    async fn test_prepare_broadcast_delegates_to_orchestrator() {
+        let mock = MockOrchestratorClient::new();
+        let bundle = prepare_broadcast(&mock, "action_42")
+            .await
+            .expect("should succeed");
+        assert!(mock.prepare_broadcast_called());
+        assert_eq!(bundle.action_id, "action_42");
+        assert_eq!(bundle.commit_address, "bcrt1mockcommit");
+    }
+
+    #[tokio::test]
+    async fn test_execute_broadcast_delegates_to_orchestrator() {
+        let mock = MockOrchestratorClient::new();
+        let result = execute_broadcast(&mock, "action_42")
+            .await
+            .expect("should succeed");
+        assert!(mock.execute_broadcast_called());
+        assert_eq!(result.action_id, "action_42");
+        assert_eq!(result.proposal_status, "enacted");
+        assert_eq!(result.commit_txid, "commit_mock");
     }
 }

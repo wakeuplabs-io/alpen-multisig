@@ -1,9 +1,10 @@
 //! HTTP implementation of the `OrchestratorClient` trait.
 
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
-    NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient,
-    OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
+    ApproveActionRequest, BroadcastResponse, CompleteOrchestratorAuthRequest,
+    CreateProposalRequest, NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession,
+    OrchestratorClient, OrchestratorError, PrepareBroadcastResponse, ProposalListResponse,
+    StartOrchestratorAuthRequest,
 };
 use crate::domain::proposal::Proposal;
 
@@ -153,6 +154,28 @@ impl OrchestratorClient for HttpOrchestratorClient {
         )?;
         let response: NextSeqNoResponse = self.send_and_parse(req).await?;
         Ok(response.next_seq_no)
+    }
+
+    async fn prepare_broadcast(
+        &self,
+        action_id: &str,
+    ) -> Result<PrepareBroadcastResponse, OrchestratorError> {
+        let req = self.with_auth_headers(self.client.post(format!(
+            "{}/proposals/{action_id}/broadcast/prepare",
+            self.base_url
+        )))?;
+        self.send_and_parse(req).await
+    }
+
+    async fn execute_broadcast(
+        &self,
+        action_id: &str,
+    ) -> Result<BroadcastResponse, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .post(format!("{}/proposals/{action_id}/broadcast", self.base_url)),
+        )?;
+        self.send_and_parse(req).await
     }
 }
 

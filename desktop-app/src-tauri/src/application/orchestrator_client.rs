@@ -72,6 +72,23 @@ pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrepareBroadcastResponse {
+    pub action_id: String,
+    pub commit_address: String,
+    pub commit_amount_sats: u64,
+    pub estimated_fee_sats: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BroadcastResponse {
+    pub action_id: String,
+    pub proposal_status: String,
+    pub broadcast_status: String,
+    pub commit_txid: String,
+    pub reveal_txid: String,
+}
+
 /// Abstracts the orchestrator HTTP API.
 #[async_trait::async_trait]
 pub trait OrchestratorClient: Send + Sync {
@@ -111,4 +128,16 @@ pub trait OrchestratorClient: Send + Sync {
 
     /// Get the next valid sequence number for the authenticated authority.
     async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError>;
+
+    /// Prepare commit/reveal broadcast bundle via the orchestrator (no on-chain submit).
+    async fn prepare_broadcast(
+        &self,
+        action_id: &str,
+    ) -> Result<PrepareBroadcastResponse, OrchestratorError>;
+
+    /// Execute commit/reveal broadcast via the orchestrator state machine.
+    async fn execute_broadcast(
+        &self,
+        action_id: &str,
+    ) -> Result<BroadcastResponse, OrchestratorError>;
 }
