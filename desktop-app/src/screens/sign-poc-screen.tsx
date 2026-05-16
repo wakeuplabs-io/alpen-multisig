@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
@@ -96,6 +96,13 @@ export function SignPocScreen() {
 				}
 
 				const nextProposal = proposalResult.data
+				if (nextProposal.authority !== authorityFromRole(selectedRole)) {
+					setLoadError(
+						'This proposal belongs to a different authority than your current role. Go back and select the correct role.',
+					)
+					setIsLoading(false)
+					return
+				}
 				const sighashResult = await computeSighash(nextProposal.seqNo, nextProposal.actionHex)
 				if (!sighashResult.ok) {
 					throw new Error(sighashResult.error)

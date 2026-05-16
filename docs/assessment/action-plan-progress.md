@@ -19,8 +19,8 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-020 | done | 1261980 | pending | Broadcast in-flight guard |
 | P-004 | done | 809789a | pending | Strict CSP |
 | P-008 | done | 16df77b | pending | Zod at Tauri bridge |
-| P-009 | in-progress | | | Session bound to authority |
-| P-010 | todo | | | Sign deep-link authority guard |
+| P-009 | done | 0556b5e | pending | Session bound to authority |
+| P-010 | in-progress | | | Sign deep-link authority guard |
 | P-007 | todo | | | Freeze sighash at preview |
 | P-064 | todo | | | Full Authority enum parity |
 | label-bug | todo | | | Broadcast screen authority label |
