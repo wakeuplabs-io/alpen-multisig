@@ -47,9 +47,16 @@ impl Config {
                 .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string())
                 .trim()
                 .to_string(),
-            database_url: std::env::var("DATABASE_URL")
-                .ok()
-                .map(|s| s.trim().to_string()),
+            database_url: {
+                let url = std::env::var("DATABASE_URL")
+                    .ok()
+                    .map(|s| s.trim().to_string());
+                let profile = std::env::var("ORCHESTRATOR_PROFILE").unwrap_or_default();
+                if profile.eq_ignore_ascii_case("production") && url.is_none() {
+                    anyhow::bail!("DATABASE_URL is required when ORCHESTRATOR_PROFILE=production");
+                }
+                url
+            },
             bitcoin_rpc_url: std::env::var("BITCOIN_RPC_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:18443".to_string()),
             bitcoin_rpc_user: std::env::var("BITCOIN_RPC_USER")
@@ -111,7 +118,10 @@ fn load_operator_secret_key_hex() -> anyhow::Result<String> {
 
 /// Rejects the well-known test operator key unless dev opt-in is enabled.
 pub(crate) fn validate_operator_secret_key_hex(hex: &str) -> anyhow::Result<()> {
-    if hex.trim().eq_ignore_ascii_case(WELL_KNOWN_TEST_OPERATOR_KEY_HEX) {
+    if hex
+        .trim()
+        .eq_ignore_ascii_case(WELL_KNOWN_TEST_OPERATOR_KEY_HEX)
+    {
         anyhow::bail!(
             "OPERATOR_SECRET_KEY_HEX must not be the well-known test key; \
              set ORCHESTRATOR_ALLOW_TEST_OPERATOR_KEY=1 only for local regtest"
@@ -143,5 +153,14 @@ mod tests {
         assert!(parse_bitcoin_network("regtest").is_ok());
         assert!(parse_bitcoin_network("").is_err());
         assert!(parse_bitcoin_network("mainnet2").is_err());
+    }
+
+    #[test]
+    fn production_profile_requires_database_url() {
+        std::env::set_var("ORCHESTRATOR_PROFILE", "production");
+        std::env::remove_var("DATABASE_URL");
+        let err = Config::from_env().unwrap_err();
+        assert!(err.to_string().contains("DATABASE_URL"));
+        std::env::remove_var("ORCHESTRATOR_PROFILE");
     }
 }
