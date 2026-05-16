@@ -158,6 +158,53 @@ The plan is structured around three sequential "waves." Earlier waves remove exi
 - Every Tauri IPC return value parsed through Zod; unknown enum variants raise.
 - Skeleton `ADR-006: Backend Coordination Boundary` exists even if implementation lags.
 
+#### 5.1 Wave 1 — execution record (2026-05-16)
+
+**Delivered on:** `fix/action-plan-wave1-2026-05-14` → draft PR #134 (`develop` base).  
+**Tracker:** [action-plan-progress.md](action-plan-progress.md).
+
+**How it was run**
+
+- One branch; **one atomic commit per planned P-ID** (plus bootstrap tracker commit).
+- **E2E:** single `/e2e-proposal-flow` at branch tip (`a74c817`), not per-commit runs (deviation from ideal gate in execution playbook).
+- **Automated checks per commit:** `cargo fmt`, `clippy`, `cargo test` (`orchestrator-be`, `desktop-app`), `npm run build` when FE touched; `npm run test:ipc-schemas` added later.
+
+**Outcome vs exit criteria**
+
+| Criterion | Result |
+|-----------|--------|
+| Orchestrator-only broadcast | Met (P-061, P-062) |
+| No hard-coded enacted strings | Met (P-062) |
+| Cross-authority 401 | Met (P-002) |
+| Prod operator key + DATABASE_URL | Met (P-001, P-016) |
+| CSP | Met (P-004); capabilities deferred |
+| All IPC via Zod | **Partial** — proposal/broadcast only (P-008) |
+| ADR-006 skeleton | **Not done** — carry to Wave 2 Track B |
+
+**Post–Wave 1 discoveries (fixed on same branch)**
+
+1. **P-008 regression:** Tauri serializes `Option::None` as JSON `null`; Zod `.optional()` rejected create/list — fixed in `50d3d51` / `a74c817` (`.nullish()`).
+2. **Broadcast confirmations:** `gettransaction` fails for reveal txs from `sendrawtransaction` — fixed in `e6a994d` (`getrawtransaction` verbose for confirmations).
+3. **Regtest E2E:** commit/reveal waits need mined blocks during broadcast — `662e517` (`mineWhileWaitingForBroadcastDone` in WDIO + `mine-blocks.sh` env in helper).
+
+**Partial P-IDs (acceptable short-term; full text in Wave 2/3)**
+
+| P-ID | Shipped | Remaining |
+|------|---------|-----------|
+| P-004 | CSP string | Tauri 2 capabilities (P-040) |
+| P-008 | Proposal/broadcast Zod | Auth/wallet IPC schemas |
+| P-020 | In-flight guard | `Idempotency-Key` end-to-end |
+| P-029 | `/ready` (BTC), tracing on list/get | Request UUID in bridge; Postgres/ASM on `/ready`; all handlers |
+| P-063 | Lowercase ingress | DB `CHECK` when Postgres lands |
+| P-064 | Tauri 5-variant enum | Shared `multisig-types` crate (Wave 3) |
+
+**Process / tooling gaps**
+
+- `autotest/start-stack.sh` does not inject orchestrator env (`OPERATOR_SECRET_KEY_HEX`, `BITCOIN_NETWORK`, …); operators must export manually or use updated `/e2e-proposal-flow` command.
+- Extra commits beyond “21 planned”: tracker sync (`4cad4d1`, `4e1b4e7`), prettier chore, three broadcast/E2E fixes above.
+
+**Wave 2 should pick up:** ADR-006 skeleton + implementation path for P-012; P-003; P-005–P-006; P-011; complete P-008/P-029/P-004; wire `start-stack` env for local dev.
+
 ### Wave 2 — Correctness, supply chain, operations (Weeks 3–6)
 
 **Goal:** Close the remaining Tier 0 + the highest-leverage Tier 1; deliver a credible supply-chain story; codify signer safety.
