@@ -18,7 +18,7 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-035 | done | becf9fe | pending | Threshold drift at broadcast |
 | P-020 | done | 1261980 | pending | Broadcast in-flight guard |
 | P-004 | done | 809789a | pending | Strict CSP |
-| P-008 | done | 16df77b | pending | Zod at Tauri bridge |
+| P-008 | done | (pending) | pending | Zod at Tauri bridge; null Option fields for create/list |
 | P-009 | done | 0556b5e | pending | Session bound to authority |
 | P-010 | done | 5945d3a | pending | Sign deep-link authority guard |
 | P-007 | done | 0825a1a | pending | Freeze sighash at preview |

@@ -25,9 +25,19 @@ export const proposalSchema = z.object({
 		}),
 	),
 	broadcastStatus: broadcastStatusSchema,
-	commitTxid: z.string().optional(),
-	revealTxid: z.string().optional(),
-	broadcastError: z.string().optional(),
+	// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
+	commitTxid: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	revealTxid: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	broadcastError: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
 })
 
 export const broadcastResultSchema = z.object({
