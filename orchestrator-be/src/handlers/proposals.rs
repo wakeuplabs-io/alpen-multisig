@@ -107,20 +107,26 @@ pub async fn get_next_seq_no(
 
 pub async fn list_proposals(
     State(state): State<AppState>,
-    _auth: AuthenticatedSession,
+    auth: AuthenticatedSession,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
-    let proposals = proposals::list_proposals(state.repo.as_ref(), query.status).await?;
+    let proposals =
+        proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
 
     Ok(Json(ProposalListResponse { proposals }))
 }
 
 pub async fn get_proposal(
     State(state): State<AppState>,
-    _auth: AuthenticatedSession,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    let proposal = proposals::get_update_action(state.repo.as_ref(), &ActionId(action_id)).await?;
+    let proposal = proposals::get_update_action(
+        state.repo.as_ref(),
+        auth.authority,
+        &ActionId(action_id),
+    )
+    .await?;
 
     Ok(Json(proposal))
 }
@@ -155,12 +161,13 @@ pub async fn approve_action(
 
 pub async fn prepare_broadcast(
     State(state): State<AppState>,
-    _auth: AuthenticatedSession,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<PrepareBroadcastResponse>> {
     let action_id = ActionId(action_id);
     let bundle = proposals::prepare_broadcast_bundle(
         state.repo.as_ref(),
+        auth.authority,
         state.btc_client.as_ref(),
         &state.asm_rpc_url,
         &state.operator_keypair,
@@ -179,12 +186,13 @@ pub async fn prepare_broadcast(
 
 pub async fn execute_broadcast(
     State(state): State<AppState>,
-    _auth: AuthenticatedSession,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<BroadcastResponse>> {
     let action_id = ActionId(action_id);
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         state.repo.as_ref(),
+        auth.authority,
         state.btc_client.as_ref(),
         &state.asm_rpc_url,
         &state.operator_keypair,

@@ -315,6 +315,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_proposal_wrong_authority_returns_unauthorized() {
+        use crate::application::traits::ProposalRepository;
+        use crate::domain::authority::Authority;
+        use crate::domain::proposal::{
+            ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+        };
+        use crate::infrastructure::memory_repo::InMemoryProposalRepository;
+
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        let action_id = "cross_auth_action".to_string();
+        repo.save_proposal(Proposal {
+            action_id: ActionId(action_id.clone()),
+            seq_no: 1,
+            authority: Authority::AlpenAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 2,
+            action_hex: "deadbeef".to_string(),
+            signatures: vec![ProposalSignature {
+                signer_pubkey: SIGNER_A_PK.to_string(),
+                signature_hex: "sig_a".to_string(),
+            }],
+            broadcast_status: BroadcastStatus::default(),
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        })
+        .await
+        .unwrap();
+
+        let app = {
+            use crate::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+            use bitcoin::{
+                key::UntweakedKeypair,
+                secp256k1::{SecretKey, SECP256K1},
+                Network,
+            };
+            use strata_l1_txfmt::MagicBytes;
+
+            let sk = SecretKey::from_slice(&[1u8; 32]).unwrap();
+            let keypair = UntweakedKeypair::from_secret_key(SECP256K1, &sk);
+            let btc_client = Arc::new(HttpBitcoinRpcClient::new(
+                "http://127.0.0.1:18443",
+                None,
+                "user",
+                "pass",
+            ));
+            router(AppState::new(
+                repo,
+                "mock://asm-membership".to_string(),
+                120_000,
+                240_000,
+                btc_client,
+                keypair,
+                5_000,
+                600_000,
+                MagicBytes::new([0x41, 0x4c, 0x50, 0x4e]),
+                Network::Regtest,
+            ))
+        };
+
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let req = json_request(
+            "GET",
+            &format!("/proposals/{action_id}"),
+            None,
+            Some(&token),
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn test_approve_with_invalid_token_rejected() {
         let app = test_app();
         let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;

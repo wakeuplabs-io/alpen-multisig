@@ -118,22 +118,34 @@ pub(crate) async fn approve_action(
     Ok(proposal)
 }
 
-/// Get proposal by ActionId.
-pub(crate) async fn get_update_action(
-    repo: &dyn ProposalRepository,
-    action_id: &ActionId,
-) -> Result<Proposal, AppError> {
-    repo.find_by_action_id(action_id)
-        .await?
-        .ok_or(AppError::NotFound)
+fn require_proposal_authority(proposal: &Proposal, authority: Authority) -> Result<(), AppError> {
+    if proposal.authority != authority {
+        return Err(AppError::Unauthorized);
+    }
+    Ok(())
 }
 
-/// List proposals, optionally filtered by status.
+/// Get proposal by ActionId scoped to the session authority.
+pub(crate) async fn get_update_action(
+    repo: &dyn ProposalRepository,
+    authority: Authority,
+    action_id: &ActionId,
+) -> Result<Proposal, AppError> {
+    let proposal = repo
+        .find_by_action_id(action_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    require_proposal_authority(&proposal, authority)?;
+    Ok(proposal)
+}
+
+/// List proposals for one authority, optionally filtered by status.
 pub(crate) async fn list_proposals(
     repo: &dyn ProposalRepository,
+    authority: Authority,
     status: Option<ProposalStatus>,
 ) -> Result<Vec<Proposal>, AppError> {
-    repo.list_by_status(status).await
+    repo.list_by_status(authority, status).await
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +200,7 @@ async fn require_approved(
 /// pre-built reveal tx hex (not yet valid until the commit UTXO exists).
 pub(crate) async fn prepare_broadcast_bundle(
     repo: &dyn ProposalRepository,
+    session_authority: Authority,
     btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     operator_keypair: &UntweakedKeypair,
@@ -198,6 +211,7 @@ pub(crate) async fn prepare_broadcast_bundle(
         .find_by_action_id(action_id)
         .await?
         .ok_or(AppError::NotFound)?;
+    require_proposal_authority(&raw, session_authority)?;
 
     let proposal = require_approved(repo, raw, action_id).await?;
 
@@ -233,6 +247,7 @@ pub(crate) async fn prepare_broadcast_bundle(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn broadcast_commit_then_reveal(
     repo: &dyn ProposalRepository,
+    session_authority: Authority,
     btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     operator_keypair: &UntweakedKeypair,
@@ -246,6 +261,7 @@ pub(crate) async fn broadcast_commit_then_reveal(
         .find_by_action_id(action_id)
         .await?
         .ok_or(AppError::NotFound)?;
+    require_proposal_authority(&raw, session_authority)?;
 
     let _proposal = require_approved(repo, raw, action_id).await?;
 
@@ -658,7 +674,9 @@ mod tests {
             .await
             .unwrap();
 
-        let fetched = get_update_action(&repo, &created.action_id).await.unwrap();
+        let fetched = get_update_action(&repo, Authority::StrataAdmin, &created.action_id)
+            .await
+            .unwrap();
 
         assert_eq!(fetched.action_id, created.action_id);
         assert_eq!(fetched.action_hex, created.action_hex);
@@ -670,9 +688,27 @@ mod tests {
         let repo = new_repo();
         let fake_id = ActionId("nonexistent".to_string());
 
-        let result = get_update_action(&repo, &fake_id).await;
+        let result = get_update_action(&repo, Authority::StrataAdmin, &fake_id).await;
 
         assert!(matches!(result.unwrap_err(), AppError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn test_get_update_action_rejects_wrong_authority() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+
+        let result = get_update_action(&repo, Authority::AlpenAdmin, &created.action_id).await;
+
+        assert!(matches!(result.unwrap_err(), AppError::Unauthorized));
     }
 
     #[tokio::test]
@@ -691,8 +727,44 @@ mod tests {
             .await
             .unwrap();
 
-        let all = list_proposals(&repo, None).await.unwrap();
+        let all = list_proposals(&repo, Authority::StrataAdmin, None)
+            .await
+            .unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_proposals_scoped_to_authority() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let strata_session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        create_update_action(&repo, strata_session, 1, "aa", &sig, 2)
+            .await
+            .unwrap();
+
+        let alpen_proposal = Proposal {
+            action_id: ActionId("alpen_action".to_string()),
+            seq_no: 9,
+            authority: Authority::AlpenAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 2,
+            action_hex: "cc".to_string(),
+            signatures: vec![sig.clone()],
+            broadcast_status: BroadcastStatus::default(),
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        };
+        repo.save_proposal(alpen_proposal).await.unwrap();
+
+        let strata_only = list_proposals(&repo, Authority::StrataAdmin, None)
+            .await
+            .unwrap();
+        assert_eq!(strata_only.len(), 1);
+        assert_eq!(strata_only[0].authority, Authority::StrataAdmin);
     }
 
     #[tokio::test]
@@ -711,12 +783,13 @@ mod tests {
             .await
             .unwrap();
 
-        let pending = list_proposals(&repo, Some(ProposalStatus::Pending))
+        let pending = list_proposals(&repo, Authority::StrataAdmin, Some(ProposalStatus::Pending))
             .await
             .unwrap();
         assert_eq!(pending.len(), 2);
 
-        let approved = list_proposals(&repo, Some(ProposalStatus::Approved))
+        let approved =
+            list_proposals(&repo, Authority::StrataAdmin, Some(ProposalStatus::Approved))
             .await
             .unwrap();
         assert_eq!(approved.len(), 0);

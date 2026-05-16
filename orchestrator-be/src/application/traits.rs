@@ -2,6 +2,7 @@
 //!
 //! Concrete implementations live in `crate::infrastructure`.
 
+use crate::domain::authority::Authority;
 use crate::domain::proposal::{ActionId, BroadcastStatus, Proposal, ProposalStatus};
 use crate::error::AppError;
 
@@ -22,9 +23,10 @@ pub(crate) trait ProposalRepository: Send + Sync {
         signature_hex: &str,
     ) -> Result<Option<Proposal>, AppError>;
 
-    /// List proposals, optionally filtered by status.
+    /// List proposals for one authority, optionally filtered by status.
     async fn list_by_status(
         &self,
+        authority: Authority,
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError>;
 
