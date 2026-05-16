@@ -41,8 +41,8 @@ export type BroadcastResult = {
 	actionId: string
 	proposalStatus: ProposalStatus
 	broadcastStatus: BroadcastStatus
-	commitTxid: string
-	revealTxid: string
+	commitTxid?: string
+	revealTxid?: string
 }
 
 export type GetNextSeqNoInput = {
