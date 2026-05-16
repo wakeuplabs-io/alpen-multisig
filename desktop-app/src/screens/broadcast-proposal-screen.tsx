@@ -16,7 +16,7 @@ export function BroadcastProposalScreen() {
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
 
-	const { phase, bundle, result, error, prepare, broadcast } = useBroadcastProposal(
+	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
 	)
@@ -109,7 +109,10 @@ export function BroadcastProposalScreen() {
 							className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3"
 							data-testid="e2e-broadcast-done-banner"
 						>
-							<p className="m-0 text-sm font-medium text-[#065f46]">Proposal enacted onchain.</p>
+							<p className="m-0 text-sm font-medium text-[#065f46]">
+								Proposal {proposal?.status ?? result?.proposalStatus ?? 'updated'} onchain (
+								{proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
+							</p>
 							<button
 								type="button"
 								className="mt-3 inline-flex items-center rounded-md border border-[#065f46] bg-white px-3 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"

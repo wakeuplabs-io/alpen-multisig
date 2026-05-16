@@ -7,8 +7,8 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 
 | P-ID | Status | Commit | E2E | Notes |
 |------|--------|--------|-----|-------|
-| P-061 | done | (pending) | pending | Route broadcast via orchestrator HTTP; cargo test pass |
-| P-062 | todo | | | Persisted broadcast status; no hard-coded literals |
+| P-061 | done | 3981e0c | pending | Route broadcast via orchestrator HTTP; cargo test pass |
+| P-062 | done | (pending) | pending | Re-fetch proposal after broadcast; UI shows persisted status |
 | P-002 | todo | | | Authority filter on list/get/broadcast |
 | P-001 | todo | | | Reject missing/test operator secret key |
 | P-015 | todo | | | Remove VITE operator key path |
