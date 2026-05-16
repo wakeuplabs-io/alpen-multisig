@@ -68,25 +68,12 @@ pub struct ProposalDto {
     pub broadcast_error: Option<String>,
 }
 
-/// IPC payload for broadcast commands. Orchestrator owns RPC/operator config (P-061);
-/// extra fields remain until P-015 removes the VITE operator path from the webview.
+/// IPC payload for broadcast commands — orchestrator owns RPC, operator key, and network (P-015).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[expect(dead_code)]
 pub struct BroadcastInput {
     pub base_url: String,
     pub action_id: String,
-    pub btc_rpc_url: String,
-    pub btc_rpc_user: String,
-    pub btc_rpc_pass: String,
-    pub btc_wallet_name: Option<String>,
-    pub operator_secret_key_hex: String,
-    pub magic_bytes_hex: String,
-    pub asm_rpc_url: String,
-    /// Bitcoin network name: "bitcoin", "testnet", "signet", or "regtest" (default).
-    pub network: Option<String>,
-    pub confirm_poll_interval_ms: Option<u64>,
-    pub confirm_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

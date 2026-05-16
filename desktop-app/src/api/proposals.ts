@@ -95,16 +95,6 @@ export function approveProposal(input: ApproveProposalInput): Promise<ApiResult<
 export type BroadcastInput = {
 	baseUrl: string
 	actionId: string
-	btcRpcUrl: string
-	btcRpcUser: string
-	btcRpcPass: string
-	btcWalletName?: string
-	operatorSecretKeyHex: string
-	magicBytesHex: string
-	asmRpcUrl: string
-	network?: string
-	confirmPollIntervalMs?: number
-	confirmTimeoutMs?: number
 }
 
 export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<PrepareBroadcastResult>> {
