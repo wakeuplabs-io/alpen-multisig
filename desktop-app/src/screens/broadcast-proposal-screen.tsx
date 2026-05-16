@@ -6,15 +6,14 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
-import { AuthRole } from '@/types/auth-role'
+import { authorityLabelForRole } from '@/lib/authority-label'
 
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
 
-	const authorityLabel =
-		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
+	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
