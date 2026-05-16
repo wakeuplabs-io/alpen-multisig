@@ -303,6 +303,7 @@ function ProposalCard({
 						type="button"
 						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
 						onClick={() => onBroadcastProposal(proposal.actionId)}
+						data-testid="e2e-proposal-broadcast-button"
 					>
 						Broadcast
 					</button>

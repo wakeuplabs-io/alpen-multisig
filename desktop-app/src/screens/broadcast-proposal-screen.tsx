@@ -77,6 +77,7 @@ export function BroadcastProposalScreen() {
 							<p className="m-0 text-sm text-[#6b7280]">Preparing broadcast artifacts from the orchestrator…</p>
 							<button
 								type="button"
+								data-testid="e2e-broadcast-prepare"
 								disabled={phase === 'preparing'}
 								onClick={() => void prepare()}
 								className="mt-4 inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
@@ -104,7 +105,10 @@ export function BroadcastProposalScreen() {
 					)}
 
 					{phase === 'done' && (
-						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+						<div
+							className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3"
+							data-testid="e2e-broadcast-done-banner"
+						>
 							<p className="m-0 text-sm font-medium text-[#065f46]">Proposal enacted onchain.</p>
 							<button
 								type="button"

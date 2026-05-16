@@ -63,6 +63,7 @@ npm run test:e2e:all                # every *.e2e.js spec in one run (discourage
 npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (row #0)
 npm run test:e2e:proposal-co-sign-row1 # co-sign first pending proposal as row #1 (manual step 2)
+npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
 ```
 
 Skip the automatic Tauri build (if you already ran `npm run tauri build -- --debug --no-bundle`):
@@ -71,14 +72,16 @@ Skip the automatic Tauri build (if you already ran `npm run tauri build -- --deb
 SKIP_E2E_BUILD=1 npm run test:e2e
 SKIP_E2E_BUILD=1 npm run test:e2e:proposal-add-signer
 SKIP_E2E_BUILD=1 npm run test:e2e:proposal-co-sign-row1
+SKIP_E2E_BUILD=1 npm run test:e2e:proposal-broadcast-quorum
 ```
 
-### Manual two-step: creator then co-signer
+### Manual three-step: create → co-sign → broadcast
 
 1. **`npm run test:e2e:proposal-add-signer`** — connects as **address #0**, creates and signs the draft (first signature).
 2. **`npm run test:e2e:proposal-co-sign-row1`** — connects as **address #1** (`e2e-picking-row-1`), opens the first **Sign** on the dashboard, completes **Sign with Trezor**, and waits until the app returns to **`/proposals`** (orchestrator records the second signature).
+3. **`npm run test:e2e:proposal-broadcast-quorum`** — connects again as **address #0**, opens the first **Broadcast** in **Quorum reached**, runs **Prepare broadcast** then **Confirm & Broadcast**, and waits for **Proposal enacted onchain** (`e2e-broadcast-done-banner`). Requires Bitcoin RPC / operator env vars in **`desktop-app/.env`** (see `use-broadcast-proposal`).
 
-Requires a **pending** proposal with **Sign** still visible for the #1 pubkey (same multisig as in your ASM config). If several proposals are pending, the test clicks the **first** `e2e-proposal-sign-button` in the DOM.
+Co-sign (step 2) needs a **pending** proposal where address **#1** can still **Sign** (same multisig as your ASM config). If several are pending, the spec clicks the **first** `e2e-proposal-sign-button`. Broadcast (step 3) uses the **first** `e2e-proposal-broadcast-button` in **Quorum reached**.
 
 ## What the tests do
 
@@ -101,6 +104,10 @@ After the same login helper, clicks **Create proposal** on the dashboard (client
 
 Same mnemonic, **derivation row #1** (`loginMnemonicToProposals(..., { pickingRowIndex: 1 })`), then **Sign** on the first pending card and **Sign with Trezor** on the sign screen. Intended to run **alone** after `proposal-add-signer` left a proposal needing more signatures.
 
+### [`test/specs/proposal-broadcast-quorum.e2e.js`](test/specs/proposal-broadcast-quorum.e2e.js)
+
+**Address row #0** session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Run **after** co-sign so the signer-update proposal has quorum. Needs regtest bitcoind + `VITE_*` broadcast env (RPC, operator key, magic bytes, ASM URL).
+
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 
 ## Troubleshooting
@@ -111,7 +118,7 @@ Selectors use `data-testid` attributes on the React side (`e2e-*`).
 | Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444**                                         |
 | Binary not found            | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle`                                                    |
 | Test hangs at connect       | Stack not running (ASM/orchestrator), or wrong `.env` URLs                                                           |
-| No **Sign** on co-sign spec | Run **`npm run test:e2e:proposal-add-signer`** first; row #1 must be a multisig member with a pending signature slot |
+| Broadcast spec fails at prepare | Check **`desktop-app/.env`**: `VITE_BTC_RPC_*`, `VITE_OPERATOR_SECRET_KEY_HEX`, `VITE_MAGIC_BYTES_HEX`, `VITE_ASM_RPC_URL`, wallet name / network |
 
 ## Further reading
 
