@@ -25,5 +25,5 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-064 | done | 83399c6 | pending | Full Authority enum parity |
 | label-bug | done | 2b6c1d4 | pending | Strata Administrator label |
 | P-016 | done | 805c3e1 | pending | DATABASE_URL required in prod |
-| P-029 | in-progress | | | Tracing skeleton + /ready |
-| P-054 | todo | | | Consolidate Cursor/Claude rules |
+| P-029 | done | 0e2a34f | pending | Tracing skeleton + /ready |
+| P-054 | in-progress | | | Consolidate Cursor/Claude rules |

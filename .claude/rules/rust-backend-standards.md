@@ -1,4 +1,5 @@
 ---
+description: Rust backend coding standards for Axum services and Tauri shell
 paths:
   - "orchestrator-be/**/*.rs"
   - "desktop-app/src-tauri/**/*.rs"
