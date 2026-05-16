@@ -7,17 +7,17 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 
 | P-ID | Status | Commit | E2E | Notes |
 |------|--------|--------|-----|-------|
-| P-061 | done | 3981e0c | pending | Route broadcast via orchestrator HTTP; cargo test pass |
-| P-062 | done | (pending) | pending | Re-fetch proposal after broadcast; UI shows persisted status |
-| P-002 | todo | | | Authority filter on list/get/broadcast |
-| P-001 | todo | | | Reject missing/test operator secret key |
-| P-015 | todo | | | Remove VITE operator key path |
-| P-063 | todo | | | Pubkey case normalization |
-| P-013 | todo | | | Explicit bitcoin network |
-| P-014 | todo | | | HTTPS on orchestrator URL |
-| P-035 | todo | | | Threshold drift at broadcast |
-| P-020 | todo | | | Broadcast in-flight guard |
-| P-004 | todo | | | Strict CSP |
+| P-061 | done | 3981e0c | pending | Route broadcast via orchestrator HTTP |
+| P-062 | done | fc3fbb9 | pending | Re-fetch proposal after broadcast |
+| P-002 | done | 8178b15 | pending | Authority filter on list/get/broadcast |
+| P-001 | done | 31b9f5a | pending | Reject missing/test operator secret key |
+| P-015 | done | ceeeb7a | pending | Remove VITE operator key path |
+| P-063 | done | 53bcd98 | pending | Pubkey case normalization |
+| P-013 | done | 766d685 | pending | Explicit bitcoin network |
+| P-014 | done | e51daa7 | pending | HTTPS on orchestrator URL |
+| P-035 | done | becf9fe | pending | Threshold drift at broadcast |
+| P-020 | done | 1261980 | pending | Broadcast in-flight guard |
+| P-004 | in-progress | | | Strict CSP |
 | P-008 | todo | | | Zod at Tauri bridge |
 | P-009 | todo | | | Session bound to authority |
 | P-010 | todo | | | Sign deep-link authority guard |
