@@ -18,8 +18,8 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
   - Build commit + reveal bundle.
   - Broadcast/confirm commit.
   - Broadcast reveal after commit is confirmed.
-- Backend API contract for preparing and executing broadcast.
-- Desktop app integration for broadcast screen and CTA.
+- **Orchestrator** coordination API (claim + progress reporting).
+- **Desktop** on-chain execution (prepare preview + commit/reveal submit).
 - Lifecycle/state updates after each broadcast stage.
 - Manual fallback artifacts (hex bundle export/copy).
 - Error handling and retries for Bitcoin node/network failures.
@@ -33,14 +33,18 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
 
 ## Requirements Alignment
 
-- Backend remains coordination-only:
-  - Assemble envelope transactions and track lifecycle.
-  - Do not re-implement protocol validity rules that belong to protocol crates.
-- Signer safety:
+- **Orchestrator remains coordination-only** (PRD backend guidelines §1):
+  - Proposals, signatures, quorum/off-chain lifecycle.
+  - Broadcast **metadata** (`broadcast_status`, txids, errors) via `claim` + `PATCH`.
+  - Does **not** submit Bitcoin transactions or hold the production operator key.
+- **Desktop owns execution** (PRD UI + `docs/2-discovery/01-conceptual-overview.md` §6.5):
+  - Commit/reveal construction and RPC submit from Tauri (`broadcast_env` process config).
+  - Operator key loaded in the Tauri process only (never the React webview).
+- **Signer safety:**
   - Broadcast is only enabled after quorum is reached.
   - UI shows high-signal confirmation and deterministic artifacts before sending.
-- Manual survivability:
-  - Users can copy/export broadcast bundle (`commit`/`reveal` hex + metadata) and broadcast externally if backend or node path is degraded.
+- **Manual survivability:**
+  - Users can copy/export broadcast bundle (`commit`/`reveal` hex + metadata) and broadcast externally if coordination or node path is degraded.
 
 ## State Model
 
@@ -56,9 +60,9 @@ Broadcast state semantics for `approved` proposals:
 - During broadcast processing, proposal remains `approved` but exposes broadcast sub-status in API response (see below).
 - `enacted` is set only after reveal tx is confirmed and payload is recognized as enacted by canonical state checks.
 
-### Broadcast Sub-status (new response field)
+### Broadcast Sub-status (response field)
 
-Add optional `broadcast_status` to proposal/broadcast DTOs:
+Optional `broadcast_status` on proposal/broadcast DTOs:
 - `idle` - no broadcast attempt yet.
 - `commit_broadcasted` - commit sent to network.
 - `commit_confirmed` - commit mined and reveal can be sent.
@@ -73,217 +77,84 @@ This field is operational metadata and does not replace canonical proposal lifec
 ### Entry
 
 - User opens proposal in `approved` state from dashboard and lands on broadcast screen.
-- Screen loads proposal payload + signatures and requests a broadcast preview bundle from backend.
+- Screen loads proposal payload + signatures; Tauri prepares fee/commit preview **locally**.
 
-### Step 1: Prepare Bundle
+### Step 1: Prepare (desktop)
 
-Backend prepares deterministic broadcast payload:
-- Build signed SPS payload from proposal:
-  - `seq_no`
-  - `action`
-  - collected threshold signatures
-- Build reveal transaction tied to a commit-funded input.
-- Return:
-  - `commit_tx_hex`
-  - `commit_txid` (if determinable pre-broadcast; otherwise return after submit)
-  - `reveal_tx_hex`
-  - `reveal_txid` (deterministic from hex)
-  - fee/weight summary
-  - integrity hints (payload hash/sighash references)
+Tauri `proposals_prepare_broadcast`:
+- Validates proposal is `approved` (via orchestrator `GET`).
+- Builds commit address and fee estimate using local Bitcoin RPC + operator key.
+- Returns commit address and sats to the UI (no network submit).
 
-### Step 2: Broadcast Commit
+### Step 2: Claim + broadcast (desktop + orchestrator)
 
-- On user confirmation (`Broadcast`), backend submits `commit_tx_hex`.
-- Backend records `commit_txid` and sets `broadcast_status = commit_broadcasted`.
-- Backend waits for confirmation depth policy (minimum `1` block for reveal gating in this slice).
-- On confirmation, set `broadcast_status = commit_confirmed`.
+On user confirmation (`Broadcast`):
 
-### Step 3: Broadcast Reveal
+1. `POST /proposals/:action_id/broadcast/claim` — orchestrator atomically sets `broadcast_status = commit_broadcasted` (or `409` if already claimed).
+2. Tauri submits commit tx, waits for confirmation, submits reveal tx (local Bitcoin RPC).
+3. After each phase, `PATCH /proposals/:action_id/broadcast` with `broadcast_status`, optional `commit_txid` / `reveal_txid`, and final `proposal_status = enacted` when done.
+4. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings).
 
-- Backend submits `reveal_tx_hex` only after commit confirmation check passes.
-- Set `broadcast_status = reveal_broadcasted`.
-- Backend waits for reveal confirmation and updates:
-  - `broadcast_status = reveal_confirmed`
-  - proposal lifecycle to `enacted` when canonical enacted condition is observed.
-
-### Step 4: Finalize UX
+### Step 3: Finalize UX
 
 - UI shows success with reveal txid and copy links/artifacts.
-- Dashboard eventually shows proposal under executed/enacted grouping.
+- Dashboard shows proposal under enacted grouping when coordinator state matches on-chain outcome.
 
-## API Contract
+## API Contract (orchestrator `/api/v1`)
 
-### 1) Prepare broadcast payload
+### 1) Claim broadcast
 
-`POST /proposals/:action_id/broadcast/prepare`
+`POST /proposals/:action_id/broadcast/claim`
 
-Purpose:
-- Validate proposal is `approved`.
-- Assemble commit/reveal artifacts without sending to network.
+- Validates session authority matches proposal.
+- Validates `approved` + threshold snapshot (P-035).
+- Atomically transitions `broadcast_status`: `idle` → `commit_broadcasted`.
+- Returns updated `Proposal` JSON.
 
-Response:
+### 2) Report progress
 
-```json
-{
-  "actionId": "hex",
-  "proposalStatus": "approved",
-  "broadcastStatus": "idle",
-  "commitTxHex": "hex",
-  "commitTxid": "optional-hex",
-  "revealTxHex": "hex",
-  "revealTxid": "hex",
-  "summary": {
-    "requiredSignatures": 3,
-    "collectedSignatures": 3,
-    "feeSats": 1234,
-    "vbytes": 456
-  }
-}
-```
+`PATCH /proposals/:action_id/broadcast`
 
-### 2) Execute broadcast
-
-`POST /proposals/:action_id/broadcast`
-
-Purpose:
-- Run commit -> confirm -> reveal sequence.
-- Return progress/result payload (sync for now; async migration possible later).
-
-Response (success):
+Request body:
 
 ```json
 {
-  "actionId": "hex",
-  "proposalStatus": "enacted",
-  "broadcastStatus": "reveal_confirmed",
+  "broadcastStatus": "commit_confirmed",
+  "proposalStatus": null,
   "commitTxid": "hex",
-  "revealTxid": "hex"
+  "revealTxid": null,
+  "broadcastError": null
 }
 ```
 
-Response (failure example):
-
-```json
-{
-  "actionId": "hex",
-  "proposalStatus": "approved",
-  "broadcastStatus": "failed",
-  "errorCode": "REVEAL_REJECTED",
-  "errorMessage": "Reveal transaction rejected by node policy"
-}
-```
+- Desktop reports each phase after local Bitcoin steps.
+- Returns updated `Proposal` JSON.
 
 ### 3) Read proposal status
 
-`GET /proposals` and `GET /proposals/:action_id` should include optional `broadcastStatus`, plus txids when present.
+`GET /proposals` and `GET /proposals/:action_id` include `broadcastStatus`, `commitTxid`, `revealTxid`, `broadcastError` when present.
 
 ## Technical Design
 
-### Backend (`orchestrator-be`)
+### Orchestrator (`orchestrator-be`)
 
-- Add broadcast application service with explicit phases:
-  - `prepare_broadcast_bundle(action_id)`
-  - `broadcast_commit_then_reveal(action_id)`
-- Persist operational fields in `proposals` table (or dedicated broadcast table):
-  - `broadcast_status`
-  - `commit_txid`
-  - `reveal_txid`
-  - `last_broadcast_error`
-  - timestamps for commit/reveal broadcast/confirmation
-- Integrate with Bitcoin client adapter:
-  - submit raw tx
-  - query tx confirmation depth
-  - map node errors into typed app errors
-- Enforce idempotency:
-  - if commit already broadcasted/confirmed, do not resend blindly.
-  - if reveal already broadcasted, return current state.
-- Enforce authority/session checks on broadcast endpoints same as proposal read/write endpoints.
+- **No** `broadcast_tx` module or operator key in server config.
+- Application: `claim_broadcast_coordination`, `report_broadcast_progress`.
+- Repository: `claim_broadcast`, `update_broadcast_status`.
+- Bitcoin RPC on server: `/ready` health check only.
 
-### Desktop Tauri layer (`desktop-app/src-tauri`)
+### Desktop Tauri (`desktop-app/src-tauri`)
 
-- Add orchestrator client methods:
-  - `prepareProposalBroadcast(actionId)`
-  - `broadcastProposal(actionId)`
-- Map backend DTOs into frontend-safe types with explicit `broadcastStatus`.
-- Keep high-signal error messages but sanitize low-level node internals where required.
+- `infrastructure/broadcast_env.rs` — process env for RPC + operator key.
+- `application/proposals.rs` — `prepare_broadcast_bundle`, `broadcast_commit_then_reveal` with coordination callbacks.
+- IPC: `proposals_prepare_broadcast`, `proposals_broadcast` (no secrets in React).
 
 ### Frontend (`desktop-app/src`)
 
-- Add/complete broadcast route:
-  - `'/proposals/:actionId/broadcast'`
-- Broadcast screen requirements:
-  - Proposal summary card and quorum indicator.
-  - Approval bundle block (copyable).
-  - Raw tx section showing commit + reveal hex (copyable independently).
-  - Primary CTA: `Broadcast`.
-  - In-progress state text reflecting current phase:
-    - "Broadcasting commit..."
-    - "Waiting commit confirmation..."
-    - "Broadcasting reveal..."
-    - "Waiting reveal confirmation..."
-  - Error panel with retry when safe.
-- Dashboard CTA behavior:
-  - `approved` card CTA routes to broadcast screen.
-  - pending/non-approved proposals cannot start broadcast.
+- Route `'/proposals/:actionId/broadcast'`.
+- Re-fetch proposal after broadcast (P-062).
+- In-flight guard (P-020 partial).
 
-## Error Handling
+## Manual Fallback
 
-Failure classes:
-- Proposal state invalid (`pending`, `expired`, `canceled`, `enacted`) -> reject broadcast with conflict semantics.
-- Commit rejected by node -> set `failed`, keep proposal `approved`.
-- Commit not confirmed within timeout -> set `failed` with timeout code.
-- Reveal rejected after confirmed commit -> set `failed`, include txids and operator guidance.
-- Auth/session failure -> uniform unauthorized response behavior.
-
-Recovery expectations:
-- Retry path should resume from last safe phase.
-- Manual fallback always available by exposing/copying raw hex artifacts.
-
-## Acceptance Criteria
-
-1. Only `approved` proposals can invoke prepare/broadcast endpoints.
-2. Prepare endpoint returns deterministic commit/reveal artifacts without network submission.
-3. Broadcast endpoint enforces commit confirmation before reveal broadcast.
-4. Proposal exposes `broadcastStatus` and txids after attempts.
-5. Successful commit+reveal path transitions proposal to `enacted`.
-6. Failed broadcast attempts keep proposal in `approved` and provide actionable error metadata.
-7. Desktop broadcast UI surfaces phase progress, tx artifacts, copy actions, and retry/manual fallback options.
-
-## Test Plan
-
-### Backend Unit
-
-- Validate state guard: non-approved proposals rejected.
-- Validate idempotent phase handling:
-  - commit already broadcasted
-  - commit confirmed, reveal pending
-  - reveal already broadcasted
-- Validate error mapping from Bitcoin adapter to API error codes.
-
-### Backend Integration
-
-- Happy path with regtest:
-  - prepare -> broadcast commit -> mine block -> broadcast reveal -> mine block -> enacted.
-- Commit rejected path.
-- Reveal rejected path after commit confirmation.
-- Timeout while waiting confirmation.
-- Auth/authority isolation for broadcast endpoints.
-
-### Desktop/Frontend
-
-- Approved proposal opens broadcast screen and loads prepare bundle.
-- Broadcast button triggers phase state transitions and disables duplicate submits.
-- Errors render retry/manual fallback guidance.
-- Copy actions for approval bundle, commit hex, reveal hex, and txids.
-
-### E2E
-
-- Reuse/extend commit-reveal broadcast test to verify full flow from proposal approval to enacted status reflected in dashboard.
-
-## Rollout Notes
-
-1. Land backend schema + DTO changes first (`broadcast_status` and txid fields).
-2. Implement prepare endpoint, then broadcast endpoint with phase persistence.
-3. Wire desktop Tauri + frontend broadcast screen.
-4. Add integration/e2e coverage before enabling by default in product navigation.
-
+Signers may construct and broadcast commit/reveal without the coordinator when it is down, per PRD §2. When the coordinator is reachable again, progress may be reported via `PATCH` or reconciled manually.

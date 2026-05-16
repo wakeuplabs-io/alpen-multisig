@@ -1,8 +1,10 @@
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{OrchestratorClient, OrchestratorError};
 use desktop_app::application::proposals;
-use desktop_app::application::proposals::ProposalError;
+use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::domain::proposal::{Proposal, ProposalSignature, Signature};
+use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+use desktop_app::infrastructure::broadcast_env;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +70,7 @@ pub struct ProposalDto {
     pub broadcast_error: Option<String>,
 }
 
-/// IPC payload for broadcast commands — orchestrator owns RPC, operator key, and network (P-015).
+/// IPC payload for broadcast commands — Bitcoin RPC and operator key load from Tauri env (P-066).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BroadcastInput {
@@ -162,6 +164,16 @@ mod url_tests {
     }
 }
 
+fn map_broadcast_error(error: BroadcastError) -> String {
+    match error {
+        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+            "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
+                .to_string()
+        }
+        other => other.to_string(),
+    }
+}
+
 fn map_proposal_error(error: ProposalError) -> String {
     match error {
         ProposalError::Orchestrator(OrchestratorError::Backend { status: 401, .. }) => {
@@ -234,30 +246,69 @@ pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let bundle = proposals::prepare_broadcast(&client, &input.action_id)
+    let env = broadcast_env::load_broadcast_env()?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
+
+    let (commit_address, commit_amount_sats, estimated_fee_sats) =
+        proposals::prepare_broadcast_local(
+            &client,
+            &btc_rpc,
+            &env.asm_rpc_url,
+            &env.operator_keypair,
+            env.network,
+            &input.action_id,
+        )
         .await
-        .map_err(map_proposal_error)?;
+        .map_err(map_broadcast_error)?;
 
     Ok(PrepareBroadcastDto {
-        action_id: bundle.action_id,
-        commit_address: bundle.commit_address,
-        commit_amount_sats: bundle.commit_amount_sats,
-        estimated_fee_sats: bundle.estimated_fee_sats,
+        action_id: input.action_id,
+        commit_address,
+        commit_amount_sats,
+        estimated_fee_sats,
     })
 }
 
 #[tauri::command]
 pub async fn proposals_broadcast(input: BroadcastInput) -> Result<BroadcastResultDto, String> {
     let client = build_client(input.base_url)?;
-    let result = proposals::execute_broadcast(&client, &input.action_id)
+    let env = broadcast_env::load_broadcast_env()?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
+
+    let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
+        &client,
+        &btc_rpc,
+        &env.asm_rpc_url,
+        &env.operator_keypair,
+        env.magic_bytes,
+        env.network,
+        &input.action_id,
+        env.confirm_poll_interval_ms,
+        env.confirm_timeout_ms,
+    )
+    .await
+    .map_err(map_broadcast_error)?;
+
+    let proposal = client
+        .get_proposal(&input.action_id)
         .await
-        .map_err(map_proposal_error)?;
+        .map_err(|e| map_broadcast_error(BroadcastError::ProposalFetch(e)))?;
 
     Ok(BroadcastResultDto {
-        action_id: result.action_id,
-        proposal_status: result.proposal_status,
-        broadcast_status: result.broadcast_status,
-        commit_txid: result.commit_txid,
-        reveal_txid: result.reveal_txid,
+        action_id: proposal.action_id,
+        proposal_status: proposal.status,
+        broadcast_status: proposal.broadcast_status,
+        commit_txid: proposal.commit_txid.unwrap_or(commit_txid),
+        reveal_txid: proposal.reveal_txid.unwrap_or(reveal_txid),
     })
 }

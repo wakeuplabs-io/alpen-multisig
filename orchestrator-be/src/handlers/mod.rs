@@ -2,7 +2,7 @@ use crate::state::AppState;
 use axum::{
     extract::State,
     http::StatusCode,
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -42,12 +42,12 @@ pub fn router(state: AppState) -> Router {
             post(proposals::approve_action),
         )
         .route(
-            "/proposals/:action_id/broadcast/prepare",
-            post(proposals::prepare_broadcast),
+            "/proposals/:action_id/broadcast/claim",
+            post(proposals::claim_broadcast),
         )
         .route(
             "/proposals/:action_id/broadcast",
-            post(proposals::execute_broadcast),
+            patch(proposals::report_broadcast_progress),
         )
         .with_state(state)
 }
@@ -72,16 +72,8 @@ mod tests {
         use crate::infrastructure::{
             bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
         };
-        use bitcoin::{
-            key::UntweakedKeypair,
-            secp256k1::{SecretKey, SECP256K1},
-            Network,
-        };
-        use strata_l1_txfmt::MagicBytes;
 
         let repo = Arc::new(InMemoryProposalRepository::new());
-        let sk = SecretKey::from_slice(&[1u8; 32]).unwrap();
-        let keypair = UntweakedKeypair::from_secret_key(SECP256K1, &sk);
         let btc_client = Arc::new(HttpBitcoinRpcClient::new(
             "http://127.0.0.1:18443",
             None,
@@ -94,11 +86,6 @@ mod tests {
             120_000,
             240_000,
             btc_client,
-            keypair,
-            5_000,
-            600_000,
-            MagicBytes::new([0x41, 0x4c, 0x50, 0x4e]),
-            Network::Regtest,
         ))
     }
 
@@ -358,15 +345,7 @@ mod tests {
 
         let app = {
             use crate::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
-            use bitcoin::{
-                key::UntweakedKeypair,
-                secp256k1::{SecretKey, SECP256K1},
-                Network,
-            };
-            use strata_l1_txfmt::MagicBytes;
 
-            let sk = SecretKey::from_slice(&[1u8; 32]).unwrap();
-            let keypair = UntweakedKeypair::from_secret_key(SECP256K1, &sk);
             let btc_client = Arc::new(HttpBitcoinRpcClient::new(
                 "http://127.0.0.1:18443",
                 None,
@@ -379,11 +358,6 @@ mod tests {
                 120_000,
                 240_000,
                 btc_client,
-                keypair,
-                5_000,
-                600_000,
-                MagicBytes::new([0x41, 0x4c, 0x50, 0x4e]),
-                Network::Regtest,
             ))
         };
 

@@ -44,6 +44,12 @@ export const broadcastResultSchema = z.object({
 	actionId: z.string(),
 	proposalStatus: proposalStatusSchema,
 	broadcastStatus: broadcastStatusSchema,
-	commitTxid: z.string().nullish().transform((v) => v ?? undefined),
-	revealTxid: z.string().nullish().transform((v) => v ?? undefined),
+	commitTxid: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	revealTxid: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
 })

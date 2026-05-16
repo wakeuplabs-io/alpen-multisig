@@ -18,25 +18,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-// ─── Broadcast response types ────────────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-pub struct PrepareBroadcastResponse {
-    pub action_id: String,
-    pub commit_address: String,
-    pub commit_amount_sats: u64,
-    pub estimated_fee_sats: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BroadcastResponse {
-    pub action_id: String,
-    pub proposal_status: String,
-    pub broadcast_status: String,
-    pub commit_txid: String,
-    pub reveal_txid: String,
-}
-
 // ─── Request types ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -158,62 +139,52 @@ pub async fn approve_action(
     Ok(Json(proposal))
 }
 
-pub async fn prepare_broadcast(
+/// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
+pub async fn claim_broadcast(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
-) -> Result<Json<PrepareBroadcastResponse>> {
+) -> Result<Json<Proposal>> {
     let action_id = ActionId(action_id);
-    let bundle = proposals::prepare_broadcast_bundle(
+    let proposal = proposals::claim_broadcast_coordination(
         state.repo.as_ref(),
         auth.authority,
-        state.btc_client.as_ref(),
         &state.asm_rpc_url,
-        &state.operator_keypair,
-        state.bitcoin_network,
         &action_id,
     )
     .await?;
-
-    Ok(Json(PrepareBroadcastResponse {
-        action_id: action_id.0,
-        commit_address: bundle.commit_address,
-        commit_amount_sats: bundle.commit_amount_sats,
-        estimated_fee_sats: bundle.estimated_fee_sats,
-    }))
+    Ok(Json(proposal))
 }
 
-pub async fn execute_broadcast(
+#[derive(Debug, Deserialize)]
+pub struct ReportBroadcastProgressBody {
+    pub broadcast_status: String,
+    pub proposal_status: Option<String>,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
+}
+
+/// Coordination-only: desktop reports txids / sub-status after local Bitcoin steps (P-066).
+pub async fn report_broadcast_progress(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
-) -> Result<Json<BroadcastResponse>> {
+    Json(body): Json<ReportBroadcastProgressBody>,
+) -> Result<Json<Proposal>> {
     let action_id = ActionId(action_id);
-    let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
+    let proposal = proposals::report_broadcast_progress(
         state.repo.as_ref(),
         auth.authority,
-        state.btc_client.as_ref(),
-        &state.asm_rpc_url,
-        &state.operator_keypair,
         &action_id,
-        state.bitcoin_magic_bytes,
-        state.bitcoin_network,
-        state.confirm_poll_interval_ms,
-        state.confirm_timeout_ms,
+        proposals::ReportBroadcastProgressRequest {
+            broadcast_status: body.broadcast_status,
+            proposal_status: body.proposal_status,
+            commit_txid: body.commit_txid,
+            reveal_txid: body.reveal_txid,
+            broadcast_error: body.broadcast_error,
+        },
     )
     .await?;
-
-    let proposal = state
-        .repo
-        .find_by_action_id(&action_id)
-        .await?
-        .ok_or_else(|| AppError::NotFound)?;
-
-    Ok(Json(BroadcastResponse {
-        action_id: action_id.0,
-        proposal_status: proposal.status.to_string(),
-        broadcast_status: proposal.broadcast_status.to_string(),
-        commit_txid,
-        reveal_txid,
-    }))
+    Ok(Json(proposal))
 }

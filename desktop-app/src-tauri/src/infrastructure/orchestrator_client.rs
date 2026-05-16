@@ -1,10 +1,9 @@
 //! HTTP implementation of the `OrchestratorClient` trait.
 
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, BroadcastResponse, CompleteOrchestratorAuthRequest,
-    CreateProposalRequest, NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession,
-    OrchestratorClient, OrchestratorError, PrepareBroadcastResponse, ProposalListResponse,
-    StartOrchestratorAuthRequest,
+    ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
+    NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient,
+    OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
 };
 use crate::domain::proposal::Proposal;
 
@@ -156,24 +155,23 @@ impl OrchestratorClient for HttpOrchestratorClient {
         Ok(response.next_seq_no)
     }
 
-    async fn prepare_broadcast(
-        &self,
-        action_id: &str,
-    ) -> Result<PrepareBroadcastResponse, OrchestratorError> {
+    async fn claim_broadcast(&self, action_id: &str) -> Result<Proposal, OrchestratorError> {
         let req = self.with_auth_headers(self.client.post(format!(
-            "{}/proposals/{action_id}/broadcast/prepare",
+            "{}/proposals/{action_id}/broadcast/claim",
             self.base_url
         )))?;
         self.send_and_parse(req).await
     }
 
-    async fn execute_broadcast(
+    async fn report_broadcast_progress(
         &self,
         action_id: &str,
-    ) -> Result<BroadcastResponse, OrchestratorError> {
+        request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+    ) -> Result<Proposal, OrchestratorError> {
         let req = self.with_auth_headers(
             self.client
-                .post(format!("{}/proposals/{action_id}/broadcast", self.base_url)),
+                .patch(format!("{}/proposals/{action_id}/broadcast", self.base_url))
+                .json(&request),
         )?;
         self.send_and_parse(req).await
     }

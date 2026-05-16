@@ -102,18 +102,6 @@ pub struct Proposal {
     pub broadcast_error: Option<String>,
 }
 
-/// Artifacts returned by prepare_broadcast_bundle — no network submission.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct BroadcastBundle {
-    /// P2TR address the operator must fund to anchor the reveal.
-    pub commit_address: String,
-    pub commit_amount_sats: u64,
-    /// Fully-signed reveal tx hex (ready to broadcast once commit is confirmed).
-    pub reveal_tx_hex: String,
-    pub estimated_fee_sats: u64,
-}
-
 /// A signature submitted for a proposal by a signer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProposalSignature {

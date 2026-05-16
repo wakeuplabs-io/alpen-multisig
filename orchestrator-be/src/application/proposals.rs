@@ -3,22 +3,14 @@
 //! Functions receive a `ProposalRepository` as a parameter (dependency injection).
 //! No authentication or quorum detection — those are added in future slices.
 
-use bitcoin::key::UntweakedKeypair;
-use bitcoin::Network;
-use strata_l1_txfmt::MagicBytes;
-
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{
-    compute_action_id, ActionId, BroadcastBundle, BroadcastStatus, Proposal, ProposalSignature,
-    ProposalStatus, SeqNo,
+    compute_action_id, ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+    SeqNo,
 };
 use crate::error::AppError;
-use crate::infrastructure::asm_role_membership::{
-    ordered_keys_for_authority, threshold_for_authority,
-};
-use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
-use crate::infrastructure::broadcast_tx;
+use crate::infrastructure::asm_role_membership::threshold_for_authority;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionContext<'a> {
@@ -176,14 +168,8 @@ pub(crate) async fn list_proposals(
 }
 
 // ---------------------------------------------------------------------------
-// Broadcast services
+// Broadcast coordination (metadata only — on-chain execution is desktop-owned)
 // ---------------------------------------------------------------------------
-
-/// Estimated vbytes for an SPS-51 reveal transaction (conservative upper bound).
-const REVEAL_TX_VBYTES: u64 = 350;
-
-/// Dust + protocol minimum sats locked in the commit output.
-const COMMIT_DUST_SATS: u64 = 1500;
 
 /// Ensure a proposal is in `Approved` state before broadcasting.
 ///
@@ -221,19 +207,23 @@ async fn require_approved(
     )))
 }
 
-/// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
-///
-/// Returns a [`BroadcastBundle`] containing the P2TR commit address to fund and the
-/// pre-built reveal tx hex (not yet valid until the commit UTXO exists).
-pub(crate) async fn prepare_broadcast_bundle(
+/// Request body for desktop-reported broadcast progress (coordination only — no Bitcoin RPC).
+#[derive(Debug, serde::Deserialize)]
+pub struct ReportBroadcastProgressRequest {
+    pub broadcast_status: String,
+    pub proposal_status: Option<String>,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
+}
+
+/// Atomically claim broadcast coordination rights (`idle` → `commit_broadcasted`).
+pub(crate) async fn claim_broadcast_coordination(
     repo: &dyn ProposalRepository,
     session_authority: Authority,
-    btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
-    network: Network,
     action_id: &ActionId,
-) -> Result<BroadcastBundle, AppError> {
+) -> Result<Proposal, AppError> {
     let raw = repo
         .find_by_action_id(action_id)
         .await?
@@ -243,261 +233,47 @@ pub(crate) async fn prepare_broadcast_bundle(
     let proposal = require_approved(repo, raw, action_id).await?;
     ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
 
-    let canonical_keys = ordered_keys_for_authority(asm_rpc_url, proposal.authority).await?;
-
-    let sighash = compute_sighash_for_proposal(&proposal)?;
-    let payload = broadcast_tx::build_signed_payload_bytes(
-        proposal.seq_no,
-        &proposal.action_hex,
-        &proposal.signatures,
-        &canonical_keys,
-        &sighash,
-    )?;
-
-    let (commit_address, _reveal_script, _taproot_info) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)?;
-
-    let fee_rate = btc_client.estimate_fee_rate_sats_per_vb(6).await?;
-    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
-    let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
-
-    Ok(BroadcastBundle {
-        commit_address: commit_address.to_string(),
-        commit_amount_sats,
-        reveal_tx_hex: String::new(), // filled in at broadcast time once commit UTXO is known
-        estimated_fee_sats,
-    })
+    repo.claim_broadcast(action_id).await
 }
 
-/// Execute the full commit → confirm → reveal sequence for an approved proposal.
-///
-/// Returns `(commit_txid, reveal_txid)` on success and transitions the proposal to `Enacted`.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn broadcast_commit_then_reveal(
+/// Persist broadcast sub-status reported by the desktop after local Bitcoin submission.
+pub(crate) async fn report_broadcast_progress(
     repo: &dyn ProposalRepository,
     session_authority: Authority,
-    btc_client: &dyn BitcoinRpcClient,
-    asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     action_id: &ActionId,
-    magic_bytes: MagicBytes,
-    network: Network,
-    confirm_poll_interval_ms: u64,
-    confirm_timeout_ms: u64,
-) -> Result<(String, String), AppError> {
+    body: ReportBroadcastProgressRequest,
+) -> Result<Proposal, AppError> {
     let raw = repo
         .find_by_action_id(action_id)
         .await?
         .ok_or(AppError::NotFound)?;
     require_proposal_authority(&raw, session_authority)?;
 
-    let proposal = require_approved(repo, raw, action_id).await?;
-    ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
-
-    // Atomically claim broadcast rights: transitions idle → commit_broadcasted.
-    // Returns Conflict if another caller already claimed (race-safe).
-    let proposal = repo.claim_broadcast(action_id).await?;
-
-    // --- Derive broadcast artifacts ---
-    let canonical_keys = ordered_keys_for_authority(asm_rpc_url, proposal.authority).await?;
-    let sighash = compute_sighash_for_proposal(&proposal)?;
-    let payload = broadcast_tx::build_signed_payload_bytes(
-        proposal.seq_no,
-        &proposal.action_hex,
-        &proposal.signatures,
-        &canonical_keys,
-        &sighash,
-    )?;
-    let (commit_address, reveal_script, taproot_spend_info) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)?;
-
-    let fee_rate = btc_client.estimate_fee_rate_sats_per_vb(6).await?;
-    let commit_amount_sats = COMMIT_DUST_SATS + fee_rate * REVEAL_TX_VBYTES;
-
-    let result = do_broadcast(
-        repo,
-        btc_client,
-        operator_keypair,
-        action_id,
-        &commit_address,
-        &reveal_script,
-        &taproot_spend_info,
-        &proposal,
-        &payload,
-        commit_amount_sats,
-        fee_rate,
-        magic_bytes,
-        network,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
-    )
-    .await;
-
-    if let Err(ref e) = result {
-        let _ = repo
-            .update_broadcast_status(
-                action_id,
-                BroadcastStatus::Failed,
-                None,
-                None,
-                None,
-                Some(&e.to_string()),
-            )
-            .await;
-    }
-
-    result
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn do_broadcast(
-    repo: &dyn ProposalRepository,
-    btc_client: &dyn BitcoinRpcClient,
-    operator_keypair: &UntweakedKeypair,
-    action_id: &ActionId,
-    commit_address: &bitcoin::Address,
-    reveal_script: &bitcoin::ScriptBuf,
-    taproot_spend_info: &bitcoin::taproot::TaprootSpendInfo,
-    proposal: &Proposal,
-    _payload: &[u8],
-    commit_amount_sats: u64,
-    fee_rate_sats_per_vb: u64,
-    magic_bytes: MagicBytes,
-    network: Network,
-    confirm_poll_interval_ms: u64,
-    confirm_timeout_ms: u64,
-) -> Result<(String, String), AppError> {
-    // Step 1: Broadcast commit.
-    let commit_txid = btc_client
-        .send_to_address(
-            &commit_address.to_string(),
-            commit_amount_sats,
-            fee_rate_sats_per_vb,
-        )
-        .await?;
-
-    repo.update_broadcast_status(
-        action_id,
-        BroadcastStatus::CommitBroadcasted,
-        None,
-        Some(&commit_txid),
-        None,
-        None,
-    )
-    .await?;
-
-    // Step 2: Wait for commit confirmation.
-    wait_for_confirmation(
-        btc_client,
-        &commit_txid,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
-    )
-    .await?;
-
-    repo.update_broadcast_status(
-        action_id,
-        BroadcastStatus::CommitConfirmed,
-        None,
-        Some(&commit_txid),
-        None,
-        None,
-    )
-    .await?;
-
-    // Step 3: Build and broadcast reveal.
-    let commit_tx = btc_client.get_raw_transaction(&commit_txid).await?;
-    let commit_address_script = commit_address.script_pubkey();
-
-    use ssz::Decode;
-    let action_bytes = hex::decode(&proposal.action_hex)
-        .map_err(|e| AppError::BadRequest(format!("invalid action hex: {e}")))?;
-    let action = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(&action_bytes)
-        .map_err(|e| AppError::BadRequest(format!("invalid SSZ action: {e:?}")))?;
-
-    let reveal_fee_sats = fee_rate_sats_per_vb * REVEAL_TX_VBYTES;
-    let reveal_tx = broadcast_tx::build_reveal_tx(
-        operator_keypair,
-        reveal_script,
-        taproot_spend_info,
-        &commit_tx,
-        &commit_address_script,
-        &action,
-        magic_bytes,
-        network,
-        reveal_fee_sats,
-    )?;
-
-    let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);
-    let reveal_txid = btc_client.send_raw_transaction(&reveal_tx_hex).await?;
-
-    repo.update_broadcast_status(
-        action_id,
-        BroadcastStatus::RevealBroadcasted,
-        None,
-        Some(&commit_txid),
-        Some(&reveal_txid),
-        None,
-    )
-    .await?;
-
-    // Step 4: Wait for reveal confirmation.
-    wait_for_confirmation(
-        btc_client,
-        &reveal_txid,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
-    )
-    .await?;
-
-    // Transition to enacted.
-    repo.update_broadcast_status(
-        action_id,
-        BroadcastStatus::RevealConfirmed,
-        Some(ProposalStatus::Enacted),
-        Some(&commit_txid),
-        Some(&reveal_txid),
-        None,
-    )
-    .await?;
-
-    Ok((commit_txid, reveal_txid))
-}
-
-/// Compute the SPS-65 sighash for a proposal's action and sequence number.
-fn compute_sighash_for_proposal(proposal: &Proposal) -> Result<[u8; 32], AppError> {
-    use ssz::Decode;
-    use strata_asm_txs_admin::actions::MultisigAction;
-    use strata_asm_txs_admin::signing_message::SigningMessage;
-    let action_bytes = hex::decode(&proposal.action_hex)
-        .map_err(|e| AppError::BadRequest(format!("invalid action hex: {e}")))?;
-    let action = MultisigAction::from_ssz_bytes(&action_bytes)
-        .map_err(|e| AppError::BadRequest(format!("invalid SSZ action: {e:?}")))?;
-    Ok(SigningMessage::for_action(&action, proposal.seq_no)
-        .compute_sighash()
-        .0)
-}
-
-/// Poll until a transaction has at least one confirmation or the timeout is exceeded.
-async fn wait_for_confirmation(
-    btc_client: &dyn BitcoinRpcClient,
-    txid: &str,
-    poll_interval_ms: u64,
-    timeout_ms: u64,
-) -> Result<(), AppError> {
-    let start = std::time::Instant::now();
-    loop {
-        let confs = btc_client.get_transaction_confirmations(txid).await?;
-        if confs >= 1 {
-            return Ok(());
-        }
-        if start.elapsed().as_millis() as u64 >= timeout_ms {
-            return Err(AppError::Internal(anyhow::anyhow!(
-                "timeout waiting for confirmation of txid {txid}"
+    let broadcast_status: BroadcastStatus = body.broadcast_status.parse()?;
+    let proposal_status = match body.proposal_status.as_deref() {
+        None => None,
+        Some("pending") => Some(ProposalStatus::Pending),
+        Some("approved") => Some(ProposalStatus::Approved),
+        Some("enacted") => Some(ProposalStatus::Enacted),
+        Some("canceled") => Some(ProposalStatus::Canceled),
+        Some("expired") => Some(ProposalStatus::Expired),
+        Some(other) => {
+            return Err(AppError::BadRequest(format!(
+                "unknown proposal_status: {other}"
             )));
         }
-        tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
-    }
+    };
+
+    repo.update_broadcast_status(
+        action_id,
+        broadcast_status,
+        proposal_status,
+        body.commit_txid.as_deref(),
+        body.reveal_txid.as_deref(),
+        body.broadcast_error.as_deref(),
+    )
+    .await?
+    .ok_or(AppError::NotFound)
 }
 
 #[cfg(test)]
