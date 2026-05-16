@@ -1,5 +1,7 @@
 use crate::state::AppState;
 use axum::{
+    extract::State,
+    http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
@@ -13,9 +15,19 @@ async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
 }
 
+async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    state
+        .btc_client
+        .estimate_fee_rate_sats_per_vb(1)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(Json(json!({ "status": "ready" })))
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/ready", get(ready))
         // Auth
         .route("/auth/challenge", post(auth::auth_challenge))
         .route("/auth/verify", post(auth::auth_verify))

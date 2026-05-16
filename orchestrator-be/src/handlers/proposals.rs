@@ -105,6 +105,7 @@ pub async fn get_next_seq_no(
     }))
 }
 
+#[tracing::instrument(skip(state, auth), fields(authority = ?auth.authority))]
 pub async fn list_proposals(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
@@ -116,17 +117,15 @@ pub async fn list_proposals(
     Ok(Json(ProposalListResponse { proposals }))
 }
 
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
 pub async fn get_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    let proposal = proposals::get_update_action(
-        state.repo.as_ref(),
-        auth.authority,
-        &ActionId(action_id),
-    )
-    .await?;
+    let proposal =
+        proposals::get_update_action(state.repo.as_ref(), auth.authority, &ActionId(action_id))
+            .await?;
 
     Ok(Json(proposal))
 }
