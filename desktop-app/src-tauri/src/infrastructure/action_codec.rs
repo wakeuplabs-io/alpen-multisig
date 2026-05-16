@@ -30,6 +30,8 @@ pub enum CodecError {
     PubKey(#[from] PubKeyError),
     #[error("invalid threshold: value must be non-zero")]
     InvalidThreshold,
+    #[error("unsupported authority: {0}")]
+    UnsupportedAuthority(String),
 }
 
 /// Encodes a domain `Action` to canonical SSZ bytes (the signed form).
@@ -69,6 +71,9 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                         StrataAdminMultisigUpdate::new(config_update),
                     )))
                 }
+                other => Err(CodecError::UnsupportedAuthority(format!(
+                    "encoding not implemented for authority `{other:?}`"
+                ))),
             }
         }
     }

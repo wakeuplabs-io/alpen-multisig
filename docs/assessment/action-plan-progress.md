@@ -21,8 +21,8 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-008 | done | 16df77b | pending | Zod at Tauri bridge |
 | P-009 | done | 0556b5e | pending | Session bound to authority |
 | P-010 | done | 5945d3a | pending | Sign deep-link authority guard |
-| P-007 | in-progress | | | Freeze sighash at preview |
-| P-064 | todo | | | Full Authority enum parity |
+| P-007 | done | 0825a1a | pending | Freeze sighash at preview |
+| P-064 | in-progress | | | Full Authority enum parity |
 | label-bug | todo | | | Broadcast screen authority label |
 | P-016 | todo | | | DATABASE_URL required in prod |
 | P-029 | todo | | | Tracing skeleton + /ready |
