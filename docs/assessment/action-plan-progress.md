@@ -18,8 +18,8 @@ Manual E2E before each issue commit: `/e2e-proposal-flow` (operator confirms pas
 | P-035 | done | becf9fe | pending | Threshold drift at broadcast |
 | P-020 | done | 1261980 | pending | Broadcast in-flight guard |
 | P-004 | done | 809789a | pending | Strict CSP |
-| P-008 | in-progress | | | Zod at Tauri bridge |
-| P-009 | todo | | | Session bound to authority |
+| P-008 | done | 16df77b | pending | Zod at Tauri bridge |
+| P-009 | in-progress | | | Session bound to authority |
 | P-010 | todo | | | Sign deep-link authority guard |
 | P-007 | todo | | | Freeze sighash at preview |
 | P-064 | todo | | | Full Authority enum parity |
