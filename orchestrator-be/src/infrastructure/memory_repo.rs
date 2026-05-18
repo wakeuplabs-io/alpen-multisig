@@ -89,10 +89,13 @@ impl ProposalRepository for InMemoryProposalRepository {
         let Some(proposal) = proposals.get_mut(action_id) else {
             return Err(AppError::NotFound);
         };
-        if proposal.broadcast_status != BroadcastStatus::Idle {
-            return Err(AppError::Conflict(
-                "broadcast already in progress or completed".to_string(),
-            ));
+        match proposal.broadcast_status {
+            BroadcastStatus::Idle | BroadcastStatus::Failed => {}
+            _ => {
+                return Err(AppError::Conflict(
+                    "broadcast already in progress or completed".to_string(),
+                ))
+            }
         }
         proposal.broadcast_status = BroadcastStatus::CommitBroadcasted;
         Ok(proposal.clone())

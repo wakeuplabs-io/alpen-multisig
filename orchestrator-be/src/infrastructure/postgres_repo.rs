@@ -299,7 +299,7 @@ impl ProposalRepository for PostgresProposalRepository {
             r#"
             UPDATE proposals
             SET broadcast_status = 'commit_broadcasted', updated_at = NOW()
-            WHERE action_id = $1 AND broadcast_status = 'idle'
+            WHERE action_id = $1 AND broadcast_status IN ('idle', 'failed')
             RETURNING {SELECT_PROPOSAL_COLS}
             "#
         ))

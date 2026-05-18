@@ -292,6 +292,7 @@ export function SignPocScreen() {
 							isSigning={isSigning}
 							error={signError}
 							copyFeedbackVisible={copyFeedbackVisible}
+							walletVendor={adapter.vendor}
 							onCopySighash={() => void handleCopySighash()}
 							onSign={() => void handleSignWithHw()}
 						/>

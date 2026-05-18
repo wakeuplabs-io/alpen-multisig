@@ -243,7 +243,8 @@ function ProposalCard({
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalType(proposal)
-	const hasQuorum = proposal.status === 'approved' || collectedSignatures >= requiredSignatures
+	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
+	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
 	const alreadySigned =
 		signerPubkey !== null &&
 		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
