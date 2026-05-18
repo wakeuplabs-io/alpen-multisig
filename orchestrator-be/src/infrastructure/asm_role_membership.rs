@@ -249,6 +249,17 @@ mod test_mocks {
         mock_threshold_impl(rpc_url, authority)
     }
 
+    fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
+        use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+        let mut sk_bytes = [0u8; 32];
+        sk_bytes[31] = 2;
+        let Ok(sk) = SecretKey::from_slice(&sk_bytes) else {
+            return false;
+        };
+        let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
+        signer_pubkey.eq_ignore_ascii_case(&hex::encode(pk.serialize()))
+    }
+
     fn mock_membership_impl(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -258,9 +269,7 @@ mod test_mocks {
         Authority::StrataAdmin => {
             signer_pubkey.eq_ignore_ascii_case(
                 "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            ) || signer_pubkey.eq_ignore_ascii_case(
-                "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5",
-            )
+            ) || mock_strata_signer_b_pk_matches(signer_pubkey)
         }
         Authority::SequencerManager => false,
         _ => return None,

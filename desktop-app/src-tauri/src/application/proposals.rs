@@ -15,6 +15,7 @@ use strata_l1_txfmt::MagicBytes;
 
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
+    TransitionProposalRequest,
     ReportBroadcastProgressRequest,
 };
 use crate::domain::proposal::{Proposal, Signature};
@@ -368,9 +369,27 @@ pub async fn create_update_action(
     Ok(proposal)
 }
 
-/// Append an approval signature for an existing action.
-///
-/// Mirrors PRD: `approve_action(id, sig)`.
+fn orchestrator_quorum_reached(proposal: &Proposal) -> bool {
+    proposal.signatures.len() >= proposal.required_signatures as usize
+}
+
+/// Explicit pending → approved after quorum (P-012 / ADR-006).
+pub async fn transition_to_approved(
+    client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<Proposal, ProposalError> {
+    let proposal = client
+        .transition_to_approved(
+            action_id,
+            TransitionProposalRequest {
+                proposal_status: "approved".to_string(),
+            },
+        )
+        .await?;
+    Ok(proposal)
+}
+
+/// Append an approval signature; when quorum is reached, persist `approved` on the orchestrator.
 pub async fn approve_action(
     client: &dyn OrchestratorClient,
     action_id: &str,
@@ -382,6 +401,9 @@ pub async fn approve_action(
     };
 
     let proposal = client.approve_action(action_id, request).await?;
+    if proposal.status == "pending" && orchestrator_quorum_reached(&proposal) {
+        return transition_to_approved(client, action_id).await;
+    }
     Ok(proposal)
 }
 
@@ -483,6 +505,8 @@ mod tests {
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
         last_approve_request: Mutex<Option<(String, ApproveActionRequest)>>,
+        transition_called: Mutex<bool>,
+        approve_signature_count: Mutex<usize>,
         claim_broadcast_called: Mutex<bool>,
         report_broadcast_called: Mutex<bool>,
         should_fail: bool,
@@ -493,6 +517,8 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                transition_called: Mutex::new(false),
+                approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
                 should_fail: false,
@@ -503,6 +529,8 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                transition_called: Mutex::new(false),
+                approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
                 should_fail: true,
@@ -606,6 +634,14 @@ mod tests {
                 });
             }
             *self.last_approve_request.lock().unwrap() = Some((action_id.to_string(), request));
+            let mut count = self.approve_signature_count.lock().unwrap();
+            *count += 1;
+            let signatures = (0..*count)
+                .map(|i| ProposalSignature {
+                    signer_pubkey: format!("signer_{i}"),
+                    signature_hex: format!("sig_{i}"),
+                })
+                .collect();
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,
@@ -613,7 +649,37 @@ mod tests {
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
                 required_signatures: 2,
-                signatures: vec![],
+                signatures,
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+            })
+        }
+
+        async fn transition_to_approved(
+            &self,
+            action_id: &str,
+            _request: TransitionProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            *self.transition_called.lock().unwrap() = true;
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![
+                    ProposalSignature {
+                        signer_pubkey: "signer_0".to_string(),
+                        signature_hex: "sig_0".to_string(),
+                    },
+                    ProposalSignature {
+                        signer_pubkey: "signer_1".to_string(),
+                        signature_hex: "sig_1".to_string(),
+                    },
+                ],
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
                 reveal_txid: None,
@@ -744,10 +810,31 @@ mod tests {
             .expect("should succeed");
 
         assert_eq!(result.action_id, "action_1");
+        assert_eq!(result.status, "pending");
 
         let (action_id, req) = mock.last_approve_request().expect("request sent");
         assert_eq!(action_id, "action_1");
         assert_eq!(req.signer_pubkey, sig.signer_pubkey);
+        assert!(!*mock.transition_called.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_approve_at_quorum_calls_transition() {
+        let mock = MockOrchestratorClient::new();
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 1, &action_hex);
+
+        let _first = approve_action(&mock, "action_1", &sig)
+            .await
+            .expect("first approve");
+        assert!(!*mock.transition_called.lock().unwrap());
+
+        let result = approve_action(&mock, "action_1", &sig)
+            .await
+            .expect("quorum approve");
+        assert_eq!(result.status, "approved");
+        assert!(*mock.transition_called.lock().unwrap());
     }
 
     #[tokio::test]
