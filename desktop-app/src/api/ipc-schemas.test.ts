@@ -23,4 +23,28 @@ if (parsed.success) {
 	assert.equal(parsed.data.broadcastError, undefined)
 }
 
+import { authChallengeSchema, authSessionSchema } from './ipc-schemas.ts'
+
+const challenge = {
+	challengeId: 'c1',
+	challengeHex: 'aa',
+	nonceHex: 'bb',
+	domain: 'alpen-multisig',
+	role: 'strata_administrator',
+	issuedAtUnixMs: 1,
+	expiresAtUnixMs: 2,
+	sessionId: 's1',
+}
+assert.equal(authChallengeSchema.safeParse(challenge).success, true)
+
+const session = {
+	role: 'strata_administrator',
+	signerPubkeyHex: '02' + '00'.repeat(32),
+	authenticatedAtUnixMs: 1,
+	expiresAtUnixMs: 2,
+	membershipFetchedAtUnixMs: 1,
+}
+assert.equal(authSessionSchema.safeParse(session).success, true)
+
 console.log('ipc-schemas: proposal null Option fields OK')
+console.log('ipc-schemas: auth schemas OK')

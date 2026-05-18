@@ -40,6 +40,32 @@ export const proposalSchema = z.object({
 		.transform((v) => v ?? undefined),
 })
 
+export const authRoleSchema = z.enum(['strata_administrator', 'strata_sequencer_manager'])
+
+export const authChallengeSchema = z.object({
+	challengeId: z.string(),
+	challengeHex: z.string(),
+	nonceHex: z.string(),
+	domain: z.string(),
+	role: authRoleSchema,
+	issuedAtUnixMs: z.number(),
+	expiresAtUnixMs: z.number(),
+	sessionId: z.string(),
+})
+
+export const authSessionSchema = z.object({
+	role: authRoleSchema,
+	signerPubkeyHex: z.string(),
+	authenticatedAtUnixMs: z.number(),
+	expiresAtUnixMs: z.number(),
+	membershipFetchedAtUnixMs: z.number(),
+})
+
+export const authSessionResultSchema = z.object({
+	authenticated: z.boolean(),
+	session: authSessionSchema.nullish().transform((v) => v ?? null),
+})
+
 export const broadcastResultSchema = z.object({
 	actionId: z.string(),
 	proposalStatus: proposalStatusSchema,

@@ -1,5 +1,6 @@
 import type { ApiResult } from '@/types'
 import { AuthRole } from '@/types'
+import { authChallengeSchema, authSessionResultSchema, authSessionSchema } from '@/api/ipc-schemas'
 import { tauriCall } from '@/api/tauri-bridge'
 import type { SignatureFormat } from '@/wallet/types'
 
@@ -42,15 +43,15 @@ export type AuthSessionResult = {
 }
 
 export function authStartChallenge(input: StartChallengeInput): Promise<ApiResult<AuthChallenge>> {
-	return tauriCall<AuthChallenge>('auth_start_challenge', { input })
+	return tauriCall<AuthChallenge>('auth_start_challenge', { input }, authChallengeSchema)
 }
 
 export function authComplete(input: CompleteAuthInput): Promise<ApiResult<AuthSession>> {
-	return tauriCall<AuthSession>('auth_complete', { input })
+	return tauriCall<AuthSession>('auth_complete', { input }, authSessionSchema)
 }
 
 export function authGetSession(): Promise<ApiResult<AuthSessionResult>> {
-	return tauriCall<AuthSessionResult>('auth_get_session')
+	return tauriCall<AuthSessionResult>('auth_get_session', undefined, authSessionResultSchema)
 }
 
 export function authLogout(): Promise<ApiResult<null>> {
