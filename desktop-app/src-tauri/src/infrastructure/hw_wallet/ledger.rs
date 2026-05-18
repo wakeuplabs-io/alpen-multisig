@@ -241,7 +241,10 @@ fn recover_pubkey_from_message(message: &str, sig_bytes: &[u8; 65]) -> Result<St
     Ok(hex::encode(pubkey.serialize()))
 }
 
-async fn list_with<T>(client: &BitcoinClient<T>, count: usize) -> Result<Vec<super::HwAddressEntry>, String>
+async fn list_with<T>(
+    client: &BitcoinClient<T>,
+    count: usize,
+) -> Result<Vec<super::HwAddressEntry>, String>
 where
     T: async_client::Transport,
     T::Error: std::fmt::Debug,
@@ -257,10 +260,8 @@ where
     let mut entries = Vec::with_capacity(count);
 
     for n in 0..count {
-        let suffix = DerivationPath::from(vec![
-            ChildNumber::from(0u32),
-            ChildNumber::from(n as u32),
-        ]);
+        let suffix =
+            DerivationPath::from(vec![ChildNumber::from(0u32), ChildNumber::from(n as u32)]);
         let leaf_xpub = account_xpub
             .derive_pub(&secp, &suffix)
             .map_err(|e| format!("BIP32 derivation failed at index {n}: {e}"))?;

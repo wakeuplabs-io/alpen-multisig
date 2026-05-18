@@ -192,7 +192,7 @@ export function ConnectPhase({
 				Your keys never leave the device. Alpen only receives signatures.
 			</p>
 
-{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
+			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
 		</>
 	)
 }

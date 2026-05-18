@@ -75,9 +75,11 @@ pub async fn sign_with_ledger(
     derivation_path: String,
 ) -> Result<SignatureResult, String> {
     let message = signing::render_signing_message(seqno, &action_hex)?;
-    tokio::task::spawn_blocking(move || ledger::sign_admin_sps65_binding(&message, &derivation_path))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        ledger::sign_admin_sps65_binding(&message, &derivation_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
