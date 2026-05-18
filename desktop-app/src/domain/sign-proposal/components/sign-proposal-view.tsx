@@ -1,6 +1,6 @@
 import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
-import type { SignSighashResult } from '@/wallet/types'
+import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {
 	authorityLabel: string
@@ -13,8 +13,22 @@ type SignProposalViewProps = {
 	isSigning: boolean
 	error: string | null
 	copyFeedbackVisible: boolean
+	walletVendor: WalletVendor
 	onCopySighash: () => void
 	onSign: () => void
+}
+
+function vendorLabel(vendor: WalletVendor): string {
+	switch (vendor) {
+		case 'trezor':
+			return 'Trezor'
+		case 'ledger':
+			return 'Ledger'
+		case 'mnemonic':
+			return 'Software Wallet'
+		case 'mock':
+			return 'Mock'
+	}
 }
 
 function shortenHex(hex: string) {
@@ -97,9 +111,11 @@ export function SignProposalView({
 	isSigning,
 	error,
 	copyFeedbackVisible,
+	walletVendor,
 	onCopySighash,
 	onSign,
 }: SignProposalViewProps) {
+	const label = vendorLabel(walletVendor)
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-[#fcfcff] p-4">
@@ -142,7 +158,7 @@ export function SignProposalView({
 						<UsbSessionDefaultIcon width={13} height={13} className="text-[#7c6fcd]" />
 					</div>
 					<div>
-						<p className="m-0 text-sm font-medium text-[#111827]">Connect your Trezor and confirm on device</p>
+						<p className="m-0 text-sm font-medium text-[#111827]">Connect your {label} and confirm on device</p>
 						<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
 							The sighash above appears on the device screen. Verify it matches before approving.
 						</p>
@@ -159,7 +175,7 @@ export function SignProposalView({
 					disabled={isSigning}
 				>
 					<PencilWhiteIcon width={14} height={14} />
-					{isSigning ? 'Waiting for Trezor...' : 'Sign with Trezor'}
+					{isSigning ? `Waiting for ${label}...` : `Sign with ${label}`}
 				</button>
 			</div>
 
