@@ -28,8 +28,7 @@ pub(crate) async fn is_signer_member_for_authority(
     authority: Authority,
     signer_pubkey: &str,
 ) -> Result<bool, AppError> {
-    #[cfg(test)]
-    if let Some(is_member) = test_mocks::mock_membership(rpc_url, authority, signer_pubkey) {
+    if let Some(is_member) = mock_membership(rpc_url, authority, signer_pubkey) {
         return Ok(is_member);
     }
 
@@ -59,8 +58,7 @@ pub(crate) async fn last_seqno_for_authority(
     rpc_url: &str,
     authority: Authority,
 ) -> Result<u64, AppError> {
-    #[cfg(test)]
-    if let Some(seqno) = test_mocks::mock_last_seqno(rpc_url, authority) {
+    if let Some(seqno) = mock_last_seqno(rpc_url, authority) {
         return Ok(seqno);
     }
 
@@ -83,8 +81,7 @@ pub(crate) async fn threshold_for_authority(
     rpc_url: &str,
     authority: Authority,
 ) -> Result<u16, AppError> {
-    #[cfg(test)]
-    if let Some(threshold) = test_mocks::mock_threshold(rpc_url, authority) {
+    if let Some(threshold) = mock_threshold(rpc_url, authority) {
         return Ok(threshold);
     }
 
@@ -239,85 +236,56 @@ fn authority_keys_hex(
         .collect())
 }
 
-#[cfg(test)]
-mod test_mocks {
-    use super::*;
+fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
+    use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+    let mut sk_bytes = [0u8; 32];
+    sk_bytes[31] = 2;
+    let Ok(sk) = SecretKey::from_slice(&sk_bytes) else {
+        return false;
+    };
+    let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
+    signer_pubkey.eq_ignore_ascii_case(&hex::encode(pk.serialize()))
+}
 
-    pub(super) fn mock_membership(
-        rpc_url: &str,
-        authority: Authority,
-        signer_pubkey: &str,
-    ) -> Option<bool> {
-        mock_membership_impl(rpc_url, authority, signer_pubkey)
+/// In-process mock for e2e and local dev when `STRATA_ADMIN_STATE_RPC_URL=mock://asm-membership`.
+fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
     }
 
-    pub(super) fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
-        mock_last_seqno_impl(rpc_url, authority)
-    }
-
-    pub(super) fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
-        mock_threshold_impl(rpc_url, authority)
-    }
-
-    fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
-        use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-        let mut sk_bytes = [0u8; 32];
-        sk_bytes[31] = 2;
-        let Ok(sk) = SecretKey::from_slice(&sk_bytes) else {
-            return false;
-        };
-        let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
-        signer_pubkey.eq_ignore_ascii_case(&hex::encode(pk.serialize()))
-    }
-
-    fn mock_membership_impl(
-        rpc_url: &str,
-        authority: Authority,
-        signer_pubkey: &str,
-    ) -> Option<bool> {
-        if rpc_url != "mock://asm-membership" {
-            return None;
+    let is_member = match authority {
+        Authority::StrataAdmin => {
+            signer_pubkey.eq_ignore_ascii_case(
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            ) || mock_strata_signer_b_pk_matches(signer_pubkey)
         }
+        Authority::SequencerManager => false,
+        _ => return None,
+    };
+    Some(is_member)
+}
 
-        let is_member = match authority {
-            Authority::StrataAdmin => {
-                signer_pubkey.eq_ignore_ascii_case(
-                    "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-                ) || mock_strata_signer_b_pk_matches(signer_pubkey)
-            }
-            Authority::SequencerManager => false,
-            _ => return None,
-        };
-        Some(is_member)
+fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
     }
-
-    fn mock_last_seqno_impl(rpc_url: &str, authority: Authority) -> Option<u64> {
-        if rpc_url != "mock://asm-membership" {
-            return None;
-        }
-        match authority {
-            Authority::StrataAdmin => Some(0),
-            Authority::SequencerManager => Some(0),
-            _ => None,
-        }
-    }
-
-    fn mock_threshold_impl(rpc_url: &str, authority: Authority) -> Option<u16> {
-        if rpc_url != "mock://asm-membership" {
-            return None;
-        }
-
-        match authority {
-            Authority::StrataAdmin => Some(2),
-            Authority::SequencerManager => Some(2),
-            _ => None,
-        }
+    match authority {
+        Authority::StrataAdmin => Some(0),
+        Authority::SequencerManager => Some(0),
+        _ => None,
     }
 }
 
-#[cfg(test)]
-fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
-    test_mocks::mock_membership(rpc_url, authority, signer_pubkey)
+fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+
+    match authority {
+        Authority::StrataAdmin => Some(2),
+        Authority::SequencerManager => Some(2),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
