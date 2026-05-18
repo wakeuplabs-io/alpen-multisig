@@ -15,8 +15,7 @@ use strata_l1_txfmt::MagicBytes;
 
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
-    TransitionProposalRequest,
-    ReportBroadcastProgressRequest,
+    ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;

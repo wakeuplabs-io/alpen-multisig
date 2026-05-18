@@ -17,7 +17,7 @@ pub(crate) enum AuthorityAsmSupport {
 }
 
 pub(crate) fn authority_asm_support(authority: Authority) -> AuthorityAsmSupport {
-    match authority_to_role(authority) {
+    match authority_to_role_impl(authority) {
         Ok(_) => AuthorityAsmSupport::Supported,
         Err(_) => AuthorityAsmSupport::Unsupported,
     }
@@ -31,6 +31,12 @@ pub(crate) async fn is_signer_member_for_authority(
     #[cfg(test)]
     if let Some(is_member) = test_mocks::mock_membership(rpc_url, authority, signer_pubkey) {
         return Ok(is_member);
+    }
+
+    if authority_asm_support(authority) == AuthorityAsmSupport::Unsupported {
+        return Err(AppError::BadRequest(format!(
+            "authority `{authority:?}` is not mapped to ASM role authorization yet"
+        )));
     }
 
     let role_membership = fetch_role_membership(rpc_url)
@@ -98,6 +104,10 @@ pub(crate) async fn threshold_for_authority(
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
+    authority_to_role_impl(authority)
+}
+
+fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
@@ -260,20 +270,24 @@ mod test_mocks {
         signer_pubkey.eq_ignore_ascii_case(&hex::encode(pk.serialize()))
     }
 
-    fn mock_membership_impl(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
-    if rpc_url != "mock://asm-membership" {
-        return None;
-    }
-
-    let is_member = match authority {
-        Authority::StrataAdmin => {
-            signer_pubkey.eq_ignore_ascii_case(
-                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            ) || mock_strata_signer_b_pk_matches(signer_pubkey)
+    fn mock_membership_impl(
+        rpc_url: &str,
+        authority: Authority,
+        signer_pubkey: &str,
+    ) -> Option<bool> {
+        if rpc_url != "mock://asm-membership" {
+            return None;
         }
-        Authority::SequencerManager => false,
-        _ => return None,
-    };
+
+        let is_member = match authority {
+            Authority::StrataAdmin => {
+                signer_pubkey.eq_ignore_ascii_case(
+                    "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                ) || mock_strata_signer_b_pk_matches(signer_pubkey)
+            }
+            Authority::SequencerManager => false,
+            _ => return None,
+        };
         Some(is_member)
     }
 

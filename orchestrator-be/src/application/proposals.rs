@@ -463,14 +463,10 @@ mod tests {
             .await
             .unwrap();
 
-        let err = transition_to_approved(
-            &repo,
-            session,
-            "mock://asm-membership",
-            &created.action_id,
-        )
-        .await
-        .unwrap_err();
+        let err =
+            transition_to_approved(&repo, session, "mock://asm-membership", &created.action_id)
+                .await
+                .unwrap_err();
 
         assert!(matches!(err, AppError::Conflict(_)));
     }
@@ -537,14 +533,10 @@ mod tests {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig_a().signer_pubkey,
         };
-        let err = transition_to_approved(
-            &repo,
-            session,
-            "mock://asm-membership",
-            &proposal.action_id,
-        )
-        .await
-        .unwrap_err();
+        let err =
+            transition_to_approved(&repo, session, "mock://asm-membership", &proposal.action_id)
+                .await
+                .unwrap_err();
 
         assert!(matches!(err, AppError::Conflict(_)));
     }
