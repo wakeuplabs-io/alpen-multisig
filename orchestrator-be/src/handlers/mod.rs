@@ -123,7 +123,7 @@ mod tests {
     fn create_body(signer: &str) -> Value {
         json!({
             "seq_no": 1,
-            "action_hex": "deadbeef",
+            "action_hex": crate::infrastructure::action_codec::test_fixture_action_hex(),
             "signer_pubkey": signer,
             "signature_hex": "sig_a"
         })

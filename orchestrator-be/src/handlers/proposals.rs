@@ -3,7 +3,7 @@ use crate::{
     domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
     error::{AppError, Result},
     handlers::auth_session::AuthenticatedSession,
-    infrastructure::asm_role_membership,
+    infrastructure::{action_codec, asm_role_membership},
     state::AppState,
 };
 
@@ -55,6 +55,8 @@ pub async fn create_proposal(
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
     };
+
+    action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
 
     let required_signatures =
         asm_role_membership::threshold_for_authority(&state.asm_rpc_url, auth.authority).await?;
