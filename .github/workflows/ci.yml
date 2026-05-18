@@ -65,6 +65,18 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo audit
+        run: cargo audit
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Cargo deny
+        run: cargo deny check
+
   frontend:
     name: Frontend (Lint, Format, Build)
     runs-on: ubuntu-latest
@@ -78,18 +90,26 @@ jobs:
       - name: Cache node_modules
         uses: actions/cache@v4
         with:
-          path: desktop-app/node_modules
-          key: node-modules-${{ hashFiles('desktop-app/package-lock.json') }}
+          path: |
+            node_modules
+            desktop-app/node_modules
+          key: node-modules-${{ hashFiles('package-lock.json') }}
           restore-keys: node-modules-
 
       - name: Install dependencies
-        run: cd desktop-app && npm ci
+        run: npm ci
+
+      - name: npm audit
+        run: npm audit --audit-level=high
 
       - name: Prettier check
-        run: cd desktop-app && npm run format:check
+        run: npm run format:check --workspace desktop-app
 
       - name: ESLint
-        run: cd desktop-app && npm run lint
+        run: npm run lint --workspace desktop-app
+
+      - name: IPC schema contract tests
+        run: npm run test:ipc-schemas --workspace desktop-app
 
       - name: Build
-        run: cd desktop-app && npm run build
+        run: npm run build --workspace desktop-app

@@ -3,6 +3,7 @@ name = 'desktop-app'
 version = '0.1.0'
 description = 'Alpen Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
+license = 'MIT OR Apache-2.0'
 edition = '2021'
 default-run = 'desktop-app'
 
