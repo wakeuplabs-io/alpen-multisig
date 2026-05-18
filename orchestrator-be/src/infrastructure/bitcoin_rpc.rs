@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::error::AppError;
+use crate::infrastructure::rpc_timeout;
 
 #[async_trait]
 pub(crate) trait BitcoinRpcClient: Send + Sync {
@@ -41,14 +42,16 @@ impl HttpBitcoinRpcClient {
             "params": params,
         });
 
-        let resp = self
-            .client
-            .post(&self.url)
-            .basic_auth(&self.user, Some(&self.pass))
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("bitcoin rpc send failed: {e}")))?;
+        let resp = rpc_timeout::with_rpc_timeout(
+            "Bitcoin RPC",
+            self.client
+                .post(&self.url)
+                .basic_auth(&self.user, Some(&self.pass))
+                .json(&payload)
+                .send(),
+        )
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("{e}")))?;
 
         let status = resp.status();
 

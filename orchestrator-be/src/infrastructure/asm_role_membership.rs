@@ -8,6 +8,7 @@ use strata_asm_proto_administration::{AdministrationSubprotoState, Administratio
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
+use crate::infrastructure::rpc_timeout;
 
 /// Whether this authority has a wired ASM `Role` mapping (P-037).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,12 +142,11 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
         "params": params
     });
 
-    let response = client
-        .post(rpc_url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("rpc send failed: {e}"))?;
+    let response = rpc_timeout::with_rpc_timeout(
+        &format!("ASM RPC `{method}`"),
+        client.post(rpc_url).json(&payload).send(),
+    )
+    .await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -155,10 +155,11 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
         ));
     }
 
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("invalid rpc json body: {e}"))?;
+    let body: Value = rpc_timeout::with_rpc_timeout(
+        &format!("ASM RPC `{method}` body"),
+        response.json(),
+    )
+    .await?;
 
     if let Some(err) = body.get("error") {
         let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");
