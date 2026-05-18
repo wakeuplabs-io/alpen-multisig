@@ -1,6 +1,8 @@
 use crate::state::AppState;
 use axum::{
-    routing::{get, post},
+    extract::State,
+    http::StatusCode,
+    routing::{get, patch, post},
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -13,9 +15,19 @@ async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
 }
 
+async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    state
+        .btc_client
+        .estimate_fee_rate_sats_per_vb(1)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(Json(json!({ "status": "ready" })))
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/ready", get(ready))
         // Auth
         .route("/auth/challenge", post(auth::auth_challenge))
         .route("/auth/verify", post(auth::auth_verify))
@@ -30,12 +42,12 @@ pub fn router(state: AppState) -> Router {
             post(proposals::approve_action),
         )
         .route(
-            "/proposals/:action_id/broadcast/prepare",
-            post(proposals::prepare_broadcast),
+            "/proposals/:action_id/broadcast/claim",
+            post(proposals::claim_broadcast),
         )
         .route(
             "/proposals/:action_id/broadcast",
-            post(proposals::execute_broadcast),
+            patch(proposals::report_broadcast_progress),
         )
         .with_state(state)
 }
@@ -60,16 +72,8 @@ mod tests {
         use crate::infrastructure::{
             bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
         };
-        use bitcoin::{
-            key::UntweakedKeypair,
-            secp256k1::{SecretKey, SECP256K1},
-            Network,
-        };
-        use strata_l1_txfmt::MagicBytes;
 
         let repo = Arc::new(InMemoryProposalRepository::new());
-        let sk = SecretKey::from_slice(&[1u8; 32]).unwrap();
-        let keypair = UntweakedKeypair::from_secret_key(SECP256K1, &sk);
         let btc_client = Arc::new(HttpBitcoinRpcClient::new(
             "http://127.0.0.1:18443",
             None,
@@ -82,11 +86,6 @@ mod tests {
             120_000,
             240_000,
             btc_client,
-            keypair,
-            5_000,
-            600_000,
-            MagicBytes::new([0x41, 0x4c, 0x50, 0x4e]),
-            Network::Regtest,
         ))
     }
 
@@ -308,6 +307,65 @@ mod tests {
             "POST",
             "/proposals",
             Some(create_body(SIGNER_B_PK)),
+            Some(&token),
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_get_proposal_wrong_authority_returns_unauthorized() {
+        use crate::application::traits::ProposalRepository;
+        use crate::domain::authority::Authority;
+        use crate::domain::proposal::{
+            ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+        };
+        use crate::infrastructure::memory_repo::InMemoryProposalRepository;
+
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        let action_id = "cross_auth_action".to_string();
+        repo.save_proposal(Proposal {
+            action_id: ActionId(action_id.clone()),
+            seq_no: 1,
+            authority: Authority::AlpenAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 2,
+            action_hex: "deadbeef".to_string(),
+            signatures: vec![ProposalSignature {
+                signer_pubkey: SIGNER_A_PK.to_string(),
+                signature_hex: "sig_a".to_string(),
+            }],
+            broadcast_status: BroadcastStatus::default(),
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        })
+        .await
+        .unwrap();
+
+        let app = {
+            use crate::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+
+            let btc_client = Arc::new(HttpBitcoinRpcClient::new(
+                "http://127.0.0.1:18443",
+                None,
+                "user",
+                "pass",
+            ));
+            router(AppState::new(
+                repo,
+                "mock://asm-membership".to_string(),
+                120_000,
+                240_000,
+                btc_client,
+            ))
+        };
+
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let req = json_request(
+            "GET",
+            &format!("/proposals/{action_id}"),
+            None,
             Some(&token),
         );
         let resp = app.oneshot(req).await.unwrap();

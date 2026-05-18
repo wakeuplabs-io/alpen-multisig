@@ -118,7 +118,7 @@ Selectors use `data-testid` attributes on the React side (`e2e-*`).
 | Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444**                                         |
 | Binary not found            | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle`                                                    |
 | Test hangs at connect       | Stack not running (ASM/orchestrator), or wrong `.env` URLs                                                           |
-| Broadcast spec fails at prepare | Check **`desktop-app/.env`**: `VITE_BTC_RPC_*`, `VITE_OPERATOR_SECRET_KEY_HEX`, `VITE_MAGIC_BYTES_HEX`, `VITE_ASM_RPC_URL`, wallet name / network |
+| Broadcast spec fails at prepare | Check **`desktop-app/.env`** (Tauri process): `BITCOIN_RPC_*`, `OPERATOR_SECRET_KEY_HEX`, `BITCOIN_MAGIC_BYTES_HEX`, `STRATA_ADMIN_STATE_RPC_URL`, `BITCOIN_NETWORK` — see `desktop-app/.env.example` |
 
 ## Further reading
 

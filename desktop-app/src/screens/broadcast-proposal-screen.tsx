@@ -6,17 +6,16 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
-import { AuthRole } from '@/types/auth-role'
+import { authorityLabelForRole } from '@/lib/authority-label'
 
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
 
-	const authorityLabel =
-		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
+	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	const { phase, bundle, result, error, prepare, broadcast } = useBroadcastProposal(
+	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
 	)
@@ -87,12 +86,12 @@ export function BroadcastProposalScreen() {
 						</div>
 					)}
 
-					{bundle !== null && phase === 'confirming' && (
-						<BroadcastDetailsCard bundle={bundle} onBroadcast={() => void broadcast()} isBroadcasting={false} />
-					)}
-
-					{phase === 'broadcasting' && bundle !== null && (
-						<BroadcastDetailsCard bundle={bundle} onBroadcast={() => void broadcast()} isBroadcasting />
+					{bundle !== null && (phase === 'confirming' || phase === 'broadcasting') && (
+						<BroadcastDetailsCard
+							bundle={bundle}
+							onBroadcast={() => void broadcast()}
+							isBroadcasting={phase === 'broadcasting'}
+						/>
 					)}
 
 					{(phase === 'broadcasting' || phase === 'done' || phase === 'error') && (
@@ -109,7 +108,10 @@ export function BroadcastProposalScreen() {
 							className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3"
 							data-testid="e2e-broadcast-done-banner"
 						>
-							<p className="m-0 text-sm font-medium text-[#065f46]">Proposal enacted onchain.</p>
+							<p className="m-0 text-sm font-medium text-[#065f46]">
+								Proposal {proposal?.status ?? result?.proposalStatus ?? 'updated'} onchain (
+								{proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
+							</p>
 							<button
 								type="button"
 								className="mt-3 inline-flex items-center rounded-md border border-[#065f46] bg-white px-3 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"

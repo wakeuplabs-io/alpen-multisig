@@ -154,6 +154,27 @@ impl OrchestratorClient for HttpOrchestratorClient {
         let response: NextSeqNoResponse = self.send_and_parse(req).await?;
         Ok(response.next_seq_no)
     }
+
+    async fn claim_broadcast(&self, action_id: &str) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(self.client.post(format!(
+            "{}/proposals/{action_id}/broadcast/claim",
+            self.base_url
+        )))?;
+        self.send_and_parse(req).await
+    }
+
+    async fn report_broadcast_progress(
+        &self,
+        action_id: &str,
+        request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .patch(format!("{}/proposals/{action_id}/broadcast", self.base_url))
+                .json(&request),
+        )?;
+        self.send_and_parse(req).await
+    }
 }
 
 #[cfg(test)]

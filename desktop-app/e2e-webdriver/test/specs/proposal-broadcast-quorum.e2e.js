@@ -1,10 +1,11 @@
 /**
- * Broadcast a multisig update proposal after quorum (commit/reveal via desktop env).
+ * Broadcast a multisig update proposal after quorum (commit/reveal via orchestrator).
  * Run only when the "Quorum reached" list shows **Broadcast** (e.g. after
  * `test:e2e:proposal-add-signer` then `test:e2e:proposal-co-sign-row1`).
  * Uses address row #0 session (same as wallet smoke).
  */
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
+import { mineWhileWaitingForBroadcastDone } from '../helpers/mine-regtest-blocks.mjs'
 
 describe('Alpen Multisig proposal — broadcast after quorum', () => {
 	it('prepares artifacts and confirms onchain broadcast', async function () {
@@ -34,7 +35,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await confirmBtn.waitForClickable({ timeout: 60000 })
 		await confirmBtn.click()
 
-		const done = await $('[data-testid="e2e-broadcast-done-banner"]')
-		await done.waitForDisplayed({ timeout: 240000 })
+		// Orchestrator: commit → wait conf → reveal → wait conf. Regtest must mine during that wait.
+		await mineWhileWaitingForBroadcastDone('[data-testid="e2e-broadcast-done-banner"]')
 	})
 })

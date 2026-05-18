@@ -27,6 +27,10 @@ pub async fn ordered_keys_for_authority(
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
+        Authority::SequencerManager => Ok(Role::StrataSequencerManager),
+        _ => Err(format!(
+            "authority `{authority:?}` is not mapped to ASM role authorization yet"
+        )),
     }
 }
 
@@ -140,5 +144,10 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
             "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
         ]),
+        Authority::SequencerManager => Some(vec![
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
+        ]),
+        _ => None,
     }
 }

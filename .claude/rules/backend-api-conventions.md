@@ -1,4 +1,5 @@
 ---
+description: Rust backend API, auth, and coordination-layer conventions
 paths:
   - "orchestrator-be/**/*.rs"
 ---

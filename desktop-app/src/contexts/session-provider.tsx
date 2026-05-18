@@ -34,12 +34,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	const sessionWarning = session !== null && min < 5
 
 	const ensureOrchestratorSession = useCallback(async () => {
+		const expectedAuthority = authorityFromRole(selectedRole)
 		const currentSession = await orchestratorAuthGetSession()
 		if (!currentSession.ok) {
 			throw new Error(currentSession.error)
 		}
 		if (currentSession.data !== null) {
-			return
+			if (currentSession.data.authority === expectedAuthority) {
+				return
+			}
+			await orchestratorAuthLogout(ORCHESTRATOR_BASE_URL)
 		}
 
 		const challengeResult = await orchestratorAuthStart({

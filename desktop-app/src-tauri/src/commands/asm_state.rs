@@ -18,6 +18,13 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
 
     let role = match parsed {
         Authority::StrataAdmin => AuthRole::StrataAdministrator,
+        Authority::SequencerManager => AuthRole::StrataSequencerManager,
+        _ => {
+            return Err(format!(
+                "authority `{}` is not supported in the desktop app yet",
+                parsed.as_str()
+            ));
+        }
     };
 
     let rpc_url = asm_status_rpc::default_rpc_url();

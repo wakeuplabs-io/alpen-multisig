@@ -2,6 +2,7 @@ pub mod action_codec;
 pub mod asm_role_membership;
 pub mod asm_status_rpc;
 pub mod bitcoin_rpc;
+pub mod broadcast_env;
 pub mod broadcast_tx;
 pub mod challenge_verifier;
 pub mod hw_wallet;

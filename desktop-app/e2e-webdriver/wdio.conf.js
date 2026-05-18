@@ -57,7 +57,8 @@ export const config = {
 	framework: 'mocha',
 	mochaOpts: {
 		ui: 'bdd',
-		timeout: 120000,
+		// Broadcast spec waits on orchestrator commit/reveal confirmations (up to CONFIRM_TIMEOUT_MS).
+		timeout: 600000,
 	},
 
 	onPrepare: () => {

@@ -1,4 +1,5 @@
 ---
+description: React frontend conventions for multisig desktop flows
 paths:
   - "desktop-app/src/**/*.{ts,tsx}"
 ---

@@ -1,6 +1,7 @@
 //! In-memory proposal repository for POC and testing.
 
 use crate::application::traits::ProposalRepository;
+use crate::domain::authority::Authority;
 use crate::domain::proposal::{
     ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
 };
@@ -66,6 +67,7 @@ impl ProposalRepository for InMemoryProposalRepository {
 
     async fn list_by_status(
         &self,
+        authority: Authority,
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError> {
         let proposals = self
@@ -74,7 +76,7 @@ impl ProposalRepository for InMemoryProposalRepository {
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
         Ok(proposals
             .values()
-            .filter(|p| status.is_none_or(|s| p.status == s))
+            .filter(|p| p.authority == authority && status.is_none_or(|s| p.status == s))
             .cloned()
             .collect())
     }

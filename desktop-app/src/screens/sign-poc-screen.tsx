@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { authorityLabelForRole } from '@/lib/authority-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
-import { AuthRole } from '@/types/auth-role'
 import type { SignSighashResult } from '@/wallet/types'
 
 export function SignPocScreen() {
@@ -25,8 +25,7 @@ export function SignPocScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 	const [decodedAction, setDecodedAction] = useState<DecodedAction | null>(null)
 
-	const authorityLabel =
-		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
+	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const signerLabel = wallet?.addressSample
 		? `${wallet.addressSample.slice(0, 5)}...${wallet.addressSample.slice(-6)}`
@@ -96,6 +95,13 @@ export function SignPocScreen() {
 				}
 
 				const nextProposal = proposalResult.data
+				if (nextProposal.authority !== authorityFromRole(selectedRole)) {
+					setLoadError(
+						'This proposal belongs to a different authority than your current role. Go back and select the correct role.',
+					)
+					setIsLoading(false)
+					return
+				}
 				const sighashResult = await computeSighash(nextProposal.seqNo, nextProposal.actionHex)
 				if (!sighashResult.ok) {
 					throw new Error(sighashResult.error)

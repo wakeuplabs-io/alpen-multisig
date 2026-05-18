@@ -13,7 +13,7 @@ Both audits converge on the same verdict: **`alpen-multisig` is a thoughtfully l
 The risk landscape clusters into four reinforcing themes:
 
 1. **Signer-key surface is wide open.** Operator secret key defaults to the well-known test key; mnemonics and private keys cross the Tauri IPC boundary in plaintext; CSP is `null`; releases are unsigned; there is no SCA in CI; the frontend even has a `VITE_OPERATOR_SECRET_KEY_HEX` path that can leak through sourcemaps.
-2. **Backend is not the source of truth for what it claims to coordinate.** [Δ 05-14] The desktop `proposals_broadcast` command performs commit/reveal **locally** and never calls the backend's atomic `claim_broadcast` / `execute_broadcast` pipeline; the UI then displays `"enacted"` / `"reveal_confirmed"` from **hard-coded** IPC strings, not from persisted state. Combined with cross-authority leakage on every read endpoint, the orchestrator's authority model is effectively unenforced on the happy path.
+2. **Broadcast boundary (resolved in code, 2026-05-16).** [Δ 05-14] Audits correctly identified lifecycle desync and hard-coded UI statuses. The interim fix (server-side `POST …/broadcast`) violated PRD coordination-only rules. **Current SSOT:** Tauri executes commit/reveal; orchestrator exposes `POST …/broadcast/claim` and `PATCH …/broadcast` only. See §2.1 and **P-066** (implemented).
 3. **Type, error, and identity drift across Rust ↔ TS.** Backend `Authority` has 5 variants, Tauri shell has a subset, React has 2 (`StrataAdministrator`, `StrataSequencerManager`). [Δ 05-14] Duplicate-signer detection compares pubkeys with `==` while session auth uses `eq_ignore_ascii_case` — the same Trezor signer can pass dedup twice. Errors collapse to `error: string` at every boundary; no Zod validation at the bridge; `u64 seq_no` is exposed as a JSON `number`.
 4. **Coordination state is not durable, not idempotent, not observable.** Proposals, sessions, challenges, and broadcast claims default to `Arc<RwLock<HashMap<…>>>`; broadcast is non-atomic with no RPC timeouts; there is no append-only audit log, no correlation IDs, no `/ready` probe, no rate limit. Once Postgres replaces the in-process lock, every existing race condition gets worse.
 
@@ -33,6 +33,36 @@ Doc/process layer compounds this: zero user discovery, no DoR, manual-fallback s
 | 4 | **Tauri `Authority` subset vs backend's 5 variants** — non–Strata-admin proposals fail deserialization in the shell. | Promoted to BLOCKER |
 | 5 | **`/api/v1` confirmed to exist.** Prior "no API versioning" item is **retracted**. | Retraction |
 | 6 | The remainder of Tier 0/1 from 2026-05-13 stands; no item from that list was closed in code. | No movement |
+| 7 | **P-061 superseded by P-066 (2026-05-16):** Original P-061 text (“never broadcast locally”) withdrawn. Desktop-owned execution + coordinator metadata is the target architecture. | **Resolved in plan + code** |
+
+---
+
+## 2.1 Broadcast boundary — SSOT (reconciles PRD, discovery, assessments)
+
+| Layer | Owns | Must not |
+|-------|------|----------|
+| **ASM / Bitcoin** | Protocol validity, enactment | — |
+| **Desktop (Tauri)** | Commit/reveal construction, `send_to_address` / `sendrawtransaction`, operator key in Rust process, HW signing | Re-implement SPS-65 threshold rules; trust hard-coded IPC status strings |
+| **Orchestrator** | Proposals, signatures, quorum/off-chain lifecycle, **optional** broadcast coordination metadata (`claim_broadcast`, txids, `broadcast_status`, errors) | Be required for a signer to broadcast; hold sole copy of operator key for production happy path; re-validate protocol rules |
+| **React** | UX, explicit verify gates | Private keys, direct Bitcoin RPC |
+
+**What the 2026-05-14 audits actually proved (still valid):**
+
+- Signers need a **shared** view of whether a proposal is already being broadcast (avoid duplicate commit/reveal across machines).
+- UI must show **persisted** `proposal_status` / `broadcast_status`, not literals.
+- Cross-authority reads must be scoped (P-002).
+
+**What they incorrectly concluded:**
+
+- That the fix is “desktop must call `POST …/broadcast` so the **backend** runs `broadcast_commit_then_reveal`.” That solves desync by centralizing execution — but violates PRD §2 (“signers MUST … broadcast transactions directly to Bitcoin” if the backend is down) and piles operator-key + bitcoind coupling onto the server (fights P-003, P-015).
+
+**Implemented pattern (codified in `docs/specs/proposal-broadcast-commit-reveal.md`, ADR-006 still pending):**
+
+1. **Desktop (Tauri):** `proposals_prepare_broadcast` and `proposals_broadcast` use `broadcast_env` (process env) for Bitcoin RPC + operator key; build and submit commit/reveal locally.
+2. **Orchestrator:** `POST /proposals/:id/broadcast/claim` then `PATCH /proposals/:id/broadcast` for `broadcast_status`, txids, and errors — no server-side `sendrawtransaction`.
+3. **Manual fallback (US-H5):** export hex; broadcast via any RPC; report progress when coordinator is back (PRD §2).
+
+**Removed from orchestrator:** `POST …/broadcast/prepare`, `POST …/broadcast` (execute), `broadcast_tx` module, `OPERATOR_SECRET_KEY_HEX` in server config.
 
 ---
 
@@ -46,8 +76,8 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 
 | ID | Title | Effort | Sources |
 |---|---|---|---|
-| P-001 | Operator secret key falls back to publicly-known test value `0x00…01`; remove fallback, reject literal test value, drop `VITE_OPERATOR_SECRET_KEY_HEX`. | S | 01, 02, 05, 11, 14, 16 (Δ 14) |
-| P-002 | Authority-scope leakage in `list_proposals` / `get_proposal` / `prepare_broadcast` / `execute_broadcast` (`_auth` discarded). Add `authority` filter; return 401 (not 404) on mismatch. | S | 01, 03, 06, 08 (Δ 04) |
+| P-001 | Operator secret key: **desktop** `broadcast_env` must reject well-known test key unless explicit dev flag; orchestrator no longer loads operator key. Remove any `VITE_OPERATOR_*` path. | S | 01, 02, 05, 11, 14, 16 (Δ 14) |
+| P-002 | Authority-scope leakage on proposal reads and broadcast coordination (`claim` / `PATCH`). Authority filter; 401 on mismatch. | S | 01, 03, 06, 08 (Δ 04) |
 | P-003 | Plaintext secrets across Tauri IPC (`mnemonic`, `operator_secret_key_hex`). Accept derivation indices only; load operator key in Rust at startup; wrap sensitive fields in `ZeroizeOnDrop`. | M | 02, 05 |
 | P-004 | CSP disabled (`"csp": null`). Set strict CSP; pair with Tauri 2 capabilities per window. | S | 02, 05 |
 | P-005 | No client-side check that the backend returned the proposal the user submitted (MITM / malicious-backend window). Hash submitted action and compare before signing/broadcast. | S | 02, 03 |
@@ -61,8 +91,9 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-013 | `parse_network` defaults to `regtest`. Require explicit `bitcoin`/`testnet`/`signet`/`regtest`; fail otherwise. | S | 02 |
 | P-014 | Bearer token transported over user-supplied `base_url`; no HTTPS enforcement. Reject non-`https://` in `build_client` (allow `http://localhost` only in dev). | S | 02 |
 | P-015 | `VITE_OPERATOR_SECRET_KEY_HEX` env path can leak via sourcemaps. Delete env var; load operator key only in Rust at startup. | S | 02, 05 |
-| **P-061** | **[Δ 05-14] Desktop `proposals_broadcast` bypasses orchestrator state machine.** Route `broadcastProposal` through `/api/v1/proposals/:id/broadcast` (`claim_broadcast` → commit → fee → reveal → `execute_broadcast`); never broadcast locally. | M | 02, 04 |
-| **P-062** | **[Δ 05-14] Hard-coded `"enacted"` / `"reveal_confirmed"` in `BroadcastResultDto`.** Remove literal strings; reload proposal from server after broadcast and render persisted status. | S | 02, 04 |
+| **P-061** | **[Δ 05-14] Superseded (2026-05-16).** Original wording (“route all broadcast through orchestrator”) conflicts with PRD. Do not implement. Use **P-066**. | — | 02, 04 |
+| **P-062** | **[Δ 05-14] UI reflects persisted coordinator state.** Re-fetch proposal after broadcast; no hard-coded `proposal_status` / `broadcast_status` in IPC. | S | 02, 04 |
+| **P-066** | **[2026-05-16] Broadcast boundary — desktop executes, orchestrator coordinates.** Tauri local commit/reveal; `claim` + `PATCH` APIs; spec + architecture docs updated; server execute/prepare routes removed. | M | PRD, 09-functional-analysis |
 | **P-063** | **[Δ 05-14] Pubkey case mismatch: dedup uses `==`, auth uses `eq_ignore_ascii_case`.** Normalize hex pubkeys to lowercase at every ingress; DB `CHECK (signer_pubkey ~ '^[a-f0-9]{66}$')`. | S | 04, 09 |
 | **P-064** | **[Δ 05-14] Tauri `Authority` is a subset of backend's 5 variants.** Non–Strata-admin proposals fail deserialization. Promote shared `Authority` to a shared crate (see P-022/L1) or, short-term, extend the Tauri enum and add a serde round-trip test. | S→M | 04, 06, 08 |
 
@@ -128,7 +159,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 - **No correlation chain frontend → Tauri → backend → on-chain.** P-023 + P-029 + P-051 must ship together for ops to be honest.
 - **Signer-safety UX is uncodified.** P-005 + P-006 + P-007 + P-009 + P-010 + P-039 are the codification of "what does the signer trust, and how do they verify it".
 - **Testing pyramid is hollow above the unit layer.** P-032 + P-038 are non-optional gates for Tier 0/1 closure.
-- **[Δ 05-14] Orchestrator is not the source of truth for broadcast.** P-061 + P-062 invalidate dashboards, audit logs, and authority enforcement on the happiest path. Fix these before anything else.
+- **Broadcast boundary aligned with PRD (P-066).** Orchestrator coordinates; desktop broadcasts. P-061 retired. Remaining broadcast work: P-020 idempotency, P-018 resumable FSM, manual-fallback validation (US-H5).
 - **Synthesized risk:** once Postgres replaces `RwLock`, every existing race condition (P-019, P-020, P-018) becomes worse because the in-process write lock that accidentally serialized everything is gone.
 - **Synthesized risk:** the combination of CSP-null + npm `^`-ranges without a lockfile + no SCA + unsigned releases + IPC-plaintext secrets + drifting rule guidance is a textbook supply-chain attack surface — single most likely path to catastrophic compromise.
 
@@ -144,19 +175,77 @@ The plan is structured around three sequential "waves." Earlier waves remove exi
 
 | Track | Items | Owner hint |
 |---|---|---|
-| **A** Broadcast integrity (Δ 05-14) | P-061, P-062, P-035, P-020 | BE + Desktop |
+| **A** Broadcast integrity | P-066 (done), P-062, P-035, P-020 | Desktop + BE coordination APIs |
 | **B** Backend authz hygiene | P-001, P-002, P-013, P-014, P-015, P-063 | BE |
 | **C** Frontend trust boundary | P-004, P-008, P-009, P-010, P-007, P-064 (short-term), label-bug fix | FE + Tauri |
 | **D** Ops baseline | P-016 (require `DATABASE_URL` in prod), P-029 (request IDs + `/ready` + tracing skeleton), P-054 (verify Cursor rule semantics, consolidate) | Platform |
 
 **Exit criteria:**
-- Desktop never broadcasts without orchestrator participation.
-- No `"enacted"` literal appears in `BroadcastResultDto`.
+- Desktop executes commit/reveal on the happy path; orchestrator records broadcast coordination state (not required to be up for broadcast to succeed).
+- No `"enacted"` literal appears in `BroadcastResultDto`; UI uses persisted proposal fields.
 - Strata-Admin token cannot list/get/broadcast Alpen-Admin proposals (integration test passes).
-- App refuses to start without `OPERATOR_SECRET_KEY_HEX` and `DATABASE_URL` in prod profile; refuses literal test key.
+- Desktop Tauri refuses broadcast without valid `OPERATOR_SECRET_KEY_HEX` in process env (not webview); orchestrator refuses prod start without `DATABASE_URL`.
 - CSP is set and verified in `tauri.conf.json`.
 - Every Tauri IPC return value parsed through Zod; unknown enum variants raise.
 - Skeleton `ADR-006: Backend Coordination Boundary` exists even if implementation lags.
+
+#### 5.1 Wave 1 — execution record (2026-05-16)
+
+**Delivered on:** `fix/action-plan-wave1-2026-05-14` → draft PR #134 (`develop` base).  
+**Tracker:** [action-plan-progress.md](action-plan-progress.md).
+
+**How it was run**
+
+- One branch; **one atomic commit per planned P-ID** (plus bootstrap tracker commit).
+- **E2E:** single `/e2e-proposal-flow` at branch tip (`a74c817`), not per-commit runs (deviation from ideal gate in execution playbook).
+- **Automated checks per commit:** `cargo fmt`, `clippy`, `cargo test` (`orchestrator-be`, `desktop-app`), `npm run build` when FE touched; `npm run test:ipc-schemas` added later.
+
+**Outcome vs exit criteria**
+
+| Criterion | Result |
+|-----------|--------|
+| Desktop-owned broadcast + coordinator metadata | Met (P-066, post–Wave 1 correction) |
+| No hard-coded enacted strings | Met (P-062) |
+| Cross-authority 401 | Met (P-002) |
+| Prod operator key + DATABASE_URL | Met (P-001, P-016) |
+| CSP | Met (P-004); capabilities deferred |
+| All IPC via Zod | **Partial** — proposal/broadcast only (P-008) |
+| ADR-006 skeleton | **Not done** — carry to Wave 2 Track B |
+
+**Post–Wave 1 discoveries (fixed on same branch)**
+
+1. **P-008 regression:** Tauri serializes `Option::None` as JSON `null`; Zod `.optional()` rejected create/list — fixed in `50d3d51` / `a74c817` (`.nullish()`).
+2. **Broadcast confirmations:** `gettransaction` fails for reveal txs from `sendrawtransaction` — fixed in `e6a994d` (`getrawtransaction` verbose for confirmations).
+3. **Regtest E2E:** commit/reveal waits need mined blocks during broadcast — `662e517` (`mineWhileWaitingForBroadcastDone` in WDIO + `mine-blocks.sh` env in helper).
+
+**Partial P-IDs (acceptable short-term; full text in Wave 2/3)**
+
+| P-ID | Shipped | Remaining |
+|------|---------|-----------|
+| P-004 | CSP string | Tauri 2 capabilities (P-040) |
+| P-008 | Proposal/broadcast Zod | Auth/wallet IPC schemas |
+| P-020 | In-flight guard | `Idempotency-Key` end-to-end |
+| P-029 | `/ready` (BTC), tracing on list/get | Request UUID in bridge; Postgres/ASM on `/ready`; all handlers |
+| P-063 | Lowercase ingress | DB `CHECK` when Postgres lands |
+| P-064 | Tauri 5-variant enum | Shared `multisig-types` crate (Wave 3) |
+
+**Process / tooling gaps**
+
+- `autotest/start-stack.sh` must inject **desktop** broadcast env (`OPERATOR_SECRET_KEY_HEX`, `BITCOIN_RPC_*`, `BITCOIN_NETWORK` in `desktop-app/.env`); orchestrator no longer needs operator key for happy path.
+- Extra commits beyond “21 planned”: tracker sync (`4cad4d1`, `4e1b4e7`), prettier chore, three broadcast/E2E fixes above.
+
+#### 5.2 Architectural correction (2026-05-16) — broadcast boundary
+
+Aligned with PRD §1–§2, `docs/2-discovery/01-conceptual-overview.md`, and `docs/architecture/overview.md`:
+
+| Question | Answer |
+|----------|--------|
+| Who submits commit/reveal txs? | **Desktop Tauri** (signer-configured Bitcoin RPC + operator key in process env). |
+| What does the orchestrator do for broadcast? | **Coordination only:** `claim_broadcast`, persist `broadcast_status` / txids via `PATCH`. |
+| What happened to P-061 on the branch? | Interim server-execute path **removed**; P-061 ID retired; **P-066** is the authoritative fix. |
+| Operator key location | **Desktop only** (`desktop-app/.env` / Tauri env). Orchestrator `.env` no longer requires `OPERATOR_SECRET_KEY_HEX`. |
+
+**Wave 2 should pick up:** ADR-006 skeleton; P-012; P-003; P-005–P-006; P-011; complete P-008/P-029/P-004; E2E test with coordinator stopped after claim (manual-fallback matrix).
 
 ### Wave 2 — Correctness, supply chain, operations (Weeks 3–6)
 
@@ -229,7 +318,7 @@ These are not engineering tasks — they are policy/scope decisions that must be
 
 If we can ship only the smallest credible change per track in Wave 1, ship these:
 
-- **A (broadcast integrity):** P-061 + P-062. One PR: `desktop-app/src-tauri/src/commands/proposals.rs` calls `/api/v1/proposals/:id/broadcast` instead of `broadcast_commit_then_reveal`; `BroadcastResultDto` returns persisted state; UI re-fetches proposal after broadcast.
+- **A (broadcast integrity):** P-066 (landed) + P-062 + P-020. Spec: `docs/specs/proposal-broadcast-commit-reveal.md`. APIs: `POST …/broadcast/claim`, `PATCH …/broadcast` only on orchestrator.
 - **B (backend authz):** P-002. One PR: add `authority: Option<Authority>` to `list_by_status` and `find_by_action_id`; `get_proposal` returns 401 on mismatch; integration test for cross-authority denial.
 - **C (frontend trust):** P-008. One PR: Zod schemas at `tauriCall<T>`; failing schema raises a typed error surfaced to the UI.
 - **D (ops baseline):** P-029 skeleton. One PR: `#[tracing::instrument]` on every handler with `action_id`/`authority`/`seq_no`; `/ready` checks Postgres + RPC URLs.

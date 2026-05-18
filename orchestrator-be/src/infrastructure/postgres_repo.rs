@@ -261,19 +261,22 @@ impl ProposalRepository for PostgresProposalRepository {
 
     async fn list_by_status(
         &self,
+        authority: Authority,
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError> {
         let rows = if let Some(status) = status {
             sqlx::query(&format!(
-                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE status = $1 ORDER BY created_at DESC"
+                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE authority = $1 AND status = $2 ORDER BY created_at DESC"
             ))
+            .bind(authority_to_db(authority))
             .bind(status_to_db(status))
             .fetch_all(&self.pool)
             .await
         } else {
             sqlx::query(&format!(
-                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals ORDER BY created_at DESC"
+                "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE authority = $1 ORDER BY created_at DESC"
             ))
+            .bind(authority_to_db(authority))
             .fetch_all(&self.pool)
             .await
         }

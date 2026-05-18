@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint src",
     "format:check": "prettier --check src",
+    "test:ipc-schemas": "node src/api/ipc-schemas.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },

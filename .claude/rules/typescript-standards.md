@@ -1,4 +1,5 @@
 ---
+description: TypeScript standards for React UI and client integration
 paths:
   - "desktop-app/src/**/*.{ts,tsx}"
 ---

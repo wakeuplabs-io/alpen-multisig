@@ -3,8 +3,7 @@
 //! Concrete HTTP implementation lives in `crate::infrastructure::orchestrator_client`.
 
 use crate::domain::proposal::Proposal;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Errors from orchestrator communication.
 #[derive(Debug, thiserror::Error)]
@@ -72,6 +71,16 @@ pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
 }
 
+/// Desktop-reported broadcast progress (coordination only).
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportBroadcastProgressRequest {
+    pub broadcast_status: String,
+    pub proposal_status: Option<String>,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
+}
+
 /// Abstracts the orchestrator HTTP API.
 #[async_trait::async_trait]
 pub trait OrchestratorClient: Send + Sync {
@@ -111,4 +120,14 @@ pub trait OrchestratorClient: Send + Sync {
 
     /// Get the next valid sequence number for the authenticated authority.
     async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError>;
+
+    /// Claim broadcast coordination slot before desktop submits to Bitcoin (P-066).
+    async fn claim_broadcast(&self, action_id: &str) -> Result<Proposal, OrchestratorError>;
+
+    /// Report broadcast sub-status after local Bitcoin steps (P-066).
+    async fn report_broadcast_progress(
+        &self,
+        action_id: &str,
+        request: ReportBroadcastProgressRequest,
+    ) -> Result<Proposal, OrchestratorError>;
 }

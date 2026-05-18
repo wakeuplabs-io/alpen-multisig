@@ -15,6 +15,7 @@ use strata_l1_txfmt::MagicBytes;
 
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
+    ReportBroadcastProgressRequest,
 };
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
@@ -101,8 +102,31 @@ pub async fn prepare_broadcast_bundle(
     ))
 }
 
-/// Execute the full commit → confirm → reveal sequence for an approved proposal directly
-/// from the desktop app, bypassing the orchestrator backend.
+async fn report_broadcast(
+    client: &dyn OrchestratorClient,
+    action_id: &str,
+    broadcast_status: &str,
+    proposal_status: Option<&str>,
+    commit_txid: Option<&str>,
+    reveal_txid: Option<&str>,
+    broadcast_error: Option<&str>,
+) -> Result<(), BroadcastError> {
+    client
+        .report_broadcast_progress(
+            action_id,
+            ReportBroadcastProgressRequest {
+                broadcast_status: broadcast_status.to_string(),
+                proposal_status: proposal_status.map(str::to_string),
+                commit_txid: commit_txid.map(str::to_string),
+                reveal_txid: reveal_txid.map(str::to_string),
+                broadcast_error: broadcast_error.map(str::to_string),
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+/// Execute commit → confirm → reveal on the desktop; orchestrator records coordination state only.
 ///
 /// Returns `(commit_txid, reveal_txid)` on success.
 #[allow(clippy::too_many_arguments)]
@@ -117,7 +141,17 @@ pub async fn broadcast_commit_then_reveal(
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
 ) -> Result<(String, String), BroadcastError> {
-    let proposal = client.get_proposal(action_id).await?;
+    let proposal = client.claim_broadcast(action_id).await.map_err(|e| {
+        if let OrchestratorError::Backend {
+            status: 409,
+            message,
+        } = &e
+        {
+            BroadcastError::Setup(format!("broadcast already in progress: {message}"))
+        } else {
+            BroadcastError::ProposalFetch(e)
+        }
+    })?;
 
     if proposal.status != "approved" {
         return Err(BroadcastError::Setup(format!(
@@ -154,78 +188,137 @@ pub async fn broadcast_commit_then_reveal(
     let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
-    // Step 1: Broadcast commit.
-    let commit_txid = btc_rpc
-        .send_to_address(&commit_address.to_string(), commit_amount_sats, fee_rate)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-
-    // In regtest blocks never auto-mine — generate one so confirmation is immediate.
-    if network == Network::Regtest {
-        btc_rpc
-            .mine_blocks(1)
+    let broadcast_result: Result<(String, String), BroadcastError> = async {
+        // Step 1: Broadcast commit.
+        let commit_txid = btc_rpc
+            .send_to_address(&commit_address.to_string(), commit_amount_sats, fee_rate)
             .await
             .map_err(BroadcastError::BitcoinRpc)?;
-    }
 
-    // Step 2: Wait for commit confirmation.
-    wait_for_confirmation(
-        btc_rpc,
-        &commit_txid,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
-    )
-    .await?;
+        report_broadcast(
+            client,
+            action_id,
+            "commit_broadcasted",
+            None,
+            Some(&commit_txid),
+            None,
+            None,
+        )
+        .await?;
 
-    // Step 3: Build and broadcast reveal.
-    let commit_tx = btc_rpc
-        .get_raw_transaction(&commit_txid)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
+        if network == Network::Regtest {
+            btc_rpc
+                .mine_blocks(1)
+                .await
+                .map_err(BroadcastError::BitcoinRpc)?;
+        }
 
-    let commit_address_script = commit_address.script_pubkey();
+        wait_for_confirmation(
+            btc_rpc,
+            &commit_txid,
+            confirm_poll_interval_ms,
+            confirm_timeout_ms,
+        )
+        .await?;
 
-    let action_bytes = hex::decode(&proposal.action_hex)
-        .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
-    let action = MultisigAction::from_ssz_bytes(&action_bytes)
-        .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+        report_broadcast(
+            client,
+            action_id,
+            "commit_confirmed",
+            None,
+            Some(&commit_txid),
+            None,
+            None,
+        )
+        .await?;
 
-    let reveal_tx = broadcast_tx::build_reveal_tx(
-        operator_keypair,
-        &reveal_script,
-        &taproot_spend_info,
-        &commit_tx,
-        &commit_address_script,
-        &action,
-        magic_bytes,
-        network,
-        reveal_fee_sats,
-    )
-    .map_err(BroadcastError::Setup)?;
-
-    let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);
-    let reveal_txid = btc_rpc
-        .send_raw_transaction(&reveal_tx_hex)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-
-    if network == Network::Regtest {
-        btc_rpc
-            .mine_blocks(1)
+        // Step 3: Build and broadcast reveal.
+        let commit_tx = btc_rpc
+            .get_raw_transaction(&commit_txid)
             .await
             .map_err(BroadcastError::BitcoinRpc)?;
+
+        let commit_address_script = commit_address.script_pubkey();
+
+        let action_bytes = hex::decode(&proposal.action_hex)
+            .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+
+        let reveal_tx = broadcast_tx::build_reveal_tx(
+            operator_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            network,
+            reveal_fee_sats,
+        )
+        .map_err(BroadcastError::Setup)?;
+
+        let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);
+        let reveal_txid = btc_rpc
+            .send_raw_transaction(&reveal_tx_hex)
+            .await
+            .map_err(BroadcastError::BitcoinRpc)?;
+
+        report_broadcast(
+            client,
+            action_id,
+            "reveal_broadcasted",
+            None,
+            Some(&commit_txid),
+            Some(&reveal_txid),
+            None,
+        )
+        .await?;
+
+        if network == Network::Regtest {
+            btc_rpc
+                .mine_blocks(1)
+                .await
+                .map_err(BroadcastError::BitcoinRpc)?;
+        }
+
+        wait_for_confirmation(
+            btc_rpc,
+            &reveal_txid,
+            confirm_poll_interval_ms,
+            confirm_timeout_ms,
+        )
+        .await?;
+
+        report_broadcast(
+            client,
+            action_id,
+            "reveal_confirmed",
+            Some("enacted"),
+            Some(&commit_txid),
+            Some(&reveal_txid),
+            None,
+        )
+        .await?;
+
+        Ok((commit_txid, reveal_txid))
+    }
+    .await;
+
+    if let Err(ref e) = broadcast_result {
+        let _ = report_broadcast(
+            client,
+            action_id,
+            "failed",
+            None,
+            None,
+            None,
+            Some(&e.to_string()),
+        )
+        .await;
     }
 
-    // Step 4: Wait for reveal confirmation.
-    wait_for_confirmation(
-        btc_rpc,
-        &reveal_txid,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
-    )
-    .await?;
-
-    Ok((commit_txid, reveal_txid))
+    broadcast_result
 }
 
 async fn wait_for_confirmation(
@@ -312,6 +405,26 @@ pub async fn list_proposals(
     Ok(proposals)
 }
 
+/// Prepare commit/reveal fee estimate locally (desktop-owned Bitcoin RPC).
+pub async fn prepare_broadcast_local(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    operator_keypair: &UntweakedKeypair,
+    network: Network,
+    action_id: &str,
+) -> Result<(String, u64, u64), BroadcastError> {
+    prepare_broadcast_bundle(
+        client,
+        btc_rpc,
+        asm_rpc_url,
+        operator_keypair,
+        network,
+        action_id,
+    )
+    .await
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -370,6 +483,8 @@ mod tests {
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
         last_approve_request: Mutex<Option<(String, ApproveActionRequest)>>,
+        claim_broadcast_called: Mutex<bool>,
+        report_broadcast_called: Mutex<bool>,
         should_fail: bool,
     }
 
@@ -378,6 +493,8 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                claim_broadcast_called: Mutex::new(false),
+                report_broadcast_called: Mutex::new(false),
                 should_fail: false,
             }
         }
@@ -386,8 +503,14 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                claim_broadcast_called: Mutex::new(false),
+                report_broadcast_called: Mutex::new(false),
                 should_fail: true,
             }
+        }
+
+        fn claim_broadcast_called(&self) -> bool {
+            *self.claim_broadcast_called.lock().unwrap()
         }
 
         fn last_create_request(&self) -> Option<CreateProposalRequest> {
@@ -532,6 +655,58 @@ mod tests {
             }
             Ok(1)
         }
+
+        async fn claim_broadcast(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            *self.claim_broadcast_called.lock().unwrap() = true;
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: "commit_broadcasted".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+            })
+        }
+
+        async fn report_broadcast_progress(
+            &self,
+            action_id: &str,
+            request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            *self.report_broadcast_called.lock().unwrap() = true;
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: demo_action_hex(),
+                status: request
+                    .proposal_status
+                    .unwrap_or_else(|| "approved".to_string()),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: request.broadcast_status,
+                commit_txid: request.commit_txid,
+                reveal_txid: request.reveal_txid,
+                broadcast_error: request.broadcast_error,
+            })
+        }
     }
 
     // ─── Tests ──────────────────────────────────────────────────────────────
@@ -668,5 +843,14 @@ mod tests {
             .expect("should succeed");
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].action_id, "action_1");
+    }
+
+    #[tokio::test]
+    async fn test_claim_broadcast_coordination() {
+        let mock = MockOrchestratorClient::new();
+        let proposal = mock.claim_broadcast("action_42").await.expect("claim ok");
+        assert!(mock.claim_broadcast_called());
+        assert_eq!(proposal.action_id, "action_42");
+        assert_eq!(proposal.status, "approved");
     }
 }
