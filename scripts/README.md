@@ -18,10 +18,21 @@ Helper scripts for running a local Bitcoin regtest node and a Trezor emulator st
 | `trezor_repo` | Absolute path to your local `trezor-firmware` clone |
 | `mnemonic` | BIP-39 mnemonic loaded into the emulator |
 | `trezor_port` | UDP port for the emulator (default: `21324`) |
+| `trezor_model` | Emulator model code (default: `T2B1`). See table below. |
+
+**Supported model codes:**
+
+| Code | Device |
+|---|---|
+| `T1B1` | Trezor One |
+| `T2T1` | Trezor Model T |
+| `T2B1` | Trezor Safe 3 *(default)* |
+| `T3T1` | Trezor Safe 5 |
 
 ```json
 {
   "trezor_repo": "/path/to/trezor-firmware",
+  "trezor_model": "T2B1",
   "mnemonic": "word1 word2 ... word12"
 }
 ```
@@ -112,6 +123,10 @@ Reads `trezor_repo` and `mnemonic` from `config.json`, then:
 # Compile firmware before starting (first run or after firmware changes)
 ./scripts/trezor-up.sh --build
 ./scripts/trezor-up.sh /abs/path/to/trezor-firmware --build
+
+# Override the device model without editing config.json
+./scripts/trezor-up.sh --model T3T1
+./scripts/trezor-up.sh --model T1B1 --build
 ```
 
 ### Stop
@@ -128,6 +143,46 @@ Kills `trezord-go` and the emulator process.
 /tmp/trezord-go.log
 /tmp/trezor-emu.log
 ```
+
+---
+
+## Ledger emulator (Speculos)
+
+Requires Docker.
+
+### Get the app binary
+
+Download the Bitcoin app ELF for your target model from [app-bitcoin-new releases](https://github.com/LedgerHQ/app-bitcoin-new/releases):
+
+| File | Model |
+|---|---|
+| `bitcoin_testnet_nanosp.elf` | Nano S+ *(recommended)* |
+| `bitcoin_testnet_nanos.elf` | Nano S |
+| `bitcoin_testnet_nanox.elf` | Nano X |
+
+### Start
+
+```bash
+./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanosp.elf
+# or for a different model:
+./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanos.elf --model nanos
+```
+
+Runs Speculos on `http://localhost:5000`.
+
+### Configure the desktop app
+
+Uncomment this line in `desktop-app/src-tauri/.env`:
+
+```
+LEDGER_SPECULOS_URL=http://localhost:5000
+```
+
+Then restart `npm run tauri dev`. The Tauri backend will route all Ledger calls through the emulator instead of HID.
+
+### Physical Ledger device
+
+Leave `LEDGER_SPECULOS_URL` commented out. Connect the device via USB, unlock it, and open the **Bitcoin** app before connecting from the desktop app.
 
 ---
 

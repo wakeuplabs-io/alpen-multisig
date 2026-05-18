@@ -37,6 +37,9 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 trezor-client = "0.1.5"
+ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
+ledger-transport-hid = "0.11"
+ledger-apdu = "0.11"
 bip39 = "2"
 
 [lib]

@@ -14,7 +14,7 @@ import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/ty
 type Props = {
 	adapter: WalletAdapter
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'mnemonic', mnemonic?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	onConnected: (info: WalletAccountInfo | null) => void
 	/** Wired to the shell header so Disconnect lives only in the top bar. */
 	disconnectRef?: MutableRefObject<(() => void) | null>
@@ -67,8 +67,8 @@ export function HwWalletConnect({
 		<section
 			className={`mx-auto w-full ${
 				isWidePhase
-					? 'max-w-[840px] rounded-none border-none bg-transparent p-0 shadow-none'
-					: 'max-w-[520px] rounded-2xl border border-[#e5e7eb] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
+					? 'max-w-210 rounded-none border-none bg-transparent p-0 shadow-none'
+					: 'max-w-130 rounded-2xl border border-[#e5e7eb] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
 			}`}
 		>
 			{state.phase === 'connect' && (

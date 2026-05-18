@@ -2,11 +2,18 @@
 set -euo pipefail
 
 # Usage:
-#   ./scripts/trezor-up.sh [/ABS/PATH/trezor-firmware] [--build]
+#   ./scripts/trezor-up.sh [/ABS/PATH/trezor-firmware] [--build] [--model <MODEL>]
+#
+# Supported models:
+#   T1B1  — Trezor One
+#   T2T1  — Trezor Model T
+#   T2B1  — Trezor Safe 3 (default)
+#   T3T1  — Trezor Safe 5
 #
 # Example:
 #   ./scripts/trezor-up.sh /Users/juandahl/Documents/wakeup/repositories/trezor-firmware --build
 #   ./scripts/trezor-up.sh --build
+#   ./scripts/trezor-up.sh --model T3T1
 #   ./scripts/trezor-up.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
@@ -14,14 +21,21 @@ CONFIG_FILE="$SCRIPT_DIR/config.json"
 TREZOR_REPO=""
 BUILD_FLAG=""
 MNEMONIC=""
+MODEL_ARG=""
 
-for arg in "$@"; do
-	case "$arg" in
+while [[ $# -gt 0 ]]; do
+	case "$1" in
 		--build)
 			BUILD_FLAG="--build"
+			shift
+			;;
+		--model)
+			MODEL_ARG="$2"
+			shift 2
 			;;
 		*)
-			TREZOR_REPO="$arg"
+			TREZOR_REPO="$1"
+			shift
 			;;
 	esac
 done
@@ -58,6 +72,27 @@ if [[ -f "$CONFIG_FILE" ]]; then
 	if [[ -n "$CONFIG_PORT" ]]; then
 		PORT="$CONFIG_PORT"
 	fi
+
+	CONFIG_MODEL="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('trezor_model',''))" "$CONFIG_FILE" 2>/dev/null || true)"
+	if [[ -n "$CONFIG_MODEL" ]]; then
+		MODEL="$CONFIG_MODEL"
+	fi
+fi
+
+# CLI --model overrides config.json
+if [[ -n "$MODEL_ARG" ]]; then
+	MODEL="$MODEL_ARG"
+fi
+
+VALID_MODELS=("T1B1" "T2T1" "T2B1" "T3T1")
+VALID=false
+for m in "${VALID_MODELS[@]}"; do
+	[[ "$MODEL" == "$m" ]] && VALID=true && break
+done
+if [[ "$VALID" == false ]]; then
+	echo "Unknown model: $MODEL"
+	echo "Supported models: T1B1 (Trezor One), T2T1 (Model T), T2B1 (Safe 3), T3T1 (Safe 5)"
+	exit 1
 fi
 
 if [[ ! -d "$CORE_DIR" ]]; then
@@ -78,7 +113,7 @@ if [[ "$BUILD_FLAG" == "--build" ]]; then
 	echo "[3/5] Building firmware for model $MODEL..."
 	(
 		cd "$CORE_DIR"
-		make build_unix TREZOR_MODEL="$MODEL"
+		uv run make build_unix TREZOR_MODEL="$MODEL"
 	)
 else
 	echo "[3/5] Skipping build (pass --build to compile first)."

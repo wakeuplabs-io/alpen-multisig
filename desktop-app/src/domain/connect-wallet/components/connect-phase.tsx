@@ -10,7 +10,7 @@ type Props = {
 	error: string | null
 	onConnect: () => void
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'mnemonic', mnemonic?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 }
 
 export function ConnectPhase({
@@ -28,6 +28,11 @@ export function ConnectPhase({
 
 	function handleUseTrezor() {
 		onSelectWalletMethod('trezor')
+		setMnemonicError(null)
+	}
+
+	function handleUseLedger() {
+		onSelectWalletMethod('ledger')
 		setMnemonicError(null)
 	}
 
@@ -69,10 +74,12 @@ export function ConnectPhase({
 			{/* Subtitle */}
 			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
 				{isSuccess
-					? 'Trezor detected. Loading available addresses…'
+					? 'Device detected. Loading available addresses…'
 					: walletVendor === 'mnemonic'
 						? 'Mnemonic mode selected. Connect to continue with the words provided below.'
-						: 'Plug in your Trezor and unlock it. We will detect the device automatically — no password or seed is ever shared.'}
+						: walletVendor === 'ledger'
+							? 'Plug in your Ledger and unlock it. Open the Bitcoin app on the device before connecting.'
+							: 'Plug in your Trezor and unlock it. We will detect the device automatically — no password or seed is ever shared.'}
 			</p>
 
 			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3">
@@ -92,6 +99,17 @@ export function ConnectPhase({
 					<button
 						type="button"
 						data-testid="e2e-connect-palabras"
+						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+							walletVendor === 'ledger'
+								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
+								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+						}`}
+						onClick={handleUseLedger}
+					>
+						Ledger
+					</button>
+					<button
+						type="button"
 						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
 							walletVendor === 'mnemonic'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
@@ -123,7 +141,9 @@ export function ConnectPhase({
 					/>
 					<div className="flex-1">
 						<div className="font-medium text-[#0a0a0a]">Detecting device…</div>
-						<div className="mt-0.5 text-[12px] text-[#6b7280]">Looking for a Trezor on USB.</div>
+						<div className="mt-0.5 text-[12px] text-[#6b7280]">
+							{walletVendor === 'ledger' ? 'Looking for a Ledger on USB.' : 'Looking for a Trezor on USB.'}
+						</div>
 					</div>
 				</div>
 			)}
@@ -132,7 +152,9 @@ export function ConnectPhase({
 				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] px-3.5 py-3 text-[13px]">
 					<SuccessIcon tone="emerald" />
 					<div className="flex-1">
-						<div className="font-medium text-[#059669]">Trezor Model T detected</div>
+						<div className="font-medium text-[#059669]">
+							{walletVendor === 'ledger' ? 'Ledger detected' : 'Trezor detected'}
+						</div>
 						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to address selection…</div>
 					</div>
 				</div>
@@ -170,14 +192,7 @@ export function ConnectPhase({
 				Your keys never leave the device. Alpen only receives signatures.
 			</p>
 
-			{/* Ledger note */}
-			{!isSuccess && (
-				<p className="mb-0 mt-4 text-center text-[12px] text-[#9ca3af]">
-					Ledger support · <span className="font-medium text-[#6b7280]">Coming Soon</span>
-				</p>
-			)}
-
-			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
+{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
 		</>
 	)
 }
