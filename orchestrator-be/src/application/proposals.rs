@@ -103,23 +103,58 @@ pub(crate) async fn approve_action(
 
     let proposal = updated.ok_or(AppError::NotFound)?;
 
-    if proposal.status == ProposalStatus::Pending
-        && proposal.signatures.len() >= proposal.required_signatures as usize
-    {
-        let approved = repo
-            .update_broadcast_status(
-                action_id,
-                proposal.broadcast_status,
-                Some(ProposalStatus::Approved),
-                None,
-                None,
-                None,
-            )
-            .await?;
-        return approved.ok_or(AppError::NotFound);
+    Ok(proposal)
+}
+
+/// Whether off-chain quorum is satisfied (coordination only — not on-chain validity).
+pub(crate) fn has_reached_quorum(proposal: &Proposal) -> bool {
+    proposal.signatures.len() >= proposal.required_signatures as usize
+}
+
+/// Explicit pending → approved transition (P-012 / ADR-006). Desktop calls after quorum.
+pub(crate) async fn transition_to_approved(
+    repo: &dyn ProposalRepository,
+    session: SessionContext<'_>,
+    asm_rpc_url: &str,
+    action_id: &ActionId,
+) -> Result<Proposal, AppError> {
+    let raw = repo
+        .find_by_action_id(action_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    require_proposal_authority(&raw, session.authority)?;
+
+    if raw.status == ProposalStatus::Approved {
+        return Ok(raw);
     }
 
-    Ok(proposal)
+    if raw.status != ProposalStatus::Pending {
+        return Err(AppError::Conflict(format!(
+            "proposal must be pending to transition to approved (current: {:?})",
+            raw.status
+        )));
+    }
+
+    if !has_reached_quorum(&raw) {
+        return Err(AppError::Conflict(format!(
+            "quorum not reached: {} of {} signatures collected",
+            raw.signatures.len(),
+            raw.required_signatures
+        )));
+    }
+
+    ensure_threshold_snapshot_current(&raw, asm_rpc_url).await?;
+
+    repo.update_broadcast_status(
+        action_id,
+        raw.broadcast_status,
+        Some(ProposalStatus::Approved),
+        None,
+        None,
+        None,
+    )
+    .await?
+    .ok_or(AppError::NotFound)
 }
 
 fn require_proposal_authority(proposal: &Proposal, authority: Authority) -> Result<(), AppError> {
@@ -171,34 +206,10 @@ pub(crate) async fn list_proposals(
 // Broadcast coordination (metadata only — on-chain execution is desktop-owned)
 // ---------------------------------------------------------------------------
 
-/// Ensure a proposal is in `Approved` state before broadcasting.
-///
-/// If the proposal is `Pending` but has already reached quorum (e.g. proposals created
-/// before the auto-approve logic was introduced), transitions it to `Approved` in place.
-/// Returns an error for any other non-`Approved` state.
-async fn require_approved(
-    repo: &dyn ProposalRepository,
-    proposal: Proposal,
-    action_id: &ActionId,
-) -> Result<Proposal, AppError> {
+/// Broadcast requires explicit off-chain `approved` (P-012 — no auto-transition on claim).
+fn require_approved(proposal: Proposal) -> Result<Proposal, AppError> {
     if proposal.status == ProposalStatus::Approved {
         return Ok(proposal);
-    }
-
-    if proposal.status == ProposalStatus::Pending
-        && proposal.signatures.len() >= proposal.required_signatures as usize
-    {
-        let recovered = repo
-            .update_broadcast_status(
-                action_id,
-                proposal.broadcast_status,
-                Some(ProposalStatus::Approved),
-                None,
-                None,
-                None,
-            )
-            .await?;
-        return recovered.ok_or(AppError::NotFound);
     }
 
     Err(AppError::Conflict(format!(
@@ -230,7 +241,7 @@ pub(crate) async fn claim_broadcast_coordination(
         .ok_or(AppError::NotFound)?;
     require_proposal_authority(&raw, session_authority)?;
 
-    let proposal = require_approved(repo, raw, action_id).await?;
+    let proposal = require_approved(raw)?;
     ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
 
     repo.claim_broadcast(action_id).await
@@ -253,7 +264,12 @@ pub(crate) async fn report_broadcast_progress(
     let proposal_status = match body.proposal_status.as_deref() {
         None => None,
         Some("pending") => Some(ProposalStatus::Pending),
-        Some("approved") => Some(ProposalStatus::Approved),
+        Some("approved") => {
+            return Err(AppError::BadRequest(
+                "use PATCH /proposals/:action_id with proposal_status approved to transition; not via broadcast PATCH"
+                    .to_string(),
+            ));
+        }
         Some("enacted") => Some(ProposalStatus::Enacted),
         Some("canceled") => Some(ProposalStatus::Canceled),
         Some("expired") => Some(ProposalStatus::Expired),
@@ -378,7 +394,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_approve_action_transitions_to_approved_at_threshold() {
+    async fn test_approve_at_quorum_stays_pending_until_explicit_transition() {
         let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
@@ -386,11 +402,9 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        // required_signatures = 2
         let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
             .await
             .unwrap();
-        assert_eq!(created.status, ProposalStatus::Pending);
 
         let session_b = SessionContext {
             authority: Authority::StrataAdmin,
@@ -400,7 +414,223 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(updated.status, ProposalStatus::Approved);
+        assert_eq!(updated.signatures.len(), 2);
+        assert_eq!(updated.status, ProposalStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_transition_to_approved_at_quorum() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+
+        let approved = transition_to_approved(
+            &repo,
+            session_b,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(approved.status, ProposalStatus::Approved);
+    }
+
+    #[tokio::test]
+    async fn test_transition_to_approved_fails_below_quorum() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 3)
+            .await
+            .unwrap();
+
+        let err = transition_to_approved(
+            &repo,
+            session,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn test_transition_to_approved_idempotent() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+
+        transition_to_approved(
+            &repo,
+            session_b.clone(),
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+        let again = transition_to_approved(
+            &repo,
+            session_b,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(again.status, ProposalStatus::Approved);
+    }
+
+    #[tokio::test]
+    async fn test_transition_rejects_threshold_drift() {
+        let repo = new_repo();
+        let proposal = Proposal {
+            action_id: ActionId("drift".to_string()),
+            seq_no: 1,
+            authority: Authority::StrataAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 99,
+            action_hex: ACTION_HEX.to_string(),
+            signatures: vec![sig_a(), sig_b()],
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        };
+        repo.save_proposal(proposal.clone()).await.unwrap();
+
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_a().signer_pubkey,
+        };
+        let err = transition_to_approved(
+            &repo,
+            session,
+            "mock://asm-membership",
+            &proposal.action_id,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn test_claim_broadcast_rejects_pending_at_quorum() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b, &created.action_id, &sig_b())
+            .await
+            .unwrap();
+
+        let err = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn test_claim_broadcast_409_when_not_idle() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b, &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(
+            &repo,
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_b().signer_pubkey,
+            },
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+
+        let err = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
     }
 
     #[tokio::test]

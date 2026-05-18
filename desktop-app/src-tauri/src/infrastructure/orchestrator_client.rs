@@ -4,6 +4,7 @@ use crate::application::orchestrator_client::{
     ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
     NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient,
     OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
+    TransitionProposalRequest,
 };
 use crate::domain::proposal::Proposal;
 
@@ -128,6 +129,19 @@ impl OrchestratorClient for HttpOrchestratorClient {
         let req = self.with_auth_headers(
             self.client
                 .post(format!("{}/proposals/{}/approve", self.base_url, action_id))
+                .json(&request),
+        )?;
+        self.send_and_parse(req).await
+    }
+
+    async fn transition_to_approved(
+        &self,
+        action_id: &str,
+        request: TransitionProposalRequest,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .patch(format!("{}/proposals/{}", self.base_url, action_id))
                 .json(&request),
         )?;
         self.send_and_parse(req).await

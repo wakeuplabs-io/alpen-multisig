@@ -32,6 +32,12 @@ pub struct ApproveActionRequest {
     pub signature_hex: String,
 }
 
+/// Explicit pending → approved coordination transition (P-012).
+#[derive(Debug, Serialize)]
+pub struct TransitionProposalRequest {
+    pub proposal_status: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProposalListResponse {
     pub proposals: Vec<Proposal>,
@@ -110,6 +116,13 @@ pub trait OrchestratorClient: Send + Sync {
         &self,
         action_id: &str,
         request: ApproveActionRequest,
+    ) -> Result<Proposal, OrchestratorError>;
+
+    /// Persist explicit pending → approved after quorum (P-012).
+    async fn transition_to_approved(
+        &self,
+        action_id: &str,
+        request: TransitionProposalRequest,
     ) -> Result<Proposal, OrchestratorError>;
 
     /// List proposals, optionally filtered by status.

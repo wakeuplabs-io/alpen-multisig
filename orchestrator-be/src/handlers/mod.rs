@@ -38,6 +38,10 @@ pub fn router(state: AppState) -> Router {
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))
         .route(
+            "/proposals/:action_id",
+            patch(proposals::patch_proposal),
+        )
+        .route(
             "/proposals/:action_id/approve",
             post(proposals::approve_action),
         )
@@ -63,8 +67,16 @@ mod tests {
     use tower::util::ServiceExt;
 
     const SIGNER_A_SK: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+    const SIGNER_B_SK: &str = "0000000000000000000000000000000000000000000000000000000000000002";
     const SIGNER_A_PK: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-    const SIGNER_B_PK: &str = "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5";
+
+    fn signer_b_pk() -> String {
+        use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+        let mut sk_bytes = [0u8; 32];
+        sk_bytes[31] = 2;
+        let sk = SecretKey::from_slice(&sk_bytes).expect("valid test key");
+        hex::encode(PublicKey::from_secret_key(&Secp256k1::new(), &sk).serialize())
+    }
     const NON_MEMBER_PK: &str =
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -306,7 +318,7 @@ mod tests {
         let req = json_request(
             "POST",
             "/proposals",
-            Some(create_body(SIGNER_B_PK)),
+            Some(create_body(&signer_b_pk())),
             Some(&token),
         );
         let resp = app.oneshot(req).await.unwrap();
@@ -373,6 +385,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_approve_at_quorum_stays_pending_until_patch_approved() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token_a),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let created = response_json(resp).await;
+        let action_id = created["action_id"].as_str().unwrap();
+
+        let req = json_request(
+            "POST",
+            &format!("/proposals/{action_id}/approve"),
+            Some(json!({
+                "signer_pubkey": signer_b,
+                "signature_hex": "sig_b"
+            })),
+            Some(&token_b),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let approved_resp = response_json(resp).await;
+        assert_eq!(approved_resp["status"], "pending");
+        assert_eq!(approved_resp["signatures"].as_array().unwrap().len(), 2);
+
+        let req = json_request(
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token_b),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let patched = response_json(resp).await;
+        assert_eq!(patched["status"], "approved");
+
+        let req = json_request(
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token_a),
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(response_json(resp).await["status"], "approved");
+    }
+
+    #[tokio::test]
+    async fn test_patch_approved_rejected_below_quorum() {
+        let app = test_app();
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let created = response_json(resp).await;
+        let action_id = created["action_id"].as_str().unwrap();
+
+        let req = json_request(
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token),
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
     async fn test_approve_with_invalid_token_rejected() {
         let app = test_app();
         let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
@@ -390,7 +482,7 @@ mod tests {
             "POST",
             &format!("/proposals/{action_id}/approve"),
             Some(json!({
-                "signer_pubkey": SIGNER_B_PK,
+                "signer_pubkey": signer_b_pk(),
                 "signature_hex": "sig_b"
             })),
             Some("invalid-token"),

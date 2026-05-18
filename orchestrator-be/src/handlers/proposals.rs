@@ -141,6 +141,39 @@ pub async fn approve_action(
     Ok(Json(proposal))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PatchProposalBody {
+    pub proposal_status: String,
+}
+
+/// Explicit pending → approved transition (P-012 / ADR-006).
+pub async fn patch_proposal(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+    Json(body): Json<PatchProposalBody>,
+) -> Result<Json<Proposal>> {
+    if body.proposal_status != "approved" {
+        return Err(AppError::BadRequest(format!(
+            "unsupported proposal_status: {}",
+            body.proposal_status
+        )));
+    }
+
+    let proposal = proposals::transition_to_approved(
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &state.asm_rpc_url,
+        &ActionId(action_id),
+    )
+    .await?;
+
+    Ok(Json(proposal))
+}
+
 /// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
 pub async fn claim_broadcast(
     State(state): State<AppState>,
