@@ -3,6 +3,10 @@
 use bitcoin::{key::UntweakedKeypair, Network};
 use strata_l1_txfmt::MagicBytes;
 
+/// Well-known regtest operator key (must not be used outside explicit dev).
+pub const WELL_KNOWN_TEST_OPERATOR_KEY_HEX: &str =
+    "0000000000000000000000000000000000000000000000000000000000000001";
+
 /// Bitcoin + operator settings for commit/reveal broadcast (Tauri process only).
 pub struct BroadcastEnv {
     pub btc_rpc_url: String,
@@ -32,6 +36,7 @@ pub fn load_broadcast_env() -> Result<BroadcastEnv, String> {
         })?;
     let operator_hex = std::env::var("OPERATOR_SECRET_KEY_HEX")
         .map_err(|_| "OPERATOR_SECRET_KEY_HEX must be set for broadcast".to_string())?;
+    reject_well_known_operator_key_unless_dev(&operator_hex)?;
     let magic_hex =
         std::env::var("BITCOIN_MAGIC_BYTES_HEX").unwrap_or_else(|_| "414c504e".to_string());
     let network =
@@ -71,6 +76,23 @@ fn parse_network(network: &str) -> Result<Network, String> {
     }
 }
 
+fn reject_well_known_operator_key_unless_dev(secret_key_hex: &str) -> Result<(), String> {
+    let normalized = secret_key_hex.trim().to_lowercase();
+    if normalized != WELL_KNOWN_TEST_OPERATOR_KEY_HEX {
+        return Ok(());
+    }
+    let allow = std::env::var("ALLOW_DEV_OPERATOR_KEY")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if allow {
+        return Ok(());
+    }
+    Err(
+        "OPERATOR_SECRET_KEY_HEX is the well-known test key; set ALLOW_DEV_OPERATOR_KEY=1 for local dev only"
+            .to_string(),
+    )
+}
+
 fn parse_operator_keypair(secret_key_hex: &str) -> Result<UntweakedKeypair, String> {
     let sk_bytes =
         hex::decode(secret_key_hex).map_err(|e| format!("invalid operator key hex: {e}"))?;
@@ -88,4 +110,51 @@ fn parse_magic_bytes(hex_str: &str) -> Result<MagicBytes, String> {
         .try_into()
         .map_err(|_| "BITCOIN_MAGIC_BYTES_HEX must be exactly 4 bytes".to_string())?;
     Ok(MagicBytes::new(arr))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_env_var(key: &str, value: Option<&str>, f: impl FnOnce()) {
+        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let previous = std::env::var(key).ok();
+        match value {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+        f();
+        match previous {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+
+    #[test]
+    fn rejects_well_known_test_key_without_dev_flag() {
+        with_env_var("ALLOW_DEV_OPERATOR_KEY", None, || {
+            let err = reject_well_known_operator_key_unless_dev(WELL_KNOWN_TEST_OPERATOR_KEY_HEX)
+                .unwrap_err();
+            assert!(err.contains("well-known test key"));
+        });
+    }
+
+    #[test]
+    fn allows_well_known_test_key_with_dev_flag() {
+        with_env_var("ALLOW_DEV_OPERATOR_KEY", Some("1"), || {
+            reject_well_known_operator_key_unless_dev(WELL_KNOWN_TEST_OPERATOR_KEY_HEX).unwrap();
+        });
+    }
+
+    #[test]
+    fn allows_non_test_operator_key() {
+        reject_well_known_operator_key_unless_dev(
+            "2222222222222222222222222222222222222222222222222222222222222222",
+        )
+        .unwrap();
+    }
 }
