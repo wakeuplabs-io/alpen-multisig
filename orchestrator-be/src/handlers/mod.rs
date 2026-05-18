@@ -37,10 +37,7 @@ pub fn router(state: AppState) -> Router {
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))
-        .route(
-            "/proposals/:action_id",
-            patch(proposals::patch_proposal),
-        )
+        .route("/proposals/:action_id", patch(proposals::patch_proposal))
         .route(
             "/proposals/:action_id/approve",
             post(proposals::approve_action),
