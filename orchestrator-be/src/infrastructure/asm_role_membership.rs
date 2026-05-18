@@ -9,12 +9,27 @@ use strata_asm_proto_administration::{AdministrationSubprotoState, Administratio
 use crate::domain::authority::Authority;
 use crate::error::AppError;
 
+/// Whether this authority has a wired ASM `Role` mapping (P-037).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuthorityAsmSupport {
+    Supported,
+    Unsupported,
+}
+
+pub(crate) fn authority_asm_support(authority: Authority) -> AuthorityAsmSupport {
+    match authority_to_role(authority) {
+        Ok(_) => AuthorityAsmSupport::Supported,
+        Err(_) => AuthorityAsmSupport::Unsupported,
+    }
+}
+
 pub(crate) async fn is_signer_member_for_authority(
     rpc_url: &str,
     authority: Authority,
     signer_pubkey: &str,
 ) -> Result<bool, AppError> {
-    if let Some(is_member) = mock_membership(rpc_url, authority, signer_pubkey) {
+    #[cfg(test)]
+    if let Some(is_member) = test_mocks::mock_membership(rpc_url, authority, signer_pubkey) {
         return Ok(is_member);
     }
 
@@ -38,7 +53,8 @@ pub(crate) async fn last_seqno_for_authority(
     rpc_url: &str,
     authority: Authority,
 ) -> Result<u64, AppError> {
-    if let Some(seqno) = mock_last_seqno(rpc_url, authority) {
+    #[cfg(test)]
+    if let Some(seqno) = test_mocks::mock_last_seqno(rpc_url, authority) {
         return Ok(seqno);
     }
 
@@ -61,7 +77,8 @@ pub(crate) async fn threshold_for_authority(
     rpc_url: &str,
     authority: Authority,
 ) -> Result<u16, AppError> {
-    if let Some(threshold) = mock_threshold(rpc_url, authority) {
+    #[cfg(test)]
+    if let Some(threshold) = test_mocks::mock_threshold(rpc_url, authority) {
         return Ok(threshold);
     }
 
@@ -212,7 +229,27 @@ fn authority_keys_hex(
         .collect())
 }
 
-fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
+#[cfg(test)]
+mod test_mocks {
+    use super::*;
+
+    pub(super) fn mock_membership(
+        rpc_url: &str,
+        authority: Authority,
+        signer_pubkey: &str,
+    ) -> Option<bool> {
+        mock_membership_impl(rpc_url, authority, signer_pubkey)
+    }
+
+    pub(super) fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
+        mock_last_seqno_impl(rpc_url, authority)
+    }
+
+    pub(super) fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
+        mock_threshold_impl(rpc_url, authority)
+    }
+
+    fn mock_membership_impl(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
     if rpc_url != "mock://asm-membership" {
         return None;
     }
@@ -228,30 +265,36 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
         Authority::SequencerManager => false,
         _ => return None,
     };
-    Some(is_member)
+        Some(is_member)
+    }
+
+    fn mock_last_seqno_impl(rpc_url: &str, authority: Authority) -> Option<u64> {
+        if rpc_url != "mock://asm-membership" {
+            return None;
+        }
+        match authority {
+            Authority::StrataAdmin => Some(0),
+            Authority::SequencerManager => Some(0),
+            _ => None,
+        }
+    }
+
+    fn mock_threshold_impl(rpc_url: &str, authority: Authority) -> Option<u16> {
+        if rpc_url != "mock://asm-membership" {
+            return None;
+        }
+
+        match authority {
+            Authority::StrataAdmin => Some(2),
+            Authority::SequencerManager => Some(2),
+            _ => None,
+        }
+    }
 }
 
-fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
-    if rpc_url != "mock://asm-membership" {
-        return None;
-    }
-    match authority {
-        Authority::StrataAdmin => Some(0),
-        Authority::SequencerManager => Some(0),
-        _ => None,
-    }
-}
-
-fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
-    if rpc_url != "mock://asm-membership" {
-        return None;
-    }
-
-    match authority {
-        Authority::StrataAdmin => Some(2),
-        Authority::SequencerManager => Some(2),
-        _ => None,
-    }
+#[cfg(test)]
+fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
+    test_mocks::mock_membership(rpc_url, authority, signer_pubkey)
 }
 
 #[cfg(test)]
@@ -259,12 +302,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn authority_mapping_is_fail_closed_for_unmapped_authorities() {
-        assert!(authority_to_role(Authority::StrataAdmin).is_ok());
-        assert!(authority_to_role(Authority::SequencerManager).is_ok());
-        assert!(authority_to_role(Authority::AlpenAdmin).is_err());
-        assert!(authority_to_role(Authority::SecurityCouncil).is_err());
-        assert!(authority_to_role(Authority::PayoutAdmin).is_err());
+    fn all_five_authorities_have_explicit_asm_mapping_status() {
+        use Authority::*;
+        assert_eq!(
+            authority_asm_support(StrataAdmin),
+            AuthorityAsmSupport::Supported
+        );
+        assert_eq!(
+            authority_asm_support(SequencerManager),
+            AuthorityAsmSupport::Supported
+        );
+        assert_eq!(
+            authority_asm_support(AlpenAdmin),
+            AuthorityAsmSupport::Unsupported
+        );
+        assert_eq!(
+            authority_asm_support(SecurityCouncil),
+            AuthorityAsmSupport::Unsupported
+        );
+        assert_eq!(
+            authority_asm_support(PayoutAdmin),
+            AuthorityAsmSupport::Unsupported
+        );
     }
 
     #[test]
