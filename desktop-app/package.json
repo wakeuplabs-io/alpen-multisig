@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint src",
     "format:check": "prettier --check src",
-    "test:ipc-schemas": "node src/api/ipc-schemas.test.ts",
+    "test:ipc-schemas": "tsx src/api/ipc-schemas.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -37,6 +37,7 @@
     "prettier": "^3.8.2",
     "tailwindcss": "^4.2.4",
     "typescript": "^5",
+    "tsx": "^4.19.4",
     "typescript-eslint": "^8.58.1",
     "vite": "^5"
   }
