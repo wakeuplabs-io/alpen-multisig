@@ -1,6 +1,6 @@
 # Wave 2 Track E — follow-up backlog
 
-PR [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) merged onto `develop`:
+PR [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) merged (Wave 2 PR queue complete with [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141)):
 
 | P-ID | Delivered |
 |------|-----------|

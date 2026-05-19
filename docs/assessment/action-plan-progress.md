@@ -2,36 +2,36 @@
 
 **Base branch:** `develop`  
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  
-**Wave 2 gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)
+**Wave 2 PR queue:** **Complete** (A–G merged).  
+**Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)
 
 ---
 
 ## Wave 1 (merged)
 
-PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 2026-05-16 (height 594). Broadcast: P-066 + [proposal-broadcast-commit-reveal.md](../specs/proposal-broadcast-commit-reveal.md).
+PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 2026-05-16 (height 594).
 
 ---
 
-## Wave 2 — tracks
+## Wave 2 — all tracks merged
 
-| Track | PR | Status |
-|-------|-----|--------|
-| A Secrets / IPC | [#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136) | **Merged** |
-| B Coordination | [#138](https://github.com/wakeuplabs-io/alpen-multisig/pull/138) | **Merged** |
-| C Supply chain | [#137](https://github.com/wakeuplabs-io/alpen-multisig/pull/137) | **Merged** |
-| D Correctness & ops | [#139](https://github.com/wakeuplabs-io/alpen-multisig/pull/139) | **Merged** — [follow-ups](wave2-track-d-followups.md) |
-| E Test floor | [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) | **Merged** — [follow-ups](wave2-track-e-followups.md) |
-| G Discovery | [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) | **Merged** — [follow-ups](wave2-track-g-followups.md) |
-| F Docs & signer safety | [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) | **Open** — rebase + merge |
+| Track | PR | Merged | Follow-ups |
+|-------|-----|--------|------------|
+| A Secrets / IPC | [#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136) | 2026-05-19 | — |
+| B Coordination | [#138](https://github.com/wakeuplabs-io/alpen-multisig/pull/138) | 2026-05-19 | — |
+| C Supply chain | [#137](https://github.com/wakeuplabs-io/alpen-multisig/pull/137) | 2026-05-19 | — |
+| D Correctness & ops | [#139](https://github.com/wakeuplabs-io/alpen-multisig/pull/139) | 2026-05-19 | [wave2-track-d-followups.md](wave2-track-d-followups.md) |
+| E Test floor | [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) | 2026-05-19 | [wave2-track-e-followups.md](wave2-track-e-followups.md) |
+| F Docs & signer safety | [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) | 2026-05-19 | [wave2-track-f-followups.md](wave2-track-f-followups.md) |
+| G Discovery | [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) | 2026-05-19 | [wave2-track-g-followups.md](wave2-track-g-followups.md) |
 
-### Track E — test floor (merged slice)
+### Track F — docs & signer safety (merged slice)
 
 | P-ID | Status | Notes |
 |------|--------|-------|
-| P-008 (auth IPC) | done | PR #140 — Zod on all `auth_*` commands |
-| P-008 (other IPC) | follow-up | signing, orchestrator-auth, asm-state — [wave2-track-e-followups.md](wave2-track-e-followups.md) |
-| P-032 | partial | ipc-schemas tests; axis-10 inventory not in e2e-webdriver |
-| US-H5 | gated | §3; no WDIO matrix in #140 by design |
+| P-051 | done | Runbook, threat model, signer-safety model + README links |
+| P-005, P-006 | follow-up | [wave2-track-f-followups.md](wave2-track-f-followups.md) |
+| P-055 | blocked | Gate §4 — legal |
 
 ---
 
@@ -39,14 +39,15 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 | Criterion | Met? |
 |-----------|------|
-| Secret custody (prod) | Yes (A) |
-| Supply chain CI | Yes (C) |
-| ADR-006 / no auto-approve | Yes (B) |
-| RPC timeouts | Partial (orchestrator D) |
-| Tier 0 all closed | **No** — see [wave2-exit-gap-review.md](wave2-exit-gap-review.md) |
-| Runbook + threat model + signer safety | **PR #141** |
+| Secret custody (prod) | **Yes** (A) |
+| Supply chain CI | **Yes** (C) |
+| ADR-006 / no auto-approve | **Yes** (B) |
+| RPC timeouts (orchestrator) | **Yes** (D slice) |
+| Runbook + threat model + signer safety | **Yes** (F) |
+| Tier 0 all closed | **No** — deferred items in [wave2-exit-gap-review.md](wave2-exit-gap-review.md) |
+| Full Wave 2 plan (every P-ID) | **No** — track follow-up docs |
 
-**Engineering PRs left:** F only. **Product/legal:** gates §3, §4.
+**All seven Wave 2 engineering PRs are on `develop`.** Remaining work is follow-up slices, human gates, E2E validation, and Wave 3.
 
 ---
 
@@ -54,21 +55,21 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 | When | Result |
 |------|--------|
-| 2026-05-19 Track A worktree | PASS — 3 proposal WDIO specs; height 250 |
-| Current `develop` | **Pending** — `/e2e-proposal-flow` |
+| 2026-05-19 Track A worktree | PASS — 3 proposal WDIO; height 250 |
+| Full stack on current `develop` | **Pending** — `/e2e-proposal-flow` |
 
 ---
 
 ## Human decisions
 
-[wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) — §3 US-H5 pending; §4 P-055 pending.
+[wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) — §3 US-H5, §4 P-055 still **pending**.
 
 ---
 
 ## Next steps
 
-1. Merge **#141** (F).  
-2. Resolve **§3 / §4**.  
-3. **E2E** on `develop`.  
-4. Wave 2 sign-off vs [wave2-exit-gap-review.md](wave2-exit-gap-review.md) deferrals.  
-5. Wave 3 kickoff.
+1. **E2E** — `/e2e-proposal-flow` on `develop`.  
+2. **Gates §3 / §4** — stakeholder decisions.  
+3. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals.  
+4. **Follow-up PRs** — D / E / F / G backlog docs as needed.  
+5. **Wave 3** — kickoff per action plan.

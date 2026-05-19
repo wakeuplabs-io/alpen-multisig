@@ -1,6 +1,6 @@
 # Wave 2 Track G — follow-up backlog
 
-PR [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) merged **P-053 planning** onto `develop`:
+PR [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) merged **P-053 planning** (Wave 2 PR queue A–G complete — see [action-plan-progress.md](action-plan-progress.md)):
 
 | Artifact | Path |
 |----------|------|
