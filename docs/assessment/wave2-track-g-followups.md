@@ -16,19 +16,17 @@ Human gate log lives on `develop`: [wave2-human-decisions-pending.md](wave2-huma
 | Recruit 5–8 signers | Product | Scheduled sessions per interview plan |
 | Run interviews | Product | Findings doc in `docs/2-discovery/` |
 | Digest usability sessions | UX + Product | Pass/fail vs ≥80% criteria in usability doc |
-| US-H5 tabletop | Product + Eng | **After gate §3 decision** — scenario in interview plan §4 |
+| US-H5 tabletop | Product + Eng | **Deferred to Wave 3** with US-H5 (gate §3 resolved) — scenario in interview plan §4 |
 
 ## Feeds other tracks
 
 | Consumer | Use |
 |----------|-----|
 | **P-006** (Track F) | On-device verification copy from usability failure modes |
-| **Track E** | E2E negative matrix; orchestrator-down scope **blocked on gate §3** |
-| **P-052 / Wave 3** | Slice plan + walking-skeleton scope for US-H5 |
+| **P-052 / Wave 3** | US-H5 implementation, coordinator-down flows, Slice 5 scope |
 
 ## Still pending (not resolved by merging G)
 
 | Gate | Blocks |
 |------|--------|
-| §3 US-H5 scope | Track E full fallback WDIO |
 | §4 P-055 legal | Track F SPS archive import |

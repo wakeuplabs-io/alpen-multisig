@@ -33,6 +33,6 @@ Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) Track E — **not** v
 
 ## US-H5 manual fallback
 
-**Blocked:** [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) §3.
+**Deferred to Wave 3 / Slice 5** — [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) §3 (resolved 2026-05-19). Not required for Wave 2 sign-off or develop → main.
 
-After decision: implement outside default `e2e-webdriver` package or add a **single** manually maintained spec; tabletop script in [wave2-p053-interview-plan.md](../2-discovery/wave2-p053-interview-plan.md) §4.
+When implemented: outside default `e2e-webdriver` unless manually promoted; align with P-052 and PRD §2.3.
