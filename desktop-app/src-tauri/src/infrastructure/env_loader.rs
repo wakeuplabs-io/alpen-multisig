@@ -49,15 +49,16 @@ mod tests {
     #[test]
     fn dotenvy_does_not_overwrite_existing_vars() {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!(
-            "alpen-env-loader-test-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("alpen-env-loader-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("tempdir");
         let first = dir.join("first.env");
         let second = dir.join("second.env");
-        std::fs::write(&first, "ALPEN_ENV_LOADER_FOO=first\nALPEN_ENV_LOADER_BAR=first\n")
-            .expect("write first");
+        std::fs::write(
+            &first,
+            "ALPEN_ENV_LOADER_FOO=first\nALPEN_ENV_LOADER_BAR=first\n",
+        )
+        .expect("write first");
         std::fs::write(&second, "ALPEN_ENV_LOADER_FOO=second\n").expect("write second");
 
         let foo_prev = std::env::var("ALPEN_ENV_LOADER_FOO").ok();
@@ -68,14 +69,8 @@ mod tests {
         try_load_dotenv(&first);
         try_load_dotenv(&second);
 
-        assert_eq!(
-            std::env::var("ALPEN_ENV_LOADER_FOO").expect("foo"),
-            "first"
-        );
-        assert_eq!(
-            std::env::var("ALPEN_ENV_LOADER_BAR").expect("bar"),
-            "first"
-        );
+        assert_eq!(std::env::var("ALPEN_ENV_LOADER_FOO").expect("foo"), "first");
+        assert_eq!(std::env::var("ALPEN_ENV_LOADER_BAR").expect("bar"), "first");
 
         restore_var("ALPEN_ENV_LOADER_FOO", foo_prev);
         restore_var("ALPEN_ENV_LOADER_BAR", bar_prev);
@@ -98,10 +93,7 @@ mod tests {
             "STRATA_ADMIN_STATE_RPC_URL",
             "OPERATOR_SECRET_KEY_HEX",
         ];
-        let saved: Vec<_> = keys
-            .iter()
-            .map(|k| (*k, std::env::var(k).ok()))
-            .collect();
+        let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for key in keys {
             std::env::remove_var(key);
         }
