@@ -155,11 +155,8 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
         ));
     }
 
-    let body: Value = rpc_timeout::with_rpc_timeout(
-        &format!("ASM RPC `{method}` body"),
-        response.json(),
-    )
-    .await?;
+    let body: Value =
+        rpc_timeout::with_rpc_timeout(&format!("ASM RPC `{method}` body"), response.json()).await?;
 
     if let Some(err) = body.get("error") {
         let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");

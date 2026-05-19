@@ -6,14 +6,20 @@ use tokio::time::timeout;
 
 pub const RPC_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub async fn with_rpc_timeout<T, E>(label: &str, fut: impl std::future::Future<Output = Result<T, E>>) -> Result<T, String>
+pub async fn with_rpc_timeout<T, E>(
+    label: &str,
+    fut: impl std::future::Future<Output = Result<T, E>>,
+) -> Result<T, String>
 where
     E: std::fmt::Display,
 {
     match timeout(RPC_TIMEOUT, fut).await {
         Ok(Ok(value)) => Ok(value),
         Ok(Err(err)) => Err(format!("{label}: {err}")),
-        Err(_) => Err(format!("{label}: timed out after {}s", RPC_TIMEOUT.as_secs())),
+        Err(_) => Err(format!(
+            "{label}: timed out after {}s",
+            RPC_TIMEOUT.as_secs()
+        )),
     }
 }
 
