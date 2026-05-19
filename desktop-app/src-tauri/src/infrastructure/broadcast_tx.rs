@@ -118,28 +118,6 @@ pub fn build_signed_payload_bytes(
     Ok(signed_payload.as_ssz_bytes())
 }
 
-#[cfg(test)]
-mod recovery_id_tests {
-    use super::*;
-    use crate::domain::proposal::ProposalSignature;
-
-    /// P-033: 65-byte r||s||recid is normalized to BIP-137 recid||r||s before IndexedSignature.
-    #[test]
-    fn accepts_mnemonic_format_65_byte_signature() {
-        let sighash = [0u8; 32];
-        let pk = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-        let mut sig_65 = vec![0u8; 65];
-        sig_65[64] = 1;
-        let sigs = vec![ProposalSignature {
-            signer_pubkey: pk.to_string(),
-            signature_hex: hex::encode(&sig_65),
-        }];
-        let err =
-            build_signed_payload_bytes(1, "00", &sigs, &[pk.to_string()], &sighash).unwrap_err();
-        assert!(err.contains("invalid SSZ action") || err.contains("recover"));
-    }
-}
-
 /// Compute the SPS-65 sighash for a proposal's action and sequence number.
 pub fn compute_sighash(seq_no: u64, action_hex: &str) -> Result<[u8; 32], String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
@@ -278,4 +256,26 @@ pub fn tx_to_hex(tx: &Transaction) -> String {
     tx.consensus_encode(&mut buf)
         .expect("tx encode is infallible");
     hex::encode(buf)
+}
+
+#[cfg(test)]
+mod recovery_id_tests {
+    use super::*;
+    use crate::domain::proposal::ProposalSignature;
+
+    /// P-033: 65-byte r||s||recid is normalized to BIP-137 recid||r||s before IndexedSignature.
+    #[test]
+    fn accepts_mnemonic_format_65_byte_signature() {
+        let sighash = [0u8; 32];
+        let pk = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let mut sig_65 = vec![0u8; 65];
+        sig_65[64] = 1;
+        let sigs = vec![ProposalSignature {
+            signer_pubkey: pk.to_string(),
+            signature_hex: hex::encode(&sig_65),
+        }];
+        let err =
+            build_signed_payload_bytes(1, "00", &sigs, &[pk.to_string()], &sighash).unwrap_err();
+        assert!(err.contains("invalid SSZ action") || err.contains("recover"));
+    }
 }
