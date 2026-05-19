@@ -1,9 +1,12 @@
 # Wave 2 — exit gap review
 
-**As of:** `develop` @ `2afe0d3` — **all Wave 2 track PRs merged** ([#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136)–[#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142)).  
+**Status:** **Closed** — sign-off 2026-05-19.  
+**As of:** `develop` — all Wave 2 track PRs merged ([#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136)–[#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142)); gate log [#145](https://github.com/wakeuplabs-io/alpen-multisig/pull/145) / [#146](https://github.com/wakeuplabs-io/alpen-multisig/pull/146).  
 **Source:** [action-plan-2026-05-14.md §Wave 2](action-plan-2026-05-14.md#wave-2--correctness-supply-chain-operations-weeks-36).
 
-The parallel **engineering PR queue is complete**. Wave 2 is not fully closed against every P-ID in the plan — several tracks landed as **slices** with documented follow-ups.
+The parallel **engineering PR queue is complete**. Wave 2 landed as **slices**; remaining P-IDs are tracked in follow-up docs and Wave 3 — not blockers for Wave 2 close.
+
+**`develop → main`** is **deferred** until Wave 3 and the assessment action plan are complete (team decision at sign-off).
 
 ---
 
@@ -14,9 +17,12 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 | No mnemonic/key over IPC (production) | **Met** | Track A — [secret-custody-wave2.md](../specs/secret-custody-wave2.md) |
 | `cargo deny` / `cargo audit` / `npm audit` block CI | **Met** | Track C |
 | No auto-Approve; ADR-006 + threshold at claim | **Met** | Track B — [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) |
-| All RPC calls in `tokio::time::timeout` + structured errors | **Partial** | Orchestrator 30s (D); desktop + retries → [wave2-track-d-followups.md](wave2-track-d-followups.md) |
-| Every Tier 0 BLOCKER from 2026-05-14 closed | **Partial** | See tier table below |
+| All RPC calls in `tokio::time::timeout` + structured errors | **Partial** (accepted) | Orchestrator 30s (D); desktop + retries → [wave2-track-d-followups.md](wave2-track-d-followups.md) |
+| Every Tier 0 BLOCKER from 2026-05-14 closed | **Partial** (accepted) | Remainder → follow-ups / Wave 3 |
 | Ops runbook + threat model + signer-safety linked from README | **Met** | Track F — [README.md](../../README.md) |
+| E2E proposal flow on `develop` | **Met** | 2026-05-19 — 3 WDIO specs; height 548 |
+| Manual enactment sign-off | **Met** | 3 Strata Administrator signers incl. `03dd6d7…427c` |
+| Human gates §1–§4 | **Met** | [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) |
 
 ---
 
@@ -34,14 +40,14 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 
 ---
 
-## Still open (post–Wave 2 PR queue)
+## Deferred backlog (Wave 3 / follow-up PRs)
 
-### Human gates
+### Human gates (resolved; implementation deferred)
 
-| # | Topic | Doc |
-|---|--------|-----|
-| §3 | US-H5 manual-fallback scope | **Resolved** — deferred to Wave 3 / Slice 5 ([gate log](wave2-human-decisions-pending.md) §3) |
-| §4 | P-055 SPS in-repo | **Resolved** — Option A post-merge; legal OK for excerpts ([gate log](wave2-human-decisions-pending.md) §4) |
+| # | Topic | Outcome |
+|---|--------|---------|
+| §3 | US-H5 manual-fallback | Wave 3 / Slice 5 — [gate log](wave2-human-decisions-pending.md) §3 |
+| §4 | P-055 SPS in-repo | Post-merge docs PR after legal OK — [gate log](wave2-human-decisions-pending.md) §4 |
 
 ### P-ID backlog (by follow-up doc)
 
@@ -52,18 +58,11 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 | [wave2-track-f-followups.md](wave2-track-f-followups.md) | P-005, P-006, P-055 (post-merge docs) |
 | [wave2-track-g-followups.md](wave2-track-g-followups.md) | P-053 execution (interviews, usability) |
 
-### Validation
-
-| Item | Status |
-|------|--------|
-| `/e2e-proposal-flow` on `develop` (2026-05-19) | **PASS** — 3 WDIO specs; chain mined to 548 |
-| Manual enactment sign-off | **Done** (2026-05-19) — 3 Strata Administrator signers incl. `03dd6d7…427c` |
-
 ---
 
-## Recommended close-out
+## Post–Wave 2 (active)
 
-1. **Sign-off** meeting: accept slice deferrals → GitHub issues.  
-2. **develop → main** — stabilization merge (all human gates resolved).  
-3. **Post-merge** — P-055 `docs/specs/sps-reference/` + doc hygiene (after legal confirmation).  
-4. Start **Wave 3** ([action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712)) — includes US-H5 / PRD §2.3.
+1. **Wave 3** — [action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712) on `develop`.  
+2. **Follow-up slices** — D / E / F / G as PRs to `develop`.  
+3. **P-055** — `docs/specs/sps-reference/` after legal confirmation.  
+4. **develop → main** — after Wave 3 + assessment action plan complete.
