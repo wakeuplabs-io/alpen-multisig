@@ -15,9 +15,9 @@ PR [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) merged **P-0
 |------|--------|-------|
 | **P-005** | open | On-device verification UX — implement after G digest usability findings |
 | **P-006** | open | HW vs software signing payload parity / verify gate |
-| **P-055** | blocked | SPS-50/51/65 excerpts under `docs/specs/sps-reference/` — [gate §4](wave2-human-decisions-pending.md) |
+| **P-055** | deferred | Option A `docs/specs/sps-reference/` — post-merge focused docs PR; [gate §4](wave2-human-decisions-pending.md) resolved; awaits legal OK for in-repo excerpts |
 
 ## Dependencies
 
 - **P-006** ← [wave2-p053-digest-usability.md](../2-discovery/wave2-p053-digest-usability.md) sessions (Track G execution).
-- **P-055** ← Alpen legal sign-off on §4.
+- **P-055** ← Alpen legal-of-record confirmation on excerpt scope; then doc hygiene pass + minimal archive PR (not blocking develop → main).

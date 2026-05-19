@@ -2,7 +2,7 @@
 
 Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §6. **Do not implement blocked items until approved.**
 
-This file is the gate log for Wave 2: **resolved** entries record what was decided and where it landed; **pending** entries still block named tracks.
+This file is the gate log for Wave 2: **resolved** entries record what was decided and where it landed. **All four gates are resolved** (2026-05-19); deferred implementation items (US-H5, P-055 archive) are not blockers for develop → main.
 
 ---
 
@@ -85,13 +85,23 @@ Out of scope for this release (develop → main):
 
 ---
 
-## Pending
-
 ### 4. P-055 — SPS excerpts in repository
 
-**Question:** May we archive SPS-50/51/65 excerpts under `docs/specs/sps-reference/`?
+**Status:** Resolved (2026-05-19) — implementation deferred pending legal confirmation.
 
-**Stakeholder:** Alpen legal-of-record.
+**Decision:** **Option A (intent)** — curated `docs/specs/sps-reference/` archive of the SPS-50/51/65 sections this codebase depends on, as part of an upcoming **documentation hygiene pass** (reorder/archive/remove redundant `2-discovery` and duplicate protocol text).
 
-**Blocked:** Track F `P-055` content import.
+**Subject to:** Alpen **legal-of-record** confirmation on what may live in-repo.
+
+**Not required for** the current **develop → main** stabilization merge.
+
+**Until legal approval**, continue to rely on:
+
+- External Notion links
+- Existing PRD copies under `docs/0-prd/`
+- Upstream Alpen/Strata crates
+
+**Execution plan:** **P-055** in a **focused docs PR after** develop → main merge — **minimal excerpts** (not full spec duplication) and cross-links from `docs/specs/` and `docs/architecture/`.
+
+**Unblocks:** Wave 2 sign-off; develop → main merge. Track F P-055 content import → post-merge docs backlog (not blocked on gate).
 
