@@ -89,29 +89,18 @@ export function BroadcastPhaseProgress({ phase, commitTxid, revealTxid, error }:
 											{done ? '✓' : i + 1}
 										</div>
 										{i < STEPS.length - 1 && (
-											<div
-												className={[
-													'mt-1 h-6 w-px',
-													done ? 'bg-[#0f9d7a]' : 'bg-[#e5e7eb]',
-												].join(' ')}
-											/>
+											<div className={['mt-1 h-6 w-px', done ? 'bg-[#0f9d7a]' : 'bg-[#e5e7eb]'].join(' ')} />
 										)}
 									</div>
 									<div className="min-w-0 pb-5">
 										<p
 											className={[
 												'm-0 text-[13px] font-medium',
-												done
-													? 'text-[#0f9d7a]'
-													: active
-														? 'text-[#111827]'
-														: 'text-[#9ca3af]',
+												done ? 'text-[#0f9d7a]' : active ? 'text-[#111827]' : 'text-[#9ca3af]',
 											].join(' ')}
 										>
 											{step.label}
-											{active && (
-												<span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#0f9d7a]" />
-											)}
+											{active && <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#0f9d7a]" />}
 										</p>
 										<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">{step.detail}</p>
 									</div>
@@ -133,7 +122,6 @@ export function BroadcastPhaseProgress({ phase, commitTxid, revealTxid, error }:
 						<p className="m-0 text-[13px] text-[#b91c1c]">{error}</p>
 					</div>
 				)}
-
 			</div>
 		</div>
 	)

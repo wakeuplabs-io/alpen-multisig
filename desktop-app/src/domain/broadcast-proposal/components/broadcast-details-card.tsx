@@ -33,9 +33,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function SectionLabel({ children }: { children: string }) {
-	return (
-		<p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
-	)
+	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
 export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcasting }: Props) {
@@ -65,8 +63,7 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 						<div className="mb-1.5 flex items-center justify-between gap-3">
 							<p className="m-0 text-[13px] font-medium text-[#121212]">Signatures</p>
 							<p className="m-0 text-[13px] font-medium text-[#121212]">
-								{collectedSignatures} / {requiredSignatures}{' '}
-								<span className="font-normal text-[#6b7280]">signed</span>
+								{collectedSignatures} / {requiredSignatures} <span className="font-normal text-[#6b7280]">signed</span>
 							</p>
 						</div>
 						<div className="h-1.5 rounded-full bg-[#ebedf0]">
@@ -90,9 +87,7 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 					</div>
 					<p className="mt-2 text-[13px] text-[#6b7280]">
 						{satsToBtc(bundle.commitAmountSats)} BTC{' '}
-						<span className="text-[12px] text-[#9ca3af]">
-							({bundle.commitAmountSats.toLocaleString()} sats)
-						</span>
+						<span className="text-[12px] text-[#9ca3af]">({bundle.commitAmountSats.toLocaleString()} sats)</span>
 					</p>
 				</div>
 
@@ -104,9 +99,7 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 				</div>
 
 				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
-						Estimated fee
-					</span>
+					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
 					<span className="text-[13px] font-medium text-[#111827]">
 						{bundle.estimatedFeeSats.toLocaleString()} sats
 					</span>

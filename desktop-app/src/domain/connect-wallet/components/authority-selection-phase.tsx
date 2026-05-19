@@ -63,11 +63,12 @@ export function AuthoritySelectionPhase({
 					const isSelected = selectedAuthorityId === option.id
 					const isDisabled = isChecking || !option.enabled
 					const badgeLabel = isChecking && option.role !== null ? 'Checking…' : option.availabilityLabel
-					const badgeClassName = isChecking && option.role !== null
-						? 'border-[#e5e7eb] bg-white text-[#9ca3af]'
-						: option.enabled
-							? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#059669]'
-							: 'border-[#e5e7eb] bg-white text-[#6b7280]'
+					const badgeClassName =
+						isChecking && option.role !== null
+							? 'border-[#e5e7eb] bg-white text-[#9ca3af]'
+							: option.enabled
+								? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#059669]'
+								: 'border-[#e5e7eb] bg-white text-[#6b7280]'
 					return (
 						<button
 							key={option.id}
@@ -88,7 +89,9 @@ export function AuthoritySelectionPhase({
 									<p className="m-0 mt-1 text-sm text-[#6b7280]">{option.description}</p>
 									<p className="m-0 mt-1 text-xs text-[#9ca3af]">Signer set: {option.signerSetSource}</p>
 								</div>
-								<span className={`inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-medium ${badgeClassName}`}>
+								<span
+									className={`inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-medium ${badgeClassName}`}
+								>
 									{badgeLabel}
 								</span>
 							</div>

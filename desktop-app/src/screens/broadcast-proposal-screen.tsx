@@ -1,4 +1,3 @@
-
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
@@ -21,7 +20,7 @@ export function BroadcastProposalScreen() {
 		actionId ?? '',
 	)
 
-async function handleBack() {
+	async function handleBack() {
 		await disconnectSession()
 	}
 

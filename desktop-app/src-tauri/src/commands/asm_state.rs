@@ -40,7 +40,9 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
 }
 
 #[tauri::command]
-pub async fn check_authority_memberships(pubkey_hex: String) -> Result<HashMap<String, bool>, String> {
+pub async fn check_authority_memberships(
+    pubkey_hex: String,
+) -> Result<HashMap<String, bool>, String> {
     let rpc_url = asm_status_rpc::default_rpc_url();
     let (role_to_keys, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
 

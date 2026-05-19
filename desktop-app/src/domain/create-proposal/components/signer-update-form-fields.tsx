@@ -131,13 +131,17 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								)
 							})}
 							{visibleAddedSigners.map(({ value, index }) => {
-								const itemError = (errors.keysToAdd as Record<number, { value?: { message?: string } }> | undefined)?.[index]?.value?.message
+								const itemError = (errors.keysToAdd as Record<number, { value?: { message?: string } }> | undefined)?.[
+									index
+								]?.value?.message
 								return (
 									<div key={index} className="flex flex-col gap-1">
 										<div
 											className={`flex items-center gap-3 rounded-lg border bg-white px-4 py-3 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
 										>
-											<span className={`h-4 w-4 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`} />
+											<span
+												className={`h-4 w-4 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
+											/>
 											<span
 												className={`min-w-0 flex-1 break-all font-mono text-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
 												data-testid="e2e-added-signer-value"
