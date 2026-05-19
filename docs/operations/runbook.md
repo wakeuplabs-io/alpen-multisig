@@ -16,7 +16,7 @@
 | `STRATA_ADMIN_STATE_RPC_URL` | Yes | ASM runner JSON-RPC |
 | `BITCOIN_RPC_*` | Yes | Used by `/ready` only |
 
-Broadcast operator key and Bitcoin wallet live in **`desktop-app/.env`** (see `.env.example`).
+Broadcast operator key and Bitcoin wallet live in **`desktop-app/src-tauri/.env`** (see `.env.example`). Decision #2: operator key is process env only; use `ALLOW_DEV_OPERATOR_KEY=1` with the well-known regtest test key. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md` on Track A).
 
 ## Incidents
 

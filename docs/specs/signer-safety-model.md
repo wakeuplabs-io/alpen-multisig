@@ -4,7 +4,7 @@
 
 1. **Explicit authority context** — Every sign/broadcast screen shows which multisig authority is active.
 2. **Verify before sign** — User must confirm sighash hex matches intent (Trezor shows 32-byte hash only; UI names authority — P-006).
-3. **No secrets in webview** — Mnemonic/operator key must not cross IPC (P-003, in progress).
+3. **No secrets in webview (production)** — Operator key loads from Tauri env at startup only; mnemonic/raw-key IPC is dev/E2E-only (Wave 2 Decision #2; implementation: Track A `docs/specs/secret-custody-wave2.md`).
 4. **Persisted broadcast truth** — UI reads coordinator `proposal_status` / `broadcast_status` after broadcast (P-062).
 
 ## Signer checklist

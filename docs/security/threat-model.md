@@ -16,7 +16,7 @@ flowchart LR
   BTC[Bitcoin RPC]
   ASM[ASM RPC]
 
-  React -->|IPC no secrets| Tauri
+  React -->|IPC no secrets in prod| Tauri
   Tauri -->|HTTPS| Orch
   Tauri -->|RPC| BTC
   Orch -->|RPC| ASM
@@ -27,7 +27,8 @@ flowchart LR
 | Risk | Mitigation |
 |------|------------|
 | Malicious backend returns wrong proposal | P-005 hash verify (Track F) |
-| Operator test key in production | P-001 desktop + env gate |
+| Operator test key in production | P-001 desktop + `ALLOW_DEV_OPERATOR_KEY` |
+| Mnemonic / raw key exfil via XSS | P-003 + P-040: dev signing IPC off in release (Decision #2; Track A) |
 | Supply-chain compromise | P-011 audit/deny/lockfile |
 | Cross-authority data leak | P-002 session + proposal scope |
 | Coordinator/UI desync on broadcast | P-066 desktop execute + PATCH metadata |
