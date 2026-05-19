@@ -56,7 +56,7 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 | When | Result | Height | Manual enactment |
 |------|--------|--------|------------------|
 | 2026-05-19 Track A worktree | PASS — 3 proposal WDIO | 250 | ASM log OK |
-| 2026-05-19 **`develop`** (`782fc12`) | **PASS** — add-signer, co-sign-row1, broadcast-quorum | see post-run mine | **Pending** UI check |
+| 2026-05-19 **`develop`** (`30ca94f`) | **PASS** — add-signer, co-sign-row1, broadcast-quorum | 548 | **Yes** — 3 Strata Administrator signers incl. `03dd6d7…427c` |
 
 ---
 
@@ -68,7 +68,14 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ## Next steps
 
+<<<<<<< HEAD
 1. **Gate §4** — P-055 legal (SPS excerpts in repo).  
 2. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals; **develop → main** unblocked on §3.  
 3. **Follow-up PRs** — D / E / F / G backlog slices as needed.  
 4. **Wave 3** — kickoff per action plan (includes US-H5 / PRD §2.3).
+=======
+1. **Gates §3 / §4** — stakeholder decisions.  
+2. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals.  
+3. **Follow-up PRs** — D / E / F / G backlog slices as needed.  
+4. **Wave 3** — kickoff per action plan.
+>>>>>>> origin/develop
