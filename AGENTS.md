@@ -71,6 +71,7 @@ Alpen/Strata crates are not on crates.io — consumed as git dependencies. Share
 - **Naming**: Use kebab-case for directories and file names
 - **Patterns**: Match existing project patterns before introducing new abstractions
 - **CI**: All generated code must pass CI checks — verify locally before considering work done
+- **Git / `develop`**: Never push directly to `develop`. Use a branch and PR for all changes (code and docs); merge only after review and green CI
 
 ## Rule Files
 
