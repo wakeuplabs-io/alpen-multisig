@@ -134,7 +134,8 @@ mod recovery_id_tests {
             signer_pubkey: pk.to_string(),
             signature_hex: hex::encode(&sig_65),
         }];
-        let err = build_signed_payload_bytes(1, "00", &sigs, &[pk.to_string()], &sighash).unwrap_err();
+        let err =
+            build_signed_payload_bytes(1, "00", &sigs, &[pk.to_string()], &sighash).unwrap_err();
         assert!(err.contains("invalid SSZ action") || err.contains("recover"));
     }
 }

@@ -5,6 +5,7 @@ pub mod bitcoin_rpc;
 pub mod broadcast_env;
 pub mod broadcast_tx;
 pub mod challenge_verifier;
+pub mod dev_secrets;
 pub mod hw_wallet;
 pub mod orchestrator_client;
 pub mod signing;
