@@ -18,4 +18,4 @@ Remaining Track D items from [action-plan-2026-05-14.md](action-plan-2026-05-14.
 
 **Priority suggestion:** P-029 skeleton (ops visibility) → P-019 (race under Postgres) → P-017 → P-023 → P-027 retries → P-018 reset endpoint.
 
-**Wave 2 tracks merged before phase 2:** A, B, C, D (P-027 slice), G (P-053 plans). Open engineering tracks: **E**, **F** — see [action-plan-progress.md](action-plan-progress.md).
+**Wave 2 tracks merged before phase 2:** A, B, C, D (P-027 slice), E (P-008 auth + ipc-schemas tests), G (P-053 plans). Open engineering PR: **F** — see [action-plan-progress.md](action-plan-progress.md) and [wave2-exit-gap-review.md](wave2-exit-gap-review.md).

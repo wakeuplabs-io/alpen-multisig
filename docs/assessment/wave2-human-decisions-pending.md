@@ -62,7 +62,7 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 **Question:** Is coordinator-down broadcast (export hex + local RPC) Slice-0 invariant or deferred?
 
-**Blocked:** Track E orchestrator-down WDIO matrix scope.
+**Blocked:** US-H5 implementation and non–e2e-webdriver tests. Track E #140 merged auth IPC validation only (no fallback WDIO in `e2e-webdriver`).
 
 **Note (post P-012):** Quorum does not auto-`approved`; tabletop scenarios should include explicit `PATCH` to `approved` before claim, or document export path when coordinator is down after signatures only.
 
