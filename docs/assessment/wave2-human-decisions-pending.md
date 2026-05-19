@@ -24,17 +24,37 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 ---
 
-## Pending
+### 2. Decision #2 — Secret custody (Wave 2 Slice-0)
 
-### 2. Operator-key custody (P-001, P-003, P-040)
+**Status:** Decided (2026-05-18).
 
-**Options:** process env at Tauri startup (current + P-001 gate), OS keychain, HSM, hardware-wallet-only operator.
+**Owners:** Alpen security + Wakeup platform.
 
-**Blocked:** Track A `P-003` (mnemonic off IPC) and `P-040` (capabilities) design.
+**Canonical policy:** In production, the React webview must never pass a full mnemonic or operator hex to Tauri; the operator key is loaded from process env at startup; mnemonic-over-IPC is allowed only for dev/E2E behind an explicit flag.
 
-**Interim shipped:** P-001 desktop rejects well-known test key unless `ALLOW_DEV_OPERATOR_KEY=1`.
+#### Operator / broadcast (commit–reveal)
+
+- We kept the current model: `OPERATOR_SECRET_KEY_HEX` and related broadcast configuration load from **Tauri process environment at startup** (`broadcast_env`).
+- Not from the React webview over IPC. Not on the orchestrator.
+- **P-001** (reject well-known test operator key unless explicit dev mode) aligns with this and ships independently of P-003 / P-040.
+
+#### Multisig signer material (mnemonic / software signing)
+
+- Mnemonic-based signing over IPC (`sign_with_mnemonic_path`, etc.) **remains required** for development, local POC, E2E, and CI.
+- In **production / release builds**, the webview **must not** pass a full BIP39 mnemonic or raw secret key over Tauri IPC.
+- Dev/E2E use is allowed only behind an explicit flag (e.g. `ALLOW_DEV_MNEMONIC_SIGNING`) and/or debug builds, and must be **excluded from the production capability set** (P-040).
+
+#### Deferred (not part of this decision)
+
+- OS keychain, HSM, and secrets manager for operator or signer storage → **Wave 3** (ops / runbook). Not a blocker for Wave 2 implementation on this basis.
+
+**Unblocks:** P-003, P-040, Track A (secrets off IPC), Wave 2 exit criterion “no key/mnemonic across IPC” with a **documented dev/E2E exception**; Track E test strategy for mnemonic paths (dev builds / flags only). **P-001** desktop test-key gate continues on its own track.
+
+**Does not decide:** US-H5 manual-fallback scope (see pending §3). Trezor-first signing UX remains product default; this decision only bounds IPC secret transport.
 
 ---
+
+## Pending
 
 ### 3. US-H5 manual-fallback scope (P-052, P-053, Track E)
 
@@ -54,10 +74,3 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 **Blocked:** Track F `P-055` content import.
 
----
-
-### 5. Production vs test mnemonic path
-
-**Question:** Is mnemonic-over-IPC acceptable only in dev/E2E (`ALLOW_DEV_*`), or must production builds compile it out?
-
-**Blocked:** Track A `P-003` and Track E E2E strategy.
