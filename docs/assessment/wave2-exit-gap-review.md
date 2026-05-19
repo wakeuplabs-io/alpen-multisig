@@ -57,13 +57,12 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 | Item | Status |
 |------|--------|
 | `/e2e-proposal-flow` on `develop` (2026-05-19) | **PASS** — 3 WDIO specs; chain mined to 548 |
-| Manual enactment sign-off | **Pending** — confirm 3rd Strata Administrator signer in UI |
+| Manual enactment sign-off | **Done** (2026-05-19) — 3 Strata Administrator signers incl. `03dd6d7…427c` |
 
 ---
 
 ## Recommended close-out
 
-1. Run **E2E** on `develop`.  
-2. **Stakeholder** resolution of §3 and §4.  
-3. **Sign-off** meeting: accept slice deferrals → GitHub issues / Wave 3.  
-4. Start **Wave 3** ([action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712)).
+1. **Stakeholder** resolution of §3 and §4.  
+2. **Sign-off** meeting: accept slice deferrals → GitHub issues / Wave 3.  
+3. Start **Wave 3** ([action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712)).
