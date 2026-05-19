@@ -17,3 +17,5 @@ Remaining Track D items from [action-plan-2026-05-14.md](action-plan-2026-05-14.
 **Wave 2 exit line** (“every RPC call wrapped in timeout with structured error metadata”) needs at least **desktop P-027** + **P-029** skeleton before calling Track D complete.
 
 **Priority suggestion:** P-029 skeleton (ops visibility) → P-019 (race under Postgres) → P-017 → P-023 → P-027 retries → P-018 reset endpoint.
+
+**Wave 2 tracks merged before phase 2:** A, B, C, D (P-027 slice), G (P-053 plans). Open engineering tracks: **E**, **F** — see [action-plan-progress.md](action-plan-progress.md).

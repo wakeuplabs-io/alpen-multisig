@@ -66,6 +66,8 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 **Note (post P-012):** Quorum does not auto-`approved`; tabletop scenarios should include explicit `PATCH` to `approved` before claim, or document export path when coordinator is down after signatures only.
 
+**Research (Track G, merged #142):** Tabletop scripted in [wave2-p053-interview-plan.md](../2-discovery/wave2-p053-interview-plan.md) §4 — run after this gate is decided.
+
 ---
 
 ### 4. P-055 — SPS excerpts in repository
