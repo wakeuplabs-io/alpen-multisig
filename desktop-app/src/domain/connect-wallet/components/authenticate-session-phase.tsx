@@ -36,7 +36,7 @@ export function AuthenticateSessionPhase({
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-[680px]">
+		<div className="mx-auto w-full max-w-150">
 			<div className="mb-3 flex items-center justify-between">
 				<button
 					type="button"
@@ -46,7 +46,9 @@ export function AuthenticateSessionPhase({
 					<span aria-hidden="true">←</span>
 					Back
 				</button>
-				<p className="m-0 text-[0.68rem] font-medium uppercase tracking-[0.22em] text-[#9ca3af]">Step 4 of 4</p>
+				<p className="m-0 w-22 text-right text-[0.68rem] font-medium uppercase tracking-[0.22em] tabular-nums text-[#9ca3af]">
+					Step 4 of 4
+				</p>
 			</div>
 
 			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">

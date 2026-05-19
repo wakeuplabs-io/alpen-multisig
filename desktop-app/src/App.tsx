@@ -6,6 +6,7 @@ import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { BroadcastProposalScreen } from '@/screens/broadcast-proposal-screen'
+import { ProposalDetailScreen } from '@/screens/proposal-detail-screen'
 import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
 import { SignPocScreen } from '@/screens/sign-poc-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
@@ -34,6 +35,14 @@ export default function App() {
 								element={
 									<RequireAuth>
 										<ProposalsDashboardScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/:actionId"
+								element={
+									<RequireAuth>
+										<ProposalDetailScreen />
 									</RequireAuth>
 								}
 							/>

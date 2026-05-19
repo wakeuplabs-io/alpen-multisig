@@ -3,18 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { LogOutMutedIcon, LogOutRedIcon } from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
+import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
-
-type AuthorityOption = {
-	id: string
-	role: AuthRole | null
-	label: string
-	description: string
-	signerSetSource: string
-	availabilityLabel: string
-	enabled: boolean
-}
 
 const AUTHORITY_OPTIONS: AuthorityOption[] = [
 	{
@@ -22,6 +13,15 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		role: AuthRole.StrataAdministrator,
 		label: 'Strata Administrator',
 		description: 'Strata protocol parameters (verification key, signers, operators, bridge, safe harbor).',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Available',
+		enabled: true,
+	},
+	{
+		id: 'alpen-administrator',
+		role: AuthRole.AlpenAdministrator,
+		label: 'Alpen Administrator',
+		description: 'EE predicate key (update_vk) management.',
 		signerSetSource: 'Strata ASM state',
 		availabilityLabel: 'Available',
 		enabled: true,

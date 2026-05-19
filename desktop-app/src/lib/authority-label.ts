@@ -6,6 +6,8 @@ export function authorityLabelForRole(role: AuthRole): string {
 			return 'Strata Administrator'
 		case AuthRole.StrataSequencerManager:
 			return 'Strata Sequencer Manager'
+		case AuthRole.AlpenAdministrator:
+			return 'Alpen Administrator'
 		default:
 			return 'Unknown authority'
 	}

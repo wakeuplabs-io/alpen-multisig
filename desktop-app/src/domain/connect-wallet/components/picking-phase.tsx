@@ -1,6 +1,6 @@
 import { useCallback, useState, type MouseEvent } from 'react'
 import { CheckEmeraldIcon, CopyClipboardIcon } from '@/assets/icons'
-import { truncateAddr } from '@/domain/connect-wallet/utils/hw-wallet-connect-utils'
+import { ScreenBottomBar } from '@/components/screen-bottom-bar'
 import type { HwAddressEntry } from '@/wallet/types'
 
 type Props = {
@@ -11,7 +11,6 @@ type Props = {
 	onUseAddress: () => void
 }
 
-/** Narrow # and path so `1fr` favors the address; last column is icon-only. */
 const GRID_COLS = 'grid-cols-[44px_minmax(0,140px)_minmax(0,1fr)_32px]'
 const ROW_INNER_COLS = 'grid-cols-[44px_minmax(0,140px)_minmax(0,1fr)]'
 
@@ -39,7 +38,7 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 	}, [])
 
 	return (
-		<div className="mx-auto w-full max-w-[840px] pb-28">
+		<div className="mx-auto w-full max-w-150 pb-28">
 			<div className="mb-3 flex items-center justify-between">
 				<button
 					type="button"
@@ -49,7 +48,9 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 					<span aria-hidden="true">←</span>
 					Back
 				</button>
-				<p className="m-0 text-[0.68rem] font-medium uppercase tracking-[0.22em] text-[#9ca3af]">Step 2 of 4</p>
+				<p className="m-0 w-22 text-right text-[0.68rem] font-medium uppercase tracking-[0.22em] tabular-nums text-[#9ca3af]">
+					Step 2 of 4
+				</p>
 			</div>
 
 			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
@@ -90,9 +91,7 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 								>
 									<span className="font-mono text-xs">#{entry.index}</span>
 									<span className="min-w-0 truncate font-mono text-xs">{entry.derivationPath}</span>
-									<span className="min-w-0 truncate font-mono text-xs">
-										{truncateAddr(entry.address, { headChars: 14, tailChars: 10 })}
-									</span>
+									<span className="min-w-0 font-mono text-xs">{entry.address}</span>
 								</button>
 								<div className="flex h-full items-center justify-end pr-1.5">
 									<button
@@ -115,27 +114,27 @@ export function PickingPhase({ addresses, selectedIndex, onSelectIndex, onBack, 
 				</div>
 			</div>
 
-			<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur-sm">
-				<div className="mx-auto flex w-full max-w-[840px] items-center justify-between gap-4">
-					<div className="min-w-0">
+			<ScreenBottomBar
+				left={
+					<>
 						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Signing as</p>
 						<p className="m-0 mt-1 truncate font-mono text-xs text-[#334155]">
 							{selectedEntry ? selectedEntry.address : 'Select an address from the list above'}
 						</p>
-					</div>
-					<div className="flex shrink-0 items-center gap-2">
-						<button
-							type="button"
-							data-testid="e2e-picking-continue"
-							className={continueButtonClassName}
-							onClick={onUseAddress}
-							disabled={selectedEntry === null}
-						>
-							Continue →
-						</button>
-					</div>
-				</div>
-			</div>
+					</>
+				}
+				actions={
+					<button
+						type="button"
+						data-testid="e2e-picking-continue"
+						className={continueButtonClassName}
+						onClick={onUseAddress}
+						disabled={selectedEntry === null}
+					>
+						Continue →
+					</button>
+				}
+			/>
 		</div>
 	)
 }

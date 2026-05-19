@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 use desktop_app::domain::auth::AuthRole;
@@ -19,6 +21,7 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
     let role = match parsed {
         Authority::StrataAdmin => AuthRole::StrataAdministrator,
         Authority::SequencerManager => AuthRole::StrataSequencerManager,
+        Authority::AlpenAdmin => AuthRole::AlpenAdministrator,
         _ => {
             return Err(format!(
                 "authority `{}` is not supported in the desktop app yet",
@@ -34,4 +37,19 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
         signers: config.signers,
         threshold: config.threshold,
     })
+}
+
+#[tauri::command]
+pub async fn check_authority_memberships(
+    pubkey_hex: String,
+) -> Result<HashMap<String, bool>, String> {
+    let rpc_url = asm_status_rpc::default_rpc_url();
+    let (role_to_keys, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
+
+    let mut result = HashMap::new();
+    for (role, keys) in &role_to_keys {
+        let is_member = keys.iter().any(|k| k.eq_ignore_ascii_case(&pubkey_hex));
+        result.insert(role.as_wire_str().to_string(), is_member);
+    }
+    Ok(result)
 }

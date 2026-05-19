@@ -9,6 +9,7 @@ import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
+import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
 import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/types'
 
 type Props = {
@@ -48,6 +49,9 @@ export function HwWalletConnect({
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
 	const isWidePhase = state.phase === 'picking' || (state.phase === 'selected' && authoritySelection !== null)
 
+	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
+	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
+
 	// TODO: Refactor this to use a context
 	useEffect(() => {
 		if (!disconnectRef) {
@@ -67,7 +71,7 @@ export function HwWalletConnect({
 		<section
 			className={`mx-auto w-full ${
 				isWidePhase
-					? 'max-w-210 rounded-none border-none bg-transparent p-0 shadow-none'
+					? 'max-w-150 rounded-none border-none bg-transparent p-0 shadow-none'
 					: 'max-w-130 rounded-2xl border border-[#e5e7eb] bg-white p-7 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
 			}`}
 		>
@@ -97,7 +101,8 @@ export function HwWalletConnect({
 				authoritySelection.step === 'select-authority' && (
 					<AuthoritySelectionPhase
 						selectedAuthorityId={authoritySelection.selectedAuthorityId}
-						options={authoritySelection.options}
+						options={resolvedOptions}
+						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
 						onBackToAddresses={actions.changeAddress}

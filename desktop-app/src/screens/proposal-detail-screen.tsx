@@ -1,24 +1,26 @@
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
-import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
-import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
+import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 
-export function BroadcastProposalScreen() {
+type LocationState = { signerPubkey?: string | null }
+
+export function ProposalDetailScreen() {
 	const navigate = useNavigate()
+	const location = useLocation()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
+	const signerPubkey: string | null = (location.state as LocationState)?.signerPubkey ?? null
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
-		ORCHESTRATOR_BASE_URL,
-		actionId ?? '',
-	)
+	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	const decodedData = useDecodedProposal(proposal)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -31,10 +33,6 @@ export function BroadcastProposalScreen() {
 	if (actionId === undefined) {
 		return <Navigate to="/proposals" replace />
 	}
-
-	const isLoading = phase === 'idle' || phase === 'preparing'
-	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
-	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
 
 	return (
 		<ScreenShell
@@ -68,68 +66,41 @@ export function BroadcastProposalScreen() {
 				</button>
 
 				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
-					Broadcast proposal
+					Proposal detail
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
-					Quorum has been reached. Review the commit details, then broadcast via the commit/reveal flow.
-				</p>
+				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">Review signatures, action payload, and broadcast status.</p>
 
-				<div className="mt-6 space-y-4">
+				<div className="mt-6">
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<div className="h-7 w-48 rounded-lg bg-[#f3f4f6]" />
-							<div className="h-4 w-32 rounded-md bg-[#f3f4f6]" />
+							<div className="h-4 w-64 rounded-md bg-[#f3f4f6]" />
 							<div className="mt-4 h-1.5 w-full rounded-full bg-[#f3f4f6]" />
-							<div className="mt-6 h-10 w-full rounded-xl bg-[#f3f4f6]" />
+							<div className="mt-6 h-20 w-full rounded-lg bg-[#f3f4f6]" />
 						</div>
 					)}
 
-					{showDetails && (
-						<BroadcastDetailsCard
-							bundle={bundle}
-							proposal={proposal}
-							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting'}
-						/>
-					)}
-
-					{showProgress && (
-						<BroadcastPhaseProgress
-							phase={phase}
-							commitTxid={result?.commitTxid}
-							revealTxid={result?.revealTxid}
-							error={error}
-						/>
-					)}
-
-					{phase === 'done' && (
-						<div
-							className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3"
-							data-testid="e2e-broadcast-done-banner"
-						>
-							<p className="m-0 text-sm font-medium text-[#065f46]">
-								Proposal {proposal?.status ?? result?.proposalStatus ?? 'updated'} onchain (
-								{proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
-							</p>
+					{error && (
+						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+							<p className="m-0 text-sm text-[#991b1b]">{error}</p>
 							<button
 								type="button"
-								className="mt-3 inline-flex items-center rounded-md border border-[#065f46] bg-white px-3 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
-								onClick={() => navigate('/proposals')}
+								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+								onClick={reload}
 							>
-								Back to proposals
+								Retry
 							</button>
 						</div>
 					)}
 
-					{phase === 'error' && (
-						<button
-							type="button"
-							data-testid="e2e-broadcast-prepare"
-							onClick={() => void prepare()}
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						>
-							Retry
-						</button>
+					{proposal && (
+						<ProposalDetail
+							proposal={proposal}
+							signerPubkey={signerPubkey}
+							decodedData={decodedData}
+							onSign={() => navigate(`/proposals/${actionId}/sign`)}
+							onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+						/>
 					)}
 				</div>
 			</div>

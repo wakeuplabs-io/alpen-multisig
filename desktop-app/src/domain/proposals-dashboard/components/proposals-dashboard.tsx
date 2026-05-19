@@ -21,6 +21,7 @@ type Props = {
 	onCreateProposal: () => void
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
+	onViewProposal: (actionId: string) => void
 }
 
 export function ProposalsDashboard({
@@ -36,6 +37,7 @@ export function ProposalsDashboard({
 	onCreateProposal,
 	onSignProposal,
 	onBroadcastProposal,
+	onViewProposal,
 }: Props) {
 	const isEmpty =
 		!isLoading &&
@@ -95,6 +97,7 @@ export function ProposalsDashboard({
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
+						onViewProposal={onViewProposal}
 					/>
 					<ProposalGroup
 						title="Pending"
@@ -106,6 +109,7 @@ export function ProposalsDashboard({
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
+						onViewProposal={onViewProposal}
 					/>
 					<ProposalGroup
 						title="Executed & Canceled"
@@ -117,6 +121,7 @@ export function ProposalsDashboard({
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
+						onViewProposal={onViewProposal}
 					/>
 					<ProposalGroup
 						title="Expired / Skipped"
@@ -128,6 +133,7 @@ export function ProposalsDashboard({
 						signerPubkey={signerPubkey}
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
+						onViewProposal={onViewProposal}
 					/>
 				</div>
 			)}
@@ -167,6 +173,7 @@ function ProposalGroup({
 	signerPubkey,
 	onSignProposal,
 	onBroadcastProposal,
+	onViewProposal,
 }: {
 	title: string
 	count: number
@@ -177,6 +184,7 @@ function ProposalGroup({
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
+	onViewProposal: (actionId: string) => void
 }) {
 	const [open, setOpen] = useState(initialOpen)
 
@@ -217,6 +225,7 @@ function ProposalGroup({
 								signerPubkey={signerPubkey}
 								onSignProposal={onSignProposal}
 								onBroadcastProposal={onBroadcastProposal}
+								onViewProposal={onViewProposal}
 							/>
 						))}
 					</div>
@@ -230,11 +239,13 @@ function ProposalCard({
 	signerPubkey,
 	onSignProposal,
 	onBroadcastProposal,
+	onViewProposal,
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
+	onViewProposal: (actionId: string) => void
 }) {
 	const [hovered, setHovered] = useState(false)
 	const requiredSignatures = proposal.requiredSignatures
@@ -264,6 +275,7 @@ function ProposalCard({
 			}}
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => setHovered(false)}
+			onClick={() => onViewProposal(proposal.actionId)}
 		>
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
@@ -303,7 +315,10 @@ function ProposalCard({
 					<button
 						type="button"
 						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						onClick={() => onBroadcastProposal(proposal.actionId)}
+						onClick={(e) => {
+							e.stopPropagation()
+							onBroadcastProposal(proposal.actionId)
+						}}
 						data-testid="e2e-proposal-broadcast-button"
 					>
 						Broadcast
@@ -315,12 +330,15 @@ function ProposalCard({
 						<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
 						{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
 					</p>
-					{!alreadySigned && (
+					{!isTerminal && !alreadySigned && (
 						<button
 							type="button"
 							data-testid="e2e-proposal-sign-button"
 							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-							onClick={() => onSignProposal(proposal.actionId)}
+							onClick={(e) => {
+								e.stopPropagation()
+								onSignProposal(proposal.actionId)
+							}}
 						>
 							Sign
 						</button>

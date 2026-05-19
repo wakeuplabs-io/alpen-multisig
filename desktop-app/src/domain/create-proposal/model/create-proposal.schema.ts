@@ -177,6 +177,22 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 				}
 			}
 
+			if (currentMultisigSigners !== null) {
+				const currentNormalized = new Set(currentMultisigSigners.map(normalizeSignerKey))
+				for (const [normalized, addIndexes] of addKeyIndexes.entries()) {
+					if (!currentNormalized.has(normalized)) continue
+					// Key already exists — only flag if it's not being removed in this same update
+					if (removeKeyIndexes.has(normalized)) continue
+					for (const index of addIndexes) {
+						ctx.addIssue({
+							code: 'custom',
+							path: ['keysToAdd', index, 'value'],
+							message: 'Signer already exists in the current set',
+						})
+					}
+				}
+			}
+
 			const th = data.threshold.trim()
 			if (!/^\d+$/.test(th)) {
 				ctx.addIssue({

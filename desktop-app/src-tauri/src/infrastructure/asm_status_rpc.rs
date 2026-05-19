@@ -62,6 +62,10 @@ pub async fn fetch_role_membership(
         AuthRole::StrataSequencerManager,
         authority_keys_hex(&admin, AuthRole::StrataSequencerManager)?,
     );
+    role_to_keys.insert(
+        AuthRole::AlpenAdministrator,
+        authority_keys_hex(&admin, AuthRole::AlpenAdministrator)?,
+    );
 
     Ok((role_to_keys, now_unix_ms()))
 }

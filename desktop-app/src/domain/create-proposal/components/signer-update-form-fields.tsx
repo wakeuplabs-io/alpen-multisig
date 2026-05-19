@@ -130,28 +130,37 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 									</div>
 								)
 							})}
-							{visibleAddedSigners.map(({ value, index }) => (
-								<div
-									key={index}
-									className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
-								>
-									<span className="h-4 w-4 shrink-0 rounded-full border border-[#d97706]" />
-									<span
-										className="min-w-0 flex-1 break-all font-mono text-sm text-[#374151]"
-										data-testid="e2e-added-signer-value"
-									>
-										{value}
-									</span>
-									<button
-										type="button"
-										className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
-										onClick={() => handleRemoveAdded(index)}
-										aria-label="Remove added signer"
-									>
-										<TrashIcon width={16} height={16} />
-									</button>
-								</div>
-							))}
+							{visibleAddedSigners.map(({ value, index }) => {
+								const itemError = (errors.keysToAdd as Record<number, { value?: { message?: string } }> | undefined)?.[
+									index
+								]?.value?.message
+								return (
+									<div key={index} className="flex flex-col gap-1">
+										<div
+											className={`flex items-center gap-3 rounded-lg border bg-white px-4 py-3 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
+										>
+											<span
+												className={`h-4 w-4 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
+											/>
+											<span
+												className={`min-w-0 flex-1 break-all font-mono text-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
+												data-testid="e2e-added-signer-value"
+											>
+												{value}
+											</span>
+											<button
+												type="button"
+												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												onClick={() => handleRemoveAdded(index)}
+												aria-label="Remove added signer"
+											>
+												<TrashIcon width={16} height={16} />
+											</button>
+										</div>
+										{itemError && <p className={fieldErrorClass}>{itemError}</p>}
+									</div>
+								)
+							})}
 							{hasNoSigners && <div className="py-4 text-center text-sm text-[#9ca3af]">No signers remaining.</div>}
 						</div>
 					</div>
