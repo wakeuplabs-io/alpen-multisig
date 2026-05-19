@@ -35,6 +35,14 @@ Two axes only:
 
 “Not broadcast yet” = `approved` + `broadcast_status == idle`.
 
+“On-chain queued, not yet enacted” = `approved` + `broadcast_status == reveal_confirmed` (reveal mined; ASM has not yet applied the governance change).
+
+### Enactment reconciliation
+
+- Desktop must not PATCH `proposal_status: enacted` when reporting `reveal_confirmed`.
+- Orchestrator promotes to `enacted` only when a lightweight ASM snapshot check passes (MultisigUpdate post-conditions: keys/threshold/`last_seqno`) — on `GET` list/detail reconciliation, or on `PATCH` if a client explicitly reports `enacted`.
+- Early `PATCH` with `enacted` while ASM still shows the pre-enactment state returns **409 Conflict**.
+
 ## Consequences
 
 - P-028 limits Strata crate imports to infrastructure codecs.

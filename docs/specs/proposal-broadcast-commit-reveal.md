@@ -58,7 +58,7 @@ Canonical states remain:
 Broadcast state semantics for `approved` proposals:
 - `approved` means quorum reached and broadcast-eligible.
 - During broadcast processing, proposal remains `approved` but exposes broadcast sub-status in API response (see below).
-- `enacted` is set only after reveal tx is confirmed and payload is recognized as enacted by canonical state checks.
+- `enacted` is set only when ASM canonical state satisfies the proposal action post-conditions (signer set / threshold / `last_seqno`), typically after the confirmation-delay queue executes — not when the reveal tx reaches Bitcoin confirmation.
 
 ### Broadcast Sub-status (response field)
 
@@ -67,7 +67,7 @@ Optional `broadcast_status` on proposal/broadcast DTOs:
 - `commit_broadcasted` - commit sent to network.
 - `commit_confirmed` - commit mined and reveal can be sent.
 - `reveal_broadcasted` - reveal sent to network.
-- `reveal_confirmed` - reveal mined; awaiting or completing enacted transition.
+- `reveal_confirmed` - reveal mined; proposal stays `approved` until ASM enactment is detected.
 - `failed` - latest attempt failed (with reason code/message).
 
 This field is operational metadata and does not replace canonical proposal lifecycle state.
@@ -92,8 +92,9 @@ On user confirmation (`Broadcast`):
 
 1. `POST /proposals/:action_id/broadcast/claim` — orchestrator atomically sets `broadcast_status = commit_broadcasted` (or `409` if already claimed).
 2. Tauri submits commit tx, waits for confirmation, submits reveal tx (local Bitcoin RPC).
-3. After each phase, `PATCH /proposals/:action_id/broadcast` with `broadcast_status`, optional `commit_txid` / `reveal_txid`, and final `proposal_status = enacted` when done.
+3. After each phase, `PATCH /proposals/:action_id/broadcast` with `broadcast_status` and optional `commit_txid` / `reveal_txid`. After reveal confirmation, report `reveal_confirmed` and leave `proposal_status` as `approved`.
 4. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings).
+5. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles `approved` + `reveal_confirmed` rows to `enacted` when ASM post-conditions match (coordination hygiene only).
 
 ### Step 3: Finalize UX
 

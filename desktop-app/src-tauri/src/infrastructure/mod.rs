@@ -1,4 +1,5 @@
 pub mod action_codec;
+pub mod asm_enactment;
 pub mod asm_role_membership;
 pub mod asm_status_rpc;
 pub mod bitcoin_rpc;

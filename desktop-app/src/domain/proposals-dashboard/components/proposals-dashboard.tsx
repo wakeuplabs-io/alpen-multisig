@@ -256,6 +256,10 @@ function ProposalCard({
 	const proposalTypeLabel = inferProposalType(proposal)
 	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
 	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
+	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
+	const awaitingEnactment =
+		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+	const canBroadcast = hasQuorum && proposal.status === 'approved' && proposal.broadcastStatus === 'idle'
 	const alreadySigned =
 		signerPubkey !== null &&
 		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
@@ -306,7 +310,7 @@ function ProposalCard({
 				</div>
 			</div>
 
-			{hasQuorum ? (
+			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
 					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
@@ -323,6 +327,26 @@ function ProposalCard({
 					>
 						Broadcast
 					</button>
+				</div>
+			) : awaitingEnactment ? (
+				<div className="mt-4 border-t border-[#eceff3] pt-3">
+					<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">
+						Reveal confirmed — awaiting ASM enactment
+					</p>
+					<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
+						Refresh the dashboard after the confirmation delay to see enacted status.
+					</p>
+				</div>
+			) : broadcastInProgress ? (
+				<div className="mt-4 border-t border-[#eceff3] pt-3">
+					<p className="m-0 text-[14px] font-medium text-[#6b7280]">Broadcast in progress</p>
+				</div>
+			) : hasQuorum ? (
+				<div className="mt-4 border-t border-[#eceff3] pt-3">
+					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
+						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
+						Quorum reached
+					</p>
 				</div>
 			) : (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
