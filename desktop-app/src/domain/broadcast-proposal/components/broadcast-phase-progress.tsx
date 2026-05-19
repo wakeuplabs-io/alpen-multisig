@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { CopyClipboardIcon } from '@/assets/icons'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
@@ -7,60 +9,132 @@ type Props = {
 	error?: string | null
 }
 
-const PHASES: { key: BroadcastPhase; label: string }[] = [
-	{ key: 'confirming', label: 'Prepare' },
-	{ key: 'broadcasting', label: 'Commit' },
-	{ key: 'done', label: 'Reveal' },
+type Step = { label: string; detail: string }
+
+const STEPS: Step[] = [
+	{ label: 'Commit', detail: 'Sending commit transaction to Bitcoin' },
+	{ label: 'Reveal', detail: 'Sending reveal transaction once commit confirms' },
+	{ label: 'Enacted', detail: 'Proposal enacted on-chain' },
 ]
 
-const PHASE_ORDER: BroadcastPhase[] = ['idle', 'preparing', 'confirming', 'broadcasting', 'done', 'error']
+function CopyButton({ text }: { text: string }) {
+	const [copied, setCopied] = useState(false)
 
-function phaseIndex(phase: BroadcastPhase) {
-	return PHASE_ORDER.indexOf(phase)
+	function handleCopy() {
+		void navigator.clipboard.writeText(text).then(() => {
+			setCopied(true)
+			setTimeout(() => setCopied(false), 2000)
+		})
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={handleCopy}
+			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+		>
+			<CopyClipboardIcon width={12} height={12} />
+			{copied ? 'Copied!' : 'Copy'}
+		</button>
+	)
+}
+
+function TxidRow({ label, txid }: { label: string; txid: string }) {
+	return (
+		<div>
+			<p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
+			<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+				<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">{txid}</span>
+				<CopyButton text={txid} />
+			</div>
+		</div>
+	)
 }
 
 export function BroadcastPhaseProgress({ phase, commitTxid, revealTxid, error }: Props) {
-	const currentIndex = phaseIndex(phase)
 	const isError = phase === 'error'
+	const isDone = phase === 'done'
+
+	// broadcasting = step 0 active, done = all steps complete
+	const activeStep = phase === 'broadcasting' ? 0 : isDone ? STEPS.length : -1
 
 	return (
-		<div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
-			<h3 className="mb-4 text-base font-semibold text-[#111827]">Broadcast Progress</h3>
-			<div className="flex items-center gap-2">
-				{PHASES.map((step, i) => {
-					const stepIndex = phaseIndex(step.key)
-					const isDone = currentIndex >= stepIndex && !isError
-					const isActive = currentIndex === stepIndex && !isError
-
-					return (
-						<div key={step.key} className="flex flex-1 flex-col items-center gap-1">
-							<div
-								className={[
-									'h-2 w-full rounded-full',
-									isDone ? 'bg-[#0f9d7a]' : isActive ? 'bg-[#0f9d7a] opacity-50' : 'bg-[#e5e7eb]',
-									isError && i === 0 ? 'bg-red-400' : '',
-								].join(' ')}
-							/>
-							<span className="text-[11px] text-[#6b7280]">{step.label}</span>
-						</div>
-					)
-				})}
+		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+			<div className="border-b border-[#f3f4f6] px-6 py-4">
+				<h3 className="m-0 text-[15px] font-semibold text-[#111827]">
+					{isDone ? 'Broadcast complete' : isError ? 'Broadcast failed' : 'Broadcasting…'}
+				</h3>
 			</div>
-			{phase === 'done' && (
-				<div className="mt-4 space-y-2 text-xs">
-					{commitTxid && (
-						<p className="text-[#6b7280]">
-							Commit txid: <span className="font-mono text-[#111827]">{commitTxid}</span>
-						</p>
-					)}
-					{revealTxid && (
-						<p className="text-[#6b7280]">
-							Reveal txid: <span className="font-mono text-[#111827]">{revealTxid}</span>
-						</p>
-					)}
-				</div>
-			)}
-			{isError && error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+			<div className="p-6">
+				{!isError && (
+					<div className="mb-6 space-y-3">
+						{STEPS.map((step, i) => {
+							const done = activeStep > i || isDone
+							const active = activeStep === i && !isDone
+
+							return (
+								<div key={step.label} className="flex items-start gap-3">
+									<div className="relative mt-0.5 flex shrink-0 flex-col items-center">
+										<div
+											className={[
+												'flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold',
+												done
+													? 'border-[#0f9d7a] bg-[#0f9d7a] text-white'
+													: active
+														? 'border-[#0f9d7a] bg-white text-[#0f9d7a]'
+														: 'border-[#e5e7eb] bg-[#f9fafb] text-[#9ca3af]',
+											].join(' ')}
+										>
+											{done ? '✓' : i + 1}
+										</div>
+										{i < STEPS.length - 1 && (
+											<div
+												className={[
+													'mt-1 h-6 w-px',
+													done ? 'bg-[#0f9d7a]' : 'bg-[#e5e7eb]',
+												].join(' ')}
+											/>
+										)}
+									</div>
+									<div className="min-w-0 pb-5">
+										<p
+											className={[
+												'm-0 text-[13px] font-medium',
+												done
+													? 'text-[#0f9d7a]'
+													: active
+														? 'text-[#111827]'
+														: 'text-[#9ca3af]',
+											].join(' ')}
+										>
+											{step.label}
+											{active && (
+												<span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#0f9d7a]" />
+											)}
+										</p>
+										<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">{step.detail}</p>
+									</div>
+								</div>
+							)
+						})}
+					</div>
+				)}
+
+				{isDone && (commitTxid || revealTxid) && (
+					<div className="space-y-3">
+						{commitTxid && <TxidRow label="Commit TXID" txid={commitTxid} />}
+						{revealTxid && <TxidRow label="Reveal TXID" txid={revealTxid} />}
+					</div>
+				)}
+
+				{isError && error && (
+					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+						<p className="m-0 text-[13px] text-[#b91c1c]">{error}</p>
+					</div>
+				)}
+
+			</div>
 		</div>
 	)
 }

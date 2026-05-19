@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
 	broadcastProposal,
 	getProposalByActionId,
@@ -47,14 +47,44 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 	const [error, setError] = useState<string | null>(null)
 	const broadcastStarted = useRef(false)
 
+	useEffect(() => {
+		if (!actionId) return
+		let active = true
+		setPhase('preparing')
+		setError(null)
+		Promise.all([
+			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
+			getProposalByActionId({ baseUrl, actionId }),
+		]).then(([res, proposalRes]) => {
+			if (!active) return
+			if (!res.ok) {
+				setError(res.error)
+				setPhase('error')
+				return
+			}
+			if (proposalRes.ok) setProposal(proposalRes.data)
+			setBundle(res.data)
+			setPhase('confirming')
+		})
+		return () => {
+			active = false
+		}
+	}, [actionId, baseUrl])
+
 	async function prepare() {
 		setPhase('preparing')
 		setError(null)
-		const res = await prepareBroadcast(buildBroadcastInput(baseUrl, actionId))
+		const [res, proposalRes] = await Promise.all([
+			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
+			getProposalByActionId({ baseUrl, actionId }),
+		])
 		if (!res.ok) {
 			setError(res.error)
 			setPhase('error')
 			return
+		}
+		if (proposalRes.ok) {
+			setProposal(proposalRes.data)
 		}
 		setBundle(res.data)
 		setPhase('confirming')

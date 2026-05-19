@@ -8,6 +8,7 @@ use strata_asm_params::Role;
 pub enum AuthRole {
     StrataAdministrator,
     StrataSequencerManager,
+    AlpenAdministrator,
 }
 
 impl AuthRole {
@@ -15,6 +16,15 @@ impl AuthRole {
         match self {
             AuthRole::StrataAdministrator => Role::StrataAdministrator,
             AuthRole::StrataSequencerManager => Role::StrataSequencerManager,
+            AuthRole::AlpenAdministrator => Role::AlpenAdministrator,
+        }
+    }
+
+    pub fn as_wire_str(self) -> &'static str {
+        match self {
+            AuthRole::StrataAdministrator => "strata_administrator",
+            AuthRole::StrataSequencerManager => "strata_sequencer_manager",
+            AuthRole::AlpenAdministrator => "alpen_administrator",
         }
     }
 }

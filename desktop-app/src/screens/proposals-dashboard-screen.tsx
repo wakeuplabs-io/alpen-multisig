@@ -125,6 +125,9 @@ export function ProposalsDashboardScreen() {
 				onCreateProposal={() => {
 					navigate('/proposals/create')
 				}}
+				onViewProposal={(actionId) => {
+					navigate(`/proposals/${actionId}`, { state: { signerPubkey } })
+				}}
 				onSignProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/sign`)
 				}}
