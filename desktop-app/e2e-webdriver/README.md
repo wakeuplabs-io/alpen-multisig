@@ -38,6 +38,15 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 | **Real backend stack**      | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E                                                |
 | **Env files**               | `orchestrator-be/.env`, `desktop-app/.env`, `desktop-app/src-tauri/.env` must point RPC/asm/orchestrator at your running services |
 
+### Secret custody (Wave 2 Decision #2)
+
+| Variable | When |
+|----------|------|
+| `ALLOW_DEV_OPERATOR_KEY=1` | Required in `desktop-app/src-tauri/.env` when `OPERATOR_SECRET_KEY_HEX` is the well-known regtest test key |
+| `ALLOW_DEV_MNEMONIC_SIGNING=1` | Only needed for **release** builds that run mnemonic WebDriver flows; **debug** builds (`npm run tauri build -- --debug`) enable mnemonic IPC by default |
+
+See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
+
 ## Build the app under test
 
 The WebDriver suite runs **`npm run tauri build -- --debug --no-bundle`** from **`desktop-app/`** on each run (unless **`SKIP_E2E_BUILD=1`**) so the Vite bundle is rebuilt and embedded in the binary. Plain **`cargo build -p desktop-app`** can leave an **out-of-date embedded UI** (e.g. missing new `data-testid` attributes).
