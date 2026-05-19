@@ -56,8 +56,8 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 
 | Item | Status |
 |------|--------|
-| `/e2e-proposal-flow` on `develop` | **Pending** |
-| Manual enactment sign-off | **Pending** |
+| `/e2e-proposal-flow` on `develop` (2026-05-19) | **PASS** — 3 WDIO specs; chain mined to 548 |
+| Manual enactment sign-off | **Pending** — confirm 3rd Strata Administrator signer in UI |
 
 ---
 

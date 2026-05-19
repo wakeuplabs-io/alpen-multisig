@@ -53,10 +53,10 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ## E2E
 
-| When | Result |
-|------|--------|
-| 2026-05-19 Track A worktree | PASS — 3 proposal WDIO; height 250 |
-| Full stack on current `develop` | **Pending** — `/e2e-proposal-flow` |
+| When | Result | Height | Manual enactment |
+|------|--------|--------|------------------|
+| 2026-05-19 Track A worktree | PASS — 3 proposal WDIO | 250 | ASM log OK |
+| 2026-05-19 **`develop`** (`782fc12`) | **PASS** — add-signer, co-sign-row1, broadcast-quorum | see post-run mine | **Pending** UI check |
 
 ---
 
