@@ -14,7 +14,7 @@ set -euo pipefail
 #   ./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanos.elf --model nanos
 #
 # Requires Docker. Starts Speculos on http://localhost:5000.
-# Set LEDGER_SPECULOS_URL=http://localhost:5000 in desktop-app/src-tauri/.env to use it.
+# Set LEDGER_SPECULOS_URL=http://localhost:5000 in desktop-app/.env to use it.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

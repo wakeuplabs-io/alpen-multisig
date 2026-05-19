@@ -36,13 +36,13 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 | Node 18+                    | `npm` in this directory                                                                                                           |
 | Graphical session           | Run from your desktop session (not SSH-only without display)                                                                      |
 | **Real backend stack**      | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E                                                |
-| **Env files**               | `orchestrator-be/.env`, `desktop-app/.env`, `desktop-app/src-tauri/.env` must point RPC/asm/orchestrator at your running services |
+| **Env files**               | `orchestrator-be/.env`, `desktop-app/.env` must point RPC/asm/orchestrator at your running services |
 
 ### Secret custody (Wave 2 Decision #2)
 
 | Variable | When |
 |----------|------|
-| `ALLOW_DEV_OPERATOR_KEY=1` | Required in `desktop-app/src-tauri/.env` when `OPERATOR_SECRET_KEY_HEX` is the well-known regtest test key |
+| `ALLOW_DEV_OPERATOR_KEY=1` | Required in `desktop-app/.env` when `OPERATOR_SECRET_KEY_HEX` is the well-known regtest test key |
 | `ALLOW_DEV_MNEMONIC_SIGNING=1` | Only needed for **release** builds that run mnemonic WebDriver flows; **debug** builds (`npm run tauri build -- --debug`) enable mnemonic IPC by default |
 
 See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
