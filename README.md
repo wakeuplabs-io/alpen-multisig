@@ -15,6 +15,7 @@ Desktop multisig client and coordination backend for Alpen/Strata governance flo
 - `desktop-app/src/`: React UI (wallet connect + signing PoC screens)
 - `e2e-tests/`: protocol and cross-component end-to-end tests
 - `docs/`: PRDs, proposal, discovery, story map, architecture, and per-feature specs
+- Ops & safety (Wave 2): [runbook](docs/operations/runbook.md), [threat model](docs/security/threat-model.md), [signer safety model](docs/specs/signer-safety-model.md)
 
 ## Prerequisites
 
