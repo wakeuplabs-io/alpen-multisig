@@ -3,7 +3,7 @@
 mod commands;
 
 fn main() {
-    dotenvy::dotenv().ok();
+    desktop_app::infrastructure::env_loader::load_dotenv_files();
 
     commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .run(tauri::generate_context!())

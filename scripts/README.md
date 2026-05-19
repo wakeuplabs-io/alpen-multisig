@@ -172,7 +172,7 @@ Runs Speculos on `http://localhost:5000`.
 
 ### Configure the desktop app
 
-Uncomment this line in `desktop-app/src-tauri/.env`:
+Uncomment this line in `desktop-app/.env`:
 
 ```
 LEDGER_SPECULOS_URL=http://localhost:5000
