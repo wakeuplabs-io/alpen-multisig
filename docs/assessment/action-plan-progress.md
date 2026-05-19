@@ -2,8 +2,9 @@
 
 **Base branch:** `develop`  
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  
-**Wave 2 PR queue:** **Complete** (A–G merged).  
-**Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)
+**Wave 2:** **Closed** (sign-off 2026-05-19; A–G merged on `develop`).  
+**Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)  
+**Active wave:** Wave 3 — [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §Wave 3.
 
 ---
 
@@ -13,7 +14,11 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ---
 
-## Wave 2 — all tracks merged
+## Wave 2 — closed
+
+Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop → main` deferred** until Wave 3 + assessment action plan complete.
+
+### Tracks merged
 
 | Track | PR | Merged | Follow-ups |
 |-------|-----|--------|------------|
@@ -47,7 +52,7 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 | Tier 0 all closed | **No** — deferred items in [wave2-exit-gap-review.md](wave2-exit-gap-review.md) |
 | Full Wave 2 plan (every P-ID) | **No** — track follow-up docs |
 
-**All seven Wave 2 engineering PRs are on `develop`.** Human gates §1–§4 resolved (2026-05-19). Remaining work is follow-up slices, develop → main, and Wave 3.
+**Wave 2 complete on `develop`.** Human gates §1–§4 resolved. Active work: Wave 3 + follow-up slices on `develop`; `main` updates after Wave 3 close-out.
 
 ---
 
@@ -66,10 +71,10 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ---
 
-## Next steps
+## Next steps (post–Wave 2 close)
 
-1. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals.  
-2. **develop → main** — stabilization merge (gates no longer block).  
-3. **Post-merge docs** — P-055 `sps-reference/` archive + doc hygiene pass (after legal confirmation).  
-4. **Follow-up PRs** — D / E / F / G backlog slices as needed.  
-5. **Wave 3** — kickoff per action plan (includes US-H5 / PRD §2.3).
+1. **Wave 3** — execute on `develop` per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §Wave 3 (US-H5 / PRD §2.3).  
+2. **Follow-up slices** — D / E / F / G backlog as PRs to `develop`.  
+3. **P-055 docs** — `sps-reference/` after Alpen legal OK (gate §4).  
+4. **develop → main** — after Wave 3 + assessment action plan complete.  
+5. **Optional** — GitHub issues from follow-up docs for tracking.
