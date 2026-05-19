@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { AuthRole } from '@/types/auth-role'
+
 export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
 
 export const broadcastStatusSchema = z.enum([
@@ -40,7 +42,7 @@ export const proposalSchema = z.object({
 		.transform((v) => v ?? undefined),
 })
 
-export const authRoleSchema = z.enum(['strata_administrator', 'strata_sequencer_manager'])
+export const authRoleSchema = z.nativeEnum(AuthRole)
 
 export const authChallengeSchema = z.object({
 	challengeId: z.string(),
