@@ -40,15 +40,15 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 
 | # | Topic | Doc |
 |---|--------|-----|
-| §3 | US-H5 manual-fallback scope | [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) |
-| §4 | P-055 SPS in-repo | Same |
+| §3 | US-H5 manual-fallback scope | **Resolved** — deferred to Wave 3 / Slice 5 ([gate log](wave2-human-decisions-pending.md) §3) |
+| §4 | P-055 SPS in-repo | **Pending** — same doc |
 
 ### P-ID backlog (by follow-up doc)
 
 | Doc | P-IDs |
 |-----|-------|
 | [wave2-track-d-followups.md](wave2-track-d-followups.md) | P-017, P-018, P-019, P-023, P-029, P-027 remainder |
-| [wave2-track-e-followups.md](wave2-track-e-followups.md) | P-008 remainder, P-032 axis-10, US-H5 tests |
+| [wave2-track-e-followups.md](wave2-track-e-followups.md) | P-008 remainder, P-032 axis-10 (US-H5 → Wave 3) |
 | [wave2-track-f-followups.md](wave2-track-f-followups.md) | P-005, P-006, P-055 |
 | [wave2-track-g-followups.md](wave2-track-g-followups.md) | P-053 execution (interviews, usability) |
 
@@ -63,6 +63,12 @@ The parallel **engineering PR queue is complete**. Wave 2 is not fully closed ag
 
 ## Recommended close-out
 
+<<<<<<< HEAD
+1. **Stakeholder** resolution of §4 (P-055).  
+2. **Sign-off** meeting: accept slice deferrals → GitHub issues / Wave 3; **develop → main** per §3 resolution.  
+3. Start **Wave 3** ([action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712)) — includes US-H5 / PRD §2.3.
+=======
 1. **Stakeholder** resolution of §3 and §4.  
 2. **Sign-off** meeting: accept slice deferrals → GitHub issues / Wave 3.  
 3. Start **Wave 3** ([action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712)).
+>>>>>>> origin/develop

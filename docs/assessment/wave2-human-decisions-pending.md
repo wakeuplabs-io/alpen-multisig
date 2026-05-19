@@ -52,23 +52,40 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 **Implementation SSOT:** `docs/specs/secret-custody-wave2.md` (Track A).
 
-**Does not decide:** US-H5 manual-fallback scope (see pending §3). Trezor-first signing UX remains product default; this decision only bounds IPC secret transport.
+**Does not decide:** US-H5 manual-fallback scope (resolved §3). Trezor-first signing UX remains product default; this decision only bounds IPC secret transport.
+
+---
+
+### 3. US-H5 manual-fallback scope (P-052, P-053, Track E)
+
+**Status:** Resolved (2026-05-19).
+
+**Decision:** **Defer full US-H5 scope to Wave 3 / Story Map Slice 5.**
+
+Out of scope for this release (develop → main):
+
+- Offline signature aggregation
+- Paste-quorum flows
+- Coordinator-down broadcast (export hex + local RPC)
+- US-H5 implementation
+- Coordinator-down E2E / WDIO coverage
+- P-053 interview-plan §4 tabletop (pairs with deferred US-H5)
+
+**In scope for Wave 2 sign-off and develop → main** (already implemented and validated):
+
+- Online coordination
+- Explicit `approved` via `PATCH` per [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md)
+- Desktop commit/reveal broadcast (P-066)
+- Secret custody per Decision #2 and [secret-custody-wave2.md](../specs/secret-custody-wave2.md)
+- Passing proposal-flow E2E + manual enactment confirmation
+
+**PRD §2.3** remains a **committed follow-up** in Wave 3 — not a blocker for Wave 2 sign-off or the develop → main merge.
+
+**Unblocks:** Wave 2 sign-off; develop → main merge. Track E scope closed for this release. US-H5 / P-052 implementation → Wave 3 backlog.
 
 ---
 
 ## Pending
-
-### 3. US-H5 manual-fallback scope (P-052, P-053, Track E)
-
-**Question:** Is coordinator-down broadcast (export hex + local RPC) Slice-0 invariant or deferred?
-
-**Blocked:** US-H5 implementation and non–e2e-webdriver tests. Track E #140 merged auth IPC validation only (no fallback WDIO in `e2e-webdriver`).
-
-**Note (post P-012):** Quorum does not auto-`approved`; tabletop scenarios should include explicit `PATCH` to `approved` before claim, or document export path when coordinator is down after signatures only.
-
-**Research (Track G, merged #142):** Tabletop scripted in [wave2-p053-interview-plan.md](../2-discovery/wave2-p053-interview-plan.md) §4 — run after this gate is decided.
-
----
 
 ### 4. P-055 — SPS excerpts in repository
 

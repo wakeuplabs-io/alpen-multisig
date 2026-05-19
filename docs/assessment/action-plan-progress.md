@@ -62,13 +62,20 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ## Human decisions
 
-[wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) — §3 US-H5, §4 P-055 still **pending**.
+[wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) — §3 US-H5 **resolved** (defer to Wave 3 / Slice 5, 2026-05-19); §4 P-055 still **pending**.
 
 ---
 
 ## Next steps
 
+<<<<<<< HEAD
+1. **Gate §4** — P-055 legal (SPS excerpts in repo).  
+2. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals; **develop → main** unblocked on §3.  
+3. **Follow-up PRs** — D / E / F / G backlog slices as needed.  
+4. **Wave 3** — kickoff per action plan (includes US-H5 / PRD §2.3).
+=======
 1. **Gates §3 / §4** — stakeholder decisions.  
 2. **Wave 2 sign-off** — review [wave2-exit-gap-review.md](wave2-exit-gap-review.md); ticket deferrals.  
 3. **Follow-up PRs** — D / E / F / G backlog slices as needed.  
 4. **Wave 3** — kickoff per action plan.
+>>>>>>> origin/develop
