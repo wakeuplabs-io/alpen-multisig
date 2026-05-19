@@ -25,8 +25,9 @@ Human gate log lives on `develop`: [wave2-human-decisions-pending.md](wave2-huma
 | **P-006** (Track F) | On-device verification copy from usability failure modes |
 | **P-052 / Wave 3** | US-H5 implementation, coordinator-down flows, Slice 5 scope |
 
-## Still pending (not resolved by merging G)
+## Gates (resolved on develop)
 
-| Gate | Blocks |
+| Gate | Status |
 |------|--------|
-| §4 P-055 legal | Track F SPS archive import |
+| §3 US-H5 | Deferred to Wave 3 — [gate log](wave2-human-decisions-pending.md) §3 |
+| §4 P-055 | Post-merge docs — [gate log](wave2-human-decisions-pending.md) §4 |
