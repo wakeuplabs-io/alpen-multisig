@@ -50,6 +50,8 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 
 **Unblocks:** P-003, P-040, Track A (secrets off IPC), Wave 2 exit criterion “no key/mnemonic across IPC” with a **documented dev/E2E exception**; Track E test strategy for mnemonic paths (dev builds / flags only). **P-001** desktop test-key gate continues on its own track.
 
+**Implementation SSOT:** `docs/specs/secret-custody-wave2.md` (Track A).
+
 **Does not decide:** US-H5 manual-fallback scope (see pending §3). Trezor-first signing UX remains product default; this decision only bounds IPC secret transport.
 
 ---
