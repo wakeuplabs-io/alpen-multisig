@@ -1,23 +1,32 @@
-# Wave 2 — decisions pending (human gate)
+# Wave 2 — human decisions (gate log)
 
 Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §6. **Do not implement blocked items until approved.**
 
-## 1. P-012 / ADR-006 — threshold-detection policy
-
-**Options:**
-
-| Option | Behavior | Trade-off |
-|--------|----------|-----------|
-| **A — Remove** | Delete auto-transition to `Approved` when `signatures.len() >= required_signatures` in orchestrator | Aligns with PRD §1 “coordination only”; signers/off-chain UI must infer quorum |
-| **B — Advisory carve-out** | Keep transition; document in ADR-006; add threshold-resync test vs ASM | Faster UX; must prove stale `required_signatures` cannot mislead broadcast (pairs with P-035) |
-
-**Stakeholders:** Alpen + Wakeup architecture leads.
-
-**Blocked:** Track B `P-012` implementation; ADR-006 final wording.
+This file is the gate log for Wave 2: **resolved** entries record what was decided and where it landed; **pending** entries still block named tracks.
 
 ---
 
-## 2. Operator-key custody (P-001, P-003, P-040)
+## Resolved
+
+### 1. P-012 / ADR-006 — threshold / `approved` policy
+
+**Status:** Resolved (2026-05-18) — merged via Track B / PR #138.
+
+**Decision:** **Remove auto-approve on signature ingest** (Option A). Off-chain `approved` is explicit coordination state:
+
+- `POST …/approve` only appends signatures; proposal stays `pending` at quorum.
+- Desktop calls `PATCH /proposals/:action_id` with `{ "proposal_status": "approved" }` after quorum (Tauri application layer).
+- Broadcast claim requires `approved` + `broadcast_status == idle`; threshold checked at transition and at claim (P-035).
+
+**SSOT:** [ADR-006: Backend coordination boundary](../architecture/adrs/006-backend-coordination-boundary.md) (Accepted).
+
+**Unblocks:** Track B `P-012`; ADR-006 final wording.
+
+---
+
+## Pending
+
+### 2. Operator-key custody (P-001, P-003, P-040)
 
 **Options:** process env at Tauri startup (current + P-001 gate), OS keychain, HSM, hardware-wallet-only operator.
 
@@ -27,15 +36,17 @@ Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §6. **Do not impleme
 
 ---
 
-## 3. US-H5 manual-fallback scope (P-052, P-053, Track E)
+### 3. US-H5 manual-fallback scope (P-052, P-053, Track E)
 
 **Question:** Is coordinator-down broadcast (export hex + local RPC) Slice-0 invariant or deferred?
 
 **Blocked:** Track E orchestrator-down WDIO matrix scope.
 
+**Note (post P-012):** Quorum does not auto-`approved`; tabletop scenarios should include explicit `PATCH` to `approved` before claim, or document export path when coordinator is down after signatures only.
+
 ---
 
-## 4. P-055 — SPS excerpts in repository
+### 4. P-055 — SPS excerpts in repository
 
 **Question:** May we archive SPS-50/51/65 excerpts under `docs/specs/sps-reference/`?
 
@@ -45,7 +56,7 @@ Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §6. **Do not impleme
 
 ---
 
-## 5. Production vs test mnemonic path
+### 5. Production vs test mnemonic path
 
 **Question:** Is mnemonic-over-IPC acceptable only in dev/E2E (`ALLOW_DEV_*`), or must production builds compile it out?
 
