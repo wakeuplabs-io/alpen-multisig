@@ -1,3 +1,4 @@
+use desktop_app::infrastructure::dev_secrets;
 use desktop_app::infrastructure::signing;
 
 #[tauri::command]
@@ -23,6 +24,7 @@ pub(crate) fn sign_action_sighash(
     secret_key_hex: String,
     sighash_hex: String,
 ) -> Result<signing::SignatureResult, String> {
+    dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
     signing::sign_sighash(&secret_key_hex, &sighash_hex)
 }
 
@@ -32,6 +34,7 @@ pub(crate) fn list_mnemonic_addresses(
     passphrase: Option<String>,
     count: Option<u32>,
 ) -> Result<Vec<signing::MnemonicAddressEntry>, String> {
+    dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
     signing::list_mnemonic_addresses(
         &mnemonic,
         passphrase.as_deref().unwrap_or(""),
@@ -46,6 +49,7 @@ pub(crate) fn sign_with_mnemonic_path(
     derivation_path: String,
     sighash_hex: String,
 ) -> Result<signing::SignatureResult, String> {
+    dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
     signing::sign_with_mnemonic_path(
         &mnemonic,
         passphrase.as_deref().unwrap_or(""),

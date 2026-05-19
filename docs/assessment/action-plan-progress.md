@@ -72,7 +72,8 @@ Broadcast boundary (SSOT): [§2.1 + §5.2](action-plan-2026-05-14.md#21-broadcas
 - **P-001** — desktop `broadcast_env` must reject test key (mirror BE rules).
 - **E2E** — `/e2e-proposal-flow` passed 2026-05-16 with desktop broadcast env in `desktop-app/.env`.
 - **Manual fallback test** — broadcast with orchestrator down after signatures (US-H5 matrix).
-- **Tier 0 open:** P-003, P-005, P-006, P-011, P-012, …
+- **P-003 / P-040 (Decision #2):** Dev mnemonic IPC gated; production handler set omits dev signing commands — see `docs/specs/secret-custody-wave2.md`.
+- **Tier 0 open:** P-005, P-006, P-011, …
 
 ## Commit order (reference)
 
