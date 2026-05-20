@@ -48,5 +48,3 @@ bip39 = "2"
 name = "desktop_app"
 path = "src/lib.rs"
 
-[features]
-custom-protocol = ['tauri/custom-protocol']
