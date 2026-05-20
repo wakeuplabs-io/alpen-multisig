@@ -294,7 +294,7 @@ pub async fn broadcast_commit_then_reveal(
             client,
             action_id,
             "reveal_confirmed",
-            Some("enacted"),
+            None,
             Some(&commit_txid),
             Some(&reveal_txid),
             None,
@@ -508,6 +508,8 @@ mod tests {
         approve_signature_count: Mutex<usize>,
         claim_broadcast_called: Mutex<bool>,
         report_broadcast_called: Mutex<bool>,
+        last_report_request:
+            Mutex<Option<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
         should_fail: bool,
     }
 
@@ -520,6 +522,7 @@ mod tests {
                 approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
+                last_report_request: Mutex::new(None),
                 should_fail: false,
             }
         }
@@ -532,6 +535,7 @@ mod tests {
                 approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
+                last_report_request: Mutex::new(None),
                 should_fail: true,
             }
         }
@@ -756,6 +760,7 @@ mod tests {
                 });
             }
             *self.report_broadcast_called.lock().unwrap() = true;
+            *self.last_report_request.lock().unwrap() = Some(request.clone());
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,
@@ -938,5 +943,30 @@ mod tests {
         assert!(mock.claim_broadcast_called());
         assert_eq!(proposal.action_id, "action_42");
         assert_eq!(proposal.status, "approved");
+    }
+
+    #[tokio::test]
+    async fn reveal_confirmed_report_keeps_proposal_approved() {
+        let mock = MockOrchestratorClient::new();
+        super::report_broadcast(
+            &mock,
+            "action-1",
+            "reveal_confirmed",
+            None,
+            Some("commit-txid"),
+            Some("reveal-txid"),
+            None,
+        )
+        .await
+        .expect("report ok");
+
+        let req = mock
+            .last_report_request
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("report captured");
+        assert_eq!(req.broadcast_status, "reveal_confirmed");
+        assert_eq!(req.proposal_status, None);
     }
 }

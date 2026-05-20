@@ -247,9 +247,92 @@ pub(crate) async fn claim_broadcast_coordination(
     repo.claim_broadcast(action_id).await
 }
 
+/// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions.
+pub(crate) async fn reconcile_enacted_for_authority(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    authority: Authority,
+) -> Result<(), AppError> {
+    let approved = repo
+        .list_by_status(authority, Some(ProposalStatus::Approved))
+        .await?;
+
+    for proposal in approved {
+        if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
+            continue;
+        }
+        if proposal.reveal_txid.is_none() {
+            continue;
+        }
+        if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+            asm_rpc_url,
+            proposal.authority,
+            proposal.seq_no,
+            &proposal.action_hex,
+        )
+        .await?
+        {
+            continue;
+        }
+        repo.update_broadcast_status(
+            &proposal.action_id,
+            BroadcastStatus::RevealConfirmed,
+            Some(ProposalStatus::Enacted),
+            None,
+            None,
+            None,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+/// Reconcile a single proposal before returning it to the client.
+pub(crate) async fn reconcile_enacted_for_action(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    authority: Authority,
+    action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
+        return Ok(());
+    };
+    require_proposal_authority(&proposal, authority)?;
+
+    if proposal.status != ProposalStatus::Approved
+        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
+        || proposal.reveal_txid.is_none()
+    {
+        return Ok(());
+    }
+
+    if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+        asm_rpc_url,
+        proposal.authority,
+        proposal.seq_no,
+        &proposal.action_hex,
+    )
+    .await?
+    {
+        return Ok(());
+    }
+
+    repo.update_broadcast_status(
+        action_id,
+        BroadcastStatus::RevealConfirmed,
+        Some(ProposalStatus::Enacted),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
 /// Persist broadcast sub-status reported by the desktop after local Bitcoin submission.
 pub(crate) async fn report_broadcast_progress(
     repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
     session_authority: Authority,
     action_id: &ActionId,
     body: ReportBroadcastProgressRequest,
@@ -270,7 +353,31 @@ pub(crate) async fn report_broadcast_progress(
                     .to_string(),
             ));
         }
-        Some("enacted") => Some(ProposalStatus::Enacted),
+        Some("enacted") => {
+            if raw.status == ProposalStatus::Enacted {
+                None
+            } else {
+                if raw.broadcast_status != BroadcastStatus::RevealConfirmed {
+                    return Err(AppError::Conflict(format!(
+                        "proposal must have broadcast_status reveal_confirmed before enacted (current: {})",
+                        raw.broadcast_status
+                    )));
+                }
+                if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+                    asm_rpc_url,
+                    raw.authority,
+                    raw.seq_no,
+                    &raw.action_hex,
+                )
+                .await?
+                {
+                    return Err(AppError::Conflict(
+                        "ASM state does not yet show proposal enactment".to_string(),
+                    ));
+                }
+                Some(ProposalStatus::Enacted)
+            }
+        }
         Some("canceled") => Some(ProposalStatus::Canceled),
         Some("expired") => Some(ProposalStatus::Expired),
         Some(other) => {
@@ -884,5 +991,99 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Unauthorized));
+    }
+
+    async fn save_reveal_confirmed_approved(repo: &InMemoryProposalRepository) -> ActionId {
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(repo, session_b, "mock://asm-membership", &created.action_id)
+            .await
+            .unwrap();
+        repo.update_broadcast_status(
+            &created.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        created.action_id
+    }
+
+    #[tokio::test]
+    async fn report_reveal_confirmed_keeps_proposal_approved() {
+        let repo = new_repo();
+        let action_id = save_reveal_confirmed_approved(&repo).await;
+
+        let updated = report_broadcast_progress(
+            &repo,
+            "mock://asm-membership",
+            Authority::StrataAdmin,
+            &action_id,
+            ReportBroadcastProgressRequest {
+                broadcast_status: "reveal_confirmed".to_string(),
+                proposal_status: None,
+                commit_txid: Some("commit".to_string()),
+                reveal_txid: Some("reveal".to_string()),
+                broadcast_error: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(updated.status, ProposalStatus::Approved);
+        assert_eq!(updated.broadcast_status, BroadcastStatus::RevealConfirmed);
+    }
+
+    #[tokio::test]
+    async fn report_enacted_rejected_when_asm_not_enacted() {
+        let repo = new_repo();
+        let action_id = save_reveal_confirmed_approved(&repo).await;
+
+        let err = report_broadcast_progress(
+            &repo,
+            "mock://asm-membership",
+            Authority::StrataAdmin,
+            &action_id,
+            ReportBroadcastProgressRequest {
+                broadcast_status: "reveal_confirmed".to_string(),
+                proposal_status: Some("enacted".to_string()),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn reconcile_promotes_reveal_confirmed_when_asm_enacted() {
+        let repo = new_repo();
+        let action_id = save_reveal_confirmed_approved(&repo).await;
+
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Enacted);
     }
 }

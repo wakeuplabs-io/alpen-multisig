@@ -64,7 +64,7 @@ pub enum ProposalStatus {
     Pending,
     /// Threshold reached, broadcast to Bitcoin. Onchain, awaiting enactment (~2016 blocks).
     Approved,
-    /// Enacted onchain.
+    /// ASM applied the governance change (not merely reveal confirmed on Bitcoin).
     Enacted,
     /// Canceled during the approved window.
     Canceled,

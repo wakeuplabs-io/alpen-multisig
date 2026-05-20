@@ -4,6 +4,7 @@ import type { BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
 	phase: BroadcastPhase
+	proposalStatus?: string
 	commitTxid?: string
 	revealTxid?: string
 	error?: string | null
@@ -14,7 +15,7 @@ type Step = { label: string; detail: string }
 const STEPS: Step[] = [
 	{ label: 'Commit', detail: 'Sending commit transaction to Bitcoin' },
 	{ label: 'Reveal', detail: 'Sending reveal transaction once commit confirms' },
-	{ label: 'Enacted', detail: 'Proposal enacted on-chain' },
+	{ label: 'Enactment', detail: 'ASM applies the governance change after the confirmation delay' },
 ]
 
 function CopyButton({ text }: { text: string }) {
@@ -51,9 +52,10 @@ function TxidRow({ label, txid }: { label: string; txid: string }) {
 	)
 }
 
-export function BroadcastPhaseProgress({ phase, commitTxid, revealTxid, error }: Props) {
+export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, revealTxid, error }: Props) {
 	const isError = phase === 'error'
 	const isDone = phase === 'done'
+	const isEnacted = proposalStatus === 'enacted'
 
 	// broadcasting = step 0 active, done = all steps complete
 	const activeStep = phase === 'broadcasting' ? 0 : isDone ? STEPS.length : -1
@@ -62,7 +64,13 @@ export function BroadcastPhaseProgress({ phase, commitTxid, revealTxid, error }:
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 			<div className="border-b border-[#f3f4f6] px-6 py-4">
 				<h3 className="m-0 text-[15px] font-semibold text-[#111827]">
-					{isDone ? 'Broadcast complete' : isError ? 'Broadcast failed' : 'Broadcasting…'}
+					{isDone
+						? isEnacted
+							? 'Proposal enacted'
+							: 'Reveal confirmed — awaiting enactment'
+						: isError
+							? 'Broadcast failed'
+							: 'Broadcasting…'}
 				</h3>
 			</div>
 

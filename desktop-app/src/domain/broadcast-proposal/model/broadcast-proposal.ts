@@ -34,7 +34,7 @@ export function broadcastStatusLabel(status: BroadcastStatus): string {
 		case 'reveal_broadcasted':
 			return 'Reveal broadcast — awaiting confirmation'
 		case 'reveal_confirmed':
-			return 'Enacted'
+			return 'Reveal confirmed — awaiting enactment'
 		case 'failed':
 			return 'Failed'
 	}

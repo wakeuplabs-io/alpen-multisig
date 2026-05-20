@@ -20,7 +20,23 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC, opts = 
 	await $('button[data-testid="e2e-picking-continue"]').click()
 
 	await $('//h1[contains(.,"Select authority")]').waitForDisplayed({ timeout: 60000 })
-	await $('button[data-testid="e2e-authority-select-continue"]').click()
+	// Membership check disables Continue until ASM confirms the signer; wait for Strata Admin.
+	await browser.waitUntil(
+		async () => {
+			const badge = await $(
+				'//button[.//p[contains(text(),"Strata Administrator")]]//span[contains(text(),"Available")]',
+			)
+			return badge.isDisplayed()
+		},
+		{
+			timeout: 90000,
+			timeoutMsg: 'Strata Administrator should show Available after ASM membership check',
+		},
+	)
+	await $('//button[.//p[contains(text(),"Strata Administrator")]]').click()
+	const authorityContinue = await $('button[data-testid="e2e-authority-select-continue"]')
+	await authorityContinue.waitForClickable({ timeout: 30000 })
+	await authorityContinue.click()
 
 	await $('//h1[contains(.,"Authenticate session")]').waitForDisplayed({ timeout: 60000 })
 	await $('button[data-testid="e2e-authenticate-submit"]').click()

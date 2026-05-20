@@ -96,6 +96,7 @@ export function BroadcastProposalScreen() {
 					{showProgress && (
 						<BroadcastPhaseProgress
 							phase={phase}
+							proposalStatus={proposal?.status ?? result?.proposalStatus}
 							commitTxid={result?.commitTxid}
 							revealTxid={result?.revealTxid}
 							error={error}
@@ -108,8 +109,10 @@ export function BroadcastProposalScreen() {
 							data-testid="e2e-broadcast-done-banner"
 						>
 							<p className="m-0 text-sm font-medium text-[#065f46]">
-								Proposal {proposal?.status ?? result?.proposalStatus ?? 'updated'} onchain (
-								{proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
+								{proposal?.status === 'enacted' || result?.proposalStatus === 'enacted'
+									? 'Proposal enacted on-chain.'
+									: 'Reveal confirmed on-chain. Proposal stays approved until ASM enactment; refresh the dashboard after the confirmation delay.'}{' '}
+								({proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
 							</p>
 							<button
 								type="button"

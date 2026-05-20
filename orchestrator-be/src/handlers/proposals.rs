@@ -94,6 +94,13 @@ pub async fn list_proposals(
     auth: AuthenticatedSession,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
+    proposals::reconcile_enacted_for_authority(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+    )
+    .await?;
+
     let proposals =
         proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
 
@@ -106,9 +113,17 @@ pub async fn get_proposal(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
+    let action_id = ActionId(action_id);
+    proposals::reconcile_enacted_for_action(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+        &action_id,
+    )
+    .await?;
+
     let proposal =
-        proposals::get_update_action(state.repo.as_ref(), auth.authority, &ActionId(action_id))
-            .await?;
+        proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
 
     Ok(Json(proposal))
 }
@@ -210,6 +225,7 @@ pub async fn report_broadcast_progress(
     let action_id = ActionId(action_id);
     let proposal = proposals::report_broadcast_progress(
         state.repo.as_ref(),
+        &state.asm_rpc_url,
         auth.authority,
         &action_id,
         proposals::ReportBroadcastProgressRequest {
