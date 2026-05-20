@@ -4,7 +4,8 @@
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  
 **Wave 2:** **Closed** (sign-off 2026-05-19; A–G merged on `develop`).  
 **Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)  
-**Wave 3:** **Closed** (sign-off 2026-05-20; W3-0–W3-8 merged on `develop`).
+**Wave 3:** **Closed** (sign-off 2026-05-20; W3-0–W3-8 merged on `develop`).  
+**Assessment:** **Closed** (2026-05-20). Deferred items captured as USs / NFRs in [deferred-backlog.md](deferred-backlog.md). No Wave 4 scheduled.
 
 ---
 
@@ -71,13 +72,11 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 
 ---
 
-## Next steps (post–Wave 3 close)
+## Next steps (assessment closed)
 
-1. **develop → main** — Wave 3 complete; merge gate open. Run final E2E WDIO pass on `develop` tip before merging.
+1. **develop → main** — Run final E2E WDIO pass on `develop` tip; record result below. Gate is open once pass is logged.
 2. **P-055 docs** — `sps-reference/` after Alpen legal OK (gate §4 resolved).
-3. **Deferred backlog** — P-011 full, US-H5, P-053 execution, P-031, P-022/P-064, P-048, CI WebDriver — schedule as Wave 4 or separate follow-up PRs on `develop`.
-4. **P-017 / P-018** — Session TTL, rate-limit, `/reset-broadcast` endpoint (Track D remainder, not gated on Wave 3).
-5. **Follow-up slices** — remaining D / E / F / G backlog as PRs to `develop`.
+3. **Deferred backlog** — All items captured as USs / NFRs in [deferred-backlog.md](deferred-backlog.md). Pick up as standalone PRs when prioritized; no Wave 4 pre-planned.
 
 ---
 
@@ -132,21 +131,23 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 
 ---
 
-## Future appendix — deferred backlog
+## Deferred backlog
 
-Items not addressed in Waves 1–3. Schedule as Wave 4 or targeted follow-up PRs.
+All items documented as User Stories and Non-Functional Requirements in **[deferred-backlog.md](deferred-backlog.md)**.
 
-| P-ID | Summary | Priority |
-|------|---------|----------|
-| P-011 | Full proposal expiry enforcement (TTL-based cancellation) | High |
-| P-017 | Session/challenge TTL + rate-limit (`tower-governor`) | High |
-| P-018 | Admin `/reset-broadcast` endpoint; resumable broadcast FSM | High |
-| US-H5 | Manual coordinator-down fallback flow (PRD §2.3) | High |
-| P-031 | Persistent storage (Postgres) for orchestrator-be | Medium |
-| P-022/P-064 | Payout-Admin authority + associated flows | Medium |
-| P-048 | Sequencer-Manager authority flow completion | Medium |
-| P-053 | Signer interviews + digest usability execution | Medium |
-| P-006 | On-device verification copy (depends on P-053 findings) | Low |
-| P-005 | Broadcast retry + jitter for RPC timeouts | Low |
-| CI WebDriver | Automate WDIO smoke in CI pipeline | Low |
-| `develop → main` | Merge gate — after final E2E WDIO pass on Wave 3 tip | — |
+| Item | Type | Priority |
+|------|------|----------|
+| US-H5 — Manual coordinator-down fallback | User Story | High |
+| US-EXP — Proposal expiry enforcement (P-011) | User Story | High |
+| US-RESET — Broadcast reset endpoint (P-018) | User Story | High |
+| US-DISC — Signer discovery & digest usability (P-053) | User Story | Medium |
+| NFR-AUTH — Session TTL + rate-limiting (P-017) | NFR | High |
+| NFR-PERSIST — Persistent proposal storage (P-031) | NFR | Medium |
+| NFR-TYPES — Shared authority/status types (P-022, P-064) | NFR | Medium |
+| NFR-SEC-ENCRYPT — Encryption at rest (P-048) | NFR | Medium |
+| NFR-SUPPLY-CHAIN — Full release pipeline (P-011 full) | NFR | Medium |
+| NFR-SIGNER-SAFETY — On-device verification gate (P-005, P-006) | NFR | Medium |
+| NFR-PAYOUT-ADMIN — Payout-Admin authority flow (P-022/P-064) | NFR | Medium |
+| NFR-SEQ-MGR — Sequencer-Manager flow completion (P-048) | NFR | Medium |
+| NFR-CI-WEBDRIVER — Automated WebDriver smoke in CI | NFR | Low |
+| NFR-AUDIT-LOG — Append-only proposal event log (P-031) | NFR | Low |
