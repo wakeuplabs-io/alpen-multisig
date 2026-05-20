@@ -58,6 +58,13 @@ impl ProposalRepository for InMemoryProposalRepository {
         let Some(proposal) = proposals.get_mut(action_id) else {
             return Ok(None);
         };
+        let already_signed = proposal
+            .signatures
+            .iter()
+            .any(|s| s.signer_pubkey.eq_ignore_ascii_case(signer_pubkey));
+        if already_signed {
+            return Err(AppError::Conflict("signer already signed".to_string()));
+        }
         proposal.signatures.push(ProposalSignature {
             signer_pubkey: signer_pubkey.to_string(),
             signature_hex: signature_hex.to_string(),
@@ -129,5 +136,47 @@ impl ProposalRepository for InMemoryProposalRepository {
         }
         proposal.broadcast_error = error.map(|s| s.to_string());
         Ok(Some(proposal.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::authority::Authority;
+    use crate::domain::proposal::{
+        ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+    };
+
+    fn make_proposal(action_id: &str, signer_pubkey: &str) -> Proposal {
+        Proposal {
+            action_id: ActionId(action_id.to_string()),
+            seq_no: 1,
+            authority: Authority::StrataAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 2,
+            action_hex: "deadbeef".to_string(),
+            signatures: vec![ProposalSignature {
+                signer_pubkey: signer_pubkey.to_string(),
+                signature_hex: "sig0".to_string(),
+            }],
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_signature_rejects_duplicate_signer_under_write_lock() {
+        let repo = InMemoryProposalRepository::new();
+        let pubkey = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let proposal = make_proposal("action1", pubkey);
+        repo.save_proposal(proposal).await.unwrap();
+
+        // first add should fail — signer already in initial signatures
+        let result = repo
+            .add_signature(&ActionId("action1".to_string()), pubkey, "sig_dup")
+            .await;
+        assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
 }

@@ -1086,4 +1086,71 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Enacted);
     }
+
+    /// P-032 (race): concurrent duplicate approve results in exactly one signature stored.
+    #[tokio::test]
+    async fn test_concurrent_duplicate_approve_single_signature() {
+        use std::sync::Arc;
+
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let created = create_update_action(&*repo, session, 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        let action_id = created.action_id.clone();
+
+        // Two signers: one is sig_b (first signer was sig_a who created the proposal).
+        // We attempt two concurrent approvals from sig_b — only one should land.
+        let sig_b = sig_b();
+        let dup_sig = ProposalSignature {
+            signer_pubkey: sig_b.signer_pubkey.clone(),
+            signature_hex: "sig_b_dup".to_string(),
+        };
+
+        let repo1 = Arc::clone(&repo);
+        let repo2 = Arc::clone(&repo);
+        let action_id1 = action_id.clone();
+        let action_id2 = action_id.clone();
+        let session1 = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b.signer_pubkey,
+        };
+        let session2 = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &dup_sig.signer_pubkey,
+        };
+
+        let (r1, r2) = tokio::join!(
+            approve_action(&*repo1, session1, &action_id1, &sig_b),
+            approve_action(&*repo2, session2, &action_id2, &dup_sig),
+        );
+
+        let successes = [r1.is_ok(), r2.is_ok()].iter().filter(|&&ok| ok).count();
+        let conflicts = [r1.is_err(), r2.is_err()]
+            .iter()
+            .filter(|&&err| err)
+            .count();
+        assert_eq!(successes, 1, "exactly one approve should succeed");
+        assert_eq!(
+            conflicts, 1,
+            "exactly one approve should fail with conflict"
+        );
+
+        let final_proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        let b_sigs: Vec<_> = final_proposal
+            .signatures
+            .iter()
+            .filter(|s| s.signer_pubkey.eq_ignore_ascii_case(&sig_b.signer_pubkey))
+            .collect();
+        assert_eq!(
+            b_sigs.len(),
+            1,
+            "only one signature from sig_b must be stored"
+        );
+    }
 }
