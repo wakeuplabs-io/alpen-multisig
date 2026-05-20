@@ -26,13 +26,12 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
-		const prepareBtn = await $('button[data-testid="e2e-broadcast-prepare"]')
-		await prepareBtn.waitForClickable({ timeout: 60000 })
-		await prepareBtn.click()
-
+		// Screen auto-runs prepare on mount; wait for the confirm step (prepare only shows as Retry on error).
 		const confirmBtn = await $('button[data-testid="e2e-broadcast-confirm"]')
-		await confirmBtn.waitForDisplayed({ timeout: 180000 })
-		await confirmBtn.waitForClickable({ timeout: 60000 })
+		await confirmBtn.waitForClickable({
+			timeout: 180000,
+			timeoutMsg: 'Prepare broadcast should finish and enable Confirm & Broadcast',
+		})
 		await confirmBtn.click()
 
 		// Orchestrator: commit → wait conf → reveal → wait conf. Regtest must mine during that wait.
