@@ -9,6 +9,7 @@
     "lint": "eslint src",
     "format:check": "prettier --check src",
     "test:ipc-schemas": "tsx src/api/ipc-schemas.test.ts",
+    "test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
