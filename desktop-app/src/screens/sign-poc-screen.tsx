@@ -5,6 +5,7 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -168,6 +169,7 @@ export function SignPocScreen() {
 				seqno: proposal.seqNo,
 				actionHex: decodedActionHex,
 			})
+			assertWalletPubkeyBinding(signerPubkey, signed.publicKeyHex)
 			const approved = await approveProposal({
 				baseUrl: ORCHESTRATOR_BASE_URL,
 				actionId: proposal.actionId,
