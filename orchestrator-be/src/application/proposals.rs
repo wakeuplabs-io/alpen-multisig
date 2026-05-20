@@ -58,6 +58,8 @@ pub(crate) async fn create_update_action(
         commit_txid: None,
         reveal_txid: None,
         broadcast_error: None,
+        target_action_id: None,
+        activation_height: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -633,6 +635,8 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -891,6 +895,8 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -946,6 +952,8 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")

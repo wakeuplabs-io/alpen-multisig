@@ -137,6 +137,35 @@ impl ProposalRepository for InMemoryProposalRepository {
         proposal.broadcast_error = error.map(|s| s.to_string());
         Ok(Some(proposal.clone()))
     }
+
+    async fn find_cancel_for_target(
+        &self,
+        target: &ActionId,
+    ) -> Result<Option<Proposal>, AppError> {
+        let proposals = self
+            .proposals
+            .read()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        Ok(proposals
+            .values()
+            .find(|p| p.target_action_id.as_ref() == Some(target))
+            .cloned())
+    }
+
+    async fn update_activation_height(
+        &self,
+        action_id: &ActionId,
+        height: u64,
+    ) -> Result<(), AppError> {
+        let mut proposals = self
+            .proposals
+            .write()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        if let Some(proposal) = proposals.get_mut(action_id) {
+            proposal.activation_height = Some(height);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
