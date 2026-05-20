@@ -57,3 +57,65 @@ if (sessionParsed.success) {
 
 console.log('ipc-schemas: proposal null Option fields OK')
 console.log('ipc-schemas: auth schemas OK')
+
+import {
+	sighashResultSchema,
+	verifyResultSchema,
+	signatureResultSchema,
+	decodedActionSchema,
+	rawOrchestratorAuthChallengeSchema,
+	rawOrchestratorAuthSessionSchema,
+	multisigConfigSchema,
+	authorityMembershipsSchema,
+	buildActionHexResponseSchema,
+} from './ipc-schemas.ts'
+
+// signing schemas
+const sighash = sighashResultSchema.safeParse({ sighashHex: 'aabb', seqno: 1 })
+assert.equal(sighash.success, true)
+
+const verify = verifyResultSchema.safeParse({ valid: true, signaturesVerified: 2, thresholdRequired: 2 })
+assert.equal(verify.success, true)
+
+const sig = signatureResultSchema.safeParse({ publicKeyHex: '02aa', signatureHex: 'cc' })
+assert.equal(sig.success, true)
+
+const actionMultisig = decodedActionSchema.safeParse({
+	kind: 'multisig_update',
+	role: 'strata_admin',
+	addKeys: ['02aa'],
+	removeKeys: [],
+	newThreshold: 2,
+})
+assert.equal(actionMultisig.success, true)
+
+const actionUnknown = decodedActionSchema.safeParse({ kind: 'unknown', rawHex: 'deadbeef' })
+assert.equal(actionUnknown.success, true)
+
+// orchestrator-auth raw schemas (snake_case from Tauri)
+const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({ challenge_id: 'c1', challenge_hex: 'aa' })
+assert.equal(rawChallenge.success, true)
+
+const rawSession = rawOrchestratorAuthSessionSchema.safeParse({
+	token: 'tok',
+	authority: 'strata_admin',
+	signer_pubkey: '02aa',
+	expires_at_unix_ms: 9999,
+})
+assert.equal(rawSession.success, true)
+
+// asm-state schemas
+const config = multisigConfigSchema.safeParse({ signers: ['02aa', '02bb'], threshold: 2 })
+assert.equal(config.success, true)
+
+const memberships = authorityMembershipsSchema.safeParse({ strata_admin: true, sequencer_manager: false })
+assert.equal(memberships.success, true)
+
+// action-builder schema
+const buildResp = buildActionHexResponseSchema.safeParse({ actionHex: 'deadbeef' })
+assert.equal(buildResp.success, true)
+
+console.log('ipc-schemas: signing schemas OK')
+console.log('ipc-schemas: orchestrator-auth raw schemas OK')
+console.log('ipc-schemas: asm-state schemas OK')
+console.log('ipc-schemas: action-builder schema OK')
