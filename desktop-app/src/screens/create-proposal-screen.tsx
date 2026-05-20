@@ -5,7 +5,7 @@ import { useSession } from '@/hooks/use-session'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 
-export function ProposalPocScreen() {
+export function CreateProposalScreen() {
 	const navigate = useNavigate()
 	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession, connectSession } = useSession()
 	const createProposal = useCreateProposal()

@@ -7,8 +7,8 @@ import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { BroadcastProposalScreen } from '@/screens/broadcast-proposal-screen'
 import { ProposalDetailScreen } from '@/screens/proposal-detail-screen'
-import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
-import { SignPocScreen } from '@/screens/sign-poc-screen'
+import { CreateProposalScreen } from '@/screens/create-proposal-screen'
+import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -50,7 +50,7 @@ export default function App() {
 								path="/proposals/create"
 								element={
 									<RequireAuth>
-										<ProposalPocScreen />
+										<CreateProposalScreen />
 									</RequireAuth>
 								}
 							/>
@@ -58,7 +58,7 @@ export default function App() {
 								path="/dev/proposal"
 								element={
 									<RequireAuth>
-										<ProposalPocScreen />
+										<CreateProposalScreen />
 									</RequireAuth>
 								}
 							/>
@@ -66,7 +66,7 @@ export default function App() {
 								path="/proposals/:actionId/sign"
 								element={
 									<RequireAuth>
-										<SignPocScreen />
+										<SignScreen />
 									</RequireAuth>
 								}
 							/>
@@ -82,7 +82,7 @@ export default function App() {
 								path="/dev/sign"
 								element={
 									<RequireAuth>
-										<SignPocScreen />
+										<SignScreen />
 									</RequireAuth>
 								}
 							/>

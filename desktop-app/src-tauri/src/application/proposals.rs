@@ -42,10 +42,7 @@ pub enum BroadcastError {
     Timeout { txid: String },
 }
 
-/// Dust + protocol minimum sats locked in the commit output.
-const COMMIT_DUST_SATS: u64 = 1500;
-/// Estimated vbytes for an SPS-51 reveal transaction (conservative upper bound).
-const REVEAL_TX_VBYTES: u64 = 350;
+use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
 ///

@@ -11,7 +11,7 @@ import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 
-export function SignPocScreen() {
+export function SignScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, adapter, selectedRole, sessionTimeLabel, disconnectSession, ensureOrchestratorSession } = useSession()
