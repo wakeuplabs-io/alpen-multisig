@@ -10,4 +10,5 @@ pub mod dev_secrets;
 pub mod env_loader;
 pub mod hw_wallet;
 pub mod orchestrator_client;
+pub mod rpc_timeout;
 pub mod signing;
