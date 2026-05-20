@@ -94,7 +94,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | W3-1 | `wave3/w3-1-ipc-zod` | IPC Zod remainder | P-008 | merged | [#152](https://github.com/wakeuplabs-io/alpen-multisig/pull/152) |
 | W3-2 | `wave3/w3-2-coordination` | Coordination correctness | P-019, P-032 (race) | merged | [#153](https://github.com/wakeuplabs-io/alpen-multisig/pull/153) |
 | W3-3 | `wave3/w3-3-test-floor` | Happy-path test floor | P-032 (floor) | merged | [#154](https://github.com/wakeuplabs-io/alpen-multisig/pull/154) |
-| W3-4 | `wave3/w3-4-timeout-errors` | Timeout + typed errors | P-027, P-023 | in_progress | — |
+| W3-4 | `wave3/w3-4-timeout-errors` | Timeout + typed errors | P-027, P-023 | in_progress | [#155](https://github.com/wakeuplabs-io/alpen-multisig/pull/155) |
 | W3-5 | `wave3/w3-5-correlation` | Correlation slice | P-029 | pending | — |
 | W3-6 | `wave3/w3-6-wallet-pubkey` | Wallet pubkey binding | P-039 | pending | — |
 | W3-7 | `wave3/w3-7-hygiene` | Codebase hygiene | HYG-POC, P-036 [, P-057] | pending | — |
@@ -109,8 +109,8 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | P-019 | done | W3-2 | Duplicate check in `add_signature` under write lock |
 | P-032 (race) | done | W3-2 | Integration test concurrent duplicate approve |
 | P-032 (floor) | done | W3-3 | Claim/broadcast conflict guards + `e2e_propose_sign` |
-| P-027 | in_progress | W3-4 | ~30s timeout on Tauri ASM/Bitcoin RPC in broadcast path |
-| P-023 | pending | W3-4 | `errorCode` on happy-path orchestrator APIs + Tauri/bridge |
+| P-027 | done | W3-4 | ~30s timeout on Tauri ASM/Bitcoin RPC in broadcast path |
+| P-023 | done | W3-4 | `errorCode` on happy-path orchestrator APIs + Tauri/bridge |
 | P-029 | pending | W3-5 | `X-Request-Id` in bridge; `tracing` on approve/patch/claim/broadcast |
 | P-039 | pending | W3-6 | Reject when `wallet.publicKeyHex !== signature.publicKeyHex` |
 | HYG-POC | pending | W3-7 | Remove POC naming from product code + active docs |
