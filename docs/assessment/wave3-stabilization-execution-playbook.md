@@ -1,6 +1,6 @@
 # Wave 3 — Stabilization execution playbook
 
-**Status:** Exported 2026-05-20 for a **separate execution session** (not the Cursor plan file).  
+**Status:** **Closed** 2026-05-20 — all W3-0 through W3-8 PRs merged on `develop`.  
 **Base branch:** `develop` only — **`develop → main` is out of scope.**  
 **Source plan:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md) (Wave 3 section updated by W3-8).  
 **Tracker (SSOT):** [action-plan-progress.md](action-plan-progress.md) — all P-ID status lives there; **no GitHub Issues** for Wave 3.

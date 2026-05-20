@@ -10,26 +10,24 @@ PR [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) merged (Wave
 
 **Explicitly out of #140:** WDIO negative / US-H5 matrix in `e2e-webdriver` (manual curated specs only).
 
-## P-008 remainder
+## P-008 remainder — **done** (Wave 3, W3-1 [#152](https://github.com/wakeuplabs-io/alpen-multisig/pull/152))
 
-Add Zod (or equivalent validation) at `tauriCall` for IPC surfaces still unchecked:
+Zod schemas added at `tauriCall` boundary for all remaining IPC surfaces:
 
-| Module | Commands (examples) |
-|--------|---------------------|
-| `signing.ts` | `decode_action_hex`, `compute_sighash`, `verify_threshold` |
-| `orchestrator-auth.ts` | `orchestrator_auth_*` |
-| `asm-state.ts` | `get_multisig_config` |
-| `action-builder.ts` | `build_admin_multisig_update_hex` |
+| Module | Status |
+|--------|--------|
+| `signing.ts` — `decode_action_hex`, `compute_sighash`, `verify_threshold`, `sign_sighash_mock` | done |
+| `orchestrator-auth.ts` — challenge + session schemas | done |
+| `asm-state.ts` — `get_multisig_config`, authority memberships | done |
+| `action-builder.ts` — `build_admin_multisig_update_hex` | done |
 
-## P-032 remainder (axis-10 inventory)
+## P-032 remainder — **done** (Wave 3, W3-2/W3-3 [#153](https://github.com/wakeuplabs-io/alpen-multisig/pull/153) / [#154](https://github.com/wakeuplabs-io/alpen-multisig/pull/154))
 
-Per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) Track E — **not** via new `e2e-webdriver` specs unless manually promoted:
-
-| Item | Suggested home |
-|------|----------------|
-| Broadcast negative paths | Integration tests (`orchestrator-be`) or dedicated test crate |
-| Concurrent approval races | Load/integration tests (pairs with P-019) |
-| Extra frontend smoke | Curated WDIO only when stable |
+| Item | Delivered |
+|------|-----------|
+| Concurrent approval race (dedup under write lock) | P-019 + integration test W3-2 |
+| Claim when pending, broadcast conflict guards | Handler tests W3-3 |
+| `e2e_propose_sign` extended to quorum → approved | W3-3 e2e-tests |
 
 ## US-H5 manual fallback
 

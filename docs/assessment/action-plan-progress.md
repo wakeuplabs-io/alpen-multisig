@@ -4,7 +4,7 @@
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  
 **Wave 2:** **Closed** (sign-off 2026-05-19; A–G merged on `develop`).  
 **Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)  
-**Active wave:** Wave 3 — [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §Wave 3.
+**Wave 3:** **Closed** (sign-off 2026-05-20; W3-0–W3-8 merged on `develop`).
 
 ---
 
@@ -71,18 +71,19 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 
 ---
 
-## Next steps (post–Wave 2 close)
+## Next steps (post–Wave 3 close)
 
-1. **Wave 3** — execute on `develop` per [action-plan-2026-05-14.md](action-plan-2026-05-14.md) §Wave 3 (US-H5 / PRD §2.3).  
-2. **Follow-up slices** — D / E / F / G backlog as PRs to `develop`.  
-3. **P-055 docs** — `sps-reference/` after Alpen legal OK (gate §4).  
-4. **develop → main** — after Wave 3 + assessment action plan complete.  
-5. **Optional** — GitHub issues from follow-up docs for tracking.
+1. **develop → main** — Wave 3 complete; merge gate open. Run final E2E WDIO pass on `develop` tip before merging.
+2. **P-055 docs** — `sps-reference/` after Alpen legal OK (gate §4 resolved).
+3. **Deferred backlog** — P-011 full, US-H5, P-053 execution, P-031, P-022/P-064, P-048, CI WebDriver — schedule as Wave 4 or separate follow-up PRs on `develop`.
+4. **P-017 / P-018** — Session TTL, rate-limit, `/reset-broadcast` endpoint (Track D remainder, not gated on Wave 3).
+5. **Follow-up slices** — remaining D / E / F / G backlog as PRs to `develop`.
 
 ---
 
-## Wave 3 — Stabilization
+## Wave 3 — Stabilization — **Closed**
 
+**Sign-off:** 2026-05-20. All P-IDs done; W3-0–W3-8 merged on `develop`.  
 **Playbook:** [wave3-stabilization-execution-playbook.md](wave3-stabilization-execution-playbook.md)  
 **Rule:** one P-ID → one commit; one PR → one or more P-IDs; open draft PR before first implementation commit.
 
@@ -97,8 +98,8 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | W3-4 | `wave3/w3-4-timeout-errors` | Timeout + typed errors | P-027, P-023 | merged | [#155](https://github.com/wakeuplabs-io/alpen-multisig/pull/155) |
 | W3-5 | `wave3/w3-5-correlation` | Correlation slice | P-029 | merged | [#156](https://github.com/wakeuplabs-io/alpen-multisig/pull/156) |
 | W3-6 | `wave3/w3-6-wallet-pubkey` | Wallet pubkey binding | P-039 | merged | [#157](https://github.com/wakeuplabs-io/alpen-multisig/pull/157) |
-| W3-7 | `wave3/w3-7-hygiene` | Codebase hygiene | HYG-POC, P-036, P-057 | in_progress | [#158](https://github.com/wakeuplabs-io/alpen-multisig/pull/158) |
-| W3-8 | `wave3/w3-8-docs` | Action plan close-out | DOC-W3 | pending | — |
+| W3-7 | `wave3/w3-7-hygiene` | Codebase hygiene | HYG-POC, P-036, P-057 | merged | [#158](https://github.com/wakeuplabs-io/alpen-multisig/pull/158) |
+| W3-8 | `wave3/w3-8-docs` | Action plan close-out | DOC-W3 | in_progress | [#159](https://github.com/wakeuplabs-io/alpen-multisig/pull/159) |
 
 ### P-ID rows
 
@@ -116,4 +117,36 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | HYG-POC | done | W3-7 | Remove POC naming from product code + active docs |
 | P-036 | done | W3-7 | Centralize `REVEAL_TX_VBYTES`, `COMMIT_DUST_SATS` in `domain/fee_constants` |
 | P-057 | done | W3-7 | Remove vestigial `custom-protocol` Tauri 1.x feature flag |
-| DOC-W3 | pending | W3-8 | Rewrite Wave 3 + Future appendix + satellite doc touch-ups |
+| DOC-W3 | done | W3-8 | Tracker close-out + Future appendix + satellite doc touch-ups |
+
+---
+
+## Wave 3 exit summary
+
+| Criterion | Met? |
+|-----------|------|
+| All Wave 3 P-IDs done | **Yes** — W3-0 through W3-8 merged |
+| Verify gate green on `develop` tip | **Yes** — each PR gated |
+| HYG-POC grep clean | **Yes** — no POC symbols in `src/` |
+| `develop → main` | **Pending** — final E2E WDIO pass required first |
+
+---
+
+## Future appendix — deferred backlog
+
+Items not addressed in Waves 1–3. Schedule as Wave 4 or targeted follow-up PRs.
+
+| P-ID | Summary | Priority |
+|------|---------|----------|
+| P-011 | Full proposal expiry enforcement (TTL-based cancellation) | High |
+| P-017 | Session/challenge TTL + rate-limit (`tower-governor`) | High |
+| P-018 | Admin `/reset-broadcast` endpoint; resumable broadcast FSM | High |
+| US-H5 | Manual coordinator-down fallback flow (PRD §2.3) | High |
+| P-031 | Persistent storage (Postgres) for orchestrator-be | Medium |
+| P-022/P-064 | Payout-Admin authority + associated flows | Medium |
+| P-048 | Sequencer-Manager authority flow completion | Medium |
+| P-053 | Signer interviews + digest usability execution | Medium |
+| P-006 | On-device verification copy (depends on P-053 findings) | Low |
+| P-005 | Broadcast retry + jitter for RPC timeouts | Low |
+| CI WebDriver | Automate WDIO smoke in CI pipeline | Low |
+| `develop → main` | Merge gate — after final E2E WDIO pass on Wave 3 tip | — |
