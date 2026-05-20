@@ -84,3 +84,14 @@ pub fn build_admin_multisig_update_hex(
         action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
     Ok(BuildActionHexResponse { action_hex })
 }
+
+#[tauri::command]
+pub fn build_cancel_action_hex(
+    target_action_hex: String,
+    target_seq_no: u64,
+) -> Result<BuildActionHexResponse, String> {
+    let action_hex =
+        action_codec::encode_cancel_hex_for_target(&target_action_hex, target_seq_no)
+            .map_err(|e| e.to_string())?;
+    Ok(BuildActionHexResponse { action_hex })
+}

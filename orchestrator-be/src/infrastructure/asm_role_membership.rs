@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
-use strata_asm_params::Role;
+use strata_asm_params::{Role, UpdateTxType};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 
 use crate::domain::authority::Authority;
@@ -99,6 +99,38 @@ pub(crate) async fn threshold_for_authority(
         ))
     })?;
     Ok(u16::from(authority_config.config().threshold()))
+}
+
+/// Return the confirmation depth (in blocks) before an update for `authority` activates.
+///
+/// Returns `0` when the authority is configured for immediate activation (no queue).
+pub(crate) async fn lock_period_for_authority(
+    rpc_url: &str,
+    authority: Authority,
+) -> Result<u64, AppError> {
+    if let Some(period) = mock_lock_period(rpc_url, authority) {
+        return Ok(period);
+    }
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+    let tx_type = authority_to_update_tx_type(authority).map_err(AppError::BadRequest)?;
+    let depth = admin.confirmation_depth(tx_type).unwrap_or(0);
+    Ok(depth as u64)
+}
+
+fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, String> {
+    match authority {
+        Authority::StrataAdmin => Ok(UpdateTxType::StrataAdminMultisigUpdate),
+        Authority::AlpenAdmin => Ok(UpdateTxType::AlpenAdminMultisigUpdate),
+        Authority::SequencerManager => Ok(UpdateTxType::StrataSeqManagerMultisigUpdate),
+        _ => Err(format!(
+            "authority `{authority:?}` has no UpdateTxType mapping"
+        )),
+    }
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
@@ -282,6 +314,16 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     match authority {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
+        _ => None,
+    }
+}
+
+fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+    match authority {
+        Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
         _ => None,
     }
 }

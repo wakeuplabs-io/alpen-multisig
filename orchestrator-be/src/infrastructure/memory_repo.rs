@@ -192,6 +192,8 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
         }
     }
 

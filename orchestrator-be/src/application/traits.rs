@@ -48,7 +48,6 @@ pub(crate) trait ProposalRepository: Send + Sync {
     ) -> Result<Option<Proposal>, AppError>;
 
     /// Find the cancel proposal that targets the given action_id, if one exists.
-    #[allow(dead_code)]
     async fn find_cancel_for_target(
         &self,
         target: &ActionId,

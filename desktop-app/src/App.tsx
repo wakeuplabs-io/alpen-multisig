@@ -6,6 +6,9 @@ import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { BroadcastProposalScreen } from '@/screens/broadcast-proposal-screen'
+import { CancelProposalBroadcastScreen } from '@/screens/cancel-proposal-broadcast-screen'
+import { CancelProposalScreen } from '@/screens/cancel-proposal-screen'
+import { CancelProposalSignScreen } from '@/screens/cancel-proposal-sign-screen'
 import { ProposalDetailScreen } from '@/screens/proposal-detail-screen'
 import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
 import { SignPocScreen } from '@/screens/sign-poc-screen'
@@ -75,6 +78,30 @@ export default function App() {
 								element={
 									<RequireAuth>
 										<BroadcastProposalScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/:actionId/cancel"
+								element={
+									<RequireAuth>
+										<CancelProposalScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/:actionId/cancel/sign"
+								element={
+									<RequireAuth>
+										<CancelProposalSignScreen />
+									</RequireAuth>
+								}
+							/>
+							<Route
+								path="/proposals/:actionId/cancel/broadcast"
+								element={
+									<RequireAuth>
+										<CancelProposalBroadcastScreen />
 									</RequireAuth>
 								}
 							/>

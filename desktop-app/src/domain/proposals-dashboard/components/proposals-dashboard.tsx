@@ -8,6 +8,8 @@ import {
 	SignaturePenMutedIcon,
 } from '@/assets/icons'
 
+const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
+
 type Props = {
 	authorityLabel: string
 	signerPubkey: string | null
@@ -22,6 +24,7 @@ type Props = {
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
+	onCancelProposal: (actionId: string) => void
 }
 
 export function ProposalsDashboard({
@@ -38,6 +41,7 @@ export function ProposalsDashboard({
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
+	onCancelProposal,
 }: Props) {
 	const isEmpty =
 		!isLoading &&
@@ -98,6 +102,7 @@ export function ProposalsDashboard({
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
 						onViewProposal={onViewProposal}
+						onCancelProposal={onCancelProposal}
 					/>
 					<ProposalGroup
 						title="Pending"
@@ -110,6 +115,7 @@ export function ProposalsDashboard({
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
 						onViewProposal={onViewProposal}
+						onCancelProposal={onCancelProposal}
 					/>
 					<ProposalGroup
 						title="Executed & Canceled"
@@ -122,6 +128,7 @@ export function ProposalsDashboard({
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
 						onViewProposal={onViewProposal}
+						onCancelProposal={onCancelProposal}
 					/>
 					<ProposalGroup
 						title="Expired / Skipped"
@@ -134,6 +141,7 @@ export function ProposalsDashboard({
 						onSignProposal={onSignProposal}
 						onBroadcastProposal={onBroadcastProposal}
 						onViewProposal={onViewProposal}
+						onCancelProposal={onCancelProposal}
 					/>
 				</div>
 			)}
@@ -174,6 +182,7 @@ function ProposalGroup({
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
+	onCancelProposal,
 }: {
 	title: string
 	count: number
@@ -185,6 +194,7 @@ function ProposalGroup({
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
+	onCancelProposal: (actionId: string) => void
 }) {
 	const [open, setOpen] = useState(initialOpen)
 
@@ -226,6 +236,7 @@ function ProposalGroup({
 								onSignProposal={onSignProposal}
 								onBroadcastProposal={onBroadcastProposal}
 								onViewProposal={onViewProposal}
+								onCancelProposal={onCancelProposal}
 							/>
 						))}
 					</div>
@@ -240,12 +251,14 @@ function ProposalCard({
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
+	onCancelProposal,
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
+	onCancelProposal: (actionId: string) => void
 }) {
 	const [hovered, setHovered] = useState(false)
 	const requiredSignatures = proposal.requiredSignatures
@@ -285,6 +298,12 @@ function ProposalCard({
 					<p className="m-0 font-['BIZ_UDPMincho'] text-[24px] leading-[1.2] text-[#121212]">{proposalTitle}</p>
 					<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
 						#{proposal.seqNo} · {proposalTypeLabel} · {proposal.authority}
+						{proposal.kind === 'cancel' && proposal.targetActionId !== null && (
+							<>
+								{' '}· Cancels{' '}
+								<span className="font-mono">{proposal.targetActionId.slice(0, 8)}…</span>
+							</>
+						)}
 					</p>
 				</div>
 				<StatusBadge status={proposal.status} />
@@ -329,10 +348,26 @@ function ProposalCard({
 				</div>
 			) : awaitingEnactment ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
-					<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
-						Refresh the dashboard after the confirmation delay to see enacted status.
-					</p>
+					<div className="flex items-start justify-between gap-3">
+						<div>
+							<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
+							<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
+								Refresh the dashboard after the confirmation delay to see enacted status.
+							</p>
+						</div>
+						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
+							<button
+								type="button"
+								className="shrink-0 rounded-xl border border-[#dc2626] bg-white px-3 py-1.5 text-[13px] font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+								onClick={(e) => {
+									e.stopPropagation()
+									onCancelProposal(proposal.actionId)
+								}}
+							>
+								Cancel
+							</button>
+						)}
+					</div>
 				</div>
 			) : broadcastInProgress ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
@@ -371,10 +406,12 @@ function ProposalCard({
 }
 
 function buildProposalTitle(proposal: Proposal): string {
+	if (proposal.kind === 'cancel') return `Cancel #${proposal.seqNo}`
 	return `Proposal #${proposal.seqNo} - ${inferProposalType(proposal)}`
 }
 
 function inferProposalType(proposal: Proposal): string {
+	if (proposal.kind === 'cancel') return 'Cancel'
 	if (proposal.authority.toLowerCase().includes('sequencer')) {
 		return 'Sequencer update'
 	}

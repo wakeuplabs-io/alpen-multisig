@@ -18,3 +18,10 @@ export function buildAdminMultisigUpdateHex(
 ): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_admin_multisig_update_hex', { input }, buildActionHexResponseSchema)
 }
+
+export function buildCancelActionHex(
+	targetActionHex: string,
+	targetSeqNo: number,
+): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_cancel_action_hex', { targetActionHex, targetSeqNo }, buildActionHexResponseSchema)
+}

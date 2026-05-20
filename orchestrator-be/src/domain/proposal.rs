@@ -107,7 +107,6 @@ pub struct Proposal {
 }
 
 impl Proposal {
-    #[allow(dead_code)]
     pub fn is_cancel(&self) -> bool {
         self.target_action_id.is_some()
     }

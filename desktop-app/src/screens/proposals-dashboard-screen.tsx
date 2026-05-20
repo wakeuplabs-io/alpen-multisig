@@ -126,13 +126,21 @@ export function ProposalsDashboardScreen() {
 					navigate('/proposals/create')
 				}}
 				onViewProposal={(actionId) => {
-					navigate(`/proposals/${actionId}`, { state: { signerPubkey } })
+					const p = proposals.find((pr) => pr.actionId === actionId)
+					if (p?.kind === 'cancel' && p.targetActionId !== null) {
+						navigate(`/proposals/${p.targetActionId}/cancel`, { state: { signerPubkey } })
+					} else {
+						navigate(`/proposals/${actionId}`, { state: { signerPubkey } })
+					}
 				}}
 				onSignProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/sign`)
 				}}
 				onBroadcastProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/broadcast`)
+				}}
+				onCancelProposal={(actionId) => {
+					navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })
 				}}
 			/>
 		</ScreenShell>

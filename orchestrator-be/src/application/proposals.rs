@@ -10,7 +10,8 @@ use crate::domain::proposal::{
     SeqNo,
 };
 use crate::error::AppError;
-use crate::infrastructure::asm_role_membership::threshold_for_authority;
+use crate::infrastructure::asm_role_membership::{lock_period_for_authority, threshold_for_authority};
+use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionContext<'a> {
@@ -260,6 +261,9 @@ pub(crate) async fn reconcile_enacted_for_authority(
         .await?;
 
     for proposal in approved {
+        if proposal.is_cancel() {
+            continue;
+        }
         if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
             continue;
         }
@@ -301,7 +305,8 @@ pub(crate) async fn reconcile_enacted_for_action(
     };
     require_proposal_authority(&proposal, authority)?;
 
-    if proposal.status != ProposalStatus::Approved
+    if proposal.is_cancel()
+        || proposal.status != ProposalStatus::Approved
         || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
         || proposal.reveal_txid.is_none()
     {
@@ -331,12 +336,94 @@ pub(crate) async fn reconcile_enacted_for_action(
     Ok(())
 }
 
+/// Create a cancel proposal for an Approved target, or return the existing one (idempotent).
+///
+/// `action_hex` encodes `MultisigAction::Cancel` — built by the desktop before signing.
+pub(crate) async fn create_cancel_proposal(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    target_action_id: ActionId,
+    seq_no: SeqNo,
+    action_hex: &str,
+    signer_pubkey: &str,
+    signature_hex: &str,
+) -> Result<Proposal, AppError> {
+    let target = repo
+        .find_by_action_id(&target_action_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if target.status != ProposalStatus::Approved {
+        return Err(AppError::BadRequest(format!(
+            "target proposal must be approved to cancel (current: {})",
+            target.status
+        )));
+    }
+
+    if !matches!(target.authority, Authority::AlpenAdmin | Authority::StrataAdmin) {
+        return Err(AppError::BadRequest(format!(
+            "cancel is only supported for AlpenAdmin and StrataAdmin (got: {:?})",
+            target.authority
+        )));
+    }
+
+    if let Some(existing) = repo.find_cancel_for_target(&target_action_id).await? {
+        return Ok(existing);
+    }
+
+    let required_signatures = threshold_for_authority(asm_rpc_url, target.authority).await?;
+    let action_id = compute_action_id(seq_no, action_hex)?;
+    let normalized_pubkey = normalize_signer_pubkey_hex(signer_pubkey);
+
+    let proposal = Proposal {
+        action_id,
+        seq_no,
+        authority: target.authority,
+        status: ProposalStatus::Pending,
+        required_signatures,
+        action_hex: action_hex.to_string(),
+        signatures: vec![ProposalSignature {
+            signer_pubkey: normalized_pubkey,
+            signature_hex: signature_hex.to_string(),
+        }],
+        broadcast_status: BroadcastStatus::default(),
+        commit_txid: None,
+        reveal_txid: None,
+        broadcast_error: None,
+        target_action_id: Some(target_action_id),
+        activation_height: None,
+    };
+
+    repo.save_proposal(proposal.clone()).await?;
+    Ok(proposal)
+}
+
+/// Compute and persist `activation_height` after a non-cancel proposal's reveal is confirmed.
+///
+/// Non-fatal: caller should log and continue on error rather than failing the progress report.
+async fn compute_and_store_activation_height(
+    proposal: &Proposal,
+    repo: &dyn ProposalRepository,
+    btc_client: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+) -> Result<(), AppError> {
+    let Some(reveal_txid) = &proposal.reveal_txid else {
+        return Ok(());
+    };
+    let reveal_confirm_block = btc_client.get_block_height_for_txid(reveal_txid).await?;
+    let lock_period = lock_period_for_authority(asm_rpc_url, proposal.authority).await?;
+    let activation_height = reveal_confirm_block + lock_period;
+    repo.update_activation_height(&proposal.action_id, activation_height)
+        .await
+}
+
 /// Persist broadcast sub-status reported by the desktop after local Bitcoin submission.
 pub(crate) async fn report_broadcast_progress(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
     session_authority: Authority,
     action_id: &ActionId,
+    btc_client: &dyn BitcoinRpcClient,
     body: ReportBroadcastProgressRequest,
 ) -> Result<Proposal, AppError> {
     let raw = repo
@@ -389,25 +476,59 @@ pub(crate) async fn report_broadcast_progress(
         }
     };
 
-    repo.update_broadcast_status(
-        action_id,
-        broadcast_status,
-        proposal_status,
-        body.commit_txid.as_deref(),
-        body.reveal_txid.as_deref(),
-        body.broadcast_error.as_deref(),
-    )
-    .await?
-    .ok_or(AppError::NotFound)
+    let updated = repo
+        .update_broadcast_status(
+            action_id,
+            broadcast_status,
+            proposal_status,
+            body.commit_txid.as_deref(),
+            body.reveal_txid.as_deref(),
+            body.broadcast_error.as_deref(),
+        )
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if updated.broadcast_status == BroadcastStatus::RevealConfirmed && !updated.is_cancel() {
+        if let Err(e) =
+            compute_and_store_activation_height(&updated, repo, btc_client, asm_rpc_url).await
+        {
+            tracing::warn!(
+                action_id = %updated.action_id.0,
+                "failed to compute activation_height: {e}"
+            );
+        }
+    }
+
+    Ok(updated)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
     use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 
     fn new_repo() -> InMemoryProposalRepository {
         InMemoryProposalRepository::new()
+    }
+
+    struct MockBitcoinRpcClient {
+        block_height: u64,
+    }
+
+    #[async_trait::async_trait]
+    impl BitcoinRpcClient for MockBitcoinRpcClient {
+        async fn estimate_fee_rate_sats_per_vb(&self, _target_blocks: u16) -> Result<u64, AppError> {
+            Ok(1)
+        }
+
+        async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
+            Ok(self.block_height)
+        }
+    }
+
+    fn mock_btc() -> MockBitcoinRpcClient {
+        MockBitcoinRpcClient { block_height: 800_000 }
     }
 
     const ACTION_HEX: &str = "deadbeef";
@@ -1043,6 +1164,7 @@ mod tests {
             "mock://asm-membership",
             Authority::StrataAdmin,
             &action_id,
+            &mock_btc(),
             ReportBroadcastProgressRequest {
                 broadcast_status: "reveal_confirmed".to_string(),
                 proposal_status: None,
@@ -1068,6 +1190,7 @@ mod tests {
             "mock://asm-membership",
             Authority::StrataAdmin,
             &action_id,
+            &mock_btc(),
             ReportBroadcastProgressRequest {
                 broadcast_status: "reveal_confirmed".to_string(),
                 proposal_status: Some("enacted".to_string()),
@@ -1093,6 +1216,171 @@ mod tests {
 
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Enacted);
+    }
+
+    // ---------------------------------------------------------------------------
+    // create_cancel_proposal tests
+    // ---------------------------------------------------------------------------
+
+    async fn save_approved_proposal(
+        repo: &InMemoryProposalRepository,
+        authority: Authority,
+        seq_no: SeqNo,
+        action_hex: &str,
+    ) -> Proposal {
+        let sig = sig_a();
+        let session = SessionContext {
+            authority,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(repo, session.clone(), seq_no, action_hex, &sig, 2)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(repo, session_b, "mock://asm-membership", &created.action_id)
+            .await
+            .unwrap();
+        repo.find_by_action_id(&created.action_id)
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_proposal_happy_path() {
+        let repo = new_repo();
+        // StrataAdmin has a mock threshold of 2; use it for cancel creation
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(cancel.status, ProposalStatus::Pending);
+        assert_eq!(cancel.authority, Authority::StrataAdmin);
+        assert_eq!(cancel.target_action_id, Some(target.action_id));
+        assert_eq!(cancel.signatures.len(), 1);
+        assert_eq!(cancel.action_hex, "cafebabe");
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_proposal_idempotent() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let first = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let second = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_b().signer_pubkey,
+            "cancel_sig_2",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(first.action_id, second.action_id);
+        assert_eq!(second.signatures.len(), 1, "idempotent: no new sig appended");
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_proposal_rejects_non_approved_target() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let pending = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+
+        let err = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            pending.action_id,
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::BadRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_proposal_rejects_unsupported_authority() {
+        // Insert approved proposals directly to avoid threshold_for_authority calls during setup.
+        let cases = [
+            (Authority::SequencerManager, ActionId("seq_target".to_string())),
+            (Authority::SecurityCouncil, ActionId("sec_target".to_string())),
+        ];
+
+        for (authority, target_action_id) in cases {
+            let repo = new_repo();
+            let target = Proposal {
+                action_id: target_action_id.clone(),
+                seq_no: 1,
+                authority,
+                status: ProposalStatus::Approved,
+                required_signatures: 2,
+                action_hex: ACTION_HEX.to_string(),
+                signatures: vec![sig_a(), sig_b()],
+                broadcast_status: BroadcastStatus::Idle,
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+            };
+            repo.save_proposal(target).await.unwrap();
+
+            let err = create_cancel_proposal(
+                &repo,
+                "mock://asm-membership",
+                target_action_id,
+                99,
+                "cafebabe",
+                &sig_a().signer_pubkey,
+                "cancel_sig",
+            )
+            .await
+            .unwrap_err();
+
+            assert!(
+                matches!(err, AppError::BadRequest(_)),
+                "expected BadRequest for authority {authority:?}"
+            );
+        }
     }
 
     /// P-032 (race): concurrent duplicate approve results in exactly one signature stored.

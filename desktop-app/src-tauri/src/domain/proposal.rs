@@ -4,6 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::authority::Authority;
 
+/// Summary of a cancel proposal attached to a target proposal's detail response.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CancelProposalSummary {
+    pub action_id: String,
+    pub status: String,
+    pub signatures: Vec<ProposalSignature>,
+    pub required_signatures: u16,
+}
+
 /// A proposal as seen by the desktop client.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Proposal {
@@ -18,6 +27,9 @@ pub struct Proposal {
     pub commit_txid: Option<String>,
     pub reveal_txid: Option<String>,
     pub broadcast_error: Option<String>,
+    pub target_action_id: Option<String>,
+    pub activation_height: Option<u64>,
+    pub cancel_proposal: Option<CancelProposalSummary>,
 }
 
 /// A signature attached to a proposal.

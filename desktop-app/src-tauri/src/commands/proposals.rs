@@ -1,8 +1,10 @@
 use desktop_app::application::orchestrator_auth;
-use desktop_app::application::orchestrator_client::{OrchestratorClient, OrchestratorError};
+use desktop_app::application::orchestrator_client::{
+    CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
+};
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
-use desktop_app::domain::proposal::{Proposal, ProposalSignature, Signature};
+use desktop_app::domain::proposal::{CancelProposalSummary, Proposal, ProposalSignature, Signature};
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::broadcast_env;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
@@ -47,11 +49,31 @@ pub struct ApproveProposalInput {
     pub signature_hex: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCancelProposalInput {
+    pub base_url: String,
+    pub target_action_id: String,
+    pub seq_no: u64,
+    pub action_hex: String,
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalSignatureDto {
     pub signer_pubkey: String,
     pub signature_hex: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelProposalSummaryDto {
+    pub action_id: String,
+    pub status: String,
+    pub signatures: Vec<ProposalSignatureDto>,
+    pub required_signatures: u16,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,6 +90,34 @@ pub struct ProposalDto {
     pub commit_txid: Option<String>,
     pub reveal_txid: Option<String>,
     pub broadcast_error: Option<String>,
+    pub target_action_id: Option<String>,
+    pub activation_height: Option<u64>,
+    pub cancel_proposal: Option<CancelProposalSummaryDto>,
+}
+
+#[tauri::command]
+pub async fn proposals_create_cancel(
+    input: CreateCancelProposalInput,
+) -> Result<ProposalDto, String> {
+    let client = build_client(input.base_url)?;
+    let proposal = client
+        .create_cancel_proposal(
+            &input.target_action_id,
+            CreateCancelProposalRequest {
+                seq_no: input.seq_no,
+                action_hex: input.action_hex,
+                signer_pubkey: input.signer_pubkey,
+                signature_hex: input.signature_hex,
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            OrchestratorError::Backend { status: 401, .. } => {
+                "orchestrator session unauthorized (401). Re-authenticate and retry.".to_string()
+            }
+            other => other.to_string(),
+        })?;
+    Ok(map_proposal(proposal))
 }
 
 /// IPC payload for broadcast commands — Bitcoin RPC and operator key load from Tauri env (P-066).
@@ -104,6 +154,15 @@ fn map_signature(signature: ProposalSignature) -> ProposalSignatureDto {
     }
 }
 
+fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDto {
+    CancelProposalSummaryDto {
+        action_id: summary.action_id,
+        status: summary.status,
+        signatures: summary.signatures.into_iter().map(map_signature).collect(),
+        required_signatures: summary.required_signatures,
+    }
+}
+
 fn map_proposal(proposal: Proposal) -> ProposalDto {
     ProposalDto {
         action_id: proposal.action_id,
@@ -117,6 +176,9 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         commit_txid: proposal.commit_txid,
         reveal_txid: proposal.reveal_txid,
         broadcast_error: proposal.broadcast_error,
+        target_action_id: proposal.target_action_id,
+        activation_height: proposal.activation_height,
+        cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
     }
 }
 

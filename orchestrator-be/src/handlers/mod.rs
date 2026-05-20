@@ -50,6 +50,10 @@ pub fn router(state: AppState) -> Router {
             "/proposals/:action_id/broadcast",
             patch(proposals::report_broadcast_progress),
         )
+        .route(
+            "/proposals/:action_id/cancel",
+            post(proposals::create_cancel_proposal),
+        )
         .with_state(state)
 }
 
