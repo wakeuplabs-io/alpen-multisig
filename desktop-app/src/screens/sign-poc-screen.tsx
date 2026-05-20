@@ -138,7 +138,7 @@ export function SignPocScreen() {
 		return () => {
 			mounted = false
 		}
-	}, [actionId, ensureOrchestratorSession])
+	}, [actionId, ensureOrchestratorSession, selectedRole])
 
 	async function handleBack() {
 		await disconnectSession()
