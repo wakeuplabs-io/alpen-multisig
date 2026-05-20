@@ -97,8 +97,8 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop â
 | W3-4 | `wave3/w3-4-timeout-errors` | Timeout + typed errors | P-027, P-023 | merged | [#155](https://github.com/wakeuplabs-io/alpen-multisig/pull/155) |
 | W3-5 | `wave3/w3-5-correlation` | Correlation slice | P-029 | merged | [#156](https://github.com/wakeuplabs-io/alpen-multisig/pull/156) |
 | W3-6 | `wave3/w3-6-wallet-pubkey` | Wallet pubkey binding | P-039 | merged | [#157](https://github.com/wakeuplabs-io/alpen-multisig/pull/157) |
-| W3-7 | `wave3/w3-7-hygiene` | Codebase hygiene | HYG-POC, P-036, P-057 | in_progress | [#158](https://github.com/wakeuplabs-io/alpen-multisig/pull/158) |
-| W3-8 | `wave3/w3-8-docs` | Action plan close-out | DOC-W3 | pending | â€” |
+| W3-7 | `wave3/w3-7-hygiene` | Codebase hygiene | HYG-POC, P-036, P-057 | merged | [#158](https://github.com/wakeuplabs-io/alpen-multisig/pull/158) |
+| W3-8 | `wave3/w3-8-docs` | Action plan close-out | DOC-W3 | in_progress | â€” |
 
 ### P-ID rows
 
@@ -116,4 +116,4 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop â
 | HYG-POC | done | W3-7 | Remove POC naming from product code + active docs |
 | P-036 | done | W3-7 | Centralize `REVEAL_TX_VBYTES`, `COMMIT_DUST_SATS` in `domain/fee_constants` |
 | P-057 | done | W3-7 | Remove vestigial `custom-protocol` Tauri 1.x feature flag |
-| DOC-W3 | pending | W3-8 | Rewrite Wave 3 + Future appendix + satellite doc touch-ups |
+| DOC-W3 | in_progress | W3-8 | Rewrite Wave 3 + Future appendix + satellite doc touch-ups |
