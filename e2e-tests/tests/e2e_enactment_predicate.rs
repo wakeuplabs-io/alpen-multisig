@@ -150,12 +150,13 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let admin = decode_administration_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
-    let enacted_after_reveal = anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
-        &admin,
-        Authority::StrataAdmin,
-        seq_no,
-        &action_hex,
-    ))?;
+    let enacted_after_reveal =
+        anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
+            &admin,
+            Authority::StrataAdmin,
+            seq_no,
+            &action_hex,
+        ))?;
     anyhow::ensure!(
         !enacted_after_reveal,
         "predicate must be false before activation_height is reached"
@@ -168,12 +169,13 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let admin = decode_administration_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
-    let enacted_after_delay = anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
-        &admin,
-        Authority::StrataAdmin,
-        seq_no,
-        &action_hex,
-    ))?;
+    let enacted_after_delay =
+        anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
+            &admin,
+            Authority::StrataAdmin,
+            seq_no,
+            &action_hex,
+        ))?;
     anyhow::ensure!(
         enacted_after_delay,
         "predicate must be true after confirmation depth blocks"
