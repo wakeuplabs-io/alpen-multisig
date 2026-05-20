@@ -238,8 +238,8 @@ mod tests {
 
     #[test]
     fn post_conditions_require_added_keys_present_and_removed_absent() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(&key_hex(3)).unwrap()).unwrap();
-        let removed = CompressedPublicKey::from_slice(&hex::decode(&key_hex(2)).unwrap()).unwrap();
+        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
+        let removed = CompressedPublicKey::from_slice(&hex::decode(key_hex(2)).unwrap()).unwrap();
         let config =
             ThresholdConfigUpdate::new(vec![added], vec![removed], NonZeroU8::new(2).unwrap());
 
