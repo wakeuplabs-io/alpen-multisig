@@ -7,7 +7,7 @@ function bytesToHex(bytes: Uint8Array): string {
 		.join('')
 }
 
-export function createMockPocAdapter(): WalletAdapter {
+export function createMockAdapter(): WalletAdapter {
 	let connected = false
 	let secretKeyHex: string | null = null
 	let cachedPublicKeyHex: string | null = null
