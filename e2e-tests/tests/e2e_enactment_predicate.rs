@@ -6,12 +6,13 @@ use std::process::Command;
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
     decode_administration_subproto, parse_admin_section, strata_admin_confirmation_depth,
-    strata_admin_keys_hex, FAST_ENACTMENT,
+    strata_admin_keys_hex, SignerUpdateEnactedFixture, FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::Amount;
+use bitcoind_async_client::traits::Reader;
 use rand::rngs::OsRng;
 use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
@@ -31,8 +32,12 @@ async fn e2e_enactment_predicate_before_and_after_activation() {
         eprintln!("Skipping e2e_enactment_predicate: bitcoind is not available in PATH");
         return;
     }
+    run_enactment_predicate(&FAST_ENACTMENT)
+        .await
+        .expect("enactment predicate before/after activation");
+}
 
-    let fixture = &FAST_ENACTMENT;
+async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()> {
     let mnemonic = fixture.mnemonic;
     let passphrase = fixture.passphrase;
     let path_prefix = fixture.derivation_path_prefix;
@@ -145,12 +150,12 @@ async fn e2e_enactment_predicate_before_and_after_activation() {
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let admin = decode_administration_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
-    let enacted_after_reveal = asm_enactment::is_multisig_update_enacted_in_admin_state(
+    let enacted_after_reveal = anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
         &admin,
         Authority::StrataAdmin,
         seq_no,
         &action_hex,
-    )?;
+    ))?;
     anyhow::ensure!(
         !enacted_after_reveal,
         "predicate must be false before activation_height is reached"
@@ -163,14 +168,16 @@ async fn e2e_enactment_predicate_before_and_after_activation() {
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let admin = decode_administration_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
-    let enacted_after_delay = asm_enactment::is_multisig_update_enacted_in_admin_state(
+    let enacted_after_delay = anyhow_string(asm_enactment::is_multisig_update_enacted_in_admin_state(
         &admin,
         Authority::StrataAdmin,
         seq_no,
         &action_hex,
-    )?;
+    ))?;
     anyhow::ensure!(
         enacted_after_delay,
         "predicate must be true after confirmation depth blocks"
     );
+
+    Ok(())
 }
