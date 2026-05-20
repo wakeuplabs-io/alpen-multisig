@@ -257,8 +257,7 @@ function ProposalCard({
 	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
 	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
 	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
-	const awaitingEnactment =
-		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+	const awaitingEnactment = proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
 	const canBroadcast = hasQuorum && proposal.status === 'approved' && proposal.broadcastStatus === 'idle'
 	const alreadySigned =
 		signerPubkey !== null &&
@@ -330,9 +329,7 @@ function ProposalCard({
 				</div>
 			) : awaitingEnactment ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">
-						Reveal confirmed — awaiting ASM enactment
-					</p>
+					<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
 					<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
 						Refresh the dashboard after the confirmation delay to see enacted status.
 					</p>

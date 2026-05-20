@@ -217,6 +217,7 @@ fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoStat
 mod tests {
     use super::*;
     use std::num::NonZeroU8;
+    use strata_crypto::keys::compressed::CompressedPublicKey;
 
     fn key_hex(byte: u8) -> String {
         let mut bytes = [0u8; 33];
