@@ -1,5 +1,6 @@
 import type { ApiResult } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
+import { buildActionHexResponseSchema } from '@/api/ipc-schemas'
 
 export type BuildAdminMultisigUpdateHexInput = {
 	role: 'strata_admin'
@@ -15,5 +16,5 @@ export type BuildActionHexResponse = {
 export function buildAdminMultisigUpdateHex(
 	input: BuildAdminMultisigUpdateHexInput,
 ): Promise<ApiResult<BuildActionHexResponse>> {
-	return tauriCall<BuildActionHexResponse>('build_admin_multisig_update_hex', { input })
+	return tauriCall('build_admin_multisig_update_hex', { input }, buildActionHexResponseSchema)
 }

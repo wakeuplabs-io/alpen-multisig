@@ -2,6 +2,8 @@ import type { ApiResult } from '@/types'
 import { AuthRole } from '@/types'
 import type { SignatureFormat } from '@/wallet/types'
 import { tauriCall } from '@/api/tauri-bridge'
+import { rawOrchestratorAuthChallengeSchema, rawOrchestratorAuthSessionSchema } from '@/api/ipc-schemas'
+import { z } from 'zod'
 
 export const ORCHESTRATOR_BASE_URL = import.meta.env.VITE_ORCHESTRATOR_BASE_URL ?? 'http://127.0.0.1:3000/api/v1'
 
@@ -15,18 +17,6 @@ export type OrchestratorAuthSession = {
 	authority: string
 	signerPubkey: string
 	expiresAtUnixMs: number
-}
-
-type RawOrchestratorAuthChallenge = {
-	challenge_id: string
-	challenge_hex: string
-}
-
-type RawOrchestratorAuthSession = {
-	token: string
-	authority: string
-	signer_pubkey: string
-	expires_at_unix_ms: number
 }
 
 type StartOrchestratorAuthInput = {
@@ -56,7 +46,7 @@ export function authorityFromRole(role: AuthRole): string {
 export function orchestratorAuthStart(
 	input: StartOrchestratorAuthInput,
 ): Promise<ApiResult<OrchestratorAuthChallenge>> {
-	return tauriCall<RawOrchestratorAuthChallenge>('orchestrator_auth_start', { input }).then((result) => {
+	return tauriCall('orchestrator_auth_start', { input }, rawOrchestratorAuthChallengeSchema).then((result) => {
 		if (!result.ok) {
 			return result
 		}
@@ -73,7 +63,7 @@ export function orchestratorAuthStart(
 export function orchestratorAuthComplete(
 	input: CompleteOrchestratorAuthInput,
 ): Promise<ApiResult<OrchestratorAuthSession>> {
-	return tauriCall<RawOrchestratorAuthSession>('orchestrator_auth_complete', { input }).then((result) => {
+	return tauriCall('orchestrator_auth_complete', { input }, rawOrchestratorAuthSessionSchema).then((result) => {
 		if (!result.ok) {
 			return result
 		}
@@ -90,28 +80,27 @@ export function orchestratorAuthComplete(
 }
 
 export function orchestratorAuthLogout(baseUrl: string): Promise<ApiResult<null>> {
-	return tauriCall<null>('orchestrator_auth_logout', { baseUrl })
+	return tauriCall('orchestrator_auth_logout', { baseUrl }, z.null())
 }
 
 export function orchestratorAuthGetSession(): Promise<ApiResult<OrchestratorAuthSession | null>> {
-	return tauriCall<RawOrchestratorAuthSession | null>('orchestrator_auth_get_session').then((result) => {
-		if (!result.ok) {
-			return result
-		}
-		if (result.data === null) {
+	return tauriCall('orchestrator_auth_get_session', undefined, rawOrchestratorAuthSessionSchema.nullable()).then(
+		(result) => {
+			if (!result.ok) {
+				return result
+			}
+			if (result.data === null) {
+				return { ok: true, data: null }
+			}
 			return {
 				ok: true,
-				data: null,
+				data: {
+					token: result.data.token,
+					authority: result.data.authority,
+					signerPubkey: result.data.signer_pubkey,
+					expiresAtUnixMs: result.data.expires_at_unix_ms,
+				},
 			}
-		}
-		return {
-			ok: true,
-			data: {
-				token: result.data.token,
-				authority: result.data.authority,
-				signerPubkey: result.data.signer_pubkey,
-				expiresAtUnixMs: result.data.expires_at_unix_ms,
-			},
-		}
-	})
+		},
+	)
 }

@@ -81,3 +81,57 @@ export const broadcastResultSchema = z.object({
 		.nullish()
 		.transform((v) => v ?? undefined),
 })
+
+// signing.ts schemas
+export const sighashResultSchema = z.object({
+	sighashHex: z.string(),
+	seqno: z.number(),
+})
+
+export const verifyResultSchema = z.object({
+	valid: z.boolean(),
+	signaturesVerified: z.number(),
+	thresholdRequired: z.number(),
+})
+
+export const signatureResultSchema = z.object({
+	publicKeyHex: z.string(),
+	signatureHex: z.string(),
+})
+
+export const decodedActionSchema = z.discriminatedUnion('kind', [
+	z.object({
+		kind: z.literal('multisig_update'),
+		role: z.string(),
+		addKeys: z.array(z.string()),
+		removeKeys: z.array(z.string()),
+		newThreshold: z.number(),
+	}),
+	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
+])
+
+// orchestrator-auth.ts raw schemas (Tauri emits snake_case for these commands)
+export const rawOrchestratorAuthChallengeSchema = z.object({
+	challenge_id: z.string(),
+	challenge_hex: z.string(),
+})
+
+export const rawOrchestratorAuthSessionSchema = z.object({
+	token: z.string(),
+	authority: z.string(),
+	signer_pubkey: z.string(),
+	expires_at_unix_ms: z.number(),
+})
+
+// asm-state.ts schemas
+export const multisigConfigSchema = z.object({
+	signers: z.array(z.string()),
+	threshold: z.number(),
+})
+
+export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
+
+// action-builder.ts schema
+export const buildActionHexResponseSchema = z.object({
+	actionHex: z.string(),
+})
