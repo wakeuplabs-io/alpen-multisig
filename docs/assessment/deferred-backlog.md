@@ -225,7 +225,7 @@
 | Wave 1 merged | Done | PR #134 |
 | Wave 2 merged | Done | PRs #136–#142 |
 | Wave 3 merged | Done | PRs #151–#159 |
-| Final E2E WDIO pass on `develop` tip | **Pending** | Run `npm run test:e2e:all` on Wave 3 `develop` tip; record result in [action-plan-progress.md](action-plan-progress.md) E2E table |
+| Final E2E WDIO pass on `develop` tip | **Done** | PASS `cc996de` — 2026-05-20; recorded in [action-plan-progress.md](action-plan-progress.md) E2E table |
 | P-055 legal OK | Pending | Awaits Alpen legal OK for SPS reference excerpts |
 
-Once the E2E pass is recorded, `develop → main` can proceed.
+**`develop → main` gate is open.** PR [#162](https://github.com/wakeuplabs-io/alpen-multisig/pull/162) ready to merge.
