@@ -609,4 +609,40 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::CONFLICT);
     }
+
+    /// P-023: error responses must include a machine-readable `errorCode` field.
+    #[tokio::test]
+    async fn test_error_response_includes_error_code() {
+        let app = test_app();
+
+        // 401 — unauthorized (no bearer)
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let body = response_json(resp).await;
+        assert_eq!(body["errorCode"], "unauthorized");
+
+        // 404 — not found
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let resp = app
+            .oneshot(json_request(
+                "GET",
+                "/proposals/nonexistent-id",
+                None,
+                Some(&token),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = response_json(resp).await;
+        assert_eq!(body["errorCode"], "not_found");
+    }
 }

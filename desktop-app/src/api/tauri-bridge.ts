@@ -18,6 +18,7 @@ export async function tauriCall<T>(
 				return {
 					ok: false,
 					error: `Invalid IPC response for ${command}: ${parsed.error.message}`,
+					errorCode: 'ipc_schema_mismatch',
 				}
 			}
 			return { ok: true, data: parsed.data }

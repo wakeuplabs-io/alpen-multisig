@@ -47,7 +47,7 @@ impl HttpBitcoinRpcClient {
             url,
             user: user.to_string(),
             pass: pass.to_string(),
-            client: reqwest::Client::new(),
+            client: super::rpc_timeout::rpc_client(),
         }
     }
 
@@ -207,5 +207,20 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 
         Transaction::consensus_decode(&mut tx_bytes.as_slice())
             .map_err(|e| format!("getrawtransaction: decode failed: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::rpc_timeout::{rpc_client, RPC_TIMEOUT};
+
+    #[test]
+    fn rpc_timeout_is_thirty_seconds() {
+        assert_eq!(RPC_TIMEOUT.as_secs(), 30);
+    }
+
+    #[test]
+    fn rpc_client_builds_without_panic() {
+        let _client = rpc_client();
     }
 }
