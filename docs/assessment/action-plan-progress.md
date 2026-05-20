@@ -90,8 +90,8 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 
 | PR | Branch | Title | P-IDs | Status | PR link |
 |----|--------|-------|-------|--------|---------|
-| W3-0 | `wave3/w3-0-playbook` | Playbook on develop | DOC-PLAYBOOK | in_progress | [#151](https://github.com/wakeuplabs-io/alpen-multisig/pull/151) |
-| W3-1 | `wave3/w3-1-ipc-zod` | IPC Zod remainder | P-008 | pending | — |
+| W3-0 | `wave3/w3-0-playbook` | Playbook on develop | DOC-PLAYBOOK | merged | [#151](https://github.com/wakeuplabs-io/alpen-multisig/pull/151) |
+| W3-1 | `wave3/w3-1-ipc-zod` | IPC Zod remainder | P-008 | in_progress | — |
 | W3-2 | `wave3/w3-2-coordination` | Coordination correctness | P-019, P-032 (race) | pending | — |
 | W3-3 | `wave3/w3-3-test-floor` | Happy-path test floor | P-032 (floor) | pending | — |
 | W3-4 | `wave3/w3-4-timeout-errors` | Timeout + typed errors | P-027, P-023 | pending | — |
@@ -105,7 +105,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | P-ID | Status | PR | Notes |
 |------|--------|----|-------|
 | DOC-PLAYBOOK | done | W3-0 | Playbook + tracker section |
-| P-008 | pending | W3-1 | Zod at `tauriCall` for signing, orchestrator-auth, asm-state, action-builder |
+| P-008 | in_progress | W3-1 | Zod at `tauriCall` for signing, orchestrator-auth, asm-state, action-builder |
 | P-019 | pending | W3-2 | Duplicate check in `add_signature` under write lock |
 | P-032 (race) | pending | W3-2 | Integration test concurrent duplicate approve |
 | P-032 (floor) | pending | W3-3 | Claim/broadcast conflict guards + `e2e_propose_sign` |
