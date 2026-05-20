@@ -487,4 +487,126 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
+
+    /// P-032 (floor): claim on a pending proposal (even at quorum) must return 409.
+    #[tokio::test]
+    async fn test_claim_broadcast_pending_proposal_returns_conflict() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let action_id = response_json(resp).await["action_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Signer B approves → quorum reached, still pending
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/approve"),
+                Some(json!({ "signer_pubkey": signer_b, "signature_hex": "sig_b" })),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Claim while still pending → 409
+        let resp = app
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    /// P-032 (floor): second claim on an approved proposal must return 409.
+    #[tokio::test]
+    async fn test_claim_broadcast_second_claim_returns_conflict() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let action_id = response_json(resp).await["action_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Reach quorum
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/approve"),
+                Some(json!({ "signer_pubkey": signer_b, "signature_hex": "sig_b" })),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+
+        // Transition to approved
+        app.clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/proposals/{action_id}"),
+                Some(json!({ "proposal_status": "approved" })),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+
+        // First claim → 200
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Second claim → 409
+        let resp = app
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
 }
