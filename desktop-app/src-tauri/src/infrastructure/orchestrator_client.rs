@@ -45,7 +45,9 @@ impl HttpOrchestratorClient {
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<T, OrchestratorError> {
+        let request_id = uuid::Uuid::new_v4().to_string();
         let res = request
+            .header("x-request-id", &request_id)
             .send()
             .await
             .map_err(|e| OrchestratorError::Request(e.to_string()))?;
@@ -243,5 +245,41 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, OrchestratorError::Request(_)));
+    }
+
+    #[tokio::test]
+    async fn every_request_carries_x_request_id_header() {
+        use tokio::io::AsyncReadExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = stream.read(&mut buf).await.unwrap();
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+
+        let client = HttpOrchestratorClient::new(format!("http://127.0.0.1:{port}"))
+            .with_bearer_token("tok".to_string());
+
+        // fires a request; response will be garbled but server captures the raw headers
+        let _ = client
+            .approve_action(
+                "a1",
+                ApproveActionRequest {
+                    signature_hex: "sig".to_string(),
+                    signer_pubkey: "02aa".to_string(),
+                },
+            )
+            .await;
+
+        let raw = server.await.unwrap();
+        assert!(
+            raw.to_lowercase().contains("x-request-id"),
+            "expected X-Request-Id header in outgoing request, got:\n{raw}"
+        );
     }
 }

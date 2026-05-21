@@ -17,7 +17,7 @@ type SignatureResult = {
 	signatureHex: string
 }
 
-export function createTrezorPocAdapter(): WalletAdapter {
+export function createTrezorAdapter(): WalletAdapter {
 	let publicKeyHex: string | null = null
 	let currentDerivationPath = ADMIN_ID_PATH
 

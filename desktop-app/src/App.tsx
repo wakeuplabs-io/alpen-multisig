@@ -10,8 +10,8 @@ import { CancelProposalBroadcastScreen } from '@/screens/cancel-proposal-broadca
 import { CancelProposalScreen } from '@/screens/cancel-proposal-screen'
 import { CancelProposalSignScreen } from '@/screens/cancel-proposal-sign-screen'
 import { ProposalDetailScreen } from '@/screens/proposal-detail-screen'
-import { ProposalPocScreen } from '@/screens/proposal-poc-screen'
-import { SignPocScreen } from '@/screens/sign-poc-screen'
+import { CreateProposalScreen } from '@/screens/create-proposal-screen'
+import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -53,7 +53,7 @@ export default function App() {
 								path="/proposals/create"
 								element={
 									<RequireAuth>
-										<ProposalPocScreen />
+										<CreateProposalScreen />
 									</RequireAuth>
 								}
 							/>
@@ -61,7 +61,7 @@ export default function App() {
 								path="/dev/proposal"
 								element={
 									<RequireAuth>
-										<ProposalPocScreen />
+										<CreateProposalScreen />
 									</RequireAuth>
 								}
 							/>
@@ -69,7 +69,7 @@ export default function App() {
 								path="/proposals/:actionId/sign"
 								element={
 									<RequireAuth>
-										<SignPocScreen />
+										<SignScreen />
 									</RequireAuth>
 								}
 							/>
@@ -109,7 +109,7 @@ export default function App() {
 								path="/dev/sign"
 								element={
 									<RequireAuth>
-										<SignPocScreen />
+										<SignScreen />
 									</RequireAuth>
 								}
 							/>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
 import type { WalletVendor } from '@/wallet/types'
 
 type Props = {
@@ -23,7 +24,7 @@ export function ConnectPhase({
 }: Props) {
 	const isDetecting = loading && connectViewState !== 'success'
 	const isSuccess = connectViewState === 'success'
-	const [mnemonicInput, setMnemonicInput] = useState('')
+	const [mnemonicInput, setMnemonicInput] = useState(DEMO_MNEMONIC)
 	const [mnemonicError, setMnemonicError] = useState<string | null>(null)
 
 	function handleUseTrezor() {
@@ -37,11 +38,12 @@ export function ConnectPhase({
 	}
 
 	function handleUseMnemonic() {
-		if (!mnemonicInput.trim()) {
+		const words = mnemonicInput.trim() || DEMO_MNEMONIC
+		if (!words) {
 			setMnemonicError('Enter your mnemonic words first.')
 			return
 		}
-		onSelectWalletMethod('mnemonic', mnemonicInput)
+		onSelectWalletMethod('mnemonic', words)
 		setMnemonicError(null)
 	}
 

@@ -191,6 +191,7 @@ pub async fn create_cancel_proposal(
     Ok(Json(proposal))
 }
 
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
 pub async fn approve_action(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
@@ -225,6 +226,7 @@ pub struct PatchProposalBody {
 }
 
 /// Explicit pending → approved transition (P-012 / ADR-006).
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
 pub async fn patch_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
@@ -253,6 +255,7 @@ pub async fn patch_proposal(
 }
 
 /// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
 pub async fn claim_broadcast(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
@@ -279,6 +282,7 @@ pub struct ReportBroadcastProgressBody {
 }
 
 /// Coordination-only: desktop reports txids / sub-status after local Bitcoin steps (P-066).
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
 pub async fn report_broadcast_progress(
     State(state): State<AppState>,
     auth: AuthenticatedSession,

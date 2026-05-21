@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { WalletSessionContext } from '@/contexts/wallet-session-context'
-import { createWalletAdapter } from '@/wallet/create-poc-wallet-adapter'
-import { pocWalletAdapter } from '@/wallet/default-poc-adapter'
+import { createWalletAdapter } from '@/wallet/create-wallet-adapter'
+import { defaultWalletAdapter } from '@/wallet/default-adapter'
 import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVendor } from '@/wallet/types'
 
 export function WalletSessionProvider({ children }: { children: ReactNode }) {
 	const [wallet, setWallet] = useState<WalletAccountInfo | null>(null)
-	const [adapter, setAdapter] = useState<WalletAdapter>(pocWalletAdapter)
+	const [adapter, setAdapter] = useState<WalletAdapter>(defaultWalletAdapter)
 
 	const setConnectedWallet = useCallback((info: WalletAccountInfo | null) => {
 		setWallet(info)

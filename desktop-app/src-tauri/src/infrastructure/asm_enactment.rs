@@ -139,7 +139,7 @@ fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = reqwest::Client::new();
+    let client = super::rpc_timeout::rpc_client();
     let payload = json!({
         "jsonrpc": "2.0",
         "id": 1,

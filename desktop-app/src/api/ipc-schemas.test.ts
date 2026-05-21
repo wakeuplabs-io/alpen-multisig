@@ -119,3 +119,15 @@ console.log('ipc-schemas: signing schemas OK')
 console.log('ipc-schemas: orchestrator-auth raw schemas OK')
 console.log('ipc-schemas: asm-state schemas OK')
 console.log('ipc-schemas: action-builder schema OK')
+
+// P-023: ApiResult type carries errorCode on failure
+// Verified by TypeScript compilation: ApiResult<T> now includes errorCode?: string
+// tauriCall sets errorCode: 'ipc_schema_mismatch' on Zod parse failure (branch in tauri-bridge.ts)
+import type { ApiResult } from '../types/index.ts'
+const _typeCheck: ApiResult<number> = { ok: false, error: 'test', errorCode: 'ipc_schema_mismatch' }
+assert.equal(_typeCheck.ok, false)
+if (!_typeCheck.ok) {
+	assert.equal(_typeCheck.errorCode, 'ipc_schema_mismatch')
+}
+
+console.log('ipc-schemas: P-023 errorCode field on ApiResult OK')

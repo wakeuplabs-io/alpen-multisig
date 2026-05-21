@@ -242,4 +242,43 @@ async fn test_e2e_propose_approve_verify() {
         .expect("verify_threshold should succeed");
 
     assert!(verify.valid, "threshold verification must pass");
+
+    // 7. Signer B approves → quorum (2/2) → auto-transitions to approved
+    let mut sk_b_bytes = [0u8; 32];
+    sk_b_bytes[31] = 2;
+    let (sk_b, pk_b) = keypair_from_fixed_secret(sk_b_bytes);
+
+    let challenge_b = auth_client
+        .auth_challenge(StartOrchestratorAuthRequest {
+            authority: "strata_admin".to_string(),
+        })
+        .await
+        .expect("auth challenge B should succeed");
+    let auth_sig_b = sign_auth_challenge(&sk_b, &challenge_b.challenge_hex);
+    let session_b = auth_client
+        .auth_verify(CompleteOrchestratorAuthRequest {
+            challenge_id: challenge_b.challenge_id,
+            signer_pubkey: pk_b,
+            signature_hex: auth_sig_b,
+            signature_format: "p2wpkh-tx-binding".to_string(),
+        })
+        .await
+        .expect("auth verify B should succeed");
+    let client_b =
+        HttpOrchestratorClient::new(server.base_url.clone()).with_bearer_token(session_b.token);
+
+    let sig_b = sign_action(&sk_b, seq_no, &action_hex);
+    let approved = proposals::approve_action(&client_b, action_id, &sig_b)
+        .await
+        .expect("approve_action signer B should succeed");
+
+    assert_eq!(
+        approved.status, "approved",
+        "proposal must be approved after quorum reached"
+    );
+    assert_eq!(
+        approved.signatures.len(),
+        2,
+        "two signatures must be stored"
+    );
 }

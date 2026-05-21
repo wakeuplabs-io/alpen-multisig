@@ -17,7 +17,7 @@ type SignatureResult = {
 	signatureHex: string
 }
 
-export function createLedgerPocAdapter(): WalletAdapter {
+export function createLedgerAdapter(): WalletAdapter {
 	let publicKeyHex: string | null = null
 	let currentDerivationPath = ADMIN_ID_PATH
 
