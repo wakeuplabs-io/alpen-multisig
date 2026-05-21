@@ -3,6 +3,8 @@ import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
+import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
+import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -21,6 +23,7 @@ export function CancelProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	const decodedData = useDecodedProposal(proposal)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -112,6 +115,11 @@ export function CancelProposalScreen() {
 								<div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
 									<ActivationCountdown activationHeight={proposal.activationHeight} />
 								</div>
+							)}
+
+							{/* Target proposal summary */}
+							{proposal.status === 'approved' && (
+								<CancelTargetSummary proposal={proposal} decodedData={decodedData} />
 							)}
 
 							{/* Cancel details or prompt to initiate */}

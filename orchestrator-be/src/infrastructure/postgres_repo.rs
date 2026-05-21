@@ -100,6 +100,7 @@ fn row_to_proposal_no_sigs(
     let broadcast_status: String = row.get("broadcast_status");
     let target_action_id: Option<String> = row.get("target_action_id");
     let activation_height: Option<i64> = row.get("activation_height");
+    let update_id_in_queue: Option<i32> = row.get("update_id_in_queue");
     Ok(Proposal {
         action_id: ActionId(action_id),
         seq_no: row.get::<i64, _>("seq_no") as u64,
@@ -114,13 +115,14 @@ fn row_to_proposal_no_sigs(
         broadcast_error: row.get("broadcast_error"),
         target_action_id: target_action_id.map(ActionId),
         activation_height: activation_height.map(|h| h as u64),
+        update_id_in_queue: update_id_in_queue.map(|id| id as u32),
     })
 }
 
 const SELECT_PROPOSAL_COLS: &str = r#"
     action_id, seq_no, authority, status, action_hex, required_signatures,
     broadcast_status, commit_txid, reveal_txid, broadcast_error,
-    target_action_id, activation_height
+    target_action_id, activation_height, update_id_in_queue
 "#;
 
 #[async_trait::async_trait]
@@ -134,8 +136,8 @@ impl ProposalRepository for PostgresProposalRepository {
 
         let proposal_insert = sqlx::query(
             r#"
-            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex, required_signatures, target_action_id, activation_height)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex, required_signatures, target_action_id, activation_height, update_id_in_queue)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
         )
         .bind(&proposal.action_id.0)
@@ -146,6 +148,7 @@ impl ProposalRepository for PostgresProposalRepository {
         .bind(proposal.required_signatures as i16)
         .bind(proposal.target_action_id.as_ref().map(|id| &id.0))
         .bind(proposal.activation_height.map(|h| h as i64))
+        .bind(proposal.update_id_in_queue.map(|id| id as i32))
         .execute(&mut *tx)
         .await;
 
@@ -406,6 +409,25 @@ impl ProposalRepository for PostgresProposalRepository {
         .await
         .map_err(|e| {
             AppError::Internal(anyhow::anyhow!("failed to update activation height: {e}"))
+        })?;
+
+        Ok(())
+    }
+
+    async fn update_update_id_in_queue(
+        &self,
+        action_id: &ActionId,
+        update_id: u32,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE proposals SET update_id_in_queue = $1, updated_at = NOW() WHERE action_id = $2",
+        )
+        .bind(update_id as i32)
+        .bind(&action_id.0)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("failed to update update_id_in_queue: {e}"))
         })?;
 
         Ok(())

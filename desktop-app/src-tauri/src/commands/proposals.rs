@@ -92,6 +92,7 @@ pub struct ProposalDto {
     pub broadcast_error: Option<String>,
     pub target_action_id: Option<String>,
     pub activation_height: Option<u64>,
+    pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummaryDto>,
 }
 
@@ -178,6 +179,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         broadcast_error: proposal.broadcast_error,
         target_action_id: proposal.target_action_id,
         activation_height: proposal.activation_height,
+        update_id_in_queue: proposal.update_id_in_queue,
         cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
     }
 }

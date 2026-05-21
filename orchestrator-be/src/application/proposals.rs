@@ -10,7 +10,9 @@ use crate::domain::proposal::{
     SeqNo,
 };
 use crate::error::AppError;
-use crate::infrastructure::asm_role_membership::{lock_period_for_authority, threshold_for_authority};
+use crate::infrastructure::asm_role_membership::{
+    lock_period_for_authority, threshold_for_authority, update_id_in_queue_for_action,
+};
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +63,7 @@ pub(crate) async fn create_update_action(
         broadcast_error: None,
         target_action_id: None,
         activation_height: None,
+        update_id_in_queue: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -293,6 +296,46 @@ pub(crate) async fn reconcile_enacted_for_authority(
     Ok(())
 }
 
+/// Re-populate `update_id_in_queue` on a single proposal if it is still null after RevealConfirmed.
+///
+/// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
+pub(crate) async fn reconcile_update_id_in_queue(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
+        return Ok(());
+    };
+
+    if proposal.is_cancel()
+        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
+        || proposal.update_id_in_queue.is_some()
+    {
+        return Ok(());
+    }
+
+    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+        Ok(Some(id)) => {
+            if let Err(e) = repo.update_update_id_in_queue(action_id, id).await {
+                tracing::warn!(
+                    action_id = %action_id.0,
+                    "reconcile_update_id_in_queue: failed to persist id: {e}"
+                );
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!(
+                action_id = %action_id.0,
+                "reconcile_update_id_in_queue: ASM lookup failed: {e}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Reconcile a single proposal before returning it to the client.
 pub(crate) async fn reconcile_enacted_for_action(
     repo: &dyn ProposalRepository,
@@ -392,6 +435,7 @@ pub(crate) async fn create_cancel_proposal(
         broadcast_error: None,
         target_action_id: Some(target_action_id),
         activation_height: None,
+        update_id_in_queue: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -496,6 +540,28 @@ pub(crate) async fn report_broadcast_progress(
                 action_id = %updated.action_id.0,
                 "failed to compute activation_height: {e}"
             );
+        }
+        match update_id_in_queue_for_action(asm_rpc_url, &updated.action_hex).await {
+            Ok(Some(id)) => {
+                if let Err(e) = repo.update_update_id_in_queue(&updated.action_id, id).await {
+                    tracing::warn!(
+                        action_id = %updated.action_id.0,
+                        "failed to store update_id_in_queue: {e}"
+                    );
+                }
+            }
+            Ok(None) => {
+                tracing::warn!(
+                    action_id = %updated.action_id.0,
+                    "update not found in ASM queue after RevealConfirmed"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %updated.action_id.0,
+                    "failed to query ASM for update_id_in_queue: {e}"
+                );
+            }
         }
     }
 
@@ -758,6 +824,7 @@ mod tests {
             broadcast_error: None,
             target_action_id: None,
             activation_height: None,
+            update_id_in_queue: None,
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1018,6 +1085,7 @@ mod tests {
             broadcast_error: None,
             target_action_id: None,
             activation_height: None,
+            update_id_in_queue: None,
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -1075,6 +1143,7 @@ mod tests {
             broadcast_error: None,
             target_action_id: None,
             activation_height: None,
+            update_id_in_queue: None,
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
@@ -1361,6 +1430,7 @@ mod tests {
                 broadcast_error: None,
                 target_action_id: None,
                 activation_height: None,
+                update_id_in_queue: None,
             };
             repo.save_proposal(target).await.unwrap();
 

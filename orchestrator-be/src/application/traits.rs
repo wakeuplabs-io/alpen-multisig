@@ -60,4 +60,12 @@ pub(crate) trait ProposalRepository: Send + Sync {
         action_id: &ActionId,
         height: u64,
     ) -> Result<(), AppError>;
+
+    /// Persist the ASM queue UpdateId on a proposal row. Set after RevealConfirmed.
+    #[allow(dead_code)]
+    async fn update_update_id_in_queue(
+        &self,
+        action_id: &ActionId,
+        update_id: u32,
+    ) -> Result<(), AppError>;
 }

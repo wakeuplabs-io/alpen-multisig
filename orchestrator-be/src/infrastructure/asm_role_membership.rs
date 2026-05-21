@@ -5,10 +5,11 @@ use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::{Role, UpdateTxType};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::rpc_timeout;
+use crate::infrastructure::{action_codec, rpc_timeout};
 
 /// Whether this authority has a wired ASM `Role` mapping (P-037).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +121,41 @@ pub(crate) async fn lock_period_for_authority(
     let tx_type = authority_to_update_tx_type(authority).map_err(AppError::BadRequest)?;
     let depth = admin.confirmation_depth(tx_type).unwrap_or(0);
     Ok(depth as u64)
+}
+
+/// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
+///
+/// Decodes the action, then scans the live ASM queue for the matching `UpdateAction`.
+/// Returns `None` when the update is not yet in the queue (reveal not confirmed) or
+/// the RPC URL is a mock endpoint (tests).
+pub(crate) async fn update_id_in_queue_for_action(
+    rpc_url: &str,
+    action_hex: &str,
+) -> Result<Option<u32>, AppError> {
+    if rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted" {
+        return Ok(None);
+    }
+
+    let action =
+        action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
+    let target_update = match action {
+        MultisigAction::Update(u) => u,
+        MultisigAction::Cancel(_) => return Ok(None),
+    };
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+
+    let found = admin
+        .queued()
+        .iter()
+        .find(|q| q.action() == &target_update)
+        .map(|q| *q.id());
+
+    Ok(found)
 }
 
 fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, String> {

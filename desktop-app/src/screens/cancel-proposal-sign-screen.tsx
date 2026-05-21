@@ -102,7 +102,7 @@ export function CancelProposalSignScreen() {
 					if (!seqNoRes.ok) throw new Error(seqNoRes.error)
 					const nextSeqNo = seqNoRes.data
 
-					const cancelHexRes = await buildCancelActionHex(parent.actionHex, parent.seqNo)
+					const cancelHexRes = await buildCancelActionHex(parent.actionHex)
 					if (!cancelHexRes.ok) throw new Error(cancelHexRes.error)
 					const cancelHex = cancelHexRes.data.actionHex
 

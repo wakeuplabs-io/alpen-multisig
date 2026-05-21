@@ -166,6 +166,21 @@ impl ProposalRepository for InMemoryProposalRepository {
         }
         Ok(())
     }
+
+    async fn update_update_id_in_queue(
+        &self,
+        action_id: &ActionId,
+        update_id: u32,
+    ) -> Result<(), AppError> {
+        let mut proposals = self
+            .proposals
+            .write()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        if let Some(proposal) = proposals.get_mut(action_id) {
+            proposal.update_id_in_queue = Some(update_id);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -194,6 +209,7 @@ mod tests {
             broadcast_error: None,
             target_action_id: None,
             activation_height: None,
+            update_id_in_queue: None,
         }
     }
 

@@ -40,6 +40,7 @@ export type Proposal = {
 	kind: ProposalKind
 	targetActionId: string | null
 	activationHeight: number | null
+	updateIdInQueue: number | null
 	cancelProposal: CancelProposalSummary | null
 }
 

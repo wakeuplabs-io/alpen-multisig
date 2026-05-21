@@ -29,6 +29,8 @@ pub struct Proposal {
     pub broadcast_error: Option<String>,
     pub target_action_id: Option<String>,
     pub activation_height: Option<u64>,
+    /// ASM queue UpdateId assigned when the reveal tx confirmed. Used to build CancelAction.
+    pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummary>,
 }
 

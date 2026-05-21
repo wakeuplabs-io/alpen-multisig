@@ -133,6 +133,7 @@ export function ProposalDetailScreen() {
 
 							{/* Cancel CTA */}
 							{proposal.status === 'approved' &&
+								proposal.kind !== 'cancel' &&
 								CANCELABLE_AUTHORITIES.includes(proposal.authority) &&
 								proposal.cancelProposal === null && (
 									<button

@@ -354,6 +354,7 @@ mod tests {
             broadcast_error: None,
             target_action_id: None,
             activation_height: None,
+            update_id_in_queue: None,
         })
         .await
         .unwrap();
