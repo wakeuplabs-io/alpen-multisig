@@ -48,10 +48,8 @@ pub(crate) trait ProposalRepository: Send + Sync {
     ) -> Result<Option<Proposal>, AppError>;
 
     /// Find the cancel proposal that targets the given action_id, if one exists.
-    async fn find_cancel_for_target(
-        &self,
-        target: &ActionId,
-    ) -> Result<Option<Proposal>, AppError>;
+    async fn find_cancel_for_target(&self, target: &ActionId)
+        -> Result<Option<Proposal>, AppError>;
 
     /// Persist the computed activation height on a proposal row.
     #[allow(dead_code)]

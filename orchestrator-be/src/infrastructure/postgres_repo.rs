@@ -380,9 +380,7 @@ impl ProposalRepository for PostgresProposalRepository {
         .bind(&target.0)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("failed to find cancel proposal: {e}"))
-        })?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to find cancel proposal: {e}")))?;
 
         let Some(row) = row else {
             return Ok(None);

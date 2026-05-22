@@ -117,8 +117,7 @@ export function ProposalDetailScreen() {
 							{proposal.cancelProposal !== null && (
 								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
 									<p className="m-0 text-[13px] text-[#d97706]">
-										⚠ Cancellation in progress —{' '}
-										{proposal.cancelProposal.signatures.length} /{' '}
+										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
 										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
 									</p>
 									<button

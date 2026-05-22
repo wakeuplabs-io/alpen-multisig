@@ -300,8 +300,8 @@ function ProposalCard({
 						#{proposal.seqNo} · {proposalTypeLabel} · {proposal.authority}
 						{proposal.kind === 'cancel' && proposal.targetActionId !== null && (
 							<>
-								{' '}· Cancels{' '}
-								<span className="font-mono">{proposal.targetActionId.slice(0, 8)}…</span>
+								{' '}
+								· Cancels <span className="font-mono">{proposal.targetActionId.slice(0, 8)}…</span>
 							</>
 						)}
 					</p>

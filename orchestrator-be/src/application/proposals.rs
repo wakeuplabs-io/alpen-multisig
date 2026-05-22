@@ -403,7 +403,10 @@ pub(crate) async fn create_cancel_proposal(
         )));
     }
 
-    if !matches!(target.authority, Authority::AlpenAdmin | Authority::StrataAdmin) {
+    if !matches!(
+        target.authority,
+        Authority::AlpenAdmin | Authority::StrataAdmin
+    ) {
         return Err(AppError::BadRequest(format!(
             "cancel is only supported for AlpenAdmin and StrataAdmin (got: {:?})",
             target.authority
@@ -584,7 +587,10 @@ mod tests {
 
     #[async_trait::async_trait]
     impl BitcoinRpcClient for MockBitcoinRpcClient {
-        async fn estimate_fee_rate_sats_per_vb(&self, _target_blocks: u16) -> Result<u64, AppError> {
+        async fn estimate_fee_rate_sats_per_vb(
+            &self,
+            _target_blocks: u16,
+        ) -> Result<u64, AppError> {
             Ok(1)
         }
 
@@ -594,7 +600,9 @@ mod tests {
     }
 
     fn mock_btc() -> MockBitcoinRpcClient {
-        MockBitcoinRpcClient { block_height: 800_000 }
+        MockBitcoinRpcClient {
+            block_height: 800_000,
+        }
     }
 
     const ACTION_HEX: &str = "deadbeef";
@@ -1376,7 +1384,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(first.action_id, second.action_id);
-        assert_eq!(second.signatures.len(), 1, "idempotent: no new sig appended");
+        assert_eq!(
+            second.signatures.len(),
+            1,
+            "idempotent: no new sig appended"
+        );
     }
 
     #[tokio::test]
@@ -1410,8 +1422,14 @@ mod tests {
     async fn test_create_cancel_proposal_rejects_unsupported_authority() {
         // Insert approved proposals directly to avoid threshold_for_authority calls during setup.
         let cases = [
-            (Authority::SequencerManager, ActionId("seq_target".to_string())),
-            (Authority::SecurityCouncil, ActionId("sec_target".to_string())),
+            (
+                Authority::SequencerManager,
+                ActionId("seq_target".to_string()),
+            ),
+            (
+                Authority::SecurityCouncil,
+                ActionId("sec_target".to_string()),
+            ),
         ];
 
         for (authority, target_action_id) in cases {

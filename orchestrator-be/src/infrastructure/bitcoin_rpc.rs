@@ -113,9 +113,7 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
     }
 
     async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
-        let result = self
-            .call("gettransaction", json!([txid, true]))
-            .await?;
+        let result = self.call("gettransaction", json!([txid, true])).await?;
 
         result
             .get("blockheight")

@@ -118,9 +118,7 @@ export function CancelProposalScreen() {
 							)}
 
 							{/* Target proposal summary */}
-							{proposal.status === 'approved' && (
-								<CancelTargetSummary proposal={proposal} decodedData={decodedData} />
-							)}
+							{proposal.status === 'approved' && <CancelTargetSummary proposal={proposal} decodedData={decodedData} />}
 
 							{/* Cancel details or prompt to initiate */}
 							{proposal.status === 'approved' &&

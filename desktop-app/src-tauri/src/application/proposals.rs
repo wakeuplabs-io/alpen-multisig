@@ -595,9 +595,21 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
+        }
+
+        async fn create_cancel_proposal(
+            &self,
+            _target_action_id: &str,
+            _request: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
         }
 
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
@@ -619,6 +631,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -654,6 +670,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -684,6 +704,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -709,6 +733,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             }])
         }
 
@@ -742,6 +770,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -772,6 +804,10 @@ mod tests {
                 commit_txid: request.commit_txid,
                 reveal_txid: request.reveal_txid,
                 broadcast_error: request.broadcast_error,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
     }

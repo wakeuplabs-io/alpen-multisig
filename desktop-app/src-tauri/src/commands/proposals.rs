@@ -4,7 +4,9 @@ use desktop_app::application::orchestrator_client::{
 };
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
-use desktop_app::domain::proposal::{CancelProposalSummary, Proposal, ProposalSignature, Signature};
+use desktop_app::domain::proposal::{
+    CancelProposalSummary, Proposal, ProposalSignature, Signature,
+};
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::broadcast_env;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
