@@ -3,6 +3,7 @@ name = 'desktop-app'
 version = '0.1.0'
 description = 'Alpen Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
+license = 'MIT OR Apache-2.0'
 edition = '2021'
 default-run = 'desktop-app'
 
@@ -14,14 +15,20 @@ tauri = { version = '2', features = [] }
 serde = { version = '1', features = ['derive'] }
 serde_json = '1'
 reqwest = { version = '0.12', features = ['json'] }
+uuid = { version = '1', features = ['v4'] }
 tokio = { version = '1', features = ['full'] }
+dotenvy = "0.15"
 
 # Alpen crates (see docs/architecture/adrs/001-alpen-crate-dependencies.md)
 # From alpenlabs/asm
 strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
 strata-asm-params = { workspace = true }
+strata-asm-common = { workspace = true }
+strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }
+strata-l1-txfmt = { workspace = true }
+strata-l1-envelope-fmt = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
@@ -32,10 +39,12 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 trezor-client = "0.1.5"
+ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
+ledger-transport-hid = "0.11"
+ledger-apdu = "0.11"
+bip39 = "2"
 
 [lib]
 name = "desktop_app"
 path = "src/lib.rs"
 
-[features]
-custom-protocol = ['tauri/custom-protocol']

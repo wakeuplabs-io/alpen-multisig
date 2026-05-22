@@ -11,8 +11,10 @@ use std::process::{Child, Command};
 use std::time::Duration;
 
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
-use rand::rngs::OsRng;
 
+use desktop_app::application::orchestrator_client::{
+    CompleteOrchestratorAuthRequest, OrchestratorClient, StartOrchestratorAuthRequest,
+};
 use desktop_app::application::proposals;
 use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
@@ -38,6 +40,7 @@ impl TestServer {
             .env("SERVER_HOST", "127.0.0.1")
             .env("SERVER_PORT", port.to_string())
             .env("RUST_LOG", "warn")
+            .env("STRATA_ADMIN_STATE_RPC_URL", "mock://asm-membership")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -116,8 +119,8 @@ fn orchestrator_binary() -> String {
 
 // ─── Crypto helpers ────────────────────────────────────────────────────────
 
-fn generate_keypair() -> (String, String) {
-    let sk = SecretKey::new(&mut OsRng);
+fn keypair_from_fixed_secret(secret_key_bytes: [u8; 32]) -> (String, String) {
+    let sk = SecretKey::from_slice(&secret_key_bytes).expect("valid fixed key");
     let pk = PublicKey::from_secret_key(SECP256K1, &sk);
     (hex::encode(sk.secret_bytes()), hex::encode(pk.serialize()))
 }
@@ -144,31 +147,53 @@ fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature
     }
 }
 
+fn sign_auth_challenge(secret_key_hex: &str, challenge_hex: &str) -> String {
+    let sk_bytes = hex::decode(secret_key_hex).expect("secret key hex");
+    let sk = SecretKey::from_slice(&sk_bytes).expect("valid secret key");
+    let digest = hex::decode(challenge_hex).expect("challenge hex");
+    let msg = bitcoin::secp256k1::Message::from_digest_slice(&digest).expect("challenge digest");
+    let sig = SECP256K1.sign_ecdsa(&msg, &sk);
+    hex::encode(sig.serialize_compact())
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_e2e_propose_approve_verify() {
     // 1. Start orchestrator subprocess
     let server = TestServer::start().await;
-    let client = HttpOrchestratorClient::new(server.base_url.clone());
-
     // 2. Signer A: generate keypair, build action, sign
-    let (sk_a, _pk_a) = generate_keypair();
+    let mut sk_a_bytes = [0u8; 32];
+    sk_a_bytes[31] = 1;
+    let (sk_a, pk_a) = keypair_from_fixed_secret(sk_a_bytes);
+    let auth_client = HttpOrchestratorClient::new(server.base_url.clone());
+    let challenge = auth_client
+        .auth_challenge(StartOrchestratorAuthRequest {
+            authority: "strata_admin".to_string(),
+        })
+        .await
+        .expect("auth challenge should succeed");
+    let auth_sig = sign_auth_challenge(&sk_a, &challenge.challenge_hex);
+    let session = auth_client
+        .auth_verify(CompleteOrchestratorAuthRequest {
+            challenge_id: challenge.challenge_id,
+            signer_pubkey: pk_a,
+            signature_hex: auth_sig,
+            signature_format: "p2wpkh-tx-binding".to_string(),
+        })
+        .await
+        .expect("auth verify should succeed");
+    let client =
+        HttpOrchestratorClient::new(server.base_url.clone()).with_bearer_token(session.token);
     let action = build_demo_action();
     let action_hex = action_codec::encode_hex(&action).expect("encode action");
     let seq_no = 1u64;
     let sig_a = sign_action(&sk_a, seq_no, &action_hex);
 
     // 3. Create proposal via desktop application layer
-    let created = proposals::create_update_action(
-        &client,
-        Authority::StrataAdmin,
-        action_hex.as_str(),
-        seq_no,
-        &sig_a,
-    )
-    .await
-    .expect("create_update_action should succeed");
+    let created = proposals::create_update_action(&client, action_hex.as_str(), seq_no, &sig_a)
+        .await
+        .expect("create_update_action should succeed");
 
     assert_eq!(created.status, "pending");
     assert_eq!(created.seq_no, seq_no);
@@ -191,27 +216,15 @@ async fn test_e2e_propose_approve_verify() {
     assert_eq!(fetched.action_hex, action_hex);
     assert_eq!(fetched.signatures.len(), 1);
 
-    // 5. Signer B: generate keypair, sign the same action
-    let (sk_b, _pk_b) = generate_keypair();
-    let sig_b = sign_action(&sk_b, seq_no, &action_hex);
-
-    // 6. Approve proposal via desktop application layer
-    let approved = proposals::approve_action(&client, action_id, &sig_b)
-        .await
-        .expect("approve_action should succeed");
-
-    assert_eq!(approved.action_id, *action_id);
-    assert_eq!(approved.signatures.len(), 2);
-
-    // 7. Get proposal again — verify both signatures are persisted
+    // 5. Get proposal again — verify created signature remains persisted
     let final_state = proposals::get_update_action(&client, action_id)
         .await
-        .expect("get_update_action after approve should succeed");
+        .expect("get_update_action second call should succeed");
 
-    assert_eq!(final_state.signatures.len(), 2);
+    assert_eq!(final_state.signatures.len(), 1);
     assert_eq!(final_state.action_hex, action_hex);
 
-    // 8. Verify threshold: both signatures are valid
+    // 6. Verify threshold: initial signature is valid
     let sighash = signing::compute_sighash(seq_no, &action_hex).expect("sighash ok");
 
     let pubkeys: Vec<String> = final_state
@@ -225,8 +238,47 @@ async fn test_e2e_propose_approve_verify() {
         .map(|s| s.signature_hex.clone())
         .collect();
 
-    let verify = signing::verify_threshold(&pubkeys, 2, &sigs, &sighash.sighash_hex)
+    let verify = signing::verify_threshold(&pubkeys, 1, &sigs, &sighash.sighash_hex)
         .expect("verify_threshold should succeed");
 
     assert!(verify.valid, "threshold verification must pass");
+
+    // 7. Signer B approves → quorum (2/2) → auto-transitions to approved
+    let mut sk_b_bytes = [0u8; 32];
+    sk_b_bytes[31] = 2;
+    let (sk_b, pk_b) = keypair_from_fixed_secret(sk_b_bytes);
+
+    let challenge_b = auth_client
+        .auth_challenge(StartOrchestratorAuthRequest {
+            authority: "strata_admin".to_string(),
+        })
+        .await
+        .expect("auth challenge B should succeed");
+    let auth_sig_b = sign_auth_challenge(&sk_b, &challenge_b.challenge_hex);
+    let session_b = auth_client
+        .auth_verify(CompleteOrchestratorAuthRequest {
+            challenge_id: challenge_b.challenge_id,
+            signer_pubkey: pk_b,
+            signature_hex: auth_sig_b,
+            signature_format: "p2wpkh-tx-binding".to_string(),
+        })
+        .await
+        .expect("auth verify B should succeed");
+    let client_b =
+        HttpOrchestratorClient::new(server.base_url.clone()).with_bearer_token(session_b.token);
+
+    let sig_b = sign_action(&sk_b, seq_no, &action_hex);
+    let approved = proposals::approve_action(&client_b, action_id, &sig_b)
+        .await
+        .expect("approve_action signer B should succeed");
+
+    assert_eq!(
+        approved.status, "approved",
+        "proposal must be approved after quorum reached"
+    );
+    assert_eq!(
+        approved.signatures.len(),
+        2,
+        "two signatures must be stored"
+    );
 }

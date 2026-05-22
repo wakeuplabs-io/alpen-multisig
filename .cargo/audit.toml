@@ -1,0 +1,3 @@
+# cargo-audit policy (P-011). rsa via sqlx Postgres auth; not used for multisig signing.
+[advisories]
+ignore = ["RUSTSEC-2023-0071"]

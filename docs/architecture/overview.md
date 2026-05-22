@@ -88,7 +88,7 @@ orchestrator-be/src/
 ├── infrastructure/
 │   └── memory_repo.rs   # InMemoryProposalRepository (in-memory impl of the trait)
 └── handlers/
-    └── proposals.rs     # CRUD + approve: POST/GET /proposals, GET /proposals/:action_id, POST /proposals/:action_id/approve
+    └── proposals.rs     # CRUD, approve, broadcast coordination (claim + progress PATCH)
 ```
 
 **Layering:** Follows [ADR-005](adrs/005-layered-architecture.md). `domain/` holds pure types; `application/` holds business logic and trait definitions; `infrastructure/` holds trait implementations; `handlers/` is a thin HTTP boundary. `main.rs` wires concrete impls into `AppState` (repo behind `Arc<RwLock<…>>`). See [ADR-002](adrs/002-application-layer-strategy.md) for the evolution strategy.
@@ -98,15 +98,20 @@ orchestrator-be/src/
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | Liveness check |
-| `GET` | `/proposals` | List proposals (optional status filter) |
+| `GET` | `/ready` | Readiness (ASM + Bitcoin RPC reachability) |
+| `GET` | `/proposals` | List proposals (authority-scoped, optional status filter) |
 | `POST` | `/proposals` | Create proposal (`seq_no` + `action_payload`) |
 | `GET` | `/proposals/:action_id` | Get proposal details + quorum status |
 | `POST` | `/proposals/:action_id/approve` | Submit approval signature |
+| `POST` | `/proposals/:action_id/broadcast/claim` | Claim broadcast coordination slot (`idle` → `commit_broadcasted`) |
+| `PATCH` | `/proposals/:action_id/broadcast` | Report broadcast progress / txids from desktop |
+
+**Broadcast execution** (commit/reveal, operator key, Bitcoin wallet RPC) runs in **`desktop-app/src-tauri`**, not on the orchestrator. See PRD §2 and `docs/specs/proposal-broadcast-commit-reveal.md`.
 
 **API Security:**
 
-- Proposer signer's signature is included in every proposal request
-- No session/bearer token — signer_pubkey + signature_hex authenticate requests directly
+- Bearer session from `/auth/challenge` + `/auth/verify` (authority-scoped)
+- Proposal mutations include signer signatures per PRD
 
 **Data Identity:**
 

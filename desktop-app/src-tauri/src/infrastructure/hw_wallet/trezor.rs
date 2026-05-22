@@ -2,28 +2,17 @@ use std::str::FromStr;
 
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{DerivationPath, Xpub};
-use bitcoin::hashes::Hash;
-use bitcoin::key::TweakedPublicKey;
-use bitcoin::opcodes::all::OP_RETURN;
-use bitcoin::psbt::{Input, Psbt, PsbtSighashType};
-use bitcoin::script::Builder;
-use bitcoin::secp256k1::ecdsa::Signature as EcdsaSignature;
-use bitcoin::secp256k1::Message;
-use bitcoin::secp256k1::XOnlyPublicKey;
-use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::Network;
-use bitcoin::{absolute::LockTime, key::CompressedPublicKey, transaction::Version};
-use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness};
-use trezor_client::client::handle_interaction;
-use trezor_client::{InputScriptType, Trezor, TrezorMessage, TrezorResponse};
+use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
 use super::{HwAddressEntry, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
-/// Product default derivation path (BIP86 Taproot).
-const DEFAULT_PATH: &str = "m/86'/0'/73'/0/0";
-const DUMMY_INPUT_VALUE: Amount = Amount::from_sat(100_000);
-const DUMMY_FEE: Amount = Amount::from_sat(500);
+/// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
+const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
+
+/// BIP-84 path template for Admin ID (P2WPKH message signing).
+const ADMIN_ID_PATH_PREFIX: &str = "m/84'/0'/73'/0/";
 
 fn open_trezor() -> Result<Trezor, String> {
     let mut attempts = Vec::with_capacity(2);
@@ -68,6 +57,67 @@ fn parse_path(path: &str) -> Result<DerivationPath, String> {
     DerivationPath::from_str(path).map_err(|e| format!("Invalid derivation path: {e}"))
 }
 
+/// Wrapper around `sign_message` that converts the Trezor response to the app's 65-byte
+/// recoverable format `[r[32] | s[32] | recid]`, bypassing the library's
+/// `parse_recoverable_signature` which fails on SegWit signatures.
+///
+/// Trezor returns `[header | r[32] | s[32]]` where `header = 27 + flags + recid`. For native
+/// P2WPKH (BIP-84) `header = 39 + recid`. The library computes `39 - 31 = 8` and calls
+/// `RecoveryId::from_i32(8)` which fails. The correct extraction is `(header - 27) & 0x03`.
+fn sign_message_recoverable<'a>(
+    trezor: &'a mut Trezor,
+    message: &str,
+    path: &DerivationPath,
+    script_type: InputScriptType,
+    network: Network,
+) -> Result<TrezorResponse<'a, [u8; 65], protos::MessageSignature>, String> {
+    let mut req = protos::SignMessage::new();
+    req.address_n = utils::convert_path(path);
+    req.set_message(message.as_bytes().to_vec());
+    req.set_coin_name(utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_script_type(script_type);
+    trezor
+        .call(
+            req,
+            Box::new(|_, m: protos::MessageSignature| {
+                let sig = m.signature();
+                if sig.len() != 65 || sig[0] < 27 {
+                    return Err(trezor_client::Error::MalformedSignature);
+                }
+                let recid = (sig[0] - 27) & 0x03;
+                let mut out = [0u8; 65];
+                out[..64].copy_from_slice(&sig[1..]);
+                out[64] = recid;
+                Ok(out)
+            }),
+        )
+        .map_err(|e: trezor_client::Error| e.to_string())
+}
+
+/// Wrapper around `get_public_key` that sets `ignore_xpub_magic = true` so Trezor returns
+/// standard xpub version bytes instead of SLIP-0132 zpub/Zpub bytes (which `bitcoin::Xpub`
+/// refuses to decode).
+fn get_xpub<'a>(
+    trezor: &'a mut Trezor,
+    path: &DerivationPath,
+    script_type: InputScriptType,
+    network: Network,
+    show_display: bool,
+) -> Result<TrezorResponse<'a, Xpub, protos::PublicKey>, String> {
+    let mut req = protos::GetPublicKey::new();
+    req.address_n = utils::convert_path(path);
+    req.set_show_display(show_display);
+    req.set_coin_name(utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_script_type(script_type);
+    req.set_ignore_xpub_magic(true);
+    trezor
+        .call(
+            req,
+            Box::new(|_, m: protos::PublicKey| Ok(m.xpub().parse()?)),
+        )
+        .map_err(|e: trezor_client::Error| e.to_string())
+}
+
 /// Drive a TrezorResponse to completion, handling ButtonRequests along the way.
 fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> Result<T, String> {
     loop {
@@ -87,29 +137,27 @@ fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> R
     }
 }
 
-/// Connect: read the P2TR address at the given derivation path (default `m/86'/0'/73'/0/0`).
+/// Connect: read the P2WPKH Admin ID address at the BIP-84 derivation path.
 pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
-    let path_str = derivation_path.unwrap_or_else(|| DEFAULT_PATH.to_string());
+    let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
     let path = parse_path(&path_str)?;
 
     let mut trezor = open_trezor()?;
 
     let xpub = resolve(
-        trezor
-            .get_public_key(
-                &path,
-                InputScriptType::SPENDTAPROOT,
-                Network::Bitcoin,
-                false,
-            )
-            .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            false,
+        )
+        .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
     )?;
 
     let pubkey_hex = hex::encode(xpub.public_key.serialize());
-
-    let xonly = XOnlyPublicKey::from(xpub.public_key);
-    let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
-    let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
+    let compressed = bitcoin::CompressedPublicKey(xpub.public_key);
+    let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
 
     Ok(HwWalletInfo {
         device_label: "Trezor".to_string(),
@@ -120,38 +168,32 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
     })
 }
 
-/// UC-1: Fetch the first `count` P2TR addresses at `m/86'/0'/73'/0/{n}` (BIP86 Taproot).
+/// Fetch the first `count` P2WPKH Admin ID addresses at `m/84'/0'/73'/0/{n}` (BIP-84).
 ///
 /// Opens a single HID session and loops `count` `get_public_key` calls with
-/// `InputScriptType::SPENDTAPROOT`. Returns on the first error encountered.
+/// `InputScriptType::SPENDWITNESS`. Returns on the first error encountered.
 pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String> {
     let mut trezor = open_trezor()?;
     let mut entries = Vec::with_capacity(count);
 
     for n in 0..count {
-        let path_str = format!("m/86'/0'/73'/0/{n}");
+        let path_str = format!("{ADMIN_ID_PATH_PREFIX}{n}");
         let path = parse_path(&path_str)?;
 
         let xpub: Xpub = resolve(
-            trezor
-                .get_public_key(
-                    &path,
-                    InputScriptType::SPENDTAPROOT,
-                    Network::Bitcoin,
-                    false,
-                )
-                .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
+            get_xpub(
+                &mut trezor,
+                &path,
+                InputScriptType::SPENDWITNESS,
+                Network::Bitcoin,
+                false,
+            )
+            .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
         )?;
 
-        let compressed_bytes = xpub.public_key.serialize();
-        let public_key_hex = hex::encode(compressed_bytes);
-
-        // BIP86 key-path P2TR: strip the parity byte and treat as an x-only key.
-        // `dangerous_assume_tweaked` is correct here — BIP86 prescribes no script-tree tweak
-        // for the standard key-path spend, so the x-only key IS the tweaked output key.
-        let xonly = XOnlyPublicKey::from(xpub.public_key);
-        let tweaked = TweakedPublicKey::dangerous_assume_tweaked(xonly);
-        let address = bitcoin::Address::p2tr_tweaked(tweaked, KnownHrp::Mainnet);
+        let public_key_hex = hex::encode(xpub.public_key.serialize());
+        let compressed = bitcoin::CompressedPublicKey(xpub.public_key);
+        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
 
         entries.push(HwAddressEntry {
             index: n as u32,
@@ -169,174 +211,57 @@ pub fn verify_address_on_device(derivation_path: String) -> Result<(), String> {
     let mut trezor = open_trezor()?;
 
     resolve(
-        trezor
-            .get_public_key(&path, InputScriptType::SPENDTAPROOT, Network::Bitcoin, true)
-            .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            true,
+        )
+        .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
     )?;
 
     Ok(())
 }
 
-fn decode_sighash_32(sighash_hex: &str) -> Result<[u8; 32], String> {
-    let bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
-    if bytes.len() != 32 {
-        return Err(format!("sighash must be 32 bytes, got {}", bytes.len()));
-    }
-    let mut digest = [0u8; 32];
-    digest.copy_from_slice(&bytes);
-    Ok(digest)
-}
-
-fn build_admin_commitment_psbt(
-    xpub: &Xpub,
-    path: &DerivationPath,
-    admin_sighash: [u8; 32],
-) -> Result<(Psbt, ScriptBuf), String> {
-    let compressed_pk = CompressedPublicKey(xpub.public_key);
-    let witness_script = ScriptBuf::new_p2wpkh(&compressed_pk.wpubkey_hash());
-    let change_value = DUMMY_INPUT_VALUE
-        .checked_sub(DUMMY_FEE)
-        .ok_or("fee exceeds dummy input value")?;
-
-    let op_return = TxOut {
-        value: Amount::ZERO,
-        script_pubkey: Builder::new()
-            .push_opcode(OP_RETURN)
-            .push_slice(admin_sighash)
-            .into_script(),
-    };
-    let change_out = TxOut {
-        value: change_value,
-        script_pubkey: witness_script.clone(),
-    };
-
-    let unsigned_tx = Transaction {
-        version: Version::TWO,
-        lock_time: LockTime::ZERO,
-        input: vec![TxIn {
-            previous_output: OutPoint {
-                txid: Txid::from_slice([0x11u8; 32].as_slice()).expect("valid txid length"),
-                vout: 0,
-            },
-            script_sig: ScriptBuf::new(),
-            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-            witness: Witness::new(),
-        }],
-        output: vec![op_return, change_out],
-    };
-
-    let mut psbt = Psbt::from_unsigned_tx(unsigned_tx).map_err(|e| format!("PSBT from tx: {e}"))?;
-    psbt.inputs[0] = Input {
-        witness_utxo: Some(TxOut {
-            value: DUMMY_INPUT_VALUE,
-            script_pubkey: witness_script.clone(),
-        }),
-        bip32_derivation: [(xpub.public_key, (xpub.fingerprint(), path.clone()))]
-            .into_iter()
-            .collect(),
-        sighash_type: Some(PsbtSighashType::from(EcdsaSighashType::All)),
-        ..Default::default()
-    };
-
-    Ok((psbt, witness_script))
-}
-
-fn sign_tx_with_trezor(trezor: &mut Trezor, psbt: &Psbt) -> Result<Vec<u8>, String> {
-    let mut response = trezor
-        .sign_tx(psbt, Network::Bitcoin)
-        .map_err(|e| format!("Trezor sign_tx failed: {e}"))?;
-    let mut collected_signature = None;
-
-    loop {
-        let progress =
-            handle_interaction(response).map_err(|e| format!("Trezor sign_tx interaction: {e}"))?;
-        if let Some((_, sig)) = progress.get_signature() {
-            collected_signature = Some(sig.to_vec());
-        }
-        if progress.finished() {
-            return collected_signature.ok_or_else(|| {
-                "Trezor sign_tx finished without returning a signature".to_string()
-            });
-        }
-        response = progress
-            .ack_psbt(psbt, Network::Bitcoin)
-            .map_err(|e| format!("Trezor PSBT ack failed: {e}"))?;
-    }
-}
-
-fn parse_ecdsa_signature(sig_bytes: &[u8]) -> Result<[u8; 64], String> {
-    if sig_bytes.len() == 64 {
-        let mut compact = [0u8; 64];
-        compact.copy_from_slice(sig_bytes);
-        return Ok(compact);
-    }
-    if sig_bytes.len() == 65 {
-        let mut compact = [0u8; 64];
-        compact.copy_from_slice(&sig_bytes[..64]);
-        return Ok(compact);
-    }
-    if sig_bytes.first() == Some(&0x30) && sig_bytes.len() > 1 {
-        let der = &sig_bytes[..sig_bytes.len() - 1];
-        let signature =
-            EcdsaSignature::from_der(der).map_err(|e| format!("invalid DER signature: {e}"))?;
-        return Ok(signature.serialize_compact());
-    }
-    Err(format!(
-        "unexpected signature format ({} bytes), expected compact or DER+sighash",
-        sig_bytes.len()
-    ))
-}
-
-fn verify_binding_signature(
-    signature_compact: [u8; 64],
-    xpub: &Xpub,
-    tx: &Transaction,
-    prev_script: &ScriptBuf,
-) -> Result<(), String> {
-    let sighash = SighashCache::new(tx.clone())
-        .p2wpkh_signature_hash(
-            0,
-            prev_script.as_script(),
-            DUMMY_INPUT_VALUE,
-            EcdsaSighashType::All,
-        )
-        .map_err(|e| format!("could not compute segwit sighash: {e:?}"))?;
-    let message = Message::from_digest_slice(&sighash.to_byte_array())
-        .map_err(|e| format!("sighash message: {e}"))?;
-    let signature = EcdsaSignature::from_compact(&signature_compact)
-        .map_err(|e| format!("invalid compact signature: {e}"))?;
-    bitcoin::secp256k1::SECP256K1
-        .verify_ecdsa(&message, &signature, &xpub.public_key)
-        .map_err(|e| format!("signature verification failed: {e}"))
-}
-
-/// Signs an SPS-65 digest through a synthetic Bitcoin tx binding approved on Trezor.
+/// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
+///
+/// `message` must be the human-readable string produced by
+/// `SigningMessage::for_action(action, seqno).as_str()`. Trezor will compute
+/// `Hash256(prefix || message)` internally, which matches `compute_sighash()` exactly.
+///
+/// Uses `SPENDWITNESS` (BIP-84 P2WPKH) which is required for `m/84'` Admin ID paths.
 pub fn sign_admin_sps65_binding(
-    sighash_hex: &str,
+    message: &str,
     derivation_path: &str,
 ) -> Result<SignatureResult, String> {
     let path = parse_path(derivation_path)?;
-    let admin_sighash = decode_sighash_32(sighash_hex)?;
     let mut trezor = open_trezor()?;
 
     let xpub: Xpub = resolve(
-        trezor
-            .get_public_key(
-                &path,
-                InputScriptType::SPENDTAPROOT,
-                Network::Bitcoin,
-                false,
-            )
-            .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        get_xpub(
+            &mut trezor,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+            false,
+        )
+        .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
     )?;
 
-    let (psbt, prev_script) = build_admin_commitment_psbt(&xpub, &path, admin_sighash)?;
-    let signature_raw = sign_tx_with_trezor(&mut trezor, &psbt)?;
-    let signature_compact = parse_ecdsa_signature(&signature_raw)?;
-    verify_binding_signature(signature_compact, &xpub, &psbt.unsigned_tx, &prev_script)?;
+    let recoverable_sig = resolve(
+        sign_message_recoverable(
+            &mut trezor,
+            message,
+            &path,
+            InputScriptType::SPENDWITNESS,
+            Network::Bitcoin,
+        )
+        .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
+    )?;
 
     Ok(SignatureResult {
         public_key_hex: hex::encode(xpub.public_key.serialize()),
-        signature_hex: hex::encode(signature_compact),
+        signature_hex: hex::encode(recoverable_sig),
     })
 }

@@ -14,3 +14,4 @@ alwaysApply: true
 - **Naming**: Use kebab-case for directories and file names
 - **Patterns**: Match existing project patterns before introducing new abstractions
 - **CI**: All generated code must pass CI checks — verify locally before considering work done
+- **Git / `develop`**: Never `git push origin develop`. All changes (features, docs, trackers) land via a branch and PR into `develop`; only humans merge PRs after review and green CI

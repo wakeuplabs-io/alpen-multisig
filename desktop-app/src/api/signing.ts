@@ -1,5 +1,6 @@
 import type { ApiResult } from '@/types'
 import { tauriCall } from './tauri-bridge'
+import { decodedActionSchema, sighashResultSchema, signatureResultSchema, verifyResultSchema } from './ipc-schemas'
 
 export type SighashResult = {
 	sighashHex: string
@@ -12,8 +13,21 @@ export type VerifyResult = {
 	thresholdRequired: number
 }
 
+export type SignatureResult = {
+	publicKeyHex: string
+	signatureHex: string
+}
+
+export type DecodedAction =
+	| { kind: 'multisig_update'; role: string; addKeys: string[]; removeKeys: string[]; newThreshold: number }
+	| { kind: 'unknown'; rawHex: string }
+
+export function decodeActionHex(actionHex: string): Promise<ApiResult<DecodedAction>> {
+	return tauriCall<DecodedAction>('decode_action_hex', { actionHex }, decodedActionSchema)
+}
+
 export function computeSighash(seqno: number, actionHex: string): Promise<ApiResult<SighashResult>> {
-	return tauriCall<SighashResult>('compute_sighash', { seqno, action_hex: actionHex })
+	return tauriCall('compute_sighash', { seqno, actionHex }, sighashResultSchema)
 }
 
 export function verifyThreshold(
@@ -22,10 +36,9 @@ export function verifyThreshold(
 	signaturesHex: string[],
 	sighashHex: string,
 ): Promise<ApiResult<VerifyResult>> {
-	return tauriCall<VerifyResult>('verify_threshold', {
-		public_keys_hex: publicKeysHex,
-		threshold,
-		signatures_hex: signaturesHex,
-		sighash_hex: sighashHex,
-	})
+	return tauriCall('verify_threshold', { publicKeysHex, threshold, signaturesHex, sighashHex }, verifyResultSchema)
+}
+
+export function signSighashMock(secretKeyHex: string, sighashHex: string): Promise<ApiResult<SignatureResult>> {
+	return tauriCall('sign_sighash_mock', { secretKeyHex, sighashHex }, signatureResultSchema)
 }

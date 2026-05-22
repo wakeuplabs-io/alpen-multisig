@@ -1,4 +1,5 @@
 ---
+description: TypeScript standards for React UI and client integration
 paths:
   - "desktop-app/src/**/*.{ts,tsx}"
 ---
@@ -15,6 +16,10 @@ paths:
 - Prefer immutable updates and pure helpers for derived data (quorum counts, status grouping, time remaining)
 - Handle nullable and optional values with type guards and early returns
 - Keep transport DTO types separate from UI view-model types
+- Keep transport DTO types in boundary modules (`domain/<feature>/services` or adapters), not in presentational components
+- Expose typed hook contracts for feature boundaries (input params, returned state, and handler signatures)
+- Avoid passing raw backend response shapes through screen/component trees; map once at the domain boundary
+- Prefer feature-local domain types in `domain/<feature>/model` for UI-facing state
 - Use utility types (`Pick`, `Omit`, `Partial`, `Record`) to remove duplication while preserving intent
 - Ensure async API helpers return typed success/error shapes rather than `any` or exception-only control flow
 - Prefix unused function parameters with `_` (e.g., `_actionId`) — ESLint is configured to allow `_`-prefixed unused vars

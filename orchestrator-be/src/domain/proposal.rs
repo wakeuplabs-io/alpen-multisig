@@ -12,6 +12,50 @@ pub type SeqNo = u64;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ActionId(pub String);
 
+/// Broadcast sub-status tracking the commit/reveal sequence.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BroadcastStatus {
+    #[default]
+    Idle,
+    CommitBroadcasted,
+    CommitConfirmed,
+    RevealBroadcasted,
+    RevealConfirmed,
+    Failed,
+}
+
+impl std::fmt::Display for BroadcastStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Idle => "idle",
+            Self::CommitBroadcasted => "commit_broadcasted",
+            Self::CommitConfirmed => "commit_confirmed",
+            Self::RevealBroadcasted => "reveal_broadcasted",
+            Self::RevealConfirmed => "reveal_confirmed",
+            Self::Failed => "failed",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::str::FromStr for BroadcastStatus {
+    type Err = AppError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "idle" => Ok(Self::Idle),
+            "commit_broadcasted" => Ok(Self::CommitBroadcasted),
+            "commit_confirmed" => Ok(Self::CommitConfirmed),
+            "reveal_broadcasted" => Ok(Self::RevealBroadcasted),
+            "reveal_confirmed" => Ok(Self::RevealConfirmed),
+            "failed" => Ok(Self::Failed),
+            _ => Err(AppError::Internal(anyhow::anyhow!(
+                "unknown broadcast_status: {s}"
+            ))),
+        }
+    }
+}
+
 /// Lifecycle state of a proposal, aligned with ASM state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -20,12 +64,25 @@ pub enum ProposalStatus {
     Pending,
     /// Threshold reached, broadcast to Bitcoin. Onchain, awaiting enactment (~2016 blocks).
     Approved,
-    /// Enacted onchain.
+    /// ASM applied the governance change (not merely reveal confirmed on Bitcoin).
     Enacted,
     /// Canceled during the approved window.
     Canceled,
     /// Expired before reaching threshold.
     Expired,
+}
+
+impl std::fmt::Display for ProposalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Pending => "pending",
+            Self::Approved => "approved",
+            Self::Enacted => "enacted",
+            Self::Canceled => "canceled",
+            Self::Expired => "expired",
+        };
+        write!(f, "{s}")
+    }
 }
 
 /// A multisig proposal stored by the coordination backend.
@@ -35,9 +92,14 @@ pub struct Proposal {
     pub seq_no: SeqNo,
     pub authority: Authority,
     pub status: ProposalStatus,
+    pub required_signatures: u16,
     /// Hex-encoded MultisigAction payload (opaque to backend).
     pub action_hex: String,
     pub signatures: Vec<ProposalSignature>,
+    pub broadcast_status: BroadcastStatus,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
 }
 
 /// A signature submitted for a proposal by a signer.

@@ -10,3 +10,20 @@ target/
 Thumbs.db
 node_modules
 dist/
+
+# Environment variables
+/desktop-app/src-tauri/.env
+/desktop-app/.env
+
+# Claude settings
+/.claude/settings.local.json
+
+# Scripts
+scripts/config.json
+orchestrator-be/.env
+branding/**/*
+
+
+/desktop-app/src-tauri/gen/
+scripts/asm-params.json
+/.claude/settings.json

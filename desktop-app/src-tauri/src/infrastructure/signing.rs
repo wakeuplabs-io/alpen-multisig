@@ -1,8 +1,13 @@
 use std::num::NonZero;
+use std::str::FromStr;
 
+use bip39::Mnemonic;
+use bitcoin::address::KnownHrp;
+use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
 use ssz::Decode;
-use strata_asm_txs_admin::actions::{MultisigAction, Sighash};
+use strata_asm_txs_admin::actions::MultisigAction;
+use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfig;
 
@@ -26,6 +31,15 @@ pub struct SignatureResult {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MnemonicAddressEntry {
+    pub index: u32,
+    pub derivation_path: String,
+    pub address: String,
+    pub public_key_hex: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyResult {
     pub valid: bool,
     pub signatures_verified: u32,
@@ -42,10 +56,10 @@ pub fn compute_sighash(seqno: u64, action_hex: &str) -> Result<SighashResult, St
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
-    let sighash = action.compute_sighash(seqno);
+    let digest = SigningMessage::for_action(&action, seqno).compute_sighash();
 
     Ok(SighashResult {
-        sighash_hex: hex::encode(sighash.0),
+        sighash_hex: hex::encode(digest.0),
         seqno,
     })
 }
@@ -65,6 +79,84 @@ pub fn sign_sighash(secret_key_hex: &str, sighash_hex: &str) -> Result<Signature
 
     Ok(SignatureResult {
         public_key_hex: hex::encode(pk.serialize()),
+        signature_hex: hex::encode(sig.serialize_compact()),
+    })
+}
+
+fn derive_secret_key_from_mnemonic_path(
+    mnemonic: &str,
+    passphrase: &str,
+    derivation_path: &str,
+) -> Result<SecretKey, String> {
+    let normalized = mnemonic.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return Err("mnemonic is required".to_string());
+    }
+
+    let mnemonic =
+        Mnemonic::parse(&normalized).map_err(|e| format!("invalid BIP39 mnemonic: {e}"))?;
+    let seed = mnemonic.to_seed(passphrase);
+    let path = DerivationPath::from_str(derivation_path)
+        .map_err(|e| format!("invalid derivation path: {e}"))?;
+
+    let master = Xpriv::new_master(bitcoin::Network::Bitcoin, &seed)
+        .map_err(|e| format!("failed to create BIP32 master key: {e}"))?;
+    let derived = master
+        .derive_priv(SECP256K1, &path)
+        .map_err(|e| format!("failed to derive path {derivation_path}: {e}"))?;
+
+    Ok(derived.private_key)
+}
+
+pub fn list_mnemonic_addresses(
+    mnemonic: &str,
+    passphrase: &str,
+    count: u32,
+) -> Result<Vec<MnemonicAddressEntry>, String> {
+    let mut out = Vec::with_capacity(count as usize);
+    for n in 0..count {
+        let derivation_path = format!("m/84'/0'/73'/0/{n}");
+        let secret_key =
+            derive_secret_key_from_mnemonic_path(mnemonic, passphrase, &derivation_path)?;
+        let pubkey = PublicKey::from_secret_key(SECP256K1, &secret_key);
+        let compressed = bitcoin::CompressedPublicKey(pubkey);
+        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
+        out.push(MnemonicAddressEntry {
+            index: n,
+            derivation_path,
+            address: address.to_string(),
+            public_key_hex: hex::encode(pubkey.serialize()),
+        });
+    }
+    Ok(out)
+}
+
+/// Return the canonical human-readable signing message for a given action and sequence number.
+/// This is the string Trezor (and any Bitcoin `signMessage`-compatible wallet) must sign.
+pub fn render_signing_message(seqno: u64, action_hex: &str) -> Result<String, String> {
+    let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
+    let action = MultisigAction::from_ssz_bytes(&action_bytes)
+        .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
+    Ok(SigningMessage::for_action(&action, seqno)
+        .as_str()
+        .to_string())
+}
+
+pub fn sign_with_mnemonic_path(
+    mnemonic: &str,
+    passphrase: &str,
+    derivation_path: &str,
+    sighash_hex: &str,
+) -> Result<SignatureResult, String> {
+    let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, derivation_path)?;
+    let hash_bytes = hex::decode(sighash_hex).map_err(|e| format!("invalid sighash hex: {e}"))?;
+    let message = Message::from_digest_slice(&hash_bytes)
+        .map_err(|e| format!("invalid sighash (must be 32 bytes): {e}"))?;
+    let sig = SECP256K1.sign_ecdsa(&message, &secret_key);
+    let public_key = PublicKey::from_secret_key(SECP256K1, &secret_key);
+
+    Ok(SignatureResult {
+        public_key_hex: hex::encode(public_key.serialize()),
         signature_hex: hex::encode(sig.serialize_compact()),
     })
 }
@@ -130,8 +222,7 @@ mod tests {
     use super::*;
     use rand::rngs::OsRng;
     use ssz::Encode;
-    use strata_asm_params::Role;
-    use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
+    use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
     use strata_asm_txs_admin::actions::UpdateAction;
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
@@ -164,8 +255,8 @@ mod tests {
             vec![],
             NonZero::new(2).expect("non-zero"),
         );
-        let multisig_update = MultisigUpdate::new(config_update, Role::StrataAdministrator);
-        MultisigAction::Update(UpdateAction::Multisig(multisig_update))
+        let multisig_update = StrataAdminMultisigUpdate::new(config_update);
+        MultisigAction::Update(UpdateAction::StrataAdminMultisig(multisig_update))
     }
 
     fn demo_action_hex() -> String {
@@ -272,6 +363,36 @@ mod tests {
 
         assert!(!result.valid);
         assert_eq!(result.signatures_verified, 0);
+    }
+
+    #[test]
+    fn test_mnemonic_signature_verifies_against_raw_sighash() {
+        // Regression: sign_with_mnemonic_path previously used signed_msg_hash (Bitcoin message
+        // prefix), producing a signature that the ASM validator would silently reject.
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let path = "m/86'/0'/73'/0/0";
+        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+
+        let result =
+            sign_with_mnemonic_path(mnemonic, "", path, &sighash.sighash_hex).expect("sign ok");
+
+        // 64-byte compact r||s — verify directly against raw sighash bytes.
+        let sig_bytes = hex::decode(&result.signature_hex).expect("hex ok");
+        assert_eq!(
+            sig_bytes.len(),
+            64,
+            "mnemonic path must produce 64-byte compact sig"
+        );
+
+        let pk_bytes = hex::decode(&result.public_key_hex).expect("hex ok");
+        let pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).expect("pk ok");
+        let hash_bytes = hex::decode(&sighash.sighash_hex).expect("hex ok");
+        let msg = Message::from_digest_slice(&hash_bytes).expect("msg ok");
+        let sig = bitcoin::secp256k1::ecdsa::Signature::from_compact(&sig_bytes).expect("sig ok");
+
+        SECP256K1
+            .verify_ecdsa(&msg, &sig, &pk)
+            .expect("signature must verify against raw sighash");
     }
 
     #[test]

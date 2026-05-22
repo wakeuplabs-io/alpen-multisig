@@ -3,15 +3,9 @@
 mod commands;
 
 fn main() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            commands::hw_wallet::get_trezor_info,
-            commands::hw_wallet::list_hw_addresses,
-            commands::hw_wallet::verify_address_on_device,
-            commands::hw_wallet::sign_with_trezor,
-            commands::signing::compute_sighash,
-            commands::signing::verify_threshold,
-        ])
+    desktop_app::infrastructure::env_loader::load_dotenv_files();
+
+    commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -6,22 +6,23 @@ resolver = '2'
 # sign_tx fixes for modern Trezor firmware (`script_pubkey` on TxAck inputs, P2TR → SPENDTAPROOT).
 [workspace.dependencies]
 # Alpen crates — see docs/architecture/adrs/001-alpen-crate-dependencies.md
-# From alpenlabs/asm (rev-pinned — main HEAD == tag v0.1-alpha.5; no stable tag adopted yet)
-strata-asm-txs-admin = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
-strata-asm-txs-test-utils = { git = "https://github.com/alpenlabs/asm", rev = "a8559d3" }
+# From alpenlabs/asm (rev e0461f8; upstream renames — keep Rust crate paths via `package =`)
+strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 
-# From alpenlabs/strata-common (tag-pinned)
-strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc16" }
+# From alpenlabs/strata-common (rc19 — matches alpenlabs/asm @ e0461f8 workspace)
+strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 
 # SSZ serialization (replaces Borsh for admin tx wire format after upstream PR alpenlabs/asm#8)
 ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }
 
 # Third-party (versions matched to Alpen workspace to avoid type duplication)
 bitcoin = { version = "0.32.6", features = ["serde"] }
-secp256k1 = { version = "0.29.1", features = ["global-context", "std"] }
+secp256k1 = { version = "0.29.1", features = ["global-context", "std", "recovery"] }
 rand = "0.8"
 hex = "0.4"
 tokio = { version = "1", features = ["full"] }

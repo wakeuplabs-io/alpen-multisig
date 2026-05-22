@@ -2,6 +2,7 @@
 name = "orchestrator-be"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [[bin]]
 name = "server"
@@ -18,8 +19,21 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tower-http = { version = "0.5", features = ["trace", "cors", "request-id"] }
 dotenvy = "0.15"
+async-trait = "0.1"
+bitcoin = { workspace = true }
+rand = { workspace = true }
 hex = "0.4"
 sha2 = "0.10"
+reqwest = { workspace = true }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "chrono"] }
+ssz = { workspace = true }
+strata-asm-common = { workspace = true }
+strata-asm-params = { workspace = true }
+strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-txs-admin = { workspace = true }
+strata-crypto = { workspace = true }
+strata-l1-txfmt = { workspace = true }
+strata-l1-envelope-fmt = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

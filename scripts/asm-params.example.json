@@ -1,0 +1,67 @@
+{
+  "magic": "ALPN",
+  "anchor": {
+    "block": {
+      "height": 101,
+      "blkid": "REPLACE_WITH_64_HEX_CHARS_FROM_getblockhash_101"
+    },
+    "next_target": 545259519,
+    "epoch_start_timestamp": 0,
+    "network": "regtest"
+  },
+  "subprotocols": [
+    {
+      "Admin": {
+        "strata_administrator": {
+          "keys": [
+            "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
+            "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
+          ],
+          "threshold": 2
+        },
+        "strata_sequencer_manager": {
+          "keys": [
+            "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+          ],
+          "threshold": 1
+        },
+        "alpen_administrator": {
+          "keys": [
+            "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+          ],
+          "threshold": 1
+        },
+        "confirmation_depths": {
+          "strata_admin_multisig_update": 144,
+          "strata_seq_manager_multisig_update": 144,
+          "alpen_admin_multisig_update": 144,
+          "operator_update": 144,
+          "sequencer_update": 144,
+          "ol_stf_vk_update": 144,
+          "asm_stf_vk_update": 144,
+          "ee_stf_vk_update": 144
+        },
+        "max_seqno_gap": 10
+      }
+    },
+    {
+      "Checkpoint": {
+        "sequencer_predicate": "AlwaysAccept",
+        "checkpoint_predicate": "AlwaysAccept",
+        "genesis_l1_height": 101,
+        "genesis_ol_blkid": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "Bridge": {
+        "operators": [
+          "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7"
+        ],
+        "denomination": 1000000000,
+        "assignment_duration": 10000,
+        "operator_fee": 100000000,
+        "recovery_delay": 1008
+      }
+    }
+  ]
+}

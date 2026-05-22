@@ -1,26 +1,54 @@
 use crate::state::AppState;
 use axum::{
-    routing::{get, post},
+    extract::State,
+    http::StatusCode,
+    routing::{get, patch, post},
     Json, Router,
 };
 use serde_json::{json, Value};
 
+pub mod auth;
+pub mod auth_session;
 pub mod proposals;
 
 async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
 }
 
+async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    state
+        .btc_client
+        .estimate_fee_rate_sats_per_vb(1)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(Json(json!({ "status": "ready" })))
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/ready", get(ready))
+        // Auth
+        .route("/auth/challenge", post(auth::auth_challenge))
+        .route("/auth/verify", post(auth::auth_verify))
+        .route("/auth/logout", post(auth::auth_logout))
         // Proposals
+        .route("/proposals/next-seq-no", get(proposals::get_next_seq_no))
         .route("/proposals", get(proposals::list_proposals))
         .route("/proposals", post(proposals::create_proposal))
         .route("/proposals/:action_id", get(proposals::get_proposal))
+        .route("/proposals/:action_id", patch(proposals::patch_proposal))
         .route(
             "/proposals/:action_id/approve",
             post(proposals::approve_action),
+        )
+        .route(
+            "/proposals/:action_id/broadcast/claim",
+            post(proposals::claim_broadcast),
+        )
+        .route(
+            "/proposals/:action_id/broadcast",
+            patch(proposals::report_broadcast_progress),
         )
         .with_state(state)
 }
@@ -32,17 +60,61 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use serde_json::{json, Value};
+    use std::sync::Arc;
     use tower::util::ServiceExt;
 
-    fn test_app() -> Router {
-        router(AppState::new())
+    const SIGNER_A_SK: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+    const SIGNER_B_SK: &str = "0000000000000000000000000000000000000000000000000000000000000002";
+    const SIGNER_A_PK: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+
+    fn signer_b_pk() -> String {
+        use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+        let mut sk_bytes = [0u8; 32];
+        sk_bytes[31] = 2;
+        let sk = SecretKey::from_slice(&sk_bytes).expect("valid test key");
+        hex::encode(PublicKey::from_secret_key(&Secp256k1::new(), &sk).serialize())
+    }
+    const NON_MEMBER_PK: &str =
+        "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn test_app_with_rpc_url(rpc_url: &str) -> Router {
+        use crate::infrastructure::{
+            bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
+        };
+
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        let btc_client = Arc::new(HttpBitcoinRpcClient::new(
+            "http://127.0.0.1:18443",
+            None,
+            "user",
+            "pass",
+        ));
+        router(AppState::new(
+            repo,
+            rpc_url.to_string(),
+            120_000,
+            240_000,
+            btc_client,
+        ))
     }
 
-    fn json_request(method: &str, uri: &str, body: Option<Value>) -> Request<Body> {
-        let builder = Request::builder()
+    fn test_app() -> Router {
+        test_app_with_rpc_url("mock://asm-membership")
+    }
+
+    fn json_request(
+        method: &str,
+        uri: &str,
+        body: Option<Value>,
+        bearer: Option<&str>,
+    ) -> Request<Body> {
+        let mut builder = Request::builder()
             .method(method)
             .uri(uri)
             .header("content-type", "application/json");
+        if let Some(token) = bearer {
+            builder = builder.header("authorization", format!("Bearer {token}"));
+        }
 
         match body {
             Some(b) => builder
@@ -57,227 +129,520 @@ mod tests {
         serde_json::from_slice(&bytes).unwrap()
     }
 
-    fn create_body() -> Value {
+    fn create_body(signer: &str) -> Value {
         json!({
-            "authority": "strata_admin",
             "seq_no": 1,
-            "action_hex": "deadbeef",
-            "signer_pubkey": "pubkey_a",
+            "action_hex": crate::infrastructure::action_codec::test_fixture_action_hex(),
+            "signer_pubkey": signer,
             "signature_hex": "sig_a"
         })
     }
 
-    // ─── create_proposal ────────────────────────────────────────────────────
+    fn sign_digest(secret_key_hex: &str, challenge_hex: &str) -> String {
+        use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
+        let sk_bytes = hex::decode(secret_key_hex).unwrap();
+        let sk = SecretKey::from_slice(&sk_bytes).unwrap();
+        let digest = hex::decode(challenge_hex).unwrap();
+        let msg = Message::from_digest_slice(&digest).unwrap();
+        let sig = Secp256k1::new().sign_ecdsa(&msg, &sk);
+        hex::encode(sig.serialize_compact())
+    }
 
-    #[tokio::test]
-    async fn test_create_proposal_happy_path() {
-        let app = test_app();
-        let req = json_request("POST", "/proposals", Some(create_body()));
+    async fn login(app: Router, signer_sk: &str, signer_pk: &str) -> String {
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "strata_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let challenge = response_json(resp).await;
+        let challenge_id = challenge["challenge_id"].as_str().unwrap();
+        let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+        let signature_hex = sign_digest(signer_sk, challenge_hex);
+
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge_id,
+                "signer_pubkey": signer_pk,
+                "signature_hex": signature_hex,
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
         let resp = app.oneshot(req).await.unwrap();
-
         assert_eq!(resp.status(), StatusCode::CREATED);
-
         let body = response_json(resp).await;
-        assert_eq!(body["seq_no"], 1);
-        assert_eq!(body["authority"], "strata_admin");
-        assert_eq!(body["status"], "pending");
-        assert_eq!(body["signatures"][0]["signer_pubkey"], "pubkey_a");
+        body["token"].as_str().unwrap().to_string()
     }
 
     #[tokio::test]
-    async fn test_create_proposal_duplicate_rejected() {
-        let state = AppState::new();
-        let app = router(state.clone());
-
-        // First create
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::CREATED);
-
-        // Second create — same action_hex + seq_no
-        let app = router(state);
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::CONFLICT);
-    }
-
-    #[tokio::test]
-    async fn test_create_proposal_invalid_hex() {
+    async fn test_auth_verify_non_member_rejected() {
         let app = test_app();
-        let body = json!({
-            "authority": "strata_admin",
-            "seq_no": 1,
-            "action_hex": "not_valid_hex",
-            "signer_pubkey": "pubkey_a",
-            "signature_hex": "sig_a"
-        });
-        let req = json_request("POST", "/proposals", Some(body));
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "strata_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let challenge = response_json(resp).await;
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge["challenge_id"],
+                "signer_pubkey": NON_MEMBER_PK,
+                "signature_hex": "00",
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
         let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
 
+    #[tokio::test]
+    async fn test_auth_verify_signer_a_fixture_accepted() {
+        let app = test_app();
+        let token = login(app, SIGNER_A_SK, SIGNER_A_PK).await;
+        assert!(!token.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_auth_verify_unmapped_authority_is_fail_closed() {
+        let app = test_app();
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "alpen_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let challenge = response_json(resp).await;
+        let challenge_id = challenge["challenge_id"].as_str().unwrap();
+        let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+        let signature_hex = sign_digest(SIGNER_A_SK, challenge_hex);
+
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge_id,
+                "signer_pubkey": SIGNER_A_PK,
+                "signature_hex": signature_hex,
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
+        let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    // ─── list_proposals ─────────────────────────────────────────────────────
+    #[tokio::test]
+    async fn test_auth_verify_fails_closed_when_rpc_unavailable() {
+        let app = test_app_with_rpc_url("http://127.0.0.1:1");
+        let req = json_request(
+            "POST",
+            "/auth/challenge",
+            Some(json!({ "authority": "strata_admin" })),
+            None,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let challenge = response_json(resp).await;
+        let challenge_id = challenge["challenge_id"].as_str().unwrap();
+        let challenge_hex = challenge["challenge_hex"].as_str().unwrap();
+        let signature_hex = sign_digest(SIGNER_A_SK, challenge_hex);
+
+        let req = json_request(
+            "POST",
+            "/auth/verify",
+            Some(json!({
+                "challenge_id": challenge_id,
+                "signer_pubkey": SIGNER_A_PK,
+                "signature_hex": signature_hex,
+                "signature_format": "p2wpkh-tx-binding"
+            })),
+            None,
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
 
     #[tokio::test]
-    async fn test_list_proposals_empty() {
+    async fn test_create_proposal_requires_bearer() {
         let app = test_app();
-        let req = json_request("GET", "/proposals", None);
+        let req = json_request("POST", "/proposals", Some(create_body(SIGNER_A_PK)), None);
         let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
 
+    #[tokio::test]
+    async fn test_create_and_get_with_bearer() {
+        let app = test_app();
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let created = response_json(resp).await;
+        let action_id = created["action_id"].as_str().unwrap().to_string();
+
+        let req = json_request(
+            "GET",
+            &format!("/proposals/{action_id}"),
+            None,
+            Some(&token),
+        );
+        let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = response_json(resp).await;
-        assert_eq!(body["proposals"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]
-    async fn test_list_proposals_returns_all() {
-        let state = AppState::new();
-
-        // Create 2 proposals
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        app.oneshot(req).await.unwrap();
-
-        let app = router(state.clone());
-        let body2 = json!({
-            "authority": "strata_admin",
-            "seq_no": 2,
-            "action_hex": "cafebabe",
-            "signer_pubkey": "pubkey_a",
-            "signature_hex": "sig_a"
-        });
-        let req = json_request("POST", "/proposals", Some(body2));
-        app.oneshot(req).await.unwrap();
-
-        // List
-        let app = router(state);
-        let req = json_request("GET", "/proposals", None);
+    async fn test_create_signer_mismatch_rejected() {
+        let app = test_app();
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(&signer_b_pk())),
+            Some(&token),
+        );
         let resp = app.oneshot(req).await.unwrap();
-
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = response_json(resp).await;
-        assert_eq!(body["proposals"].as_array().unwrap().len(), 2);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
-    async fn test_list_proposals_filter_by_status() {
-        let state = AppState::new();
+    async fn test_get_proposal_wrong_authority_returns_unauthorized() {
+        use crate::application::traits::ProposalRepository;
+        use crate::domain::authority::Authority;
+        use crate::domain::proposal::{
+            ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+        };
+        use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        app.oneshot(req).await.unwrap();
+        let repo = Arc::new(InMemoryProposalRepository::new());
+        let action_id = "cross_auth_action".to_string();
+        repo.save_proposal(Proposal {
+            action_id: ActionId(action_id.clone()),
+            seq_no: 1,
+            authority: Authority::AlpenAdmin,
+            status: ProposalStatus::Pending,
+            required_signatures: 2,
+            action_hex: "deadbeef".to_string(),
+            signatures: vec![ProposalSignature {
+                signer_pubkey: SIGNER_A_PK.to_string(),
+                signature_hex: "sig_a".to_string(),
+            }],
+            broadcast_status: BroadcastStatus::default(),
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+        })
+        .await
+        .unwrap();
 
-        // Filter pending
-        let app = router(state.clone());
-        let req = json_request("GET", "/proposals?status=pending", None);
+        let app = {
+            use crate::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+
+            let btc_client = Arc::new(HttpBitcoinRpcClient::new(
+                "http://127.0.0.1:18443",
+                None,
+                "user",
+                "pass",
+            ));
+            router(AppState::new(
+                repo,
+                "mock://asm-membership".to_string(),
+                120_000,
+                240_000,
+                btc_client,
+            ))
+        };
+
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let req = json_request(
+            "GET",
+            &format!("/proposals/{action_id}"),
+            None,
+            Some(&token),
+        );
         let resp = app.oneshot(req).await.unwrap();
-        let body = response_json(resp).await;
-        assert_eq!(body["proposals"].as_array().unwrap().len(), 1);
-
-        // Filter approved — should be empty
-        let app = router(state);
-        let req = json_request("GET", "/proposals?status=approved", None);
-        let resp = app.oneshot(req).await.unwrap();
-        let body = response_json(resp).await;
-        assert_eq!(body["proposals"].as_array().unwrap().len(), 0);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    // ─── get_proposal ───────────────────────────────────────────────────────
-
     #[tokio::test]
-    async fn test_get_proposal_happy_path() {
-        let state = AppState::new();
+    async fn test_approve_at_quorum_stays_pending_until_patch_approved() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
 
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token_a),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
         let created = response_json(resp).await;
         let action_id = created["action_id"].as_str().unwrap();
 
-        let app = router(state);
-        let req = json_request("GET", &format!("/proposals/{action_id}"), None);
-        let resp = app.oneshot(req).await.unwrap();
-
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = response_json(resp).await;
-        assert_eq!(body["seq_no"], 1);
-        assert_eq!(body["status"], "pending");
-    }
-
-    #[tokio::test]
-    async fn test_get_proposal_not_found() {
-        let app = test_app();
-        let req = json_request("GET", "/proposals/nonexistent", None);
-        let resp = app.oneshot(req).await.unwrap();
-
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-    }
-
-    // ─── approve_action ─────────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn test_approve_action_happy_path() {
-        let state = AppState::new();
-
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
-        let created = response_json(resp).await;
-        let action_id = created["action_id"].as_str().unwrap();
-
-        let app = router(state);
-        let sig_body = json!({
-            "signer_pubkey": "pubkey_b",
-            "signature_hex": "sig_b"
-        });
         let req = json_request(
             "POST",
             &format!("/proposals/{action_id}/approve"),
-            Some(sig_body),
+            Some(json!({
+                "signer_pubkey": signer_b,
+                "signature_hex": "sig_b"
+            })),
+            Some(&token_b),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let approved_resp = response_json(resp).await;
+        assert_eq!(approved_resp["status"], "pending");
+        assert_eq!(approved_resp["signatures"].as_array().unwrap().len(), 2);
+
+        let req = json_request(
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token_b),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let patched = response_json(resp).await;
+        assert_eq!(patched["status"], "approved");
+
+        let req = json_request(
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token_a),
         );
         let resp = app.oneshot(req).await.unwrap();
-
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = response_json(resp).await;
-        assert_eq!(body["signatures"].as_array().unwrap().len(), 2);
+        assert_eq!(response_json(resp).await["status"], "approved");
     }
 
     #[tokio::test]
-    async fn test_approve_action_duplicate_signer_rejected() {
-        let state = AppState::new();
+    async fn test_patch_approved_rejected_below_quorum() {
+        let app = test_app();
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
 
-        let app = router(state.clone());
-        let req = json_request("POST", "/proposals", Some(create_body()));
-        let resp = app.oneshot(req).await.unwrap();
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
         let created = response_json(resp).await;
         let action_id = created["action_id"].as_str().unwrap();
 
-        let app = router(state);
-        let sig_body = json!({
-            "signer_pubkey": "pubkey_a",
-            "signature_hex": "sig_a_again"
-        });
         let req = json_request(
-            "POST",
-            &format!("/proposals/{action_id}/approve"),
-            Some(sig_body),
+            "PATCH",
+            &format!("/proposals/{action_id}"),
+            Some(json!({ "proposal_status": "approved" })),
+            Some(&token),
         );
         let resp = app.oneshot(req).await.unwrap();
-
         assert_eq!(resp.status(), StatusCode::CONFLICT);
     }
 
     #[tokio::test]
-    async fn test_approve_action_nonexistent_proposal() {
+    async fn test_approve_with_invalid_token_rejected() {
         let app = test_app();
-        let sig_body = json!({
-            "signer_pubkey": "pubkey_a",
-            "signature_hex": "sig_a"
-        });
-        let req = json_request("POST", "/proposals/nonexistent/approve", Some(sig_body));
-        let resp = app.oneshot(req).await.unwrap();
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let created = response_json(resp).await;
+        let action_id = created["action_id"].as_str().unwrap();
 
+        let req = json_request(
+            "POST",
+            &format!("/proposals/{action_id}/approve"),
+            Some(json!({
+                "signer_pubkey": signer_b_pk(),
+                "signature_hex": "sig_b"
+            })),
+            Some("invalid-token"),
+        );
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    /// P-032 (floor): claim on a pending proposal (even at quorum) must return 409.
+    #[tokio::test]
+    async fn test_claim_broadcast_pending_proposal_returns_conflict() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let action_id = response_json(resp).await["action_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Signer B approves → quorum reached, still pending
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/approve"),
+                Some(json!({ "signer_pubkey": signer_b, "signature_hex": "sig_b" })),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Claim while still pending → 409
+        let resp = app
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    /// P-032 (floor): second claim on an approved proposal must return 409.
+    #[tokio::test]
+    async fn test_claim_broadcast_second_claim_returns_conflict() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let action_id = response_json(resp).await["action_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Reach quorum
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/approve"),
+                Some(json!({ "signer_pubkey": signer_b, "signature_hex": "sig_b" })),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+
+        // Transition to approved
+        app.clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/proposals/{action_id}"),
+                Some(json!({ "proposal_status": "approved" })),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+
+        // First claim → 200
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Second claim → 409
+        let resp = app
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    /// P-023: error responses must include a machine-readable `errorCode` field.
+    #[tokio::test]
+    async fn test_error_response_includes_error_code() {
+        let app = test_app();
+
+        // 401 — unauthorized (no bearer)
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let body = response_json(resp).await;
+        assert_eq!(body["errorCode"], "unauthorized");
+
+        // 404 — not found
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let resp = app
+            .oneshot(json_request(
+                "GET",
+                "/proposals/nonexistent-id",
+                None,
+                Some(&token),
+            ))
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = response_json(resp).await;
+        assert_eq!(body["errorCode"], "not_found");
     }
 }

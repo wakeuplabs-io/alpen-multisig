@@ -3,6 +3,7 @@ export type WalletVendor = 'mock' | 'ledger' | 'trezor' | 'mnemonic'
 export type WalletAdapterOptions = {
 	/** Required when vendor is 'mnemonic'. */
 	mnemonic?: string
+	passphrase?: string
 	derivationPath?: string
 }
 
@@ -31,12 +32,17 @@ export type HwAddressEntry = {
 	publicKeyHex: string
 }
 
+export type SigningContext = {
+	seqno: number
+	actionHex: string
+}
+
 export type WalletAdapter = {
 	readonly vendor: WalletVendor
 	readonly supportsSighashSigning: boolean
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
 	setDerivationPath?(derivationPath: string): void
-	signSighash(sighashHex: string): Promise<SignSighashResult>
+	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
 	listAddresses?(count?: number): Promise<HwAddressEntry[]>
 }

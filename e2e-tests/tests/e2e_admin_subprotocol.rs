@@ -21,8 +21,9 @@ use std::num::NonZero;
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use rand::rngs::OsRng;
 
-use strata_asm_txs_admin::actions::updates::multisig::MultisigUpdate;
-use strata_asm_txs_admin::actions::{MultisigAction, Sighash, UpdateAction};
+use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
+use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_asm_txs_admin::test_utils::create_test_admin_tx;
 use strata_asm_txs_test_utils::TEST_MAGIC_BYTES;
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -65,17 +66,16 @@ fn e2e_build_and_verify_admin_signer_update() {
         threshold,        // new threshold (unchanged)
     );
 
-    let multisig_update =
-        MultisigUpdate::new(config_update, strata_asm_params::Role::StrataAdministrator);
+    let strata_update = StrataAdminMultisigUpdate::new(config_update);
 
-    let action = MultisigAction::Update(UpdateAction::Multisig(multisig_update));
+    let action = MultisigAction::Update(UpdateAction::StrataAdminMultisig(strata_update));
 
     // ---------------------------------------------------------------
     // Step 3: Compute the sighash (SPS-65 tagged hash)
     // Formula: SHA256(SHA256("strata/admin/strata_admin_multisig_update") || seqno_be || payload)
     // ---------------------------------------------------------------
     let seqno: u64 = 1; // first action, seqno must be > last_seqno (0)
-    let sighash = action.compute_sighash(seqno);
+    let sighash = SigningMessage::for_action(&action, seqno).compute_sighash();
 
     // Sighash is a 32-byte hash that each signer will sign
     assert_eq!(sighash.0.len(), 32, "sighash must be 32 bytes");

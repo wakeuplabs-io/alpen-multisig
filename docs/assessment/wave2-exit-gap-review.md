@@ -1,0 +1,68 @@
+# Wave 2 — exit gap review
+
+**Status:** **Closed** — sign-off 2026-05-19.  
+**As of:** `develop` — all Wave 2 track PRs merged ([#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136)–[#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142)); gate log [#145](https://github.com/wakeuplabs-io/alpen-multisig/pull/145) / [#146](https://github.com/wakeuplabs-io/alpen-multisig/pull/146).  
+**Source:** [action-plan-2026-05-14.md §Wave 2](action-plan-2026-05-14.md#wave-2--correctness-supply-chain-operations-weeks-36).
+
+The parallel **engineering PR queue is complete**. Wave 2 landed as **slices**; remaining P-IDs are tracked in follow-up docs and Wave 3 — not blockers for Wave 2 close.
+
+**`develop → main`** is **deferred** until Wave 3 and the assessment action plan are complete (team decision at sign-off).
+
+---
+
+## Exit criteria checklist
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| No mnemonic/key over IPC (production) | **Met** | Track A — [secret-custody-wave2.md](../specs/secret-custody-wave2.md) |
+| `cargo deny` / `cargo audit` / `npm audit` block CI | **Met** | Track C |
+| No auto-Approve; ADR-006 + threshold at claim | **Met** | Track B — [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) |
+| All RPC calls in `tokio::time::timeout` + structured errors | **Partial** (accepted) | Orchestrator 30s (D); desktop + retries → [wave2-track-d-followups.md](wave2-track-d-followups.md) |
+| Every Tier 0 BLOCKER from 2026-05-14 closed | **Partial** (accepted) | Remainder → follow-ups / Wave 3 |
+| Ops runbook + threat model + signer-safety linked from README | **Met** | Track F — [README.md](../../README.md) |
+| E2E proposal flow on `develop` | **Met** | 2026-05-19 — 3 WDIO specs; height 548 |
+| Manual enactment sign-off | **Met** | 3 Strata Administrator signers incl. `03dd6d7…427c` |
+| Human gates §1–§4 | **Met** | [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) |
+
+---
+
+## Tracks merged vs full plan
+
+| Track | PR | Merged slice | Follow-up doc |
+|-------|-----|--------------|---------------|
+| A | #136 | P-001, P-003, P-040, P-033 | — |
+| B | #138 | ADR-006, P-012, P-026, P-025, P-037, P-028 | — |
+| C | #137 | P-011 | — |
+| D | #139 | P-027 orchestrator | [wave2-track-d-followups.md](wave2-track-d-followups.md) |
+| E | #140 | P-008 auth; ipc-schemas tests | [wave2-track-e-followups.md](wave2-track-e-followups.md) |
+| F | #141 | P-051 docs | [wave2-track-f-followups.md](wave2-track-f-followups.md) |
+| G | #142 | P-053 plans | [wave2-track-g-followups.md](wave2-track-g-followups.md) |
+
+---
+
+## Deferred backlog (Wave 3 / follow-up PRs)
+
+### Human gates (resolved; implementation deferred)
+
+| # | Topic | Outcome |
+|---|--------|---------|
+| §3 | US-H5 manual-fallback | Wave 3 / Slice 5 — [gate log](wave2-human-decisions-pending.md) §3 |
+| §4 | P-055 SPS in-repo | Post-merge docs PR after legal OK — [gate log](wave2-human-decisions-pending.md) §4 |
+
+### P-ID backlog (by follow-up doc)
+
+| Doc | P-IDs |
+|-----|-------|
+| [wave2-track-d-followups.md](wave2-track-d-followups.md) | P-017, P-018, P-019, P-023, P-029, P-027 remainder |
+| [wave2-track-e-followups.md](wave2-track-e-followups.md) | P-008 remainder, P-032 axis-10 (US-H5 → Wave 3) |
+| [wave2-track-f-followups.md](wave2-track-f-followups.md) | P-005, P-006, P-055 (post-merge docs) |
+| [wave2-track-g-followups.md](wave2-track-g-followups.md) | P-053 execution (interviews, usability) |
+
+---
+
+## Post–Wave 2 (active)
+
+1. **Wave 3** — [action plan §Wave 3](action-plan-2026-05-14.md#wave-3--architectural-hardening--governance-integrity-weeks-712) on `develop`.  
+2. **Follow-up slices** — D / E / F / G as PRs to `develop`.  
+3. **P-055** — `docs/specs/sps-reference/` after legal confirmation.  
+4. **develop → main** — after Wave 3 + assessment action plan complete.

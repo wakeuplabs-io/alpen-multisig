@@ -1,12 +1,16 @@
 use crate::{
     application::proposals,
-    domain::{
-        authority::Authority,
-        proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
-    },
+    domain::proposal::{ActionId, Proposal, ProposalSignature, ProposalStatus},
     error::{AppError, Result},
+    handlers::auth_session::AuthenticatedSession,
+    infrastructure::{action_codec, asm_role_membership},
     state::AppState,
 };
+
+#[derive(Debug, Serialize)]
+pub struct NextSeqNoResponse {
+    pub next_seq_no: u64,
+}
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -18,7 +22,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProposalRequest {
-    pub authority: Authority,
     pub seq_no: u64,
     pub action_hex: String,
     pub signer_pubkey: String,
@@ -45,6 +48,7 @@ pub struct ProposalListResponse {
 
 pub async fn create_proposal(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Json(body): Json<CreateProposalRequest>,
 ) -> Result<(StatusCode, Json<Proposal>)> {
     let sig = ProposalSignature {
@@ -52,66 +56,190 @@ pub async fn create_proposal(
         signature_hex: body.signature_hex,
     };
 
-    let mut repo = state
-        .repo
-        .write()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+    action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
+
+    let required_signatures =
+        asm_role_membership::threshold_for_authority(&state.asm_rpc_url, auth.authority).await?;
 
     let proposal = proposals::create_update_action(
-        &mut *repo,
-        body.authority,
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
         body.seq_no,
         &body.action_hex,
         &sig,
-    )?;
+        required_signatures,
+    )
+    .await?;
 
     Ok((StatusCode::CREATED, Json(proposal)))
 }
 
+pub async fn get_next_seq_no(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+) -> Result<Json<NextSeqNoResponse>> {
+    let last_seqno =
+        asm_role_membership::last_seqno_for_authority(&state.asm_rpc_url, auth.authority).await?;
+    Ok(Json(NextSeqNoResponse {
+        next_seq_no: last_seqno + 1,
+    }))
+}
+
+#[tracing::instrument(skip(state, auth), fields(authority = ?auth.authority))]
 pub async fn list_proposals(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Query(query): Query<ListProposalsQuery>,
 ) -> Result<Json<ProposalListResponse>> {
-    let repo = state
-        .repo
-        .read()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+    proposals::reconcile_enacted_for_authority(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+    )
+    .await?;
 
-    let proposals = proposals::list_proposals(&*repo, query.status);
+    let proposals =
+        proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
 
     Ok(Json(ProposalListResponse { proposals }))
 }
 
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
 pub async fn get_proposal(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
 ) -> Result<Json<Proposal>> {
-    let repo = state
-        .repo
-        .read()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+    let action_id = ActionId(action_id);
+    proposals::reconcile_enacted_for_action(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+        &action_id,
+    )
+    .await?;
 
-    let proposal = proposals::get_update_action(&*repo, &ActionId(action_id))?;
+    let proposal =
+        proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
 
     Ok(Json(proposal))
 }
 
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
 pub async fn approve_action(
     State(state): State<AppState>,
+    auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
 ) -> Result<Json<Proposal>> {
+    if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
+        return Err(AppError::Unauthorized);
+    }
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
     };
 
-    let mut repo = state
-        .repo
-        .write()
-        .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+    let proposal = proposals::approve_action(
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &ActionId(action_id),
+        &sig,
+    )
+    .await?;
 
-    let proposal = proposals::approve_action(&mut *repo, &ActionId(action_id), &sig)?;
+    Ok(Json(proposal))
+}
 
+#[derive(Debug, Deserialize)]
+pub struct PatchProposalBody {
+    pub proposal_status: String,
+}
+
+/// Explicit pending → approved transition (P-012 / ADR-006).
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
+pub async fn patch_proposal(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+    Json(body): Json<PatchProposalBody>,
+) -> Result<Json<Proposal>> {
+    if body.proposal_status != "approved" {
+        return Err(AppError::BadRequest(format!(
+            "unsupported proposal_status: {}",
+            body.proposal_status
+        )));
+    }
+
+    let proposal = proposals::transition_to_approved(
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &state.asm_rpc_url,
+        &ActionId(action_id),
+    )
+    .await?;
+
+    Ok(Json(proposal))
+}
+
+/// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
+pub async fn claim_broadcast(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+) -> Result<Json<Proposal>> {
+    let action_id = ActionId(action_id);
+    let proposal = proposals::claim_broadcast_coordination(
+        state.repo.as_ref(),
+        auth.authority,
+        &state.asm_rpc_url,
+        &action_id,
+    )
+    .await?;
+    Ok(Json(proposal))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReportBroadcastProgressBody {
+    pub broadcast_status: String,
+    pub proposal_status: Option<String>,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub broadcast_error: Option<String>,
+}
+
+/// Coordination-only: desktop reports txids / sub-status after local Bitcoin steps (P-066).
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
+pub async fn report_broadcast_progress(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+    Json(body): Json<ReportBroadcastProgressBody>,
+) -> Result<Json<Proposal>> {
+    let action_id = ActionId(action_id);
+    let proposal = proposals::report_broadcast_progress(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+        &action_id,
+        proposals::ReportBroadcastProgressRequest {
+            broadcast_status: body.broadcast_status,
+            proposal_status: body.proposal_status,
+            commit_txid: body.commit_txid,
+            reveal_txid: body.reveal_txid,
+            broadcast_error: body.broadcast_error,
+        },
+    )
+    .await?;
     Ok(Json(proposal))
 }
