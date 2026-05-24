@@ -307,7 +307,7 @@ Shared acceptance signals for all US-E*:
 - **Slice:** **1a — Admin Wallet regtest commit funding**
 - **Depends on:** US-C1, US-C2, US-H6, regtest stack (`bitcoind` in dev only).
 - **Out of scope:** Payout; P2TR Admin ID; US-H4 fee UI; full WalletPanel; PRD §4.3.5 Send; US-H2 cancel; HWI; HW-signed commit; mainnet/testnet enablement in US-H7 (regtest only).
-- **Discovery note:** Story-map Slice 0 says “no in-app broadcast” but US-H6 commit/reveal is already implemented. US-H7 adds first Admin Wallet spend via BDK+RPC. Technical spec: [`docs/specs/admin-wallet-regtest-commit-funding.md`](../specs/admin-wallet-regtest-commit-funding.md).
+- **Discovery note:** US-H7 adds the first Admin Wallet spend via BDK + chain RPC, layered on the in-app commit/reveal (US-H6). See §6 *Addendum (broadcast drift)* for the Slice 0 reconciliation. Technical spec: [`docs/specs/admin-wallet-regtest-commit-funding.md`](../specs/admin-wallet-regtest-commit-funding.md).
 
 ### Activity I — Payout operations (Payout Admin swimlane)
 

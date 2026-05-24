@@ -152,16 +152,19 @@ Do not use Admin ID keys for commit funding.
 
 ### Regtest playbook
 
-1. Start local node: `./scripts/bitcoind-asm-runner.sh start`
-2. Fund Admin Wallet external address:
-   - `generatetoaddress` / faucet RPC to `m/86'/0'/73'/0/0` (after deriving address from dev mnemonic), or
-   - use existing CI wallet `sendtoaddress` to that address once derived
-3. Set desktop `.env`:
+Canonical recipe (avoids coinbase-maturity confusion):
+
+1. Start local node: `./scripts/bitcoind-asm-runner.sh start`.
+2. Mature coinbase for the CI wallet: `bitcoin-cli -rpcwallet=<CI> generatetoaddress 101 <CI-wallet-addr>`.
+3. Derive Admin Wallet external address from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/0/0`.
+4. Fund it: `bitcoin-cli -rpcwallet=<CI> sendtoaddress <admin-wallet-addr> 1.0`.
+5. Confirm: `bitcoin-cli -rpcwallet=<CI> generatetoaddress 1 <CI-wallet-addr>`.
+6. Set desktop `.env`:
    - `COMMIT_FUNDING=admin_wallet`
    - `ADMIN_WALLET_REGTEST_MNEMONIC=…`
    - `ALLOW_DEV_MNEMONIC_SIGNING=1`
    - `BITCOIN_RPC_*`, `OPERATOR_SECRET_KEY_HEX`, `BITCOIN_NETWORK=regtest`
-4. Run orchestrator + `npm run tauri dev`; broadcast an `approved` proposal.
+7. Run orchestrator + `npm run tauri dev`; broadcast an `approved` proposal.
 
 ## API Contract (orchestrator)
 
@@ -174,8 +177,10 @@ Unchanged from [proposal-broadcast-commit-reveal.md](./proposal-broadcast-commit
 | Unit | Descriptor derivation for `m/86'/0'/73'/0/0` and change `…/1/0`; address matches expected test vectors for regtest mnemonic |
 | Unit | `CommitFunding` selection: default `bitcoind`; `admin_wallet` only when env + regtest |
 | CI / E2E | Default `COMMIT_FUNDING` unset or `bitcoind` — existing commit/reveal tests pass without BDK mnemonic |
+| CI / E2E | Existing commit/reveal smoke suite remains unchanged when `COMMIT_FUNDING` is unset (regression guard for the legacy path) |
 | Manual regtest | `COMMIT_FUNDING=admin_wallet` — commit tx inputs trace to Admin Wallet; reveal succeeds; orchestrator shows txids |
 | Negative | Insufficient balance, RPC down, `admin_wallet` on non-regtest → high-signal errors |
+| Negative | Retry after a partial commit-funding failure (signed but broadcast failed) does not produce a double-spend: orchestrator `claim` prevents duplicate execution; second attempt either rebroadcasts the same tx or surfaces a clear "already claimed" error |
 
 ## Manual Fallback
 

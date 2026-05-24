@@ -247,7 +247,7 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_RPC_URL` | Chain RPC base URL | Keep; document as chain RPC, not “Core-only” |
 | `BITCOIN_RPC_USER` / `BITCOIN_RPC_PASS` | RPC auth | Keep |
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
-| `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | Deprecate for product flows after Phase 1 migration |
+| `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Required while CI keeps legacy funding (Phases 1–4)**; deprecate once Phase 4 (Send) proves parity and CI migrates to `admin_wallet` |
 | `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | Phase 1+ |
 | `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed | Regtest only |
 | `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing | Align with existing `dev_secrets.rs` |
@@ -257,6 +257,8 @@ Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI until Phase 
 ## 7. Risks and future backends
 
 **Remote RPC limits:** Public or shared Bitcoin Core RPC endpoints may rate-limit, lag on descriptor rescans, or lack wallet-related RPCs BDK expects. Phase 9 hardening must validate sync latency and failure modes on testnet before mainnet.
+
+**Payout path collision (future Payout program):** PRD §3.2.1.1 defines the **Payout Admin ID** at `m/86'/0'/73'/0/0` — the **same path** this program uses for the Admin Wallet external address index 0. When Payout is later in scope, decide explicitly between (a) shifting the Admin Wallet external start index for Payout, or (b) treating the Payout Admin ID as a dual-use key (auth + funding). Out of scope here; documented so the assumption is not lost.
 
 **Future (out of program):** If remote chain RPC cannot support descriptor sync and transaction history at scale, re-evaluate **Esplora** or **Electrum** as a BDK backend in a separate program. Do not implement those backends in the phases above.
 
