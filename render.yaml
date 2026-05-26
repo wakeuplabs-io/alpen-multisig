@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: alpen-multisig-staging
+    env: docker
+    dockerfilePath: ./staging/Dockerfile
+    dockerContext: .
+    plan: standard  # needs enough RAM to run 3 processes
+    disk:
+      name: staging-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      # Orchestrator
+      - key: SERVER_HOST
+        value: "0.0.0.0"
+      - key: SERVER_PORT
+        value: "3000"
+      # Internal services (co-located in the same container)
+      - key: STRATA_ADMIN_STATE_RPC_URL
+        value: "http://127.0.0.1:8080"
+      - key: BITCOIN_RPC_URL
+        value: "http://127.0.0.1:18443"
+      - key: BITCOIN_RPC_USER
+        value: "user"
+      - key: BITCOIN_RPC_PASS
+        value: "password"
+      - key: BITCOIN_WALLET_NAME
+        value: "staging"
+      # Dev/staging feature flags
+      - key: DEV_MINE_ENABLED
+        value: "1"
+      - key: ALLOW_DEV_MNEMONIC_SIGNING
+        value: "1"
+      - key: ALLOW_DEV_OPERATOR_KEY
+        value: "1"
+
+  # Cron job: auto-mine 2 blocks every minute so regtest txs confirm automatically.
+  # Uses a lightweight curl-only image — no need to rebuild the full staging image.
+  - type: cron
+    name: alpen-multisig-staging-automine
+    env: docker
+    dockerfilePath: ./staging/Dockerfile.cron
+    dockerContext: .
+    schedule: "* * * * *"  # every minute (Render cron minimum granularity)
+    startCommand: >-
+      curl -sf -X POST
+      "https://alpen-multisig-staging.onrender.com/api/v1/dev/mine?count=2"
+      || true
