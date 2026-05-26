@@ -73,6 +73,23 @@ Alpen/Strata crates are not on crates.io — consumed as git dependencies. Share
 - **CI**: All generated code must pass CI checks — verify locally before considering work done
 - **Git / `develop`**: Never push directly to `develop`. Use a branch and PR for all changes (code and docs); merge only after review and green CI
 
+## Pre-Commit CI Checklist
+
+Run all of the following locally and confirm they pass **before every commit**. Do not push until all are green.
+
+```bash
+# Rust (from repo root)
+cargo fmt --check
+cargo clippy -p desktop-app -- -D warnings
+cargo test -p desktop-app
+
+# Frontend (from desktop-app/)
+cd desktop-app
+npm run format:check
+npm run lint
+npm run build
+```
+
 ## Rule Files
 
 Rules in `.claude/rules/` auto-load based on `paths` frontmatter — only the rules relevant to the files being edited are loaded into context:
