@@ -26,11 +26,8 @@ pub(crate) trait BitcoinRpcClient: Send + Sync {
     ///
     /// Returns the list of block hashes for the newly mined blocks.
     /// Only available in regtest — gated by `DEV_MINE_ENABLED` at the handler level.
-    async fn generate_to_address(
-        &self,
-        count: u32,
-        address: &str,
-    ) -> Result<Vec<String>, AppError>;
+    async fn generate_to_address(&self, count: u32, address: &str)
+        -> Result<Vec<String>, AppError>;
 }
 
 pub(crate) struct HttpBitcoinRpcClient {
