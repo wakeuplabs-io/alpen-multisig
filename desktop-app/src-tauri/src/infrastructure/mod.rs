@@ -1,3 +1,4 @@
+pub mod admin_wallet;
 pub mod action_codec;
 pub mod asm_enactment;
 pub mod asm_role_membership;
