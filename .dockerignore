@@ -1,0 +1,11 @@
+target/
+desktop-app/node_modules/
+desktop-app/dist/
+node_modules/
+.git/
+*.md
+docs/
+branding/
+scripts/
+asm/
+bin/
