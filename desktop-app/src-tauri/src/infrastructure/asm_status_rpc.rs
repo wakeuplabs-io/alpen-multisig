@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::auth::AuthRole;
 
@@ -68,6 +69,36 @@ pub async fn fetch_role_membership(
     );
 
     Ok((role_to_keys, now_unix_ms()))
+}
+
+/// Search the live ASM queue for the `UpdateId` matching `action_hex`.
+///
+/// Returns `None` when the update is not yet queued (reveal not processed by ASM yet) or
+/// when `action_hex` encodes a Cancel (not an Update).
+pub async fn find_update_id_in_queue(
+    rpc_url: &str,
+    action_hex: &str,
+) -> Result<Option<u32>, String> {
+    let bytes = hex::decode(action_hex.trim_start_matches("0x"))
+        .map_err(|e| format!("invalid action hex: {e}"))?;
+    let target_update = match MultisigAction::from_ssz_bytes(&bytes)
+        .map_err(|e| format!("invalid SSZ MultisigAction: {e:?}"))?
+    {
+        MultisigAction::Update(u) => u,
+        MultisigAction::Cancel(_) => return Ok(None),
+    };
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    let admin = decode_admin_state(&anchor)?;
+
+    let found = admin
+        .queued()
+        .iter()
+        .find(|q| q.action() == &target_update)
+        .map(|q| *q.id());
+
+    Ok(found)
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {

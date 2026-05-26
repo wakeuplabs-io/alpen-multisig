@@ -100,6 +100,19 @@ pub struct Proposal {
     pub commit_txid: Option<String>,
     pub reveal_txid: Option<String>,
     pub broadcast_error: Option<String>,
+    /// Set when this row is a cancel proposal; points to the target proposal's action_id.
+    pub target_action_id: Option<ActionId>,
+    /// Bitcoin block height at which the target update activates. Set after RevealConfirmed.
+    pub activation_height: Option<u64>,
+    /// ASM queue UpdateId assigned to this update when its reveal tx confirmed. Set after RevealConfirmed.
+    /// Required to build a valid CancelAction (target_id field). Distinct from seq_no.
+    pub update_id_in_queue: Option<u32>,
+}
+
+impl Proposal {
+    pub fn is_cancel(&self) -> bool {
+        self.target_action_id.is_some()
+    }
 }
 
 /// A signature submitted for a proposal by a signer.

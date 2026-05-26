@@ -13,34 +13,61 @@ export const broadcastStatusSchema = z.enum([
 	'failed',
 ])
 
-export const proposalSchema = z.object({
+const cancelProposalSummarySchema = z.object({
 	actionId: z.string(),
-	seqNo: z.number(),
-	authority: z.string(),
 	status: proposalStatusSchema,
-	requiredSignatures: z.number(),
-	actionHex: z.string(),
 	signatures: z.array(
 		z.object({
 			signerPubkey: z.string(),
 			signatureHex: z.string(),
 		}),
 	),
-	broadcastStatus: broadcastStatusSchema,
-	// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
-	commitTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	revealTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	broadcastError: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
+	requiredSignatures: z.number(),
 })
+
+export const proposalSchema = z
+	.object({
+		actionId: z.string(),
+		seqNo: z.number(),
+		authority: z.string(),
+		status: proposalStatusSchema,
+		requiredSignatures: z.number(),
+		actionHex: z.string(),
+		signatures: z.array(
+			z.object({
+				signerPubkey: z.string(),
+				signatureHex: z.string(),
+			}),
+		),
+		broadcastStatus: broadcastStatusSchema,
+		// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
+		commitTxid: z
+			.string()
+			.nullish()
+			.transform((v) => v ?? undefined),
+		revealTxid: z
+			.string()
+			.nullish()
+			.transform((v) => v ?? undefined),
+		broadcastError: z
+			.string()
+			.nullish()
+			.transform((v) => v ?? undefined),
+		targetActionId: z
+			.string()
+			.nullish()
+			.transform((v) => v ?? null),
+		activationHeight: z
+			.number()
+			.nullish()
+			.transform((v) => v ?? null),
+		updateIdInQueue: z
+			.number()
+			.nullish()
+			.transform((v) => v ?? null),
+		cancelProposal: cancelProposalSummarySchema.nullish().transform((v) => v ?? null),
+	})
+	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 
 export const authRoleSchema = z.nativeEnum(AuthRole)
 

@@ -11,6 +11,11 @@ use crate::infrastructure::rpc_timeout;
 #[async_trait]
 pub(crate) trait BitcoinRpcClient: Send + Sync {
     async fn estimate_fee_rate_sats_per_vb(&self, target_blocks: u16) -> Result<u64, AppError>;
+
+    /// Return the block height at which `txid` was confirmed.
+    ///
+    /// Fails if the transaction is not yet in a block.
+    async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError>;
 }
 
 pub(crate) struct HttpBitcoinRpcClient {
@@ -105,5 +110,18 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 
         let sats_per_vb = (feerate_btc_per_kb * 100_000_000.0 / 1000.0).ceil() as u64;
         Ok(sats_per_vb.max(1))
+    }
+
+    async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
+        let result = self.call("gettransaction", json!([txid, true])).await?;
+
+        result
+            .get("blockheight")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| {
+                AppError::Internal(anyhow::anyhow!(
+                    "gettransaction: missing `blockheight` for txid {txid} — not yet confirmed?"
+                ))
+            })
     }
 }

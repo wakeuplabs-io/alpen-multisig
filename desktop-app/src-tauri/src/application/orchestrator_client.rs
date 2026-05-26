@@ -77,6 +77,15 @@ pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
 }
 
+/// Request to create a cancel proposal for an approved target.
+#[derive(Debug, Serialize)]
+pub struct CreateCancelProposalRequest {
+    pub seq_no: u64,
+    pub action_hex: String,
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
 /// Desktop-reported broadcast progress (coordination only).
 #[derive(Debug, Clone, Serialize)]
 pub struct ReportBroadcastProgressRequest {
@@ -142,5 +151,12 @@ pub trait OrchestratorClient: Send + Sync {
         &self,
         action_id: &str,
         request: ReportBroadcastProgressRequest,
+    ) -> Result<Proposal, OrchestratorError>;
+
+    /// Create a cancel proposal for an approved target (idempotent).
+    async fn create_cancel_proposal(
+        &self,
+        target_action_id: &str,
+        request: CreateCancelProposalRequest,
     ) -> Result<Proposal, OrchestratorError>;
 }

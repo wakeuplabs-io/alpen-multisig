@@ -8,7 +8,7 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
-use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
@@ -57,6 +57,31 @@ pub fn encode_hex(action: &Action) -> Result<String, CodecError> {
 pub fn decode_hex(s: &str) -> Result<Action, CodecError> {
     let bytes = hex::decode(s).map_err(|e| CodecError::Hex(e.to_string()))?;
     decode(&bytes)
+}
+
+/// Wraps an existing update action hex in a `MultisigAction::Cancel` envelope.
+///
+/// `target_action_hex` must encode a `MultisigAction::Update`. `target_seq_no` is the
+/// seq_no of the queued update (used as the cancel's `target_id`).
+pub fn encode_cancel_hex_for_target(
+    target_action_hex: &str,
+    target_seq_no: u64,
+) -> Result<String, CodecError> {
+    let hex = target_action_hex
+        .strip_prefix("0x")
+        .unwrap_or(target_action_hex);
+    let bytes = hex::decode(hex).map_err(|e| CodecError::Hex(e.to_string()))?;
+    let target_action =
+        MultisigAction::from_ssz_bytes(&bytes).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
+    let update = match target_action {
+        MultisigAction::Update(u) => u,
+        MultisigAction::Cancel(_) => return Err(CodecError::UnsupportedVariant("Cancel")),
+    };
+    let target_id: u32 = target_seq_no
+        .try_into()
+        .map_err(|_| CodecError::Encode(format!("seq_no {target_seq_no} exceeds u32 range")))?;
+    let cancel = MultisigAction::Cancel(CancelAction::new(target_id, update));
+    Ok(hex::encode(cancel.as_ssz_bytes()))
 }
 
 // ─── Domain → Strata ────────────────────────────────────────────────────────

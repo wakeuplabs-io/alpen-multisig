@@ -50,6 +50,10 @@ pub fn router(state: AppState) -> Router {
             "/proposals/:action_id/broadcast",
             patch(proposals::report_broadcast_progress),
         )
+        .route(
+            "/proposals/:action_id/cancel",
+            post(proposals::create_cancel_proposal),
+        )
         .with_state(state)
 }
 
@@ -348,6 +352,9 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
         })
         .await
         .unwrap();

@@ -13,6 +13,15 @@ export type BroadcastStatus =
 	| 'reveal_confirmed'
 	| 'failed'
 
+export type ProposalKind = 'update' | 'cancel'
+
+export type CancelProposalSummary = {
+	actionId: string
+	status: ProposalStatus
+	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+	requiredSignatures: number
+}
+
 export type Proposal = {
 	actionId: string
 	seqNo: number
@@ -28,6 +37,11 @@ export type Proposal = {
 	commitTxid?: string
 	revealTxid?: string
 	broadcastError?: string
+	kind: ProposalKind
+	targetActionId: string | null
+	activationHeight: number | null
+	updateIdInQueue: number | null
+	cancelProposal: CancelProposalSummary | null
 }
 
 export type PrepareBroadcastResult = {
@@ -105,4 +119,17 @@ export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<Prepa
 
 export function broadcastProposal(input: BroadcastInput): Promise<ApiResult<BroadcastResult>> {
 	return tauriCall('proposals_broadcast', { input }, broadcastResultSchema)
+}
+
+export type CreateCancelProposalInput = {
+	baseUrl: string
+	targetActionId: string
+	seqNo: number
+	actionHex: string
+	signerPubkey: string
+	signatureHex: string
+}
+
+export function createCancelProposal(input: CreateCancelProposalInput): Promise<ApiResult<Proposal>> {
+	return tauriCall('proposals_create_cancel', { input }, proposalSchema)
 }
