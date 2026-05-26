@@ -1,3 +1,4 @@
+use desktop_app::application::commit_funding::select_commit_funding;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
@@ -344,16 +345,18 @@ pub async fn proposals_prepare_broadcast(
 pub async fn proposals_broadcast(input: BroadcastInput) -> Result<BroadcastResultDto, String> {
     let client = build_client(input.base_url)?;
     let env = broadcast_env::load_broadcast_env()?;
-    let btc_rpc = HttpBitcoinRpcClient::new(
+    let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         env.btc_wallet_name.as_deref(),
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
-    );
+    ));
+    let commit_funding =
+        select_commit_funding(btc_rpc.clone(), env.network).map_err(|e| e.to_string())?;
 
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         &client,
-        &btc_rpc,
+        btc_rpc.as_ref(),
         &env.asm_rpc_url,
         &env.operator_keypair,
         env.magic_bytes,
@@ -361,6 +364,7 @@ pub async fn proposals_broadcast(input: BroadcastInput) -> Result<BroadcastResul
         &input.action_id,
         env.confirm_poll_interval_ms,
         env.confirm_timeout_ms,
+        commit_funding.as_ref(),
     )
     .await
     .map_err(map_broadcast_error)?;

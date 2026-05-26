@@ -65,17 +65,13 @@ impl CommitFunding for BitcoindSendToAddress {
 // BdkAdminWalletMnemonic — funds from Admin Wallet descriptors (regtest only)
 // ---------------------------------------------------------------------------
 
-pub struct BdkAdminWalletMnemonic;
-
-impl BdkAdminWalletMnemonic {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct BdkAdminWalletMnemonic {
+    pub network: Network,
 }
 
-impl Default for BdkAdminWalletMnemonic {
-    fn default() -> Self {
-        Self::new()
+impl BdkAdminWalletMnemonic {
+    pub fn new(network: Network) -> Self {
+        Self { network }
     }
 }
 
@@ -83,13 +79,77 @@ impl Default for BdkAdminWalletMnemonic {
 impl CommitFunding for BdkAdminWalletMnemonic {
     async fn fund_commit(
         &self,
-        _commit_address: &str,
-        _amount_sats: u64,
-        _fee_rate: u64,
+        commit_address: &str,
+        amount_sats: u64,
+        fee_rate: u64,
     ) -> Result<String, CommitFundingError> {
-        Err(CommitFundingError::AdminWallet(
-            "BDK commit not yet implemented".into(),
-        ))
+        use bdk_bitcoind_rpc::Emitter;
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+
+        let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
+            .map_err(|_| CommitFundingError::MissingEnv("ADMIN_WALLET_REGTEST_MNEMONIC".into()))?;
+
+        let mut wallet = load_admin_wallet(&mnemonic, self.network)
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+
+        let rpc_url = std::env::var("BITCOIN_RPC_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+        let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
+        let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
+
+        let rpc = bdk_bitcoind_rpc::bitcoincore_rpc::Client::new(
+            &rpc_url,
+            bdk_bitcoind_rpc::bitcoincore_rpc::Auth::UserPass(rpc_user, rpc_pass),
+        )
+        .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?;
+
+        let mut emitter = Emitter::new(&rpc, wallet.latest_checkpoint(), 0);
+        while let Some(event) = emitter
+            .next_block()
+            .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?
+        {
+            wallet
+                .apply_block_connected_to(
+                    &event.block,
+                    event.block_height(),
+                    event.connected_to(),
+                )
+                .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+        }
+
+        let commit_addr: bdk_wallet::bitcoin::Address<_> = commit_address
+            .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?
+            .require_network(self.network)
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+
+        let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
+            .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
+
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(
+            commit_addr.script_pubkey(),
+            bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
+        );
+        tx_builder.fee_rate(fee_rate_val);
+        let mut psbt = tx_builder
+            .finish()
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+
+        wallet
+            .sign(&mut psbt, bdk_wallet::SignOptions::default())
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+
+        let tx = psbt
+            .extract_tx()
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
+
+        use bdk_bitcoind_rpc::bitcoincore_rpc::RpcApi;
+        let txid = rpc
+            .send_raw_transaction(&tx)
+            .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?;
+
+        Ok(txid.to_string())
     }
 }
 
@@ -111,7 +171,7 @@ pub fn select_commit_funding(
             if network != Network::Regtest {
                 return Err(CommitFundingError::NotRegtest(format!("{network}")));
             }
-            Ok(Box::new(BdkAdminWalletMnemonic::new()))
+            Ok(Box::new(BdkAdminWalletMnemonic::new(network)))
         }
         _ => Ok(Box::new(BitcoindSendToAddress::new(btc_rpc))),
     }
@@ -180,6 +240,12 @@ mod tests {
         let result = select_commit_funding(mock_rpc(), Network::Regtest);
         std::env::remove_var("COMMIT_FUNDING");
         assert!(result.is_ok(), "expected Ok but got an error");
+    }
+
+    #[test]
+    fn bdk_admin_wallet_stores_network() {
+        let wallet = BdkAdminWalletMnemonic::new(Network::Regtest);
+        assert_eq!(wallet.network, Network::Regtest);
     }
 
     #[test]
