@@ -78,10 +78,10 @@ Alpen/Strata crates are not on crates.io — consumed as git dependencies. Share
 Run all of the following locally and confirm they pass **before every commit**. Do not push until all are green.
 
 ```bash
-# Rust (from repo root)
+# Rust (from repo root) — use exact CI flags
 cargo fmt --check
-cargo clippy -p desktop-app -- -D warnings
-cargo test -p desktop-app
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 
 # Frontend (from desktop-app/)
 cd desktop-app

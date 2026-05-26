@@ -1034,15 +1034,11 @@ mod tests {
     }
 
     /// MockBitcoinRpcClient: used for steps after commit (confirm/reveal)
-    struct MockBtcRpc {
-        commit_txid: String,
-    }
+    struct MockBtcRpc;
 
     impl MockBtcRpc {
-        fn new(commit_txid: &str) -> Self {
-            Self {
-                commit_txid: commit_txid.to_string(),
-            }
+        fn new(_commit_txid: &str) -> Self {
+            Self
         }
     }
 
@@ -1205,7 +1201,7 @@ mod tests {
         let keypair = UntweakedKeypair::new(SECP256K1, &mut thread_rng());
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
 
-        let result = broadcast_commit_then_reveal(
+        let _result = broadcast_commit_then_reveal(
             &mock_client,
             &mock_rpc,
             "mock://asm-membership",
