@@ -1124,6 +1124,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
         async fn approve_action(
@@ -1162,6 +1166,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
         async fn report_broadcast_progress(
@@ -1181,7 +1189,18 @@ mod tests {
                 commit_txid: request.commit_txid,
                 reveal_txid: request.reveal_txid,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
+        }
+        async fn create_cancel_proposal(
+            &self,
+            _: &str,
+            _: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
         }
     }
 
