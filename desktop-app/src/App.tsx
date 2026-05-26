@@ -10,6 +10,7 @@ import { ProposalDetailScreen } from '@/screens/proposal-detail-screen'
 import { CreateProposalScreen } from '@/screens/create-proposal-screen'
 import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
+import { BlockPayoutsScreen } from '@/screens/block-payouts-screen'
 
 function RequireAuth({ children }: { children: ReactElement }) {
 	const { isAuthenticated, isLoading } = useAuthSession()
@@ -86,6 +87,7 @@ export default function App() {
 									</RequireAuth>
 								}
 							/>
+							<Route path="/block-payouts" element={<BlockPayoutsScreen />} />
 							<Route path="*" element={<Navigate to="/" replace />} />
 						</Routes>
 					</SessionProvider>
