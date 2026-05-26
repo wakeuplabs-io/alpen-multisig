@@ -1,0 +1,5 @@
+# Lightweight image for the Render cron job that calls POST /dev/mine.
+# Spins up in seconds — just needs curl.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*

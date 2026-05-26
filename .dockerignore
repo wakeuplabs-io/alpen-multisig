@@ -6,6 +6,10 @@ node_modules/
 *.md
 docs/
 branding/
-scripts/
-asm/
 bin/
+
+# asm/target is large — exclude build artifacts but keep source for staging build
+asm/target/
+
+# scripts shell scripts not needed; .toml and .json are included via staging/ copies
+scripts/*.sh
