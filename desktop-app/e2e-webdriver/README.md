@@ -115,7 +115,7 @@ Same mnemonic, **derivation row #1** (`loginMnemonicToProposals(..., { pickingRo
 
 ### [`test/specs/proposal-broadcast-quorum.e2e.js`](test/specs/proposal-broadcast-quorum.e2e.js)
 
-**Address row #0** session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Run **after** co-sign so the signer-update proposal has quorum. Needs regtest bitcoind + `VITE_*` broadcast env (RPC, operator key, magic bytes, ASM URL).
+**Address row #0** session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Run **after** co-sign so the signer-update proposal has quorum. Needs regtest bitcoind + broadcast env in **`desktop-app/.env`** (RPC, operator key, magic bytes, ASM URL — see `desktop-app/.env.example`).
 
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 
