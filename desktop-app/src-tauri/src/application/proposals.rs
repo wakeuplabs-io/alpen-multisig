@@ -1048,12 +1048,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::infrastructure::bitcoin_rpc::BitcoinRpcClient for MockBtcRpc {
-        async fn send_to_address(
-            &self,
-            _: &str,
-            _: u64,
-            _: u64,
-        ) -> Result<String, String> {
+        async fn send_to_address(&self, _: &str, _: u64, _: u64) -> Result<String, String> {
             // Should NOT be called in this test — CommitFunding takes over
             panic!("send_to_address must not be called when CommitFunding is injected");
         }
@@ -1070,10 +1065,7 @@ mod tests {
             Ok(2)
         }
 
-        async fn get_raw_transaction(
-            &self,
-            _txid: &str,
-        ) -> Result<bitcoin::Transaction, String> {
+        async fn get_raw_transaction(&self, _txid: &str) -> Result<bitcoin::Transaction, String> {
             use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxIn, TxOut};
             Ok(Transaction {
                 version: Version::TWO,
@@ -1096,10 +1088,33 @@ mod tests {
 
     #[async_trait::async_trait]
     impl OrchestratorClient for MockOrchestratorClientLargeAction {
-        async fn auth_challenge(&self, _: crate::application::orchestrator_client::StartOrchestratorAuthRequest) -> Result<crate::application::orchestrator_client::OrchestratorAuthChallenge, OrchestratorError> { unimplemented!() }
-        async fn auth_verify(&self, _: crate::application::orchestrator_client::CompleteOrchestratorAuthRequest) -> Result<crate::application::orchestrator_client::OrchestratorAuthSession, OrchestratorError> { unimplemented!() }
-        async fn auth_logout(&self) -> Result<(), OrchestratorError> { unimplemented!() }
-        async fn create_proposal(&self, _: CreateProposalRequest) -> Result<OrcProposal, OrchestratorError> { unimplemented!() }
+        async fn auth_challenge(
+            &self,
+            _: crate::application::orchestrator_client::StartOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthChallenge,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_verify(
+            &self,
+            _: crate::application::orchestrator_client::CompleteOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthSession,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_logout(&self) -> Result<(), OrchestratorError> {
+            unimplemented!()
+        }
+        async fn create_proposal(
+            &self,
+            _: CreateProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
@@ -1115,10 +1130,29 @@ mod tests {
                 broadcast_error: None,
             })
         }
-        async fn approve_action(&self, _: &str, _: ApproveActionRequest) -> Result<OrcProposal, OrchestratorError> { unimplemented!() }
-        async fn transition_to_approved(&self, _: &str, _: TransitionProposalRequest) -> Result<OrcProposal, OrchestratorError> { unimplemented!() }
-        async fn list_proposals(&self, _: Option<&str>) -> Result<Vec<OrcProposal>, OrchestratorError> { unimplemented!() }
-        async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> { unimplemented!() }
+        async fn approve_action(
+            &self,
+            _: &str,
+            _: ApproveActionRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn transition_to_approved(
+            &self,
+            _: &str,
+            _: TransitionProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn list_proposals(
+            &self,
+            _: Option<&str>,
+        ) -> Result<Vec<OrcProposal>, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> {
+            unimplemented!()
+        }
         async fn claim_broadcast(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
@@ -1134,7 +1168,11 @@ mod tests {
                 broadcast_error: None,
             })
         }
-        async fn report_broadcast_progress(&self, action_id: &str, request: crate::application::orchestrator_client::ReportBroadcastProgressRequest) -> Result<OrcProposal, OrchestratorError> {
+        async fn report_broadcast_progress(
+            &self,
+            action_id: &str,
+            request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,

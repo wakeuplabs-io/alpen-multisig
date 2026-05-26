@@ -122,9 +122,7 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 						</div>
 						<p className="mt-2 text-[13px] text-[#6b7280]">
 							Admin Wallet (BDK){' '}
-							<span className="text-[12px] text-[#9ca3af]">
-								({adminWalletInfo.balanceSats.toLocaleString()} sats)
-							</span>
+							<span className="text-[12px] text-[#9ca3af]">({adminWalletInfo.balanceSats.toLocaleString()} sats)</span>
 						</p>
 					</div>
 				)}
