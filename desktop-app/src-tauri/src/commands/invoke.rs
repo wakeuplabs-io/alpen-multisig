@@ -45,6 +45,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::hw_wallet::sign_challenge_with_ledger,
         super::signing::compute_sighash,
         super::signing::verify_threshold,
+        super::admin_wallet::get_admin_wallet_info,
     ])
 }
 
@@ -85,5 +86,6 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::signing::sign_action_sighash,
         super::signing::list_mnemonic_addresses,
         super::signing::sign_with_mnemonic_path,
+        super::admin_wallet::get_admin_wallet_info,
     ])
 }
