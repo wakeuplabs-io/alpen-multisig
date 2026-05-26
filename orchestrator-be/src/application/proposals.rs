@@ -597,6 +597,18 @@ mod tests {
         async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
             Ok(self.block_height)
         }
+
+        async fn get_new_address(&self) -> Result<String, AppError> {
+            Ok("bcrt1qtest000000000000000000000000000000000000".to_string())
+        }
+
+        async fn generate_to_address(
+            &self,
+            _count: u32,
+            _address: &str,
+        ) -> Result<Vec<String>, AppError> {
+            Ok(vec![])
+        }
     }
 
     fn mock_btc() -> MockBitcoinRpcClient {

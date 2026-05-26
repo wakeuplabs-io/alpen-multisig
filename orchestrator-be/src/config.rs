@@ -13,6 +13,8 @@ pub struct Config {
     pub bitcoin_rpc_user: String,
     pub bitcoin_rpc_pass: String,
     pub bitcoin_wallet_name: Option<String>,
+    /// Enable `POST /dev/mine` — only for regtest/staging. Never set in production.
+    pub dev_mine_enabled: bool,
 }
 
 impl Config {
@@ -54,6 +56,9 @@ impl Config {
             bitcoin_wallet_name: std::env::var("BITCOIN_WALLET_NAME")
                 .ok()
                 .filter(|s| !s.is_empty()),
+            dev_mine_enabled: std::env::var("DEV_MINE_ENABLED")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         })
     }
 }
