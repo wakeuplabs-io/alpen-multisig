@@ -83,8 +83,8 @@ impl CommitFunding for BdkAdminWalletMnemonic {
         amount_sats: u64,
         fee_rate: u64,
     ) -> Result<String, CommitFundingError> {
-        use bdk_bitcoind_rpc::Emitter;
         use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_bitcoind_rpc::Emitter;
 
         let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
             .map_err(|_| CommitFundingError::MissingEnv("ADMIN_WALLET_REGTEST_MNEMONIC".into()))?;
@@ -92,8 +92,8 @@ impl CommitFunding for BdkAdminWalletMnemonic {
         let mut wallet = load_admin_wallet(&mnemonic, self.network)
             .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
 
-        let rpc_url = std::env::var("BITCOIN_RPC_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+        let rpc_url =
+            std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
         let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
         let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
 
@@ -109,11 +109,7 @@ impl CommitFunding for BdkAdminWalletMnemonic {
             .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?
         {
             wallet
-                .apply_block_connected_to(
-                    &event.block,
-                    event.block_height(),
-                    event.connected_to(),
-                )
+                .apply_block_connected_to(&event.block, event.block_height(), event.connected_to())
                 .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
         }
 
