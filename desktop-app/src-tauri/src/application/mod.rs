@@ -7,4 +7,5 @@
 pub mod authentication;
 pub mod orchestrator_auth;
 pub mod orchestrator_client;
+pub mod commit_funding;
 pub mod proposals;
