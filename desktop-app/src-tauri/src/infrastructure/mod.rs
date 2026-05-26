@@ -1,5 +1,5 @@
-pub mod admin_wallet;
 pub mod action_codec;
+pub mod admin_wallet;
 pub mod asm_enactment;
 pub mod asm_role_membership;
 pub mod asm_status_rpc;

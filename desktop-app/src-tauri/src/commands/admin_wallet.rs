@@ -8,8 +8,7 @@ pub struct AdminWalletInfo {
 
 /// Inner logic — separated from the Tauri macro to allow direct unit testing.
 pub fn admin_wallet_info_inner() -> Result<AdminWalletInfo, String> {
-    let commit_funding =
-        std::env::var("COMMIT_FUNDING").unwrap_or_else(|_| "bitcoind".to_string());
+    let commit_funding = std::env::var("COMMIT_FUNDING").unwrap_or_else(|_| "bitcoind".to_string());
     if commit_funding != "admin_wallet" {
         return Err(format!(
             "COMMIT_FUNDING is '{}', expected 'admin_wallet'",
@@ -20,8 +19,7 @@ pub fn admin_wallet_info_inner() -> Result<AdminWalletInfo, String> {
     let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
         .map_err(|_| "missing env var: ADMIN_WALLET_REGTEST_MNEMONIC".to_string())?;
 
-    let network_str =
-        std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
+    let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
     let network = match network_str.as_str() {
         "regtest" => bdk_wallet::bitcoin::Network::Regtest,
         "testnet" => bdk_wallet::bitcoin::Network::Testnet,
@@ -29,8 +27,7 @@ pub fn admin_wallet_info_inner() -> Result<AdminWalletInfo, String> {
         other => return Err(format!("unsupported BITCOIN_NETWORK: {}", other)),
     };
 
-    let mut wallet =
-        load_admin_wallet(&mnemonic, network).map_err(|e| e.to_string())?;
+    let mut wallet = load_admin_wallet(&mnemonic, network).map_err(|e| e.to_string())?;
 
     // Sync via bdk_bitcoind_rpc when RPC vars are present; otherwise skip (offline / test).
     let rpc_url = std::env::var("BITCOIN_RPC_URL").ok();
@@ -47,11 +44,7 @@ pub fn admin_wallet_info_inner() -> Result<AdminWalletInfo, String> {
         let mut emitter = Emitter::new(&rpc, wallet.latest_checkpoint(), 0);
         while let Some(event) = emitter.next_block().map_err(|e| e.to_string())? {
             wallet
-                .apply_block_connected_to(
-                    &event.block,
-                    event.block_height(),
-                    event.connected_to(),
-                )
+                .apply_block_connected_to(&event.block, event.block_height(), event.connected_to())
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -96,10 +89,7 @@ mod tests {
         std::env::remove_var("BITCOIN_NETWORK");
 
         let info = result.expect("expected Ok");
-        assert!(
-            !info.address.is_empty(),
-            "expected non-empty address"
-        );
+        assert!(!info.address.is_empty(), "expected non-empty address");
         assert!(
             info.address.starts_with("bcrt1p"),
             "expected P2TR regtest address but got: {}",
@@ -116,7 +106,10 @@ mod tests {
 
         std::env::remove_var("COMMIT_FUNDING");
 
-        assert!(result.is_err(), "expected Err when COMMIT_FUNDING != admin_wallet");
+        assert!(
+            result.is_err(),
+            "expected Err when COMMIT_FUNDING != admin_wallet"
+        );
         let err = result.unwrap_err();
         assert!(
             err.contains("admin_wallet"),
