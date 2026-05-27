@@ -16,6 +16,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::asm_state::get_multisig_config,
         super::asm_state::check_authority_memberships,
         super::action_builder::build_admin_multisig_update_hex,
+        super::action_builder::build_cancel_action_hex,
         super::action_builder::decode_action_hex,
         super::authentication::auth_start_challenge,
         super::authentication::auth_complete,
@@ -32,6 +33,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::proposals::proposals_approve,
         super::proposals::proposals_prepare_broadcast,
         super::proposals::proposals_broadcast,
+        super::proposals::proposals_create_cancel,
         super::hw_wallet::get_trezor_info,
         super::hw_wallet::list_hw_addresses,
         super::hw_wallet::verify_address_on_device,
@@ -43,6 +45,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::hw_wallet::sign_challenge_with_ledger,
         super::signing::compute_sighash,
         super::signing::verify_threshold,
+        super::admin_wallet::get_admin_wallet_info,
     ])
 }
 
@@ -51,6 +54,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::asm_state::get_multisig_config,
         super::asm_state::check_authority_memberships,
         super::action_builder::build_admin_multisig_update_hex,
+        super::action_builder::build_cancel_action_hex,
         super::action_builder::decode_action_hex,
         super::authentication::auth_start_challenge,
         super::authentication::auth_complete,
@@ -67,6 +71,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::proposals::proposals_approve,
         super::proposals::proposals_prepare_broadcast,
         super::proposals::proposals_broadcast,
+        super::proposals::proposals_create_cancel,
         super::hw_wallet::get_trezor_info,
         super::hw_wallet::list_hw_addresses,
         super::hw_wallet::verify_address_on_device,
@@ -81,5 +86,6 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::signing::sign_action_sighash,
         super::signing::list_mnemonic_addresses,
         super::signing::sign_with_mnemonic_path,
+        super::admin_wallet::get_admin_wallet_info,
     ])
 }

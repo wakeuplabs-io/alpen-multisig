@@ -13,6 +13,7 @@ use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_l1_txfmt::MagicBytes;
 
+use crate::application::commit_funding::CommitFunding;
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
     ReportBroadcastProgressRequest, TransitionProposalRequest,
@@ -137,6 +138,7 @@ pub async fn broadcast_commit_then_reveal(
     action_id: &str,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
 ) -> Result<(String, String), BroadcastError> {
     let proposal = client.claim_broadcast(action_id).await.map_err(|e| {
         if let OrchestratorError::Backend {
@@ -186,11 +188,11 @@ pub async fn broadcast_commit_then_reveal(
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
-        // Step 1: Broadcast commit.
-        let commit_txid = btc_rpc
-            .send_to_address(&commit_address.to_string(), commit_amount_sats, fee_rate)
+        // Step 1: Broadcast commit via injected funding strategy.
+        let commit_txid = commit_funding
+            .fund_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
             .await
-            .map_err(BroadcastError::BitcoinRpc)?;
+            .map_err(|e| BroadcastError::Setup(e.to_string()))?;
 
         report_broadcast(
             client,
@@ -489,6 +491,26 @@ mod tests {
         action_codec::encode_hex(&demo_action()).expect("encode ok")
     }
 
+    /// Action with 4 keys — produces a payload large enough for taproot envelope (>= 126 bytes).
+    fn large_demo_action_hex() -> String {
+        let keys: Vec<CompressedPubKey> = (1u8..=4)
+            .map(|i| {
+                let mut seed = [0x42u8; 32];
+                seed[0] = i;
+                let sk = SecretKey::from_slice(&seed).expect("valid key");
+                let pk = PublicKey::from_secret_key(SECP256K1, &sk);
+                CompressedPubKey::new(pk.serialize())
+            })
+            .collect();
+        let action = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: keys,
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).expect("non-zero"),
+        });
+        action_codec::encode_hex(&action).expect("encode ok")
+    }
+
     fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
         let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
         let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
@@ -595,9 +617,21 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
+        }
+
+        async fn create_cancel_proposal(
+            &self,
+            _target_action_id: &str,
+            _request: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
         }
 
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
@@ -619,6 +653,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -654,6 +692,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -684,6 +726,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -709,6 +755,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             }])
         }
 
@@ -742,6 +792,10 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
 
@@ -772,6 +826,10 @@ mod tests {
                 commit_txid: request.commit_txid,
                 reveal_txid: request.reveal_txid,
                 broadcast_error: request.broadcast_error,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
             })
         }
     }
@@ -940,6 +998,246 @@ mod tests {
         assert!(mock.claim_broadcast_called());
         assert_eq!(proposal.action_id, "action_42");
         assert_eq!(proposal.status, "approved");
+    }
+
+    // ─── Acceptance test: CommitFunding abstraction is used ─────────────────
+
+    struct SpyCommitFunding {
+        fund_commit_called: Mutex<bool>,
+        txid_to_return: String,
+    }
+
+    impl SpyCommitFunding {
+        fn new(txid: &str) -> Self {
+            Self {
+                fund_commit_called: Mutex::new(false),
+                txid_to_return: txid.to_string(),
+            }
+        }
+
+        fn was_called(&self) -> bool {
+            *self.fund_commit_called.lock().unwrap()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::application::commit_funding::CommitFunding for SpyCommitFunding {
+        async fn fund_commit(
+            &self,
+            _commit_address: &str,
+            _amount_sats: u64,
+            _fee_rate: u64,
+        ) -> Result<String, crate::application::commit_funding::CommitFundingError> {
+            *self.fund_commit_called.lock().unwrap() = true;
+            Ok(self.txid_to_return.clone())
+        }
+    }
+
+    /// MockBitcoinRpcClient: used for steps after commit (confirm/reveal)
+    struct MockBtcRpc;
+
+    impl MockBtcRpc {
+        fn new(_commit_txid: &str) -> Self {
+            Self
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::infrastructure::bitcoin_rpc::BitcoinRpcClient for MockBtcRpc {
+        async fn send_to_address(&self, _: &str, _: u64, _: u64) -> Result<String, String> {
+            // Should NOT be called in this test — CommitFunding takes over
+            panic!("send_to_address must not be called when CommitFunding is injected");
+        }
+
+        async fn send_raw_transaction(&self, _: &str) -> Result<String, String> {
+            Ok("reveal-txid-mock".to_string())
+        }
+
+        async fn get_transaction_confirmations(&self, _txid: &str) -> Result<u32, String> {
+            Ok(1)
+        }
+
+        async fn estimate_fee_rate_sats_per_vb(&self, _: u16) -> Result<u64, String> {
+            Ok(2)
+        }
+
+        async fn get_raw_transaction(&self, _txid: &str) -> Result<bitcoin::Transaction, String> {
+            use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxIn, TxOut};
+            Ok(Transaction {
+                version: Version::TWO,
+                lock_time: LockTime::ZERO,
+                input: vec![TxIn::default()],
+                output: vec![TxOut {
+                    value: bitcoin::Amount::from_sat(10_000),
+                    script_pubkey: bitcoin::ScriptBuf::new(),
+                }],
+            })
+        }
+
+        async fn mine_blocks(&self, _: u32) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.
+    struct MockOrchestratorClientLargeAction;
+
+    #[async_trait::async_trait]
+    impl OrchestratorClient for MockOrchestratorClientLargeAction {
+        async fn auth_challenge(
+            &self,
+            _: crate::application::orchestrator_client::StartOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthChallenge,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_verify(
+            &self,
+            _: crate::application::orchestrator_client::CompleteOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthSession,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_logout(&self) -> Result<(), OrchestratorError> {
+            unimplemented!()
+        }
+        async fn create_proposal(
+            &self,
+            _: CreateProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
+            })
+        }
+        async fn approve_action(
+            &self,
+            _: &str,
+            _: ApproveActionRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn transition_to_approved(
+            &self,
+            _: &str,
+            _: TransitionProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn list_proposals(
+            &self,
+            _: Option<&str>,
+        ) -> Result<Vec<OrcProposal>, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn claim_broadcast(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
+            })
+        }
+        async fn report_broadcast_progress(
+            &self,
+            action_id: &str,
+            request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: request.broadcast_status,
+                commit_txid: request.commit_txid,
+                reveal_txid: request.reveal_txid,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                cancel_proposal: None,
+            })
+        }
+        async fn create_cancel_proposal(
+            &self,
+            _: &str,
+            _: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn broadcast_commit_uses_commit_funding_abstraction() {
+        use bitcoin::{
+            key::{rand::thread_rng, UntweakedKeypair},
+            secp256k1::SECP256K1,
+            Network,
+        };
+        use strata_l1_txfmt::MagicBytes;
+
+        let commit_txid = "spy-commit-txid-abc123";
+        let spy = SpyCommitFunding::new(commit_txid);
+        let mock_rpc = MockBtcRpc::new(commit_txid);
+        let mock_client = MockOrchestratorClientLargeAction;
+        let keypair = UntweakedKeypair::new(SECP256K1, &mut thread_rng());
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+
+        let _result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            &keypair,
+            magic_bytes,
+            Network::Regtest,
+            "action-1",
+            10,
+            5000,
+            &spy,
+        )
+        .await;
+
+        assert!(
+            spy.was_called(),
+            "CommitFunding::fund_commit must be called instead of btc_rpc.send_to_address"
+        );
     }
 
     #[tokio::test]

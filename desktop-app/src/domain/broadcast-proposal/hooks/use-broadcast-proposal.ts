@@ -62,7 +62,27 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 				setPhase('error')
 				return
 			}
-			if (proposalRes.ok) setProposal(proposalRes.data)
+			if (proposalRes.ok) {
+				const p = proposalRes.data
+				setProposal(p)
+				if (p.broadcastStatus !== 'idle' && p.broadcastStatus !== 'failed') {
+					setResult(
+						mergeBroadcastWithProposal(
+							{
+								actionId: p.actionId,
+								proposalStatus: p.status,
+								broadcastStatus: p.broadcastStatus,
+								commitTxid: p.commitTxid,
+								revealTxid: p.revealTxid,
+							},
+							p,
+						),
+					)
+					setBundle(res.data)
+					setPhase('done')
+					return
+				}
+			}
 			setBundle(res.data)
 			setPhase('confirming')
 		})

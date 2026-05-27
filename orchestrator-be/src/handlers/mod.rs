@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 pub mod auth;
 pub mod auth_session;
+pub mod dev;
 pub mod proposals;
 
 async fn health() -> Json<Value> {
@@ -25,7 +26,7 @@ async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode>
 }
 
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let mut r = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
         // Auth
@@ -50,7 +51,17 @@ pub fn router(state: AppState) -> Router {
             "/proposals/:action_id/broadcast",
             patch(proposals::report_broadcast_progress),
         )
-        .with_state(state)
+        .route(
+            "/proposals/:action_id/cancel",
+            post(proposals::create_cancel_proposal),
+        );
+
+    // Dev-only: mine blocks on demand (regtest/staging only).
+    if state.dev_mine_enabled {
+        r = r.route("/dev/mine", post(dev::mine_blocks));
+    }
+
+    r.with_state(state)
 }
 
 #[cfg(test)]
@@ -348,6 +359,9 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
         })
         .await
         .unwrap();

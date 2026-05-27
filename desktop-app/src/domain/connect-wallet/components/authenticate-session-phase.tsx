@@ -2,6 +2,7 @@ import type { SigningStepInfo } from '@/contexts/session-context'
 
 type Props = {
 	authorityLabel: string
+	adapterLabel: string
 	signerAddress: string
 	compressedPublicKey: string
 	isAuthenticating: boolean
@@ -14,6 +15,7 @@ type Props = {
 
 export function AuthenticateSessionPhase({
 	authorityLabel,
+	adapterLabel,
 	signerAddress,
 	compressedPublicKey,
 	isAuthenticating,
@@ -28,7 +30,7 @@ export function AuthenticateSessionPhase({
 		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
 
 	function getButtonLabel() {
-		if (!isAuthenticating) return 'Authenticate with Trezor'
+		if (!isAuthenticating) return `Authenticate with ${adapterLabel}`
 		if (signingStep) {
 			return `Signing authentication (${signingStep.step} of ${signingStep.totalSteps})…`
 		}
@@ -55,7 +57,7 @@ export function AuthenticateSessionPhase({
 				Authenticate session
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Your Trezor will sign an authentication challenge to prove control of this address. This requires{' '}
+				Your {adapterLabel} will sign an authentication challenge to prove control of this address. This requires{' '}
 				<strong className="font-medium text-[#374151]">2 signatures</strong>: one for the on-chain session and one for
 				the coordination backend.
 			</p>
@@ -96,7 +98,7 @@ export function AuthenticateSessionPhase({
 						Signing on device — step {signingStep.step} of {signingStep.totalSteps}
 					</p>
 					<p className="m-0 mt-1 text-[0.75rem] text-[#6b7280]">
-						Confirm this hash on your Trezor — it must match exactly:
+						Confirm this hash on your {adapterLabel} — it must match exactly:
 					</p>
 					<p className="m-0 mt-2 break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
 						{signingStep.challengeHex}

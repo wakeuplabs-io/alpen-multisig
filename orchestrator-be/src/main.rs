@@ -52,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
         )
+        .with_dev_mine(config.dev_mine_enabled)
     } else {
         tracing::warn!("DATABASE_URL not set — using in-memory storage (data will not persist)");
         let repo = Arc::new(infrastructure::memory_repo::InMemoryProposalRepository::new());
@@ -62,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
         )
+        .with_dev_mine(config.dev_mine_enabled)
     };
 
     let cors = CorsLayer::new()

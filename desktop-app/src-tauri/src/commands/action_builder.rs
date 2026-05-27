@@ -3,6 +3,8 @@ use std::num::NonZeroU8;
 use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
+use desktop_app::infrastructure::asm_status_rpc;
+use desktop_app::infrastructure::broadcast_env;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -82,5 +84,23 @@ pub fn build_admin_multisig_update_hex(
 
     let action_hex =
         action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
+#[tauri::command]
+pub async fn build_cancel_action_hex(
+    target_action_hex: String,
+) -> Result<BuildActionHexResponse, String> {
+    let env = broadcast_env::load_broadcast_env()?;
+    let update_id = asm_status_rpc::find_update_id_in_queue(&env.asm_rpc_url, &target_action_hex)
+        .await?
+        .ok_or_else(|| {
+            "The update has not been confirmed in the ASM queue yet. \
+             Wait for the reveal transaction to confirm before canceling."
+                .to_string()
+        })?;
+    let action_hex =
+        action_codec::encode_cancel_hex_for_target(&target_action_hex, update_id as u64)
+            .map_err(|e| e.to_string())?;
     Ok(BuildActionHexResponse { action_hex })
 }

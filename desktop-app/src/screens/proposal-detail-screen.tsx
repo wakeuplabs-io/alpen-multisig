@@ -1,12 +1,15 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
+
+const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -94,13 +97,53 @@ export function ProposalDetailScreen() {
 					)}
 
 					{proposal && (
-						<ProposalDetail
-							proposal={proposal}
-							signerPubkey={signerPubkey}
-							decodedData={decodedData}
-							onSign={() => navigate(`/proposals/${actionId}/sign`)}
-							onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
-						/>
+						<>
+							<ProposalDetail
+								proposal={proposal}
+								signerPubkey={signerPubkey}
+								decodedData={decodedData}
+								onSign={() => navigate(`/proposals/${actionId}/sign`)}
+								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+							/>
+
+							{/* Activation countdown */}
+							{proposal.activationHeight !== null && proposal.status === 'approved' && (
+								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<ActivationCountdown activationHeight={proposal.activationHeight} />
+								</div>
+							)}
+
+							{/* In-progress cancel banner */}
+							{proposal.cancelProposal !== null && (
+								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<p className="m-0 text-[13px] text-[#d97706]">
+										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
+										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
+									</p>
+									<button
+										type="button"
+										className="shrink-0 text-[13px] font-medium text-[#d97706] transition hover:text-[#b45309]"
+										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
+									>
+										View cancel →
+									</button>
+								</div>
+							)}
+
+							{/* Cancel CTA */}
+							{proposal.status === 'approved' &&
+								proposal.kind !== 'cancel' &&
+								CANCELABLE_AUTHORITIES.includes(proposal.authority) &&
+								proposal.cancelProposal === null && (
+									<button
+										type="button"
+										className="mt-4 w-full rounded-xl border border-[#dc2626] bg-white px-4 py-2.5 text-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
+									>
+										Cancel this proposal
+									</button>
+								)}
+						</>
 					)}
 				</div>
 			</div>

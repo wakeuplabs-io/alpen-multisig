@@ -1,0 +1,11 @@
+# Lightweight image for the Render cron job that calls POST /dev/mine.
+# Spins up in seconds — just needs curl.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ORCHESTRATOR_URL is baked at build time; override with --build-arg if needed.
+ARG ORCHESTRATOR_URL=https://alpen-multisig-orchestrator.onrender.com/api/v1
+ENV ORCHESTRATOR_URL=${ORCHESTRATOR_URL}
+
+CMD ["sh", "-c", "curl -sf -X POST \"${ORCHESTRATOR_URL}/dev/mine?count=2\" || true"]

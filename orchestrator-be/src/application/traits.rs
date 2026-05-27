@@ -46,4 +46,24 @@ pub(crate) trait ProposalRepository: Send + Sync {
         reveal_txid: Option<&str>,
         error: Option<&str>,
     ) -> Result<Option<Proposal>, AppError>;
+
+    /// Find the cancel proposal that targets the given action_id, if one exists.
+    async fn find_cancel_for_target(&self, target: &ActionId)
+        -> Result<Option<Proposal>, AppError>;
+
+    /// Persist the computed activation height on a proposal row.
+    #[allow(dead_code)]
+    async fn update_activation_height(
+        &self,
+        action_id: &ActionId,
+        height: u64,
+    ) -> Result<(), AppError>;
+
+    /// Persist the ASM queue UpdateId on a proposal row. Set after RevealConfirmed.
+    #[allow(dead_code)]
+    async fn update_update_id_in_queue(
+        &self,
+        action_id: &ActionId,
+        update_id: u32,
+    ) -> Result<(), AppError>;
 }

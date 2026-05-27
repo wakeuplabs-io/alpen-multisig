@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
-use strata_asm_params::Role;
+use strata_asm_params::{Role, UpdateTxType};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::rpc_timeout;
+use crate::infrastructure::{action_codec, rpc_timeout};
 
 /// Whether this authority has a wired ASM `Role` mapping (P-037).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +100,73 @@ pub(crate) async fn threshold_for_authority(
         ))
     })?;
     Ok(u16::from(authority_config.config().threshold()))
+}
+
+/// Return the confirmation depth (in blocks) before an update for `authority` activates.
+///
+/// Returns `0` when the authority is configured for immediate activation (no queue).
+pub(crate) async fn lock_period_for_authority(
+    rpc_url: &str,
+    authority: Authority,
+) -> Result<u64, AppError> {
+    if let Some(period) = mock_lock_period(rpc_url, authority) {
+        return Ok(period);
+    }
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+    let tx_type = authority_to_update_tx_type(authority).map_err(AppError::BadRequest)?;
+    let depth = admin.confirmation_depth(tx_type).unwrap_or(0);
+    Ok(depth as u64)
+}
+
+/// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
+///
+/// Decodes the action, then scans the live ASM queue for the matching `UpdateAction`.
+/// Returns `None` when the update is not yet in the queue (reveal not confirmed) or
+/// the RPC URL is a mock endpoint (tests).
+pub(crate) async fn update_id_in_queue_for_action(
+    rpc_url: &str,
+    action_hex: &str,
+) -> Result<Option<u32>, AppError> {
+    if rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted" {
+        return Ok(None);
+    }
+
+    let action =
+        action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
+    let target_update = match action {
+        MultisigAction::Update(u) => u,
+        MultisigAction::Cancel(_) => return Ok(None),
+    };
+
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+        .await
+        .map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+
+    let found = admin
+        .queued()
+        .iter()
+        .find(|q| q.action() == &target_update)
+        .map(|q| *q.id());
+
+    Ok(found)
+}
+
+fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, String> {
+    match authority {
+        Authority::StrataAdmin => Ok(UpdateTxType::StrataAdminMultisigUpdate),
+        Authority::AlpenAdmin => Ok(UpdateTxType::AlpenAdminMultisigUpdate),
+        Authority::SequencerManager => Ok(UpdateTxType::StrataSeqManagerMultisigUpdate),
+        _ => Err(format!(
+            "authority `{authority:?}` has no UpdateTxType mapping"
+        )),
+    }
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
@@ -282,6 +350,16 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     match authority {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
+        _ => None,
+    }
+}
+
+fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+    match authority {
+        Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
         _ => None,
     }
 }

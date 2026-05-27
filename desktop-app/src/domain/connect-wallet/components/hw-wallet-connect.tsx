@@ -115,6 +115,7 @@ export function HwWalletConnect({
 				authoritySelection.step === 'authenticate-session' && (
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
+						adapterLabel={walletVendor.charAt(0).toUpperCase() + walletVendor.slice(1)}
 						signerAddress={state.selectedEntry.address}
 						compressedPublicKey={state.selectedEntry.publicKeyHex}
 						isAuthenticating={authoritySelection.isAuthenticating}

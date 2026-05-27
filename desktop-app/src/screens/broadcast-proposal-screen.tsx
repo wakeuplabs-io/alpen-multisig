@@ -4,6 +4,7 @@ import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -14,6 +15,8 @@ export function BroadcastProposalScreen() {
 	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
+
+	const { adminWalletInfo } = useAdminWalletInfo()
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
@@ -90,6 +93,7 @@ export function BroadcastProposalScreen() {
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting'}
+							adminWalletInfo={adminWalletInfo}
 						/>
 					)}
 

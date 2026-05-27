@@ -81,17 +81,6 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 		}
 
 		if (data.actionType === 'signer_update') {
-			const normalizedAdds = data.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
-			const normalizedRemoves = data.keysToRemove.map((row) => row.value.trim()).filter((value) => value.length > 0)
-
-			if (normalizedAdds.length === 0 && normalizedRemoves.length === 0) {
-				ctx.addIssue({
-					code: 'custom',
-					path: ['keysToAdd'],
-					message: 'Provide at least one signer key to add or remove',
-				})
-			}
-
 			for (const [index, row] of data.keysToAdd.entries()) {
 				const key = row.value.trim()
 				if (key.length === 0) continue

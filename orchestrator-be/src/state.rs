@@ -14,6 +14,9 @@ pub struct AppState {
     pub auth_session_ttl_ms: u64,
     /// Used by `/ready` to verify Bitcoin RPC reachability (coordination service does not broadcast).
     pub btc_client: Arc<dyn BitcoinRpcClient>,
+    /// When true, the `POST /dev/mine` route is registered and usable.
+    /// Only set via `DEV_MINE_ENABLED=1` — never enabled in production.
+    pub dev_mine_enabled: bool,
 }
 
 impl AppState {
@@ -32,6 +35,13 @@ impl AppState {
             auth_challenge_ttl_ms,
             auth_session_ttl_ms,
             btc_client,
+            dev_mine_enabled: false,
         }
+    }
+
+    /// Enable the dev mine endpoint (`POST /dev/mine`).
+    pub fn with_dev_mine(mut self, enabled: bool) -> Self {
+        self.dev_mine_enabled = enabled;
+        self
     }
 }

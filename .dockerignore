@@ -1,0 +1,15 @@
+target/
+desktop-app/node_modules/
+desktop-app/dist/
+node_modules/
+.git/
+*.md
+docs/
+branding/
+bin/
+
+# asm/target is large — exclude build artifacts but keep source for staging build
+asm/target/
+
+# scripts shell scripts not needed; .toml and .json are included via staging/ copies
+scripts/*.sh

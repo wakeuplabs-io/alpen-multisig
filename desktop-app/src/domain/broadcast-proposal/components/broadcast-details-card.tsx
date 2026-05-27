@@ -3,11 +3,17 @@ import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
 import { CopyClipboardIcon } from '@/assets/icons'
 import { satsToBtc } from '../model/broadcast-proposal'
 
+type AdminWalletInfoView = {
+	address: string
+	balanceSats: number
+}
+
 type Props = {
 	bundle: PrepareBroadcastResult
 	proposal: Proposal | null
 	onBroadcast: () => void
 	isBroadcasting: boolean
+	adminWalletInfo?: AdminWalletInfoView | null
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -36,7 +42,7 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcasting }: Props) {
+export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcasting, adminWalletInfo }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
 	const signaturesProgress =
@@ -104,6 +110,22 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 						{bundle.estimatedFeeSats.toLocaleString()} sats
 					</span>
 				</div>
+
+				{adminWalletInfo != null && (
+					<div>
+						<SectionLabel>Funding Source</SectionLabel>
+						<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+							<span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]">
+								{adminWalletInfo.address}
+							</span>
+							<CopyButton text={adminWalletInfo.address} />
+						</div>
+						<p className="mt-2 text-[13px] text-[#6b7280]">
+							Admin Wallet (BDK){' '}
+							<span className="text-[12px] text-[#9ca3af]">({adminWalletInfo.balanceSats.toLocaleString()} sats)</span>
+						</p>
+					</div>
+				)}
 
 				<button
 					type="button"
