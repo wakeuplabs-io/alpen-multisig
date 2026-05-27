@@ -89,6 +89,52 @@ pub struct WalletService {
 /// Keychain selection for address listing.
 pub use bdk_wallet::KeychainKind as Keychain;
 
+/// Converts Unix seconds to an ISO-8601 UTC string (e.g. "2026-05-27T17:23:08Z").
+/// Pure std — no chrono dependency required.
+fn secs_to_iso8601(secs: u64) -> String {
+    let mut days = secs / 86400;
+    let time_secs = secs % 86400;
+    let hh = time_secs / 3600;
+    let mm = (time_secs % 3600) / 60;
+    let ss = time_secs % 60;
+
+    let mut year = 1970u64;
+    loop {
+        let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let days_in_year = if leap { 366 } else { 365 };
+        if days < days_in_year {
+            break;
+        }
+        days -= days_in_year;
+        year += 1;
+    }
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+    let month_days: [u64; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month = 1u64;
+    for &md in &month_days {
+        if days < md {
+            break;
+        }
+        days -= md;
+        month += 1;
+    }
+    let day = days + 1;
+    format!("{year:04}-{month:02}-{day:02}T{hh:02}:{mm:02}:{ss:02}Z")
+}
+
 fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
@@ -231,13 +277,12 @@ impl WalletService {
         }
 
         let tip_height = wallet.latest_checkpoint().height();
-        let last_synced_at = {
-            let secs = std::time::SystemTime::now()
+        let last_synced_at = secs_to_iso8601(
+            std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs();
-            format!("{secs}")
-        };
+                .as_secs(),
+        );
 
         drop(wallet);
 
@@ -504,6 +549,24 @@ mod tests {
             result.is_ok(),
             "Expected Ok when all env vars set correctly"
         );
+    }
+
+    // Acceptance test (step 01-01): secs_to_iso8601 formats Unix epoch as ISO-8601 UTC string
+    #[test]
+    fn secs_to_iso8601_epoch_zero_returns_unix_epoch_string() {
+        assert_eq!(secs_to_iso8601(0), "1970-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn secs_to_iso8601_known_timestamp_returns_correct_date() {
+        // 1748361234 → 2025-05-27T15:53:54Z (verified via Python datetime.utcfromtimestamp)
+        assert_eq!(secs_to_iso8601(1748361234), "2025-05-27T15:53:54Z");
+    }
+
+    // Unit test (step 01-01): one full day boundary
+    #[test]
+    fn secs_to_iso8601_one_day_returns_1970_01_02() {
+        assert_eq!(secs_to_iso8601(86400), "1970-01-02T00:00:00Z");
     }
 
     // Unit test: confirmation arithmetic
