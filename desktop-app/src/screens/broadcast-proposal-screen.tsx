@@ -5,6 +5,7 @@ import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/bro
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
+import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -17,6 +18,10 @@ export function BroadcastProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { adminWalletInfo } = useAdminWalletInfo()
+	const isAdminWalletMode = adminWalletInfo != null
+
+	const { data: utxos } = useAdminWalletUtxos()
+	const { syncStatus } = useAdminWalletSync()
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
@@ -38,6 +43,14 @@ export function BroadcastProposalScreen() {
 	const isLoading = phase === 'idle' || phase === 'preparing'
 	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
 	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
+
+	const utxoCount = isAdminWalletMode && utxos != null ? utxos.length : undefined
+	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined
+	const syncError = isAdminWalletMode
+		? syncStatus?.lastError != null
+			? { type: 'SyncIncomplete' as const, message: syncStatus.lastError.message }
+			: null
+		: undefined
 
 	return (
 		<ScreenShell
@@ -94,6 +107,9 @@ export function BroadcastProposalScreen() {
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting'}
 							adminWalletInfo={adminWalletInfo}
+							utxoCount={utxoCount}
+							lastSyncedAt={lastSyncedAt}
+							syncError={syncError}
 						/>
 					)}
 

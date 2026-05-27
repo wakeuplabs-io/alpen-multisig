@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
+import type { AdminWalletError } from '@/api/admin-wallet'
 import { CopyClipboardIcon } from '@/assets/icons'
 import { satsToBtc } from '../model/broadcast-proposal'
 
@@ -14,6 +15,9 @@ type Props = {
 	onBroadcast: () => void
 	isBroadcasting: boolean
 	adminWalletInfo?: AdminWalletInfoView | null
+	utxoCount?: number
+	lastSyncedAt?: string | null
+	syncError?: AdminWalletError | null
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -42,7 +46,36 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcasting, adminWalletInfo }: Props) {
+function relativeTime(isoString: string): string {
+	const diffSeconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
+	if (diffSeconds < 60) return `${diffSeconds}s ago`
+	const diffMinutes = Math.floor(diffSeconds / 60)
+	if (diffMinutes < 60) return `${diffMinutes}m ago`
+	const diffHours = Math.floor(diffMinutes / 60)
+	return `${diffHours}h ago`
+}
+
+function LastSyncLabel({ lastSyncedAt }: { lastSyncedAt: string }) {
+	const [, setTick] = useState(0)
+
+	useEffect(() => {
+		const interval = setInterval(() => setTick((t) => t + 1), 15000)
+		return () => clearInterval(interval)
+	}, [])
+
+	return <span className="text-[12px] text-[#9ca3af]">Last sync: {relativeTime(lastSyncedAt)}</span>
+}
+
+export function BroadcastDetailsCard({
+	bundle,
+	proposal,
+	onBroadcast,
+	isBroadcasting,
+	adminWalletInfo,
+	utxoCount,
+	lastSyncedAt,
+	syncError,
+}: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
 	const signaturesProgress =
@@ -124,6 +157,16 @@ export function BroadcastDetailsCard({ bundle, proposal, onBroadcast, isBroadcas
 							Admin Wallet (BDK){' '}
 							<span className="text-[12px] text-[#9ca3af]">({adminWalletInfo.balanceSats.toLocaleString()} sats)</span>
 						</p>
+						{utxoCount !== undefined && <p className="mt-1 text-[12px] text-[#9ca3af]">UTXOs: {utxoCount}</p>}
+						{syncError != null ? (
+							<p className="mt-1 text-[12px] text-[#ef4444]">
+								Sync error: {'message' in syncError ? syncError.message : syncError.type}
+							</p>
+						) : lastSyncedAt != null ? (
+							<p className="mt-1">
+								<LastSyncLabel lastSyncedAt={lastSyncedAt} />
+							</p>
+						) : null}
 					</div>
 				)}
 
