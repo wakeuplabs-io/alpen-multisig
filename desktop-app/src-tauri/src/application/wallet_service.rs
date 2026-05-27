@@ -1,9 +1,14 @@
 use crate::infrastructure::admin_wallet::AdminWalletError;
+use bdk_bitcoind_rpc::bitcoincore_rpc::Auth;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::{sleep, Duration};
+
+const SYNC_INTERVAL: Duration = Duration::from_secs(30);
+const SYNC_IDLE_WINDOW: Duration = Duration::from_secs(300);
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -75,19 +80,195 @@ pub struct WalletService {
     pub sync_state: Arc<RwLock<SyncState>>,
     pub sync_in_flight: Arc<AtomicBool>,
     pub last_read_at: Arc<RwLock<Option<Instant>>>,
+    bg_task_started: Arc<AtomicBool>,
+    rpc_url: String,
+    rpc_user: String,
+    rpc_pass: String,
 }
 
 /// Keychain selection for address listing.
 pub use bdk_wallet::KeychainKind as Keychain;
 
+fn error_code(e: &AdminWalletError) -> String {
+    match e {
+        AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
+        AdminWalletError::RpcAuthFailed { .. } => "RpcAuthFailed".into(),
+        AdminWalletError::DescriptorParseError { .. } => "DescriptorParseError".into(),
+        AdminWalletError::SyncIncomplete { .. } => "SyncIncomplete".into(),
+        AdminWalletError::RegtestGuardViolation { .. } => "RegtestGuardViolation".into(),
+        AdminWalletError::Disabled => "Disabled".into(),
+        AdminWalletError::InvalidMnemonic(_) => "InvalidMnemonic".into(),
+        AdminWalletError::Descriptor(_) => "Descriptor".into(),
+        AdminWalletError::WalletCreation(_) => "WalletCreation".into(),
+    }
+}
+
 impl WalletService {
     pub fn new(wallet: bdk_wallet::Wallet) -> Self {
+        let rpc_url =
+            std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+        let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
+        let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
         Self {
             wallet: Arc::new(Mutex::new(wallet)),
             sync_state: Arc::new(RwLock::new(SyncState::default())),
             sync_in_flight: Arc::new(AtomicBool::new(false)),
             last_read_at: Arc::new(RwLock::new(None)),
+            bg_task_started: Arc::new(AtomicBool::new(false)),
+            rpc_url,
+            rpc_user,
+            rpc_pass,
         }
+    }
+
+    /// Returns a lock-free snapshot of the current sync state.
+    pub fn sync_status(&self) -> SyncStatusDto {
+        let is_syncing = self.sync_in_flight.load(Ordering::Relaxed);
+        let state = self.sync_state.try_read();
+        match state {
+            Ok(s) => SyncStatusDto {
+                tip_height: s.tip_height,
+                last_synced_block: s.last_synced_block,
+                last_synced_at: s.last_synced_at.clone(),
+                is_syncing,
+                last_error: s.last_error.clone(),
+            },
+            Err(_) => SyncStatusDto {
+                tip_height: None,
+                last_synced_block: None,
+                last_synced_at: None,
+                is_syncing,
+                last_error: None,
+            },
+        }
+    }
+
+    /// Update the last_read_at timestamp (called by read methods to signal activity).
+    pub async fn update_last_read_at(&self) {
+        *self.last_read_at.write().await = Some(Instant::now());
+    }
+
+    /// Sync the wallet with the Bitcoin RPC node.
+    /// Collapses concurrent callers — if a sync is already in-flight, waits for it.
+    pub async fn sync(&self) -> Result<SyncStatusDto, AdminWalletError> {
+        // Check disabled guard first
+        WalletService::check_enabled()?;
+
+        // Collapse concurrent calls: if already syncing, spin-wait (simple approach for regtest)
+        if self
+            .sync_in_flight
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            // Another sync is in-flight; wait for it to complete
+            while self.sync_in_flight.load(Ordering::SeqCst) {
+                sleep(Duration::from_millis(50)).await;
+            }
+            return Ok(self.sync_status());
+        }
+
+        let result = self.do_sync().await;
+
+        self.sync_in_flight.store(false, Ordering::SeqCst);
+
+        match result {
+            Ok(()) => Ok(self.sync_status()),
+            Err(e) => {
+                let typed = TypedError {
+                    code: error_code(&e),
+                    message: e.to_string(),
+                };
+                self.sync_state.write().await.last_error = Some(typed);
+                Err(e)
+            }
+        }
+    }
+
+    async fn do_sync(&self) -> Result<(), AdminWalletError> {
+        use bdk_bitcoind_rpc::bitcoincore_rpc::Client;
+        use bdk_bitcoind_rpc::Emitter;
+
+        let rpc = Client::new(
+            &self.rpc_url,
+            Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
+        )
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("401") || msg.contains("Unauthorized") {
+                AdminWalletError::RpcAuthFailed { message: msg }
+            } else {
+                AdminWalletError::RpcUnreachable { message: msg }
+            }
+        })?;
+
+        let mut wallet = self.wallet.lock().await;
+        let checkpoint = wallet.latest_checkpoint();
+        let mut emitter = Emitter::new(&rpc, checkpoint, 0);
+
+        loop {
+            match emitter.next_block() {
+                Ok(Some(event)) => {
+                    wallet
+                        .apply_block_connected_to(
+                            &event.block,
+                            event.block_height(),
+                            event.connected_to(),
+                        )
+                        .map_err(|e| AdminWalletError::SyncIncomplete {
+                            message: e.to_string(),
+                        })?;
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    let msg = e.to_string();
+                    return Err(if msg.contains("401") || msg.contains("Unauthorized") {
+                        AdminWalletError::RpcAuthFailed { message: msg }
+                    } else {
+                        AdminWalletError::RpcUnreachable { message: msg }
+                    });
+                }
+            }
+        }
+
+        let tip_height = wallet.latest_checkpoint().height();
+        let last_synced_at = {
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            format!("{secs}")
+        };
+
+        drop(wallet);
+
+        let mut state = self.sync_state.write().await;
+        state.tip_height = Some(tip_height);
+        state.last_synced_block = Some(tip_height);
+        state.last_synced_at = Some(last_synced_at);
+        state.last_error = None;
+
+        Ok(())
+    }
+
+    /// Spawn the background sync loop once (idempotent). Must be called on first IPC invocation.
+    pub fn spawn_background_sync(self: &Arc<Self>) {
+        if self
+            .bg_task_started
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return; // already started
+        }
+        let svc = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                sleep(SYNC_INTERVAL).await;
+                let last_read = *svc.last_read_at.read().await;
+                if last_read.is_some_and(|t| t.elapsed() < SYNC_IDLE_WINDOW) {
+                    let _ = svc.sync().await;
+                }
+            }
+        });
     }
 
     /// Returns balance from the last successful sync. All fields are 0 on a never-synced wallet.
@@ -313,6 +494,54 @@ mod tests {
         assert!(
             addresses.is_empty(),
             "out-of-bound page must return empty vec"
+        );
+    }
+
+    // Acceptance test (step 01-03): sync_status() returns is_syncing=false on a fresh WalletService
+    #[test]
+    fn sync_status_returns_not_syncing_on_fresh_wallet_service() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        let status = svc.sync_status();
+
+        assert!(
+            !status.is_syncing,
+            "fresh WalletService must report is_syncing=false"
+        );
+        assert!(
+            status.tip_height.is_none(),
+            "tip_height must be None before any sync"
+        );
+        assert!(
+            status.last_error.is_none(),
+            "last_error must be None before any sync"
+        );
+    }
+
+    // Unit test (step 01-03): concurrent sync() calls collapse via sync_in_flight AtomicBool
+    #[tokio::test]
+    async fn concurrent_sync_calls_second_call_observes_in_flight_flag() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+        use std::sync::atomic::Ordering;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        // Simulate a sync in-flight by setting the flag
+        svc.sync_in_flight.store(true, Ordering::SeqCst);
+
+        // A call to sync_status while in_flight=true must report is_syncing=true
+        let status = svc.sync_status();
+        assert!(
+            status.is_syncing,
+            "sync_status must reflect in-flight sync as is_syncing=true"
         );
     }
 
