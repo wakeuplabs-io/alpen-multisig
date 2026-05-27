@@ -30,7 +30,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | Phase | Name | Stories / specs |
 |---|---|---|
 | 1 | Regtest commit funding | US-H7, [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md) |
-| 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses) |
+| 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -117,6 +117,8 @@ flowchart LR
 ---
 
 ### Phase 2 — Wallet core read path
+
+**Spec:** [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) — full technical design, IPC contracts, test plan.
 
 **Goal:** BDK sync, balance, UTXOs, address list for Admin Wallet without Send UI.
 
