@@ -6,6 +6,71 @@ export type AdminWalletInfo = {
 	balance_sats: number
 }
 
+export type BalanceDto = {
+	confirmedSats: number
+	unconfirmedSats: number
+	totalSats: number
+}
+
+export type OutPointDto = {
+	txid: string
+	vout: number
+}
+
+export type KeychainDto = 'External' | 'Internal'
+
+export type UtxoDto = {
+	outpoint: OutPointDto
+	valueSats: number
+	scriptPubkeyHex: string
+	keychain: KeychainDto
+	derivationIndex: number
+	confirmations: number
+}
+
+export type AddressDto = {
+	index: number
+	address: string
+	isUsed: boolean
+}
+
+export type SyncStatusDto = {
+	tipHeight: number | null
+	lastSyncedBlock: number | null
+	lastSyncedAt: string | null
+	isSyncing: boolean
+	lastError: { kind: string; message: string } | null
+}
+
+export type AdminWalletError =
+	| { type: 'RpcUnreachable'; message: string }
+	| { type: 'RpcAuthFailed'; message: string }
+	| { type: 'DescriptorParseError'; message: string }
+	| { type: 'SyncIncomplete'; message: string }
+	| { type: 'RegtestGuardViolation'; message: string }
+	| { type: 'Disabled' }
+
 export function getAdminWalletInfo(): Promise<ApiResult<AdminWalletInfo>> {
 	return tauriCall<AdminWalletInfo>('get_admin_wallet_info', {})
+}
+
+export function getAdminWalletBalance(): Promise<ApiResult<BalanceDto>> {
+	return tauriCall<BalanceDto>('admin_wallet_get_balance', {})
+}
+
+export function listAdminWalletUtxos(): Promise<ApiResult<UtxoDto[]>> {
+	return tauriCall<UtxoDto[]>('admin_wallet_list_utxos', {})
+}
+
+export function listAdminWalletAddresses(pageSize = 20): Promise<ApiResult<AddressDto[]>> {
+	const clampedPageSize = Math.min(pageSize, 20)
+	return tauriCall<AddressDto[]>('admin_wallet_list_addresses', { page_size: clampedPageSize })
+}
+
+export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
+	return tauriCall<void>('admin_wallet_sync', {})
+}
+
+export function getAdminWalletSyncStatus(): Promise<ApiResult<SyncStatusDto>> {
+	return tauriCall<SyncStatusDto>('admin_wallet_get_sync_status', {})
 }
