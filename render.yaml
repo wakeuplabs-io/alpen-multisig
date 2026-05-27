@@ -5,11 +5,7 @@ services:
     env: docker
     dockerfilePath: ./staging/Dockerfile.bitcoin
     dockerContext: .
-    plan: standard
-    disk:
-      name: bitcoin-data
-      mountPath: /data
-      sizeGB: 10
+    plan: free
     envVars:
       - key: PORT
         value: "18443"
@@ -20,11 +16,7 @@ services:
     env: docker
     dockerfilePath: ./staging/Dockerfile.asm
     dockerContext: .
-    plan: standard
-    disk:
-      name: asm-data
-      mountPath: /data
-      sizeGB: 5
+    plan: free
     envVars:
       - key: PORT
         value: "8080"
@@ -41,7 +33,7 @@ services:
     env: docker
     dockerfilePath: ./staging/Dockerfile.orchestrator
     dockerContext: .
-    plan: standard
+    plan: free
     envVars:
       - key: SERVER_HOST
         value: "0.0.0.0"
