@@ -63,15 +63,3 @@ services:
         value: "1"
       - key: ALLOW_DEV_OPERATOR_KEY
         value: "1"
-
-  # ── Cron: auto-mine 2 blocks every minute ────────────────────────────────
-  - type: cron
-    name: alpen-multisig-staging-automine
-    env: docker
-    dockerfilePath: ./staging/Dockerfile.cron
-    dockerContext: .
-    schedule: "* * * * *"
-    startCommand: >-
-      curl -sf -X POST
-      "https://alpen-multisig-orchestrator.onrender.com/api/v1/dev/mine?count=2"
-      || true
