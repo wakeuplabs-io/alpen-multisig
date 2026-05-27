@@ -46,6 +46,11 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::signing::compute_sighash,
         super::signing::verify_threshold,
         super::admin_wallet::get_admin_wallet_info,
+        super::admin_wallet::admin_wallet_get_balance,
+        super::admin_wallet::admin_wallet_list_utxos,
+        super::admin_wallet::admin_wallet_list_addresses,
+        super::admin_wallet::admin_wallet_sync,
+        super::admin_wallet::admin_wallet_sync_status,
     ])
 }
 
@@ -87,5 +92,10 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::signing::list_mnemonic_addresses,
         super::signing::sign_with_mnemonic_path,
         super::admin_wallet::get_admin_wallet_info,
+        super::admin_wallet::admin_wallet_get_balance,
+        super::admin_wallet::admin_wallet_list_utxos,
+        super::admin_wallet::admin_wallet_list_addresses,
+        super::admin_wallet::admin_wallet_sync,
+        super::admin_wallet::admin_wallet_sync_status,
     ])
 }
