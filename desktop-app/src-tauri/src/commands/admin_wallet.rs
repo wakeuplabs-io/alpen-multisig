@@ -1,4 +1,8 @@
+use desktop_app::application::wallet_service::{
+    AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
+};
 use desktop_app::infrastructure::admin_wallet::{get_external_address, load_admin_wallet};
+use std::sync::Arc;
 
 #[derive(Debug, serde::Serialize)]
 pub struct AdminWalletInfo {
@@ -64,6 +68,62 @@ pub fn get_admin_wallet_info() -> Result<AdminWalletInfo, String> {
     admin_wallet_info_inner()
 }
 
+fn serialize_wallet_error<E: serde::Serialize + std::fmt::Debug>(e: E) -> String {
+    serde_json::to_string(&e).unwrap_or_else(|_| format!("{:?}", e))
+}
+
+#[tauri::command]
+pub async fn admin_wallet_get_balance(
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> Result<BalanceDto, String> {
+    wallet_service
+        .get_balance()
+        .await
+        .map_err(serialize_wallet_error)
+}
+
+#[tauri::command]
+pub async fn admin_wallet_list_utxos(
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> Result<Vec<UtxoDto>, String> {
+    wallet_service
+        .list_utxos()
+        .await
+        .map_err(serialize_wallet_error)
+}
+
+#[tauri::command]
+pub async fn admin_wallet_list_addresses(
+    keychain: String,
+    page_index: u32,
+    page_size: u32,
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> Result<Vec<AddressDto>, String> {
+    use bdk_wallet::KeychainKind;
+    let keychain_kind = match keychain.to_lowercase().as_str() {
+        "internal" => KeychainKind::Internal,
+        _ => KeychainKind::External,
+    };
+    wallet_service
+        .list_addresses(keychain_kind, page_index, page_size)
+        .await
+        .map_err(serialize_wallet_error)
+}
+
+#[tauri::command]
+pub async fn admin_wallet_sync(
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> Result<SyncStatusDto, String> {
+    wallet_service.sync().await.map_err(serialize_wallet_error)
+}
+
+#[tauri::command]
+pub fn admin_wallet_sync_status(
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> SyncStatusDto {
+    wallet_service.sync_status()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +133,25 @@ mod tests {
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    // RED_ACCEPTANCE / RED_UNIT: verifies the 5 new IPC command functions exist
+    // and are importable from the module. This is a compilation test — if any function
+    // is missing or has wrong imports, this test file will not compile.
+    // Note: Tauri commands cannot be directly invoked in unit tests (tauri::State requires
+    // an AppHandle), so we verify at module import level.
+    #[test]
+    fn five_ipc_command_functions_are_importable() {
+        // Taking a reference to each function confirms it exists and is accessible.
+        // async fn pointers cannot be cast to fn-pointer types directly, so we use
+        // the is_some pattern via Option wrapping to avoid the invalid cast.
+        let _ = Some(admin_wallet_get_balance as fn(_) -> _);
+        let _ = Some(admin_wallet_list_utxos as fn(_) -> _);
+        let _ = Some(admin_wallet_list_addresses as fn(_, _, _, _) -> _);
+        let _ = Some(admin_wallet_sync as fn(_) -> _);
+        let _sync_status_ptr: fn(tauri::State<'_, Arc<WalletService>>) -> SyncStatusDto =
+            admin_wallet_sync_status;
+        let _ = _sync_status_ptr;
+    }
 
     #[test]
     fn returns_ok_with_non_empty_address_when_admin_wallet_mode_and_mnemonic_set() {

@@ -2,10 +2,11 @@ use bdk_wallet::bitcoin::bip32::{DerivationPath, Xpriv};
 use bdk_wallet::bitcoin::secp256k1::Secp256k1;
 use bdk_wallet::bitcoin::{Address, Network};
 use bip39::Mnemonic;
+use serde::Serialize;
 use std::str::FromStr;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Serialize)]
 pub enum AdminWalletError {
     #[error("invalid mnemonic: {0}")]
     InvalidMnemonic(String),
