@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { triggerAdminWalletSync, getAdminWalletSyncStatus } from '@/api/admin-wallet'
 import type { SyncStatusDto, AdminWalletError } from '@/api/admin-wallet'
+import { parseAdminWalletError } from './parse-admin-wallet-error'
 
 type UseAdminWalletSyncReturn = {
 	syncStatus: SyncStatusDto | null
@@ -8,15 +9,6 @@ type UseAdminWalletSyncReturn = {
 	error: AdminWalletError | null
 	refresh: () => void
 	triggerSync: () => Promise<void>
-}
-
-function parseAdminWalletError(raw: string): AdminWalletError {
-	try {
-		const parsed = JSON.parse(raw) as AdminWalletError
-		return parsed
-	} catch {
-		return { type: 'RpcUnreachable', message: raw }
-	}
 }
 
 export function useAdminWalletSync(): UseAdminWalletSyncReturn {
@@ -39,11 +31,9 @@ export function useAdminWalletSync(): UseAdminWalletSyncReturn {
 			.finally(() => setIsLoading(false))
 	}, [tick])
 
-	function refresh() {
-		setTick((t) => t + 1)
-	}
+	const refresh = useCallback(() => setTick((t) => t + 1), [])
 
-	async function triggerSync() {
+	const triggerSync = useCallback(async () => {
 		setIsLoading(true)
 		const result = await triggerAdminWalletSync()
 		if (!result.ok) {
@@ -51,7 +41,7 @@ export function useAdminWalletSync(): UseAdminWalletSyncReturn {
 		}
 		setIsLoading(false)
 		refresh()
-	}
+	}, [refresh])
 
 	return { syncStatus, isLoading, error, refresh, triggerSync }
 }

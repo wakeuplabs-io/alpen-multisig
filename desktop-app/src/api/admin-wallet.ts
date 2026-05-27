@@ -39,7 +39,7 @@ export type SyncStatusDto = {
 	lastSyncedBlock: number | null
 	lastSyncedAt: string | null
 	isSyncing: boolean
-	lastError: { kind: string; message: string } | null
+	lastError: { code: string; message: string } | null
 }
 
 export type AdminWalletError =
@@ -62,9 +62,17 @@ export function listAdminWalletUtxos(): Promise<ApiResult<UtxoDto[]>> {
 	return tauriCall<UtxoDto[]>('admin_wallet_list_utxos', {})
 }
 
-export function listAdminWalletAddresses(pageSize = 20): Promise<ApiResult<AddressDto[]>> {
+export function listAdminWalletAddresses(
+	keychain: KeychainDto = 'External',
+	pageIndex = 0,
+	pageSize = 20,
+): Promise<ApiResult<AddressDto[]>> {
 	const clampedPageSize = Math.min(pageSize, 20)
-	return tauriCall<AddressDto[]>('admin_wallet_list_addresses', { page_size: clampedPageSize })
+	return tauriCall<AddressDto[]>('admin_wallet_list_addresses', {
+		keychain,
+		page_index: pageIndex,
+		page_size: clampedPageSize,
+	})
 }
 
 export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
@@ -72,5 +80,5 @@ export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
 }
 
 export function getAdminWalletSyncStatus(): Promise<ApiResult<SyncStatusDto>> {
-	return tauriCall<SyncStatusDto>('admin_wallet_get_sync_status', {})
+	return tauriCall<SyncStatusDto>('admin_wallet_sync_status', {})
 }
