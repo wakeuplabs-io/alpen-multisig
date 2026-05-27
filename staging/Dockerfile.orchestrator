@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+#
+# Staging orchestrator image: orchestrator-be only.
+# Connects to alpen-multisig-asm via Render private network.
+
+# ── Stage 1: Build orchestrator-be ───────────────────────────────────────────
+FROM rust:slim-bookworm AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY rust-toolchain.toml ./
+RUN rustup show
+
+# Cache dependency fetches as a layer
+COPY Cargo.toml Cargo.lock ./
+COPY orchestrator-be/Cargo.toml orchestrator-be/
+COPY desktop-app/src-tauri/Cargo.toml desktop-app/src-tauri/
+COPY e2e-tests/Cargo.toml e2e-tests/
+
+RUN mkdir -p orchestrator-be/src \
+    && echo 'fn main(){}' > orchestrator-be/src/main.rs \
+    && mkdir -p desktop-app/src-tauri/src \
+    && echo 'fn main(){}' > desktop-app/src-tauri/src/main.rs \
+    && mkdir -p e2e-tests/src \
+    && touch e2e-tests/src/lib.rs
+
+RUN cargo fetch
+
+COPY orchestrator-be/src orchestrator-be/src/
+COPY orchestrator-be/migrations orchestrator-be/migrations/
+
+RUN cargo build --release -p orchestrator-be
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /build/target/release/server /usr/local/bin/orchestrator
+
+RUN chmod +x /usr/local/bin/orchestrator
+
+EXPOSE 3000
+
+CMD ["/usr/local/bin/orchestrator"]
