@@ -21,15 +21,15 @@ export function BroadcastProposalScreen() {
 	const { adminWalletInfo } = useAdminWalletInfo()
 	const isAdminWalletMode = adminWalletInfo != null
 
-	const { data: utxos } = useAdminWalletUtxos()
+	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
 
-	// Trigger sync on mount when in admin_wallet mode
+	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
 	useEffect(() => {
 		if (isAdminWalletMode) {
-			void triggerSync()
+			void triggerSync().then(() => refreshUtxos())
 		}
-	}, [isAdminWalletMode, triggerSync])
+	}, [isAdminWalletMode, triggerSync, refreshUtxos])
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
