@@ -32,6 +32,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 1 | Regtest commit funding | US-H7, [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md) |
 | 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
+| 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 6 | Receive rotation + Admin ID UI | PRD §4.1–4.2, §4.3.4 |
@@ -73,7 +74,8 @@ React (desktop-app/src)
 flowchart LR
   P1[Phase 1 Commit funding] --> P2[Phase 2 Read path]
   P2 --> P3[Phase 3 UI shell]
-  P3 --> P4[Phase 4 Send happy path]
+  P3 --> P35[Phase 3.5 Retire operator hot key]
+  P35 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
   P5 --> P6[Phase 6 Receive + Admin ID UI]
   P6 --> P7[Phase 7 HW adapters]
@@ -146,6 +148,51 @@ flowchart LR
 
 ---
 
+### Phase 3.5 — Retire operator hot key (interim Admin Wallet derivation)
+
+**Goal:** Eliminate `OPERATOR_SECRET_KEY_HEX` as a separate hot key in environment. Derive the SPS-50 commit/reveal internal key from the Admin Wallet seed at a dedicated path so that — per PRD §3.2 — no signing material lives outside the Admin Wallet's secret zone. HW-mediated signing is deferred to Phase 7; this phase keeps the dev mnemonic as the secret source, but consolidates it into a single key custody surface.
+
+**Rationale:** The PRD never specifies a separate operator key. All signing flows are HW-wallet mediated (§3.2.2.5, §4.3.5.5.1, §5.3.3.2.2). `OPERATOR_SECRET_KEY_HEX` is dev scaffolding from POC days; carrying it as a parallel hot key through Phase 7 unnecessarily widens the secret-management surface. Retiring it before Phase 4 means the Send pipeline (Phase 4) and the reveal pipeline share one signer infrastructure, which Phase 7 then swaps to HW in a single coherent change.
+
+**In scope**
+
+- Derivation path: `m/86'/0'/73'/2/0` — dedicated chain `2` for SPS-50 commit/reveal internal key (distinct from external `0/*` and change `1/*`).
+- `infrastructure/broadcast_env.rs`: drop `OPERATOR_SECRET_KEY_HEX` parsing; load the operator keypair via BDK from the Admin Wallet descriptor at the new path. Same `ALLOW_DEV_MNEMONIC_SIGNING` guard as Phase 1.
+- Remove `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY`, and the well-known test-key rejection logic — superseded by the mnemonic guard.
+- Update `application/proposals.rs`: `broadcast_commit_then_reveal` continues to receive an `&UntweakedKeypair`; only its source changes.
+- Update `proposal-broadcast-commit-reveal.md` spec to reflect Admin Wallet-derived commit internal key.
+- Update `desktop-app/e2e-webdriver/README.md`, CI workflows, and regtest scripts to drop `OPERATOR_SECRET_KEY_HEX` from setup recipes.
+- Tests: `broadcast_env.rs` regressions; integration test that verifies the commit address is reproducible from the dev mnemonic; orchestrator claim/PATCH unchanged.
+
+**Out of scope**
+
+- HW PSBT signing for reveal (Phase 7).
+- Removing `ADMIN_WALLET_REGTEST_MNEMONIC` (Phase 9).
+- Changing SPS-50/51 envelope shape — only the internal key source changes; protocol semantics preserved.
+
+**Done when**
+
+- `OPERATOR_SECRET_KEY_HEX` and `ALLOW_DEV_OPERATOR_KEY` no longer exist in code, env, `.env.example`, runbooks, CI, or E2E setup.
+- On regtest with `ALLOW_DEV_MNEMONIC_SIGNING=1`, commit and reveal still succeed; orchestrator txids and `PATCH` behavior unchanged.
+- The commit address for a given proposal is deterministic from `ADMIN_WALLET_REGTEST_MNEMONIC` + payload.
+- Regression suite (Phase 1 + Phase 2) green; no operator-key references remain in workspace `grep`.
+
+**Primary code areas**
+
+- `desktop-app/src-tauri/src/infrastructure/broadcast_env.rs` — replace env parsing with BDK derivation
+- `desktop-app/src-tauri/src/infrastructure/broadcast_tx.rs` — no API change; consumes the same `UntweakedKeypair`
+- `desktop-app/src-tauri/src/application/proposals.rs` — wiring only
+- `docs/specs/proposal-broadcast-commit-reveal.md` — protocol-doc update
+- `desktop-app/e2e-webdriver/README.md`, `scripts/`, CI workflows — env recipe cleanup
+
+**Risks / notes**
+
+- **Breaking change on regtest:** commit addresses change (different internal key). Acceptable because regtest state is ephemeral; document in changelog and reset E2E fixtures.
+- **No on-chain consequence in production:** no mainnet/testnet state exists yet; this is a one-time clean swap.
+- **Phase 7 future:** swaps the mnemonic-derived keypair for an HW-derived signature at the same path. No further changes to `broadcast_env.rs` or `broadcast_tx.rs` API.
+
+---
+
 ### Phase 4 — Send BTC happy path (regtest, dev mnemonic)
 
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee default from chain RPC, change to `…/1/*`).
@@ -190,15 +237,15 @@ flowchart LR
 
 ### Phase 7 — Hardware wallet direct adapters (no HWI)
 
-**Goal:** Trezor/Ledger PSBT sign for Admin Wallet paths per PRD §3.2; reuse existing device adapters where possible.
+**Goal:** Trezor/Ledger PSBT sign for Admin Wallet paths per PRD §3.2; reuse existing device adapters where possible. Includes the SPS-50 commit/reveal internal key path (`m/86'/0'/73'/2/0`) introduced in Phase 3.5 — HW now signs reveal in place of the dev mnemonic.
 
-**In scope:** Direct device APIs already in Tauri; PSBT preview on device.
+**In scope:** Direct device APIs already in Tauri; PSBT preview on device; HW-derived reveal signing at the path established in Phase 3.5.
 
 **Out of scope:** HWI CLI, POC Electrum path.
 
-**Done when:** Regtest/testnet send and (optionally) commit can be HW-signed without mnemonic.
+**Done when:** Regtest/testnet send and reveal are HW-signed without mnemonic; dev-mnemonic guard becomes unreachable on release builds (full removal in Phase 9).
 
-**Primary code areas:** `infrastructure/hw_wallet/`, PSBT pipeline in `admin_wallet`.
+**Primary code areas:** `infrastructure/hw_wallet/`, PSBT pipeline in `admin_wallet`, reveal signer swap in `broadcast_env.rs`.
 
 ---
 
@@ -234,7 +281,7 @@ flowchart LR
 |---|---|
 | Governance broadcast | Desktop `broadcast_commit_then_reveal` — commit via `sendtoaddress`, reveal via operator key + `send_raw_transaction` |
 | Chain access | `HttpBitcoinRpcClient` in `infrastructure/bitcoin_rpc.rs` |
-| Operator / reveal | `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY` on regtest |
+| Operator / reveal | `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY` on regtest — **dev scaffolding only; retired in Phase 3.5** (derived from Admin Wallet at `m/86'/0'/73'/2/0`) |
 | Admin ID HW | BIP-84 Trezor paths in `hw_wallet/trezor.rs`; frontend `m/84'/0'/73'/0/0` |
 | Broadcast UI | `/proposals/:actionId/broadcast`, orchestrator claim + PATCH |
 | BDK | Not in workspace yet |
@@ -251,8 +298,10 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
 | `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Required while CI keeps legacy funding (Phases 1–4)**; deprecate once Phase 4 (Send) proves parity and CI migrates to `admin_wallet` |
 | `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | Phase 1+ |
-| `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed | Regtest only |
-| `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing | Align with existing `dev_secrets.rs` |
+| `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed; also source of the SPS-50 reveal internal key from Phase 3.5 onward | Regtest only; removed in Phase 9 (release builds) |
+| `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing — covers both Admin Wallet funding (Phase 1) and reveal signing (Phase 3.5+) | Align with existing `dev_secrets.rs` |
+| `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Dev hot key for SPS-50 commit/reveal internal key; superseded by Admin Wallet derivation at `m/86'/0'/73'/2/0` | Retired |
+| `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |
 
 Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI until Phase 9; end users target remote RPC.
 
