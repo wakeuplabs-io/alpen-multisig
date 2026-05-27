@@ -1,21 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listAdminWalletUtxos } from '@/api/admin-wallet'
 import type { UtxoDto, AdminWalletError } from '@/api/admin-wallet'
+import { parseAdminWalletError } from './parse-admin-wallet-error'
 
 type UseAdminWalletUtxosReturn = {
 	data: UtxoDto[] | null
 	isLoading: boolean
 	error: AdminWalletError | null
 	refresh: () => void
-}
-
-function parseAdminWalletError(raw: string): AdminWalletError {
-	try {
-		const parsed = JSON.parse(raw) as AdminWalletError
-		return parsed
-	} catch {
-		return { type: 'RpcUnreachable', message: raw }
-	}
 }
 
 export function useAdminWalletUtxos(): UseAdminWalletUtxosReturn {
@@ -38,9 +30,7 @@ export function useAdminWalletUtxos(): UseAdminWalletUtxosReturn {
 			.finally(() => setIsLoading(false))
 	}, [tick])
 
-	function refresh() {
-		setTick((t) => t + 1)
-	}
+	const refresh = useCallback(() => setTick((t) => t + 1), [])
 
 	return { data, isLoading, error, refresh }
 }

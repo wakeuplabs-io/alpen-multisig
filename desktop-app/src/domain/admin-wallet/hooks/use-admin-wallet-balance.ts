@@ -1,21 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getAdminWalletBalance } from '@/api/admin-wallet'
 import type { BalanceDto, AdminWalletError } from '@/api/admin-wallet'
+import { parseAdminWalletError } from './parse-admin-wallet-error'
 
 type UseAdminWalletBalanceReturn = {
 	data: BalanceDto | null
 	isLoading: boolean
 	error: AdminWalletError | null
 	refresh: () => void
-}
-
-function parseAdminWalletError(raw: string): AdminWalletError {
-	try {
-		const parsed = JSON.parse(raw) as AdminWalletError
-		return parsed
-	} catch {
-		return { type: 'RpcUnreachable', message: raw }
-	}
 }
 
 export function useAdminWalletBalance(): UseAdminWalletBalanceReturn {
@@ -38,9 +30,7 @@ export function useAdminWalletBalance(): UseAdminWalletBalanceReturn {
 			.finally(() => setIsLoading(false))
 	}, [tick])
 
-	function refresh() {
-		setTick((t) => t + 1)
-	}
+	const refresh = useCallback(() => setTick((t) => t + 1), [])
 
 	return { data, isLoading, error, refresh }
 }

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listAdminWalletAddresses } from '@/api/admin-wallet'
-import type { AddressDto, AdminWalletError } from '@/api/admin-wallet'
+import type { AddressDto, AdminWalletError, KeychainDto } from '@/api/admin-wallet'
+import { parseAdminWalletError } from './parse-admin-wallet-error'
 
 type UseAdminWalletAddressesReturn = {
 	data: AddressDto[] | null
@@ -9,16 +10,11 @@ type UseAdminWalletAddressesReturn = {
 	refresh: () => void
 }
 
-function parseAdminWalletError(raw: string): AdminWalletError {
-	try {
-		const parsed = JSON.parse(raw) as AdminWalletError
-		return parsed
-	} catch {
-		return { type: 'RpcUnreachable', message: raw }
-	}
-}
-
-export function useAdminWalletAddresses(pageSize = 20): UseAdminWalletAddressesReturn {
+export function useAdminWalletAddresses(
+	keychain: KeychainDto = 'External',
+	pageIndex = 0,
+	pageSize = 20,
+): UseAdminWalletAddressesReturn {
 	const [data, setData] = useState<AddressDto[] | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<AdminWalletError | null>(null)
@@ -28,7 +24,7 @@ export function useAdminWalletAddresses(pageSize = 20): UseAdminWalletAddressesR
 
 	useEffect(() => {
 		setIsLoading(true)
-		listAdminWalletAddresses(clampedPageSize)
+		listAdminWalletAddresses(keychain, pageIndex, clampedPageSize)
 			.then((result) => {
 				if (result.ok) {
 					setData(result.data)
@@ -38,11 +34,9 @@ export function useAdminWalletAddresses(pageSize = 20): UseAdminWalletAddressesR
 				}
 			})
 			.finally(() => setIsLoading(false))
-	}, [tick, clampedPageSize])
+	}, [tick, keychain, pageIndex, clampedPageSize])
 
-	function refresh() {
-		setTick((t) => t + 1)
-	}
+	const refresh = useCallback(() => setTick((t) => t + 1), [])
 
 	return { data, isLoading, error, refresh }
 }
