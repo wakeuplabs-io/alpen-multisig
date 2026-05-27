@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
@@ -21,7 +22,14 @@ export function BroadcastProposalScreen() {
 	const isAdminWalletMode = adminWalletInfo != null
 
 	const { data: utxos } = useAdminWalletUtxos()
-	const { syncStatus } = useAdminWalletSync()
+	const { syncStatus, triggerSync } = useAdminWalletSync()
+
+	// Trigger sync on mount when in admin_wallet mode
+	useEffect(() => {
+		if (isAdminWalletMode) {
+			void triggerSync()
+		}
+	}, [isAdminWalletMode, triggerSync])
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,

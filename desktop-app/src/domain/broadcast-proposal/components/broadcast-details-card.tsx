@@ -46,8 +46,10 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-function relativeTime(isoString: string): string {
-	const diffSeconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
+function relativeTime(isoStr: string): string {
+	// Handle both ISO-8601 strings and legacy numeric-only strings (bare Unix epoch seconds)
+	const ts = isNaN(Number(isoStr)) ? Date.parse(isoStr) : Number(isoStr) * 1000
+	const diffSeconds = Math.floor((Date.now() - ts) / 1000)
 	if (diffSeconds < 60) return `${diffSeconds}s ago`
 	const diffMinutes = Math.floor(diffSeconds / 60)
 	if (diffMinutes < 60) return `${diffMinutes}m ago`
