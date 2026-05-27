@@ -38,7 +38,7 @@ echo "[asm] Bitcoin RPC ready."
 if [ ! -f "$INITIALIZED_FLAG" ]; then
     echo "[asm] First run — generating asm-params.json..."
 
-    BLKID=$(btc_rpc getblockhash "101" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+    BLKID=$(btc_rpc getblockhash "101" | jq -r '.result')
     echo "[asm] Anchor block hash (height 101): $BLKID"
 
     sed "s/ANCHOR_BLKID_PLACEHOLDER/$BLKID/" /app/asm-params.template.json > /data/asm-params.json

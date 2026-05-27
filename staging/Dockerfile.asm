@@ -23,7 +23,7 @@ RUN cargo build --release --bin strata-asm-runner
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl libssl3 \
+    ca-certificates curl libssl3 jq \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /build/asm/target/release/strata-asm-runner /usr/local/bin/strata-asm-runner
