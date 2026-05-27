@@ -1,7 +1,7 @@
+use bdk_wallet::KeychainKind;
 use desktop_app::application::wallet_service::{
     AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
-use desktop_app::infrastructure::admin_wallet::{get_external_address, load_admin_wallet};
 use std::sync::Arc;
 
 #[derive(Debug, serde::Serialize)]
@@ -10,62 +10,34 @@ pub struct AdminWalletInfo {
     pub balance_sats: u64,
 }
 
-/// Inner logic — separated from the Tauri macro to allow direct unit testing.
-pub fn admin_wallet_info_inner() -> Result<AdminWalletInfo, String> {
-    let commit_funding = std::env::var("COMMIT_FUNDING").unwrap_or_else(|_| "bitcoind".to_string());
-    if commit_funding != "admin_wallet" {
-        return Err(format!(
-            "COMMIT_FUNDING is '{}', expected 'admin_wallet'",
-            commit_funding
-        ));
-    }
-
-    let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
-        .map_err(|_| "missing env var: ADMIN_WALLET_REGTEST_MNEMONIC".to_string())?;
-
-    let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
-    let network = match network_str.as_str() {
-        "regtest" => bdk_wallet::bitcoin::Network::Regtest,
-        "testnet" => bdk_wallet::bitcoin::Network::Testnet,
-        "bitcoin" | "mainnet" => bdk_wallet::bitcoin::Network::Bitcoin,
-        other => return Err(format!("unsupported BITCOIN_NETWORK: {}", other)),
-    };
-
-    let mut wallet = load_admin_wallet(&mnemonic, network).map_err(|e| e.to_string())?;
-
-    // Sync via bdk_bitcoind_rpc when RPC vars are present; otherwise skip (offline / test).
-    let rpc_url = std::env::var("BITCOIN_RPC_URL").ok();
-    if let Some(url) = rpc_url {
-        use bdk_bitcoind_rpc::Emitter;
-        let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
-        let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
-        let rpc = bdk_bitcoind_rpc::bitcoincore_rpc::Client::new(
-            &url,
-            bdk_bitcoind_rpc::bitcoincore_rpc::Auth::UserPass(rpc_user, rpc_pass),
-        )
-        .map_err(|e| e.to_string())?;
-
-        let mut emitter = Emitter::new(&rpc, wallet.latest_checkpoint(), 0);
-        while let Some(event) = emitter.next_block().map_err(|e| e.to_string())? {
-            wallet
-                .apply_block_connected_to(&event.block, event.block_height(), event.connected_to())
-                .map_err(|e| e.to_string())?;
-        }
-    }
-
-    let balance = wallet.balance();
-    let balance_sats = balance.trusted_spendable().to_sat();
-    let address = get_external_address(&wallet).to_string();
-
+/// Read admin wallet info from the shared `WalletService` — single source of truth.
+///
+/// Triggers a sync (which applies `WalletService::check_enabled` guard),
+/// then returns the confirmed balance and external address index 0.
+/// Returns `Err(Disabled)` if any of `COMMIT_FUNDING=admin_wallet`,
+/// `BITCOIN_NETWORK=regtest`, `ALLOW_DEV_MNEMONIC_SIGNING=1` is missing.
+pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
+    svc.sync().await.map_err(serialize_wallet_error)?;
+    let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
+    let address = svc
+        .list_addresses(KeychainKind::External, 0, 1)
+        .await
+        .map_err(serialize_wallet_error)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no external address derivable".to_string())?
+        .address;
     Ok(AdminWalletInfo {
         address,
-        balance_sats,
+        balance_sats: balance.confirmed_sats,
     })
 }
 
 #[tauri::command]
-pub fn get_admin_wallet_info() -> Result<AdminWalletInfo, String> {
-    admin_wallet_info_inner()
+pub async fn get_admin_wallet_info(
+    wallet_service: tauri::State<'_, Arc<WalletService>>,
+) -> Result<AdminWalletInfo, String> {
+    admin_wallet_info(wallet_service.inner()).await
 }
 
 fn serialize_wallet_error<E: serde::Serialize + std::fmt::Debug>(e: E) -> String {
@@ -99,7 +71,6 @@ pub async fn admin_wallet_list_addresses(
     page_size: u32,
     wallet_service: tauri::State<'_, Arc<WalletService>>,
 ) -> Result<Vec<AddressDto>, String> {
-    use bdk_wallet::KeychainKind;
     let keychain_kind = match keychain.to_lowercase().as_str() {
         "internal" => KeychainKind::Internal,
         _ => KeychainKind::External,
@@ -127,23 +98,92 @@ pub fn admin_wallet_sync_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
+    use desktop_app::infrastructure::admin_wallet::load_admin_wallet;
+    use tokio::sync::Mutex;
 
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    // RED_ACCEPTANCE / RED_UNIT: verifies the 5 new IPC command functions exist
-    // and are importable from the module. This is a compilation test — if any function
-    // is missing or has wrong imports, this test file will not compile.
-    // Note: Tauri commands cannot be directly invoked in unit tests (tauri::State requires
-    // an AppHandle), so we verify at module import level.
+    fn build_test_service() -> WalletService {
+        let wallet = load_admin_wallet(TEST_MNEMONIC, bdk_wallet::bitcoin::Network::Regtest)
+            .expect("wallet creation must succeed");
+        WalletService::new(wallet)
+    }
+
+    fn clear_guard_env_vars() {
+        std::env::remove_var("COMMIT_FUNDING");
+        std::env::remove_var("BITCOIN_NETWORK");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+    }
+
+    /// REGRESSION (UTXOs:0 with balance>0 bug): `get_admin_wallet_info` and
+    /// `WalletService.sync()` MUST share the same guard. Before this fix the two
+    /// paths diverged — info accepted only `COMMIT_FUNDING=admin_wallet`, sync
+    /// required all three env vars — causing balance to render while UTXOs/list
+    /// silently returned `[]` when `ALLOW_DEV_MNEMONIC_SIGNING` was unset.
+    #[tokio::test]
+    async fn admin_wallet_info_rejects_when_allow_dev_mnemonic_signing_missing() {
+        let _guard = ENV_LOCK.lock().await;
+        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+
+        let svc = build_test_service();
+        let result = admin_wallet_info(&svc).await;
+
+        clear_guard_env_vars();
+        assert!(
+            result.is_err(),
+            "admin_wallet_info must reject when ALLOW_DEV_MNEMONIC_SIGNING is absent \
+             (same guard as WalletService.sync) — otherwise the broadcast screen shows \
+             balance from one wallet and UTXOs from another. Got: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_wallet_info_rejects_when_bitcoin_network_not_regtest() {
+        let _guard = ENV_LOCK.lock().await;
+        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        std::env::set_var("BITCOIN_NETWORK", "bitcoin");
+
+        let svc = build_test_service();
+        let result = admin_wallet_info(&svc).await;
+
+        clear_guard_env_vars();
+        assert!(
+            result.is_err(),
+            "admin_wallet_info must reject when BITCOIN_NETWORK != regtest. Got: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_wallet_info_rejects_when_commit_funding_is_not_admin_wallet() {
+        let _guard = ENV_LOCK.lock().await;
+        std::env::set_var("COMMIT_FUNDING", "bitcoind");
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+
+        let svc = build_test_service();
+        let result = admin_wallet_info(&svc).await;
+
+        clear_guard_env_vars();
+        assert!(
+            result.is_err(),
+            "admin_wallet_info must reject when COMMIT_FUNDING != admin_wallet. Got: {:?}",
+            result
+        );
+    }
+
+    /// Verifies all 6 admin-wallet IPC commands are importable from the module
+    /// (compile-time check — Tauri commands cannot be invoked directly in unit tests).
     #[test]
-    fn five_ipc_command_functions_are_importable() {
-        // Taking a reference to each function confirms it exists and is accessible.
-        // async fn pointers cannot be cast to fn-pointer types directly, so we use
-        // the is_some pattern via Option wrapping to avoid the invalid cast.
+    fn six_ipc_command_functions_are_importable() {
+        let _ = Some(get_admin_wallet_info as fn(_) -> _);
         let _ = Some(admin_wallet_get_balance as fn(_) -> _);
         let _ = Some(admin_wallet_list_utxos as fn(_) -> _);
         let _ = Some(admin_wallet_list_addresses as fn(_, _, _, _) -> _);
@@ -151,49 +191,5 @@ mod tests {
         let _sync_status_ptr: fn(tauri::State<'_, Arc<WalletService>>) -> SyncStatusDto =
             admin_wallet_sync_status;
         let _ = _sync_status_ptr;
-    }
-
-    #[test]
-    fn returns_ok_with_non_empty_address_when_admin_wallet_mode_and_mnemonic_set() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
-        std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::remove_var("BITCOIN_RPC_URL");
-
-        let result = admin_wallet_info_inner();
-
-        std::env::remove_var("COMMIT_FUNDING");
-        std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC");
-        std::env::remove_var("BITCOIN_NETWORK");
-
-        let info = result.expect("expected Ok");
-        assert!(!info.address.is_empty(), "expected non-empty address");
-        assert!(
-            info.address.starts_with("bcrt1p"),
-            "expected P2TR regtest address but got: {}",
-            info.address
-        );
-    }
-
-    #[test]
-    fn returns_err_when_commit_funding_is_not_admin_wallet() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        std::env::set_var("COMMIT_FUNDING", "bitcoind");
-
-        let result = admin_wallet_info_inner();
-
-        std::env::remove_var("COMMIT_FUNDING");
-
-        assert!(
-            result.is_err(),
-            "expected Err when COMMIT_FUNDING != admin_wallet"
-        );
-        let err = result.unwrap_err();
-        assert!(
-            err.contains("admin_wallet"),
-            "error should mention admin_wallet but got: {}",
-            err
-        );
     }
 }
