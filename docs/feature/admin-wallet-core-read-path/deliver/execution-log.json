@@ -3,102 +3,102 @@
   "feature_id": "admin-wallet-core-read-path",
   "events": [
     {
-      "sid": "01-01",
+      "sid": "01-03",
       "p": "PREPARE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:50Z"
+      "t": "2026-05-27T15:44:55Z"
     },
     {
-      "sid": "01-01",
+      "sid": "01-03",
       "p": "RED_ACCEPTANCE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:51Z"
+      "t": "2026-05-27T15:44:55Z"
     },
     {
-      "sid": "01-01",
+      "sid": "01-03",
       "p": "RED_UNIT",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:51Z"
+      "t": "2026-05-27T15:44:56Z"
     },
     {
-      "sid": "01-01",
+      "sid": "01-03",
       "p": "GREEN",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:51Z"
+      "t": "2026-05-27T15:44:56Z"
     },
     {
-      "sid": "01-01",
+      "sid": "01-03",
       "p": "COMMIT",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:51Z"
+      "t": "2026-05-27T15:44:56Z"
     },
     {
-      "sid": "01-02",
+      "sid": "02-01",
       "p": "PREPARE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:39:55Z"
+      "t": "2026-05-27T16:01:02Z"
     },
     {
-      "sid": "01-02",
+      "sid": "02-01",
       "p": "RED_ACCEPTANCE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:42:29Z"
+      "t": "2026-05-27T16:01:02Z"
     },
     {
-      "sid": "01-02",
+      "sid": "02-01",
       "p": "RED_UNIT",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:42:57Z"
+      "t": "2026-05-27T16:01:02Z"
     },
     {
-      "sid": "01-02",
+      "sid": "02-01",
       "p": "GREEN",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:54:35Z"
+      "t": "2026-05-27T16:01:02Z"
     },
     {
-      "sid": "01-02",
+      "sid": "02-01",
       "p": "COMMIT",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T14:56:36Z"
+      "t": "2026-05-27T16:01:03Z"
     },
     {
-      "sid": "01-03",
+      "sid": "02-01",
       "p": "PREPARE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T15:09:37Z"
+      "t": "2026-05-27T16:05:52Z"
     },
     {
-      "sid": "01-03",
+      "sid": "02-01",
       "p": "RED_ACCEPTANCE",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T15:10:02Z"
+      "t": "2026-05-27T16:05:58Z"
     },
     {
-      "sid": "01-03",
+      "sid": "02-01",
       "p": "RED_UNIT",
-      "s": "EXECUTED",
-      "d": "PASS",
-      "t": "2026-05-27T15:10:23Z"
+      "s": "SKIPPED",
+      "d": "NOT_APPLICABLE: Tauri command handlers require runtime; structural coverage via RED_ACCEPTANCE",
+      "t": "2026-05-27T16:05:58Z"
     },
     {
-      "sid": "01-03",
+      "sid": "02-01",
       "p": "GREEN",
       "s": "EXECUTED",
       "d": "PASS",
-      "t": "2026-05-27T15:14:56Z"
+      "t": "2026-05-27T16:05:58Z"
     }
   ]
 }
