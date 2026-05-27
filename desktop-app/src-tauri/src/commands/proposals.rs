@@ -5,6 +5,7 @@ use desktop_app::application::orchestrator_client::{
 };
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
+use desktop_app::application::wallet_service::WalletService;
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
 };
@@ -342,7 +343,10 @@ pub async fn proposals_prepare_broadcast(
 }
 
 #[tauri::command]
-pub async fn proposals_broadcast(input: BroadcastInput) -> Result<BroadcastResultDto, String> {
+pub async fn proposals_broadcast(
+    input: BroadcastInput,
+    wallet_service: tauri::State<'_, std::sync::Arc<WalletService>>,
+) -> Result<BroadcastResultDto, String> {
     let client = build_client(input.base_url)?;
     let env = broadcast_env::load_broadcast_env()?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
@@ -351,8 +355,12 @@ pub async fn proposals_broadcast(input: BroadcastInput) -> Result<BroadcastResul
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
-    let commit_funding =
-        select_commit_funding(btc_rpc.clone(), env.network).map_err(|e| e.to_string())?;
+    let commit_funding = select_commit_funding(
+        btc_rpc.clone(),
+        env.network,
+        Some(std::sync::Arc::clone(&wallet_service)),
+    )
+    .map_err(|e| e.to_string())?;
 
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         &client,

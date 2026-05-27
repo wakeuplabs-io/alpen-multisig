@@ -353,6 +353,73 @@ impl WalletService {
         Ok(addresses)
     }
 
+    /// Syncs the wallet then builds, signs and broadcasts a commit transaction.
+    /// Single source of truth for the BDK wallet — no ephemeral instances created.
+    pub async fn fund_commit(
+        &self,
+        commit_address: &str,
+        amount_sats: u64,
+        fee_rate: u64,
+    ) -> Result<String, AdminWalletError> {
+        use bdk_bitcoind_rpc::bitcoincore_rpc::{Client, RpcApi};
+
+        // 1. Guard check
+        WalletService::check_enabled()?;
+
+        // 2. Sync so UTXOs are fresh
+        self.sync().await?;
+
+        // 3. Acquire wallet lock, build + sign PSBT, release
+        let network = {
+            let wallet = self.wallet.lock().await;
+            wallet.network()
+        };
+
+        let commit_addr: bdk_wallet::bitcoin::Address<_> = commit_address
+            .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
+            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
+            .require_network(network)
+            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+
+        let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
+            .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
+
+        let tx = {
+            let mut wallet = self.wallet.lock().await;
+            let mut tx_builder = wallet.build_tx();
+            tx_builder.add_recipient(
+                commit_addr.script_pubkey(),
+                bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
+            );
+            tx_builder.fee_rate(fee_rate_val);
+            let mut psbt = tx_builder
+                .finish()
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+            wallet
+                .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+            psbt.extract_tx()
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
+        };
+
+        // 4. Broadcast via RPC
+        let rpc = Client::new(
+            &self.rpc_url,
+            Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
+        )
+        .map_err(|e| AdminWalletError::RpcUnreachable {
+            message: e.to_string(),
+        })?;
+
+        let txid = rpc
+            .send_raw_transaction(&tx)
+            .map_err(|e| AdminWalletError::RpcUnreachable {
+                message: e.to_string(),
+            })?;
+
+        Ok(txid.to_string())
+    }
+
     /// Guard: returns Disabled if env configuration does not allow admin wallet.
     pub fn check_enabled() -> Result<(), AdminWalletError> {
         let commit_funding = std::env::var("COMMIT_FUNDING").unwrap_or_default();

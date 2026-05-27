@@ -8,6 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bitcoin::Network;
 
+use crate::application::wallet_service::WalletService;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 
 #[derive(Debug, thiserror::Error)]
@@ -67,11 +68,15 @@ impl CommitFunding for BitcoindSendToAddress {
 
 pub struct BdkAdminWalletMnemonic {
     pub network: Network,
+    pub wallet_service: Arc<WalletService>,
 }
 
 impl BdkAdminWalletMnemonic {
-    pub fn new(network: Network) -> Self {
-        Self { network }
+    pub fn new(network: Network, wallet_service: Arc<WalletService>) -> Self {
+        Self {
+            network,
+            wallet_service,
+        }
     }
 }
 
@@ -83,69 +88,10 @@ impl CommitFunding for BdkAdminWalletMnemonic {
         amount_sats: u64,
         fee_rate: u64,
     ) -> Result<String, CommitFundingError> {
-        use crate::infrastructure::admin_wallet::load_admin_wallet;
-        use bdk_bitcoind_rpc::Emitter;
-
-        let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
-            .map_err(|_| CommitFundingError::MissingEnv("ADMIN_WALLET_REGTEST_MNEMONIC".into()))?;
-
-        let mut wallet = load_admin_wallet(&mnemonic, self.network)
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-
-        let rpc_url =
-            std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
-        let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
-        let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
-
-        let rpc = bdk_bitcoind_rpc::bitcoincore_rpc::Client::new(
-            &rpc_url,
-            bdk_bitcoind_rpc::bitcoincore_rpc::Auth::UserPass(rpc_user, rpc_pass),
-        )
-        .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?;
-
-        let mut emitter = Emitter::new(&rpc, wallet.latest_checkpoint(), 0);
-        while let Some(event) = emitter
-            .next_block()
-            .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?
-        {
-            wallet
-                .apply_block_connected_to(&event.block, event.block_height(), event.connected_to())
-                .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-        }
-
-        let commit_addr: bdk_wallet::bitcoin::Address<_> = commit_address
-            .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?
-            .require_network(self.network)
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-
-        let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
-            .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
-
-        let mut tx_builder = wallet.build_tx();
-        tx_builder.add_recipient(
-            commit_addr.script_pubkey(),
-            bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
-        );
-        tx_builder.fee_rate(fee_rate_val);
-        let mut psbt = tx_builder
-            .finish()
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-
-        wallet
-            .sign(&mut psbt, bdk_wallet::SignOptions::default())
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-
-        let tx = psbt
-            .extract_tx()
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))?;
-
-        use bdk_bitcoind_rpc::bitcoincore_rpc::RpcApi;
-        let txid = rpc
-            .send_raw_transaction(&tx)
-            .map_err(|e| CommitFundingError::BitcoinRpc(e.to_string()))?;
-
-        Ok(txid.to_string())
+        self.wallet_service
+            .fund_commit(commit_address, amount_sats, fee_rate)
+            .await
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))
     }
 }
 
@@ -160,6 +106,7 @@ impl CommitFunding for BdkAdminWalletMnemonic {
 pub fn select_commit_funding(
     btc_rpc: Arc<dyn BitcoinRpcClient>,
     network: Network,
+    wallet_service: Option<Arc<WalletService>>,
 ) -> Result<Box<dyn CommitFunding + Send + Sync>, CommitFundingError> {
     let mode = std::env::var("COMMIT_FUNDING").unwrap_or_else(|_| "bitcoind".to_string());
     match mode.as_str() {
@@ -167,7 +114,12 @@ pub fn select_commit_funding(
             if network != Network::Regtest {
                 return Err(CommitFundingError::NotRegtest(format!("{network}")));
             }
-            Ok(Box::new(BdkAdminWalletMnemonic::new(network)))
+            let ws = wallet_service.ok_or_else(|| {
+                CommitFundingError::MissingEnv(
+                    "WalletService not provided for admin_wallet mode".into(),
+                )
+            })?;
+            Ok(Box::new(BdkAdminWalletMnemonic::new(network, ws)))
         }
         _ => Ok(Box::new(BitcoindSendToAddress::new(btc_rpc))),
     }
@@ -219,12 +171,22 @@ mod tests {
     // Env-var tests mutate process-level state; serialize with a mutex.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    fn make_wallet_service() -> Arc<crate::application::wallet_service::WalletService> {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        const TEST_MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let bdk_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        Arc::new(crate::application::wallet_service::WalletService::new(
+            bdk_wallet,
+        ))
+    }
+
     #[test]
     fn default_selection_returns_bitcoind_variant() {
         let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var("COMMIT_FUNDING");
 
-        let result = select_commit_funding(mock_rpc(), Network::Regtest);
+        let result = select_commit_funding(mock_rpc(), Network::Regtest, None);
         assert!(result.is_ok(), "expected Ok but got an error");
     }
 
@@ -233,15 +195,58 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var("COMMIT_FUNDING", "admin_wallet");
 
-        let result = select_commit_funding(mock_rpc(), Network::Regtest);
+        let result =
+            select_commit_funding(mock_rpc(), Network::Regtest, Some(make_wallet_service()));
         std::env::remove_var("COMMIT_FUNDING");
         assert!(result.is_ok(), "expected Ok but got an error");
     }
 
     #[test]
     fn bdk_admin_wallet_stores_network() {
-        let wallet = BdkAdminWalletMnemonic::new(Network::Regtest);
+        let wallet = BdkAdminWalletMnemonic::new(Network::Regtest, make_wallet_service());
         assert_eq!(wallet.network, Network::Regtest);
+    }
+
+    // Acceptance test (step 01-01): BdkAdminWalletMnemonic stores injected WalletService — no
+    // ephemeral wallet created on construction.
+    #[test]
+    fn bdk_admin_wallet_mnemonic_stores_injected_wallet_service() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use std::sync::Arc;
+
+        const TEST_MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let bdk_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let wallet_service = Arc::new(crate::application::wallet_service::WalletService::new(
+            bdk_wallet,
+        ));
+
+        let funded = BdkAdminWalletMnemonic::new(Network::Regtest, Arc::clone(&wallet_service));
+        assert!(
+            Arc::ptr_eq(&funded.wallet_service, &wallet_service),
+            "BdkAdminWalletMnemonic must store the injected WalletService Arc (same pointer)"
+        );
+    }
+
+    // Unit test (step 01-01): select_commit_funding with admin_wallet mode injects WalletService
+    #[test]
+    fn select_commit_funding_admin_wallet_injects_wallet_service() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use std::sync::Arc;
+
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
+
+        const TEST_MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let bdk_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let wallet_service = Arc::new(crate::application::wallet_service::WalletService::new(
+            bdk_wallet,
+        ));
+
+        let result = select_commit_funding(mock_rpc(), Network::Regtest, Some(wallet_service));
+        std::env::remove_var("COMMIT_FUNDING");
+        assert!(result.is_ok(), "expected Ok when wallet_service injected");
     }
 
     #[test]
@@ -249,7 +254,8 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var("COMMIT_FUNDING", "admin_wallet");
 
-        let result = select_commit_funding(mock_rpc(), Network::Bitcoin);
+        let result =
+            select_commit_funding(mock_rpc(), Network::Bitcoin, Some(make_wallet_service()));
         std::env::remove_var("COMMIT_FUNDING");
 
         assert!(
