@@ -13,6 +13,19 @@ pub enum AdminWalletError {
     Descriptor(String),
     #[error("wallet creation error: {0}")]
     WalletCreation(String),
+    // Phase 2 variants
+    #[error("RPC unreachable: {message}")]
+    RpcUnreachable { message: String },
+    #[error("RPC auth failed: {message}")]
+    RpcAuthFailed { message: String },
+    #[error("descriptor parse error: {message}")]
+    DescriptorParseError { message: String },
+    #[error("sync incomplete: {message}")]
+    SyncIncomplete { message: String },
+    #[error("regtest guard violation: {message}")]
+    RegtestGuardViolation { message: String },
+    #[error("admin wallet is disabled")]
+    Disabled,
 }
 
 /// Load a BIP-86 taproot wallet for account 73' from a mnemonic phrase.
