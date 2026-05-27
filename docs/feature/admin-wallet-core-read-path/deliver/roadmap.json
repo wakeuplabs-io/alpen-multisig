@@ -1,0 +1,226 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-core-read-path",
+    "created_at": "2026-05-27T14:09:54Z",
+    "total_steps": 8,
+    "phases": 4
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "Rust Backend: WalletService and Read DTOs",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "WalletService struct, SyncState, and typed DTOs",
+          "description": "Create application/wallet_service.rs with WalletService struct holding a tokio::sync::Mutex<Wallet>, Arc<RwLock<SyncState>>, sync_in_flight AtomicBool, and last_read_at. Define BalanceDto, UtxoDto, OutPointDto, KeychainDto, AddressDto, SyncStatusDto, TypedError, and extend AdminWalletError with RpcUnreachable, RpcAuthFailed, DescriptorParseError, SyncIncomplete, RegtestGuardViolation, Disabled variants. Extend infrastructure/admin_wallet/wallet.rs with pure read helpers used by WalletService methods.",
+          "estimated_hours": 3,
+          "dependencies": [],
+          "criteria": [
+            "WalletService struct defined in desktop-app/src-tauri/src/application/wallet_service.rs with wallet, sync_state, sync_in_flight, and last_read_at fields",
+            "BalanceDto has confirmed_sats: u64, unconfirmed_sats: u64, total_sats: u64; all fields derive serde::Serialize/Deserialize",
+            "UtxoDto has outpoint: OutPointDto, value_sats: u64, script_pubkey_hex: String, keychain: KeychainDto, derivation_index: u32, confirmations: u32",
+            "AddressDto has index: u32, address: String, is_used: bool",
+            "SyncStatusDto has tip_height: Option<u32>, last_synced_block: Option<u32>, last_synced_at: Option<String> (ISO-8601), is_syncing: bool, last_error: Option<TypedError>",
+            "AdminWalletError enum extended with RpcUnreachable, RpcAuthFailed, DescriptorParseError, SyncIncomplete, RegtestGuardViolation, Disabled variants",
+            "AdminWalletError::Disabled is returned when COMMIT_FUNDING != admin_wallet OR BITCOIN_NETWORK != regtest OR ALLOW_DEV_MNEMONIC_SIGNING != 1 (US-RP2.AC-3)",
+            "cargo fmt --check passes; cargo clippy --workspace --all-targets -- -D warnings passes"
+          ],
+          "test_file": "",
+          "scenario_name": "WalletService struct and DTO definitions compile and satisfy type constraints"
+        },
+        {
+          "id": "01-02",
+          "name": "WalletService get_balance, list_utxos, list_addresses methods",
+          "description": "Implement get_balance, list_utxos, and list_addresses on WalletService. Each method acquires the wallet mutex, copies required data into a DTO, and releases the lock without awaiting network I/O. list_addresses enforces page_size cap of 20, returns empty Vec for out-of-bound pages, and uses BDK heuristic is_used. confirmations for UTXOs derived from BDK chain state: tip_height.saturating_sub(utxo_height).saturating_add(1) when confirmed, else 0. Add unit tests embedded in source for DTO shaping and address windowing invariants.",
+          "estimated_hours": 4,
+          "dependencies": ["01-01"],
+          "criteria": [
+            "get_balance returns BalanceDto reflecting last successful sync; on never-synced wallet all fields are 0 (US-RP2.AC-2)",
+            "list_utxos returns Vec<UtxoDto> with confirmations computed from BDK chain state, NOT gettxout RPC (US-RP3.AC-2)",
+            "list_utxos returns empty Vec for empty wallet, not an error (US-RP3.AC-3)",
+            "list_addresses with page_index=0 returns indices 0..=19 of the requested keychain (US-RP4.AC-3)",
+            "list_addresses with out-of-bound page returns [], not an error (US-RP4.AC-4)",
+            "page_size is defaulted to and capped at 20 (US-RP4.AC-1)",
+            "Unit test: UtxoDto confirmation arithmetic on tip / spent / unconfirmed cases",
+            "Unit test: address windowing returns correct index ranges for external page 0 and internal page 1",
+            "Unit test: AdminWalletError::Disabled returned when each guard condition fails (US-RP2.AC-3)",
+            "cargo fmt --check passes; cargo clippy --workspace --all-targets -- -D warnings passes"
+          ],
+          "test_file": "",
+          "scenario_name": "get_balance, list_utxos, list_addresses methods with unit tests for DTO shaping and address windowing"
+        },
+        {
+          "id": "01-03",
+          "name": "WalletService sync, sync_status methods and background sync loop",
+          "description": "Implement sync() and sync_status() on WalletService. sync() checks sync_in_flight AtomicBool to collapse concurrent callers; performs bdk_bitcoind_rpc Emitter cycle while holding wallet mutex; updates SyncState on success or records typed error. sync_status() reads Arc<RwLock<SyncState>> without acquiring the wallet mutex. Spawn background sync tokio task on first IPC invocation: loop sleeping SYNC_INTERVAL (30s const), checking last_read_at against SYNC_IDLE_WINDOW (5min const), calling sync() when active. Add unit test for concurrent sync() collapse.",
+          "estimated_hours": 5,
+          "dependencies": ["01-02"],
+          "criteria": [
+            "sync() resolves after success or returns typed error mapping to RpcUnreachable, RpcAuthFailed, DescriptorParseError, SyncIncomplete, RegtestGuardViolation (US-RP5.AC-2)",
+            "sync_status() returns SyncStatusDto snapshot without blocking on wallet mutex (US-RP5.AC-1)",
+            "Two concurrent calls to sync() collapse into one in-flight sync; no double-RPC storm (US-RP5.AC-4)",
+            "Background loop runs at SYNC_INTERVAL = 30s cadence while last IPC read was within SYNC_IDLE_WINDOW = 5min (US-RP5.AC-3)",
+            "Background loop suspends when no read IPC invoked in past 5 minutes (US-RP5.AC-3)",
+            "SYNC_INTERVAL and SYNC_IDLE_WINDOW are Rust constants, not env vars (US-RP5.AC-3, D6)",
+            "While is_syncing == true, read IPC commands return last successful snapshot, not an error (US-RP5.AC-5)",
+            "Unit test: concurrent sync() calls assert single Emitter cycle observed",
+            "cargo fmt --check passes; cargo clippy --workspace --all-targets -- -D warnings passes"
+          ],
+          "test_file": "",
+          "scenario_name": "sync and sync_status methods with background loop and concurrent collapse"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Tauri IPC Commands",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "5 new IPC commands, WalletService managed state, and Tauri registration",
+          "description": "Add admin_wallet_get_balance, admin_wallet_list_utxos, admin_wallet_list_addresses, admin_wallet_sync, admin_wallet_sync_status commands to commands/admin_wallet.rs. Each command resolves WalletService via tauri::State<Arc<WalletService>>. Construct one WalletService in Tauri setup and place it in managed state. Register all 5 commands in commands/invoke.rs alongside existing get_admin_wallet_info.",
+          "estimated_hours": 3,
+          "dependencies": ["01-03"],
+          "criteria": [
+            "admin_wallet_get_balance command exists and returns BalanceDto or AdminWalletError (US-RP2.AC-1)",
+            "admin_wallet_list_utxos command returns Vec<UtxoDto> or AdminWalletError (US-RP3.AC-1)",
+            "admin_wallet_list_addresses command accepts keychain, page_index, page_size params and returns Vec<AddressDto> or AdminWalletError (US-RP4.AC-1)",
+            "admin_wallet_sync command performs chain sync and returns SyncStatusDto or typed AdminWalletError (US-RP5.AC-2)",
+            "admin_wallet_sync_status command returns SyncStatusDto snapshot (US-RP5.AC-1)",
+            "All 5 commands return AdminWalletError::Disabled when guard conditions not met (US-RP2.AC-3, US-RP3.AC-4, US-RP4.AC-5)",
+            "WalletService constructed once in Tauri setup and placed in managed state; commands resolve it via tauri::State<Arc<WalletService>>",
+            "All 5 commands registered in commands/invoke.rs",
+            "cargo build succeeds; cargo fmt --check passes; cargo clippy --workspace --all-targets -- -D warnings passes"
+          ],
+          "test_file": "",
+          "scenario_name": "5 IPC commands registered with WalletService managed state"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "React Layer: Hooks and BroadcastDetailsCard Extension",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "TypeScript IPC adapter extensions and 4 React hooks",
+          "description": "Extend api/admin-wallet.ts with one typed function per new IPC command: getAdminWalletBalance, listAdminWalletUtxos, listAdminWalletAddresses, triggerAdminWalletSync, getAdminWalletSyncStatus. Define TS types BalanceDto, UtxoDto, OutPointDto, AddressDto, SyncStatusDto, AdminWalletError union. Create 4 hooks under domain/admin-wallet/hooks/: use-admin-wallet-balance.ts, use-admin-wallet-utxos.ts, use-admin-wallet-addresses.ts, use-admin-wallet-sync.ts. Each hook returns { data, isLoading, error, refresh }. useAdminWalletSync additionally exposes syncStatus and triggerSync(). Hooks call getAdminWalletSyncStatus for cache invalidation on sync completion.",
+          "estimated_hours": 4,
+          "dependencies": ["02-01"],
+          "criteria": [
+            "api/admin-wallet.ts extended with getAdminWalletBalance, listAdminWalletUtxos, listAdminWalletAddresses, triggerAdminWalletSync, getAdminWalletSyncStatus typed functions (US-RP6.AC-2)",
+            "TS types BalanceDto, UtxoDto, AddressDto, SyncStatusDto, AdminWalletError defined with no any/unknown leaks",
+            "useAdminWalletBalance, useAdminWalletUtxos, useAdminWalletAddresses, useAdminWalletSync hooks created under desktop-app/src/domain/admin-wallet/hooks/ (US-RP6.AC-2)",
+            "Each hook returns { data, isLoading, error, refresh } with data typed against IPC schema and error typed as AdminWalletError (US-RP6.AC-1)",
+            "useAdminWalletSync exposes syncStatus and triggerSync() and is the only hook that calls admin_wallet_sync (US-RP6.AC-3)",
+            "Other hooks do not trigger sync; they subscribe to status changes for cache invalidation (US-RP6.AC-3)",
+            "useAdminWalletAddresses defaults page_size to 20 and caps at 20",
+            "npm run build passes; npm run lint passes; npm run format:check passes"
+          ],
+          "test_file": "",
+          "scenario_name": "TypeScript IPC adapter and 4 React hooks with typed contracts"
+        },
+        {
+          "id": "03-02",
+          "name": "BroadcastDetailsCard extension and broadcast-proposal-screen wiring",
+          "description": "Extend BroadcastDetailsCard with optional props utxoCount?: number, lastSyncedAt?: string | null, syncError?: AdminWalletErrorDto | null. Render 'UTXOs: <N>' when utxoCount is non-undefined. Render 'Last sync: <relative time>' computed from lastSyncedAt, refreshed at least every 15s while screen is mounted. When syncError is non-null, replace relative-time field with 'Sync error: <typed message>' and hide stale timestamp. When all new props are undefined, card renders byte-identical to Phase 1 (regression gate). Extend broadcast-proposal-screen.tsx to consume useAdminWalletUtxos and useAdminWalletSync when useAdminWalletInfo returns non-null, and pass new props through.",
+          "estimated_hours": 3,
+          "dependencies": ["03-01"],
+          "criteria": [
+            "BroadcastDetailsCard renders 'UTXOs: <N>' where <N> matches count from admin_wallet_list_utxos when COMMIT_FUNDING=admin_wallet (US-RP1.AC-1)",
+            "'Last sync: <relative time>' updates at least every 15s while screen is mounted (US-RP1.AC-2)",
+            "When COMMIT_FUNDING is unset or bitcoind, card renders unchanged from Phase 1 — new props are undefined (US-RP1.AC-3)",
+            "When most recent sync failed, card shows 'Sync error: <typed message>' and does NOT show stale 'Last sync' value (US-RP1.AC-4)",
+            "broadcast-proposal-screen.tsx consumes useAdminWalletUtxos and useAdminWalletSync only when funding mode is admin_wallet",
+            "npm run build passes; npm run lint passes; npm run format:check passes"
+          ],
+          "test_file": "",
+          "scenario_name": "BroadcastDetailsCard renders UTXO count and sync status with Phase 1 regression guard"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Integration, Regression, and Frontend Hook Tests",
+      "steps": [
+        {
+          "id": "04-01",
+          "name": "Rust integration tests using regtest harness",
+          "description": "Write integration tests in e2e-tests or orchestrator-be using the Phase 1 regtest harness (scripts/bitcoind-asm-runner.sh). Test: fund m/86'/0'/73'/0/0 with sendtoaddress + mine 1 block, then verify admin_wallet_get_balance returns confirmed sats, admin_wallet_list_utxos lists 1 UTXO with confirmations==1, admin_wallet_sync_status.last_synced_block == tip_height. Test: stop bitcoind, verify admin_wallet_sync returns RpcUnreachable, reads return prior snapshot. Test: AdminWalletError::Disabled for every new IPC command when guard conditions not met.",
+          "estimated_hours": 4,
+          "dependencies": ["02-01"],
+          "criteria": [
+            "Integration test: fund wallet + mine 1 block → admin_wallet_get_balance returns confirmed sats > 0 (spec Test Plan row 5)",
+            "Integration test: 1 UTXO listed with confirmations == 1 after mining 1 block (spec Test Plan row 5)",
+            "Integration test: admin_wallet_sync_status.last_synced_block == tip_height after sync (spec Test Plan row 5)",
+            "Integration test: stop bitcoind → admin_wallet_sync returns AdminWalletError::RpcUnreachable (spec Test Plan row 6)",
+            "Integration test: reads return prior snapshot while bitcoind is stopped (spec Test Plan row 6)",
+            "Integration test: AdminWalletError::Disabled returned for every new IPC command when COMMIT_FUNDING unset (DoD criterion 8)",
+            "cargo test --workspace passes"
+          ],
+          "test_file": "desktop-app/src-tauri/tests/admin_wallet_integration.rs",
+          "scenario_name": "Regtest integration: balance, UTXOs, sync, RpcUnreachable, and disabled-mode across all 5 IPC commands"
+        },
+        {
+          "id": "04-02",
+          "name": "TypeScript hook unit tests and BroadcastDetailsCard regression",
+          "description": "Write hook unit tests under desktop-app/src/domain/admin-wallet/hooks/__tests__/ with mocked Tauri IPC. Cover: Disabled error surfaced for each hook; triggerSync exposed only by useAdminWalletSync; useAdminWalletAddresses defaults page_size=20 caps at 20. Write BroadcastDetailsCard tests: renders UTXOs and Last sync only when props non-undefined; renders Sync error when syncError non-null; renders byte-identical to Phase 1 when new props are undefined.",
+          "estimated_hours": 3,
+          "dependencies": ["03-02"],
+          "criteria": [
+            "Hook unit test: AdminWalletError::Disabled error surfaced for useAdminWalletBalance, useAdminWalletUtxos, useAdminWalletAddresses (US-RP6.AC-4)",
+            "Hook unit test: triggerSync exposed only by useAdminWalletSync; other hooks do not expose it (US-RP6.AC-3)",
+            "Hook unit test: useAdminWalletAddresses defaults page_size to 20 and caps at 20 (spec Test Plan row 8)",
+            "Component test: BroadcastDetailsCard renders 'UTXOs: N' and 'Last sync: ...' only when utxoCount and lastSyncedAt are non-undefined (spec Test Plan row 9)",
+            "Component test: renders 'Sync error: ...' and hides Last sync when syncError is non-null (US-RP1.AC-4)",
+            "Regression test: with COMMIT_FUNDING unset, BroadcastDetailsCard renders byte-identical to pre-Phase-2 (US-RP1.AC-3, DoD criterion 7)",
+            "npm run build passes; npm run lint passes; npm run format:check passes"
+          ],
+          "test_file": "desktop-app/src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-hooks.test.ts",
+          "scenario_name": "Hook unit tests with mocked IPC and BroadcastDetailsCard regression tests"
+        }
+      ]
+    }
+  ],
+  "implementation_scope": {
+    "source_directories": [
+      "desktop-app/src-tauri/src/application/",
+      "desktop-app/src-tauri/src/infrastructure/admin_wallet/",
+      "desktop-app/src-tauri/src/commands/",
+      "desktop-app/src/api/",
+      "desktop-app/src/domain/admin-wallet/",
+      "desktop-app/src/domain/broadcast-proposal/"
+    ],
+    "test_directories": [
+      "desktop-app/src-tauri/tests/",
+      "desktop-app/src/domain/admin-wallet/hooks/__tests__/"
+    ],
+    "excluded_patterns": [
+      "__init__.py",
+      "__pycache__/**"
+    ]
+  },
+  "files_to_modify": [
+    "desktop-app/src-tauri/src/application/wallet_service.rs",
+    "desktop-app/src-tauri/src/infrastructure/admin_wallet/wallet.rs",
+    "desktop-app/src-tauri/src/infrastructure/admin_wallet/mod.rs",
+    "desktop-app/src-tauri/src/commands/admin_wallet.rs",
+    "desktop-app/src-tauri/src/commands/invoke.rs",
+    "desktop-app/src-tauri/src/state.rs",
+    "desktop-app/src-tauri/tests/admin_wallet_integration.rs",
+    "desktop-app/src/api/admin-wallet.ts",
+    "desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-balance.ts",
+    "desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-utxos.ts",
+    "desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-addresses.ts",
+    "desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-sync.ts",
+    "desktop-app/src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-hooks.test.ts",
+    "desktop-app/src/domain/broadcast-proposal/components/broadcast-details-card.tsx",
+    "desktop-app/src/screens/broadcast-proposal-screen.tsx"
+  ],
+  "validation": {
+    "status": "pending",
+    "reviewer": "juandahl",
+    "approved_at": "TODO"
+  }
+}
