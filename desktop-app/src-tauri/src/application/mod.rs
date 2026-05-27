@@ -9,3 +9,4 @@ pub mod commit_funding;
 pub mod orchestrator_auth;
 pub mod orchestrator_client;
 pub mod proposals;
+pub mod wallet_service;
