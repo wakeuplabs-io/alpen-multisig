@@ -10,10 +10,12 @@ export type AddressWithBalanceView = {
 
 export function composeAddressesWithBalance(addresses: AddressDto[], utxos: UtxoDto[]): AddressWithBalanceView[] {
 	const balanceByIndex = groupUtxosByDerivation(utxos)
-	return addresses.map((addr) => ({
-		index: addr.index,
-		address: addr.address,
-		balanceSats: balanceByIndex.get(addr.index) ?? 0,
-		isUsed: addr.isUsed,
-	}))
+	return addresses
+		.map((addr) => ({
+			index: addr.index,
+			address: addr.address,
+			balanceSats: balanceByIndex.get(addr.index) ?? 0,
+			isUsed: addr.isUsed,
+		}))
+		.filter((row) => row.balanceSats > 0)
 }

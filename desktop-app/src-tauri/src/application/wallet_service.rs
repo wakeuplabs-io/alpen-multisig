@@ -25,6 +25,7 @@ pub enum KeychainDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BalanceDto {
     pub confirmed_sats: u64,
     pub unconfirmed_sats: u64,
@@ -32,6 +33,7 @@ pub struct BalanceDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UtxoDto {
     pub outpoint: OutPointDto,
     pub value_sats: u64,
@@ -42,6 +44,7 @@ pub struct UtxoDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AddressDto {
     pub index: u32,
     pub address: String,
@@ -55,6 +58,7 @@ pub struct TypedError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncStatusDto {
     pub tip_height: Option<u32>,
     pub last_synced_block: Option<u32>,

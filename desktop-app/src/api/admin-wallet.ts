@@ -70,8 +70,8 @@ export function listAdminWalletAddresses(
 	const clampedPageSize = Math.min(pageSize, 20)
 	return tauriCall<AddressDto[]>('admin_wallet_list_addresses', {
 		keychain,
-		page_index: pageIndex,
-		page_size: clampedPageSize,
+		pageIndex,
+		pageSize: clampedPageSize,
 	})
 }
 

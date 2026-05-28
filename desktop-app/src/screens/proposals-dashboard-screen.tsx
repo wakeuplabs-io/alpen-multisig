@@ -183,7 +183,12 @@ export function ProposalsDashboardScreen() {
 					syncStatus={syncHook.syncStatus}
 					isSyncRefreshing={syncHook.isLoading}
 					syncError={syncHook.error}
-					onRefreshSync={() => void syncHook.triggerSync()}
+					onRefreshSync={async () => {
+						await syncHook.triggerSync()
+						balanceHook.refresh()
+						addressesHook.refresh()
+						addressesWithBalanceHook.refresh()
+					}}
 				/>
 			</WalletPanel>
 		</ScreenShell>
