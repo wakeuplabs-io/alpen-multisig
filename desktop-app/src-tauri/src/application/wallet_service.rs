@@ -67,6 +67,22 @@ pub struct SyncStatusDto {
     pub last_error: Option<TypedError>,
 }
 
+impl SyncStatusDto {
+    /// Returns a SyncStatusDto representing the Disabled state (no active wallet session).
+    pub fn disabled_default() -> Self {
+        Self {
+            tip_height: None,
+            last_synced_block: None,
+            last_synced_at: None,
+            is_syncing: false,
+            last_error: Some(TypedError {
+                code: "Disabled".to_string(),
+                message: AdminWalletError::Disabled.to_string(),
+            }),
+        }
+    }
+}
+
 // ── SyncState ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Default)]
@@ -84,6 +100,7 @@ pub struct WalletService {
     pub sync_state: Arc<RwLock<SyncState>>,
     pub sync_in_flight: Arc<AtomicBool>,
     pub last_read_at: Arc<RwLock<Option<Instant>>>,
+    pub cancel: Arc<tokio::sync::Notify>,
     bg_task_started: Arc<AtomicBool>,
     rpc_url: String,
     rpc_user: String,
@@ -165,6 +182,7 @@ impl WalletService {
             sync_state: Arc::new(RwLock::new(SyncState::default())),
             sync_in_flight: Arc::new(AtomicBool::new(false)),
             last_read_at: Arc::new(RwLock::new(None)),
+            cancel: Arc::new(tokio::sync::Notify::new()),
             bg_task_started: Arc::new(AtomicBool::new(false)),
             rpc_url,
             rpc_user,
@@ -470,6 +488,12 @@ impl WalletService {
         Ok(txid.to_string())
     }
 
+    /// Signals the background sync loop to exit. Idempotent — safe to call multiple times.
+    /// Uses notify_one() so the permit persists for the next notified().await call.
+    pub fn shutdown(&self) {
+        self.cancel.notify_one();
+    }
+
     /// Guard: returns Disabled unless running on regtest with dev-mnemonic signing enabled.
     pub fn check_enabled() -> Result<(), AdminWalletError> {
         let bitcoin_network = std::env::var("BITCOIN_NETWORK").unwrap_or_default();
@@ -713,6 +737,74 @@ mod tests {
             status.is_syncing,
             "sync_status must reflect in-flight sync as is_syncing=true"
         );
+    }
+
+    // Unit test (step 01-01): shutdown() can be called multiple times without panicking
+    #[test]
+    fn shutdown_is_idempotent_and_does_not_panic() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        // Calling shutdown multiple times must not panic
+        svc.shutdown();
+        svc.shutdown();
+        svc.shutdown();
+    }
+
+    // Unit test (step 01-01): after shutdown() the cancel signal is in notified state
+    #[test]
+    fn shutdown_sets_cancel_signal_to_notified_state() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        svc.shutdown();
+
+        // After shutdown, a notified() future should be immediately ready.
+        // We verify by cloning the cancel Arc and checking notified resolves via try_recv pattern.
+        // tokio::sync::Notify::notified() is the only public API — we verify by spawning a runtime.
+        let cancel = Arc::clone(&svc.cancel);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let notified: Result<(), tokio::time::error::Elapsed> = rt.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_millis(10), cancel.notified()).await
+        });
+        assert!(
+            notified.is_ok(),
+            "cancel signal must be notified after shutdown()"
+        );
+    }
+
+    // Unit test (step 01-03): disabled_default() returns is_syncing=false with Disabled error
+    #[test]
+    fn sync_status_disabled_default_returns_disabled_state() {
+        let status = SyncStatusDto::disabled_default();
+
+        assert!(
+            !status.is_syncing,
+            "disabled_default must return is_syncing=false"
+        );
+        assert!(status.tip_height.is_none(), "tip_height must be None");
+        assert!(
+            status.last_synced_block.is_none(),
+            "last_synced_block must be None"
+        );
+        assert!(
+            status.last_synced_at.is_none(),
+            "last_synced_at must be None"
+        );
+
+        let err = status
+            .last_error
+            .expect("last_error must be Some for Disabled state");
+        assert_eq!(err.code, "Disabled", "error code must be 'Disabled'");
+        assert!(!err.message.is_empty(), "error message must be non-empty");
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
