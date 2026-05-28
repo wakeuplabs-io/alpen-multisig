@@ -57,6 +57,13 @@ services:
       DATABASE_URL: "postgresql://neondb_owner:npg_HuMb6SVQxW7s@ep-proud-star-aqpu1w7v-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
       DEV_MINE_ENABLED: "1"
       ALLOW_DEV_MNEMONIC_SIGNING: "1"
+      ALLOW_DEV_OPERATOR_KEY: "1"
+      OPERATOR_SECRET_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000001"
+      BITCOIN_NETWORK: "regtest"
+      BITCOIN_MAGIC_BYTES_HEX: "414c504e"
+      ALLOW_INSECURE_HTTP_URL: "1"
+      ADMIN_WALLET_REGTEST_MNEMONIC: "multiply toss magic exclude crawl obey garden black apart room village neglect"
+      COMMIT_FUNDING: "admin_wallet"
     depends_on:
       bitcoin:
         condition: service_healthy
