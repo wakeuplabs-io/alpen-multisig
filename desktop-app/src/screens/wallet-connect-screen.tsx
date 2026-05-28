@@ -46,12 +46,12 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 	},
 	{
 		id: 'payout-administrator',
-		role: null,
+		role: AuthRole.PayoutAdministrator,
 		label: 'Payout Administrator',
 		description: 'Bridge payout spending rules and payout control.',
 		signerSetSource: 'Bridge multisig script',
-		availabilityLabel: 'Not in v0.1',
-		enabled: false,
+		availabilityLabel: 'Available',
+		enabled: true,
 	},
 ]
 
@@ -104,7 +104,7 @@ export function WalletConnectScreen() {
 		try {
 			await connectSession()
 			setAuthOkMessage('Success: authenticated.')
-			navigate('/proposals')
+			navigate(selectedRole === AuthRole.PayoutAdministrator ? '/block-payouts' : '/proposals')
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -137,6 +137,10 @@ export function WalletConnectScreen() {
 	function handleContinueToAuthenticate() {
 		const selectedAuthority = AUTHORITY_OPTIONS.find((option) => option.id === selectedAuthorityId)
 		if (!selectedAuthority || !selectedAuthority.enabled || selectedAuthority.role === null) {
+			return
+		}
+		if (selectedAuthority.role === AuthRole.PayoutAdministrator) {
+			navigate('/block-payouts')
 			return
 		}
 		setAuthorityStep('authenticate-session')
