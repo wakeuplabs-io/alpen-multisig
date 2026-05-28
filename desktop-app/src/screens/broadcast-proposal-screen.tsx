@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
@@ -13,7 +14,6 @@ import { useAdminWalletAddresses } from '@/domain/admin-wallet/hooks/use-admin-w
 import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelTrigger } from '@/domain/admin-wallet/components/wallet-panel-trigger'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -22,7 +22,7 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
@@ -71,6 +71,10 @@ export function BroadcastProposalScreen() {
 		return <Navigate to="/proposals" replace />
 	}
 
+	const signerLabel = wallet.addressSample
+		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
+		: 'Unknown'
+
 	const isLoading = phase === 'idle' || phase === 'preparing'
 	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
 	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
@@ -87,15 +91,18 @@ export function BroadcastProposalScreen() {
 		<ScreenShell
 			headerContent={
 				<>
-					<WalletPanelTrigger isOpen={isOpen} onToggle={() => (isOpen ? close() : open())} />
-
 					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
-					</span>
+					<SessionChip
+						timeLabel={sessionTimeLabel}
+						signerLabel={signerLabel}
+						warning={sessionWarning}
+						onActivate={() => (isOpen ? close() : open())}
+						isActive={isOpen}
+						panelId="wallet-slide-dialog"
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
@@ -191,7 +198,7 @@ export function BroadcastProposalScreen() {
 			</div>
 
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={close} />
+				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
 					balanceSats={balanceHook.data?.confirmedSats ?? 0}

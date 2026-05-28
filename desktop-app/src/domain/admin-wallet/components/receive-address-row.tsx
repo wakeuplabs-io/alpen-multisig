@@ -16,8 +16,10 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 	}
 
 	return (
-		<div className="flex items-center gap-2">
-			<p className="flex-1 truncate font-mono text-[12px] text-[#374151]">{address}</p>
+		<div className="flex min-w-0 items-center gap-2">
+			<span className="min-w-0 flex-1 truncate font-mono text-[11px] leading-[1.45] text-[#374151]" title={address}>
+				{address}
+			</span>
 			<CopyButton text={address} />
 		</div>
 	)

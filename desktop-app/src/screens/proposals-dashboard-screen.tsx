@@ -2,15 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
-import {
-	ClockSessionDefaultIcon,
-	ClockSessionWarningIcon,
-	LogOutMutedIcon,
-	LogOutRedIcon,
-	ShieldPurpleIcon,
-	UsbSessionDefaultIcon,
-	UsbSessionWarningIcon,
-} from '@/assets/icons'
+import { LogOutMutedIcon, LogOutRedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { SessionChip } from '@/components/session-chip'
 import { AuthRole } from '@/types'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
@@ -22,7 +15,6 @@ import { useAdminWalletSync } from '@/domain/admin-wallet/hooks/use-admin-wallet
 import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelTrigger } from '@/domain/admin-wallet/components/wallet-panel-trigger'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 
 export function ProposalsDashboardScreen() {
@@ -107,14 +99,19 @@ export function ProposalsDashboardScreen() {
 		<ScreenShell
 			headerContent={
 				<>
-					<WalletPanelTrigger isOpen={isOpen} onToggle={() => (isOpen ? close() : open())} />
-
 					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
 
-					<SessionChip timeLabel={sessionTimeLabel} signerLabel={signerLabel} warning={sessionWarning} />
+					<SessionChip
+						timeLabel={sessionTimeLabel}
+						signerLabel={signerLabel}
+						warning={sessionWarning}
+						onActivate={() => (isOpen ? close() : open())}
+						isActive={isOpen}
+						panelId="wallet-slide-dialog"
+					/>
 
 					<button
 						type="button"
@@ -171,7 +168,7 @@ export function ProposalsDashboardScreen() {
 			/>
 
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={close} />
+				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
 					balanceSats={balanceHook.data?.confirmedSats ?? 0}
@@ -195,49 +192,4 @@ export function ProposalsDashboardScreen() {
 
 function hasReachedQuorum(proposal: Proposal): boolean {
 	return proposal.status === 'pending' && proposal.signatures.length >= proposal.requiredSignatures
-}
-
-function SessionChip({
-	timeLabel,
-	signerLabel,
-	warning,
-}: {
-	timeLabel: string
-	signerLabel: string
-	warning: boolean
-}) {
-	return (
-		<span
-			className="inline-flex items-center gap-2 rounded-full border px-3 py-1.25 text-[12px] whitespace-nowrap flex-none transition"
-			style={
-				warning
-					? {
-							background: '#fffbeb',
-							borderColor: '#fde68a',
-							color: '#d97706',
-						}
-					: {
-							background: '#f8f8fb',
-							borderColor: '#e5e7eb',
-							color: '#111827',
-						}
-			}
-		>
-			{warning ? (
-				<ClockSessionWarningIcon width={12} height={12} className="block shrink-0" />
-			) : (
-				<ClockSessionDefaultIcon width={12} height={12} className="block shrink-0" />
-			)}
-			<span className="font-mono text-[11px] font-medium">Session · {timeLabel}</span>
-			<span className="h-3 w-px" style={{ background: warning ? '#fde68a' : '#e5e7eb' }} aria-hidden="true" />
-			{warning ? (
-				<UsbSessionWarningIcon width={12} height={12} className="block shrink-0" />
-			) : (
-				<UsbSessionDefaultIcon width={12} height={12} className="block shrink-0" />
-			)}
-			<span className="font-mono text-[11px]" style={{ color: warning ? '#d97706' : '#6b7280' }}>
-				{signerLabel}
-			</span>
-		</span>
-	)
 }

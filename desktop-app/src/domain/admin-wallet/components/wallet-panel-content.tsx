@@ -53,29 +53,43 @@ export function WalletPanelContent({
 	}
 
 	return (
-		<div className="flex flex-col gap-0 overflow-y-auto">
+		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 			<WalletBalance balanceSats={balanceSats} isLoading={isBalanceLoading} />
-			<div className="px-5 py-3">
+
+			<div className="px-[18px] pt-[18px]">
 				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
 			</div>
-			<AddressesWithBalanceList
-				rows={addressRows}
-				isLoading={addressRowsLoading}
-				error={addressRowsError}
-				isExpanded={expandedSection === 'addresses'}
-				onToggle={onToggleAddresses}
-			/>
-			<div className="px-5 py-3">
+
+			<div className="px-[18px] pt-[18px]">
 				<ReceiveSection address={receiveAddress} isLoading={isAddressesLoading} />
 			</div>
-			<div className="px-5 py-3">
+
+			<div className="px-[18px] pt-[18px]">
 				<TxHistoryList />
 			</div>
-			<div className="px-5 py-3">
-				<SendPlaceholder />
-			</div>
-			<div className="px-5 py-3">
-				<SyncChip syncStatus={syncStatus} isRefreshing={isSyncRefreshing} error={syncError} onRefresh={onRefreshSync} />
+
+			<div className="mt-[18px] border-t border-[#f3f4f6] pt-3">
+				<p className="px-[18px] pb-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9ca3af]">
+					Admin tools
+				</p>
+				<AddressesWithBalanceList
+					rows={addressRows}
+					isLoading={addressRowsLoading}
+					error={addressRowsError}
+					isExpanded={expandedSection === 'addresses'}
+					onToggle={onToggleAddresses}
+				/>
+				<div className="px-[18px] py-3">
+					<SendPlaceholder />
+				</div>
+				<div className="px-[18px] pb-4 pt-1">
+					<SyncChip
+						syncStatus={syncStatus}
+						isRefreshing={isSyncRefreshing}
+						error={syncError}
+						onRefresh={onRefreshSync}
+					/>
+				</div>
 			</div>
 		</div>
 	)

@@ -11,30 +11,36 @@ export function WalletBalance({ balanceSats, isLoading }: WalletBalanceProps) {
 
 	if (isLoading) {
 		return (
-			<div className="px-5 py-4">
-				<div className="mb-1 h-7 w-32 animate-pulse rounded bg-[#e5e7eb]" />
-				<div className="h-4 w-20 animate-pulse rounded bg-[#e5e7eb]" />
+			<div className="px-[18px] pt-[18px]">
+				<div className="mb-2 h-8 w-44 animate-pulse rounded bg-[#e5e7eb]" />
+				<div className="h-4 w-24 animate-pulse rounded bg-[#e5e7eb]" />
 			</div>
 		)
 	}
 
-	const primaryValue = showSats ? `${balanceSats.toLocaleString()} sats` : `${formatBtcFromSats(balanceSats)} BTC`
-
-	const secondaryValue = showSats ? `${formatBtcFromSats(balanceSats)} BTC` : `${balanceSats.toLocaleString()} sats`
+	const btcStr = `${formatBtcFromSats(balanceSats)} BTC`
+	const satsStr = `${balanceSats.toLocaleString()} sats`
+	const primary = showSats ? satsStr : btcStr
+	const secondary = showSats ? btcStr : satsStr
 
 	return (
-		<div className="px-5 py-4">
-			<p className="text-[22px] font-semibold leading-tight text-[#111827]">{primaryValue}</p>
-			<div className="mt-1 flex items-center gap-2">
-				<p className="text-[13px] text-[#6b7280]">{secondaryValue}</p>
-				<button
-					type="button"
-					onClick={() => setShowSats((prev) => !prev)}
-					className="rounded px-1.5 py-0.5 text-[11px] font-medium text-[#6366f1] transition hover:bg-[#eef2ff]"
-				>
-					{showSats ? 'Show BTC' : 'Show sats'}
-				</button>
+		<div className="flex-none px-[18px] pt-[18px]">
+			<div className="flex items-baseline gap-2 flex-wrap">
+				<span className="font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] text-[#111827]">
+					{showSats ? balanceSats.toLocaleString() : formatBtcFromSats(balanceSats)}
+				</span>
+				<span className="text-[13px] font-medium text-[#6b7280]">{showSats ? 'sats' : 'BTC'}</span>
 			</div>
+			<button
+				type="button"
+				onClick={() => setShowSats((prev) => !prev)}
+				aria-pressed={showSats}
+				className="mt-2 cursor-pointer bg-transparent p-0 text-[12px] text-[#7c6fcd] underline underline-offset-2 transition hover:text-[#5a4fb3]"
+			>
+				Show {showSats ? 'BTC' : 'sats'}
+			</button>
+			<div className="mt-1.5 font-mono text-[12px] text-[#9ca3af]">{secondary}</div>
+			<span className="sr-only">Primary balance: {primary}</span>
 		</div>
 	)
 }

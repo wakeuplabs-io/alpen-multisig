@@ -17,13 +17,13 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'RpcUnreachable':
 			return {
 				title: 'Bitcoin node unreachable',
-				body: 'Cannot reach Bitcoin node. Check BITCOIN_RPC_URL.',
+				body: `Cannot reach Bitcoin node. Check BITCOIN_RPC_URL.${err.message ? ` (${err.message})` : ''}`,
 				severity: 'warning',
 			}
 		case 'RpcAuthFailed':
 			return {
 				title: 'RPC auth failed',
-				body: 'Bitcoin RPC authentication failed. Check BITCOIN_RPC_USER and BITCOIN_RPC_PASS.',
+				body: `Bitcoin RPC authentication failed. Check BITCOIN_RPC_USER and BITCOIN_RPC_PASS.${err.message ? ` (${err.message})` : ''}`,
 				severity: 'warning',
 			}
 		case 'DescriptorParseError':

@@ -82,9 +82,8 @@ export function WalletPanel({ isOpen, onClose, panelId = 'wallet-slide-dialog', 
 			{/* Backdrop */}
 			<div
 				className={[
-					'fixed inset-0 z-40 bg-black/40',
-					'transition-all ease-in-out',
-					`duration-[${WALLET_SLIDE_TRANSITION_MS}ms]`,
+					'fixed inset-0 z-40 bg-black/20',
+					'transition-opacity ease-in-out duration-200',
 					entered ? 'opacity-100' : 'opacity-0',
 				].join(' ')}
 				onClick={onClose}
@@ -99,10 +98,11 @@ export function WalletPanel({ isOpen, onClose, panelId = 'wallet-slide-dialog', 
 				aria-modal="true"
 				aria-labelledby="wallet-panel-title"
 				className={[
-					'fixed inset-y-0 right-0 z-50 w-80 sm:w-96 bg-white shadow-xl flex flex-col',
-					'transition-all ease-in-out',
+					'fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col border-l border-[#e5e7eb] bg-white',
+					'shadow-[-4px_0_24px_rgba(10,10,10,0.06)]',
+					'transition-transform ease-in-out',
 					`duration-[${WALLET_SLIDE_TRANSITION_MS}ms]`,
-					entered ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0',
+					entered ? 'translate-x-0' : 'translate-x-full',
 				].join(' ')}
 			>
 				{children}
