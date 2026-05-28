@@ -157,6 +157,14 @@ fn secs_to_iso8601(secs: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
+fn rpc_error_from_message(msg: String) -> AdminWalletError {
+    if msg.contains("401") || msg.contains("Unauthorized") {
+        AdminWalletError::RpcAuthFailed { message: msg }
+    } else {
+        AdminWalletError::RpcUnreachable { message: msg }
+    }
+}
+
 fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
@@ -261,14 +269,7 @@ impl WalletService {
             &self.rpc_url,
             Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
         )
-        .map_err(|e| {
-            let msg = e.to_string();
-            if msg.contains("401") || msg.contains("Unauthorized") {
-                AdminWalletError::RpcAuthFailed { message: msg }
-            } else {
-                AdminWalletError::RpcUnreachable { message: msg }
-            }
-        })?;
+        .map_err(|e| rpc_error_from_message(e.to_string()))?;
 
         let mut wallet = self.wallet.lock().await;
         let checkpoint = wallet.latest_checkpoint();
@@ -288,14 +289,7 @@ impl WalletService {
                         })?;
                 }
                 Ok(None) => break,
-                Err(e) => {
-                    let msg = e.to_string();
-                    return Err(if msg.contains("401") || msg.contains("Unauthorized") {
-                        AdminWalletError::RpcAuthFailed { message: msg }
-                    } else {
-                        AdminWalletError::RpcUnreachable { message: msg }
-                    });
-                }
+                Err(e) => return Err(rpc_error_from_message(e.to_string())),
             }
         }
 
@@ -316,6 +310,29 @@ impl WalletService {
         state.last_error = None;
 
         Ok(())
+    }
+
+    async fn build_and_sign_tx(
+        &self,
+        commit_addr: bdk_wallet::bitcoin::Address,
+        amount_sats: u64,
+        fee_rate: bdk_wallet::bitcoin::FeeRate,
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
+        let mut wallet = self.wallet.lock().await;
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(
+            commit_addr.script_pubkey(),
+            bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
+        );
+        tx_builder.fee_rate(fee_rate);
+        let mut psbt = tx_builder
+            .finish()
+            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+        wallet
+            .sign(&mut psbt, bdk_wallet::SignOptions::default())
+            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+        psbt.extract_tx()
+            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))
     }
 
     /// Spawn the background sync loop once (idempotent). Must be called on first IPC invocation.
@@ -459,23 +476,9 @@ impl WalletService {
         let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
             .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
 
-        let tx = {
-            let mut wallet = self.wallet.lock().await;
-            let mut tx_builder = wallet.build_tx();
-            tx_builder.add_recipient(
-                commit_addr.script_pubkey(),
-                bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
-            );
-            tx_builder.fee_rate(fee_rate_val);
-            let mut psbt = tx_builder
-                .finish()
-                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
-            wallet
-                .sign(&mut psbt, bdk_wallet::SignOptions::default())
-                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
-            psbt.extract_tx()
-                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
-        };
+        let tx = self
+            .build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
+            .await?;
 
         // 4. Broadcast via RPC
         let rpc = Client::new(
@@ -503,13 +506,15 @@ impl WalletService {
 
     /// Guard: returns Disabled unless running on regtest with dev-mnemonic signing enabled.
     pub fn check_enabled() -> Result<(), AdminWalletError> {
-        let bitcoin_network = std::env::var("BITCOIN_NETWORK").unwrap_or_default();
-        let allow_dev = std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").unwrap_or_default();
+        let is_regtest = std::env::var("BITCOIN_NETWORK").unwrap_or_default() == "regtest";
+        let dev_signing_allowed =
+            std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").unwrap_or_default() == "1";
 
-        if bitcoin_network != "regtest" || allow_dev != "1" {
-            return Err(AdminWalletError::Disabled);
+        if is_regtest && dev_signing_allowed {
+            Ok(())
+        } else {
+            Err(AdminWalletError::Disabled)
         }
-        Ok(())
     }
 }
 

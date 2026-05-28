@@ -222,6 +222,7 @@ mod tests {
     /// Each function is referenced with its expected parameter types — wrong State type
     /// or missing import causes a compile error, proving the migration is complete.
     #[test]
+    #[allow(clippy::let_underscore_future)]
     fn six_ipc_commands_use_wallet_session_state() {
         use desktop_app::application::wallet_session::WalletSession;
         // Async commands: reference the fn item; the compiler checks the State<WalletSession>
