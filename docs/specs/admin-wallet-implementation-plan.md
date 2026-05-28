@@ -33,6 +33,8 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
+| 3.7 | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — Admin Wallet derives from the same seed the user logged in with; retires `ADMIN_WALLET_REGTEST_MNEMONIC` for the "Palabras" path |
+| 3.8 | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 6 | Receive rotation + Admin ID UI | PRD §4.1–4.2, §4.3.4 |
@@ -75,7 +77,9 @@ flowchart LR
   P1[Phase 1 Commit funding] --> P2[Phase 2 Read path]
   P2 --> P3[Phase 3 UI shell]
   P3 --> P35[Phase 3.5 Retire operator hot key]
-  P35 --> P4[Phase 4 Send happy path]
+  P35 --> P37[Phase 3.7 Session-bound wallet mnemonic]
+  P37 --> P38[Phase 3.8 Watch-only wallet HW]
+  P38 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
   P5 --> P6[Phase 6 Receive + Admin ID UI]
   P6 --> P7[Phase 7 HW adapters]
@@ -193,6 +197,89 @@ flowchart LR
 
 ---
 
+### Phase 3.7 — Session-bound Admin Wallet (mnemonic login)
+
+**Goal:** Bind the `WalletService` lifecycle to the user's login session so that when the user logs in with "Palabras" (dev mnemonic), the Admin Wallet is derived from *that same mnemonic* — not from a separate `ADMIN_WALLET_REGTEST_MNEMONIC` env var. Closes the PRD §3.2 gap where Admin Wallet and Admin ID were sourced independently.
+
+**Rationale:** The PRD specifies a single hardware wallet as the source of both Admin ID (`m/84'/0'/73'/0/0`) and Admin Wallet (`m/86'/0'/73'/n/n`). Today `ADMIN_WALLET_REGTEST_MNEMONIC` is an independent env var with no runtime enforcement that it matches the login session. Any mismatch silently shows the wrong wallet. Phase 3.7 makes the Admin Wallet a first-class property of the session.
+
+**In scope**
+
+- `WalletService` becomes session-scoped: initialized at login time from the session mnemonic, cleared at logout. Tauri managed state changes from `Arc<WalletService>` (fixed at startup) to `Arc<RwLock<Option<WalletService>>>` (replaced per session).
+- Mnemonic login (`auth_complete` IPC path): after successful orchestrator auth, derive and register the `WalletService` from the same mnemonic used to derive the Admin ID. Mnemonic never leaves Rust.
+- Logout (`auth_logout` IPC path): drop the `WalletService` from managed state; panel returns to `Disabled` state.
+- `ADMIN_WALLET_REGTEST_MNEMONIC` env var demoted to **CI/headless fallback only** — used only when no session is active (e.g. integration tests that call wallet IPC without a login flow). Documented as such; no longer part of the normal dev setup.
+- `ALLOW_DEV_MNEMONIC_SIGNING` guard remains but is now implied by the mnemonic login type; still required as an explicit opt-in for regtest.
+- HW login path: `WalletService` is not initialized (stays `None` / `Disabled`) until Phase 3.8 handles it.
+- Tests: session init/teardown unit tests; regression that balance and addresses returned by IPC match the session mnemonic's derived wallet, not the env var wallet.
+
+**Out of scope**
+
+- HW login (Phase 3.8).
+- Send/signing from the session wallet (Phase 4+).
+- Removing `ADMIN_WALLET_REGTEST_MNEMONIC` entirely (kept for CI; full removal in Phase 9).
+
+**Done when**
+
+- Logging in with mnemonic A and separately configuring `ADMIN_WALLET_REGTEST_MNEMONIC=B` shows wallet A in the panel, not wallet B.
+- Logging out clears the wallet panel to `Disabled` state.
+- CI integration tests using `ADMIN_WALLET_REGTEST_MNEMONIC` as headless fallback continue to pass unmodified.
+- `cargo test --workspace` and full frontend CI green.
+
+**Primary code areas**
+
+- `desktop-app/src-tauri/src/main.rs` — managed state type change
+- `desktop-app/src-tauri/src/commands/authentication.rs` — `auth_complete` initializes `WalletService`; `auth_logout` drops it
+- `desktop-app/src-tauri/src/application/wallet_service.rs` — session lifecycle API
+- `desktop-app/src-tauri/src/commands/admin_wallet.rs` — all commands guard against `None` session (return `Disabled`)
+
+**Risks / notes**
+
+- **Concurrent IPC calls during login**: brief window between `auth_complete` and first wallet IPC. Commands must handle `None` state gracefully (return `Disabled`, not panic).
+- **Phase 7 future**: HW login will call the same session-init slot but pass an xpub instead of a mnemonic. The `WalletService` API surface established here is the extension point Phase 7 fills.
+
+---
+
+### Phase 3.8 — Watch-only Admin Wallet (HW login)
+
+**Goal:** When the user logs in with a hardware wallet (Trezor/Ledger), derive a **watch-only** BDK wallet from the device xpub at `m/86'/0'/73'` and register it as the session's `WalletService`. Balance and addresses become visible; all signing operations (Send, commit funding, reveal) remain disabled with a clear "Connect hardware wallet to sign" message. Phase 7 completes this by enabling PSBT-based signing.
+
+**Rationale:** After Phase 3.7, HW users see the `Disabled` state in the wallet panel — a regression from the PRD intent. A watch-only wallet is trivially derivable from the xpub that the existing Trezor/Ledger IPC already surfaces, and gives HW users the same read-only visibility mnemonic users have, without requiring any Phase 7 signing infrastructure.
+
+**In scope**
+
+- Extend `auth_complete` (HW path): after successful orchestrator auth with a HW-derived Admin ID, also call the Trezor/Ledger IPC to retrieve the account xpub at `m/86'/0'/73'` and construct a watch-only `bdk_wallet::Wallet` (descriptor from xpub, no private key material).
+- `WalletService` initialized from watch-only descriptor; `can_sign()` → `false`. All existing read IPC (balance, UTXOs, addresses, sync) works identically.
+- Send and commit-funding IPC commands return a new `WalletError::ReadOnly` variant when `can_sign()` is false; UI surfaces "Hardware wallet required to sign".
+- Logout clears the watch-only wallet from managed state (same as Phase 3.7).
+- Tests: unit test that a watch-only `WalletService` returns `ReadOnly` on sign attempts; read-path IPC returns data normally.
+
+**Out of scope**
+
+- PSBT construction and HW signing (Phase 7).
+- Trezor/Ledger xpub export IPC if it does not already exist — if missing, scope it minimally here; do not build full PSBT flow.
+
+**Done when**
+
+- HW login shows correct balance and funded addresses in the wallet panel.
+- Send button and broadcast commit are disabled with "Hardware wallet required to sign" (not hidden — visible but inoperable).
+- Mnemonic login path unchanged; watch-only path has zero impact on Phase 3.7 behavior.
+- `cargo test --workspace` and full frontend CI green.
+
+**Primary code areas**
+
+- `desktop-app/src-tauri/src/commands/authentication.rs` — HW `auth_complete` branch
+- `desktop-app/src-tauri/src/application/wallet_service.rs` — `can_sign()` predicate; `WalletError::ReadOnly`
+- `desktop-app/src-tauri/src/infrastructure/hw_wallet/` — xpub extraction (Trezor/Ledger)
+- `desktop-app/src/domain/admin-wallet/` — UI: disable Send / show "requires HW" when `canSign: false`
+
+**Risks / notes**
+
+- **xpub IPC availability**: Trezor adapter in `hw_wallet/trezor.rs` may not yet expose account-level xpub export. Needs investigation at implementation time; if missing it is a small addition scoped to this phase.
+- **Phase 7 handoff**: Phase 7 replaces the watch-only descriptor with a PSBT signer at the same managed state slot. No further changes to `auth_complete` or `WalletService` API are expected.
+
+---
+
 ### Phase 4 — Send BTC happy path (regtest, dev mnemonic)
 
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee default from chain RPC, change to `…/1/*`).
@@ -298,7 +385,7 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
 | `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Required while CI keeps legacy funding (Phases 1–4)**; deprecate once Phase 4 (Send) proves parity and CI migrates to `admin_wallet` |
 | `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | Phase 1+ |
-| `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed; also source of the SPS-50 reveal internal key from Phase 3.5 onward | Regtest only; removed in Phase 9 (release builds) |
+| `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed; also source of the SPS-50 reveal internal key from Phase 3.5 onward. **From Phase 3.7 onward: CI/headless fallback only** — normal dev/prod flow derives the wallet from the login session instead | Regtest only; CI fallback from Phase 3.7; removed in Phase 9 (release builds) |
 | `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing — covers both Admin Wallet funding (Phase 1) and reveal signing (Phase 3.5+) | Align with existing `dev_secrets.rs` |
 | `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Dev hot key for SPS-50 commit/reveal internal key; superseded by Admin Wallet derivation at `m/86'/0'/73'/2/0` | Retired |
 | `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |
