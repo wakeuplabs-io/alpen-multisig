@@ -11,7 +11,7 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'Disabled':
 			return {
 				title: 'Admin Wallet not enabled',
-				body: 'Admin Wallet is not enabled for this environment. Set COMMIT_FUNDING=admin_wallet, BITCOIN_NETWORK=regtest, and ALLOW_DEV_MNEMONIC_SIGNING=1 to enable.',
+				body: 'Admin Wallet is not enabled for this environment. Set BITCOIN_NETWORK=regtest and ALLOW_DEV_MNEMONIC_SIGNING=1 to enable.',
 				severity: 'info',
 			}
 		case 'RpcUnreachable':

@@ -1044,11 +1044,6 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::infrastructure::bitcoin_rpc::BitcoinRpcClient for MockBtcRpc {
-        async fn send_to_address(&self, _: &str, _: u64, _: u64) -> Result<String, String> {
-            // Should NOT be called in this test — CommitFunding takes over
-            panic!("send_to_address must not be called when CommitFunding is injected");
-        }
-
         async fn send_raw_transaction(&self, _: &str) -> Result<String, String> {
             Ok("reveal-txid-mock".to_string())
         }
@@ -1236,7 +1231,7 @@ mod tests {
 
         assert!(
             spy.was_called(),
-            "CommitFunding::fund_commit must be called instead of btc_rpc.send_to_address"
+            "CommitFunding::fund_commit must be called to fund the commit (Admin Wallet path)"
         );
     }
 

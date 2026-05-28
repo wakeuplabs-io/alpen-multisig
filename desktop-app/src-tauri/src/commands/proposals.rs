@@ -1,4 +1,4 @@
-use desktop_app::application::commit_funding::select_commit_funding;
+use desktop_app::application::commit_funding::BdkAdminWalletMnemonic;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
@@ -315,12 +315,7 @@ pub async fn proposals_prepare_broadcast(
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
     let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(
-        &env.btc_rpc_url,
-        env.btc_wallet_name.as_deref(),
-        &env.btc_rpc_user,
-        &env.btc_rpc_pass,
-    );
+    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
         proposals::prepare_broadcast_local(
@@ -351,16 +346,10 @@ pub async fn proposals_broadcast(
     let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
-        env.btc_wallet_name.as_deref(),
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
-    let commit_funding = select_commit_funding(
-        btc_rpc.clone(),
-        env.network,
-        Some(std::sync::Arc::clone(&wallet_service)),
-    )
-    .map_err(|e| e.to_string())?;
+    let commit_funding = BdkAdminWalletMnemonic::new(std::sync::Arc::clone(&wallet_service));
 
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         &client,
@@ -372,7 +361,7 @@ pub async fn proposals_broadcast(
         &input.action_id,
         env.confirm_poll_interval_ms,
         env.confirm_timeout_ms,
-        commit_funding.as_ref(),
+        &commit_funding,
     )
     .await
     .map_err(map_broadcast_error)?;

@@ -14,8 +14,8 @@ pub struct AdminWalletInfo {
 ///
 /// Triggers a sync (which applies `WalletService::check_enabled` guard),
 /// then returns the confirmed balance and external address index 0.
-/// Returns `Err(Disabled)` if any of `COMMIT_FUNDING=admin_wallet`,
-/// `BITCOIN_NETWORK=regtest`, `ALLOW_DEV_MNEMONIC_SIGNING=1` is missing.
+/// Returns `Err(Disabled)` if `BITCOIN_NETWORK=regtest` or `ALLOW_DEV_MNEMONIC_SIGNING=1`
+/// is not set.
 pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
     svc.sync().await.map_err(serialize_wallet_error)?;
     let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
@@ -113,20 +113,16 @@ mod tests {
     }
 
     fn clear_guard_env_vars() {
-        std::env::remove_var("COMMIT_FUNDING");
         std::env::remove_var("BITCOIN_NETWORK");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
     }
 
-    /// REGRESSION (UTXOs:0 with balance>0 bug): `get_admin_wallet_info` and
-    /// `WalletService.sync()` MUST share the same guard. Before this fix the two
-    /// paths diverged — info accepted only `COMMIT_FUNDING=admin_wallet`, sync
-    /// required all three env vars — causing balance to render while UTXOs/list
-    /// silently returned `[]` when `ALLOW_DEV_MNEMONIC_SIGNING` was unset.
+    /// REGRESSION: `admin_wallet_info` and `WalletService::sync()` MUST share the same guard.
+    /// If `ALLOW_DEV_MNEMONIC_SIGNING` is absent the guard rejects — this prevents the broadcast
+    /// screen from showing a balance while UTXOs/list silently return empty.
     #[tokio::test]
     async fn admin_wallet_info_rejects_when_allow_dev_mnemonic_signing_missing() {
         let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
@@ -136,9 +132,7 @@ mod tests {
         clear_guard_env_vars();
         assert!(
             result.is_err(),
-            "admin_wallet_info must reject when ALLOW_DEV_MNEMONIC_SIGNING is absent \
-             (same guard as WalletService.sync) — otherwise the broadcast screen shows \
-             balance from one wallet and UTXOs from another. Got: {:?}",
+            "admin_wallet_info must reject when ALLOW_DEV_MNEMONIC_SIGNING is absent. Got: {:?}",
             result
         );
     }
@@ -146,7 +140,6 @@ mod tests {
     #[tokio::test]
     async fn admin_wallet_info_rejects_when_bitcoin_network_not_regtest() {
         let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "bitcoin");
 
@@ -154,27 +147,10 @@ mod tests {
         let result = admin_wallet_info(&svc).await;
 
         clear_guard_env_vars();
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             result.is_err(),
             "admin_wallet_info must reject when BITCOIN_NETWORK != regtest. Got: {:?}",
-            result
-        );
-    }
-
-    #[tokio::test]
-    async fn admin_wallet_info_rejects_when_commit_funding_is_not_admin_wallet() {
-        let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("COMMIT_FUNDING", "bitcoind");
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-
-        let svc = build_test_service();
-        let result = admin_wallet_info(&svc).await;
-
-        clear_guard_env_vars();
-        assert!(
-            result.is_err(),
-            "admin_wallet_info must reject when COMMIT_FUNDING != admin_wallet. Got: {:?}",
             result
         );
     }

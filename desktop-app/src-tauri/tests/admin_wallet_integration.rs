@@ -7,7 +7,7 @@
 /// Run explicitly:
 ///   BITCOIN_RPC_URL=http://127.0.0.1:18443 \
 ///   BITCOIN_RPC_USER=user BITCOIN_RPC_PASS=pass \
-///   COMMIT_FUNDING=admin_wallet BITCOIN_NETWORK=regtest ALLOW_DEV_MNEMONIC_SIGNING=1 \
+///   BITCOIN_NETWORK=regtest ALLOW_DEV_MNEMONIC_SIGNING=1 \
 ///   cargo test -p desktop-app --test admin_wallet_integration -- --ignored
 use desktop_app::application::wallet_service::WalletService;
 use desktop_app::infrastructure::admin_wallet::AdminWalletError;
@@ -17,13 +17,11 @@ use std::sync::Mutex;
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn clear_guard_env_vars() {
-    std::env::remove_var("COMMIT_FUNDING");
     std::env::remove_var("BITCOIN_NETWORK");
     std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 }
 
 fn set_all_guard_env_vars() {
-    std::env::set_var("COMMIT_FUNDING", "admin_wallet");
     std::env::set_var("BITCOIN_NETWORK", "regtest");
     std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
 }
@@ -31,24 +29,8 @@ fn set_all_guard_env_vars() {
 // ── Guard tests (no bitcoind required) ────────────────────────────────────────
 
 #[test]
-fn check_enabled_returns_disabled_when_commit_funding_missing() {
-    let _guard = ENV_LOCK.lock().unwrap();
-    set_all_guard_env_vars();
-    std::env::remove_var("COMMIT_FUNDING");
-
-    let result = WalletService::check_enabled();
-
-    clear_guard_env_vars();
-    assert!(
-        matches!(result, Err(AdminWalletError::Disabled)),
-        "Expected Disabled when COMMIT_FUNDING is absent, got: {:?}",
-        result
-    );
-}
-
-#[test]
 fn check_enabled_returns_disabled_when_bitcoin_network_missing() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_all_guard_env_vars();
     std::env::remove_var("BITCOIN_NETWORK");
 
@@ -64,7 +46,7 @@ fn check_enabled_returns_disabled_when_bitcoin_network_missing() {
 
 #[test]
 fn check_enabled_returns_disabled_when_allow_dev_mnemonic_signing_missing() {
-    let _guard = ENV_LOCK.lock().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_all_guard_env_vars();
     std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
@@ -79,8 +61,8 @@ fn check_enabled_returns_disabled_when_allow_dev_mnemonic_signing_missing() {
 }
 
 #[test]
-fn check_enabled_returns_ok_when_all_guard_conditions_met() {
-    let _guard = ENV_LOCK.lock().unwrap();
+fn check_enabled_returns_ok_when_guard_conditions_met() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_all_guard_env_vars();
 
     let result = WalletService::check_enabled();
@@ -88,7 +70,7 @@ fn check_enabled_returns_ok_when_all_guard_conditions_met() {
     clear_guard_env_vars();
     assert!(
         result.is_ok(),
-        "Expected Ok when all guard env vars set, got: {:?}",
+        "Expected Ok with BITCOIN_NETWORK=regtest + ALLOW_DEV_MNEMONIC_SIGNING=1, got: {:?}",
         result
     );
 }

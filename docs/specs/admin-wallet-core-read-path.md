@@ -1,5 +1,10 @@
 # Spec: Admin Wallet Core Read Path (Phase 2)
 
+> **⚠️ Guard condition updated in Phase 3.6** ([`admin-wallet-commit-funding-only.md`](./admin-wallet-commit-funding-only.md)).
+> References below to `COMMIT_FUNDING=admin_wallet` as an enablement condition are obsolete: the
+> `COMMIT_FUNDING` env var was removed. `AdminWalletError::Disabled` / `WalletService::check_enabled()`
+> now gate on `BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1` only. The read-path design is otherwise unchanged.
+
 ## Objective
 
 Expose BDK-backed **read APIs** for the Admin Wallet over Tauri IPC so that the desktop app — and the Phase 3 WalletPanel that will consume them — can observe balance, UTXOs, derived addresses, and chain-sync status without ever leaving the Rust process for secrets. This is the **data backbone** of the Admin Wallet program: no Send, no signing, no UI shell beyond a small extension of Phase 1's broadcast card.
