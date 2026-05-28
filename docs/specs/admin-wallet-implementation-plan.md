@@ -33,7 +33,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
-| 3.6 | Admin Wallet–only commit funding | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
+| 3.6 | Admin Wallet–only commit funding ✅ | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
 | 3.7 | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — Admin Wallet derives from the same seed the user logged in with; retires `ADMIN_WALLET_REGTEST_MNEMONIC` for the "Palabras" path |
 | 3.8 | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
@@ -199,7 +199,10 @@ flowchart LR
 
 ---
 
-### Phase 3.6 — Admin Wallet–only commit funding
+### Phase 3.6 — Admin Wallet–only commit funding ✅
+
+**Status:** Complete — merged to `develop` as PR #187 (08dd1d4).
+**Spec:** [`admin-wallet-commit-funding-only.md`](./admin-wallet-commit-funding-only.md).
 
 **Goal:** Remove the `BitcoindSendToAddress` variant and the `COMMIT_FUNDING` environment variable toggle. From this phase onward, the commit transaction is always funded by the Admin Wallet (BDK), with no fallback to node-wallet `sendtoaddress`. This eliminates the dual-path bifurcation introduced in Phase 1 and ensures all development and testing work against the real Admin Wallet funding path.
 
