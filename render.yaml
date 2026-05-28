@@ -53,5 +53,3 @@ services:
         value: "1"
       - key: ALLOW_DEV_MNEMONIC_SIGNING
         value: "1"
-      - key: ALLOW_DEV_OPERATOR_KEY
-        value: "1"
