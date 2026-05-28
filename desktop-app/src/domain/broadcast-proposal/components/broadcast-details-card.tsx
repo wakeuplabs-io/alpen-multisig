@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
 import type { AdminWalletError } from '@/api/admin-wallet'
-import { CopyClipboardIcon } from '@/assets/icons'
+import { CopyButton } from '@/components/copy-button'
+import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
 
 type AdminWalletInfoView = {
@@ -18,32 +19,6 @@ type Props = {
 	utxoCount?: number
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
-}
-
-function CopyButton({ text }: { text: string }) {
-	const [copied, setCopied] = useState(false)
-
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		})
-	}
-
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-		>
-			<CopyClipboardIcon width={12} height={12} />
-			{copied ? 'Copied!' : 'Copy'}
-		</button>
-	)
-}
-
-function SectionLabel({ children }: { children: string }) {
-	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
 function relativeTime(isoStr: string): string {
