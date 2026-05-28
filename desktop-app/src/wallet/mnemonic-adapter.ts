@@ -7,7 +7,11 @@ export type MnemonicAdapterOptions = {
 	derivationPath?: string
 }
 
-export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapter {
+export type MnemonicAdapter = WalletAdapter & {
+	getMnemonic(): string
+}
+
+export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAdapter {
 	let publicKeyHex: string | null = null
 	let derivationPath = opts.derivationPath ?? "m/84'/0'/73'/0/0"
 	let selectedAddress: string | null = null
@@ -71,6 +75,10 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapt
 				signatureHex: result.data.signatureHex,
 				signatureFormat: 'raw-ecdsa',
 			}
+		},
+
+		getMnemonic(): string {
+			return opts.mnemonic
 		},
 
 		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
