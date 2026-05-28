@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useAdminWalletAddresses } from './use-admin-wallet-addresses'
 import { useAdminWalletUtxos } from './use-admin-wallet-utxos'
 import { composeAddressesWithBalance, type AddressWithBalanceView } from '../model/compose-addresses-with-balance'
@@ -32,10 +33,10 @@ export function useAddressesWithBalance(opts?: {
 			? composeAddressesWithBalance(addressesHook.data, utxosHook.data)
 			: null
 
-	const refresh = () => {
+	const refresh = useCallback(() => {
 		addressesHook.refresh()
 		utxosHook.refresh()
-	}
+	}, [addressesHook, utxosHook])
 
 	return { data, isLoading, error, refresh }
 }

@@ -23,14 +23,7 @@ import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-address
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelTrigger } from '@/domain/admin-wallet/components/wallet-panel-trigger'
-import { DisabledWalletCard } from '@/domain/admin-wallet/components/disabled-wallet-card'
-import { WalletBalance } from '@/domain/admin-wallet/components/wallet-balance'
-import { ReceiveAddressRow } from '@/domain/admin-wallet/components/receive-address-row'
-import { AddressesWithBalanceList } from '@/domain/admin-wallet/components/addresses-with-balance-list'
-import { ReceiveSection } from '@/domain/admin-wallet/components/receive-section'
-import { TxHistoryList } from '@/domain/admin-wallet/components/tx-history-list'
-import { SendPlaceholder } from '@/domain/admin-wallet/components/send-placeholder'
-import { SyncChip } from '@/domain/admin-wallet/components/sync-chip'
+import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 
 export function ProposalsDashboardScreen() {
 	const navigate = useNavigate()
@@ -179,42 +172,22 @@ export function ProposalsDashboardScreen() {
 
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
 				<WalletPanelHeader onClose={close} />
-				{walletDisabledError !== null ? (
-					<div className="p-4">
-						<DisabledWalletCard error={walletDisabledError} />
-					</div>
-				) : (
-					<div className="flex flex-col gap-0 overflow-y-auto">
-						<WalletBalance balanceSats={balanceHook.data?.confirmedSats ?? 0} isLoading={balanceHook.isLoading} />
-						<div className="px-5 py-3">
-							<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={addressesHook.isLoading} />
-						</div>
-						<AddressesWithBalanceList
-							rows={addressesWithBalanceHook.data}
-							isLoading={addressesWithBalanceHook.isLoading}
-							error={addressesWithBalanceHook.error}
-							isExpanded={expandedSection === 'addresses'}
-							onToggle={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
-						/>
-						<div className="px-5 py-3">
-							<ReceiveSection address={receiveAddress} isLoading={addressesHook.isLoading} />
-						</div>
-						<div className="px-5 py-3">
-							<TxHistoryList />
-						</div>
-						<div className="px-5 py-3">
-							<SendPlaceholder />
-						</div>
-						<div className="px-5 py-3">
-							<SyncChip
-								syncStatus={syncHook.syncStatus}
-								isRefreshing={syncHook.isLoading}
-								error={syncHook.error}
-								onRefresh={() => void syncHook.triggerSync()}
-							/>
-						</div>
-					</div>
-				)}
+				<WalletPanelContent
+					disabledError={walletDisabledError}
+					balanceSats={balanceHook.data?.confirmedSats ?? 0}
+					isBalanceLoading={balanceHook.isLoading}
+					receiveAddress={receiveAddress}
+					isAddressesLoading={addressesHook.isLoading}
+					addressRows={addressesWithBalanceHook.data}
+					addressRowsLoading={addressesWithBalanceHook.isLoading}
+					addressRowsError={addressesWithBalanceHook.error}
+					expandedSection={expandedSection}
+					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
+					syncStatus={syncHook.syncStatus}
+					isSyncRefreshing={syncHook.isLoading}
+					syncError={syncHook.error}
+					onRefreshSync={() => void syncHook.triggerSync()}
+				/>
 			</WalletPanel>
 		</ScreenShell>
 	)

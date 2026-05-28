@@ -25,11 +25,7 @@ export function ReceiveSection({ address, isLoading }: ReceiveSectionProps) {
 			{expanded && (
 				<div className="mt-3 space-y-2">
 					<SectionLabel>Deposit address</SectionLabel>
-					{address !== null ? (
-						<ReceiveAddressRow address={address} isLoading={isLoading} />
-					) : (
-						<ReceiveAddressRow address="" isLoading={isLoading ?? true} />
-					)}
+					<ReceiveAddressRow address={address ?? ''} isLoading={isLoading ?? address === null} />
 					<p className="text-[11px] text-[#9ca3af]">QR rendering arrives in Phase 6 (receive rotation).</p>
 				</div>
 			)}
