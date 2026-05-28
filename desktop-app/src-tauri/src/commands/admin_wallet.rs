@@ -2,7 +2,32 @@ use bdk_wallet::KeychainKind;
 use desktop_app::application::wallet_service::{
     AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
+use desktop_app::application::wallet_session::WalletSession;
 use std::sync::Arc;
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletSessionInitInput {
+    pub mnemonic: String,
+    pub passphrase: Option<String>,
+    pub network: Option<String>,
+}
+
+#[tauri::command]
+pub async fn wallet_session_init(
+    input: WalletSessionInitInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<(), String> {
+    desktop_app::infrastructure::dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
+    wallet_session
+        .init_from_mnemonic(
+            &input.mnemonic,
+            input.passphrase.as_deref(),
+            input.network.as_deref(),
+        )
+        .await
+        .map_err(serialize_wallet_error)
+}
 
 #[derive(Debug, serde::Serialize)]
 pub struct AdminWalletInfo {
@@ -152,6 +177,36 @@ mod tests {
             result.is_err(),
             "admin_wallet_info must reject when BITCOIN_NETWORK != regtest. Got: {:?}",
             result
+        );
+    }
+
+    /// Verifies wallet_session_init is importable (compile-time check).
+    #[test]
+    fn wallet_session_init_command_function_is_importable() {
+        // Verify the symbol is importable — compile-time existence check.
+        // (async fn cannot be cast to fn pointer; naming it is sufficient for existence check.)
+        let _f = wallet_session_init;
+        let _ = _f;
+    }
+
+    /// wallet_session_init must NOT appear in attach_production.
+    /// Verified by reading invoke.rs source at compile time via include_str!.
+    #[test]
+    fn wallet_session_init_not_in_attach_production() {
+        let invoke_src = include_str!("invoke.rs");
+        // Find attach_production block: everything from "fn attach_production" up to the
+        // closing of its invoke_handler! macro call.
+        let prod_start = invoke_src
+            .find("fn attach_production")
+            .expect("attach_production must exist in invoke.rs");
+        let prod_src = &invoke_src[prod_start..];
+        let prod_end = prod_src
+            .find("fn attach_with_dev_signing")
+            .unwrap_or(prod_src.len());
+        let prod_block = &prod_src[..prod_end];
+        assert!(
+            !prod_block.contains("wallet_session_init"),
+            "wallet_session_init must NOT appear in attach_production — found in: {prod_block}"
         );
     }
 
