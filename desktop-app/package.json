@@ -18,6 +18,7 @@
     "test:model-group-utxos-by-derivation": "tsx src/domain/admin-wallet/model/__tests__/group-utxos-by-derivation.test.ts",
     "test:model-compose-addresses-with-balance": "tsx src/domain/admin-wallet/model/__tests__/compose-addresses-with-balance.test.ts",
     "test:model-format-admin-wallet-error": "tsx src/domain/admin-wallet/model/__tests__/format-admin-wallet-error.test.ts",
+    "test:hooks-use-wallet-panel-state": "tsx src/domain/admin-wallet/hooks/__tests__/use-wallet-panel-state.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
