@@ -15,6 +15,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const FUND_AMOUNT_BTC = '0.01'
+// Explicit fee rate (sat/vB) so funding works on a fresh regtest chain where fee
+// estimation is unavailable and -fallbackfee is disabled (bitcoind error -6).
+const FUND_FEE_RATE_SAT_VB = '1'
 
 function runtestsDir() {
 	if (process.env.ALPEN_RUNTESTS_DIR) {
@@ -63,7 +66,9 @@ alpen_wait_bitcoind_rpc
 bitcoin-cli $CLI listwallets | grep -q asm-runner || \
   bitcoin-cli $CLI loadwallet asm-runner 2>/dev/null || \
   bitcoin-cli $CLI createwallet asm-runner
-bitcoin-cli $CLI -rpcwallet=asm-runner sendtoaddress "${address}" ${FUND_AMOUNT_BTC}
+# Pass fee_rate explicitly (sat/vB): a fresh regtest chain has no fee history and
+# -fallbackfee is off, so automatic estimation fails with -6.
+bitcoin-cli $CLI -rpcwallet=asm-runner -named sendtoaddress address="${address}" amount=${FUND_AMOUNT_BTC} fee_rate=${FUND_FEE_RATE_SAT_VB}
 CHANGE=$(bitcoin-cli $CLI -rpcwallet=asm-runner getnewaddress)
 bitcoin-cli $CLI generatetoaddress 1 "$CHANGE" >/dev/null
 echo "OK funded ${address} with ${FUND_AMOUNT_BTC} BTC"`,
