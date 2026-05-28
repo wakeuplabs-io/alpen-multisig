@@ -33,6 +33,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
+| 3.6 | Admin Wallet–only commit funding | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
 | 3.7 | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — Admin Wallet derives from the same seed the user logged in with; retires `ADMIN_WALLET_REGTEST_MNEMONIC` for the "Palabras" path |
 | 3.8 | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
@@ -77,7 +78,8 @@ flowchart LR
   P1[Phase 1 Commit funding] --> P2[Phase 2 Read path]
   P2 --> P3[Phase 3 UI shell]
   P3 --> P35[Phase 3.5 Retire operator hot key]
-  P35 --> P37[Phase 3.7 Session-bound wallet mnemonic]
+  P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
+  P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
   P38 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
@@ -194,6 +196,52 @@ flowchart LR
 - **Breaking change on regtest:** commit addresses change (different internal key). Acceptable because regtest state is ephemeral; document in changelog and reset E2E fixtures.
 - **No on-chain consequence in production:** no mainnet/testnet state exists yet; this is a one-time clean swap.
 - **Phase 7 future:** swaps the mnemonic-derived keypair for an HW-derived signature at the same path. No further changes to `broadcast_env.rs` or `broadcast_tx.rs` API.
+
+---
+
+### Phase 3.6 — Admin Wallet–only commit funding
+
+**Goal:** Remove the `BitcoindSendToAddress` variant and the `COMMIT_FUNDING` environment variable toggle. From this phase onward, the commit transaction is always funded by the Admin Wallet (BDK), with no fallback to node-wallet `sendtoaddress`. This eliminates the dual-path bifurcation introduced in Phase 1 and ensures all development and testing work against the real Admin Wallet funding path.
+
+**Rationale:** Phase 1 introduced `CommitFunding` as a pluggable trait to allow a gradual migration — CI/E2E could keep the legacy `sendtoaddress` path while the Admin Wallet path was validated. With Phase 3.5 complete (internal key consolidated) and Phase 3.7 (session-bound wallet) next in line, continuing to maintain two funding paths means all subsequent development — including Phase 4 Send and Phase 7 HW signing — would be built and tested against the wrong (legacy) path. Removing the bifurcation now ensures the Admin Wallet is the single source of truth for commit funding from this point forward.
+
+**In scope**
+
+- Remove `BitcoindSendToAddress` struct and its `CommitFunding` implementation from `application/commit_funding.rs`.
+- Remove the `select_commit_funding` factory function and the `COMMIT_FUNDING` env var dispatch logic.
+- `broadcast_commit_then_reveal` always uses `BdkAdminWalletMnemonic` (or its evolved `WalletService` form); no env-var switching.
+- Remove `COMMIT_FUNDING` and `BITCOIN_WALLET_NAME` from `.env.example`, runbooks, CI workflows, scripts, and staging config.
+- Update tests: remove tests that exercise `BitcoindSendToAddress` or the `bitcoind` mode; keep and strengthen BDK Admin Wallet funding tests.
+- CI pipeline migrated to use `admin_wallet` mode exclusively — `ADMIN_WALLET_REGTEST_MNEMONIC` + funded Admin Wallet address as the only funding path.
+- E2E regtest playbook updated: fund the Admin Wallet external address before running broadcast specs.
+
+**Out of scope**
+
+- Removing `ADMIN_WALLET_REGTEST_MNEMONIC` itself (Phase 9; or superseded by Phase 3.7 session binding for normal flows).
+- Session-binding the wallet to login (Phase 3.7).
+- Hardware wallet signing for commit (Phase 7).
+- `CommitFunding` trait itself may be retained as an abstraction if Phase 7 HW signing needs it — evaluate at implementation time. If the trait has no other implementors, remove it entirely.
+
+**Done when**
+
+- `BitcoindSendToAddress`, `select_commit_funding`, and `COMMIT_FUNDING` no longer exist anywhere in the codebase (code, env files, docs, CI, scripts).
+- `BITCOIN_WALLET_NAME` removed from all broadcast-related configuration (may be retained if still needed for other RPC calls — evaluate at implementation time).
+- On regtest with `ALLOW_DEV_MNEMONIC_SIGNING=1` and a funded Admin Wallet, commit and reveal succeed; orchestrator `PATCH` behavior unchanged.
+- CI green with the Admin Wallet as the sole commit funder.
+- `cargo test --workspace` and frontend CI pass.
+
+**Primary code areas**
+
+- `desktop-app/src-tauri/src/application/commit_funding.rs` — remove `BitcoindSendToAddress`, `select_commit_funding`, and `COMMIT_FUNDING` dispatch
+- `desktop-app/src-tauri/src/commands/proposals.rs` — wire directly to BDK funding path; remove `select_commit_funding` call
+- `desktop-app/.env.example`, CI workflows, `scripts/`, `staging/docker-compose.yml`, `render.yaml` — remove `COMMIT_FUNDING` and `BITCOIN_WALLET_NAME` from broadcast recipes
+- `docs/specs/admin-wallet-regtest-commit-funding.md` — update to reflect single funding path
+
+**Risks / notes**
+
+- **CI regtest funding:** CI must have an Admin Wallet address pre-funded before running broadcast specs. Add a setup step to fund `m/86'/0'/73'/0/0` from the coinbase wallet before broadcast tests.
+- **`BITCOIN_WALLET_NAME` scope:** verify whether any non-broadcast code path still uses `BITCOIN_WALLET_NAME` before removing it. If so, retain it scoped to that path only.
+- **Phase 7 future:** HW signing for commit will replace the BDK mnemonic signer at the `WalletService` level, not at the `CommitFunding` level. No further changes to the commit-funding wiring are expected after this phase.
 
 ---
 
@@ -383,14 +431,14 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_RPC_URL` | Chain RPC base URL | Keep; document as chain RPC, not “Core-only” |
 | `BITCOIN_RPC_USER` / `BITCOIN_RPC_PASS` | RPC auth | Keep |
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
-| `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Required while CI keeps legacy funding (Phases 1–4)**; deprecate once Phase 4 (Send) proves parity and CI migrates to `admin_wallet` |
-| `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | Phase 1+ |
+| `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Removed in Phase 3.6** (broadcast path); verify non-broadcast usages before full removal |
+| `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | **Removed in Phase 3.6** — Admin Wallet is the sole commit funder from Phase 3.6 onward |
 | `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed; also source of the SPS-50 reveal internal key from Phase 3.5 onward. **From Phase 3.7 onward: CI/headless fallback only** — normal dev/prod flow derives the wallet from the login session instead | Regtest only; CI fallback from Phase 3.7; removed in Phase 9 (release builds) |
 | `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing — covers both Admin Wallet funding (Phase 1) and reveal signing (Phase 3.5+) | Align with existing `dev_secrets.rs` |
 | `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Dev hot key for SPS-50 commit/reveal internal key; superseded by Admin Wallet derivation at `m/86'/0'/73'/2/0` | Retired |
 | `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |
 
-Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI until Phase 9; end users target remote RPC.
+Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI as the chain RPC source until Phase 9; end users target remote RPC. The node's **wallet** (`BITCOIN_WALLET_NAME`) is no longer used for commit funding from Phase 3.6 onward.
 
 ## 7. Risks and future backends
 

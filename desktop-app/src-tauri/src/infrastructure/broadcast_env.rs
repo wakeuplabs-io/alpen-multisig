@@ -31,7 +31,6 @@ pub struct BroadcastEnv {
     pub btc_rpc_url: String,
     pub btc_rpc_user: String,
     pub btc_rpc_pass: String,
-    pub btc_wallet_name: Option<String>,
     // Wired in Step 02-01 (commands/proposals.rs); suppress dead_code until then.
     #[allow(dead_code)]
     pub commit_reveal_keypair: UntweakedKeypair,
@@ -74,7 +73,6 @@ pub fn load_broadcast_env() -> Result<BroadcastEnv, BroadcastEnvError> {
         .map_err(|_| BroadcastEnvError::MissingEnv("BITCOIN_RPC_USER"))?;
     let btc_rpc_pass = std::env::var("BITCOIN_RPC_PASS")
         .map_err(|_| BroadcastEnvError::MissingEnv("BITCOIN_RPC_PASS"))?;
-    let btc_wallet_name = std::env::var("BITCOIN_WALLET_NAME").ok();
     let asm_rpc_url = std::env::var("STRATA_ADMIN_STATE_RPC_URL")
         .or_else(|_| std::env::var("ASM_RPC_URL"))
         .map_err(|_| BroadcastEnvError::MissingEnv("STRATA_ADMIN_STATE_RPC_URL"))?;
@@ -94,7 +92,6 @@ pub fn load_broadcast_env() -> Result<BroadcastEnv, BroadcastEnvError> {
         btc_rpc_url,
         btc_rpc_user,
         btc_rpc_pass,
-        btc_wallet_name,
         operator_keypair: commit_reveal_keypair,
         commit_reveal_keypair,
         magic_bytes: parse_magic_bytes(&magic_hex)?,
@@ -313,7 +310,6 @@ mod tests {
         std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "signet");
-        std::env::set_var("BITCOIN_WALLET_NAME", "my-wallet");
         std::env::set_var("BITCOIN_MAGIC_BYTES_HEX", "deadbeef");
         std::env::set_var("BROADCAST_CONFIRM_POLL_MS", "1234");
         std::env::set_var("BROADCAST_CONFIRM_TIMEOUT_MS", "56789");
@@ -328,7 +324,6 @@ mod tests {
             "ADMIN_WALLET_REGTEST_MNEMONIC",
             "ALLOW_DEV_MNEMONIC_SIGNING",
             "BITCOIN_NETWORK",
-            "BITCOIN_WALLET_NAME",
             "BITCOIN_MAGIC_BYTES_HEX",
             "BROADCAST_CONFIRM_POLL_MS",
             "BROADCAST_CONFIRM_TIMEOUT_MS",
@@ -338,7 +333,6 @@ mod tests {
 
         let env = result.expect("expected Ok with all vars set");
         assert_eq!(env.network, bitcoin::Network::Signet);
-        assert_eq!(env.btc_wallet_name.as_deref(), Some("my-wallet"));
         assert_eq!(env.confirm_poll_interval_ms, 1234);
         assert_eq!(env.confirm_timeout_ms, 56789);
     }

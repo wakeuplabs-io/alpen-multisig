@@ -5,15 +5,6 @@ use serde_json::{json, Value};
 
 #[async_trait]
 pub trait BitcoinRpcClient: Send + Sync {
-    /// Fund the taproot commit address from the node wallet. Returns txid.
-    /// `fee_rate_sats_per_vb` is passed directly to avoid relying on the node's fee estimator.
-    async fn send_to_address(
-        &self,
-        address: &str,
-        amount_sats: u64,
-        fee_rate_sats_per_vb: u64,
-    ) -> Result<String, String>;
-
     /// Broadcast a fully signed raw transaction. Returns txid.
     async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String>;
 
@@ -38,13 +29,9 @@ pub struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
-        let url = match wallet_name.filter(|w| !w.is_empty()) {
-            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
-            None => base_url.to_string(),
-        };
+    pub fn new(base_url: &str, user: &str, pass: &str) -> Self {
         Self {
-            url,
+            url: base_url.to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
             client: super::rpc_timeout::rpc_client(),
@@ -107,39 +94,6 @@ impl HttpBitcoinRpcClient {
 
 #[async_trait]
 impl BitcoinRpcClient for HttpBitcoinRpcClient {
-    async fn send_to_address(
-        &self,
-        address: &str,
-        amount_sats: u64,
-        fee_rate_sats_per_vb: u64,
-    ) -> Result<String, String> {
-        let btc_amount = amount_sats as f64 / 100_000_000.0;
-        // Positional params: address, amount, comment, comment_to, subtractfeefromamount,
-        // replaceable, conf_target, estimate_mode, avoid_reuse, fee_rate (sat/vb).
-        // Passing fee_rate explicitly bypasses the node's internal fee estimator.
-        let result = self
-            .call(
-                "sendtoaddress",
-                json!([
-                    address,
-                    btc_amount,
-                    "",
-                    "",
-                    false,
-                    null,
-                    null,
-                    "unset",
-                    null,
-                    fee_rate_sats_per_vb
-                ]),
-            )
-            .await?;
-        result
-            .as_str()
-            .map(str::to_string)
-            .ok_or_else(|| "sendtoaddress: expected string txid".to_string())
-    }
-
     async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String> {
         let result = self.call("sendrawtransaction", json!([tx_hex])).await?;
         result

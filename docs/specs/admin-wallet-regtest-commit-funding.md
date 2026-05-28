@@ -1,5 +1,12 @@
 # Spec: Admin Wallet Regtest Commit Funding (US-H7)
 
+> **⚠️ Superseded in part by Phase 3.6** ([`admin-wallet-commit-funding-only.md`](./admin-wallet-commit-funding-only.md)).
+> The dual-path funding model described below — the `COMMIT_FUNDING` env-var toggle, the
+> `BitcoindSendToAddress` legacy path, and the node-wallet `sendtoaddress` fallback — was **removed**.
+> From Phase 3.6 onward the Admin Wallet (BDK) is the **sole** commit funder, enabled by
+> `BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1` (no `COMMIT_FUNDING`). The BIP-86
+> derivation, UTXO selection, and commit/reveal protocol described here remain accurate.
+
 ## Objective
 
 Enable governance **commit** funding from the Admin Wallet on regtest using BDK and a Bitcoin Core–compatible chain RPC endpoint, while keeping the existing commit/reveal protocol, orchestrator coordination, and reveal signing unchanged.
