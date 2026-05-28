@@ -91,7 +91,7 @@ pub fn build_admin_multisig_update_hex(
 pub async fn build_cancel_action_hex(
     target_action_hex: String,
 ) -> Result<BuildActionHexResponse, String> {
-    let env = broadcast_env::load_broadcast_env()?;
+    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
     let update_id = asm_status_rpc::find_update_id_in_queue(&env.asm_rpc_url, &target_action_hex)
         .await?
         .ok_or_else(|| {

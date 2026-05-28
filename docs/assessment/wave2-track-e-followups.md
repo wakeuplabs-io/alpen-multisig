@@ -6,7 +6,7 @@ PR [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) merged (Wave
 |------|-----------|
 | **P-008** | Zod on `auth_start_challenge`, `auth_complete`, `auth_get_session` (`authRoleSchema` = `z.nativeEnum(AuthRole)`) |
 | **P-008** | Proposal/broadcast IPC already validated (Wave 1 + ipc-schemas tests) |
-| **Docs** | E2E README — Decision #2 dev flags (`ALLOW_DEV_OPERATOR_KEY`, `ALLOW_DEV_MNEMONIC_SIGNING`) |
+| **Docs** | E2E README — Decision #2 dev flags (`ALLOW_DEV_MNEMONIC_SIGNING`; `ALLOW_DEV_OPERATOR_KEY` retired in Phase 3.5) |
 
 **Explicitly out of #140:** WDIO negative / US-H5 matrix in `e2e-webdriver` (manual curated specs only).
 

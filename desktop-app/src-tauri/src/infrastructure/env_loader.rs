@@ -25,9 +25,9 @@ fn try_load_dotenv(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+    // Use the shared env lock from broadcast_env to prevent concurrent env-var races.
+    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
 
     fn restore_var(key: &str, previous: Option<String>) {
         match previous {
@@ -91,7 +91,10 @@ mod tests {
             "BITCOIN_RPC_USER",
             "BITCOIN_RPC_PASS",
             "STRATA_ADMIN_STATE_RPC_URL",
-            "OPERATOR_SECRET_KEY_HEX",
+            "ADMIN_WALLET_REGTEST_MNEMONIC",
+            "ALLOW_DEV_MNEMONIC_SIGNING",
+            "BITCOIN_NETWORK",
+            "BITCOIN_MAGIC_BYTES_HEX",
         ];
         let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for key in keys {
@@ -109,7 +112,7 @@ mod tests {
             result.is_ok(),
             "load_broadcast_env failed after loading {}: {}",
             path.display(),
-            result.err().unwrap_or_default()
+            result.err().map(|e| e.to_string()).unwrap_or_default()
         );
     }
 }

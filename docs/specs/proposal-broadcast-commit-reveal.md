@@ -39,7 +39,7 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
   - Does **not** submit Bitcoin transactions or hold the production operator key.
 - **Desktop owns execution** (PRD UI + `docs/2-discovery/01-conceptual-overview.md` §6.5):
   - Commit/reveal construction and RPC submit from Tauri (`broadcast_env` process config).
-  - Operator key loaded in the Tauri process only (never the React webview).
+  - Commit/reveal internal key derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` in the Tauri process only (never the React webview). Phase 3.5+: `OPERATOR_SECRET_KEY_HEX` retired.
 - **Signer safety:**
   - Broadcast is only enabled after quorum is reached.
   - UI shows high-signal confirmation and deterministic artifacts before sending.
@@ -83,7 +83,7 @@ This field is operational metadata and does not replace canonical proposal lifec
 
 Tauri `proposals_prepare_broadcast`:
 - Validates proposal is `approved` (via orchestrator `GET`).
-- Builds commit address and fee estimate using local Bitcoin RPC + operator key.
+- Builds commit address and fee estimate using local Bitcoin RPC + commit/reveal internal key (derived from Admin Wallet seed at `m/86'/0'/73'/2/0`).
 - Returns commit address and sats to the UI (no network submit).
 
 ### Step 2: Claim + broadcast (desktop + orchestrator)
@@ -139,14 +139,14 @@ Request body:
 
 ### Orchestrator (`orchestrator-be`)
 
-- **No** `broadcast_tx` module or operator key in server config.
+- **No** `broadcast_tx` module or signing key in server config.
 - Application: `claim_broadcast_coordination`, `report_broadcast_progress`.
 - Repository: `claim_broadcast`, `update_broadcast_status`.
 - Bitcoin RPC on server: `/ready` health check only.
 
 ### Desktop Tauri (`desktop-app/src-tauri`)
 
-- `infrastructure/broadcast_env.rs` — process env for RPC + operator key.
+- `infrastructure/broadcast_env.rs` — process env for RPC + commit/reveal keypair (derived from Admin Wallet seed).
 - `application/proposals.rs` — `prepare_broadcast_bundle`, `broadcast_commit_then_reveal` with coordination callbacks.
 - IPC: `proposals_prepare_broadcast`, `proposals_broadcast` (no secrets in React).
 

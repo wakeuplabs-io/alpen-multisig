@@ -1,0 +1,91 @@
+{
+  "feature_id": "admin-wallet-retire-operator-key",
+  "description": "Phase 3.5 — Retire OPERATOR_SECRET_KEY_HEX; derive SPS-50 commit/reveal internal key from Admin Wallet seed at m/86'/0'/73'/2/0",
+  "spec": "docs/specs/admin-wallet-retire-operator-key.md",
+  "validation": { "status": "approved" },
+  "steps": [
+    {
+      "step_id": "01-01",
+      "name": "derive_commit_reveal_keypair helper",
+      "description": "Create infrastructure/admin_wallet/commit_reveal_key.rs with pub(crate) derive_commit_reveal_keypair(mnemonic, network) -> Result<UntweakedKeypair, AdminWalletError>. Uses bip39::Mnemonic -> seed -> Xpriv::new_master -> derive_priv at m/86h/0h/73h/2/0 -> SecretKey -> UntweakedKeypair. No BDK wallet, no descriptors.",
+      "acceptance_criteria": [
+        "Happy path: derive_commit_reveal_keypair(TEST_MNEMONIC, Regtest) returns Ok(keypair) and XOnlyPublicKey hex matches a pinned constant",
+        "Invalid mnemonic: empty string returns Err(AdminWalletError::InvalidMnemonic(...))",
+        "Invalid mnemonic: malformed phrase returns Err(AdminWalletError::InvalidMnemonic(...))",
+        "Network agnostic: keypair from Regtest and Bitcoin have the same secret key bytes",
+        "Defensive: 100 repeated calls with TEST_MNEMONIC never return Err(AdminWalletError::Descriptor(...))"
+      ],
+      "files_to_modify": [
+        "desktop-app/src-tauri/src/infrastructure/admin_wallet/commit_reveal_key.rs"
+      ],
+      "estimated_hours": 1
+    },
+    {
+      "step_id": "01-02",
+      "name": "BroadcastEnvError + rewrite load_broadcast_env",
+      "description": "Rewrite broadcast_env.rs: (1) Add BroadcastEnvError thiserror enum with variants MissingEnv, InvalidNetwork, InvalidMagicBytes, MnemonicSigningDisabled, AdminWallet(#[from] AdminWalletError). (2) Rewrite load_broadcast_env -> Result<BroadcastEnv, BroadcastEnvError>: read ADMIN_WALLET_REGTEST_MNEMONIC, enforce ALLOW_DEV_MNEMONIC_SIGNING=1, call derive_commit_reveal_keypair. (3) Remove OPERATOR_SECRET_KEY_HEX, ALLOW_DEV_OPERATOR_KEY, WELL_KNOWN_TEST_OPERATOR_KEY_HEX, parse_operator_keypair, reject_well_known_operator_key_unless_dev and their tests. (4) BroadcastEnv field operator_keypair renamed to commit_reveal_keypair.",
+      "acceptance_criteria": [
+        "Happy path: all required env vars set returns BroadcastEnv with commit_reveal_keypair matching derive_commit_reveal_keypair output for same mnemonic",
+        "Missing mnemonic: ALLOW_DEV_MNEMONIC_SIGNING=1 but no ADMIN_WALLET_REGTEST_MNEMONIC returns BroadcastEnvError::MissingEnv",
+        "Missing guard: mnemonic set but ALLOW_DEV_MNEMONIC_SIGNING unset returns BroadcastEnvError::MnemonicSigningDisabled",
+        "Guard false: ALLOW_DEV_MNEMONIC_SIGNING=0 returns BroadcastEnvError::MnemonicSigningDisabled",
+        "Invalid mnemonic: AdminWalletError::InvalidMnemonic propagated as BroadcastEnvError::AdminWallet",
+        "Regression: BITCOIN_MAGIC_BYTES_HEX, BITCOIN_NETWORK, BITCOIN_WALLET_NAME, BROADCAST_CONFIRM_POLL_MS, BROADCAST_CONFIRM_TIMEOUT_MS all parsed correctly",
+        "Regression: invalid BITCOIN_MAGIC_BYTES_HEX (3 bytes) returns BroadcastEnvError::InvalidMagicBytes"
+      ],
+      "files_to_modify": [
+        "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+      ],
+      "estimated_hours": 2
+    },
+    {
+      "step_id": "01-03",
+      "name": "Pinned commit address integration test",
+      "description": "Add integration-style test in commit_reveal_key.rs (or a dedicated test module): wire derive_commit_reveal_keypair(TEST_MNEMONIC, Regtest) into broadcast_tx::derive_commit_address with a fixed payload byte literal. Assert the resulting commit address string equals a constant pinned in the test. This is the long-term regression hook against derivation drift.",
+      "acceptance_criteria": [
+        "derive_commit_address called with keypair from TEST_MNEMONIC + fixed payload returns a pinned, stable address string",
+        "The pinned constant is committed in the test (not computed at runtime)"
+      ],
+      "files_to_modify": [
+        "desktop-app/src-tauri/src/infrastructure/admin_wallet/commit_reveal_key.rs"
+      ],
+      "estimated_hours": 1
+    },
+    {
+      "step_id": "02-01",
+      "name": "Wiring: mod.rs re-export + call site rename",
+      "description": "Update infrastructure/admin_wallet/mod.rs to re-export derive_commit_reveal_keypair. Update commands/proposals.rs: rename env.operator_keypair -> env.commit_reveal_keypair at both call sites. Update application/proposals.rs: parameter naming only (signatures unchanged). Ensure cargo build compiles cleanly.",
+      "acceptance_criteria": [
+        "cargo build succeeds with zero errors",
+        "grep operator_keypair desktop-app/src-tauri/src/ returns zero hits",
+        "commands/proposals.rs uses env.commit_reveal_keypair at proposals_prepare_broadcast and proposals_broadcast call sites"
+      ],
+      "files_to_modify": [
+        "desktop-app/src-tauri/src/infrastructure/admin_wallet/mod.rs",
+        "desktop-app/src-tauri/src/commands/proposals.rs",
+        "desktop-app/src-tauri/src/application/proposals.rs"
+      ],
+      "estimated_hours": 0.5
+    },
+    {
+      "step_id": "03-01",
+      "name": "Cleanup: env, docs, scripts, CI",
+      "description": "Remove all references to OPERATOR_SECRET_KEY_HEX and ALLOW_DEV_OPERATOR_KEY from: desktop-app/.env.example, docs/specs/proposal-broadcast-commit-reveal.md (update to Admin Wallet-derived key), docs/specs/secret-custody-wave2.md, docs/specs/admin-wallet-regtest-commit-funding.md, docs/security/threat-model.md, docs/operations/runbook.md, desktop-app/e2e-webdriver/README.md, .github/workflows/*, scripts/, staging/docker-compose.yml, render.yaml. Do NOT touch docs/assessment/2026-05-13-adversarial/ or docs/assessment/2026-05-14-adversarial/ (immutable historical records).",
+      "acceptance_criteria": [
+        "grep -r OPERATOR_SECRET_KEY_HEX . --exclude-dir=.git --exclude-dir=docs/assessment returns zero hits",
+        "grep -r ALLOW_DEV_OPERATOR_KEY . --exclude-dir=.git --exclude-dir=docs/assessment returns zero hits",
+        "docs/specs/proposal-broadcast-commit-reveal.md references Admin Wallet-derived commit internal key"
+      ],
+      "files_to_modify": [
+        "desktop-app/.env.example",
+        "docs/specs/proposal-broadcast-commit-reveal.md",
+        "docs/specs/secret-custody-wave2.md",
+        "docs/specs/admin-wallet-regtest-commit-funding.md",
+        "docs/security/threat-model.md",
+        "docs/operations/runbook.md",
+        "desktop-app/e2e-webdriver/README.md"
+      ],
+      "estimated_hours": 1
+    }
+  ]
+}
