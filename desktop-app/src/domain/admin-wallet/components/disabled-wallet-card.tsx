@@ -1,4 +1,4 @@
-import type { AdminWalletError } from '@/api/admin-wallet'
+import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 
 type DisabledWalletCardProps = {
 	error: AdminWalletError & ({ type: 'Disabled' } | { type: 'RegtestGuardViolation' })

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { SyncStatusDto, AdminWalletError } from '@/api/admin-wallet'
+import type { SyncStatusDto, AdminWalletError } from '@/domain/admin-wallet/model/types'
 import { relativeTime } from '../model/relative-time'
 
 type SyncChipProps = {

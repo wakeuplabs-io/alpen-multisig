@@ -1,4 +1,4 @@
-import type { AdminWalletError } from '@/api/admin-wallet'
+import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 import type { AddressWithBalanceView } from '@/domain/admin-wallet/model/view-models'
 import { formatAdminWalletError } from '@/domain/admin-wallet/model/format-admin-wallet-error'
 import { AddressRow } from './address-row'
