@@ -16,7 +16,7 @@
 | `STRATA_ADMIN_STATE_RPC_URL` | Yes | ASM runner JSON-RPC |
 | `BITCOIN_RPC_*` | Yes | Used by `/ready` only |
 
-Broadcast operator key and Bitcoin wallet live in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). Decision #2: operator key is process env only; use `ALLOW_DEV_OPERATOR_KEY=1` with the well-known regtest test key. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md` on Track A).
+Broadcast configuration and the commit/reveal internal key live in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). The commit/reveal internal key is derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` — no separate operator key env var is used (Phase 3.5+). Guard `ALLOW_DEV_MNEMONIC_SIGNING=1` is required in regtest. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md`).
 
 ## Incidents
 

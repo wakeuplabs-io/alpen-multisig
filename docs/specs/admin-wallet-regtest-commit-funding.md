@@ -146,7 +146,7 @@ Do not use Admin ID keys for commit funding.
 | `COMMIT_FUNDING` | `bitcoind` (default) or `admin_wallet` |
 | `ADMIN_WALLET_REGTEST_MNEMONIC` | BIP-39 mnemonic for Admin Wallet descriptors (dev/regtest only) |
 | `ALLOW_DEV_MNEMONIC_SIGNING` | Existing pattern — must be set (or debug build) to load dev mnemonic |
-| `ALLOW_DEV_OPERATOR_KEY` | Unchanged — operator key for reveal on regtest |
+| `ALLOW_DEV_MNEMONIC_SIGNING` | Guards both Admin Wallet funding and commit/reveal key derivation (Phase 3.5+); `ALLOW_DEV_OPERATOR_KEY` retired |
 
 **Regtest-only guards:** If `COMMIT_FUNDING=admin_wallet` and network ≠ regtest, fail fast with a clear configuration error.
 
@@ -163,7 +163,7 @@ Canonical recipe (avoids coinbase-maturity confusion):
    - `COMMIT_FUNDING=admin_wallet`
    - `ADMIN_WALLET_REGTEST_MNEMONIC=…`
    - `ALLOW_DEV_MNEMONIC_SIGNING=1`
-   - `BITCOIN_RPC_*`, `OPERATOR_SECRET_KEY_HEX`, `BITCOIN_NETWORK=regtest`
+   - `BITCOIN_RPC_*`, `BITCOIN_NETWORK=regtest`
 7. Run orchestrator + `npm run tauri dev`; broadcast an `approved` proposal.
 
 ## API Contract (orchestrator)

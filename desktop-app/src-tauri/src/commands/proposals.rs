@@ -314,7 +314,7 @@ pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env()?;
+    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
     let btc_rpc = HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         env.btc_wallet_name.as_deref(),
@@ -327,7 +327,7 @@ pub async fn proposals_prepare_broadcast(
             &client,
             &btc_rpc,
             &env.asm_rpc_url,
-            &env.operator_keypair,
+            &env.commit_reveal_keypair,
             env.network,
             &input.action_id,
         )
@@ -348,7 +348,7 @@ pub async fn proposals_broadcast(
     wallet_service: tauri::State<'_, std::sync::Arc<WalletService>>,
 ) -> Result<BroadcastResultDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env()?;
+    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         env.btc_wallet_name.as_deref(),
@@ -366,7 +366,7 @@ pub async fn proposals_broadcast(
         &client,
         btc_rpc.as_ref(),
         &env.asm_rpc_url,
-        &env.operator_keypair,
+        &env.commit_reveal_keypair,
         env.magic_bytes,
         env.network,
         &input.action_id,

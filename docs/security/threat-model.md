@@ -27,7 +27,7 @@ flowchart LR
 | Risk | Mitigation |
 |------|------------|
 | Malicious backend returns wrong proposal | P-005 hash verify (Track F) |
-| Operator test key in production | P-001 desktop + `ALLOW_DEV_OPERATOR_KEY` |
+| Well-known test mnemonic in production | `ALLOW_DEV_MNEMONIC_SIGNING` guard (Phase 3.5+); commit/reveal key derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` |
 | Mnemonic / raw key exfil via XSS | P-003 + P-040: dev signing IPC off in release (Decision #2; Track A) |
 | Supply-chain compromise | P-011 audit/deny/lockfile |
 | Cross-authority data leak | P-002 session + proposal scope |

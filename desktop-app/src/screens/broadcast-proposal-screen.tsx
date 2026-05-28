@@ -2,11 +2,19 @@ import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
+import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
+import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
+import { useAdminWalletAddresses } from '@/domain/admin-wallet/hooks/use-admin-wallet-addresses'
+import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
+import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
+import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -14,7 +22,7 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
@@ -23,6 +31,21 @@ export function BroadcastProposalScreen() {
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
+
+	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
+	const balanceHook = useAdminWalletBalance()
+	const addressesHook = useAdminWalletAddresses('External', 0, 20)
+	const syncHook = useAdminWalletSync()
+	const addressesWithBalanceHook = useAddressesWithBalance()
+
+	const walletDisabledError =
+		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
+			? balanceHook.error
+			: addressesHook.error?.type === 'Disabled' || addressesHook.error?.type === 'RegtestGuardViolation'
+				? addressesHook.error
+				: null
+
+	const receiveAddress = addressesHook.data?.find((a) => !a.isUsed)?.address ?? null
 
 	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
 	useEffect(() => {
@@ -48,6 +71,10 @@ export function BroadcastProposalScreen() {
 		return <Navigate to="/proposals" replace />
 	}
 
+	const signerLabel = wallet.addressSample
+		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
+		: 'Unknown'
+
 	const isLoading = phase === 'idle' || phase === 'preparing'
 	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
 	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
@@ -68,9 +95,14 @@ export function BroadcastProposalScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
-					</span>
+					<SessionChip
+						timeLabel={sessionTimeLabel}
+						signerLabel={signerLabel}
+						warning={sessionWarning}
+						onActivate={() => (isOpen ? close() : open())}
+						isActive={isOpen}
+						panelId="wallet-slide-dialog"
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
@@ -164,6 +196,31 @@ export function BroadcastProposalScreen() {
 					)}
 				</div>
 			</div>
+
+			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
+				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+				<WalletPanelContent
+					disabledError={walletDisabledError}
+					balanceSats={balanceHook.data?.confirmedSats ?? 0}
+					isBalanceLoading={balanceHook.isLoading}
+					receiveAddress={receiveAddress}
+					isAddressesLoading={addressesHook.isLoading}
+					addressRows={addressesWithBalanceHook.data}
+					addressRowsLoading={addressesWithBalanceHook.isLoading}
+					addressRowsError={addressesWithBalanceHook.error}
+					expandedSection={expandedSection}
+					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
+					syncStatus={syncHook.syncStatus}
+					isSyncRefreshing={syncHook.isLoading}
+					syncError={syncHook.error}
+					onRefreshSync={async () => {
+						await syncHook.triggerSync()
+						balanceHook.refresh()
+						addressesHook.refresh()
+						addressesWithBalanceHook.refresh()
+					}}
+				/>
+			</WalletPanel>
 		</ScreenShell>
 	)
 }
