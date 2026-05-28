@@ -33,6 +33,12 @@ services:
       bitcoin:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
 
   orchestrator:
     build:
@@ -55,7 +61,7 @@ services:
       bitcoin:
         condition: service_healthy
       asm:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
