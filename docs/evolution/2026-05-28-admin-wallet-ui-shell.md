@@ -100,16 +100,41 @@ The implementation ports the Alta WalletPanel design pattern into the existing T
 
 ---
 
+## Post-Integration Bug Fixes
+
+Three IPC serialisation bugs were discovered and resolved after the initial delivery:
+
+### Bug 1 — DTO camelCase mismatch (0-balance / "Never synced")
+`BalanceDto`, `UtxoDto`, `AddressDto`, and `SyncStatusDto` in `wallet_service.rs` lacked
+`#[serde(rename_all = "camelCase")]`. Rust serialised `confirmed_sats` / `is_used` /
+`last_synced_at` while the TS frontend expected `confirmedSats` / `isUsed` / `lastSyncedAt`.
+All fields arrived as `undefined` → balance showed 0 BTC, "Never synced" displayed permanently.
+**Fix**: added `#[serde(rename_all = "camelCase")]` to all four DTOs.
+
+### Bug 2 — IPC args in snake_case ("Cannot reach Bitcoin node" banner)
+`listAdminWalletAddresses` in `admin-wallet.ts` sent `page_index` / `page_size` (snake_case).
+Tauri v2 expects camelCase argument keys, so the command rejected the call with
+"missing required key pageIndex". `parseAdminWalletError` misclassified the raw string as
+`RpcUnreachable`, producing the misleading banner.
+**Fix**: changed to `pageIndex` / `pageSize` in the IPC call.
+
+### Bug 3 — Address list showed all 20 regardless of balance
+`composeAddressesWithBalance` returned all paginated addresses unconditionally.
+**Fix**: added `.filter(row => row.balanceSats > 0)`. Also wired `onRefreshSync` to refresh
+balance, addresses, and UTXOs hooks after sync completes so the UI reflects post-sync state.
+
+---
+
 ## Quality Gates Passed
 
 | Gate | Result |
 |------|--------|
-| Model unit tests (8) | PASS |
-| Hook contract tests (2) | PASS |
-| Architecture compliance test (1) | PASS |
+| Model unit tests (12 suites) | PASS |
+| Hook contract tests | PASS |
+| Architecture compliance test | PASS |
 | `cargo fmt --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS |
+| `cargo test --workspace --lib` (84 tests) | PASS |
 | `npm run format:check` | PASS |
 | `npm run lint` | PASS |
 | `npm run build` | PASS |

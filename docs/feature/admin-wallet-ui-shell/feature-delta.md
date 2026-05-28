@@ -53,16 +53,24 @@ Phase 3 delivered a React/TypeScript slide-over WalletPanel integrated into the 
 
 ---
 
+## Post-Integration Fixes
+
+Three IPC serialisation bugs resolved after initial delivery (commit `d538082`):
+
+- **DTO camelCase** — `BalanceDto`/`UtxoDto`/`AddressDto`/`SyncStatusDto` missing `#[serde(rename_all = "camelCase")]` → balance=0 and "Never synced".
+- **IPC args case** — `page_index`/`page_size` sent as snake_case → "Cannot reach Bitcoin node" banner.
+- **Address filter** — `composeAddressesWithBalance` returned all 20 addresses; now filters to `balanceSats > 0` and refreshes all hooks post-sync.
+
 ## Quality Gates Passed
 
 | Gate | Status |
 |------|--------|
-| Model unit tests — 8 tests | PASS |
-| Hook contract tests — 2 tests | PASS |
-| Architecture compliance test — 1 test | PASS |
+| Model unit tests — 12 suites | PASS |
+| Hook contract tests | PASS |
+| Architecture compliance test | PASS |
 | `cargo fmt --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS |
+| `cargo test --workspace --lib` (84 tests) | PASS |
 | `npm run format:check` | PASS |
 | `npm run lint` | PASS |
 | `npm run build` | PASS |
