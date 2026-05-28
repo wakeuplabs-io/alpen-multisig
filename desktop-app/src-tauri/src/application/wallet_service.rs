@@ -470,13 +470,12 @@ impl WalletService {
         Ok(txid.to_string())
     }
 
-    /// Guard: returns Disabled if env configuration does not allow admin wallet.
+    /// Guard: returns Disabled unless running on regtest with dev-mnemonic signing enabled.
     pub fn check_enabled() -> Result<(), AdminWalletError> {
-        let commit_funding = std::env::var("COMMIT_FUNDING").unwrap_or_default();
         let bitcoin_network = std::env::var("BITCOIN_NETWORK").unwrap_or_default();
         let allow_dev = std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").unwrap_or_default();
 
-        if commit_funding != "admin_wallet" || bitcoin_network != "regtest" || allow_dev != "1" {
+        if bitcoin_network != "regtest" || allow_dev != "1" {
             return Err(AdminWalletError::Disabled);
         }
         Ok(())
@@ -521,26 +520,62 @@ mod tests {
         assert!(!status.is_syncing);
     }
 
-    // Unit test: guard returns Disabled when env vars are missing/wrong
+    // Unit test: guard returns Disabled when BITCOIN_NETWORK is missing
     #[test]
-    fn check_enabled_returns_disabled_when_env_vars_missing() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        std::env::remove_var("COMMIT_FUNDING");
+    fn check_enabled_returns_disabled_when_bitcoin_network_missing() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("BITCOIN_NETWORK");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
         let result = WalletService::check_enabled();
         assert!(
             matches!(result, Err(AdminWalletError::Disabled)),
-            "Expected Disabled when env vars missing"
+            "Expected Disabled when BITCOIN_NETWORK missing"
         );
     }
 
-    // Unit test: guard returns Ok when all env vars are correctly set
+    // Unit test: guard returns Disabled when ALLOW_DEV_MNEMONIC_SIGNING is missing
     #[test]
-    fn check_enabled_returns_ok_when_all_env_vars_set() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        std::env::set_var("COMMIT_FUNDING", "admin_wallet");
+    fn check_enabled_returns_disabled_when_allow_dev_mnemonic_signing_missing() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+
+        let result = WalletService::check_enabled();
+
+        std::env::remove_var("BITCOIN_NETWORK");
+
+        assert!(
+            matches!(result, Err(AdminWalletError::Disabled)),
+            "Expected Disabled when ALLOW_DEV_MNEMONIC_SIGNING missing"
+        );
+    }
+
+    // Unit test: guard returns Ok with only regtest + ALLOW_DEV_MNEMONIC_SIGNING (no COMMIT_FUNDING needed)
+    #[test]
+    fn check_enabled_returns_ok_without_commit_funding_var() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("COMMIT_FUNDING");
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+
+        let result = WalletService::check_enabled();
+
+        std::env::remove_var("BITCOIN_NETWORK");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+
+        assert!(
+            result.is_ok(),
+            "Expected Ok with regtest + ALLOW_DEV_MNEMONIC_SIGNING=1, without COMMIT_FUNDING"
+        );
+    }
+
+    // Unit test: COMMIT_FUNDING set to any value has no effect on the guard
+    #[test]
+    fn check_enabled_commit_funding_value_is_irrelevant() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Even setting COMMIT_FUNDING=bitcoind must not block when regtest + allow_dev are set
+        std::env::set_var("COMMIT_FUNDING", "bitcoind");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
 
@@ -552,7 +587,7 @@ mod tests {
 
         assert!(
             result.is_ok(),
-            "Expected Ok when all env vars set correctly"
+            "COMMIT_FUNDING must have no effect; Ok expected when regtest + ALLOW_DEV_MNEMONIC_SIGNING=1"
         );
     }
 

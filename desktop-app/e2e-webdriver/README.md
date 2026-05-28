@@ -43,9 +43,28 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 | Variable | When |
 |----------|------|
 | `ADMIN_WALLET_REGTEST_MNEMONIC` | Required in `desktop-app/.env`; source of the Admin Wallet and the SPS-50 commit/reveal internal key at `m/86'/0'/73'/2/0` (Phase 3.5+) |
-| `ALLOW_DEV_MNEMONIC_SIGNING=1` | Required to enable mnemonic-derived signing (regtest only); guards both Admin Wallet funding and commit/reveal key derivation |
+| `ALLOW_DEV_MNEMONIC_SIGNING=1` | Required to enable mnemonic-derived signing (regtest only); guards Admin Wallet commit funding and commit/reveal key derivation |
 
 See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
+
+### Admin Wallet pre-funding (required for broadcast spec)
+
+From Phase 3.6, the commit transaction is always funded from the Admin Wallet (BDK) — there is no fallback to node-wallet `sendtoaddress`. Before running `proposal-broadcast-quorum`, the Admin Wallet external address (`m/86'/0'/73'/0/0`) must hold spendable regtest UTXOs.
+
+Fund it from the node coinbase wallet before running the broadcast spec:
+
+```bash
+ADMIN_ADDR=$(node -e "
+  // Derive m/86'/0'/73'/0/0 from DEMO_MNEMONIC and print the regtest address
+  // or read it from the wallet panel in the app after login
+  console.log('<admin-wallet-external-address-0>')
+")
+# Send from the coinbase wallet and mine to confirm
+bitcoin-cli -regtest -rpcuser=rpcuser -rpcpassword=rpcpass sendtoaddress "$ADMIN_ADDR" 0.01
+bitcoin-cli -regtest -rpcuser=rpcuser -rpcpassword=rpcpass generatetoaddress 1 "$ADMIN_ADDR"
+```
+
+Alternatively, read the address from the Wallet panel after mnemonic login (Balance tab → first external address), or use the `get_external_address` helper from the integration tests.
 
 ## Build the app under test
 
@@ -115,7 +134,7 @@ Same mnemonic, **derivation row #1** (`loginMnemonicToProposals(..., { pickingRo
 
 ### [`test/specs/proposal-broadcast-quorum.e2e.js`](test/specs/proposal-broadcast-quorum.e2e.js)
 
-**Address row #0** session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Run **after** co-sign so the signer-update proposal has quorum. Needs regtest bitcoind + broadcast env in **`desktop-app/.env`** (RPC, operator key, magic bytes, ASM URL — see `desktop-app/.env.example`).
+**Address row #0** session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Run **after** co-sign so the signer-update proposal has quorum. Needs regtest bitcoind + broadcast env in **`desktop-app/.env`** (RPC, mnemonic, magic bytes, ASM URL — see `desktop-app/.env.example`) and a **pre-funded Admin Wallet external address** (see "Admin Wallet pre-funding").
 
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 
@@ -127,7 +146,7 @@ Selectors use `data-testid` attributes on the React side (`e2e-*`).
 | Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444**                                         |
 | Binary not found            | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle`                                                    |
 | Test hangs at connect       | Stack not running (ASM/orchestrator), or wrong `.env` URLs                                                           |
-| Broadcast spec fails at prepare | Check **`desktop-app/.env`** (Tauri process): `BITCOIN_RPC_*`, `ADMIN_WALLET_REGTEST_MNEMONIC`, `ALLOW_DEV_MNEMONIC_SIGNING`, `BITCOIN_MAGIC_BYTES_HEX`, `STRATA_ADMIN_STATE_RPC_URL`, `BITCOIN_NETWORK` — see `desktop-app/.env.example` |
+| Broadcast spec fails at prepare | Check **`desktop-app/.env`** (Tauri process): `BITCOIN_RPC_*`, `ADMIN_WALLET_REGTEST_MNEMONIC`, `ALLOW_DEV_MNEMONIC_SIGNING`, `BITCOIN_MAGIC_BYTES_HEX`, `STRATA_ADMIN_STATE_RPC_URL`, `BITCOIN_NETWORK` — see `desktop-app/.env.example`. Also ensure the Admin Wallet external address is pre-funded (see "Admin Wallet pre-funding" above). |
 
 ## Further reading
 

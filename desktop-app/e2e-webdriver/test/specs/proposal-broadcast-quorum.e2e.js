@@ -6,6 +6,7 @@
  */
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 import { mineWhileWaitingForBroadcastDone } from '../helpers/mine-regtest-blocks.mjs'
+import { fundAdminWallet } from '../helpers/fund-admin-wallet.mjs'
 
 describe('Alpen Multisig proposal — broadcast after quorum', () => {
 	it('prepares artifacts and confirms onchain broadcast', async function () {
@@ -32,6 +33,10 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 			timeout: 180000,
 			timeoutMsg: 'Prepare broadcast should finish and enable Confirm & Broadcast',
 		})
+
+		// Fund Admin Wallet before broadcasting — required from Phase 3.6 (sole commit funder).
+		await fundAdminWallet()
+
 		await confirmBtn.click()
 
 		// Orchestrator: commit → wait conf → reveal → wait conf. Regtest must mine during that wait.

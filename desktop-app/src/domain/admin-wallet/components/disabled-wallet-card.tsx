@@ -5,7 +5,7 @@ type DisabledWalletCardProps = {
 }
 
 const DISABLED_MESSAGE =
-	'Admin Wallet is not enabled for this environment. Set COMMIT_FUNDING=admin_wallet, BITCOIN_NETWORK=regtest, and ALLOW_DEV_MNEMONIC_SIGNING=1 to enable.'
+	'Admin Wallet is not enabled for this environment. Set BITCOIN_NETWORK=regtest and ALLOW_DEV_MNEMONIC_SIGNING=1 to enable.'
 
 export function DisabledWalletCard({ error }: DisabledWalletCardProps) {
 	const message = error.type === 'Disabled' ? DISABLED_MESSAGE : error.message
