@@ -1231,7 +1231,7 @@ mod tests {
 
         assert!(
             spy.was_called(),
-            "CommitFunding::fund_commit must be called instead of btc_rpc.send_to_address"
+            "CommitFunding::fund_commit must be called to fund the commit (Admin Wallet path)"
         );
     }
 

@@ -49,22 +49,11 @@ See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
 
 ### Admin Wallet pre-funding (required for broadcast spec)
 
-From Phase 3.6, the commit transaction is always funded from the Admin Wallet (BDK) — there is no fallback to node-wallet `sendtoaddress`. Before running `proposal-broadcast-quorum`, the Admin Wallet external address (`m/86'/0'/73'/0/0`) must hold spendable regtest UTXOs.
+From Phase 3.6, the commit transaction is always funded from the Admin Wallet (BDK) — there is no fallback to node-wallet `sendtoaddress`. Before "Confirm & Broadcast", the Admin Wallet external address (`m/86'/0'/73'/0/0`) must hold spendable regtest UTXOs.
 
-Fund it from the node coinbase wallet before running the broadcast spec:
+The `proposal-broadcast-quorum` spec handles this automatically: it calls `fundAdminWallet()` (`test/helpers/fund-admin-wallet.mjs`) after prepare-broadcast, which reads the Admin Wallet address from the broadcast screen's **Funding Source** card (`data-testid="e2e-admin-wallet-external-address-0"`) and funds it from the `asm-runner` wallet via `bitcoin-cli -rpcwallet=asm-runner sendtoaddress` + `generatetoaddress` — the same wallet-scoped path used by `mine-regtest-blocks.mjs` and `runtests/mine-blocks.sh`.
 
-```bash
-ADMIN_ADDR=$(node -e "
-  // Derive m/86'/0'/73'/0/0 from DEMO_MNEMONIC and print the regtest address
-  // or read it from the wallet panel in the app after login
-  console.log('<admin-wallet-external-address-0>')
-")
-# Send from the coinbase wallet and mine to confirm
-bitcoin-cli -regtest -rpcuser=rpcuser -rpcpassword=rpcpass sendtoaddress "$ADMIN_ADDR" 0.01
-bitcoin-cli -regtest -rpcuser=rpcuser -rpcpassword=rpcpass generatetoaddress 1 "$ADMIN_ADDR"
-```
-
-Alternatively, read the address from the Wallet panel after mnemonic login (Balance tab → first external address), or use the `get_external_address` helper from the integration tests.
+No manual funding step is required as long as the regtest stack (`runtests/env.sh` + `asm-runner` wallet) is running.
 
 ## Build the app under test
 

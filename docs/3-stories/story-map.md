@@ -299,7 +299,7 @@ Shared acceptance signals for all US-E*:
   - Minimum paths: external `m/86'/0'/73'/0/0` for funding; change to first unused `m/86'/0'/73'/1/*`.
   - Commit **destination** remains the operator-derived Taproot commit address (protocol unchanged).
   - Reveal: operator key in Tauri process; orchestrator claim + PATCH unchanged.
-  - Regtest-only enablement via `COMMIT_FUNDING=admin_wallet`; default `bitcoind` legacy funding (`sendtoaddress`) for CI/E2E until migrated.
+  - Regtest-only enablement via `BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1`. (Phase 3.6 made the Admin Wallet the sole commit funder; the legacy `COMMIT_FUNDING`/`sendtoaddress` path was removed.)
   - Phase 1 commit signing: regtest dev mnemonic in Tauri (dev flags); no HWI; no Ledger/Trezor required for US-H7.
   - UI: funding mode, Admin Wallet address and available balance before confirm; existing broadcast phase progress and txids on success.
   - Clear errors: insufficient Admin Wallet funds, RPC failure, misconfiguration.

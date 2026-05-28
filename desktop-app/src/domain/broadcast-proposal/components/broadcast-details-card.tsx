@@ -125,7 +125,10 @@ export function BroadcastDetailsCard({
 					<div>
 						<SectionLabel>Funding Source</SectionLabel>
 						<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-							<span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]">
+							<span
+								data-testid="e2e-admin-wallet-external-address-0"
+								className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
+							>
 								{adminWalletInfo.address}
 							</span>
 							<CopyButton text={adminWalletInfo.address} />
