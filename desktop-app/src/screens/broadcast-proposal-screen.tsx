@@ -7,6 +7,21 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
+import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
+import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
+import { useAdminWalletAddresses } from '@/domain/admin-wallet/hooks/use-admin-wallet-addresses'
+import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
+import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
+import { WalletPanelTrigger } from '@/domain/admin-wallet/components/wallet-panel-trigger'
+import { DisabledWalletCard } from '@/domain/admin-wallet/components/disabled-wallet-card'
+import { WalletBalance } from '@/domain/admin-wallet/components/wallet-balance'
+import { ReceiveAddressRow } from '@/domain/admin-wallet/components/receive-address-row'
+import { AddressesWithBalanceList } from '@/domain/admin-wallet/components/addresses-with-balance-list'
+import { ReceiveSection } from '@/domain/admin-wallet/components/receive-section'
+import { TxHistoryList } from '@/domain/admin-wallet/components/tx-history-list'
+import { SendPlaceholder } from '@/domain/admin-wallet/components/send-placeholder'
+import { SyncChip } from '@/domain/admin-wallet/components/sync-chip'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -23,6 +38,21 @@ export function BroadcastProposalScreen() {
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
+
+	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
+	const balanceHook = useAdminWalletBalance()
+	const addressesHook = useAdminWalletAddresses('External', 0, 20)
+	const syncHook = useAdminWalletSync()
+	const addressesWithBalanceHook = useAddressesWithBalance()
+
+	const walletDisabledError =
+		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
+			? balanceHook.error
+			: addressesHook.error?.type === 'Disabled' || addressesHook.error?.type === 'RegtestGuardViolation'
+				? addressesHook.error
+				: null
+
+	const receiveAddress = addressesHook.data?.find((a) => !a.isUsed)?.address ?? null
 
 	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
 	useEffect(() => {
@@ -64,6 +94,8 @@ export function BroadcastProposalScreen() {
 		<ScreenShell
 			headerContent={
 				<>
+					<WalletPanelTrigger isOpen={isOpen} onToggle={() => (isOpen ? close() : open())} />
+
 					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
@@ -164,6 +196,46 @@ export function BroadcastProposalScreen() {
 					)}
 				</div>
 			</div>
+
+			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
+				<WalletPanelHeader onClose={close} />
+				{walletDisabledError !== null ? (
+					<div className="p-4">
+						<DisabledWalletCard error={walletDisabledError} />
+					</div>
+				) : (
+					<div className="flex flex-col gap-0 overflow-y-auto">
+						<WalletBalance balanceSats={balanceHook.data?.confirmedSats ?? 0} isLoading={balanceHook.isLoading} />
+						<div className="px-5 py-3">
+							<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={addressesHook.isLoading} />
+						</div>
+						<AddressesWithBalanceList
+							rows={addressesWithBalanceHook.data}
+							isLoading={addressesWithBalanceHook.isLoading}
+							error={addressesWithBalanceHook.error}
+							isExpanded={expandedSection === 'addresses'}
+							onToggle={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
+						/>
+						<div className="px-5 py-3">
+							<ReceiveSection address={receiveAddress} isLoading={addressesHook.isLoading} />
+						</div>
+						<div className="px-5 py-3">
+							<TxHistoryList />
+						</div>
+						<div className="px-5 py-3">
+							<SendPlaceholder />
+						</div>
+						<div className="px-5 py-3">
+							<SyncChip
+								syncStatus={syncHook.syncStatus}
+								isRefreshing={syncHook.isLoading}
+								error={syncHook.error}
+								onRefresh={() => void syncHook.triggerSync()}
+							/>
+						</div>
+					</div>
+				)}
+			</WalletPanel>
 		</ScreenShell>
 	)
 }
