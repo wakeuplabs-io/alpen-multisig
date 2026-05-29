@@ -29,17 +29,21 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 
 | Phase | Name | Stories / specs |
 |---|---|---|
-| 1 | Regtest commit funding | US-H7, [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md) |
-| 2 | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
-| 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
-| 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
-| 3.6 | Admin Wallet–only commit funding ✅ | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
+| 1 ✅ | Regtest commit funding | US-H7, [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md) |
+| 2 ✅ | Wallet core read path | PRD §4.1–4.2 (balance, UTXOs, addresses), [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) |
+| 3 ✅ | Wallet UI shell | PRD §4, Alta WalletPanel |
+| 3.5 ✅ | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW signing in R1.1) |
+| 3.6 ✅ | Admin Wallet–only commit funding | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
 | 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
-| 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
+| 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
+| R1.1 | HW broadcast signing | PRD §3.2, §5.3.3 — on-device commit/reveal signing |
+| R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
+| R1.3 | Receive rotation | PRD §4.3.4 |
+| R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
-| 6 | Receive rotation + Admin ID UI | PRD §4.1–4.2, §4.3.4 |
-| 7 | Hardware wallet adapters | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
+| 6 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
+| 7 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 8 | Shared Send + governance broadcast UX | US-H4, Alta S9/S11, PRD §5.3.2 |
 | 9 | Hardening + remote testnet/mainnet RPC | PRD §2 (no local node assumption) |
 
@@ -53,12 +57,12 @@ React (desktop-app/src)
        └─ Tauri admin_wallet module
             ├─ bdk_wallet (descriptors, sync, build, sign)
             ├─ bdk_bitcoind_rpc → chain RPC (BITCOIN_RPC_URL)
-            └─ CommitFunding (Phase 1) → WalletService (Phase 4+)
+            └─ WalletService (commit funding, Send, fee inputs)
 ```
 
 - **Secrets and signing** stay in Rust (Tauri). React shows addresses, balances, and confirmation UX only.
-- **CommitFunding** (Phase 1): pluggable commit payer — legacy `sendtoaddress` vs BDK Admin Wallet. Evolves into **WalletService** for general Send and governance fee inputs.
-- **Reveal** remains operator-key + existing `broadcast_tx` path until a later phase explicitly changes HW signing for reveal.
+- **WalletService** is the single Rust service for commit funding, Send, and governance fee inputs. (Phase 1's pluggable `CommitFunding` abstraction was removed in Phase 3.6; the Admin Wallet/BDK is now the sole funder.)
+- **Reveal** internal key is derived from the Admin Wallet at `m/86'/0'/73'/2/0` (Phase 3.5); the `broadcast_tx` path is otherwise unchanged. HW-signed commit/reveal lands in Release 1 (R1.1).
 
 ### Chain RPC end state
 
@@ -81,17 +85,24 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> P4[Phase 4 Send happy path]
+  P38 --> R1[Release 1: R1.1 HW broadcast → R1.2 Clean UI → R1.3 Receive rotation → R1.4 Drop derivation picking]
+  R1 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
-  P5 --> P6[Phase 6 Receive + Admin ID UI]
-  P6 --> P7[Phase 7 HW adapters]
+  P5 --> P6[Phase 6 Admin ID UI]
+  P6 --> P7[Phase 7 HW adapters: Send-on-HW]
   P7 --> P8[Phase 8 Gov + Send UX]
   P8 --> P9[Phase 9 Remote RPC hardening]
 ```
 
 ## 4. Phased plan
 
-### Phase 1 — Regtest commit funding (BDK + chain RPC)
+The plan has three parts: the completed **Foundation** (Phases 1–3.8), the next shippable increment **Release 1**, and the **Remaining phases (4–9)**.
+
+### Foundation (Phases 1–3.8) — done
+
+Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Wallet-only funding, session-bound mnemonic wallet, and watch-only HW wallet are all complete.
+
+#### Phase 1 — Regtest commit funding (BDK + chain RPC)
 
 **Goal:** US-H7 — fund governance commit from Admin Wallet on regtest; CI keeps legacy funding.
 
@@ -124,7 +135,7 @@ flowchart LR
 
 ---
 
-### Phase 2 — Wallet core read path
+#### Phase 2 — Wallet core read path
 
 **Spec:** [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) — full technical design, IPC contracts, test plan.
 
@@ -140,7 +151,7 @@ flowchart LR
 
 ---
 
-### Phase 3 — Wallet UI shell
+#### Phase 3 — Wallet UI shell
 
 **Goal:** Port Alta WalletPanel layout (tabs: Balance, Addresses, Transactions, Receive, Send placeholder).
 
@@ -154,11 +165,11 @@ flowchart LR
 
 ---
 
-### Phase 3.5 — Retire operator hot key (interim Admin Wallet derivation)
+#### Phase 3.5 — Retire operator hot key (interim Admin Wallet derivation) ✅
 
-**Goal:** Eliminate `OPERATOR_SECRET_KEY_HEX` as a separate hot key in environment. Derive the SPS-50 commit/reveal internal key from the Admin Wallet seed at a dedicated path so that — per PRD §3.2 — no signing material lives outside the Admin Wallet's secret zone. HW-mediated signing is deferred to Phase 7; this phase keeps the dev mnemonic as the secret source, but consolidates it into a single key custody surface.
+**Goal:** Eliminate `OPERATOR_SECRET_KEY_HEX` as a separate hot key in environment. Derive the SPS-50 commit/reveal internal key from the Admin Wallet seed at a dedicated path so that — per PRD §3.2 — no signing material lives outside the Admin Wallet's secret zone. HW-mediated signing is deferred to Release 1 (R1.1); this phase keeps the dev mnemonic as the secret source, but consolidates it into a single key custody surface.
 
-**Rationale:** The PRD never specifies a separate operator key. All signing flows are HW-wallet mediated (§3.2.2.5, §4.3.5.5.1, §5.3.3.2.2). `OPERATOR_SECRET_KEY_HEX` is dev scaffolding from POC days; carrying it as a parallel hot key through Phase 7 unnecessarily widens the secret-management surface. Retiring it before Phase 4 means the Send pipeline (Phase 4) and the reveal pipeline share one signer infrastructure, which Phase 7 then swaps to HW in a single coherent change.
+**Rationale:** The PRD never specifies a separate operator key. All signing flows are HW-wallet mediated (§3.2.2.5, §4.3.5.5.1, §5.3.3.2.2). `OPERATOR_SECRET_KEY_HEX` is dev scaffolding from POC days; carrying it as a parallel hot key through Phase 7 unnecessarily widens the secret-management surface. Retiring it before Phase 4 means the Send pipeline (Phase 4) and the reveal pipeline share one signer infrastructure, which Release 1 (R1.1) then swaps to HW in a single coherent change.
 
 **In scope**
 
@@ -172,7 +183,7 @@ flowchart LR
 
 **Out of scope**
 
-- HW PSBT signing for reveal (Phase 7).
+- HW PSBT signing for reveal (Release 1, R1.1).
 - Removing `ADMIN_WALLET_REGTEST_MNEMONIC` (Phase 9).
 - Changing SPS-50/51 envelope shape — only the internal key source changes; protocol semantics preserved.
 
@@ -195,11 +206,11 @@ flowchart LR
 
 - **Breaking change on regtest:** commit addresses change (different internal key). Acceptable because regtest state is ephemeral; document in changelog and reset E2E fixtures.
 - **No on-chain consequence in production:** no mainnet/testnet state exists yet; this is a one-time clean swap.
-- **Phase 7 future:** swaps the mnemonic-derived keypair for an HW-derived signature at the same path. No further changes to `broadcast_env.rs` or `broadcast_tx.rs` API.
+- **Release 1 (R1.1) future:** swaps the mnemonic-derived keypair for an HW-derived signature at the same path. No further changes to `broadcast_env.rs` or `broadcast_tx.rs` API.
 
 ---
 
-### Phase 3.6 — Admin Wallet–only commit funding ✅
+#### Phase 3.6 — Admin Wallet–only commit funding ✅
 
 **Status:** Complete — merged to `develop` as PR #187 (08dd1d4).
 **Spec:** [`admin-wallet-commit-funding-only.md`](./admin-wallet-commit-funding-only.md).
@@ -222,8 +233,8 @@ flowchart LR
 
 - Removing `ADMIN_WALLET_REGTEST_MNEMONIC` itself (Phase 9; or superseded by Phase 3.7 session binding for normal flows).
 - Session-binding the wallet to login (Phase 3.7).
-- Hardware wallet signing for commit (Phase 7).
-- `CommitFunding` trait itself may be retained as an abstraction if Phase 7 HW signing needs it — evaluate at implementation time. If the trait has no other implementors, remove it entirely.
+- Hardware wallet signing for commit (Release 1, R1.1).
+- `CommitFunding` trait itself may be retained as an abstraction if R1.1 HW signing needs it — evaluate at implementation time. If the trait has no other implementors, remove it entirely.
 
 **Done when**
 
@@ -244,11 +255,11 @@ flowchart LR
 
 - **CI regtest funding:** CI must have an Admin Wallet address pre-funded before running broadcast specs. Add a setup step to fund `m/86'/0'/73'/0/0` from the coinbase wallet before broadcast tests.
 - **`BITCOIN_WALLET_NAME` scope:** verify whether any non-broadcast code path still uses `BITCOIN_WALLET_NAME` before removing it. If so, retain it scoped to that path only.
-- **Phase 7 future:** HW signing for commit will replace the BDK mnemonic signer at the `WalletService` level, not at the `CommitFunding` level. No further changes to the commit-funding wiring are expected after this phase.
+- **Release 1 (R1.1) future:** HW signing for commit will replace the BDK mnemonic signer at the `WalletService` level, not at the `CommitFunding` level. No further changes to the commit-funding wiring are expected after this phase.
 
 ---
 
-### Phase 3.7 — Session-bound Admin Wallet (mnemonic login) ✅
+#### Phase 3.7 — Session-bound Admin Wallet (mnemonic login) ✅
 
 **Status:** Complete (3.7a session slot + 3.7b session-bound commit/reveal key + 3.7c `ADMIN_WALLET_REGTEST_MNEMONIC` removed). See [evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md) and [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json).
 **Spec:** [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
@@ -292,13 +303,15 @@ flowchart LR
 **Risks / notes**
 
 - **Concurrent IPC calls during login**: brief window between `auth_complete` and first wallet IPC. Commands must handle `None` state gracefully (return `Disabled`, not panic).
-- **Phase 7 future**: HW login will call the same session-init slot but pass an xpub instead of a mnemonic. The `WalletService` API surface established here is the extension point Phase 7 fills.
+- **Phase 3.8 handoff**: HW login calls the same session-init slot but passes an xpub instead of a mnemonic (watch-only). The `WalletService` API surface established here is the extension point Phase 3.8 fills; HW signing then lands in Release 1 (R1.1).
 
 ---
 
-### Phase 3.8 — Watch-only Admin Wallet (HW login)
+#### Phase 3.8 — Watch-only Admin Wallet (HW login) ✅
 
-**Goal:** When the user logs in with a hardware wallet (Trezor/Ledger), derive a **watch-only** BDK wallet from the device xpub at `m/86'/0'/73'` and register it as the session's `WalletService`. Balance and addresses become visible; all signing operations (Send, commit funding, reveal) remain disabled with a clear "Connect hardware wallet to sign" message. Phase 7 completes this by enabling PSBT-based signing.
+**Status:** Complete — merged to `develop` as PR #190 (5f9fffd).
+
+**Goal:** When the user logs in with a hardware wallet (Trezor/Ledger), derive a **watch-only** BDK wallet from the device xpub at `m/86'/0'/73'` and register it as the session's `WalletService`. Balance and addresses become visible; all signing operations (Send, commit funding, reveal) remain disabled with a clear "Connect hardware wallet to sign" message. On-device signing lands later: commit/reveal in Release 1 (R1.1), Send in Phase 7.
 
 **Rationale:** After Phase 3.7, HW users see the `Disabled` state in the wallet panel — a regression from the PRD intent. A watch-only wallet is trivially derivable from the xpub that the existing Trezor/Ledger IPC already surfaces, and gives HW users the same read-only visibility mnemonic users have, without requiring any Phase 7 signing infrastructure.
 
@@ -312,7 +325,7 @@ flowchart LR
 
 **Out of scope**
 
-- PSBT construction and HW signing (Phase 7).
+- PSBT construction and HW signing (commit/reveal in Release 1 R1.1; Send in Phase 7).
 - Trezor/Ledger xpub export IPC if it does not already exist — if missing, scope it minimally here; do not build full PSBT flow.
 
 **Done when**
@@ -332,11 +345,47 @@ flowchart LR
 **Risks / notes**
 
 - **xpub IPC availability**: Trezor adapter in `hw_wallet/trezor.rs` may not yet expose account-level xpub export. Needs investigation at implementation time; if missing it is a small addition scoped to this phase.
-- **Phase 7 handoff**: Phase 7 replaces the watch-only descriptor with a PSBT signer at the same managed state slot. No further changes to `auth_complete` or `WalletService` API are expected.
+- **Signing handoff**: Release 1 (R1.1) and Phase 7 replace the watch-only descriptor with a PSBT signer at the same managed state slot. No further changes to `auth_complete` or `WalletService` API are expected.
 
 ---
 
-### Phase 4 — Send BTC happy path (regtest, dev mnemonic)
+### Release 1 — next deliverable
+
+The next shippable increment, built on the Foundation. Four steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
+
+#### R1.1 — Hardware wallet broadcast signing
+
+**Goal:** HW users sign the governance commit and reveal on-device (PSBT), replacing the dev mnemonic for the broadcast path.
+
+**Done when:** On regtest/testnet, an approved proposal's commit and reveal are signed by the connected Trezor/Ledger with no dev mnemonic involved in the broadcast.
+
+#### R1.2 — Clean wallet UI
+
+**Goal:** Bring the wallet panel to production quality — remove dev-only affordances and placeholders, consistent loading/empty/error states.
+
+**Done when:** The wallet panel shows balance, addresses, and receive cleanly with no dev-only controls, at visual parity with the Alta WalletPanel.
+
+#### R1.3 — Receive rotation
+
+**Goal:** The Receive tab issues a fresh address and rotates to the next unused index after the current one is credited (PRD §4.3.4).
+
+**Done when:** After incoming funds confirm, the displayed receive address rotates to the next unused index on regtest.
+
+#### R1.4 — Remove connect-time derivation picking
+
+**Goal:** Drop the connect-flow step where the user manually picks a derivation path/account; derive Admin ID and Admin Wallet automatically at their canonical paths.
+
+**Done when:** Connecting a HW wallet derives Admin ID (`m/84'/0'/73'/0/0`) and Admin Wallet (`m/86'/0'/73'/n/n`) with no manual path-selection UI.
+
+**Later (optional, not in Release 1):** Admin ID display/copy (Phase 6), Send-on-HW + verify-on-device (Phase 7), QR for receive, fee-bump (Phase 5) — pull forward only if a Release 1 step needs them.
+
+---
+
+### Remaining phases (4–9)
+
+Phases 4–9 continue after Release 1. **Phase 6 (receive) and Phase 7 (HW) overlap with Release 1** — their entries below list only what remains after Release 1 ships.
+
+#### Phase 4 — Send BTC happy path (regtest, dev mnemonic)
 
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee default from chain RPC, change to `…/1/*`).
 
@@ -350,7 +399,7 @@ flowchart LR
 
 ---
 
-### Phase 5 — Transactions + fee-bump (RBF-first)
+#### Phase 5 — Transactions + fee-bump (RBF-first)
 
 **Goal:** Unconfirmed tx list and fee bump per PRD §4.3.3.
 
@@ -364,35 +413,39 @@ flowchart LR
 
 ---
 
-### Phase 6 — Receive rotation + Admin ID UI
+#### Phase 6 — Admin ID UI (receive rotation shipped in Release 1)
 
-**Goal:** PRD §4.1–4.2 Admin ID display/copy; PRD §4.3.4 receive address + QR + one-time-use rotation.
+> Receive-address rotation is delivered in **Release 1 (R1.3)**. This phase covers only the remainder.
 
-**In scope:** Admin ID `m/84'/0'/73'/0/0` in UI; receive index rotation after credit.
+**Goal:** PRD §4.1–4.2 Admin ID display/copy + QR.
 
-**Out of scope:** HW verify-on-device (Phase 7).
+**In scope:** Admin ID `m/84'/0'/73'/0/0` shown and copyable in UI; QR for receive/Admin ID.
 
-**Done when:** Receive rotates after incoming funds; Admin ID visible per PRD.
+**Out of scope:** Receive rotation (Release 1, R1.3); HW verify-on-device (Phase 7).
 
-**Primary code areas:** wallet Receive tab, settings/header Admin ID.
+**Done when:** Admin ID visible and copyable per PRD.
 
----
-
-### Phase 7 — Hardware wallet direct adapters (no HWI)
-
-**Goal:** Trezor/Ledger PSBT sign for Admin Wallet paths per PRD §3.2; reuse existing device adapters where possible. Includes the SPS-50 commit/reveal internal key path (`m/86'/0'/73'/2/0`) introduced in Phase 3.5 — HW now signs reveal in place of the dev mnemonic.
-
-**In scope:** Direct device APIs already in Tauri; PSBT preview on device; HW-derived reveal signing at the path established in Phase 3.5.
-
-**Out of scope:** HWI CLI, POC Electrum path.
-
-**Done when:** Regtest/testnet send and reveal are HW-signed without mnemonic; dev-mnemonic guard becomes unreachable on release builds (full removal in Phase 9).
-
-**Primary code areas:** `infrastructure/hw_wallet/`, PSBT pipeline in `admin_wallet`, reveal signer swap in `broadcast_env.rs`.
+**Primary code areas:** settings/header Admin ID, wallet Receive tab (display only).
 
 ---
 
-### Phase 8 — Shared Send + governance broadcast UX
+#### Phase 7 — Hardware wallet direct adapters (Send-on-HW; broadcast signing shipped in Release 1)
+
+> HW commit/reveal **broadcast** signing is delivered in **Release 1 (R1.1)**. This phase covers only the remainder: HW signing of the Admin Wallet **Send** path and verify-on-device.
+
+**Goal:** Trezor/Ledger PSBT sign for the Admin Wallet Send path (Phase 4) per PRD §3.2; reuse existing device adapters; verify-address-on-device.
+
+**In scope:** PSBT preview + signing on device for Send; receive-address verify-on-device; reuse of the adapters established in Release 1.
+
+**Out of scope:** HWI CLI, POC Electrum path; commit/reveal broadcast signing (Release 1, R1.1).
+
+**Done when:** Regtest/testnet Admin Wallet send is HW-signed without a mnemonic; dev-mnemonic guard becomes unreachable on release builds (full removal in Phase 9).
+
+**Primary code areas:** `infrastructure/hw_wallet/`, PSBT pipeline in `admin_wallet` (send path).
+
+---
+
+#### Phase 8 — Shared Send + governance broadcast UX
 
 **Goal:** US-H4 fee control; Alta S9/S11-style shared Send + governance broadcast screens.
 
@@ -406,7 +459,7 @@ flowchart LR
 
 ---
 
-### Phase 9 — Hardening + remote testnet/mainnet RPC
+#### Phase 9 — Hardening + remote testnet/mainnet RPC
 
 **Goal:** No local node assumption; trusted/custom RPC URLs; production capability flags.
 
@@ -418,17 +471,19 @@ flowchart LR
 
 **Primary code areas:** `broadcast_env.rs`, config UI, release CI matrix without bundled bitcoind for app users.
 
-## 5. Current baseline
+## 5. Baseline (pre-Foundation starting point)
 
-| Area | Today |
-|---|---|
-| Governance broadcast | Desktop `broadcast_commit_then_reveal` — commit via `sendtoaddress`, reveal via operator key + `send_raw_transaction` |
-| Chain access | `HttpBitcoinRpcClient` in `infrastructure/bitcoin_rpc.rs` |
-| Operator / reveal | `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY` on regtest — **dev scaffolding only; retired in Phase 3.5** (derived from Admin Wallet at `m/86'/0'/73'/2/0`) |
-| Admin ID HW | BIP-84 Trezor paths in `hw_wallet/trezor.rs`; frontend `m/84'/0'/73'/0/0` |
-| Broadcast UI | `/proposals/:actionId/broadcast`, orchestrator claim + PATCH |
-| BDK | Not in workspace yet |
-| Product RPC assumption | Local regtest `bitcoind` in scripts; `BITCOIN_WALLET_NAME` for legacy commit funding |
+This table captures the state **before** the Foundation work. Several rows have since changed — the "Now (after Foundation)" column records the current state.
+
+| Area | Pre-Foundation starting point | Now (after Foundation) |
+|---|---|---|
+| Governance broadcast | Desktop `broadcast_commit_then_reveal` — commit via `sendtoaddress`, reveal via operator key + `send_raw_transaction` | Commit funded by Admin Wallet (BDK); reveal key derived from Admin Wallet at `m/86'/0'/73'/2/0` |
+| Chain access | `HttpBitcoinRpcClient` in `infrastructure/bitcoin_rpc.rs` | Unchanged |
+| Operator / reveal | `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY` on regtest — dev scaffolding | Retired in Phase 3.5; reveal key derived from Admin Wallet (`m/86'/0'/73'/2/0`) |
+| Admin ID HW | BIP-84 Trezor paths in `hw_wallet/trezor.rs`; frontend `m/84'/0'/73'/0/0` | Unchanged |
+| Broadcast UI | `/proposals/:actionId/broadcast`, orchestrator claim + PATCH | Unchanged |
+| BDK | Not in workspace | In workspace (`bdk_wallet`, `bdk_bitcoind_rpc`) since Phase 1 |
+| Product RPC assumption | Local regtest `bitcoind` in scripts; `BITCOIN_WALLET_NAME` for legacy commit funding | Local `bitcoind` still the dev/CI chain RPC; `BITCOIN_WALLET_NAME`/`COMMIT_FUNDING` removed (Phase 3.6) |
 
 Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md).
 
