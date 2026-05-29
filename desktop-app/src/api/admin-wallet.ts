@@ -102,7 +102,7 @@ export type WalletSessionInitWatchOnlyInput = {
 }
 
 export function walletSessionInitWatchOnly(input: WalletSessionInitWatchOnlyInput): Promise<ApiResult<null>> {
-	return tauriCall<null>('wallet_session_init_watch_only', input)
+	return tauriCall<null>('wallet_session_init_watch_only', { input })
 }
 
 export function getAdminWalletCanSign(): Promise<ApiResult<boolean>> {
