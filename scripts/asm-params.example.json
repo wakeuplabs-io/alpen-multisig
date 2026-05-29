@@ -15,7 +15,8 @@
         "strata_administrator": {
           "keys": [
             "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
-            "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
+            "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7",
+            "03950345fe8eb7dc8975c774aacb3f1afcae77a88bb0ab1cce227e7690aa62229f"
           ],
           "threshold": 2
         },
