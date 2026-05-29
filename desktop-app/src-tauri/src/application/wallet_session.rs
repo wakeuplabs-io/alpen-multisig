@@ -328,6 +328,40 @@ mod tests {
         );
     }
 
+    // Behavior 8: testnet network string routes to Network::Testnet
+    #[tokio::test]
+    async fn init_from_mnemonic_with_testnet_network_uses_testnet() {
+        let session = WalletSession::empty();
+        let result = session
+            .init_from_mnemonic(
+                "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+                None,
+                Some("testnet"),
+            )
+            .await;
+        assert!(result.is_ok(), "testnet init must succeed");
+        let svc = session.current().expect("session must be Some after init");
+        let wallet = svc.wallet.lock().await;
+        assert_eq!(wallet.network(), bdk_wallet::bitcoin::Network::Testnet);
+    }
+
+    // Behavior 9: mainnet/bitcoin network string routes to Network::Bitcoin
+    #[tokio::test]
+    async fn init_from_mnemonic_with_mainnet_network_uses_mainnet() {
+        let session = WalletSession::empty();
+        let result = session
+            .init_from_mnemonic(
+                "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+                None,
+                Some("bitcoin"),
+            )
+            .await;
+        assert!(result.is_ok(), "mainnet init must succeed");
+        let svc = session.current().expect("session must be Some after init");
+        let wallet = svc.wallet.lock().await;
+        assert_eq!(wallet.network(), bdk_wallet::bitcoin::Network::Bitcoin);
+    }
+
     // Behavior 4: re-init shuts down prior service
     #[tokio::test]
     async fn reinit_shuts_down_prior_service() {

@@ -763,6 +763,12 @@ mod tests {
 
         svc.spawn_background_sync();
 
+        assert!(
+            svc.bg_task_started
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "bg_task_started must be true after spawn_background_sync"
+        );
+
         // Give the task a moment to start polling
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
