@@ -24,7 +24,7 @@ PRD §3.2 specifies that the hardware wallet is the source of the Admin Wallet (
 | D4 | Commit/reveal key for watch-only | `SessionState.commit_reveal_keypair` becomes `Option<UntweakedKeypair>` | Watch-only stores `None`; no private key can ever be derived from an xpub; invariant held by construction |
 | D5 | Sign-disabled error | New `AdminWalletError::ReadOnly` + `BroadcastEnvError::ReadOnly`, distinct from `Disabled` and `WalletSessionRequired` | Three genuinely different states with different remedies; collapsing them would show wrong guidance to HW users |
 | D6 | Read-path enablement | Keep existing regtest `check_enabled()` guard for sync | Keeps Phase 3.8 tightly scoped; decoupling read-enablement from sign-enablement is deferred to Phase 9 |
-| D7 | Account-xpub coin type | `m/86'/0'/73'` (coin type `0'`) for both Trezor and Ledger | Matches `load_admin_wallet`; using Ledger's `1'` coin-type convention from the Admin-ID path would produce different addresses than the mnemonic wallet for the same seed |
+| D7 | Account-xpub coin type | Trezor: `m/86'/0'/73'` (`0'`). **Ledger: network-aware — `1'` on regtest/testnet/signet, `0'` on mainnet** (revised during HW validation, see below) | Original spec mandated `0'` for both to match `load_admin_wallet`. Live Ledger testing showed the Ledger testnet app **rejects** coin type `0'` (APDU `6a82`), so the Ledger must follow its own Admin-ID `1'` convention on non-mainnet networks. The xpub network version bytes are normalised at wallet build, so addresses remain consistent for the same key material |
 | D8 | `canSign` exposure to frontend | Dedicated pure command `admin_wallet_can_sign() -> bool`, no RPC | Capability check must not trigger a sync; FE can render the correct affordance immediately after login, before/independent of any sync |
 
 ## Steps completed
@@ -76,13 +76,22 @@ PRD §3.2 specifies that the hardware wallet is the source of the Admin Wallet (
 
 ## Issues encountered
 
-None blocking. The main design clarification was the coin type for the Ledger xpub path (D7): the Ledger Admin-ID convention uses `1'` (testnet), but the Admin Wallet must use `0'` to match `load_admin_wallet` and produce consistent addresses.
+Three chained bugs surfaced only during **live hardware validation** (Ledger via the speculos emulator on regtest) — all invisible to the unit suite, which had no real device. They were diagnosed by adding temporary `eprintln!` diagnostics to the IPC commands and reading the speculos APDU log:
+
+1. **Ledger rejects coin type `0'` (APDU `6a82`).** The Ledger testnet Bitcoin app only serves the testnet coin type `1'`; requesting `m/86'/0'/73'` failed at the device, so `get_account_xpub` errored and the session never initialised. Fix: Ledger xpub path is now network-aware (`1'` on regtest/testnet/signet, `0'` on mainnet), mirroring its Admin-ID convention. This **revised decision D7**. Trezor is unaffected (accepts `0'`).
+2. **Error serialization masked the failure.** `serialize_wallet_error` used serde's default externally-tagged form (`"Disabled"`), but the frontend `AdminWalletError` union expects `{ type: 'Disabled' }`. So a failed/absent session rendered as a misleading "0 balance, no error card" empty panel (and later as a "set BITCOIN_NETWORK…" card whose advice was wrong — the env was fine, there was simply no session). Fix: `serialize_wallet_error` now emits `{ type, message }`; the frontend union + formatter handle all variants.
+3. **IPC payload not wrapped in `{ input }`.** `walletSessionInitWatchOnly` invoked with a flattened payload while the Rust command takes a single `input: WatchOnlyInitInput` parameter (bound by name). Tauri could not deserialise the argument, so the command body never ran and the watch-only session silently failed to initialise. Fix: wrap as `{ input }`, matching the (already-correct) mnemonic path. This was the bug that actually blocked the feature end-to-end.
+
+A latent display issue was also fixed: the receive-address row rendered at 11px with no label, making the address effectively invisible.
 
 ## Lessons learned
 
 - The Phase 3.7 design (decoupled session slot, `Option` keypair groundwork) made this phase straightforward — adding a second fill path required no structural changes to `WalletSession`.
 - A dedicated pure capability command (`admin_wallet_can_sign`) with no RPC dependency is the right pattern for UI-state queries; piggybacking on sync-triggering commands would couple render latency to node availability.
 - User-facing copy must never reference implementation phases or internal milestone names — enforced as a spec constraint (user-facing copy constraint section in the spec).
+- **The IPC boundary needs a real-device integration test, not just typed unit tests.** All three blocking bugs lived at the Rust↔JS↔device seam and passed the unit suite. The original `walletSessionInitWatchOnly` test asserted only `typeof === 'function'` (testing theater) and missed the wrong argument shape; it has been strengthened to intercept the Tauri `invoke` and assert the `{ input }` payload wrapping. The WebDriver smoke covers the mnemonic path but not the Ledger watch-only path — a HW (speculos) smoke for this flow would have caught all three.
+- **Device assumptions must be validated against the actual app, not the spec.** The spec's D7 (`0'` for both devices) was correct in intent but wrong in practice: the Ledger testnet app cannot derive `0'`. Hardware behaviour overrides spec decisions; design notes that assert device capabilities should be flagged as assumptions until proven on-device.
+- **Overloaded error variants hide root causes.** `AdminWalletError::Disabled` means both "env guard failed" and "no session", so a watch-only init failure surfaced as misleading "set BITCOIN_NETWORK…" guidance. Distinct states deserve distinct, accurate error messages.
 
 ## Links
 
