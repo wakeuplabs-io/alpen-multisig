@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Paginator } from '@/components/paginator'
 import type { PendingBlockPayoutTx } from '../model/block-payouts.types'
 import { PendingTransactionCard } from './pending-transaction-card'
 
@@ -10,6 +12,8 @@ type Props = {
 	onCopySignatures: (txId: string) => void
 }
 
+const PAGE_SIZE = 10
+
 export function PendingTransactionsList({
 	txs,
 	hasConflicts,
@@ -18,6 +22,10 @@ export function PendingTransactionsList({
 	onExport,
 	onCopySignatures,
 }: Props) {
+	const [page, setPage] = useState(1)
+	const totalPages = Math.ceil(txs.length / PAGE_SIZE)
+	const paged = txs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
 	if (txs.length === 0) {
 		return (
 			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-12 text-center">
@@ -56,7 +64,7 @@ export function PendingTransactionsList({
 					</p>
 				</div>
 			)}
-			{txs.map((tx) => (
+			{paged.map((tx) => (
 				<PendingTransactionCard
 					key={tx.id}
 					tx={tx}
@@ -66,6 +74,7 @@ export function PendingTransactionsList({
 					onCopySignatures={() => onCopySignatures(tx.id)}
 				/>
 			))}
+			<Paginator page={page} totalPages={totalPages} onPageChange={setPage} />
 		</div>
 	)
 }

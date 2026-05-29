@@ -91,6 +91,7 @@ export function useBlockPayouts(): BlockPayoutsHook {
 					setPastTxs((prev) => [
 						{
 							id: txId,
+							inputs: signed.inputs,
 							status: 'unconfirmed',
 							broadcastAt: new Date(),
 							rawTx: signed.rawTx,
