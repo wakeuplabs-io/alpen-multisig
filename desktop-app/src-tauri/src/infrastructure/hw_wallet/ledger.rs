@@ -356,8 +356,8 @@ pub fn get_account_xpub(path: &str) -> Result<String, String> {
         .build()
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
-    let derivation_path = DerivationPath::from_str(path)
-        .map_err(|e| format!("Invalid path: {e}"))?;
+    let derivation_path =
+        DerivationPath::from_str(path).map_err(|e| format!("Invalid path: {e}"))?;
 
     if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
         let transport = SpeculosTransport::new(url);

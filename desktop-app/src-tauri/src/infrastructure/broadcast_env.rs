@@ -371,6 +371,10 @@ mod tests {
         let session = session_with_mnemonic(TEST_MNEMONIC);
         let result = resolve_commit_reveal_keypair(&session);
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-        assert!(result.is_ok(), "expected Ok keypair, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "expected Ok keypair, got: {:?}",
+            result.err()
+        );
     }
 }
