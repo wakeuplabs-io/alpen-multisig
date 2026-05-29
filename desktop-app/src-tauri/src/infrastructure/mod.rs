@@ -10,6 +10,7 @@ pub mod challenge_verifier;
 pub mod dev_secrets;
 pub mod env_loader;
 pub mod hw_wallet;
+pub mod node_config_store;
 pub mod orchestrator_client;
 pub mod rpc_timeout;
 pub mod signing;
