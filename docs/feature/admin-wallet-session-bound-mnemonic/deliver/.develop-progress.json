@@ -1,23 +1,25 @@
 {
-  "project_id": "",
+  "project_id": "admin-wallet-session-bound-mnemonic",
   "total_steps": 12,
-  "completed_steps": 6,
+  "completed_steps": 12,
   "completed_step_ids": [
     "01-01",
     "01-02",
+    "01-03",
     "02-01",
     "02-02",
     "02-03",
-    "03-01"
-  ],
-  "pending_step_ids": [
-    "01-03",
+    "03-01",
     "03-02",
     "03-03",
     "04-01",
     "05-01",
     "05-02"
   ],
-  "all_steps_done": false,
-  "phases_completed": {}
+  "pending_step_ids": [],
+  "all_steps_done": true,
+  "phases_completed": {
+    "integrity_verification": "PASS",
+    "finalize": "PASS"
+  }
 }

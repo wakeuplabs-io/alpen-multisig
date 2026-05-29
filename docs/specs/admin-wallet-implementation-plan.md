@@ -34,7 +34,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
 | 3.6 | Admin Wallet–only commit funding ✅ | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
-| 3.7 | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — Admin Wallet derives from the same seed the user logged in with; retires `ADMIN_WALLET_REGTEST_MNEMONIC` for the "Palabras" path |
+| 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — Admin Wallet derives from the same seed the user logged in with; retires `ADMIN_WALLET_REGTEST_MNEMONIC` for the "Palabras" path, [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -248,7 +248,10 @@ flowchart LR
 
 ---
 
-### Phase 3.7 — Session-bound Admin Wallet (mnemonic login)
+### Phase 3.7 — Session-bound Admin Wallet (mnemonic login) ✅
+
+**Status:** Complete — delivered on `feature/admin-wallet-session-bound-mnemonic`. See [evolution archive](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md).
+**Spec:** [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
 
 **Goal:** Bind the `WalletService` lifecycle to the user's login session so that when the user logs in with "Palabras" (dev mnemonic), the Admin Wallet is derived from *that same mnemonic* — not from a separate `ADMIN_WALLET_REGTEST_MNEMONIC` env var. Closes the PRD §3.2 gap where Admin Wallet and Admin ID were sourced independently.
 
