@@ -18,6 +18,8 @@ pub enum BroadcastEnvError {
     MnemonicSigningDisabled,
     #[error("wallet session required — log in with Palabras (dev mnemonic) before broadcast")]
     WalletSessionRequired,
+    #[error("admin wallet is watch-only; hardware wallet required to sign")]
+    ReadOnly,
     #[error("admin wallet error: {0}")]
     AdminWallet(#[from] AdminWalletError),
 }
@@ -101,9 +103,12 @@ fn resolve_commit_reveal_keypair(
     if !allow {
         return Err(BroadcastEnvError::MnemonicSigningDisabled);
     }
+    if wallet_session.current().is_none() {
+        return Err(BroadcastEnvError::WalletSessionRequired);
+    }
     wallet_session
         .commit_reveal_keypair()
-        .ok_or(BroadcastEnvError::WalletSessionRequired)
+        .ok_or(BroadcastEnvError::ReadOnly)
 }
 
 fn parse_network(network: &str) -> Result<Network, BroadcastEnvError> {
@@ -306,5 +311,66 @@ mod tests {
     #[allow(dead_code)]
     fn _with_env_var_used(key: &str, value: Option<&str>, f: impl FnOnce()) {
         with_env_var(key, value, f);
+    }
+
+    fn derive_regtest_xpub(mnemonic_str: &str) -> String {
+        use bdk_wallet::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
+        use bdk_wallet::bitcoin::secp256k1::Secp256k1;
+        use std::str::FromStr;
+        let mnemonic = bip39::Mnemonic::parse(mnemonic_str).unwrap();
+        let seed = mnemonic.to_seed("");
+        let secp = Secp256k1::new();
+        let xpriv = Xpriv::new_master(Network::Regtest, &seed).unwrap();
+        let path = DerivationPath::from_str("m/86h/0h/73h").unwrap();
+        let account_xpriv = xpriv.derive_priv(&secp, &path).unwrap();
+        Xpub::from_priv(&secp, &account_xpriv).to_string()
+    }
+
+    fn session_with_xpub(xpub: &str) -> WalletSession {
+        let session = WalletSession::empty();
+        tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(session.init_from_xpub(xpub, None))
+            .expect("session init");
+        session
+    }
+
+    #[test]
+    fn resolve_commit_reveal_keypair_watch_only_session_returns_read_only() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        let xpub = derive_regtest_xpub(TEST_MNEMONIC);
+        let session = session_with_xpub(&xpub);
+        let result = resolve_commit_reveal_keypair(&session);
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+        assert!(
+            matches!(result, Err(BroadcastEnvError::ReadOnly)),
+            "expected ReadOnly, got: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn resolve_commit_reveal_keypair_no_session_returns_wallet_session_required() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        let session = WalletSession::empty();
+        let result = resolve_commit_reveal_keypair(&session);
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+        assert!(
+            matches!(result, Err(BroadcastEnvError::WalletSessionRequired)),
+            "expected WalletSessionRequired, got: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn resolve_commit_reveal_keypair_mnemonic_session_returns_keypair() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        let session = session_with_mnemonic(TEST_MNEMONIC);
+        let result = resolve_commit_reveal_keypair(&session);
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+        assert!(result.is_ok(), "expected Ok keypair, got: {:?}", result.err());
     }
 }
