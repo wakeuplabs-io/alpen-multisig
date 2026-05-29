@@ -176,6 +176,7 @@ fn error_code(e: &AdminWalletError) -> String {
         AdminWalletError::InvalidMnemonic(_) => "InvalidMnemonic".into(),
         AdminWalletError::Descriptor(_) => "Descriptor".into(),
         AdminWalletError::WalletCreation(_) => "WalletCreation".into(),
+        AdminWalletError::ReadOnly => "ReadOnly".into(),
     }
 }
 
