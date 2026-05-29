@@ -49,6 +49,14 @@ pub async fn sign_challenge_with_trezor(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn get_trezor_admin_wallet_xpub() -> Result<String, String> {
+    let path = "m/86'/0'/73'".to_string();
+    tokio::task::spawn_blocking(move || trezor::get_account_xpub(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 // ---------------------------------------------------------------------------
 // Ledger commands
 // ---------------------------------------------------------------------------
@@ -80,6 +88,14 @@ pub async fn sign_with_ledger(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_ledger_admin_wallet_xpub() -> Result<String, String> {
+    let path = "m/86'/0'/73'".to_string();
+    tokio::task::spawn_blocking(move || ledger::get_account_xpub(&path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
