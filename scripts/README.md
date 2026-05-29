@@ -166,16 +166,19 @@ Download the Bitcoin app ELF for your target model from [app-bitcoin-new release
 ./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanosp.elf
 # or for a different model:
 ./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanos.elf --model nanos
+# optional BIP-39 seed (must match your dev wallet if you want the same addresses):
+./scripts/ledger-up.sh ~/ledger-apps/bitcoin_testnet_nanosp.elf \
+  --seed "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 ```
 
-Runs Speculos on `http://localhost:5000`.
+Runs Speculos on `http://localhost:5001`.
 
 ### Configure the desktop app
 
-Uncomment this line in `desktop-app/.env`:
+Add to `desktop-app/.env`:
 
 ```
-LEDGER_SPECULOS_URL=http://localhost:5000
+LEDGER_SPECULOS_URL=http://localhost:5001
 ```
 
 Then restart `npm run tauri dev`. The Tauri backend will route all Ledger calls through the emulator instead of HID.

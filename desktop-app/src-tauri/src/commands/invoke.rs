@@ -39,10 +39,12 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::hw_wallet::verify_address_on_device,
         super::hw_wallet::sign_with_trezor,
         super::hw_wallet::sign_challenge_with_trezor,
+        super::hw_wallet::get_trezor_admin_wallet_xpub,
         super::hw_wallet::list_ledger_addresses,
         super::hw_wallet::get_ledger_info,
         super::hw_wallet::sign_with_ledger,
         super::hw_wallet::sign_challenge_with_ledger,
+        super::hw_wallet::get_ledger_admin_wallet_xpub,
         super::signing::compute_sighash,
         super::signing::verify_threshold,
         super::admin_wallet::get_admin_wallet_info,
@@ -51,6 +53,8 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::admin_wallet::admin_wallet_list_addresses,
         super::admin_wallet::admin_wallet_sync,
         super::admin_wallet::admin_wallet_sync_status,
+        super::admin_wallet::wallet_session_init_watch_only,
+        super::admin_wallet::admin_wallet_can_sign,
     ])
 }
 
@@ -82,10 +86,12 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::hw_wallet::verify_address_on_device,
         super::hw_wallet::sign_with_trezor,
         super::hw_wallet::sign_challenge_with_trezor,
+        super::hw_wallet::get_trezor_admin_wallet_xpub,
         super::hw_wallet::list_ledger_addresses,
         super::hw_wallet::get_ledger_info,
         super::hw_wallet::sign_with_ledger,
         super::hw_wallet::sign_challenge_with_ledger,
+        super::hw_wallet::get_ledger_admin_wallet_xpub,
         super::signing::compute_sighash,
         super::signing::verify_threshold,
         super::signing::sign_action_sighash,
@@ -98,5 +104,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::admin_wallet::admin_wallet_sync,
         super::admin_wallet::admin_wallet_sync_status,
         super::admin_wallet::wallet_session_init,
+        super::admin_wallet::wallet_session_init_watch_only,
+        super::admin_wallet::admin_wallet_can_sign,
     ])
 }

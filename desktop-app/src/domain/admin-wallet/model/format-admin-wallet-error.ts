@@ -44,5 +44,24 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: err.message,
 				severity: 'info',
 			}
+		case 'ReadOnly':
+			return {
+				title: 'Watch-only wallet',
+				body: 'This wallet is in watch-only mode. Signing operations are not available.',
+				severity: 'info',
+			}
+		case 'InvalidMnemonic':
+			return {
+				title: 'Invalid mnemonic',
+				body: `Admin Wallet could not be derived from the login mnemonic.${err.message ? ` (${err.message})` : ''}`,
+				severity: 'fatal',
+			}
+		case 'Descriptor':
+		case 'WalletCreation':
+			return {
+				title: 'Admin Wallet could not be built',
+				body: `Failed to construct the Admin Wallet from the account key.${err.message ? ` (${err.message})` : ''}`,
+				severity: 'fatal',
+			}
 	}
 }

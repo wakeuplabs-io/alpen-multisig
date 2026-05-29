@@ -15,6 +15,7 @@ type Props = {
 	proposal: Proposal | null
 	onBroadcast: () => void
 	isBroadcasting: boolean
+	canSign?: boolean
 	adminWalletInfo?: AdminWalletInfoView | null
 	utxoCount?: number
 	lastSyncedAt?: string | null
@@ -48,6 +49,7 @@ export function BroadcastDetailsCard({
 	proposal,
 	onBroadcast,
 	isBroadcasting,
+	canSign = true,
 	adminWalletInfo,
 	utxoCount,
 	lastSyncedAt,
@@ -153,12 +155,13 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={isBroadcasting}
+					disabled={isBroadcasting || !canSign}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{isBroadcasting ? 'Broadcasting…' : 'Confirm & Broadcast'}
 				</button>
+				{!canSign && <p className="mt-2 text-center text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
 			</div>
 		</div>
 	)

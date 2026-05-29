@@ -224,6 +224,24 @@ pub fn verify_address_on_device(derivation_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Returns the BIP-86 (Taproot) account xpub for the given derivation path.
+///
+/// Uses `SPENDTAPROOT` script type so Trezor derives the correct key material
+/// for a P2TR wallet. `ignore_xpub_magic = true` (set inside `get_xpub`) ensures
+/// standard `xpub` version bytes are returned instead of SLIP-0132 `Xpub` bytes.
+pub fn get_account_xpub(path: &str) -> Result<String, String> {
+    let derivation_path = parse_path(path)?;
+    let mut trezor = open_trezor()?;
+    let xpub = resolve(get_xpub(
+        &mut trezor,
+        &derivation_path,
+        InputScriptType::SPENDTAPROOT,
+        Network::Bitcoin,
+        false,
+    )?)?;
+    Ok(xpub.to_string())
+}
+
 /// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
 ///
 /// `message` must be the human-readable string produced by

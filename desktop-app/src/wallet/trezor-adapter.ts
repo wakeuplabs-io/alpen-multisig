@@ -81,5 +81,11 @@ export function createTrezorAdapter(): WalletAdapter {
 			if (!result.ok) throw new Error(result.error)
 			return result.data
 		},
+
+		async getAccountXpub(): Promise<string> {
+			const result = await tauriCall<string>('get_trezor_admin_wallet_xpub', {})
+			if (!result.ok) throw new Error(result.error)
+			return result.data
+		},
 	}
 }

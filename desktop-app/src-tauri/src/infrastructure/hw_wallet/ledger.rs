@@ -345,3 +345,41 @@ pub fn sign_admin_sps65_binding(
         rt.block_on(sign_with(&client, message, derivation_path))
     }
 }
+
+/// Returns the BIP-86 (Taproot) account xpub for the given derivation path.
+///
+/// Uses `get_extended_pubkey` on the hardened account path directly.
+/// Supports Speculos emulator via `LEDGER_SPECULOS_URL` environment variable.
+pub fn get_account_xpub(path: &str) -> Result<String, String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+
+    let derivation_path =
+        DerivationPath::from_str(path).map_err(|e| format!("Invalid path: {e}"))?;
+
+    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
+        let transport = SpeculosTransport::new(url);
+        let client = BitcoinClient::new(transport);
+        rt.block_on(async {
+            client
+                .get_extended_pubkey(&derivation_path, false)
+                .await
+                .map(|xpub| xpub.to_string())
+                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))
+        })
+    } else {
+        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
+        let transport = TransportNativeHID::new(&hidapi)
+            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
+        let client = BitcoinClient::new(HidTransport(transport));
+        rt.block_on(async {
+            client
+                .get_extended_pubkey(&derivation_path, false)
+                .await
+                .map(|xpub| xpub.to_string())
+                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))
+        })
+    }
+}
