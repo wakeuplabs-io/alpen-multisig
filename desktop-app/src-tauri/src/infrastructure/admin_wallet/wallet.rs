@@ -121,6 +121,26 @@ mod tests {
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
+    // Account-level xpub for TEST_MNEMONIC at m/86'/0'/73' on Regtest (tpub prefix).
+    // Derived once and pinned as a constant to serve as the D7 regression anchor:
+    // same seed must produce identical addresses whether loaded via mnemonic or xpub.
+    const TEST_ACCOUNT_XPUB: &str = "tpubDC3pD7UZXnsjtxnhe3cD8eQUqW9jukHzXmdkpGP55pUAsjhmU9bUmwP8uvQWzhLMr2Fuqd947YAEnhQ9R95H84hrhhApsaWeVLU76jT7Bf1";
+
+    #[test]
+    fn watch_only_and_mnemonic_wallet_produce_same_external_address() {
+        // D7 anchor: external[0] from watch-only (TEST_ACCOUNT_XPUB) must equal
+        // external[0] from mnemonic wallet (TEST_MNEMONIC) — same seed, Regtest network.
+        let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
+            .expect("mnemonic wallet must succeed");
+        let watch_wallet = load_watch_only_admin_wallet(TEST_ACCOUNT_XPUB, Network::Regtest)
+            .expect("watch-only wallet must succeed");
+        assert_eq!(
+            get_external_address(&mnemonic_wallet),
+            get_external_address(&watch_wallet),
+            "external address[0] must match between mnemonic and watch-only wallet (D7 invariant)"
+        );
+    }
+
     #[test]
     fn watch_only_wallet_external_address_matches_mnemonic_wallet_address() {
         // D7 anchor: external[0] of watch-only must equal external[0] of mnemonic wallet
