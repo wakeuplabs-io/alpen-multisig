@@ -5,6 +5,10 @@
 # Rust build artifacts
 target/
 
+# cargo-mutants output (mutation testing artifacts)
+mutants.out/
+mutants.out.old/
+
 # OS files
 .DS_Store
 Thumbs.db

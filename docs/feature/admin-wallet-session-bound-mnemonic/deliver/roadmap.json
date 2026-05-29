@@ -1,0 +1,310 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-session-bound-mnemonic",
+    "created_at": "2026-05-28T22:23:13Z",
+    "total_steps": 16,
+    "phases": 6
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "WalletService cancellation signal and shutdown",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "Add cancellation signal and shutdown to WalletService",
+          "description": "Introduce a cancellation signal (tokio::sync::Notify or Arc<AtomicBool> \u2014 no tokio-util) as a field on WalletService. Add pub fn shutdown(&self) (idempotent). Calling it notifies the signal so the background loop exits promptly.",
+          "estimated_hours": 2,
+          "deps": [],
+          "criteria": "shutdown() can be called multiple times without panicking; after shutdown() the cancellation signal is in a notified/set state",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "01-02",
+          "name": "Update spawn_background_sync to select on cancellation",
+          "description": "Rewrite the sync loop so each iteration uses tokio::select! with two branches: one that waits for the sync interval and syncs, and one that observes the cancellation signal and breaks.",
+          "estimated_hours": 2,
+          "deps": [
+            "01-01"
+          ],
+          "criteria": "After shutdown() is called the background loop exits on its next iteration without completing another sync; calling shutdown() again on an already-shut-down service does not panic",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "01-03",
+          "name": "Add SyncStatusDto::disabled_default() constructor",
+          "description": "Add pub fn disabled_default() -> SyncStatusDto returning is_syncing=false, all optional numeric fields None, last_error set to the serialized Disabled variant.",
+          "estimated_hours": 1,
+          "deps": [],
+          "criteria": "disabled_default() returns is_syncing=false; its last_error encodes the Disabled error variant; all optional balance and block-height fields are None",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "WalletSession newtype \u2014 session slot",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "Create wallet_session.rs with WalletSession newtype",
+          "description": "Create application/wallet_session.rs. Define WalletSession wrapping Arc<std::sync::RwLock<Option<Arc<WalletService>>>>. Implement empty(), current(), and clear() (calls shutdown() on the held service before taking the slot). Expose in application/mod.rs.",
+          "estimated_hours": 2,
+          "deps": [
+            "01-01"
+          ],
+          "criteria": "empty() produces a session whose current() is None; after clear() current() is None; clear() calls shutdown() on the prior service; RwLock poison is recovered via into_inner and never panics",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs",
+            "desktop-app/src-tauri/src/application/mod.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "02-02",
+          "name": "Implement init_from_mnemonic on WalletSession",
+          "description": "pub async fn init_from_mnemonic(&self, mnemonic, passphrase, network) builds a WalletService via load_admin_wallet (no RPC), shuts down any prior service, stores the new Arc. Returns InvalidMnemonic on bad input; slot stays None on any error.",
+          "estimated_hours": 3,
+          "deps": [
+            "02-01"
+          ],
+          "criteria": "Valid mnemonic sets current() to Some; external address 0 equals load_admin_wallet(mnemonic) address 0; invalid mnemonic returns InvalidMnemonic and current() stays None; succeeds when BITCOIN_RPC_URL is unreachable; re-init shuts down the prior service leaving one bg loop",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "02-03",
+          "name": "Implement current_or_fallback with env-var fallback",
+          "description": "pub fn current_or_fallback() returns the live session (branch 1); only when slot is None reads ADMIN_WALLET_REGTEST_MNEMONIC (branch 2) and caches the wallet; returns Disabled when env is also absent (branch 3). Only this function reads the env var.",
+          "estimated_hours": 2,
+          "deps": [
+            "02-02"
+          ],
+          "criteria": "Session A with env=B returns service A not B; empty slot with env set builds and caches; second call returns same Arc pointer; empty slot with no env returns Disabled",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Migrate wallet IPC commands and add wallet_session_init",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "Add WalletSessionInitInput DTO and wallet_session_init command",
+          "description": "In commands/admin_wallet.rs define WalletSessionInitInput (Deserialize, camelCase) with mnemonic, passphrase, network. Implement #[tauri::command] async fn wallet_session_init gated by ensure_dev_mnemonic_signing_allowed(). Register in invoke.rs under attach_with_dev_signing only.",
+          "estimated_hours": 2,
+          "deps": [
+            "02-02"
+          ],
+          "criteria": "Valid mnemonic + ALLOW_DEV_MNEMONIC_SIGNING=1 returns Ok; invalid mnemonic returns InvalidMnemonic and slot stays None; missing dev-gate env returns gate error; command absent from attach_production handler set; no RPC contact on init",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/admin_wallet.rs",
+            "desktop-app/src-tauri/src/commands/invoke.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-02",
+          "name": "Migrate six wallet commands from Arc<WalletService> to WalletSession",
+          "description": "Change state param of get_admin_wallet_info, get_admin_wallet_balance, list_admin_wallet_addresses, get_admin_wallet_utxos, fund_commit_transaction, admin_wallet_sync_status to tauri::State<WalletSession>. Async commands use current_or_fallback(); non-async sync_status uses current() + disabled_default().",
+          "estimated_hours": 3,
+          "deps": [
+            "02-03",
+            "01-03"
+          ],
+          "criteria": "Any async wallet IPC with empty slot and no env returns Disabled without panic; admin_wallet_sync_status with empty slot returns disabled_default() values; all commands behave identically to prior behavior when session wallet is present",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/admin_wallet.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-03",
+          "name": "Extend auth_logout to clear the wallet session slot",
+          "description": "Add tauri::State<WalletSession> to auth_logout. After authentication::logout(), call wallet_session.clear(). Ensures logout cancels the bg task and drops the session wallet.",
+          "estimated_hours": 1,
+          "deps": [
+            "02-01",
+            "03-02"
+          ],
+          "criteria": "After auth_logout current() is None; next wallet IPC with no env fallback returns Disabled; the cleared service's cancellation signal was triggered before the slot was taken",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/authentication.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Simplify main.rs composition root",
+      "steps": [
+        {
+          "id": "04-01",
+          "name": "Replace managed Arc<WalletService> with WalletSession::empty()",
+          "description": "Delete build_wallet_service and dummy fallback from main.rs. Replace .manage(Arc<WalletService>) with .manage(WalletSession::empty()). main.rs must no longer reference ADMIN_WALLET_REGTEST_MNEMONIC.",
+          "estimated_hours": 1,
+          "deps": [
+            "02-01",
+            "03-02"
+          ],
+          "criteria": "main.rs contains no reference to ADMIN_WALLET_REGTEST_MNEMONIC; build_wallet_service is removed; app compiles and starts with WalletSession::empty() as managed wallet state",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/main.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "name": "Frontend wiring \u2014 walletSessionInit bridge and session-provider",
+      "steps": [
+        {
+          "id": "05-01",
+          "name": "Add walletSessionInit bridge to api/admin-wallet.ts",
+          "description": "Export async function walletSessionInit({ mnemonic, network }) calling the Tauri wallet_session_init command via the typed bridge. Passphrase omitted at this phase. Return type reflects Result<void>.",
+          "estimated_hours": 1,
+          "deps": [
+            "03-01"
+          ],
+          "criteria": "walletSessionInit is an exported function in api/admin-wallet.ts; it invokes wallet_session_init with mnemonic and network in camelCase; return type is Result wrapping void",
+          "files_to_modify": [
+            "desktop-app/src/api/admin-wallet.ts"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "05-02",
+          "name": "Wire walletSessionInit in connectSession for mnemonic adapter",
+          "description": "In session-provider.tsx connectSession: after authenticate() succeeds, if adapter.vendor === 'mnemonic' call walletSessionInit with the adapter mnemonic. Other vendors skip the call so the slot stays empty and the panel shows Disabled.",
+          "estimated_hours": 2,
+          "deps": [
+            "05-01"
+          ],
+          "criteria": "Mnemonic login calls walletSessionInit with the login mnemonic; HW-wallet login skips walletSessionInit and panel stays Disabled; after auth_logout the wallet panel returns to Disabled state",
+          "files_to_modify": [
+            "desktop-app/src/contexts/session-provider.tsx"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "name": "Session-bound commit/reveal key (3.7b)",
+      "steps": [
+        {
+          "id": "06-01",
+          "name": "SessionState holds commit_reveal_keypair",
+          "description": "Change WalletSession slot from Option<Arc<WalletService>> to Option<SessionState> with wallet + UntweakedKeypair. Add build_session_from_mnemonic that derives keypair via derive_commit_reveal_keypair. init_from_mnemonic and env fallback path store full SessionState. clear() drops both.",
+          "estimated_hours": 3,
+          "deps": [
+            "02-03"
+          ],
+          "criteria": "init_from_mnemonic stores keypair matching derive_commit_reveal_keypair(mnemonic); clear() removes keypair; env fallback builds same SessionState shape",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-02",
+          "name": "commit_reveal_keypair_or_fallback on WalletSession",
+          "description": "pub fn commit_reveal_keypair_or_fallback(&self) -> Result<UntweakedKeypair, BroadcastEnvError>: active session key first; else env mnemonic derive (CI); else MissingEnv/MnemonicSigningDisabled. Only reader of ADMIN_WALLET_REGTEST_MNEMONIC alongside current_or_fallback.",
+          "estimated_hours": 2,
+          "deps": [
+            "06-01"
+          ],
+          "criteria": "Session mnemonic A with env B returns keypair for A; no session + env set returns env keypair; no session + no env returns error",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-03",
+          "name": "Session-aware load_broadcast_env",
+          "description": "Refactor broadcast_env.rs: load RPC/asm/network/timeouts from env; resolve commit_reveal_keypair via wallet_session.commit_reveal_keypair_or_fallback(). Remove direct ADMIN_WALLET_REGTEST_MNEMONIC read from load_broadcast_env. Update unit tests.",
+          "estimated_hours": 3,
+          "deps": [
+            "06-02"
+          ],
+          "criteria": "load_broadcast_env(&WalletSession) succeeds with session only (no env mnemonic) when ALLOW_DEV_MNEMONIC_SIGNING=1; existing broadcast_env guard tests updated",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-04",
+          "name": "Wire WalletSession into prepare/broadcast commands",
+          "description": "proposals_prepare_broadcast takes State<WalletSession> and passes to load_broadcast_env. proposals_broadcast already has session; ensure both use session key resolution. No behavior change for headless CI with env only.",
+          "estimated_hours": 2,
+          "deps": [
+            "06-03"
+          ],
+          "criteria": "prepare and broadcast use same keypair source; integration/regression: session A env B uses A for prepare",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/proposals.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    }
+  ],
+  "implementation_scope": {
+    "source_directories": [
+      "desktop-app/src-tauri/src/application/",
+      "desktop-app/src-tauri/src/commands/",
+      "desktop-app/src-tauri/src/infrastructure/",
+      "desktop-app/src-tauri/src/",
+      "desktop-app/src/api/",
+      "desktop-app/src/contexts/"
+    ],
+    "test_directories": [
+      "desktop-app/src-tauri/src/application/",
+      "desktop-app/src-tauri/src/commands/"
+    ],
+    "excluded_patterns": [
+      "__init__.py",
+      "__pycache__/**"
+    ]
+  },
+  "validation": {
+    "status": "approved",
+    "reviewer": "juandahl",
+    "approved_at": "2026-05-28T22:30:59Z"
+  }
+}

@@ -16,7 +16,9 @@
 | `STRATA_ADMIN_STATE_RPC_URL` | Yes | ASM runner JSON-RPC |
 | `BITCOIN_RPC_*` | Yes | Used by `/ready` only |
 
-Broadcast configuration and the commit/reveal internal key live in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). The commit/reveal internal key is derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` — no separate operator key env var is used (Phase 3.5+). Guard `ALLOW_DEV_MNEMONIC_SIGNING=1` is required in regtest. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md`).
+Broadcast configuration lives in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). Guard `ALLOW_DEV_MNEMONIC_SIGNING=1` is required in regtest. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md`).
+
+**Phase 3.7 (3.7c):** when logged in (Palabras), the wallet panel, commit **funding**, and the SPS-50 commit/reveal **internal key** (`m/86'/0'/73'/2/0`) all follow the login session. `ADMIN_WALLET_REGTEST_MNEMONIC` is **removed** — do not set it in `.env`. Broadcast and wallet IPC require a mnemonic login (`wallet_session_init`).
 
 ## Incidents
 

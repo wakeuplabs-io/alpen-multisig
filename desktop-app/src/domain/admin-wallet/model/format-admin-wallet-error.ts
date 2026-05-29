@@ -11,7 +11,7 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'Disabled':
 			return {
 				title: 'Admin Wallet not enabled',
-				body: 'Admin Wallet is not enabled for this environment. Set BITCOIN_NETWORK=regtest and ALLOW_DEV_MNEMONIC_SIGNING=1 to enable.',
+				body: 'Admin Wallet is not available. Log in with Palabras (dev mnemonic) to bind the wallet to your session.',
 				severity: 'info',
 			}
 		case 'RpcUnreachable':
@@ -29,7 +29,7 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'DescriptorParseError':
 			return {
 				title: 'Invalid descriptor',
-				body: 'Admin Wallet descriptor invalid — check ADMIN_WALLET_REGTEST_MNEMONIC.',
+				body: 'Admin Wallet descriptor invalid — check the mnemonic used at login (Palabras).',
 				severity: 'fatal',
 			}
 		case 'SyncIncomplete':

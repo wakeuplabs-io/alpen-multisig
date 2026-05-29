@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn dotenvy_does_not_overwrite_existing_vars() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir =
             std::env::temp_dir().join(format!("alpen-env-loader-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("tempdir");
@@ -80,18 +80,20 @@ mod tests {
     /// Verifies `desktop-app/.env` (when present) supplies broadcast configuration.
     #[test]
     fn project_dotenv_supports_broadcast_env_load() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let path = match dotenv_path() {
             Some(p) if p.is_file() => p,
             _ => return,
         };
+
+        const TEST_MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
         let keys = [
             "BITCOIN_RPC_URL",
             "BITCOIN_RPC_USER",
             "BITCOIN_RPC_PASS",
             "STRATA_ADMIN_STATE_RPC_URL",
-            "ADMIN_WALLET_REGTEST_MNEMONIC",
             "ALLOW_DEV_MNEMONIC_SIGNING",
             "BITCOIN_NETWORK",
             "BITCOIN_MAGIC_BYTES_HEX",
@@ -102,7 +104,19 @@ mod tests {
         }
 
         try_load_dotenv(&path);
-        let result = crate::infrastructure::broadcast_env::load_broadcast_env();
+        if std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").is_err() {
+            for (key, prev) in saved {
+                restore_var(key, prev);
+            }
+            return;
+        }
+
+        let session = crate::application::wallet_session::WalletSession::empty();
+        tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(session.init_from_mnemonic(TEST_MNEMONIC, None, None))
+            .expect("session init for broadcast env smoke test");
+        let result = crate::infrastructure::broadcast_env::load_broadcast_env(&session);
 
         for (key, prev) in saved {
             restore_var(key, prev);

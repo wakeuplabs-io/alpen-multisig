@@ -12,7 +12,7 @@ In production, the React webview must never pass a full mnemonic or operator hex
 
 | Item | Behavior |
 |------|----------|
-| Source | Derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` in Tauri process env at startup (Phase 3.5+). No separate operator key env var. |
+| Source | **Phase 3.7 (3.7c):** wallet panel, commit funding, **and** commit/reveal internal key at `m/86'/0'/73'/2/0` from login session only (keypair cached in `WalletSession` at `wallet_session_init`; mnemonic not stored). `ADMIN_WALLET_REGTEST_MNEMONIC` removed. `broadcast_env.rs` loads RPC/asm from env; keypair from `WalletSession::commit_reveal_keypair()` or `WalletSessionRequired`. No separate operator key env var. |
 | Webview | Must not supply signing material over IPC |
 | Orchestrator | Does not derive or hold the commit/reveal key |
 | Guard | `ALLOW_DEV_MNEMONIC_SIGNING=1` required in regtest; replaces `ALLOW_DEV_OPERATOR_KEY` (retired in Phase 3.5) |

@@ -5,7 +5,7 @@ use desktop_app::application::orchestrator_client::{
 };
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
-use desktop_app::application::wallet_service::WalletService;
+use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
 };
@@ -232,6 +232,23 @@ mod url_tests {
     }
 }
 
+#[cfg(test)]
+mod wallet_session_state_tests {
+    use super::proposals_broadcast;
+    use desktop_app::application::wallet_session::WalletSession;
+
+    /// REGRESSION: proposals_broadcast must take WalletSession (not Arc<WalletService>).
+    /// Phase 3.7 migrated managed state to WalletSession; a stale Arc<WalletService> param
+    /// causes Tauri runtime error: "state not managed for field 'walletService'".
+    #[test]
+    #[allow(clippy::let_underscore_future)]
+    fn proposals_broadcast_uses_wallet_session_state() {
+        fn _check(input: super::BroadcastInput, s: tauri::State<'_, WalletSession>) {
+            let _ = proposals_broadcast(input, s);
+        }
+    }
+}
+
 fn map_broadcast_error(error: BroadcastError) -> String {
     match error {
         BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
@@ -249,6 +266,10 @@ fn map_proposal_error(error: ProposalError) -> String {
         }
         other => other.to_string(),
     }
+}
+
+fn serialize_wallet_error<E: serde::Serialize + std::fmt::Debug>(e: E) -> String {
+    serde_json::to_string(&e).unwrap_or_else(|_| format!("{:?}", e))
 }
 
 #[tauri::command]
@@ -312,9 +333,10 @@ pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDt
 #[tauri::command]
 pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
+    wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
+    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
     let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
@@ -340,10 +362,13 @@ pub async fn proposals_prepare_broadcast(
 #[tauri::command]
 pub async fn proposals_broadcast(
     input: BroadcastInput,
-    wallet_service: tauri::State<'_, std::sync::Arc<WalletService>>,
+    wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<BroadcastResultDto, String> {
+    let wallet_service = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
+    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         &env.btc_rpc_user,

@@ -97,5 +97,6 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::admin_wallet::admin_wallet_list_addresses,
         super::admin_wallet::admin_wallet_sync,
         super::admin_wallet::admin_wallet_sync_status,
+        super::admin_wallet::wallet_session_init,
     ])
 }

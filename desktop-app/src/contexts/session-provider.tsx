@@ -7,9 +7,11 @@ import {
 	orchestratorAuthStart,
 	ORCHESTRATOR_BASE_URL,
 } from '@/api/orchestrator-auth'
+import { walletSessionInit } from '@/api/admin-wallet'
 import { SessionContext, type SigningStepInfo } from '@/contexts/session-context'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
+import type { MnemonicAdapter } from '@/wallet/mnemonic-adapter'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
 	const { session, isAuthenticated, isLoading, selectedRole, setSelectedRole, authenticate, logout } = useAuthSession()
@@ -73,6 +75,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 				setSigningStep({ challengeHex, step: 1, totalSteps: 2 })
 				return adapter.signSighash(challengeHex)
 			})
+			// Bind Admin Wallet to the session mnemonic (mnemonic login only)
+			if (adapter.vendor === 'mnemonic') {
+				const mnemonicAdapter = adapter as MnemonicAdapter
+				const result = await walletSessionInit({ mnemonic: mnemonicAdapter.getMnemonic() })
+				if (!result.ok) {
+					// Non-fatal: wallet init failure should not block login
+					// The panel will show Disabled state until re-init
+					console.warn('[admin-wallet] session init failed:', result.error)
+				}
+			}
 			const challengeResult = await orchestratorAuthStart({
 				baseUrl: ORCHESTRATOR_BASE_URL,
 				authority: authorityFromRole(selectedRole),

@@ -82,3 +82,12 @@ export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
 export function getAdminWalletSyncStatus(): Promise<ApiResult<SyncStatusDto>> {
 	return tauriCall<SyncStatusDto>('admin_wallet_sync_status', {})
 }
+
+export type WalletSessionInitInput = {
+	mnemonic: string
+	network?: string
+}
+
+export async function walletSessionInit(input: WalletSessionInitInput): Promise<ApiResult<null>> {
+	return tauriCall<null>('wallet_session_init', { input })
+}

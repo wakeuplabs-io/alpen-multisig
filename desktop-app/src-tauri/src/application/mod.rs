@@ -10,3 +10,4 @@ pub mod orchestrator_auth;
 pub mod orchestrator_client;
 pub mod proposals;
 pub mod wallet_service;
+pub mod wallet_session;
