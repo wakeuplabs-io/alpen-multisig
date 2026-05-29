@@ -34,7 +34,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json",
+             "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"strata_asm_getStatus\",\"id\":1}",
+             "http://localhost:8080/"]
       interval: 15s
       timeout: 5s
       retries: 20
