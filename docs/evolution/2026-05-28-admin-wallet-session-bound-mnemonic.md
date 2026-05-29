@@ -1,6 +1,6 @@
 # Evolution Archive: admin-wallet-session-bound-mnemonic
 
-**Date**: 2026-05-28 (3.7a + 3.7b delivered)
+**Date**: 2026-05-28 / 2026-05-29 (3.7a + 3.7b + 3.7c delivered)
 **Feature branch**: feature/admin-wallet-session-bound-mnemonic
 **Spec**: [docs/specs/admin-wallet-session-bound-mnemonic.md](../specs/admin-wallet-session-bound-mnemonic.md)
 **Program**: Admin Wallet — Phase 3.7
@@ -30,7 +30,7 @@ with a watch-only wallet.
 
 ## Steps Completed
 
-12 steps across 5 phases (TDD, 5-phase DES cycle per step).
+16 steps across 6 phases (TDD, 5-phase DES cycle per step).
 
 ### Phase 01 — WalletService cancellation signal and shutdown
 1. `01-01` Add cancellation signal + idempotent `shutdown()` to `WalletService`
@@ -54,6 +54,12 @@ with a watch-only wallet.
 11. `05-01` Add `walletSessionInit` bridge to `api/admin-wallet.ts`
 12. `05-02` Wire `walletSessionInit` in `connectSession` for the mnemonic adapter
 
+### Phase 06 — Session-bound commit/reveal key (3.7b + 3.7c)
+13. `06-01` `SessionState` holds `commit_reveal_keypair` (derived at login, not stored)
+14. `06-02` `commit_reveal_keypair_or_fallback` on `WalletSession` — session key wins, env-var is CI/headless fallback only
+15. `06-03` Session-aware `load_broadcast_env` in `broadcast_env.rs`; single reader for the env var
+16. `06-04` Wire `WalletSession` into prepare/broadcast commands; remove `ADMIN_WALLET_REGTEST_MNEMONIC` from `.env.regtest` (3.7c)
+
 ---
 
 ## Key Decisions
@@ -73,6 +79,15 @@ loop per live wallet and a clean teardown at logout.
 `ADMIN_WALLET_REGTEST_MNEMONIC` for wallet IPC, and only when the session slot is empty. A live session
 always wins (session A with `env=B` returns wallet A). **3.7b** adds `commit_reveal_keypair_or_fallback`
 with the same policy for broadcast; `broadcast_env.rs` must not read the env var independently.
+
+**`commit_reveal_keypair_or_fallback` mirrors `current_or_fallback` policy (3.7b)**: the same
+"live session always wins" rule applies to the SPS-50 internal key. `broadcast_env.rs` delegates
+to this method exclusively; the env var is never read directly from broadcast code.
+
+**3.7c removes `ADMIN_WALLET_REGTEST_MNEMONIC` from `.env.regtest`**: after 3.7b, the env var is
+only needed for headless CI (no Tauri session). The regtest dev flow now derives everything from
+the mnemonic entered at login, so the variable was removed from the example env file to reduce
+confusion.
 
 **`wallet_session_init` is dev-gated**: the command is registered only under
 `attach_with_dev_signing` (guarded by `ensure_dev_mnemonic_signing_allowed()`), never in
@@ -97,6 +112,10 @@ extension point, not an oversight.
 - `desktop-app/src/api/admin-wallet.ts` — `walletSessionInit` bridge
 - `desktop-app/src/contexts/session-provider.tsx` — call `walletSessionInit` for mnemonic logins
 - `desktop-app/src/wallet/mnemonic-adapter.ts` — expose mnemonic to `connectSession` wiring
+- `desktop-app/src-tauri/src/application/wallet_session.rs` — `SessionState` extended with `commit_reveal_keypair`; `commit_reveal_keypair_or_fallback` added
+- `desktop-app/src-tauri/src/application/broadcast_env.rs` — session-aware `load_broadcast_env`; single env-var reader
+- `desktop-app/src-tauri/src/commands/admin_wallet.rs` — prepare/broadcast commands wired to `WalletSession`
+- `.env.regtest` — `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c)
 
 ### Docs
 - `docs/specs/admin-wallet-session-bound-mnemonic.md`
@@ -115,7 +134,7 @@ extension point, not an oversight.
 
 | Gate | Result |
 |------|--------|
-| Deliver integrity verification (12/12 steps complete DES traces) | PASS |
+| Deliver integrity verification (16/16 steps complete DES traces) | PASS |
 | L1–L6 refactoring pass | PASS |
 | Adversarial review | PASS |
 | Mutation testing (Phase 3.7 scope, 11/11 viable killed = 100%) | PASS |
@@ -138,10 +157,10 @@ while `ADMIN_WALLET_REGTEST_MNEMONIC=B` shows wallet A; logout returns the panel
 the loop (rather than holding and aborting a `JoinHandle`) keeps the shutdown path
 idempotent and makes "exactly one loop per live wallet" easy to assert in tests.
 
-**One reader for wallet IPC fallback**: funnelling `ADMIN_WALLET_REGTEST_MNEMONIC` reads for
-wallet IPC through `current_or_fallback` made the precedence rule (live session always wins)
-trivial to reason about and to test, and let `main.rs` drop its env dependency entirely.
-(`broadcast_env.rs` still reads the env var for the commit/reveal internal key.)
+**One reader per env-var path**: funnelling `ADMIN_WALLET_REGTEST_MNEMONIC` reads through a
+single method per domain (`current_or_fallback` for wallet IPC, `commit_reveal_keypair_or_fallback`
+for broadcast) made the precedence rule (live session always wins) trivial to reason about and to
+test. After 3.7b/c, `main.rs` and `broadcast_env.rs` both dropped their direct env reads entirely.
 
 **Mutation testing caught real coverage gaps**: the initial per-feature run surfaced
 untested `parse_network` arms (testnet/mainnet) and a missing `spawn_background_sync`
