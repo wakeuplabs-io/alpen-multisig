@@ -90,10 +90,6 @@ mod tests {
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
         let keys = [
-            "BITCOIN_RPC_URL",
-            "BITCOIN_RPC_USER",
-            "BITCOIN_RPC_PASS",
-            "STRATA_ADMIN_STATE_RPC_URL",
             "ALLOW_DEV_MNEMONIC_SIGNING",
             "BITCOIN_NETWORK",
             "BITCOIN_MAGIC_BYTES_HEX",
@@ -116,7 +112,9 @@ mod tests {
             .expect("runtime")
             .block_on(session.init_from_mnemonic(TEST_MNEMONIC, None, None))
             .expect("session init for broadcast env smoke test");
-        let result = crate::infrastructure::broadcast_env::load_broadcast_env(&session);
+        let node_config = crate::infrastructure::node_config_store::NodeConfig::default();
+        let result =
+            crate::infrastructure::broadcast_env::load_broadcast_env(&session, &node_config);
 
         for (key, prev) in saved {
             restore_var(key, prev);

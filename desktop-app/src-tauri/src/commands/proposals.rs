@@ -237,6 +237,7 @@ mod url_tests {
 mod wallet_session_state_tests {
     use super::proposals_broadcast;
     use desktop_app::application::wallet_session::WalletSession;
+    use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
     /// REGRESSION: proposals_broadcast must take WalletSession (not Arc<WalletService>).
     /// Phase 3.7 migrated managed state to WalletSession; a stale Arc<WalletService> param
@@ -244,8 +245,12 @@ mod wallet_session_state_tests {
     #[test]
     #[allow(clippy::let_underscore_future)]
     fn proposals_broadcast_uses_wallet_session_state() {
-        fn _check(input: super::BroadcastInput, s: tauri::State<'_, WalletSession>) {
-            let _ = proposals_broadcast(input, s);
+        fn _check(
+            input: super::BroadcastInput,
+            s: tauri::State<'_, WalletSession>,
+            nc: tauri::State<'_, NodeConfigState>,
+        ) {
+            let _ = proposals_broadcast(input, s, nc);
         }
     }
 }
