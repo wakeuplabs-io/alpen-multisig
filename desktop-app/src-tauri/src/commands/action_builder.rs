@@ -5,6 +5,7 @@ use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::asm_status_rpc;
 use desktop_app::infrastructure::broadcast_env;
+use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -91,8 +92,10 @@ pub fn build_admin_multisig_update_hex(
 pub async fn build_cancel_action_hex(
     target_action_hex: String,
     wallet_session: tauri::State<'_, desktop_app::application::wallet_session::WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<BuildActionHexResponse, String> {
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
+    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
+    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let update_id = asm_status_rpc::find_update_id_in_queue(&env.asm_rpc_url, &target_action_hex)
         .await?
         .ok_or_else(|| {

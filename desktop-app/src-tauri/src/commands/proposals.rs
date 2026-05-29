@@ -11,6 +11,7 @@ use desktop_app::domain::proposal::{
 };
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::broadcast_env;
+use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use serde::{Deserialize, Serialize};
 
@@ -334,9 +335,11 @@ pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDt
 pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
+    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
+    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
@@ -363,12 +366,14 @@ pub async fn proposals_prepare_broadcast(
 pub async fn proposals_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
+    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
+    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         &env.btc_rpc_user,

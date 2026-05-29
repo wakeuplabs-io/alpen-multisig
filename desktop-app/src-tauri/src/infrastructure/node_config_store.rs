@@ -54,6 +54,14 @@ impl NodeConfig {
                 .unwrap_or(LOCAL_BTC_RPC_URL),
         }
     }
+
+    pub fn btc_rpc_user(&self) -> &str {
+        self.custom_btc_rpc_user.as_deref().unwrap_or("")
+    }
+
+    pub fn btc_rpc_pass(&self) -> &str {
+        self.custom_btc_rpc_pass.as_deref().unwrap_or("")
+    }
 }
 
 pub struct NodeConfigState(pub Arc<RwLock<NodeConfig>>);
