@@ -39,7 +39,7 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
   - Does **not** submit Bitcoin transactions or hold the production operator key.
 - **Desktop owns execution** (PRD UI + `docs/2-discovery/01-conceptual-overview.md` §6.5):
   - Commit/reveal construction and RPC submit from Tauri (`broadcast_env` process config).
-  - Commit/reveal internal key derived from `ADMIN_WALLET_REGTEST_MNEMONIC` at `m/86'/0'/73'/2/0` in the Tauri process only (never the React webview). Phase 3.5+: `OPERATOR_SECRET_KEY_HEX` retired. Phase 3.7+: commit **funding** uses the session-bound Admin Wallet when logged in; the reveal internal key still comes from this env var via `broadcast_env.rs` — use the same mnemonic for login and in `.env` on regtest.
+  - Commit/reveal internal key at `m/86'/0'/73'/2/0` in the Tauri process only (never the React webview). Phase 3.5+: `OPERATOR_SECRET_KEY_HEX` retired. Phase 3.7 (3.7b): commit **funding** and the reveal internal key both use the session-bound mnemonic policy — keypair cached in `WalletSession` at login; `ADMIN_WALLET_REGTEST_MNEMONIC` only when no session (CI/headless). See [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
 - **Signer safety:**
   - Broadcast is only enabled after quorum is reached.
   - UI shows high-signal confirmation and deterministic artifacts before sending.

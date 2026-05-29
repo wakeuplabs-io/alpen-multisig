@@ -333,9 +333,10 @@ pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDt
 #[tauri::command]
 pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
+    wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
+    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
     let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
@@ -367,7 +368,7 @@ pub async fn proposals_broadcast(
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env().map_err(|e| e.to_string())?;
+    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         &env.btc_rpc_user,

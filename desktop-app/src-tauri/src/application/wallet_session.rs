@@ -1,10 +1,18 @@
 use crate::application::wallet_service::WalletService;
+use crate::infrastructure::admin_wallet::commit_reveal_key::derive_commit_reveal_keypair;
 use crate::infrastructure::admin_wallet::{load_admin_wallet, AdminWalletError};
+use bitcoin::key::UntweakedKeypair;
 use std::sync::{Arc, RwLock};
+
+/// Live session: Admin Wallet service plus derived SPS-50 commit/reveal key (mnemonic not stored).
+pub(crate) struct SessionState {
+    pub wallet: Arc<WalletService>,
+    pub commit_reveal_keypair: UntweakedKeypair,
+}
 
 #[derive(Clone)]
 pub struct WalletSession {
-    pub(crate) inner: Arc<RwLock<Option<Arc<WalletService>>>>,
+    pub(crate) inner: Arc<RwLock<Option<SessionState>>>,
 }
 
 impl WalletSession {
@@ -14,15 +22,44 @@ impl WalletSession {
         }
     }
 
+    fn read_slot(&self) -> Option<SessionState> {
+        self.inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|s| SessionState {
+                wallet: Arc::clone(&s.wallet),
+                commit_reveal_keypair: s.commit_reveal_keypair,
+            })
+    }
+
     pub fn current(&self) -> Option<Arc<WalletService>> {
-        self.inner.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.read_slot().map(|s| s.wallet)
     }
 
     pub fn clear(&self) {
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
-        if let Some(svc) = guard.take() {
-            svc.shutdown();
+        if let Some(state) = guard.take() {
+            state.wallet.shutdown();
         }
+    }
+
+    fn build_session_from_mnemonic(
+        mnemonic: &str,
+        network: bdk_wallet::bitcoin::Network,
+    ) -> Result<SessionState, AdminWalletError> {
+        let commit_reveal_keypair = derive_commit_reveal_keypair(mnemonic, network)?;
+        let wallet = load_admin_wallet(mnemonic, network)?;
+        let wallet = Arc::new(WalletService::new(wallet));
+        Ok(SessionState {
+            wallet,
+            commit_reveal_keypair,
+        })
+    }
+
+    /// SPS-50 commit/reveal internal key for the active session, if any.
+    pub fn commit_reveal_keypair(&self) -> Option<UntweakedKeypair> {
+        self.read_slot().map(|s| s.commit_reveal_keypair)
     }
 
     pub async fn init_from_mnemonic(
@@ -32,40 +69,32 @@ impl WalletSession {
         network: Option<&str>,
     ) -> Result<(), AdminWalletError> {
         let net = parse_network(network);
-        let wallet = load_admin_wallet(mnemonic, net)?;
-        let svc = Arc::new(WalletService::new(wallet));
+        let state = Self::build_session_from_mnemonic(mnemonic, net)?;
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
-            old.shutdown();
+            old.wallet.shutdown();
         }
-        *guard = Some(svc);
+        *guard = Some(state);
         Ok(())
     }
 
     /// Returns the active session wallet, or builds one from `ADMIN_WALLET_REGTEST_MNEMONIC`
     /// when the slot is empty (CI / headless fallback). Returns [`AdminWalletError::Disabled`]
     /// when both are absent.
-    ///
-    /// Reads `ADMIN_WALLET_REGTEST_MNEMONIC` for wallet IPC fallback only. Commit/reveal internal
-    /// key derivation still reads this env var separately in `broadcast_env.rs`.
     pub fn current_or_fallback(&self) -> Result<Arc<WalletService>, AdminWalletError> {
-        // Branch 1: active session always wins
         if let Some(svc) = self.current() {
             return Ok(svc);
         }
-        // Branch 2: headless / CI fallback
         let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
             .map_err(|_| AdminWalletError::Disabled)?;
-        let network = parse_network(None); // regtest default for fallback
-        let wallet = load_admin_wallet(&mnemonic, network)?;
-        let svc = Arc::new(WalletService::new(wallet));
-        // Cache in slot so second call reuses the same Arc
+        let network = parse_network(None);
+        let state = Self::build_session_from_mnemonic(&mnemonic, network)?;
+        let svc = Arc::clone(&state.wallet);
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
-        // Re-check after acquiring write lock (another thread may have won the race)
         if let Some(existing) = guard.as_ref() {
-            return Ok(Arc::clone(existing));
+            return Ok(Arc::clone(&existing.wallet));
         }
-        *guard = Some(Arc::clone(&svc));
+        *guard = Some(state);
         Ok(svc)
     }
 }
@@ -83,13 +112,19 @@ mod tests {
     use super::*;
     use crate::infrastructure::admin_wallet::load_admin_wallet;
     use bdk_wallet::bitcoin::Network;
+    use bitcoin::secp256k1::XOnlyPublicKey;
     use std::sync::Arc;
 
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    fn make_service() -> Arc<WalletService> {
-        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        Arc::new(WalletService::new(wallet))
+    fn make_session_state() -> SessionState {
+        WalletSession::build_session_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
+            .expect("wallet ok")
+    }
+
+    fn xonly_hex(keypair: UntweakedKeypair) -> String {
+        let (xonly, _) = XOnlyPublicKey::from_keypair(&keypair);
+        hex::encode(xonly.serialize())
     }
 
     #[test]
@@ -104,26 +139,21 @@ mod tests {
     #[tokio::test]
     async fn clear_removes_service_and_calls_shutdown() {
         let session = WalletSession::empty();
-        let svc = make_service();
-        let cancel = Arc::clone(&svc.cancel);
+        let state = make_session_state();
+        let cancel = Arc::clone(&state.wallet.cancel);
 
-        // Store the service in the slot
         {
             let mut guard = session.inner.write().unwrap_or_else(|e| e.into_inner());
-            *guard = Some(Arc::clone(&svc));
+            *guard = Some(state);
         }
 
-        // Verify it is present before clear
         assert!(
             session.current().is_some(),
             "service must be present before clear()"
         );
 
-        // Register notified() BEFORE calling clear() — notify_waiters() only wakes
-        // futures that are already registered at the moment of the call.
         let notified = cancel.notified();
 
-        // Spawn clear on a separate task so notified() can be polled concurrently.
         let session_clone = session.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
@@ -133,7 +163,6 @@ mod tests {
         let notified_result: Result<(), tokio::time::error::Elapsed> =
             tokio::time::timeout(std::time::Duration::from_millis(100), notified).await;
 
-        // After clear, current() must be None
         assert!(
             session.current().is_none(),
             "current() must be None after clear()"
@@ -148,7 +177,6 @@ mod tests {
     #[test]
     fn clear_is_safe_on_empty_session() {
         let session = WalletSession::empty();
-        // Must not panic
         session.clear();
         assert!(
             session.current().is_none(),
@@ -158,9 +186,6 @@ mod tests {
 
     const INVALID_MNEMONIC: &str = "this is not a valid bip39 mnemonic phrase at all nope";
 
-    // Test Budget: 4 behaviors x 2 = 8 unit tests (using 4)
-
-    // Behavior 1: valid mnemonic sets current() to Some with matching address
     #[tokio::test]
     async fn init_from_mnemonic_valid_sets_current_to_some() {
         let session = WalletSession::empty();
@@ -172,7 +197,6 @@ mod tests {
         let svc = session.current();
         assert!(svc.is_some(), "current() must be Some after valid init");
 
-        // external address 0 must match load_admin_wallet derivation
         let expected_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).unwrap();
         let expected_addr = expected_wallet
             .peek_address(bdk_wallet::KeychainKind::External, 0)
@@ -192,7 +216,6 @@ mod tests {
         );
     }
 
-    // Behavior 2: invalid mnemonic returns InvalidMnemonic and slot stays None
     #[tokio::test]
     async fn init_from_mnemonic_invalid_mnemonic_returns_error_and_slot_stays_none() {
         use crate::infrastructure::admin_wallet::AdminWalletError;
@@ -212,14 +235,8 @@ mod tests {
         );
     }
 
-    // Behavior 3: succeeds regardless of BITCOIN_RPC_URL (pure local wallet build)
-    // WalletService::new() reads BITCOIN_RPC_URL from env as a string but never connects —
-    // connection only happens in sync()/fund_commit(). init_from_mnemonic never dials the node.
     #[tokio::test]
     async fn init_from_mnemonic_does_not_require_rpc() {
-        // We do NOT set BITCOIN_RPC_URL to avoid env-var race with parallel tests.
-        // The key assertion is that init_from_mnemonic returns Ok even though no live
-        // Bitcoin node is available in the test environment.
         let session = WalletSession::empty();
         let result = session.init_from_mnemonic(TEST_MNEMONIC, None, None).await;
         assert!(
@@ -233,46 +250,37 @@ mod tests {
         );
     }
 
-    // ENV_LOCK serialises tests that mutate environment variables to prevent
-    // cross-test pollution (std::env::set_var / remove_var are process-wide).
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
 
     const TEST_MNEMONIC_B: &str = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
 
-    // Test Budget: 3 behaviors x 2 = 6 (using 3)
-
-    // Behavior 5: active session always wins over env var
     #[tokio::test]
     async fn current_or_fallback_session_wins_over_env() {
-        // Build session with mnemonic A before acquiring ENV_LOCK
-        // so the async init_from_mnemonic .await does not hold the sync Mutex.
         let session = WalletSession::empty();
         session
             .init_from_mnemonic(TEST_MNEMONIC, None, None)
             .await
             .expect("init must succeed");
 
-        // Derive expected address for mnemonic A
         let wallet_a = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).unwrap();
         let expected_addr = wallet_a
             .peek_address(bdk_wallet::KeychainKind::External, 0)
             .address
             .to_string();
 
-        // Serialise env mutation while all remaining operations are sync.
-        // SAFETY: test-only, serialised by ENV_LOCK
         let actual_addr = {
-            let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             unsafe { std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC_B) };
+            unsafe { std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1") };
 
             let result = session
                 .current_or_fallback()
                 .expect("must return Ok with active session");
 
             unsafe { std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC") };
+            unsafe { std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING") };
             drop(_lock);
 
-            // Lock released before the async wallet access below.
             let wallet = result.wallet.lock().await;
             wallet
                 .peek_address(bdk_wallet::KeychainKind::External, 0)
@@ -286,12 +294,35 @@ mod tests {
         );
     }
 
-    // Behavior 6: no session + env set → builds, caches, second call is same Arc
+    #[tokio::test]
+    async fn init_stores_commit_reveal_keypair_matching_derivation() {
+        let session = WalletSession::empty();
+        session
+            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .await
+            .expect("init must succeed");
+
+        let expected_hex = xonly_hex(
+            derive_commit_reveal_keypair(TEST_MNEMONIC, Network::Regtest).expect("derive"),
+        );
+        let actual_hex = xonly_hex(
+            session
+                .commit_reveal_keypair()
+                .expect("keypair must be stored after init"),
+        );
+        assert_eq!(actual_hex, expected_hex);
+    }
+
+    #[test]
+    fn commit_reveal_keypair_none_when_slot_empty() {
+        let session = WalletSession::empty();
+        assert!(session.commit_reveal_keypair().is_none());
+    }
+
     #[test]
     fn current_or_fallback_builds_from_env_when_no_session() {
-        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-        // SAFETY: test-only, serialised by ENV_LOCK
         unsafe {
             std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
         }
@@ -312,10 +343,9 @@ mod tests {
         );
     }
 
-    // Behavior 7: no session + no env → Disabled
     #[test]
     fn current_or_fallback_returns_disabled_when_no_session_and_no_env() {
-        let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
         unsafe { std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC") };
 
@@ -329,7 +359,6 @@ mod tests {
         );
     }
 
-    // Behavior 8: testnet network string routes to Network::Testnet
     #[tokio::test]
     async fn init_from_mnemonic_with_testnet_network_uses_testnet() {
         let session = WalletSession::empty();
@@ -346,7 +375,6 @@ mod tests {
         assert_eq!(wallet.network(), bdk_wallet::bitcoin::Network::Testnet);
     }
 
-    // Behavior 9: mainnet/bitcoin network string routes to Network::Bitcoin
     #[tokio::test]
     async fn init_from_mnemonic_with_mainnet_network_uses_mainnet() {
         let session = WalletSession::empty();
@@ -363,7 +391,6 @@ mod tests {
         assert_eq!(wallet.network(), bdk_wallet::bitcoin::Network::Bitcoin);
     }
 
-    // Behavior 4: re-init shuts down prior service
     #[tokio::test]
     async fn reinit_shuts_down_prior_service() {
         let session = WalletSession::empty();
@@ -375,7 +402,6 @@ mod tests {
 
         let first_svc = session.current().expect("first service must be present");
         let cancel = Arc::clone(&first_svc.cancel);
-        // Register notified() BEFORE second init (notify_waiters() semantics)
         let notified = cancel.notified();
 
         session
@@ -383,7 +409,6 @@ mod tests {
             .await
             .expect("second init must succeed");
 
-        // The cancel signal from first service must have been notified
         let result: Result<(), tokio::time::error::Elapsed> =
             tokio::time::timeout(std::time::Duration::from_millis(50), notified).await;
         assert!(

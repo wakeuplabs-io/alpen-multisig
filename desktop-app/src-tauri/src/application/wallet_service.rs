@@ -522,10 +522,7 @@ impl WalletService {
 mod tests {
     use super::*;
     use crate::infrastructure::admin_wallet::AdminWalletError;
-    use std::sync::Mutex;
-
-    // Serialize env-var tests to avoid cross-test pollution
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
 
     // Acceptance test: struct fields and AdminWalletError::Disabled variant exist
     #[test]
@@ -559,7 +556,7 @@ mod tests {
     // Unit test: guard returns Disabled when BITCOIN_NETWORK is missing
     #[test]
     fn check_enabled_returns_disabled_when_bitcoin_network_missing() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("BITCOIN_NETWORK");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
@@ -573,7 +570,7 @@ mod tests {
     // Unit test: guard returns Disabled when ALLOW_DEV_MNEMONIC_SIGNING is missing
     #[test]
     fn check_enabled_returns_disabled_when_allow_dev_mnemonic_signing_missing() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
@@ -590,7 +587,7 @@ mod tests {
     // Unit test: guard returns Ok with only regtest + ALLOW_DEV_MNEMONIC_SIGNING (no COMMIT_FUNDING needed)
     #[test]
     fn check_enabled_returns_ok_without_commit_funding_var() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("COMMIT_FUNDING");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
@@ -609,7 +606,7 @@ mod tests {
     // Unit test: COMMIT_FUNDING set to any value has no effect on the guard
     #[test]
     fn check_enabled_commit_funding_value_is_irrelevant() {
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Even setting COMMIT_FUNDING=bitcoind must not block when regtest + allow_dev are set
         std::env::set_var("COMMIT_FUNDING", "bitcoind");
         std::env::set_var("BITCOIN_NETWORK", "regtest");

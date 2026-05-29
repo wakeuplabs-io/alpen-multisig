@@ -2,8 +2,8 @@
   "roadmap": {
     "project_id": "admin-wallet-session-bound-mnemonic",
     "created_at": "2026-05-28T22:23:13Z",
-    "total_steps": 12,
-    "phases": 5
+    "total_steps": 16,
+    "phases": 6
   },
   "phases": [
     {
@@ -216,12 +216,79 @@
           "scenario_name": ""
         }
       ]
+    },
+    {
+      "id": "06",
+      "name": "Session-bound commit/reveal key (3.7b)",
+      "steps": [
+        {
+          "id": "06-01",
+          "name": "SessionState holds commit_reveal_keypair",
+          "description": "Change WalletSession slot from Option<Arc<WalletService>> to Option<SessionState> with wallet + UntweakedKeypair. Add build_session_from_mnemonic that derives keypair via derive_commit_reveal_keypair. init_from_mnemonic and env fallback path store full SessionState. clear() drops both.",
+          "estimated_hours": 3,
+          "deps": [
+            "02-03"
+          ],
+          "criteria": "init_from_mnemonic stores keypair matching derive_commit_reveal_keypair(mnemonic); clear() removes keypair; env fallback builds same SessionState shape",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-02",
+          "name": "commit_reveal_keypair_or_fallback on WalletSession",
+          "description": "pub fn commit_reveal_keypair_or_fallback(&self) -> Result<UntweakedKeypair, BroadcastEnvError>: active session key first; else env mnemonic derive (CI); else MissingEnv/MnemonicSigningDisabled. Only reader of ADMIN_WALLET_REGTEST_MNEMONIC alongside current_or_fallback.",
+          "estimated_hours": 2,
+          "deps": [
+            "06-01"
+          ],
+          "criteria": "Session mnemonic A with env B returns keypair for A; no session + env set returns env keypair; no session + no env returns error",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-03",
+          "name": "Session-aware load_broadcast_env",
+          "description": "Refactor broadcast_env.rs: load RPC/asm/network/timeouts from env; resolve commit_reveal_keypair via wallet_session.commit_reveal_keypair_or_fallback(). Remove direct ADMIN_WALLET_REGTEST_MNEMONIC read from load_broadcast_env. Update unit tests.",
+          "estimated_hours": 3,
+          "deps": [
+            "06-02"
+          ],
+          "criteria": "load_broadcast_env(&WalletSession) succeeds with session only (no env mnemonic) when ALLOW_DEV_MNEMONIC_SIGNING=1; existing broadcast_env guard tests updated",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "06-04",
+          "name": "Wire WalletSession into prepare/broadcast commands",
+          "description": "proposals_prepare_broadcast takes State<WalletSession> and passes to load_broadcast_env. proposals_broadcast already has session; ensure both use session key resolution. No behavior change for headless CI with env only.",
+          "estimated_hours": 2,
+          "deps": [
+            "06-03"
+          ],
+          "criteria": "prepare and broadcast use same keypair source; integration/regression: session A env B uses A for prepare",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/proposals.rs"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
     }
   ],
   "implementation_scope": {
     "source_directories": [
       "desktop-app/src-tauri/src/application/",
       "desktop-app/src-tauri/src/commands/",
+      "desktop-app/src-tauri/src/infrastructure/",
       "desktop-app/src-tauri/src/",
       "desktop-app/src/api/",
       "desktop-app/src/contexts/"

@@ -1,6 +1,6 @@
 # Evolution Archive: admin-wallet-session-bound-mnemonic
 
-**Date**: 2026-05-28
+**Date**: 2026-05-28 (3.7a + 3.7b delivered)
 **Feature branch**: feature/admin-wallet-session-bound-mnemonic
 **Spec**: [docs/specs/admin-wallet-session-bound-mnemonic.md](../specs/admin-wallet-session-bound-mnemonic.md)
 **Program**: Admin Wallet — Phase 3.7
@@ -9,19 +9,20 @@
 
 ## Feature Summary
 
-Phase 3.7 binds the `WalletService` lifecycle to the user's login session. When a
-user logs in with the "Palabras" dev mnemonic, the Admin Wallet is now derived from
+**3.7a (delivered)** binds the `WalletService` lifecycle to the user's login session. When a
+user logs in with the "Palabras" dev mnemonic, the Admin Wallet is derived from
 *that same mnemonic* rather than from the independent `ADMIN_WALLET_REGTEST_MNEMONIC`
-environment variable. This closes the PRD §3.2 gap where the Admin Wallet
-(`m/86'/0'/73'/n/n`) and Admin ID (`m/84'/0'/73'/0/0`) were sourced independently and
-any mismatch silently showed the wrong wallet.
+environment variable for **panel, sync, addresses, and commit funding**.
+
+**3.7b** extends the same policy to the SPS-50 commit/reveal internal key at `m/86'/0'/73'/2/0`:
+`SessionState` caches the derived keypair at login; `resolve_commit_reveal_keypair` in
+`broadcast_env.rs` uses the session key when present and only reads `ADMIN_WALLET_REGTEST_MNEMONIC`
+for CI/headless (no session).
 
 The Tauri managed wallet state changed from a fixed-at-startup `Arc<WalletService>` to
-a session-scoped slot (`WalletSession` wrapping `Arc<RwLock<Option<Arc<WalletService>>>>`)
-that is populated at login and cleared at logout. The mnemonic never leaves the Rust
-process. The `ADMIN_WALLET_REGTEST_MNEMONIC` env var remains in `.env`: CI/headless fallback for
-wallet IPC when no session is active, and still required for the SPS-50 commit/reveal internal key
-via `broadcast_env.rs`. Use the same mnemonic for login and in `.env` on regtest. The
+a session-scoped slot (`WalletSession`) populated at login and cleared at logout. After 3.7b,
+the slot holds `SessionState { wallet, commit_reveal_keypair }`; the mnemonic is not stored.
+`ADMIN_WALLET_REGTEST_MNEMONIC` becomes CI/headless fallback only for all paths. The
 hardware-wallet login path intentionally leaves the slot empty (`Disabled`) — Phase 3.8 fills it
 with a watch-only wallet.
 
@@ -68,10 +69,10 @@ cancellation signal through `tokio::select!` and exits on the next iteration. Re
 `clear()` call `shutdown()` on the prior service first, guaranteeing exactly one background
 loop per live wallet and a clean teardown at logout.
 
-**`current_or_fallback` is the single env-var reader**: only this function reads
-`ADMIN_WALLET_REGTEST_MNEMONIC`, and only when the session slot is empty. A live session
-always wins (session A with `env=B` returns wallet A). The empty-slot-with-no-env case
-returns `Disabled` rather than panicking.
+**`current_or_fallback` is the single env-var reader (3.7a)**: only this function reads
+`ADMIN_WALLET_REGTEST_MNEMONIC` for wallet IPC, and only when the session slot is empty. A live session
+always wins (session A with `env=B` returns wallet A). **3.7b** adds `commit_reveal_keypair_or_fallback`
+with the same policy for broadcast; `broadcast_env.rs` must not read the env var independently.
 
 **`wallet_session_init` is dev-gated**: the command is registered only under
 `attach_with_dev_signing` (guarded by `ensure_dev_mnemonic_signing_allowed()`), never in

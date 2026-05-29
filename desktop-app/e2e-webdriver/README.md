@@ -42,7 +42,7 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 
 | Variable | When |
 |----------|------|
-| `ADMIN_WALLET_REGTEST_MNEMONIC` | Required in `desktop-app/.env`. Phase 3.7+: wallet panel/commit funding use the **login session** when logged in (Palabras); this env var is the **CI/headless fallback** when no session is active. Still required for the SPS-50 commit/reveal internal key at `m/86'/0'/73'/2/0` via `broadcast_env.rs` (Phase 3.5+). Use the same mnemonic you log in with. |
+| `ADMIN_WALLET_REGTEST_MNEMONIC` | Required in `desktop-app/.env` for CI/headless. Phase 3.7: wallet panel, commit funding, and commit/reveal key use the **login session** when logged in; env is fallback only when no session. |
 | `ALLOW_DEV_MNEMONIC_SIGNING=1` | Required to enable mnemonic-derived signing (regtest only); guards Admin Wallet commit funding and commit/reveal key derivation |
 
 See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
