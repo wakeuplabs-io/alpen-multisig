@@ -9,7 +9,7 @@
 
 | Slice | Scope | Delivery |
 |-------|-------|----------|
-| **3.8** | Watch-only `WalletService` from a HW account xpub at HW login; read path visible, signing surfaced as unavailable | Planned |
+| **3.8** | Watch-only `WalletService` from a HW account xpub at HW login; read path visible, signing surfaced as unavailable | Complete |
 
 ## Objective
 
