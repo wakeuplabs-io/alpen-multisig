@@ -36,7 +36,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3.6 ✅ | Admin Wallet–only commit funding | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
 | 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
-| R1.1 | HW broadcast signing | PRD §3.2, §5.3.3 — on-device commit/reveal signing |
+| R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3 — commit/reveal signed by session signer (HW on-device / mnemonic) |
 | R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
 | R1.3 | Receive rotation | PRD §4.3.4 |
 | R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
@@ -353,11 +353,11 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 The next shippable increment, built on the Foundation. Four steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
 
-#### R1.1 — Hardware wallet broadcast signing
+#### R1.1 — Session-driven broadcast signing (adds HW path)
 
-**Goal:** HW users sign the governance commit and reveal on-device (PSBT), replacing the dev mnemonic for the broadcast path.
+**Goal:** Broadcast signing follows the login session, not a fixed source. When logged in with a hardware wallet, the governance commit and reveal are signed **on-device (PSBT)**; when logged in with the mnemonic (hot wallet), they are signed with the **session mnemonic**. The mnemonic path already works since Phase 3.7b — R1.1 adds the missing HW signing path so HW logins (today watch-only) can also broadcast.
 
-**Done when:** On regtest/testnet, an approved proposal's commit and reveal are signed by the connected Trezor/Ledger with no dev mnemonic involved in the broadcast.
+**Done when:** On regtest/testnet, an approved proposal's commit and reveal are signed by whatever the session holds — Trezor/Ledger on-device for a HW login, session mnemonic for a mnemonic login. The signer always comes from the session; no env var or out-of-session key is consulted.
 
 #### R1.2 — Clean wallet UI
 
