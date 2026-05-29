@@ -57,6 +57,12 @@ export function createLedgerAdapter(): WalletAdapter {
 			currentDerivationPath = nextPath
 		},
 
+		async getAccountXpub(): Promise<string> {
+			const result = await tauriCall<string>('get_ledger_admin_wallet_xpub', {})
+			if (!result.ok) throw new Error(result.error)
+			return result.data
+		},
+
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
 			if (!publicKeyHex) throw new Error('Connect the Ledger first.')
 			if (!context) {

@@ -45,4 +45,5 @@ export type WalletAdapter = {
 	setDerivationPath?(derivationPath: string): void
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
 	listAddresses?(count?: number): Promise<HwAddressEntry[]>
+	getAccountXpub?(): Promise<string>
 }
