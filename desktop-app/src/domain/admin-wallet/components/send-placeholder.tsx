@@ -8,7 +8,7 @@ export function SendPlaceholder() {
 			>
 				Send
 			</button>
-			<p className="mt-2 text-[13px] text-[#6b7280]">Send arrives in Phase 4 (regtest Send happy path).</p>
+			<p className="mt-2 text-[13px] text-[#6b7280]">Send is not available yet.</p>
 		</div>
 	)
 }

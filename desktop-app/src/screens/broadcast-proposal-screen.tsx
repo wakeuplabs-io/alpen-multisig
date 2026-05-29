@@ -8,6 +8,7 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
+import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
 import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
 import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
 import { useAdminWalletAddresses } from '@/domain/admin-wallet/hooks/use-admin-wallet-addresses'
@@ -27,6 +28,7 @@ export function BroadcastProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { adminWalletInfo } = useAdminWalletInfo()
+	const { canSign } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
@@ -146,6 +148,7 @@ export function BroadcastProposalScreen() {
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting'}
+							canSign={canSign}
 							adminWalletInfo={adminWalletInfo}
 							utxoCount={utxoCount}
 							lastSyncedAt={lastSyncedAt}
@@ -185,14 +188,18 @@ export function BroadcastProposalScreen() {
 					)}
 
 					{phase === 'error' && (
-						<button
-							type="button"
-							data-testid="e2e-broadcast-prepare"
-							onClick={() => void prepare()}
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						>
-							Retry
-						</button>
+						<div>
+							<button
+								type="button"
+								data-testid="e2e-broadcast-prepare"
+								disabled={!canSign}
+								onClick={() => void prepare()}
+								className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								Retry
+							</button>
+							{!canSign && <p className="mt-2 text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
+						</div>
 					)}
 				</div>
 			</div>
