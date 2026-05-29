@@ -28,6 +28,31 @@ pub async fn wallet_session_init(
         .map_err(serialize_wallet_error)
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchOnlyInitInput {
+    pub xpub: String,
+    pub network: Option<String>,
+}
+
+#[tauri::command]
+pub async fn wallet_session_init_watch_only(
+    input: WatchOnlyInitInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<(), String> {
+    wallet_session
+        .init_from_xpub(&input.xpub, input.network.as_deref())
+        .await
+        .map_err(serialize_wallet_error)
+}
+
+#[tauri::command]
+pub async fn admin_wallet_can_sign(
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<bool, String> {
+    Ok(wallet_session.can_sign())
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct AdminWalletInfo {
     pub address: String,
@@ -131,6 +156,7 @@ pub fn admin_wallet_sync_status(wallet_session: tauri::State<'_, WalletSession>)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use desktop_app::application::wallet_session::WalletSession;
     use desktop_app::infrastructure::admin_wallet::load_admin_wallet;
     use tokio::sync::Mutex;
 
@@ -212,8 +238,13 @@ mod tests {
             .find("fn attach_with_dev_signing")
             .unwrap_or(prod_src.len());
         let prod_block = &prod_src[..prod_end];
+        // Only the mnemonic-based wallet_session_init (dev-gated) must be absent from
+        // attach_production. wallet_session_init_watch_only is production-safe and is allowed.
+        let has_mnemonic_init = prod_block
+            .split_whitespace()
+            .any(|tok| tok.trim_matches(',') == "wallet_session_init");
         assert!(
-            !prod_block.contains("wallet_session_init"),
+            !has_mnemonic_init,
             "wallet_session_init must NOT appear in attach_production — found in: {prod_block}"
         );
     }
@@ -251,6 +282,48 @@ mod tests {
         let _sync_status_ptr: fn(tauri::State<'_, WalletSession>) -> SyncStatusDto =
             admin_wallet_sync_status;
         let _ = _sync_status_ptr;
+    }
+
+    // ---- acceptance test: admin_wallet_can_sign (step 02-03) ----
+
+    // Derives account xpub from mnemonic for watch-only wallet tests.
+    fn derive_test_xpub() -> String {
+        use bdk_wallet::bitcoin::bip32::{DerivationPath, Xpriv};
+        use bdk_wallet::bitcoin::{secp256k1::Secp256k1, Network};
+        use bip39::Mnemonic;
+        use std::str::FromStr;
+        let mnemonic = Mnemonic::parse(TEST_MNEMONIC).unwrap();
+        let seed = mnemonic.to_seed("");
+        let secp = Secp256k1::new();
+        let root = Xpriv::new_master(Network::Regtest, &seed).unwrap();
+        let path = DerivationPath::from_str("m/84'/1'/0'").unwrap();
+        let xpriv = root.derive_priv(&secp, &path).unwrap();
+        bdk_wallet::bitcoin::bip32::Xpub::from_priv(&secp, &xpriv).to_string()
+    }
+
+    /// Acceptance: admin_wallet_can_sign returns false after watch-only init.
+    #[tokio::test]
+    async fn admin_wallet_can_sign_returns_false_after_watch_only_init() {
+        let session = WalletSession::empty();
+        let xpub = derive_test_xpub();
+        session
+            .init_from_xpub(&xpub, None)
+            .await
+            .expect("watch-only init must succeed");
+        assert!(
+            !session.can_sign(),
+            "can_sign must be false for watch-only session"
+        );
+    }
+
+    /// Unit: admin_wallet_can_sign returns false when no session.
+    #[test]
+    fn admin_wallet_can_sign_returns_false_when_no_session() {
+        let session = WalletSession::empty();
+        assert!(
+            !session.can_sign(),
+            "can_sign must be false when slot is empty"
+        );
     }
 
     /// admin_wallet_sync_status returns disabled_default when slot is empty.
