@@ -166,7 +166,7 @@ fn rpc_error_from_message(msg: String) -> AdminWalletError {
     }
 }
 
-fn error_code(e: &AdminWalletError) -> String {
+pub fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
         AdminWalletError::RpcAuthFailed { .. } => "RpcAuthFailed".into(),

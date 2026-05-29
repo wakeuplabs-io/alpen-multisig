@@ -48,6 +48,9 @@ export type AdminWalletError =
 	| { type: 'DescriptorParseError'; message: string }
 	| { type: 'SyncIncomplete'; message: string }
 	| { type: 'RegtestGuardViolation'; message: string }
+	| { type: 'InvalidMnemonic'; message: string }
+	| { type: 'Descriptor'; message: string }
+	| { type: 'WalletCreation'; message: string }
 	| { type: 'Disabled' }
 	| { type: 'ReadOnly' }
 

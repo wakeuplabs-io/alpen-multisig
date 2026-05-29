@@ -90,9 +90,22 @@ pub async fn sign_with_ledger(
     .map_err(|e| e.to_string())?
 }
 
+/// BIP-86 Admin Wallet account path for the Ledger, by network.
+///
+/// The Ledger Bitcoin **testnet** app only serves the testnet coin type (`1'`) and rejects
+/// mainnet `0'` paths with APDU `6a82`. This mirrors the Ledger Admin ID convention
+/// (`m/84'/1'/73'`). On mainnet the standard `0'` coin type is used.
+fn ledger_admin_wallet_xpub_path(network: &str) -> &'static str {
+    match network {
+        "bitcoin" | "mainnet" => "m/86'/0'/73'",
+        _ => "m/86'/1'/73'",
+    }
+}
+
 #[tauri::command]
 pub async fn get_ledger_admin_wallet_xpub() -> Result<String, String> {
-    let path = "m/86'/0'/73'".to_string();
+    let network = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
+    let path = ledger_admin_wallet_xpub_path(&network).to_string();
     tokio::task::spawn_blocking(move || ledger::get_account_xpub(&path))
         .await
         .map_err(|e| e.to_string())?
@@ -108,4 +121,24 @@ pub async fn sign_challenge_with_ledger(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ledger_admin_wallet_xpub_path;
+
+    #[test]
+    fn ledger_uses_testnet_coin_type_on_regtest() {
+        // Regression: the Ledger testnet app rejects coin type 0' (APDU 6a82).
+        // Regtest/testnet/signet must request coin type 1'.
+        assert_eq!(ledger_admin_wallet_xpub_path("regtest"), "m/86'/1'/73'");
+        assert_eq!(ledger_admin_wallet_xpub_path("testnet"), "m/86'/1'/73'");
+        assert_eq!(ledger_admin_wallet_xpub_path("signet"), "m/86'/1'/73'");
+    }
+
+    #[test]
+    fn ledger_uses_mainnet_coin_type_on_bitcoin() {
+        assert_eq!(ledger_admin_wallet_xpub_path("bitcoin"), "m/86'/0'/73'");
+        assert_eq!(ledger_admin_wallet_xpub_path("mainnet"), "m/86'/0'/73'");
+    }
 }

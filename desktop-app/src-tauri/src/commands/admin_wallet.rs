@@ -1,8 +1,9 @@
 use bdk_wallet::KeychainKind;
 use desktop_app::application::wallet_service::{
-    AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
+    error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
 use desktop_app::application::wallet_session::WalletSession;
+use desktop_app::infrastructure::admin_wallet::AdminWalletError;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,8 +93,12 @@ pub async fn get_admin_wallet_info(
     admin_wallet_info(&svc).await
 }
 
-fn serialize_wallet_error<E: serde::Serialize + std::fmt::Debug>(e: E) -> String {
-    serde_json::to_string(&e).unwrap_or_else(|_| format!("{:?}", e))
+/// Serialize an [`AdminWalletError`] into the tagged `{ "type", "message" }` shape the frontend
+/// `AdminWalletError` union expects. The previous default serde output (externally-tagged, e.g.
+/// the bare string `"Disabled"`) did not match `{ type: 'Disabled' }`, so the UI could not
+/// recognise a `Disabled`/`ReadOnly` error and silently fell back to an empty panel.
+fn serialize_wallet_error(e: AdminWalletError) -> String {
+    serde_json::json!({ "type": error_code(&e), "message": e.to_string() }).to_string()
 }
 
 #[tauri::command]
@@ -351,5 +356,20 @@ mod tests {
             error_code, "Disabled",
             "disabled_default last_error.code must be Disabled, got: {error_code}"
         );
+    }
+
+    #[test]
+    fn serialize_wallet_error_emits_tagged_type_and_message() {
+        // Regression: the frontend AdminWalletError union expects `{ type, message }`.
+        // The old default serde output (bare `"Disabled"`) made the UI miss the error and
+        // render an empty panel instead of the Disabled card.
+        let json = serialize_wallet_error(AdminWalletError::Disabled);
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "Disabled");
+        assert_eq!(value["message"], "admin wallet is disabled");
+
+        let json = serialize_wallet_error(AdminWalletError::ReadOnly);
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "ReadOnly");
     }
 }

@@ -63,8 +63,14 @@ pub fn load_watch_only_admin_wallet(
     account_xpub: &str,
     network: Network,
 ) -> Result<bdk_wallet::Wallet, AdminWalletError> {
-    let xpub =
+    let mut xpub =
         Xpub::from_str(account_xpub).map_err(|e| AdminWalletError::Descriptor(e.to_string()))?;
+    // BIP-32 key material (public key + chain code) is network-independent; only the
+    // serialization version bytes encode the network. A hardware wallet may export a mainnet
+    // xpub while the session runs on regtest/testnet. Reinterpret the version bytes for the
+    // target network so the descriptor matches the wallet network without altering the derived
+    // keys — the addresses stay identical to the same seed's wallet (D7 equivalence preserved).
+    xpub.network = bdk_wallet::bitcoin::NetworkKind::from(network);
     let external_desc = format!("tr({}/0/*)", xpub);
     let internal_desc = format!("tr({}/1/*)", xpub);
     let wallet = bdk_wallet::Wallet::create(external_desc, internal_desc)
@@ -161,6 +167,28 @@ mod tests {
     fn load_watch_only_admin_wallet_returns_error_for_malformed_xpub() {
         let result = load_watch_only_admin_wallet("not-a-valid-xpub", Network::Regtest);
         assert!(result.is_err(), "Expected Err for malformed xpub");
+    }
+
+    #[test]
+    fn load_watch_only_admin_wallet_accepts_mainnet_xpub_on_regtest() {
+        // Regression: a hardware wallet (e.g. Trezor) may export a mainnet xpub (`xpub...`)
+        // while the session runs on regtest. The wallet must still build, and derive the SAME
+        // address as the regtest mnemonic wallet (version bytes differ, key material does not).
+        let mainnet_xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Bitcoin)
+            .expect("mainnet xpub derivation must succeed");
+        assert!(
+            mainnet_xpub.starts_with("xpub"),
+            "precondition: expected a mainnet xpub, got: {mainnet_xpub}"
+        );
+        let watch_wallet = load_watch_only_admin_wallet(&mainnet_xpub, Network::Regtest)
+            .expect("watch-only must accept a mainnet xpub on regtest");
+        let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
+            .expect("mnemonic wallet must succeed");
+        assert_eq!(
+            get_external_address(&mnemonic_wallet),
+            get_external_address(&watch_wallet),
+            "address must match regardless of the source xpub's network version bytes"
+        );
     }
 
     #[test]
