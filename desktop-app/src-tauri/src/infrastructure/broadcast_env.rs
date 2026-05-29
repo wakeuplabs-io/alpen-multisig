@@ -16,6 +16,8 @@ pub enum BroadcastEnvError {
     InvalidMagicBytes(String),
     #[error("dev mnemonic signing is disabled (set ALLOW_DEV_MNEMONIC_SIGNING=1 for regtest)")]
     MnemonicSigningDisabled,
+    #[error("wallet session required — log in with Palabras (dev mnemonic) before broadcast")]
+    WalletSessionRequired,
     #[error("admin wallet error: {0}")]
     AdminWallet(#[from] AdminWalletError),
 }
@@ -45,7 +47,7 @@ pub struct BroadcastEnv {
 }
 
 /// Loads RPC/asm broadcast config from env and resolves the commit/reveal key from
-/// [`WalletSession`] (session mnemonic first; env mnemonic only when the slot is empty).
+/// [`WalletSession`] only (set at mnemonic login via `wallet_session_init`).
 pub fn load_broadcast_env(
     wallet_session: &WalletSession,
 ) -> Result<BroadcastEnv, BroadcastEnvError> {
@@ -99,17 +101,9 @@ fn resolve_commit_reveal_keypair(
     if !allow {
         return Err(BroadcastEnvError::MnemonicSigningDisabled);
     }
-    if let Some(keypair) = wallet_session.commit_reveal_keypair() {
-        return Ok(keypair);
-    }
-    let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
-        .map_err(|_| BroadcastEnvError::MissingEnv("ADMIN_WALLET_REGTEST_MNEMONIC"))?;
-    let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
-    let network = parse_network(&network_str)?;
-    crate::infrastructure::admin_wallet::commit_reveal_key::derive_commit_reveal_keypair(
-        &mnemonic, network,
-    )
-    .map_err(BroadcastEnvError::from)
+    wallet_session
+        .commit_reveal_keypair()
+        .ok_or(BroadcastEnvError::WalletSessionRequired)
 }
 
 fn parse_network(network: &str) -> Result<Network, BroadcastEnvError> {
@@ -161,108 +155,75 @@ mod tests {
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    #[test]
-    fn load_broadcast_env_happy_path_returns_broadcast_env() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let vars = [
-            ("BITCOIN_RPC_URL", Some("http://127.0.0.1:18443")),
-            ("BITCOIN_RPC_USER", Some("user")),
-            ("BITCOIN_RPC_PASS", Some("pass")),
-            ("STRATA_ADMIN_STATE_RPC_URL", Some("http://127.0.0.1:9000")),
-            ("ADMIN_WALLET_REGTEST_MNEMONIC", Some(TEST_MNEMONIC)),
-            ("ALLOW_DEV_MNEMONIC_SIGNING", Some("1")),
-            ("BITCOIN_NETWORK", Some("regtest")),
-        ];
-        for (k, v) in &vars {
-            match v {
-                Some(val) => std::env::set_var(k, val),
-                None => std::env::remove_var(k),
-            }
-        }
+    fn session_with_mnemonic(mnemonic: &str) -> WalletSession {
         let session = WalletSession::empty();
-        let result = load_broadcast_env(&session);
-        for (k, _) in &vars {
-            std::env::remove_var(k);
-        }
-        assert!(result.is_ok(), "expected Ok but got: {:?}", result.err());
-    }
-
-    #[test]
-    fn load_broadcast_env_session_key_wins_over_env_mnemonic() {
-        const MNEMONIC_B: &str = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
-
-        let session = WalletSession::empty();
-        let rt = tokio::runtime::Runtime::new().expect("runtime");
-        rt.block_on(session.init_from_mnemonic(TEST_MNEMONIC, None, None))
+        tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(session.init_from_mnemonic(mnemonic, None, None))
             .expect("session init");
-
-        let env = {
-            let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            std::env::set_var("BITCOIN_RPC_URL", "http://127.0.0.1:18443");
-            std::env::set_var("BITCOIN_RPC_USER", "user");
-            std::env::set_var("BITCOIN_RPC_PASS", "pass");
-            std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
-            std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-            std::env::set_var("BITCOIN_NETWORK", "regtest");
-            std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", MNEMONIC_B);
-
-            let env = load_broadcast_env(&session).expect("load broadcast env");
-
-            for k in &[
-                "BITCOIN_RPC_URL",
-                "BITCOIN_RPC_USER",
-                "BITCOIN_RPC_PASS",
-                "STRATA_ADMIN_STATE_RPC_URL",
-                "ALLOW_DEV_MNEMONIC_SIGNING",
-                "BITCOIN_NETWORK",
-                "ADMIN_WALLET_REGTEST_MNEMONIC",
-            ] {
-                std::env::remove_var(k);
-            }
-            env
-        };
-
-        let expected = derive_commit_reveal_keypair(TEST_MNEMONIC, Network::Regtest).unwrap();
-        let (expected_xonly, _) = XOnlyPublicKey::from_keypair(&expected);
-        let (actual_xonly, _) = XOnlyPublicKey::from_keypair(&env.commit_reveal_keypair);
-        assert_eq!(
-            expected_xonly, actual_xonly,
-            "broadcast key must follow session mnemonic, not env"
-        );
+        session
     }
 
-    #[test]
-    fn load_broadcast_env_missing_mnemonic_returns_missing_env_error() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    fn set_broadcast_rpc_env() {
         std::env::set_var("BITCOIN_RPC_URL", "http://127.0.0.1:18443");
         std::env::set_var("BITCOIN_RPC_USER", "user");
         std::env::set_var("BITCOIN_RPC_PASS", "pass");
         std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC");
-        std::env::remove_var("BITCOIN_NETWORK");
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
+    }
 
-        let session = WalletSession::empty();
-        let result = load_broadcast_env(&session);
-
-        for k in &[
+    fn clear_broadcast_rpc_env() {
+        for k in [
             "BITCOIN_RPC_URL",
             "BITCOIN_RPC_USER",
             "BITCOIN_RPC_PASS",
             "STRATA_ADMIN_STATE_RPC_URL",
             "ALLOW_DEV_MNEMONIC_SIGNING",
+            "BITCOIN_NETWORK",
+            "BITCOIN_MAGIC_BYTES_HEX",
+            "BROADCAST_CONFIRM_POLL_MS",
+            "BROADCAST_CONFIRM_TIMEOUT_MS",
         ] {
             std::env::remove_var(k);
         }
+    }
+
+    #[test]
+    fn load_broadcast_env_happy_path_returns_broadcast_env() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        set_broadcast_rpc_env();
+        let session = session_with_mnemonic(TEST_MNEMONIC);
+        let result = load_broadcast_env(&session);
+        clear_broadcast_rpc_env();
+        assert!(result.is_ok(), "expected Ok but got: {:?}", result.err());
+    }
+
+    #[test]
+    fn load_broadcast_env_uses_session_commit_reveal_key() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        set_broadcast_rpc_env();
+        let session = session_with_mnemonic(TEST_MNEMONIC);
+        let env = load_broadcast_env(&session).expect("load broadcast env");
+        clear_broadcast_rpc_env();
+
+        let expected = derive_commit_reveal_keypair(TEST_MNEMONIC, Network::Regtest).unwrap();
+        let (expected_xonly, _) = XOnlyPublicKey::from_keypair(&expected);
+        let (actual_xonly, _) = XOnlyPublicKey::from_keypair(&env.commit_reveal_keypair);
+        assert_eq!(expected_xonly, actual_xonly);
+    }
+
+    #[test]
+    fn load_broadcast_env_without_session_returns_wallet_session_required() {
+        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        set_broadcast_rpc_env();
+        let session = WalletSession::empty();
+        let result = load_broadcast_env(&session);
+        clear_broadcast_rpc_env();
 
         assert!(
-            matches!(
-                result,
-                Err(BroadcastEnvError::MissingEnv(
-                    "ADMIN_WALLET_REGTEST_MNEMONIC"
-                ))
-            ),
-            "expected MissingEnv, got: {:?}",
+            matches!(result, Err(BroadcastEnvError::WalletSessionRequired)),
+            "expected WalletSessionRequired, got: {:?}",
             result
         );
     }
@@ -270,14 +231,11 @@ mod tests {
     #[test]
     fn load_broadcast_env_missing_dev_guard_returns_mnemonic_signing_disabled() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         std::env::remove_var("BITCOIN_NETWORK");
 
         let session = WalletSession::empty();
         let result = load_broadcast_env(&session);
-
-        std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC");
 
         assert!(
             matches!(result, Err(BroadcastEnvError::MnemonicSigningDisabled)),
@@ -289,14 +247,12 @@ mod tests {
     #[test]
     fn load_broadcast_env_dev_guard_false_returns_mnemonic_signing_disabled() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "0");
         std::env::remove_var("BITCOIN_NETWORK");
 
         let session = WalletSession::empty();
         let result = load_broadcast_env(&session);
 
-        std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC");
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
 
         assert!(
@@ -307,55 +263,14 @@ mod tests {
     }
 
     #[test]
-    fn load_broadcast_env_invalid_mnemonic_propagates_admin_wallet_error() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var(
-            "ADMIN_WALLET_REGTEST_MNEMONIC",
-            "not a valid mnemonic at all xyz",
-        );
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        std::env::remove_var("BITCOIN_NETWORK");
-
-        let session = WalletSession::empty();
-        let result = load_broadcast_env(&session);
-
-        std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        assert!(
-            matches!(result, Err(BroadcastEnvError::AdminWallet(_))),
-            "expected AdminWallet error, got: {:?}",
-            result
-        );
-    }
-
-    #[test]
     fn load_broadcast_env_invalid_magic_bytes_returns_invalid_magic_bytes_error() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("BITCOIN_RPC_URL", "http://127.0.0.1:18443");
-        std::env::set_var("BITCOIN_RPC_USER", "user");
-        std::env::set_var("BITCOIN_RPC_PASS", "pass");
-        std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
-        std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::set_var("BITCOIN_MAGIC_BYTES_HEX", "aabbcc"); // 3 bytes, not 4
+        set_broadcast_rpc_env();
+        std::env::set_var("BITCOIN_MAGIC_BYTES_HEX", "aabbcc");
 
-        let session = WalletSession::empty();
+        let session = session_with_mnemonic(TEST_MNEMONIC);
         let result = load_broadcast_env(&session);
-
-        for k in &[
-            "BITCOIN_RPC_URL",
-            "BITCOIN_RPC_USER",
-            "BITCOIN_RPC_PASS",
-            "STRATA_ADMIN_STATE_RPC_URL",
-            "ADMIN_WALLET_REGTEST_MNEMONIC",
-            "ALLOW_DEV_MNEMONIC_SIGNING",
-            "BITCOIN_NETWORK",
-            "BITCOIN_MAGIC_BYTES_HEX",
-        ] {
-            std::env::remove_var(k);
-        }
+        clear_broadcast_rpc_env();
 
         assert!(
             matches!(result, Err(BroadcastEnvError::InvalidMagicBytes(_))),
@@ -371,32 +286,17 @@ mod tests {
         std::env::set_var("BITCOIN_RPC_USER", "user");
         std::env::set_var("BITCOIN_RPC_PASS", "pass");
         std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
-        std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "signet");
         std::env::set_var("BITCOIN_MAGIC_BYTES_HEX", "deadbeef");
         std::env::set_var("BROADCAST_CONFIRM_POLL_MS", "1234");
         std::env::set_var("BROADCAST_CONFIRM_TIMEOUT_MS", "56789");
 
-        let session = WalletSession::empty();
+        let session = session_with_mnemonic(TEST_MNEMONIC);
         let result = load_broadcast_env(&session);
+        clear_broadcast_rpc_env();
 
-        for k in &[
-            "BITCOIN_RPC_URL",
-            "BITCOIN_RPC_USER",
-            "BITCOIN_RPC_PASS",
-            "STRATA_ADMIN_STATE_RPC_URL",
-            "ADMIN_WALLET_REGTEST_MNEMONIC",
-            "ALLOW_DEV_MNEMONIC_SIGNING",
-            "BITCOIN_NETWORK",
-            "BITCOIN_MAGIC_BYTES_HEX",
-            "BROADCAST_CONFIRM_POLL_MS",
-            "BROADCAST_CONFIRM_TIMEOUT_MS",
-        ] {
-            std::env::remove_var(k);
-        }
-
-        let env = result.expect("expected Ok with all vars set");
+        let env = result.expect("expected Ok with session + RPC env");
         assert_eq!(env.network, bitcoin::Network::Signet);
         assert_eq!(env.confirm_poll_interval_ms, 1234);
         assert_eq!(env.confirm_timeout_ms, 56789);

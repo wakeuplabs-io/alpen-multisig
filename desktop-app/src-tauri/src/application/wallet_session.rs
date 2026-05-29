@@ -78,24 +78,9 @@ impl WalletSession {
         Ok(())
     }
 
-    /// Returns the active session wallet, or builds one from `ADMIN_WALLET_REGTEST_MNEMONIC`
-    /// when the slot is empty (CI / headless fallback). Returns [`AdminWalletError::Disabled`]
-    /// when both are absent.
+    /// Returns the active session wallet, or [`AdminWalletError::Disabled`] when logged out.
     pub fn current_or_fallback(&self) -> Result<Arc<WalletService>, AdminWalletError> {
-        if let Some(svc) = self.current() {
-            return Ok(svc);
-        }
-        let mnemonic = std::env::var("ADMIN_WALLET_REGTEST_MNEMONIC")
-            .map_err(|_| AdminWalletError::Disabled)?;
-        let network = parse_network(None);
-        let state = Self::build_session_from_mnemonic(&mnemonic, network)?;
-        let svc = Arc::clone(&state.wallet);
-        let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
-        if let Some(existing) = guard.as_ref() {
-            return Ok(Arc::clone(&existing.wallet));
-        }
-        *guard = Some(state);
-        Ok(svc)
+        self.current().ok_or(AdminWalletError::Disabled)
     }
 }
 
@@ -250,48 +235,30 @@ mod tests {
         );
     }
 
-    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
-
-    const TEST_MNEMONIC_B: &str = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
-
     #[tokio::test]
-    async fn current_or_fallback_session_wins_over_env() {
+    async fn current_or_fallback_returns_session_wallet_after_init() {
         let session = WalletSession::empty();
         session
             .init_from_mnemonic(TEST_MNEMONIC, None, None)
             .await
             .expect("init must succeed");
 
-        let wallet_a = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).unwrap();
-        let expected_addr = wallet_a
+        let expected_addr = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
+            .unwrap()
             .peek_address(bdk_wallet::KeychainKind::External, 0)
             .address
             .to_string();
 
-        let actual_addr = {
-            let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            unsafe { std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC_B) };
-            unsafe { std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1") };
+        let svc = session
+            .current_or_fallback()
+            .expect("must return Ok with active session");
+        let wallet = svc.wallet.lock().await;
+        let actual_addr = wallet
+            .peek_address(bdk_wallet::KeychainKind::External, 0)
+            .address
+            .to_string();
 
-            let result = session
-                .current_or_fallback()
-                .expect("must return Ok with active session");
-
-            unsafe { std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC") };
-            unsafe { std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING") };
-            drop(_lock);
-
-            let wallet = result.wallet.lock().await;
-            wallet
-                .peek_address(bdk_wallet::KeychainKind::External, 0)
-                .address
-                .to_string()
-        };
-
-        assert_eq!(
-            actual_addr, expected_addr,
-            "session A must win over env=B (REGRESSION-CRITICAL)"
-        );
+        assert_eq!(actual_addr, expected_addr);
     }
 
     #[tokio::test]
@@ -320,41 +287,13 @@ mod tests {
     }
 
     #[test]
-    fn current_or_fallback_builds_from_env_when_no_session() {
-        let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
-        unsafe {
-            std::env::set_var("ADMIN_WALLET_REGTEST_MNEMONIC", TEST_MNEMONIC);
-        }
-
-        let session = WalletSession::empty();
-        let first = session
-            .current_or_fallback()
-            .expect("must return Ok with env set");
-        let second = session
-            .current_or_fallback()
-            .expect("second call must also return Ok");
-
-        unsafe { std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC") };
-
-        assert!(
-            Arc::ptr_eq(&first, &second),
-            "second call must return same Arc (cached)"
-        );
-    }
-
-    #[test]
-    fn current_or_fallback_returns_disabled_when_no_session_and_no_env() {
-        let _lock = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
-        unsafe { std::env::remove_var("ADMIN_WALLET_REGTEST_MNEMONIC") };
-
+    fn current_or_fallback_returns_disabled_when_no_session() {
         let session = WalletSession::empty();
         let result = session.current_or_fallback();
 
         assert!(
             matches!(result, Err(AdminWalletError::Disabled)),
-            "must return Disabled when no session and no env var, got: {:?}",
+            "must return Disabled when no session, got: {:?}",
             result.map(|_| "<WalletService>")
         );
     }

@@ -9,13 +9,14 @@
 | Slice | Scope | Delivery |
 |-------|--------|----------|
 | **3.7a** | Session slot, wallet IPC, commit funding from session | Delivered 2026-05-28 ([evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md)) |
-| **3.7b** | Session-bound SPS-50 commit/reveal internal key (`m/86'/0'/73'/2/0`) | **Delivered** — see [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json) |
+| **3.7b** | Session-bound SPS-50 commit/reveal internal key (`m/86'/0'/73'/2/0`) | Delivered — see [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json) |
+| **3.7c** | Remove `ADMIN_WALLET_REGTEST_MNEMONIC` (prod + tests) | **Delivered** — mnemonic only via `wallet_session_init` / `init_from_mnemonic`; tests use constants + session init |
 
 ## Objective
 
 Bind the `WalletService` lifecycle **and** the commit/reveal internal key to the user's login session
 so that when the user logs in with the dev mnemonic ("Palabras" path), **all** of the following derive
-from **that same mnemonic** — not from a process-wide `ADMIN_WALLET_REGTEST_MNEMONIC` env var:
+from **that same mnemonic** — never from `ADMIN_WALLET_REGTEST_MNEMONIC` (removed in slice **3.7c**):
 
 - Admin Wallet panel, sync, addresses (`m/86'/0'/73'/…` external/spend paths via BDK).
 - Commit transaction funding (Admin Wallet UTXOs).
@@ -23,8 +24,7 @@ from **that same mnemonic** — not from a process-wide `ADMIN_WALLET_REGTEST_MN
 
 This closes the PRD §3.2 gap: a single source (today a hardware wallet; in dev, a mnemonic) is the
 origin of the Admin ID (`m/84'/0'/73'/0/0`, P2WPKH), the Admin Wallet (`m/86'/0'/73'/n/n`, Taproot),
-and the broadcast reveal key. Today the wallet panel can follow the session while broadcast still reads
-the env var, which silently breaks commit/reveal if login and `.env` differ.
+and the broadcast reveal key.
 
 **Why now:** Phase 4 (Send) and Phase 7 (HW signing) must be built against a session-scoped wallet.
 Establishing the session slot now means HW login (Phase 3.8) and HW signing (Phase 7) fill the same
@@ -43,17 +43,18 @@ extension point instead of forcing a second refactor later.
 - All wallet IPC commands and the commit-funding path migrate to the session-scoped state and handle
   the "no session" state gracefully (return `Disabled`, never panic), including the brief race window
   between authentication and session init.
-- **Session-bound commit/reveal key (3.7b):** at `wallet_session_init` / env fallback wallet build,
-  derive `UntweakedKeypair` at `m/86'/0'/73'/2/0` from the **same** mnemonic used for the
-  `WalletService`, cache it in the session slot, and use it for `proposals_prepare_broadcast` /
-  `proposals_broadcast`. The mnemonic is **not** retained after init — only the derived keypair (same
-  pattern as Phase 3.5 env load, but keyed off session policy).
-- `load_broadcast_env` splits RPC/asm config (still from env) from key resolution (session first, env
-  fallback when slot empty). `broadcast_env.rs` must **not** read `ADMIN_WALLET_REGTEST_MNEMONIC`
-  when an active session (or env-built fallback slot) supplies a keypair.
-- `ADMIN_WALLET_REGTEST_MNEMONIC` demoted to **CI/headless fallback only** when no session is active
-  (wallet IPC, commit funding, **and** commit/reveal key). No longer the source of any signer-facing
-  surface when logged in via Palabras.
+- **Session-bound commit/reveal key (3.7b):** at `wallet_session_init`, derive `UntweakedKeypair` at
+  `m/86'/0'/73'/2/0` from the **same** mnemonic used for the `WalletService`, cache it in the session
+  slot, and use it for `proposals_prepare_broadcast` / `proposals_broadcast`. The mnemonic is **not**
+  retained after init — only the derived keypair.
+- **`ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c):** no production or test code reads this env var.
+  `current_or_fallback()` returns the session wallet or `Disabled`. `load_broadcast_env` resolves the
+  commit/reveal key from `WalletSession::commit_reveal_keypair()` only, or returns
+  `BroadcastEnvError::WalletSessionRequired`. RPC/asm config still comes from env
+  (`BITCOIN_RPC_*`, `ALLOW_DEV_MNEMONIC_SIGNING`, etc.).
+- **Test policy (3.7c):** tests MUST use `WalletSession::init_from_mnemonic` with a `#[cfg(test)]`
+  constant (e.g. the well-known regtest fixture). MUST NOT `set_var` / `remove_var` /
+  `ADMIN_WALLET_REGTEST_MNEMONIC` or depend on it in `desktop-app/.env`.
 - `ALLOW_DEV_MNEMONIC_SIGNING` guard remains and is still required as the explicit regtest opt-in;
   the secret-carrying session-init command is registered in dev-signing builds only.
 - Frontend: wire session init on mnemonic login; ensure the panel shows `Disabled` after logout.
@@ -63,7 +64,7 @@ extension point instead of forcing a second refactor later.
 - Hardware-wallet session init / watch-only wallet (Phase 3.8). HW login leaves the slot empty
   (`Disabled`) in this phase.
 - Send / signing from the session wallet (Phase 4+).
-- Full removal of `ADMIN_WALLET_REGTEST_MNEMONIC` (Phase 9).
+- ~~Full removal of `ADMIN_WALLET_REGTEST_MNEMONIC`~~ — done in **3.7c** (pulled forward from Phase 9).
 - Refactoring the legacy per-call mnemonic commands (`list_mnemonic_addresses`,
   `sign_with_mnemonic_path`) to stop receiving the mnemonic per call — tracked separately; this phase
   only narrows the wallet's mnemonic to a single init-time transit.
@@ -77,9 +78,8 @@ Replace the startup-fixed `Arc<WalletService>` with a managed **`WalletSession`*
 session slot. The slot is empty at startup. Mnemonic login fills it via a new dev-gated IPC command;
 logout clears it. Wallet IPC commands snapshot the inner `Arc<WalletService>` under a short lock and
 return `Disabled` when the slot is empty. The background-sync task is owned by the `WalletService` it
-syncs and stops when that service is shut down on session replacement/logout. The env var is consulted
-only by lazy fallbacks inside the slot accessors when no session is active — so an active session always
-wins for **wallet IPC, commit funding, and commit/reveal key** (3.7b).
+syncs and stops when that service is shut down on session replacement/logout. No env-var mnemonic
+fallback (3.7c): wallet IPC and broadcast require an active session.
 
 ```text
 React (session-provider.tsx)
@@ -88,14 +88,14 @@ React (session-provider.tsx)
 
 Tauri managed state:  WalletSession { Arc<RwLock<Option<SessionState>>> }
   SessionState { wallet: Arc<WalletService>, commit_reveal_keypair: UntweakedKeypair }
-  ├─ current()                        → live session wallet, or None
-  ├─ commit_reveal_keypair_or_fallback() → session key  ▸  else env-derived key (CI)  ▸  else error
-  ├─ current_or_fallback()            → session wallet  ▸  else env fallback (CI)  ▸  else Disabled
-  ├─ init_from_mnemonic()             → build wallet + derive keypair; store SessionState
-  └─ clear()                          → shutdown bg task + take() (drops keypair)
+  ├─ current()                 → live session wallet, or None
+  ├─ commit_reveal_keypair()     → session key, or None
+  ├─ current_or_fallback()       → session wallet, or Disabled
+  ├─ init_from_mnemonic()        → build wallet + derive keypair; store SessionState
+  └─ clear()                     → shutdown bg task + take() (drops keypair)
 
 proposals_prepare_broadcast / proposals_broadcast
-  └─ load_broadcast_env(wallet_session)  → RPC/asm from env; keypair from commit_reveal_keypair_or_fallback()
+  └─ load_broadcast_env(wallet_session)  → RPC/asm from env; keypair from commit_reveal_keypair() only
 ```
 
 ### Decision summary (full trade-offs in the design appendix below)
@@ -106,8 +106,8 @@ proposals_prepare_broadcast / proposals_broadcast
 | 2 | Mnemonic transit | New dedicated IPC command `wallet_session_init({ mnemonic, … })`, called by the FE right after auth, mnemonic adapter only; auth stays decoupled from wallet; Phase 3.8 reuses the slot with an xpub |
 | 3 | Background-sync teardown | Per-`WalletService` shutdown signal cancelled by the slot before drop/replace (`tokio::select!` on the signal) — prompt exit, no leak, no double loop |
 | 4 | No-session state | Reuse `AdminWalletError::Disabled` (no new variant); add `SyncStatusDto::disabled_default()` for the sync command |
-| 5 | Env-var fallback | Lazy, inside the slot accessor, only when slot is `None`; active session always wins by construction |
-| 6 | Commit/reveal key custody | Derive at session init / env fallback build; store `UntweakedKeypair` in `SessionState`; never re-read env while session lives; mnemonic zeroized after derive (not stored) |
+| 5 | No env mnemonic | `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c); no session → `Disabled` / `WalletSessionRequired` |
+| 6 | Commit/reveal key custody | Derive at `init_from_mnemonic` only; store `UntweakedKeypair` in `SessionState`; mnemonic not retained |
 
 ### Production functions / commands
 
@@ -117,16 +117,13 @@ proposals_prepare_broadcast / proposals_broadcast
   - `SessionState { wallet, commit_reveal_keypair }` (private)
   - `pub fn empty() -> Self`
   - `pub fn current(&self) -> Option<Arc<WalletService>>`
-  - `pub fn commit_reveal_keypair_or_fallback(&self) -> Result<UntweakedKeypair, BroadcastEnvError>`
+  - `pub fn commit_reveal_keypair(&self) -> Option<UntweakedKeypair>`
   - `pub fn current_or_fallback(&self) -> Result<Arc<WalletService>, AdminWalletError>`
   - `pub async fn init_from_mnemonic(&self, mnemonic: &str, passphrase: Option<&str>, network: Option<&str>) -> Result<(), AdminWalletError>` — derives keypair via `derive_commit_reveal_keypair` before dropping the mnemonic string
   - `pub fn clear(&self)` (cancels the prior service's bg task, then `take()`s the slot including keypair)
-  - private `build_session_from_mnemonic(...)` shared by init and env fallback
-  - private `network_from_env()` (mirrors `main.rs` network parsing)
-- `infrastructure/broadcast_env.rs` — `load_broadcast_env(wallet_session: &WalletSession)` (or
-  `load_broadcast_env` + `resolve_commit_reveal_keypair(wallet_session)`): RPC URLs, magic bytes,
-  network, poll timeouts from env; **no** unconditional `ADMIN_WALLET_REGTEST_MNEMONIC` read when
-  session supplies keypair.
+  - private `build_session_from_mnemonic(...)` used only by `init_from_mnemonic`
+- `infrastructure/broadcast_env.rs` — `load_broadcast_env(wallet_session)`: RPC URLs, magic bytes,
+  network, poll timeouts from env; commit/reveal key from `commit_reveal_keypair()` only (3.7c).
 - `commands/proposals.rs` — `proposals_prepare_broadcast` takes `State<'_, WalletSession>` and passes
   it into `load_broadcast_env` / key resolution (today only `proposals_broadcast` has session state).
 - `commands/admin_wallet.rs` — `WalletSessionInitInput` DTO + `#[tauri::command] async fn wallet_session_init(input, wallet_session) -> Result<(), String>`; gated by `dev_secrets::ensure_dev_mnemonic_signing_allowed()`. Registered in `attach_with_dev_signing` **only** (never `attach_production`).
@@ -185,32 +182,24 @@ calls `svc.shutdown()` inside `clear()`/`init_from_mnemonic()` **before** droppi
 > an `Arc<AtomicBool>` + `Notify` checked in the `select!`). Implementation chooses; document the
 > outcome. Do not add `tokio-util` without recording the rationale.
 
-### Env-var fallback semantics
+### Session-only semantics (3.7c — no env mnemonic)
 
-`current_or_fallback()` returns the live session wallet if present (branch 1, active session always
-wins). Only when the slot is `None` does it consult `ADMIN_WALLET_REGTEST_MNEMONIC` (branch 2), build a
-wallet, and cache it in the slot. No env → `Disabled`. This makes "login with mnemonic A while env=B
-shows A, not B" true by construction (branch 1 returns before branch 2 is evaluated). The
-`check_enabled()` guard (`BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1`) stays inside
-`WalletService::sync()`/`fund_commit()` unchanged, so even a built fallback wallet is inert outside
-regtest-dev. `main.rs` no longer reads the env var. **`wallet_session.rs` is the only production reader
-of `ADMIN_WALLET_REGTEST_MNEMONIC`**, and only on the no-session fallback path — for both wallet IPC
-and commit/reveal key derivation. `broadcast_env.rs` must delegate key resolution to
-`WalletSession::commit_reveal_keypair_or_fallback()` (3.7b).
+`current_or_fallback()` returns the live session wallet or `AdminWalletError::Disabled`. There is no
+env-var mnemonic path. `load_broadcast_env` resolves the commit/reveal key via
+`commit_reveal_keypair()` or returns `BroadcastEnvError::WalletSessionRequired`.
 
-> Documented caveat: in a headless/CI context where env is set and no UI session exists, the fallback
-> re-materializes on the next IPC after a `clear()`. This is the intended CI behavior; a real UI logout
-> clears a *session* wallet and the FE stops issuing wallet IPC, so the panel goes `Disabled`.
+Headless Rust tests and CI must call `WalletSession::init_from_mnemonic` with a test constant (same as
+`admin_wallet_integration.rs`). E2E must complete Palabras login so the FE invokes `wallet_session_init`.
 
 ### Production code vs. test helpers
 
-- **Production functions**: `WalletSession` (`empty`/`current`/`commit_reveal_keypair_or_fallback`/
+- **Production functions**: `WalletSession` (`empty`/`current`/`commit_reveal_keypair`/
   `current_or_fallback`/`init_from_mnemonic`/`clear`), session-aware `load_broadcast_env`,
   `wallet_session_init`, `WalletService::shutdown`, `SyncStatusDto::disabled_default`, the migrated
   six wallet commands + both broadcast commands, FE `walletSessionInit`.
 - **Test helpers** (must live in `#[cfg(test)]` / test modules, never registered as Tauri commands):
   test mnemonics (the existing `abandon … about`), builders that construct a `WalletSession` with a
-  pre-seeded service, env-var set/clear guards (reuse the existing `ENV_LOCK` serialization pattern).
+  pre-seeded service via `init_from_mnemonic`, `ENV_LOCK` for RPC/guard env only (never mnemonic env).
   The legacy `list_mnemonic_addresses` / `sign_with_mnemonic_path` remain dev-signing-only and are not
   affected by this phase.
 

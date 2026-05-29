@@ -34,7 +34,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3 | Wallet UI shell | PRD §4, Alta WalletPanel |
 | 3.5 | Retire operator hot key | PRD §3.2 (HW-mediated signing); derives reveal internal key from Admin Wallet (dev mnemonic interim, HW in Phase 7) |
 | 3.6 | Admin Wallet–only commit funding ✅ | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
-| 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet panel/commit funding derive from login session (Palabras); `ADMIN_WALLET_REGTEST_MNEMONIC` kept in `.env` as CI/headless fallback + commit/reveal key source, [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
+| 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to Phase 7 |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -263,7 +263,7 @@ flowchart LR
 - Mnemonic login (`auth_complete` IPC path): after successful orchestrator auth, derive and register the `WalletService` from the same mnemonic used to derive the Admin ID. Mnemonic never leaves Rust.
 - Logout (`auth_logout` IPC path): drop the `WalletService` from managed state; panel returns to `Disabled` state.
 - **3.7b:** Session-bound commit/reveal key at `m/86'/0'/73'/2/0` — cached in `WalletSession` at init; `load_broadcast_env` resolves keypair via session (not env) when logged in; `proposals_prepare_broadcast` takes `WalletSession` state.
-- `ADMIN_WALLET_REGTEST_MNEMONIC` demoted to **CI/headless fallback only** when no session is active (wallet IPC, commit funding, **and** commit/reveal key). No longer used for any signer-facing path when logged in via Palabras.
+- **`ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c):** no prod/test reads; mnemonic only via `wallet_session_init`.
 - `ALLOW_DEV_MNEMONIC_SIGNING` guard remains but is now implied by the mnemonic login type; still required as an explicit opt-in for regtest.
 - HW login path: `WalletService` is not initialized (stays `None` / `Disabled`) until Phase 3.8 handles it.
 - Tests: session init/teardown unit tests; regression that balance and addresses returned by IPC match the session mnemonic's derived wallet, not the env var wallet.
@@ -441,7 +441,7 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
 | `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Removed in Phase 3.6** (broadcast path); verify non-broadcast usages before full removal |
 | `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | **Removed in Phase 3.6** — Admin Wallet is the sole commit funder from Phase 3.6 onward |
-| `ADMIN_WALLET_REGTEST_MNEMONIC` | Dev Admin Wallet seed (regtest). **Phase 3.7 (3.7b):** wallet panel, commit **funding**, and commit/reveal **internal key** derive from the **login session** when logged in; this env var is **CI/headless fallback only** when no session. Removed in Phase 9 (release builds). |
+| `ADMIN_WALLET_REGTEST_MNEMONIC` | **Removed in Phase 3.7c.** Admin Wallet mnemonic and commit/reveal key come from the login session (`wallet_session_init`) only. `.env` keeps RPC/asm vars + `ALLOW_DEV_MNEMONIC_SIGNING`. |
 | `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing — covers both Admin Wallet funding (Phase 1) and reveal signing (Phase 3.5+) | Align with existing `dev_secrets.rs` |
 | `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Dev hot key for SPS-50 commit/reveal internal key; superseded by Admin Wallet derivation at `m/86'/0'/73'/2/0` | Retired |
 | `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |

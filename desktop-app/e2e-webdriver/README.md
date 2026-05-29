@@ -42,7 +42,7 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 
 | Variable | When |
 |----------|------|
-| `ADMIN_WALLET_REGTEST_MNEMONIC` | Required in `desktop-app/.env` for CI/headless. Phase 3.7: wallet panel, commit funding, and commit/reveal key use the **login session** when logged in; env is fallback only when no session. |
+| `ADMIN_WALLET_REGTEST_MNEMONIC` | **Removed (Phase 3.7c).** Do not set in `.env`. E2E flows must log in via Palabras so `wallet_session_init` binds the session mnemonic. |
 | `ALLOW_DEV_MNEMONIC_SIGNING=1` | Required to enable mnemonic-derived signing (regtest only); guards Admin Wallet commit funding and commit/reveal key derivation |
 
 See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
@@ -135,7 +135,7 @@ Selectors use `data-testid` attributes on the React side (`e2e-*`).
 | Cannot connect to WebDriver | Install/start **`WebKitWebDriver`**; confirm nothing else uses port **4444**                                         |
 | Binary not found            | From `desktop-app/`: `npm run tauri build -- --debug --no-bundle`                                                    |
 | Test hangs at connect       | Stack not running (ASM/orchestrator), or wrong `.env` URLs                                                           |
-| Broadcast spec fails at prepare | Check **`desktop-app/.env`** (Tauri process): `BITCOIN_RPC_*`, `ADMIN_WALLET_REGTEST_MNEMONIC`, `ALLOW_DEV_MNEMONIC_SIGNING`, `BITCOIN_MAGIC_BYTES_HEX`, `STRATA_ADMIN_STATE_RPC_URL`, `BITCOIN_NETWORK` — see `desktop-app/.env.example`. Also ensure the Admin Wallet external address is pre-funded (see "Admin Wallet pre-funding" above). |
+| Broadcast spec fails at prepare | Check **`desktop-app/.env`** (Tauri process): `BITCOIN_RPC_*`, `ALLOW_DEV_MNEMONIC_SIGNING`, `BITCOIN_MAGIC_BYTES_HEX`, `STRATA_ADMIN_STATE_RPC_URL`, `BITCOIN_NETWORK` — see `desktop-app/.env.example`. Confirm mnemonic login ran (`wallet_session_init`). Also ensure the Admin Wallet external address is pre-funded (see "Admin Wallet pre-funding" above). |
 
 ## Further reading
 

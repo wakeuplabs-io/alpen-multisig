@@ -18,7 +18,7 @@
 
 Broadcast configuration lives in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). Guard `ALLOW_DEV_MNEMONIC_SIGNING=1` is required in regtest. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md`).
 
-**Phase 3.7:** when logged in (Palabras), the wallet panel, commit **funding**, and the SPS-50 commit/reveal **internal key** (`m/86'/0'/73'/2/0`) all follow the login session. `ADMIN_WALLET_REGTEST_MNEMONIC` in `.env` is **CI/headless fallback only** when no session is active. Full removal of the env var is Phase 9.
+**Phase 3.7 (3.7c):** when logged in (Palabras), the wallet panel, commit **funding**, and the SPS-50 commit/reveal **internal key** (`m/86'/0'/73'/2/0`) all follow the login session. `ADMIN_WALLET_REGTEST_MNEMONIC` is **removed** — do not set it in `.env`. Broadcast and wallet IPC require a mnemonic login (`wallet_session_init`).
 
 ## Incidents
 
