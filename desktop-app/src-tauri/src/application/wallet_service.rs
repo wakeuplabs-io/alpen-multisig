@@ -470,6 +470,11 @@ impl WalletService {
     ) -> Result<String, AdminWalletError> {
         use bdk_bitcoind_rpc::bitcoincore_rpc::{Client, RpcApi};
 
+        // 0. ReadOnly guard — must run before any RPC contact or env checks
+        if !self.can_sign() {
+            return Err(AdminWalletError::ReadOnly);
+        }
+
         // 1. Guard check
         WalletService::check_enabled()?;
 
@@ -895,6 +900,57 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet);
 
         assert!(!svc.can_sign(), "new_watch_only must return can_sign=false");
+    }
+
+    // Acceptance test (step 01-03): fund_commit on watch-only returns ReadOnly without contacting RPC
+    #[tokio::test]
+    async fn fund_commit_on_watch_only_returns_read_only_error() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        // No RPC URL set — if fund_commit contacts RPC it would fail with RpcUnreachable, not ReadOnly
+        let svc = WalletService::new_watch_only(wallet);
+
+        let result = svc
+            .fund_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .await;
+
+        assert!(
+            matches!(result, Err(AdminWalletError::ReadOnly)),
+            "fund_commit on watch-only wallet must return ReadOnly, got: {:?}",
+            result
+        );
+    }
+
+    // Unit test (step 01-03): fund_commit on watch-only returns ReadOnly even with regtest env set (guard before check_enabled)
+    #[tokio::test]
+    async fn fund_commit_on_watch_only_returns_read_only_before_enabled_check() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+        {
+            let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            std::env::set_var("BITCOIN_NETWORK", "regtest");
+            std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        } // _guard dropped before .await
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new_watch_only(wallet);
+
+        let result = svc
+            .fund_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .await;
+
+        std::env::remove_var("BITCOIN_NETWORK");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+
+        assert!(
+            matches!(result, Err(AdminWalletError::ReadOnly)),
+            "fund_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
+            result
+        );
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
