@@ -105,6 +105,7 @@ pub struct WalletService {
     rpc_url: String,
     rpc_user: String,
     rpc_pass: String,
+    can_sign: bool,
 }
 
 /// Keychain selection for address listing.
@@ -196,7 +197,20 @@ impl WalletService {
             rpc_url,
             rpc_user,
             rpc_pass,
+            can_sign: true,
         }
+    }
+
+    /// Creates a watch-only WalletService that cannot sign transactions.
+    pub fn new_watch_only(wallet: bdk_wallet::Wallet) -> Self {
+        let mut svc = Self::new(wallet);
+        svc.can_sign = false;
+        svc
+    }
+
+    /// Returns whether this wallet service can sign transactions.
+    pub fn can_sign(&self) -> bool {
+        self.can_sign
     }
 
     /// Returns a lock-free snapshot of the current sync state.
@@ -855,6 +869,32 @@ mod tests {
             .expect("last_error must be Some for Disabled state");
         assert_eq!(err.code, "Disabled", "error code must be 'Disabled'");
         assert!(!err.message.is_empty(), "error message must be non-empty");
+    }
+
+    // Unit test (step 01-02): new().can_sign() returns true
+    #[test]
+    fn new_can_sign_returns_true() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        assert!(svc.can_sign(), "new() must return can_sign=true");
+    }
+
+    // Acceptance test (step 01-02): new_watch_only().can_sign() returns false
+    #[test]
+    fn new_watch_only_can_sign_returns_false() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new_watch_only(wallet);
+
+        assert!(!svc.can_sign(), "new_watch_only must return can_sign=false");
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
