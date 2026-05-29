@@ -44,5 +44,11 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: err.message,
 				severity: 'info',
 			}
+		case 'ReadOnly':
+			return {
+				title: 'Watch-only wallet',
+				body: 'This wallet is in watch-only mode. Signing operations are not available.',
+				severity: 'info',
+			}
 	}
 }

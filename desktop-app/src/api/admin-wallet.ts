@@ -49,6 +49,7 @@ export type AdminWalletError =
 	| { type: 'SyncIncomplete'; message: string }
 	| { type: 'RegtestGuardViolation'; message: string }
 	| { type: 'Disabled' }
+	| { type: 'ReadOnly' }
 
 export function getAdminWalletInfo(): Promise<ApiResult<AdminWalletInfo>> {
 	return tauriCall<AdminWalletInfo>('get_admin_wallet_info', {})
@@ -90,4 +91,17 @@ export type WalletSessionInitInput = {
 
 export async function walletSessionInit(input: WalletSessionInitInput): Promise<ApiResult<null>> {
 	return tauriCall<null>('wallet_session_init', { input })
+}
+
+export type WalletSessionInitWatchOnlyInput = {
+	xpub: string
+	network?: string
+}
+
+export function walletSessionInitWatchOnly(input: WalletSessionInitWatchOnlyInput): Promise<ApiResult<null>> {
+	return tauriCall<null>('wallet_session_init_watch_only', input)
+}
+
+export function getAdminWalletCanSign(): Promise<ApiResult<boolean>> {
+	return tauriCall<boolean>('admin_wallet_can_sign', {})
 }
