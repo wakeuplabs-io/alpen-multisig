@@ -111,10 +111,10 @@ The panel itself does **not** add this state to React Context; each screen consu
 
 | Trigger | Surface |
 |---|---|
-| `AdminWalletError.Disabled` from any hook | Panel body collapses to a single info card: *"Admin Wallet is not enabled for this environment. Set `COMMIT_FUNDING=admin_wallet`, `BITCOIN_NETWORK=regtest`, and `ALLOW_DEV_MNEMONIC_SIGNING=1` to enable."* |
+| `AdminWalletError.Disabled` from any hook | Panel body collapses to a single info card: *"Admin Wallet is not available. Log in with Palabras (dev mnemonic) to bind the wallet to your session, or set `BITCOIN_NETWORK=regtest` and `ALLOW_DEV_MNEMONIC_SIGNING=1` for CI/headless fallback."* |
 | `AdminWalletError.RpcUnreachable` | Sync chip shows `Sync error: cannot reach Bitcoin node`. Sections render last known data with a `(stale)` indicator. |
 | `AdminWalletError.RpcAuthFailed` | Sync chip shows `Sync error: RPC auth failed`. Same stale-data fallback. |
-| `AdminWalletError.DescriptorParseError` | Panel body shows fatal card: *"Admin Wallet descriptor invalid — check `ADMIN_WALLET_REGTEST_MNEMONIC`."* No partial render. |
+| `AdminWalletError.DescriptorParseError` | Panel body shows fatal card: *"Admin Wallet descriptor invalid — check the mnemonic used at login (Palabras) or `ADMIN_WALLET_REGTEST_MNEMONIC` for CI/headless fallback."* No partial render. |
 | `AdminWalletError.SyncIncomplete` | Sync chip shows the typed `message`; data renders normally. |
 | `AdminWalletError.RegtestGuardViolation` | Same body collapse as `Disabled` with the typed `message`. |
 

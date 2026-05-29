@@ -31,8 +31,7 @@ extension point instead of forcing a second refactor later.
 - All wallet IPC commands and the commit-funding path migrate to the session-scoped state and handle
   the "no session" state gracefully (return `Disabled`, never panic), including the brief race window
   between authentication and session init.
-- `ADMIN_WALLET_REGTEST_MNEMONIC` demoted to **CI/headless fallback only**: consulted only when no
-  session is active (integration tests that call wallet IPC without a UI login). Documented as such.
+- `ADMIN_WALLET_REGTEST_MNEMONIC` demoted to **CI/headless fallback** for wallet IPC when no session is active (integration tests that call wallet IPC without a UI login). **Still required in `.env`** for the SPS-50 commit/reveal internal key via `broadcast_env.rs` (Phase 3.5+). Documented as such; no longer the source of the wallet panel when logged in via Palabras.
 - `ALLOW_DEV_MNEMONIC_SIGNING` guard remains and is still required as the explicit regtest opt-in;
   the secret-carrying session-init command is registered in dev-signing builds only.
 - Frontend: wire session init on mnemonic login; ensure the panel shows `Disabled` after logout.
@@ -157,7 +156,9 @@ wallet, and cache it in the slot. No env → `Disabled`. This makes "login with 
 shows A, not B" true by construction (branch 1 returns before branch 2 is evaluated). The
 `check_enabled()` guard (`BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1`) stays inside
 `WalletService::sync()`/`fund_commit()` unchanged, so even a built fallback wallet is inert outside
-regtest-dev. `main.rs` no longer reads the env var; only `wallet_session.rs` does.
+regtest-dev. `main.rs` no longer reads the env var; `wallet_session.rs` reads it for wallet IPC
+fallback only. `broadcast_env.rs` still reads it for the commit/reveal internal key at
+`m/86'/0'/73'/2/0` (Phase 3.5+). Use the same mnemonic for login and in `.env` on regtest.
 
 > Documented caveat: in a headless/CI context where env is set and no UI session exists, the fallback
 > re-materializes on the next IPC after a `clear()`. This is the intended CI behavior; a real UI logout
@@ -226,8 +227,9 @@ Tests target production functions only.
 Each file has one reason to change:
 
 - `application/wallet_session.rs` — **owns the session slot lifecycle**: hold/replace/clear the
-  `Arc<WalletService>`, env-fallback policy, slot locking. The only file that knows about
-  `RwLock<Option<…>>` and the only file that reads `ADMIN_WALLET_REGTEST_MNEMONIC`.
+  `Arc<WalletService>`, env-fallback policy for wallet IPC, slot locking. The only file that knows about
+  `RwLock<Option<…>>`. Reads `ADMIN_WALLET_REGTEST_MNEMONIC` for wallet IPC fallback only
+  (`broadcast_env.rs` still reads it for the commit/reveal internal key).
 - `application/wallet_service.rs` — **owns one wallet's behavior and its background-task lifecycle**
   (now including the cancellation signal + `shutdown`). Unchanged otherwise.
 - `commands/admin_wallet.rs` — **thin IPC boundary**: snapshot from the slot, delegate, serialize

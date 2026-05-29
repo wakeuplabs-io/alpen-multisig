@@ -19,10 +19,11 @@ any mismatch silently showed the wrong wallet.
 The Tauri managed wallet state changed from a fixed-at-startup `Arc<WalletService>` to
 a session-scoped slot (`WalletSession` wrapping `Arc<RwLock<Option<Arc<WalletService>>>>`)
 that is populated at login and cleared at logout. The mnemonic never leaves the Rust
-process. The `ADMIN_WALLET_REGTEST_MNEMONIC` env var is demoted to a CI/headless
-fallback used only when no session is active. The hardware-wallet login path
-intentionally leaves the slot empty (`Disabled`) — Phase 3.8 fills it with a watch-only
-wallet.
+process. The `ADMIN_WALLET_REGTEST_MNEMONIC` env var remains in `.env`: CI/headless fallback for
+wallet IPC when no session is active, and still required for the SPS-50 commit/reveal internal key
+via `broadcast_env.rs`. Use the same mnemonic for login and in `.env` on regtest. The
+hardware-wallet login path intentionally leaves the slot empty (`Disabled`) — Phase 3.8 fills it
+with a watch-only wallet.
 
 ---
 
@@ -136,9 +137,10 @@ while `ADMIN_WALLET_REGTEST_MNEMONIC=B` shows wallet A; logout returns the panel
 the loop (rather than holding and aborting a `JoinHandle`) keeps the shutdown path
 idempotent and makes "exactly one loop per live wallet" easy to assert in tests.
 
-**One reader for the fallback env var**: funnelling every `ADMIN_WALLET_REGTEST_MNEMONIC`
-read through `current_or_fallback` made the precedence rule (live session always wins)
+**One reader for wallet IPC fallback**: funnelling `ADMIN_WALLET_REGTEST_MNEMONIC` reads for
+wallet IPC through `current_or_fallback` made the precedence rule (live session always wins)
 trivial to reason about and to test, and let `main.rs` drop its env dependency entirely.
+(`broadcast_env.rs` still reads the env var for the commit/reveal internal key.)
 
 **Mutation testing caught real coverage gaps**: the initial per-feature run surfaced
 untested `parse_network` arms (testnet/mainnet) and a missing `spawn_background_sync`

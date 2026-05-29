@@ -46,7 +46,8 @@ impl WalletSession {
     /// when the slot is empty (CI / headless fallback). Returns [`AdminWalletError::Disabled`]
     /// when both are absent.
     ///
-    /// This is the **only** place in the codebase that reads `ADMIN_WALLET_REGTEST_MNEMONIC`.
+    /// Reads `ADMIN_WALLET_REGTEST_MNEMONIC` for wallet IPC fallback only. Commit/reveal internal
+    /// key derivation still reads this env var separately in `broadcast_env.rs`.
     pub fn current_or_fallback(&self) -> Result<Arc<WalletService>, AdminWalletError> {
         // Branch 1: active session always wins
         if let Some(svc) = self.current() {
