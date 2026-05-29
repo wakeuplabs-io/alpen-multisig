@@ -37,6 +37,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
 | R1.0 | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0` |
+| R1.0.1 | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, persist reveal, broadcast commit→reveal (`submitpackage` if available); closes the R1.0 crash window |
 | R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3 — commit funding signed by session signer (HW on-device PSBT / mnemonic software); reveal by ephemeral key |
 | R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
 | R1.3 | Receive rotation | PRD §4.3.4 |
@@ -86,7 +87,7 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> R1[Release 1: R1.0 Ephemeral reveal key → R1.1 HW commit-funding signing → R1.2 Clean UI → R1.3 Receive rotation → R1.4 Drop derivation picking]
+  P38 --> R1[Release 1: R1.0 Ephemeral reveal key → R1.0.1 Pre-sign commit+reveal → R1.1 HW commit-funding signing → R1.2 Clean UI → R1.3 Receive rotation → R1.4 Drop derivation picking]
   R1 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
   P5 --> P6[Phase 6 Admin ID UI]
@@ -352,7 +353,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ### Release 1 — next deliverable
 
-The next shippable increment, built on the Foundation. Five steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
+The next shippable increment, built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed)
 
@@ -360,7 +361,15 @@ The next shippable increment, built on the Foundation. Five steps, in order. Eac
 
 **Done when:** On regtest, commit+reveal succeed using a fresh ephemeral key per broadcast (no `m/86'/0'/73'/2/0` derivation); the reveal change lands on an Admin Wallet address (not the ephemeral key); mnemonic-login broadcast behavior is otherwise unchanged; `cargo test --workspace` and frontend CI green.
 
-**Why / notes:** Revisits the Phase 3.5 decision (which folded the operator key into the wallet seed). That rationale treated the envelope carrier key as custody-significant; it is not — and a HW cannot sign the SPS-50 reveal (taproot **script-path** over a custom envelope leaf) anyway, so an in-app key is unavoidable for the reveal. Trade-off: an ephemeral in-memory key is not crash-recoverable between commit and reveal, so fund the commit at the minimum needed (bounded, trivial loss on crash). Record the change in [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) (or a short ADR) so it is not read as a silent regression.
+**Why / notes:** Revisits the Phase 3.5 decision (which folded the operator key into the wallet seed). That rationale treated the envelope carrier key as custody-significant; it is not — and a HW cannot sign the SPS-50 reveal (taproot **script-path** over a custom envelope leaf) anyway, so an in-app key is unavoidable for the reveal. Trade-off: an ephemeral in-memory key is not crash-recoverable between commit and reveal — **R1.0.1 closes this window**; until then, fund the commit at the minimum needed (bounded, trivial loss on crash). Record the change in [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) (or a short ADR) so it is not read as a silent regression.
+
+#### R1.0.1 — Build and sign commit + reveal before broadcasting
+
+**Goal:** Reorder the broadcast flow so the commit and the reveal are both built and signed **before either is broadcast**, then broadcast commit→reveal (atomically via `submitpackage` when the node supports it, otherwise sequentially). Persist the fully-signed reveal tx before broadcasting the commit. This removes the crash-loss window R1.0 introduces: once the reveal is signed the ephemeral key is no longer needed, and a crash after the commit broadcast is recoverable by re-submitting the saved reveal.
+
+**Done when:** On regtest, an approved proposal broadcasts with the reveal already signed before the commit hits the network; killing the app between the commit and reveal broadcast leaves a recoverable signed reveal (resubmittable without the ephemeral key); commit→reveal still confirm; `cargo test --workspace` and frontend CI green.
+
+**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 requires the funding step to return the full signed commit `Transaction` (not just its txid) so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. RBF of the commit (Phase 5) would still need the key re-derived — out of scope here.
 
 #### R1.1 — Session-driven broadcast signing (adds HW path)
 
