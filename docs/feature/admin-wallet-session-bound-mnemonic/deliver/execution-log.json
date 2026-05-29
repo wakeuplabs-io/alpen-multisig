@@ -421,6 +421,146 @@
       "s": "EXECUTED",
       "d": "PASS: committed in 4cca20a alongside step 01-01",
       "t": "2026-05-28T23:07:52Z"
+    },
+    {
+      "sid": "06-01",
+      "p": "PREPARE",
+      "s": "EXECUTED",
+      "d": "PASS: Phase 3.7b — WalletSession extended to hold commit_reveal_keypair (commit 2ffa0fa)",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-01",
+      "p": "RED_ACCEPTANCE",
+      "s": "SKIPPED",
+      "d": "NOT_APPLICABLE: no .feature file; covered by unit tests",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-01",
+      "p": "RED_UNIT",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-01",
+      "p": "GREEN",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-01",
+      "p": "COMMIT",
+      "s": "EXECUTED",
+      "d": "PASS: committed in 2ffa0fa",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-02",
+      "p": "PREPARE",
+      "s": "EXECUTED",
+      "d": "PASS: Phase 3.7b — commit_reveal_keypair_or_fallback implemented (commit 2ffa0fa)",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-02",
+      "p": "RED_ACCEPTANCE",
+      "s": "SKIPPED",
+      "d": "NOT_APPLICABLE: no .feature file; covered by unit tests",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-02",
+      "p": "RED_UNIT",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-02",
+      "p": "GREEN",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-02",
+      "p": "COMMIT",
+      "s": "EXECUTED",
+      "d": "PASS: committed in 2ffa0fa",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-03",
+      "p": "PREPARE",
+      "s": "EXECUTED",
+      "d": "PASS: Phase 3.7b — session-aware load_broadcast_env (commit 2ffa0fa)",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-03",
+      "p": "RED_ACCEPTANCE",
+      "s": "SKIPPED",
+      "d": "NOT_APPLICABLE: no .feature file; covered by unit tests",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-03",
+      "p": "RED_UNIT",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-03",
+      "p": "GREEN",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-03",
+      "p": "COMMIT",
+      "s": "EXECUTED",
+      "d": "PASS: committed in 2ffa0fa",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-04",
+      "p": "PREPARE",
+      "s": "EXECUTED",
+      "d": "PASS: Phase 3.7b/c — WalletSession wired into prepare/broadcast; ADMIN_WALLET_REGTEST_MNEMONIC removed (commits 2ffa0fa, d2dbe53)",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-04",
+      "p": "RED_ACCEPTANCE",
+      "s": "SKIPPED",
+      "d": "NOT_APPLICABLE: no .feature file; covered by unit tests",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-04",
+      "p": "RED_UNIT",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-04",
+      "p": "GREEN",
+      "s": "EXECUTED",
+      "d": "PASS",
+      "t": "2026-05-29T00:00:00Z"
+    },
+    {
+      "sid": "06-04",
+      "p": "COMMIT",
+      "s": "EXECUTED",
+      "d": "PASS: committed in d2dbe53",
+      "t": "2026-05-29T00:00:00Z"
     }
   ]
 }
