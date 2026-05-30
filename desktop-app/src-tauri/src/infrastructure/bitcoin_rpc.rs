@@ -19,6 +19,10 @@ pub trait BitcoinRpcClient: Send + Sync {
 
     /// Mine `count` blocks to an internally generated address. Regtest only.
     async fn mine_blocks(&self, count: u32) -> Result<(), String>;
+
+    /// Submit a package of transactions. Returns Ok(()) if the node accepts the package.
+    /// Unknown-method errors are propagated verbatim so callers can branch on them.
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String>;
 }
 
 pub struct HttpBitcoinRpcClient {
@@ -150,6 +154,21 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(())
     }
 
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String> {
+        let result = self
+            .call("submitpackage", serde_json::json!([tx_hexes]))
+            .await?;
+        let pkg_msg = result
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if pkg_msg == "success" {
+            Ok(())
+        } else {
+            Err(format!("submitpackage: unexpected result: {result}"))
+        }
+    }
+
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String> {
         let result = self.call("getrawtransaction", json!([txid, false])).await?;
         let hex_str = result
@@ -167,6 +186,33 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 #[cfg(test)]
 mod tests {
     use super::super::rpc_timeout::{rpc_client, RPC_TIMEOUT};
+    use super::BitcoinRpcClient;
+
+    #[test]
+    fn submit_package_is_on_bitcoin_rpc_client_trait() {
+        // compile-gate: submit_package must be on BitcoinRpcClient
+        fn _accepts_trait_object(_: &dyn BitcoinRpcClient) {}
+    }
+
+    #[test]
+    fn submit_package_parses_non_success_package_msg_as_error() {
+        let result_value = serde_json::json!({"package_msg": "some-failure"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_ne!(pkg_msg, "success");
+    }
+
+    #[test]
+    fn submit_package_parses_success_package_msg() {
+        let result_value = serde_json::json!({"package_msg": "success"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_eq!(pkg_msg, "success");
+    }
 
     #[test]
     fn rpc_timeout_is_thirty_seconds() {

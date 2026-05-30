@@ -1065,6 +1065,10 @@ mod tests {
         async fn mine_blocks(&self, _: u32) -> Result<(), String> {
             Ok(())
         }
+
+        async fn submit_package(&self, _: &[String]) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.
