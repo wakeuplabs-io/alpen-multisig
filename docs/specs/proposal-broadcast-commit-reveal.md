@@ -39,7 +39,9 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
   - Does **not** submit Bitcoin transactions or hold the production operator key.
 - **Desktop owns execution** (PRD UI + `docs/2-discovery/01-conceptual-overview.md` §6.5):
   - Commit/reveal construction and RPC submit from Tauri (`broadcast_env` process config).
-  - Commit/reveal internal key at `m/86'/0'/73'/2/0` in the Tauri process only (never the React webview). Phase 3.5+: `OPERATOR_SECRET_KEY_HEX` retired. Phase 3.7 (3.7c): commit **funding** and reveal key require mnemonic login — keypair cached in `WalletSession` at `wallet_session_init`; `ADMIN_WALLET_REGTEST_MNEMONIC` removed. See [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
+  - **R1.0 (current):** The SPS-50 envelope key is a **per-broadcast ephemeral key** generated in-memory (`generate_ephemeral_envelope_keypair`, OsRng). It is never persisted, never seed-derived, and discarded after the reveal is signed. The reveal change output is redirected to an Admin Wallet internal address (`WalletService::reveal_change_address`) so no funds are stranded on the throwaway key. The commit **funding** tx is still software-signed by the mnemonic session (`BdkAdminWalletMnemonic`); `WalletSession` no longer caches an envelope keypair. See [`admin-wallet-ephemeral-reveal-key.md`](./admin-wallet-ephemeral-reveal-key.md).
+  - **Known limitation (R1.0 crash window):** The ephemeral key lives in memory across the commit→reveal window. A crash after the commit confirms but before the reveal is built strands the commit UTXO (dust + fee). This window is closed by **R1.0.1** (pre-sign both before broadcasting). Until then, fund the commit at the minimum needed.
+  - Pre-R1.0 history: Phase 3.5 folded the key into `m/86'/0'/73'/2/0`; Phase 3.7c cached it in `WalletSession`. Both superseded by R1.0.
 - **Signer safety:**
   - Broadcast is only enabled after quorum is reached.
   - UI shows high-signal confirmation and deterministic artifacts before sending.
@@ -83,8 +85,8 @@ This field is operational metadata and does not replace canonical proposal lifec
 
 Tauri `proposals_prepare_broadcast`:
 - Validates proposal is `approved` (via orchestrator `GET`).
-- Builds commit address and fee estimate using local Bitcoin RPC + commit/reveal internal key (derived from Admin Wallet seed at `m/86'/0'/73'/2/0`).
-- Returns commit address and sats to the UI (no network submit).
+- Generates a fresh ephemeral envelope keypair in-memory; builds **indicative** commit address and fee estimate using local Bitcoin RPC.
+- Returns commit address and sats to the UI (no network submit). The displayed address is **indicative** — a new ephemeral key is generated at broadcast time, so the preview address will differ from the final on-chain commit address. The UI labels this section "Commit TX (preview)" accordingly.
 
 ### Step 2: Claim + broadcast (desktop + orchestrator)
 
@@ -146,9 +148,11 @@ Request body:
 
 ### Desktop Tauri (`desktop-app/src-tauri`)
 
-- `infrastructure/broadcast_env.rs` — process env for RPC + commit/reveal keypair (derived from Admin Wallet seed).
-- `application/proposals.rs` — `prepare_broadcast_bundle`, `broadcast_commit_then_reveal` with coordination callbacks.
-- IPC: `proposals_prepare_broadcast`, `proposals_broadcast` (no secrets in React).
+- `infrastructure/broadcast_env.rs` — process env for RPC/asm config + signing gates (no keypair since R1.0).
+- `infrastructure/admin_wallet/ephemeral_envelope_key.rs` — `generate_ephemeral_envelope_keypair()` via OsRng (R1.0).
+- `application/wallet_service.rs` — `reveal_change_address()` returns next unused internal address (R1.0).
+- `application/proposals.rs` — `prepare_broadcast_bundle`, `broadcast_commit_then_reveal`; generates ephemeral key internally; accepts `reveal_change_spk: ScriptBuf` (R1.0).
+- IPC: `proposals_prepare_broadcast`, `proposals_broadcast` (no secrets in React). `proposals_broadcast` resolves `reveal_change_spk` from `wallet_service.reveal_change_address()`.
 
 ### Frontend (`desktop-app/src`)
 
