@@ -234,6 +234,25 @@ mod url_tests {
 }
 
 #[cfg(test)]
+mod resubmit_reveal_tests {
+    use super::{proposals_resubmit_reveal, ResubmitRevealInput};
+    use desktop_app::application::pending_reveals::PendingReveals;
+    use desktop_app::application::wallet_session::WalletSession;
+
+    #[test]
+    #[allow(clippy::let_underscore_future)]
+    fn proposals_resubmit_reveal_uses_pending_reveals_state() {
+        fn _check(
+            input: ResubmitRevealInput,
+            s: tauri::State<'_, WalletSession>,
+            p: tauri::State<'_, PendingReveals>,
+        ) {
+            let _ = proposals_resubmit_reveal(input, s, p);
+        }
+    }
+}
+
+#[cfg(test)]
 mod wallet_session_state_tests {
     use super::proposals_broadcast;
     use desktop_app::application::wallet_session::WalletSession;
@@ -253,6 +272,32 @@ mod wallet_session_state_tests {
             let _ = proposals_broadcast(input, s, p);
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResubmitRevealInput {
+    pub base_url: String,
+    pub action_id: String,
+}
+
+#[tauri::command]
+pub async fn proposals_resubmit_reveal(
+    input: ResubmitRevealInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    pending: tauri::State<'_, PendingReveals>,
+) -> Result<String, String> {
+    let client = build_client(input.base_url)?;
+    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
+        .await
+        .map_err(|e| match e {
+            BroadcastError::NoPendingReveal { action_id } => {
+                format!("no pending reveal for action {action_id} — re-run broadcast")
+            }
+            other => map_broadcast_error(other),
+        })
 }
 
 fn map_broadcast_error(error: BroadcastError) -> String {
