@@ -293,42 +293,45 @@ mod build_reveal_tx_tests {
 
     #[test]
     fn change_output_uses_change_spk_not_envelope_keypair() {
+        use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+        use crate::domain::authority::Authority;
+        use crate::infrastructure::action_codec;
+        use ssz::Decode;
+        use strata_asm_txs_admin::actions::MultisigAction;
+        use strata_l1_txfmt::MagicBytes;
+        use std::num::NonZeroU8;
+
         let network = Network::Regtest;
         let envelope_keypair = make_test_envelope_keypair();
         let change_spk = make_test_change_spk(network);
 
+        // Build a valid MultisigAction via the project's action codec.
+        const SIGNER_HEX: &str =
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+        let pk = CompressedPubKey::from_hex(SIGNER_HEX).unwrap();
+        let action_domain = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        });
+        let action_hex = action_codec::encode_hex(&action_domain).unwrap();
+        let action_bytes = hex::decode(&action_hex).unwrap();
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .expect("valid MultisigAction from action_codec");
+
+        // Payload must be >= 126 bytes (EnvelopeScriptBuilder minimum).
+        const PAYLOAD: &[u8] = &[0x61u8; 128];
+
         let (commit_address, reveal_script, taproot_spend_info) =
-            derive_commit_address(&envelope_keypair, b"test_payload", network).unwrap();
+            derive_commit_address(&envelope_keypair, PAYLOAD, network).unwrap();
         let commit_address_script = commit_address.script_pubkey();
         let commit_tx = build_minimal_commit_tx(commit_address_script.clone());
 
-        // Minimal action bytes — use a known valid SSZ-encoded action if available,
-        // but we only need the tx outputs so we can use a zero-length workaround.
-        // Instead, build the tx up to outputs by checking output[1].script_pubkey.
-        // We use strata_asm_txs_admin::actions::MultisigAction with a zero tag.
-        use strata_asm_txs_admin::actions::MultisigAction;
-        use strata_l1_txfmt::MagicBytes;
-
-        // Use the deposit action as a representative concrete action
-        let _action_bytes = hex::decode("00000000").unwrap_or_default();
-        // We need a real MultisigAction — use SSZ roundtrip from a known hex if any,
-        // or construct via the public API. For now use a mock via from_ssz_bytes fallback:
-        // The test focuses on output[1].script_pubkey, which is set before signing.
-        // We'll test with a raw low-level construction to avoid action dependency.
-        // Instead, verify the change_spk is passed through via a simpler assertion path.
-
-        // Build with the simplest valid action — try deserializing zeros
-        let action_result = MultisigAction::from_ssz_bytes(&[0u8; 4]);
-        if action_result.is_err() {
-            // If we can't construct an action, skip the full tx build and just
-            // verify the structural contract via a known-good fixture below.
-            return;
-        }
-        let action = action_result.unwrap();
         let magic_bytes = MagicBytes::new([b'A', b'L', b'P', b'N']);
         let fee_sats = 500;
 
-        let result = build_reveal_tx(
+        let reveal_tx = build_reveal_tx(
             &envelope_keypair,
             &reveal_script,
             &taproot_spend_info,
@@ -338,25 +341,22 @@ mod build_reveal_tx_tests {
             magic_bytes,
             change_spk.clone(),
             fee_sats,
+        )
+        .expect("build_reveal_tx must succeed");
+
+        assert_eq!(
+            reveal_tx.output[1].script_pubkey, change_spk,
+            "change output must use the provided change_spk"
         );
 
-        if let Ok(reveal_tx) = result {
-            // The change output (index 1) must use the provided change_spk
-            assert_eq!(
-                reveal_tx.output[1].script_pubkey, change_spk,
-                "change output must use the provided change_spk"
-            );
-
-            // The change output must NOT be the bare P2TR derived from envelope keypair
-            let secp = Secp256k1::new();
-            let (envelope_xonly, _) = XOnlyPublicKey::from_keypair(&envelope_keypair);
-            let envelope_self_change = Address::p2tr(&secp, envelope_xonly, None, network);
-            assert_ne!(
-                reveal_tx.output[1].script_pubkey,
-                envelope_self_change.script_pubkey(),
-                "change output must NOT be the P2TR self-change from envelope keypair"
-            );
-        }
+        let secp = Secp256k1::new();
+        let (envelope_xonly, _) = XOnlyPublicKey::from_keypair(&envelope_keypair);
+        let envelope_self_change = Address::p2tr(&secp, envelope_xonly, None, network);
+        assert_ne!(
+            reveal_tx.output[1].script_pubkey,
+            envelope_self_change.script_pubkey(),
+            "change output must NOT be the P2TR self-change from envelope keypair"
+        );
     }
 }
 
