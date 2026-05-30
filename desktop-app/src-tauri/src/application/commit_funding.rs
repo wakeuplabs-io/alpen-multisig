@@ -49,15 +49,14 @@ impl BdkAdminWalletMnemonic {
 impl CommitFunding for BdkAdminWalletMnemonic {
     async fn build_signed_commit(
         &self,
-        _commit_address: &str,
-        _amount_sats: u64,
-        _fee_rate: u64,
+        commit_address: &str,
+        amount_sats: u64,
+        fee_rate: u64,
     ) -> Result<bitcoin::Transaction, CommitFundingError> {
-        // Stub: real implementation delegates to wallet_service.build_signed_commit in step 02-02.
-        Err(CommitFundingError::AdminWallet(
-            "not yet implemented — step 02-02 will provide WalletService::build_signed_commit"
-                .to_string(),
-        ))
+        self.wallet_service
+            .build_signed_commit(commit_address, amount_sats, fee_rate)
+            .await
+            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))
     }
 }
 
