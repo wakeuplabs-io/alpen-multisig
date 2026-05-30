@@ -8,7 +8,7 @@
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing and action encoding happen before reaching this layer.
 
-use bitcoin::{key::UntweakedKeypair, Network};
+use bitcoin::{Network, ScriptBuf};
 use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_l1_txfmt::MagicBytes;
@@ -44,6 +44,7 @@ pub enum BroadcastError {
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
+use crate::infrastructure::admin_wallet::ephemeral_envelope_key::generate_ephemeral_envelope_keypair;
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
 ///
@@ -52,7 +53,6 @@ pub async fn prepare_broadcast_bundle(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     network: Network,
     action_id: &str,
 ) -> Result<(String, u64, u64), BroadcastError> {
@@ -82,8 +82,9 @@ pub async fn prepare_broadcast_bundle(
     )
     .map_err(BroadcastError::Setup)?;
 
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
     let (commit_address, _, _) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
     let fee_rate = btc_rpc
@@ -132,13 +133,13 @@ pub async fn broadcast_commit_then_reveal(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     magic_bytes: MagicBytes,
     network: Network,
     action_id: &str,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
     commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
 ) -> Result<(String, String), BroadcastError> {
     let proposal = client.claim_broadcast(action_id).await.map_err(|e| {
         if let OrchestratorError::Backend {
@@ -176,8 +177,9 @@ pub async fn broadcast_commit_then_reveal(
     )
     .map_err(BroadcastError::Setup)?;
 
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
     let (commit_address, reveal_script, taproot_spend_info) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
     let fee_rate = btc_rpc
@@ -245,14 +247,14 @@ pub async fn broadcast_commit_then_reveal(
             .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
 
         let reveal_tx = broadcast_tx::build_reveal_tx(
-            operator_keypair,
+            &envelope_keypair,
             &reveal_script,
             &taproot_spend_info,
             &commit_tx,
             &commit_address_script,
             &action,
             magic_bytes,
-            network,
+            reveal_change_spk.clone(),
             reveal_fee_sats,
         )
         .map_err(BroadcastError::Setup)?;
@@ -430,19 +432,10 @@ pub async fn prepare_broadcast_local(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     network: Network,
     action_id: &str,
 ) -> Result<(String, u64, u64), BroadcastError> {
-    prepare_broadcast_bundle(
-        client,
-        btc_rpc,
-        asm_rpc_url,
-        operator_keypair,
-        network,
-        action_id,
-    )
-    .await
+    prepare_broadcast_bundle(client, btc_rpc, asm_rpc_url, network, action_id).await
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -1201,31 +1194,27 @@ mod tests {
 
     #[tokio::test]
     async fn broadcast_commit_uses_commit_funding_abstraction() {
-        use bitcoin::{
-            key::{rand::thread_rng, UntweakedKeypair},
-            secp256k1::SECP256K1,
-            Network,
-        };
+        use bitcoin::{Network, ScriptBuf};
         use strata_l1_txfmt::MagicBytes;
 
         let commit_txid = "spy-commit-txid-abc123";
         let spy = SpyCommitFunding::new(commit_txid);
         let mock_rpc = MockBtcRpc::new(commit_txid);
         let mock_client = MockOrchestratorClientLargeAction;
-        let keypair = UntweakedKeypair::new(SECP256K1, &mut thread_rng());
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let reveal_change_spk = ScriptBuf::new();
 
         let _result = broadcast_commit_then_reveal(
             &mock_client,
             &mock_rpc,
             "mock://asm-membership",
-            &keypair,
             magic_bytes,
             Network::Regtest,
             "action-1",
             10,
             5000,
             &spy,
+            reveal_change_spk,
         )
         .await;
 
