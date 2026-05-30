@@ -14,10 +14,10 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
 - Construction of both:
   - `commit` transaction (funding/output anchor for reveal spend).
   - `reveal` transaction (carries SPS payload/witness data).
-- Ordered execution:
-  - Build commit + reveal bundle.
-  - Broadcast/confirm commit.
-  - Broadcast reveal after commit is confirmed.
+- Ordered execution (R1.0.1):
+  - Build **and sign** the commit + reveal bundle before broadcasting either.
+  - Broadcast commit→reveal — atomically via `submitpackage` when supported, otherwise sequentially.
+  - Confirm.
 - **Orchestrator** coordination API (claim + progress reporting).
 - **Desktop** on-chain execution (prepare preview + commit/reveal submit).
 - Lifecycle/state updates after each broadcast stage.
@@ -40,7 +40,8 @@ This spec ensures quorum-approved proposals can move from offchain coordination 
 - **Desktop owns execution** (PRD UI + `docs/2-discovery/01-conceptual-overview.md` §6.5):
   - Commit/reveal construction and RPC submit from Tauri (`broadcast_env` process config).
   - **R1.0 (current):** The SPS-50 envelope key is a **per-broadcast ephemeral key** generated in-memory (`generate_ephemeral_envelope_keypair`, OsRng). It is never persisted, never seed-derived, and discarded after the reveal is signed. The reveal change output is redirected to an Admin Wallet internal address (`WalletService::reveal_change_address`) so no funds are stranded on the throwaway key. The commit **funding** tx is still software-signed by the mnemonic session (`BdkAdminWalletMnemonic`); `WalletSession` no longer caches an envelope keypair. See [`admin-wallet-ephemeral-reveal-key.md`](./admin-wallet-ephemeral-reveal-key.md).
-  - **Known limitation (R1.0 crash window):** The ephemeral key lives in memory across the commit→reveal window. A crash after the commit confirms but before the reveal is built strands the commit UTXO (dust + fee). This window is closed by **R1.0.1** (pre-sign both before broadcasting). Until then, fund the commit at the minimum needed.
+  - **R1.0.1 (current — crash window closed):** The commit **and** reveal are both built and signed *before* either is broadcast; the ephemeral key is dropped immediately after the reveal is signed. The pair is then broadcast commit→reveal via `submitpackage` (Bitcoin Core 24+) when available, otherwise sequentially (`sendrawtransaction` commit then reveal). The reveal is built from the **local** signed commit `Transaction`, so the previous `getrawtransaction` round-trip is gone. The signed reveal is held in a session-scoped **in-memory** store keyed by `action_id` and re-broadcastable via the `proposals_resubmit_reveal` IPC command (no key needed). See [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md).
+  - **Residual limitation (R1.0.1):** No durable cross-process persistence. `submitpackage` atomicity means a crash leaves nothing on-chain (clean retry); the in-memory store + resubmit covers live-session transient failures. A hard process crash on the **sequential-fallback** path (pre-24 node) between the commit and reveal sends is an accepted, documented limitation. Durable persistence (orchestrator-stored reveal) is a possible future hardening, out of scope for R1.0.1.
   - Pre-R1.0 history: Phase 3.5 folded the key into `m/86'/0'/73'/2/0`; Phase 3.7c cached it in `WalletSession`. Both superseded by R1.0.
 - **Signer safety:**
   - Broadcast is only enabled after quorum is reached.
@@ -93,8 +94,8 @@ Tauri `proposals_prepare_broadcast`:
 On user confirmation (`Broadcast`):
 
 1. `POST /proposals/:action_id/broadcast/claim` — orchestrator atomically sets `broadcast_status = commit_broadcasted` (or `409` if already claimed).
-2. Tauri submits commit tx, waits for confirmation, submits reveal tx (local Bitcoin RPC).
-3. After each phase, `PATCH /proposals/:action_id/broadcast` with `broadcast_status` and optional `commit_txid` / `reveal_txid`. After reveal confirmation, report `reveal_confirmed` and leave `proposal_status` as `approved`.
+2. Tauri builds **and signs both** the commit and the reveal locally, drops the ephemeral key, stores the signed reveal in memory, then broadcasts commit→reveal (`submitpackage` if available, otherwise sequential `sendrawtransaction`) and waits for confirmation (local Bitcoin RPC).
+3. `PATCH /proposals/:action_id/broadcast` reports `commit_broadcasted` (commit_txid) then `reveal_broadcasted` (reveal_txid) after the broadcast, then `reveal_confirmed` after confirmation, leaving `proposal_status` as `approved`. The intermediate `commit_confirmed` report is no longer sent (both txs confirm together; the PATCH contract enforces no sub-status ordering).
 4. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings).
 5. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles `approved` + `reveal_confirmed` rows to `enacted` when ASM post-conditions match (coordination hygiene only).
 
