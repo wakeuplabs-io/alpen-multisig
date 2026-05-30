@@ -1,0 +1,144 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-ephemeral-reveal-key",
+    "created_at": "2026-05-30T00:00:00Z",
+    "total_steps": 8
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "New infrastructure",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "ephemeral envelope key module",
+          "criteria": [
+            "generate_ephemeral_envelope_keypair() returns UntweakedKeypair without panicking",
+            "Two consecutive calls return keypairs with distinct secret keys",
+            "Function takes no arguments (no mnemonic, no seed, no network)"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/admin_wallet/ephemeral_envelope_key.rs"
+          ],
+          "implementation_notes": "Create new file with OsRng. In-memory only, never persisted, never seed-derived."
+        },
+        {
+          "id": "01-02",
+          "name": "broadcast_tx rename and change_spk param",
+          "criteria": [
+            "grep operator_keypair broadcast_tx.rs returns zero hits",
+            "build_reveal_tx change output script_pubkey equals passed change_spk",
+            "build_reveal_tx change output is NOT the P2TR from envelope keypair",
+            "cargo build succeeds with zero errors"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/broadcast_tx.rs"
+          ],
+          "implementation_notes": "Rename operator_keypair->envelope_keypair in derive_commit_address and build_reveal_tx. Add change_spk: ScriptBuf param to build_reveal_tx. Remove Address::p2tr(keypair, None, network) self-change. Use change_spk for the change output script_pubkey."
+        },
+        {
+          "id": "01-03",
+          "name": "wallet_service reveal_change_address",
+          "criteria": [
+            "reveal_change_address() returns Ok(address) with healthy wallet mutex",
+            "Two consecutive calls return distinct addresses (keychain index advances)",
+            "cargo build succeeds with zero errors"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ],
+          "implementation_notes": "Add pub async fn reveal_change_address(&self) -> Result<Address, AdminWalletError>. Lock wallet mutex like build_and_sign_tx. Call wallet.reveal_next_address(KeychainKind::Internal)."
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Application layer changes",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "proposals ephemeral key and change_spk wiring",
+          "criteria": [
+            "broadcast_commit_then_reveal accepts reveal_change_spk: ScriptBuf not keypair",
+            "prepare_broadcast_bundle and prepare_broadcast_local compile without keypair arg",
+            "broadcast_commit_uses_commit_funding_abstraction test passes",
+            "cargo build succeeds with zero errors"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/proposals.rs"
+          ],
+          "implementation_notes": "Drop operator_keypair from broadcast_commit_then_reveal; generate ephemeral key internally with generate_ephemeral_envelope_keypair(). Add reveal_change_spk: ScriptBuf param. Update prepare_broadcast_bundle and prepare_broadcast_local to generate ephemeral key inline."
+        },
+        {
+          "id": "02-02",
+          "name": "broadcast_env remove keypair fields",
+          "criteria": [
+            "BroadcastEnv has no commit_reveal_keypair or operator_keypair field",
+            "load_broadcast_env still enforces all three gates",
+            "load_broadcast_env_uses_session_commit_reveal_key test deleted",
+            "cargo build succeeds with zero errors"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+          ],
+          "implementation_notes": "Remove commit_reveal_keypair and operator_keypair from BroadcastEnv. Remove resolve_commit_reveal_keypair. Keep three gates: MnemonicSigningDisabled, WalletSessionRequired, ReadOnly."
+        },
+        {
+          "id": "02-03",
+          "name": "wallet_session cleanup and mod update",
+          "criteria": [
+            "SessionState has no commit_reveal_keypair field",
+            "grep commit_reveal_keypair src-tauri/src returns zero hits",
+            "commit_reveal_key.rs file deleted",
+            "ephemeral_envelope_key mod declared and accessible",
+            "cargo test --workspace passes with no failures"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs",
+            "desktop-app/src-tauri/src/infrastructure/admin_wallet/mod.rs",
+            "desktop-app/src-tauri/src/infrastructure/admin_wallet/commit_reveal_key.rs"
+          ],
+          "implementation_notes": "Remove commit_reveal_keypair from SessionState, WalletSession::commit_reveal_keypair() accessor, derive_commit_reveal_keypair import. Delete tests: init_stores_commit_reveal_keypair_matching_derivation, commit_reveal_keypair_none_when_slot_empty, build_session_from_xpub_returns_none_keypair. In mod.rs: remove mod commit_reveal_key; add mod ephemeral_envelope_key."
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Command layer wiring",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "commands proposals wiring",
+          "criteria": [
+            "proposals_broadcast resolves reveal_change_spk via wallet_service.reveal_change_address()",
+            "grep commit_reveal_keypair commands/proposals.rs returns zero hits",
+            "cargo test --workspace passes with no failures"
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/proposals.rs"
+          ],
+          "implementation_notes": "In proposals_broadcast: call wallet_service.reveal_change_address().await? to obtain change address; pass reveal_change_spk to broadcast_commit_then_reveal (no keypair arg). In proposals_prepare_broadcast: call prepare_broadcast_local without keypair argument."
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Frontend label update",
+      "steps": [
+        {
+          "id": "04-01",
+          "name": "broadcast details card preview label",
+          "criteria": [
+            "grep 'Commit TX\"' broadcast-details-card.tsx returns zero hits",
+            "grep 'Commit TX (preview)' broadcast-details-card.tsx returns at least one hit",
+            "npm run build succeeds in desktop-app/"
+          ],
+          "files_to_modify": [
+            "desktop-app/src/domain/broadcast-proposal/components/broadcast-details-card.tsx"
+          ],
+          "implementation_notes": "Relabel 'Commit TX' -> 'Commit TX (preview)' in user-facing label. Label-only change, no logic/props/DTO changes."
+        }
+      ]
+    }
+  ]
+}

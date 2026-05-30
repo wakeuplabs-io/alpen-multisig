@@ -518,6 +518,16 @@ impl WalletService {
         Ok(txid.to_string())
     }
 
+    /// Returns the next unused internal (change) keychain address.
+    /// Each call advances the BDK internal keychain index, so consecutive calls return distinct addresses.
+    pub async fn reveal_change_address(
+        &self,
+    ) -> Result<bdk_wallet::bitcoin::Address, AdminWalletError> {
+        let mut wallet = self.wallet.lock().await;
+        let info = wallet.reveal_next_address(bdk_wallet::KeychainKind::Internal);
+        Ok(info.address)
+    }
+
     /// Signals the background sync loop to exit. Idempotent — safe to call multiple times.
     /// Uses notify_waiters() to wake all current waiters (the select! loop observes it).
     pub fn shutdown(&self) {
@@ -950,6 +960,31 @@ mod tests {
             matches!(result, Err(AdminWalletError::ReadOnly)),
             "fund_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
             result
+        );
+    }
+
+    // Unit test (step 01-03): reveal_change_address returns distinct addresses on consecutive calls
+    #[tokio::test]
+    async fn reveal_change_address_returns_distinct_addresses_on_consecutive_calls() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        let addr1: bdk_wallet::bitcoin::Address = svc
+            .reveal_change_address()
+            .await
+            .expect("first reveal_change_address must succeed");
+        let addr2: bdk_wallet::bitcoin::Address = svc
+            .reveal_change_address()
+            .await
+            .expect("second reveal_change_address must succeed");
+
+        assert_ne!(
+            addr1, addr2,
+            "consecutive reveal_change_address calls must return distinct addresses"
         );
     }
 

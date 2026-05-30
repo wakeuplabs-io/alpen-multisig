@@ -184,6 +184,14 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
     let _ = harness.mine_block(None).await?;
 
     let action_strata = MultisigAction::from_ssz_bytes(&hex::decode(&action_hex)?)?;
+    let change_keypair = UntweakedKeypair::new(&secp, &mut OsRng);
+    let change_pubkey = bitcoin::CompressedPublicKey::from_private_key(
+        &secp,
+        &bitcoin::PrivateKey::new(change_keypair.secret_key(), bitcoin::Network::Regtest),
+    )
+    .expect("valid compressed public key");
+    let change_spk =
+        bitcoin::Address::p2wpkh(&change_pubkey, bitcoin::Network::Regtest).script_pubkey();
     let reveal_tx = anyhow_string(broadcast_tx::build_reveal_tx(
         &envelope_keypair,
         &reveal_script,
@@ -192,7 +200,7 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
         &commit_address.script_pubkey(),
         &action_strata,
         harness.asm_params.magic,
-        bitcoin::Network::Regtest,
+        change_spk,
         1_000,
     ))?;
 

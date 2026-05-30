@@ -96,7 +96,7 @@ export function BroadcastDetailsCard({
 
 			<div className="space-y-5 p-6">
 				<div>
-					<SectionLabel>Commit TX</SectionLabel>
+					<SectionLabel>Commit TX (preview)</SectionLabel>
 					<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
 						<span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]">
 							{bundle.commitAddress}

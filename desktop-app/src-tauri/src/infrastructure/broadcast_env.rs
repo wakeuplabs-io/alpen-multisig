@@ -1,6 +1,6 @@
 //! Desktop broadcast configuration from process environment (never from the webview).
 
-use bitcoin::{key::UntweakedKeypair, Network};
+use bitcoin::Network;
 use strata_l1_txfmt::MagicBytes;
 
 use crate::application::wallet_session::WalletSession;
@@ -30,17 +30,12 @@ impl From<BroadcastEnvError> for String {
     }
 }
 
-/// Bitcoin + commit/reveal settings for commit/reveal broadcast (Tauri process only).
+/// Bitcoin + RPC/network settings for commit/reveal broadcast (Tauri process only).
 #[derive(Debug)]
 pub struct BroadcastEnv {
     pub btc_rpc_url: String,
     pub btc_rpc_user: String,
     pub btc_rpc_pass: String,
-    // Wired in Step 02-01 (commands/proposals.rs); suppress dead_code until then.
-    #[allow(dead_code)]
-    pub commit_reveal_keypair: UntweakedKeypair,
-    /// Transitional alias for `commit_reveal_keypair`; call sites updated and field removed in Step 02-01.
-    pub operator_keypair: UntweakedKeypair,
     pub magic_bytes: MagicBytes,
     pub asm_rpc_url: String,
     pub network: Network,
@@ -48,15 +43,29 @@ pub struct BroadcastEnv {
     pub confirm_timeout_ms: u64,
 }
 
-/// Loads RPC/asm broadcast config from env and resolves the commit/reveal key from
-/// [`WalletSession`] only (set at mnemonic login via `wallet_session_init`).
+/// Loads RPC/asm broadcast config from env and enforces signing gates against
+/// [`WalletSession`].
 pub fn load_broadcast_env(
     wallet_session: &WalletSession,
 ) -> Result<BroadcastEnv, BroadcastEnvError> {
     let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
     let network = parse_network(&network_str)?;
 
-    let commit_reveal_keypair = resolve_commit_reveal_keypair(wallet_session)?;
+    // Gate 1: dev mnemonic signing must be explicitly enabled
+    let allow = std::env::var("ALLOW_DEV_MNEMONIC_SIGNING")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !allow {
+        return Err(BroadcastEnvError::MnemonicSigningDisabled);
+    }
+    // Gate 2: wallet session must be active
+    if wallet_session.current().is_none() {
+        return Err(BroadcastEnvError::WalletSessionRequired);
+    }
+    // Gate 3: session must not be read-only
+    if !wallet_session.can_sign() {
+        return Err(BroadcastEnvError::ReadOnly);
+    }
 
     // Parse remaining env vars
     let btc_rpc_url = std::env::var("BITCOIN_RPC_URL")
@@ -79,36 +88,16 @@ pub fn load_broadcast_env(
         .and_then(|s| s.parse().ok())
         .unwrap_or(600_000);
 
-    #[allow(deprecated)]
     Ok(BroadcastEnv {
         btc_rpc_url,
         btc_rpc_user,
         btc_rpc_pass,
-        operator_keypair: commit_reveal_keypair,
-        commit_reveal_keypair,
         magic_bytes: parse_magic_bytes(&magic_hex)?,
         asm_rpc_url,
         network,
         confirm_poll_interval_ms,
         confirm_timeout_ms,
     })
-}
-
-fn resolve_commit_reveal_keypair(
-    wallet_session: &WalletSession,
-) -> Result<UntweakedKeypair, BroadcastEnvError> {
-    let allow = std::env::var("ALLOW_DEV_MNEMONIC_SIGNING")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    if !allow {
-        return Err(BroadcastEnvError::MnemonicSigningDisabled);
-    }
-    if wallet_session.current().is_none() {
-        return Err(BroadcastEnvError::WalletSessionRequired);
-    }
-    wallet_session
-        .commit_reveal_keypair()
-        .ok_or(BroadcastEnvError::ReadOnly)
 }
 
 fn parse_network(network: &str) -> Result<Network, BroadcastEnvError> {
@@ -139,9 +128,7 @@ pub(crate) static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(()
 mod tests {
     use super::*;
     use crate::application::wallet_session::WalletSession;
-    use crate::infrastructure::admin_wallet::commit_reveal_key::derive_commit_reveal_keypair;
     use bdk_wallet::bitcoin::Network;
-    use bitcoin::secp256k1::XOnlyPublicKey;
 
     fn with_env_var(key: &str, value: Option<&str>, f: impl FnOnce()) {
         let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -202,20 +189,6 @@ mod tests {
         let result = load_broadcast_env(&session);
         clear_broadcast_rpc_env();
         assert!(result.is_ok(), "expected Ok but got: {:?}", result.err());
-    }
-
-    #[test]
-    fn load_broadcast_env_uses_session_commit_reveal_key() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        set_broadcast_rpc_env();
-        let session = session_with_mnemonic(TEST_MNEMONIC);
-        let env = load_broadcast_env(&session).expect("load broadcast env");
-        clear_broadcast_rpc_env();
-
-        let expected = derive_commit_reveal_keypair(TEST_MNEMONIC, Network::Regtest).unwrap();
-        let (expected_xonly, _) = XOnlyPublicKey::from_keypair(&expected);
-        let (actual_xonly, _) = XOnlyPublicKey::from_keypair(&env.commit_reveal_keypair);
-        assert_eq!(expected_xonly, actual_xonly);
     }
 
     #[test]
@@ -336,12 +309,12 @@ mod tests {
     }
 
     #[test]
-    fn resolve_commit_reveal_keypair_watch_only_session_returns_read_only() {
+    fn load_broadcast_env_watch_only_session_returns_read_only() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let xpub = derive_regtest_xpub(TEST_MNEMONIC);
         let session = session_with_xpub(&xpub);
-        let result = resolve_commit_reveal_keypair(&session);
+        let result = load_broadcast_env(&session);
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::ReadOnly)),
@@ -351,11 +324,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_commit_reveal_keypair_no_session_returns_wallet_session_required() {
+    fn load_broadcast_env_no_session_returns_wallet_session_required() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let session = WalletSession::empty();
-        let result = resolve_commit_reveal_keypair(&session);
+        let result = load_broadcast_env(&session);
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::WalletSessionRequired)),
@@ -365,15 +338,20 @@ mod tests {
     }
 
     #[test]
-    fn resolve_commit_reveal_keypair_mnemonic_session_returns_keypair() {
+    fn load_broadcast_env_mnemonic_session_passes_gates() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("BITCOIN_RPC_URL", "http://127.0.0.1:18443");
+        std::env::set_var("BITCOIN_RPC_USER", "user");
+        std::env::set_var("BITCOIN_RPC_PASS", "pass");
+        std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        std::env::set_var("BITCOIN_NETWORK", "regtest");
         let session = session_with_mnemonic(TEST_MNEMONIC);
-        let result = resolve_commit_reveal_keypair(&session);
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+        let result = load_broadcast_env(&session);
+        clear_broadcast_rpc_env();
         assert!(
             result.is_ok(),
-            "expected Ok keypair, got: {:?}",
+            "expected Ok with mnemonic session, got: {:?}",
             result.err()
         );
     }
