@@ -3,6 +3,7 @@ use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
 };
+use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::wallet_session::WalletSession;
@@ -243,8 +244,13 @@ mod wallet_session_state_tests {
     #[test]
     #[allow(clippy::let_underscore_future)]
     fn proposals_broadcast_uses_wallet_session_state() {
-        fn _check(input: super::BroadcastInput, s: tauri::State<'_, WalletSession>) {
-            let _ = proposals_broadcast(input, s);
+        use desktop_app::application::pending_reveals::PendingReveals;
+        fn _check(
+            input: super::BroadcastInput,
+            s: tauri::State<'_, WalletSession>,
+            p: tauri::State<'_, PendingReveals>,
+        ) {
+            let _ = proposals_broadcast(input, s, p);
         }
     }
 }
@@ -362,6 +368,7 @@ pub async fn proposals_prepare_broadcast(
 pub async fn proposals_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
+    pending_reveals: tauri::State<'_, PendingReveals>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
@@ -391,6 +398,7 @@ pub async fn proposals_broadcast(
         env.confirm_timeout_ms,
         &commit_funding,
         reveal_change_spk,
+        &pending_reveals,
     )
     .await
     .map_err(map_broadcast_error)?;
