@@ -1,4 +1,3 @@
-pub(crate) mod commit_reveal_key;
 pub(crate) mod ephemeral_envelope_key;
 pub mod wallet;
 

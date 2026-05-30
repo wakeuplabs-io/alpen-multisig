@@ -1,14 +1,11 @@
 use crate::application::wallet_service::WalletService;
-use crate::infrastructure::admin_wallet::commit_reveal_key::derive_commit_reveal_keypair;
 use crate::infrastructure::admin_wallet::wallet::load_watch_only_admin_wallet;
 use crate::infrastructure::admin_wallet::{load_admin_wallet, AdminWalletError};
-use bitcoin::key::UntweakedKeypair;
 use std::sync::{Arc, RwLock};
 
-/// Live session: Admin Wallet service plus derived SPS-50 commit/reveal key (mnemonic not stored).
+/// Live session: Admin Wallet service (mnemonic not stored).
 pub(crate) struct SessionState {
     pub wallet: Arc<WalletService>,
-    pub commit_reveal_keypair: Option<UntweakedKeypair>,
 }
 
 #[derive(Clone)]
@@ -30,7 +27,6 @@ impl WalletSession {
             .as_ref()
             .map(|s| SessionState {
                 wallet: Arc::clone(&s.wallet),
-                commit_reveal_keypair: s.commit_reveal_keypair,
             })
     }
 
@@ -55,13 +51,9 @@ impl WalletSession {
         mnemonic: &str,
         network: bdk_wallet::bitcoin::Network,
     ) -> Result<SessionState, AdminWalletError> {
-        let commit_reveal_keypair = derive_commit_reveal_keypair(mnemonic, network)?;
         let wallet = load_admin_wallet(mnemonic, network)?;
         let wallet = Arc::new(WalletService::new(wallet));
-        Ok(SessionState {
-            wallet,
-            commit_reveal_keypair: Some(commit_reveal_keypair),
-        })
+        Ok(SessionState { wallet })
     }
 
     fn build_session_from_xpub(
@@ -70,15 +62,7 @@ impl WalletSession {
     ) -> Result<SessionState, AdminWalletError> {
         let wallet = load_watch_only_admin_wallet(account_xpub, network)?;
         let wallet = Arc::new(WalletService::new_watch_only(wallet));
-        Ok(SessionState {
-            wallet,
-            commit_reveal_keypair: None,
-        })
-    }
-
-    /// SPS-50 commit/reveal internal key for the active session, if any.
-    pub fn commit_reveal_keypair(&self) -> Option<UntweakedKeypair> {
-        self.read_slot().and_then(|s| s.commit_reveal_keypair)
+        Ok(SessionState { wallet })
     }
 
     pub async fn init_from_xpub(
@@ -131,7 +115,6 @@ mod tests {
     use super::*;
     use crate::infrastructure::admin_wallet::load_admin_wallet;
     use bdk_wallet::bitcoin::Network;
-    use bitcoin::secp256k1::XOnlyPublicKey;
     use std::sync::Arc;
 
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -139,11 +122,6 @@ mod tests {
     fn make_session_state() -> SessionState {
         WalletSession::build_session_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
             .expect("wallet ok")
-    }
-
-    fn xonly_hex(keypair: UntweakedKeypair) -> String {
-        let (xonly, _) = XOnlyPublicKey::from_keypair(&keypair);
-        hex::encode(xonly.serialize())
     }
 
     #[test]
@@ -295,31 +273,6 @@ mod tests {
         assert_eq!(actual_addr, expected_addr);
     }
 
-    #[tokio::test]
-    async fn init_stores_commit_reveal_keypair_matching_derivation() {
-        let session = WalletSession::empty();
-        session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
-            .await
-            .expect("init must succeed");
-
-        let expected_hex = xonly_hex(
-            derive_commit_reveal_keypair(TEST_MNEMONIC, Network::Regtest).expect("derive"),
-        );
-        let actual_hex = xonly_hex(
-            session
-                .commit_reveal_keypair()
-                .expect("keypair must be stored after init"),
-        );
-        assert_eq!(actual_hex, expected_hex);
-    }
-
-    #[test]
-    fn commit_reveal_keypair_none_when_slot_empty() {
-        let session = WalletSession::empty();
-        assert!(session.commit_reveal_keypair().is_none());
-    }
-
     #[test]
     fn current_or_fallback_returns_disabled_when_no_session() {
         let session = WalletSession::empty();
@@ -395,17 +348,6 @@ mod tests {
         assert!(
             !session.can_sign(),
             "can_sign() must be false after xpub init"
-        );
-    }
-
-    #[test]
-    fn build_session_from_xpub_returns_none_keypair() {
-        let xpub = derive_account_xpub(TEST_MNEMONIC, Network::Regtest);
-        let state = WalletSession::build_session_from_xpub(&xpub, Network::Regtest)
-            .expect("valid xpub must succeed");
-        assert!(
-            state.commit_reveal_keypair.is_none(),
-            "commit_reveal_keypair must be None for xpub session"
         );
     }
 
