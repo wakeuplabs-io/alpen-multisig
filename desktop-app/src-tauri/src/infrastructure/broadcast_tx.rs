@@ -297,9 +297,9 @@ mod build_reveal_tx_tests {
         use crate::domain::authority::Authority;
         use crate::infrastructure::action_codec;
         use ssz::Decode;
+        use std::num::NonZeroU8;
         use strata_asm_txs_admin::actions::MultisigAction;
         use strata_l1_txfmt::MagicBytes;
-        use std::num::NonZeroU8;
 
         let network = Network::Regtest;
         let envelope_keypair = make_test_envelope_keypair();
