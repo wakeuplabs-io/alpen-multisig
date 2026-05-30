@@ -36,7 +36,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3.6 ✅ | Admin Wallet–only commit funding | Remove `BitcoindSendToAddress` variant and `COMMIT_FUNDING` toggle; Admin Wallet (BDK) is the sole commit funder from this phase onward |
 | 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
-| R1.0 | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0` |
+| R1.0 ✅ | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0`; merged PR #195 |
 | R1.0.1 | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, persist reveal, broadcast commit→reveal (`submitpackage` if available); closes the R1.0 crash window |
 | R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3 — commit funding signed by session signer (HW on-device PSBT / mnemonic software); reveal by ephemeral key |
 | R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
@@ -355,13 +355,15 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 The next shippable increment, built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
 
-#### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed)
+#### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
+
+**Status:** Complete — merged to `develop` as PR #195 (2026-05-30).
 
 **Goal:** Replace the commit/reveal internal key — currently derived from the session seed at `m/86'/0'/73'/2/0` (Phase 3.5/3.7b) — with a **per-broadcast ephemeral key** generated in the app. The envelope/carrier key is not custody-significant (governance authority lives in the SPS-65 `SignatureSet` inside the payload), so it does not need to come from the wallet seed. This makes reveal signing **login-agnostic** and shrinks R1.1 to "HW signs the commit funding". The reveal **change must be redirected to an Admin Wallet address** so no funds are stranded on the throwaway key.
 
 **Done when:** On regtest, commit+reveal succeed using a fresh ephemeral key per broadcast (no `m/86'/0'/73'/2/0` derivation); the reveal change lands on an Admin Wallet address (not the ephemeral key); mnemonic-login broadcast behavior is otherwise unchanged; `cargo test --workspace` and frontend CI green.
 
-**Why / notes:** Revisits the Phase 3.5 decision (which folded the operator key into the wallet seed). That rationale treated the envelope carrier key as custody-significant; it is not — and a HW cannot sign the SPS-50 reveal (taproot **script-path** over a custom envelope leaf) anyway, so an in-app key is unavoidable for the reveal. Trade-off: an ephemeral in-memory key is not crash-recoverable between commit and reveal — **R1.0.1 closes this window**; until then, fund the commit at the minimum needed (bounded, trivial loss on crash). Record the change in [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) (or a short ADR) so it is not read as a silent regression.
+**Why / notes:** Revisits the Phase 3.5 decision (which folded the operator key into the wallet seed). That rationale treated the envelope carrier key as custody-significant; it is not — and a HW cannot sign the SPS-50 reveal (taproot **script-path** over a custom envelope leaf) anyway, so an in-app key is unavoidable for the reveal. Known limitation until R1.0.1: the ephemeral key lives across the commit→reveal window; loss on crash is bounded to the commit dust + fee. See [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) for the updated protocol description.
 
 #### R1.0.1 — Build and sign commit + reveal before broadcasting
 
