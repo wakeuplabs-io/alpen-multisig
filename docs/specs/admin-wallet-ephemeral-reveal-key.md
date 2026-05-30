@@ -34,6 +34,8 @@ address** so no funds are stranded on the throwaway key.
   `WalletSessionRequired`, `ReadOnly`/watch-only) is preserved via `WalletSession` capability checks.
 - Removal of the seed-derived key: delete `derive_commit_reveal_keypair`, the `m/86'/0'/73'/2/0` path,
   `SessionState.commit_reveal_keypair`, and `WalletSession::commit_reveal_keypair()`.
+- Frontend: relabel the broadcast preview from "Commit TX" to **"Commit TX (preview)"** so the now-indicative
+  commit address is not read as the final on-chain address.
 - Update [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) to document the
   ephemeral key, the change-to-Admin-Wallet redirect, and the (temporary) crash window closed by R1.0.1.
 
@@ -115,9 +117,10 @@ in R1.0). Failing early in `load_broadcast_env` preserves the existing high-sign
 
 ### Frontend
 
-- No required change. Optional (flag for product): relabel the preview as "Commit TX (preview)" in
-  `domain/broadcast-proposal/components/broadcast-details-card.tsx` since the address is now indicative.
-  Treated as out of scope unless the gate requests it.
+- **In scope:** relabel the preview section header from "Commit TX" to "Commit TX (preview)" in
+  `domain/broadcast-proposal/components/broadcast-details-card.tsx`, because the displayed `commitAddress`
+  is now per-call and indicative (it will not equal the broadcast's commit address). Label-only change —
+  no DTO, props, or behavior changes; the address + amount keep rendering as today.
 
 ### Production code vs. test helpers
 
@@ -169,6 +172,11 @@ Tests target production functions only.
 
 13. Manual-fallback note: because the commit address is now per-broadcast and non-deterministic, the
     exported preview address is indicative; documented in the protocol spec (no code assertion).
+
+### Frontend
+
+13b. The broadcast preview header reads "Commit TX (preview)"; the address + amount still render. Verified
+     via component/snapshot test or the existing broadcast-proposal test, plus `npm run build` / lint / format.
 
 ### Regression / removals
 
