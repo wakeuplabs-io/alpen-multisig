@@ -344,7 +344,6 @@ pub async fn proposals_prepare_broadcast(
             &client,
             &btc_rpc,
             &env.asm_rpc_url,
-            &env.commit_reveal_keypair,
             env.network,
             &input.action_id,
         )
@@ -375,18 +374,23 @@ pub async fn proposals_broadcast(
         &env.btc_rpc_pass,
     ));
     let commit_funding = BdkAdminWalletMnemonic::new(std::sync::Arc::clone(&wallet_service));
+    let reveal_change_address = wallet_service
+        .reveal_change_address()
+        .await
+        .map_err(|e| e.to_string())?;
+    let reveal_change_spk = reveal_change_address.script_pubkey();
 
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         &client,
         btc_rpc.as_ref(),
         &env.asm_rpc_url,
-        &env.commit_reveal_keypair,
         env.magic_bytes,
         env.network,
         &input.action_id,
         env.confirm_poll_interval_ms,
         env.confirm_timeout_ms,
         &commit_funding,
+        reveal_change_spk,
     )
     .await
     .map_err(map_broadcast_error)?;
