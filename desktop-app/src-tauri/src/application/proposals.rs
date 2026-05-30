@@ -18,6 +18,7 @@ use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
     ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
+use crate::application::pending_reveals::PendingReveals;
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -41,6 +42,8 @@ pub enum BroadcastError {
     BitcoinRpc(String),
     #[error("confirmation timeout for txid {txid}")]
     Timeout { txid: String },
+    #[error("no pending reveal found for action_id: {action_id}")]
+    NoPendingReveal { action_id: String },
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
@@ -437,6 +440,33 @@ pub async fn prepare_broadcast_local(
     action_id: &str,
 ) -> Result<(String, u64, u64), BroadcastError> {
     prepare_broadcast_bundle(client, btc_rpc, asm_rpc_url, network, action_id).await
+}
+
+/// Re-broadcast a stored reveal transaction for a given action_id.
+///
+/// Looks up the reveal_tx_hex in PendingReveals and calls send_raw_transaction.
+/// Does NOT remove the entry — removal happens on reveal_confirmed.
+pub async fn resubmit_reveal(
+    pending: &PendingReveals,
+    btc_rpc: &dyn BitcoinRpcClient,
+    _client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<String, BroadcastError> {
+    let reveal_tx_hex = {
+        let guard = pending.lock().unwrap();
+        guard
+            .get(action_id)
+            .ok_or_else(|| BroadcastError::NoPendingReveal {
+                action_id: action_id.to_string(),
+            })?
+            .reveal_tx_hex
+            .clone()
+    };
+    let txid = btc_rpc
+        .send_raw_transaction(&reveal_tx_hex)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    Ok(txid)
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -1235,6 +1265,39 @@ mod tests {
             spy.was_called(),
             "CommitFunding::build_signed_commit must be called to fund the commit (Admin Wallet path)"
         );
+    }
+
+    // ─── resubmit_reveal tests ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn resubmit_reveal_returns_no_pending_reveal_when_absent() {
+        let pending = crate::application::pending_reveals::new();
+        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_client = MockOrchestratorClient::new();
+        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-missing").await;
+        assert!(matches!(
+            result,
+            Err(BroadcastError::NoPendingReveal { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn resubmit_reveal_broadcasts_stored_reveal_hex() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-1".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-txid-123".to_string(),
+                commit_txid: "commit-txid-456".to_string(),
+            },
+        );
+        let mock_rpc = MockBtcRpc::new("action-1");
+        let mock_client = MockOrchestratorClient::new();
+        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-1").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "reveal-txid-mock");
     }
 
     #[tokio::test]
