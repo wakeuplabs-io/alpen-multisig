@@ -191,10 +191,11 @@ pub async fn broadcast_commit_then_reveal(
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
         // Step 1: Broadcast commit via injected funding strategy.
-        let commit_txid = commit_funding
-            .fund_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
+        let commit_tx = commit_funding
+            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
             .await
             .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+        let commit_txid = commit_tx.compute_txid().to_string();
 
         report_broadcast(
             client,
@@ -996,33 +997,41 @@ mod tests {
     // ─── Acceptance test: CommitFunding abstraction is used ─────────────────
 
     struct SpyCommitFunding {
-        fund_commit_called: Mutex<bool>,
-        txid_to_return: String,
+        build_signed_commit_called: Mutex<bool>,
     }
 
     impl SpyCommitFunding {
-        fn new(txid: &str) -> Self {
+        fn new(_txid: &str) -> Self {
             Self {
-                fund_commit_called: Mutex::new(false),
-                txid_to_return: txid.to_string(),
+                build_signed_commit_called: Mutex::new(false),
             }
         }
 
         fn was_called(&self) -> bool {
-            *self.fund_commit_called.lock().unwrap()
+            *self.build_signed_commit_called.lock().unwrap()
         }
     }
 
     #[async_trait::async_trait]
     impl crate::application::commit_funding::CommitFunding for SpyCommitFunding {
-        async fn fund_commit(
+        async fn build_signed_commit(
             &self,
             _commit_address: &str,
             _amount_sats: u64,
             _fee_rate: u64,
-        ) -> Result<String, crate::application::commit_funding::CommitFundingError> {
-            *self.fund_commit_called.lock().unwrap() = true;
-            Ok(self.txid_to_return.clone())
+        ) -> Result<bitcoin::Transaction, crate::application::commit_funding::CommitFundingError>
+        {
+            *self.build_signed_commit_called.lock().unwrap() = true;
+            use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxOut};
+            Ok(Transaction {
+                version: Version::TWO,
+                lock_time: LockTime::ZERO,
+                input: vec![],
+                output: vec![TxOut {
+                    value: bitcoin::Amount::from_sat(10_000),
+                    script_pubkey: bitcoin::ScriptBuf::new(),
+                }],
+            })
         }
     }
 
@@ -1224,7 +1233,7 @@ mod tests {
 
         assert!(
             spy.was_called(),
-            "CommitFunding::fund_commit must be called to fund the commit (Admin Wallet path)"
+            "CommitFunding::build_signed_commit must be called to fund the commit (Admin Wallet path)"
         );
     }
 

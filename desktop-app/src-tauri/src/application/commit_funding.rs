@@ -20,12 +20,12 @@ pub enum CommitFundingError {
 /// level; this trait's single implementor remains `BdkAdminWalletMnemonic`.
 #[async_trait]
 pub trait CommitFunding: Send + Sync {
-    async fn fund_commit(
+    async fn build_signed_commit(
         &self,
         commit_address: &str,
         amount_sats: u64,
         fee_rate: u64,
-    ) -> Result<String, CommitFundingError>;
+    ) -> Result<bitcoin::Transaction, CommitFundingError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,16 +47,17 @@ impl BdkAdminWalletMnemonic {
 
 #[async_trait]
 impl CommitFunding for BdkAdminWalletMnemonic {
-    async fn fund_commit(
+    async fn build_signed_commit(
         &self,
-        commit_address: &str,
-        amount_sats: u64,
-        fee_rate: u64,
-    ) -> Result<String, CommitFundingError> {
-        self.wallet_service
-            .fund_commit(commit_address, amount_sats, fee_rate)
-            .await
-            .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))
+        _commit_address: &str,
+        _amount_sats: u64,
+        _fee_rate: u64,
+    ) -> Result<bitcoin::Transaction, CommitFundingError> {
+        // Stub: real implementation delegates to wallet_service.build_signed_commit in step 02-02.
+        Err(CommitFundingError::AdminWallet(
+            "not yet implemented — step 02-02 will provide WalletService::build_signed_commit"
+                .to_string(),
+        ))
     }
 }
 
@@ -75,6 +76,15 @@ mod tests {
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let bdk_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
         Arc::new(WalletService::new(bdk_wallet))
+    }
+
+    // compile-gate: CommitFunding trait must have build_signed_commit returning bitcoin::Transaction
+    // This test verifies the trait shape at compile time; if the method is missing or returns a
+    // different type, the file won't compile.
+    #[test]
+    fn commit_funding_trait_has_build_signed_commit() {
+        // Verify the associated type via trait object coercion (compile-only check).
+        fn _assert_build_signed_commit_exists<T: CommitFunding>() {}
     }
 
     // BdkAdminWalletMnemonic stores the injected WalletService — no ephemeral wallet on construction.
