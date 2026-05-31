@@ -22,7 +22,12 @@ The downstream broadcast orchestration (`broadcast_commit_then_reveal`), the `Co
 signature, and the reveal-signing semantics are **unchanged** — that is the central design constraint
 and the main selling point of this slice.
 
----
+This spec covers the **full end-to-end path** required for a governance broadcast to be signed by a
+hardware wallet — not only the backend signing seam (D1–D7) but the desktop surface that makes it usable:
+the user flow from clicking Broadcast through the on-device confirmation window to on-chain confirmation
+(§"End-to-End Flow"), a structured broadcast error contract so the UI can branch on failure kind
+(§DDD-8), and the device-interaction UX + error surfacing (§DDD-9). D1–D7 remain locked and unchanged;
+DDD-8 and DDD-9 are **added**.
 
 ## Scope
 
@@ -45,6 +50,14 @@ and the main selling point of this slice.
 - HW device access in the pre-sign window via `tokio::task::spawn_blocking` (the Trezor client is
   synchronous); the device is re-opened by fingerprint at sign time (no live connection held in the
   session).
+- **(DDD-8) Structured broadcast error contract** — `proposals_broadcast` returns `{ code, message }`
+  (backward-compatible JSON string) so the UI can branch on kind and offer recovery correctly. See
+  §"Structured broadcast error contract (DDD-8)".
+- **(DDD-9) Frontend device-UX + error surfacing** — the desktop broadcast surface needed for the HW path
+  to actually work end-to-end: a coarse "Confirm on your device" affordance during the HW pre-sign window
+  (skipped for the mnemonic/simulated-HW path), kind-specific error copy via a new `deriveBroadcastError`,
+  recovery-gated resubmit, and per-reason disabled-tooltip copy. The confirm control already auto-enables
+  from `canSign` (no new gating). See §"Frontend / UI impact (DDD-9)" and §"End-to-End Flow".
 
 ### Not included
 
@@ -176,6 +189,355 @@ a correctness dependency for D7, not just for device re-open.
 11. **CI no longer needs `ALLOW_DEV_MNEMONIC_SIGNING`.** Remove the variable from CI/e2e env; tests on
     regtest pass because `MnemonicPsbtSigner.allowed_on(regtest)` = true.
 
+### Frontend / end-to-end (slice (a) unless noted) — see §"Frontend / UI impact (DDD-9)"
+
+18. **Button auto-enables when `can_sign` flips true — regression, no new gating code.** The broadcast
+    confirm control already renders `disabled={isBroadcasting || !canSign}` and `canSign` already flows from
+    `useAdminWalletCapability()` → `admin_wallet_can_sign`. Assert: when `admin_wallet_can_sign` returns
+    `true` for an HW session, the confirm control is enabled with **no change** to gating logic. This is a
+    *characterization / regression* test guarding the design win — not a new feature. Extend the existing
+    `broadcast-details-card-can-sign.test.ts` (which already encodes `broadcastButtonDisabled(isBroadcasting,
+    canSign)`).
+19. **Structured-error mapping — backend variant → `code`.** Unit test `map_broadcast_error` /
+    `map_admin_wallet_error_for_broadcast` (Rust): each `BroadcastError` / `AdminWalletError` variant maps
+    to the expected `{ code }` per the §DDD-8 table (`SignerNotAllowedOnNetwork`, `HwDisconnected`,
+    `HwSigningFailed`, `HwUserRefused`, `ReadOnly`, `BitcoinRpc`, `Timeout`, `OrchestratorUnauthorized`,
+    `NoPendingReveal`, `Unknown`), and carries a non-empty `message`.
+20. **`deriveBroadcastError` consumes the structured code (TS).** Given `{ code, message }` JSON (the new
+    DTO), `deriveBroadcastError` returns `{ code, message, recovery }` with kind-specific copy; given a bare
+    legacy string it falls back to `{ code: 'Unknown', message, recovery: 'retry' }` (backward compatible).
+21. **Resubmit-reveal gating — structural prevention of the latent bug (CRITICAL).** `canResubmit` is
+    `true` **only** when `error.recovery === 'resubmit-reveal'` (a post-broadcast-boundary error with a live
+    `PendingReveal`), and **false** for `HwDisconnected` / `HwUserRefused` / `HwSigningFailed` /
+    `SignerNotAllowedOnNetwork` / `ReadOnly` / `OrchestratorUnauthorized` (all pre-broadcast-boundary). The
+    gating contract MUST be `recovery`-driven, never `Boolean(error)`. Assert that a device-absent
+    commit-signing failure yields `canResubmit === false` (so no resubmit affordance can ever be offered for
+    it). This guards the bug structurally before any resubmit control is wired into the card.
+22. **Device-prompt state appears during the HW pre-sign window; skipped for the mnemonic path.** For an HW
+    session the controller exposes an `awaiting-device` phase while `proposals_broadcast` is in flight, and
+    `BroadcastDevicePrompt` renders "Confirm on your device". For the mnemonic / simulated-HW session the
+    signer returns instantly, so the prompt is transient/never shown and the card behaves byte-identically
+    to today (no device affordance). Assert both branches off the `canSign`-source signer kind. (Slice (b)
+    for the real prompt content; slice (a) must prove the mnemonic path is unchanged.)
+23. **Mnemonic / simulated-HW path keeps card behavior identical (slice (a) regression).** With a mnemonic
+    session, the broadcast card renders no device prompt, advances commit → reveal → confirmed exactly as
+    R1.0.1, and the only observable change is structured-error copy + corrected resubmit gating.
+24. **E2E webdriver — mnemonic/simulated-HW walking skeleton (slice (a) GATE).** This is the slice (a)
+    completion gate: extend the existing `desktop-app/e2e-webdriver` broadcast spec
+    (`specs/broadcast-flow.e2e.ts`) per the repo README pattern — with the "Palabras" (mnemonic) login and
+    zero device, an approved proposal broadcasts through the unified flow; the phase progress advances
+    commit → reveal → confirmed; no device prompt appears. Run via the package's `test:e2e:*` scripts per
+    `desktop-app/e2e-webdriver/README.md`. Slice (a) is not done until this gate is green.
+25. **Manual / instrumented real-device path (slice (b), NOT CI-automatable).** Slice (b) gate (manual,
+    no device in CI). Document a manual regtest /
+    testnet procedure: connect a real Trezor/Ledger, log in via HW, broadcast an approved proposal, observe
+    the "Confirm on your device" prompt, physically confirm on-device, and verify commit + reveal confirm.
+    A second manual case: unplug / refuse on the device and assert the UI shows the `HwDisconnected` /
+    `HwUserRefused` copy with **no** "Resubmit reveal" control and nothing broadcast. This is a release
+    checklist item, not a CI gate (no device in CI).
+
+---
+
+## End-to-End Flow (UI → device → chain)
+
+This section traces a single governance broadcast from the operator's click to on-chain confirmation,
+making explicit **where the user must physically confirm on the hardware device** and **what the UI shows
+during the blocking pre-sign window**. It binds the locked backend design (D1–D7) to the desktop surface.
+
+> Naming note (ground truth — verified against the repo). The repository frontend uses a `domain/`-oriented
+> layout, not an FSD `features/` layout. The "controller" is the hook
+> `domain/broadcast-proposal/hooks/use-broadcast-proposal.ts`; the **confirm button + disabled tooltip +
+> error rendering live in `domain/broadcast-proposal/components/broadcast-details-card.tsx`** and the phase
+> rail + error banner in `broadcast-phase-progress.tsx`. There is **no** separate confirmation-modal /
+> button / error-alert file, and — important — **there is no "Resubmit reveal" control wired into this
+> broadcast card today**. The resubmit IPC (`proposals_resubmit_reveal`, R1.0.1) exists on the backend but
+> is not surfaced on this screen. `canSign` is sourced by **`useAdminWalletCapability()`** in
+> `domain/admin-wallet/hooks/use-admin-wallet-capability.ts` (via the `admin_wallet_can_sign` IPC) and
+> passed into `BroadcastDetailsCard` from `screens/broadcast-proposal-screen.tsx`. The controller's `error`
+> is a flat `string | null` today. The design below targets these real files; any reference to a "modal" or
+> "panel" means an in-card affordance unless a new component is explicitly proposed.
+
+### Sequence
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Card as BroadcastDetailsCard (UI)
+  participant Ctl as useBroadcastProposal (controller hook)
+  participant Cap as useAdminWalletCapability (canSign source)
+  participant Api as api/proposals.ts (invoke)
+  participant Cmd as proposals_broadcast (Tauri cmd)
+  participant App as proposals::broadcast_commit_then_reveal
+  participant WS as WalletService.build_signed_commit
+  participant Sig as PsbtSigner.sign_psbt
+  participant Dev as Hardware device (spawn_blocking)
+  participant RPC as Bitcoin Core / Esplora
+  participant Orch as Orchestrator
+
+  User->>Card: Open broadcast screen
+  Cap->>Api: getAdminWalletCanSign() → admin_wallet_can_sign
+  Api-->>Cap: canSign (+ signerKind, reason in slice b)
+  Ctl->>Api: prepareBroadcast(actionId)
+  Api->>Cmd: proposals_prepare_broadcast
+  Cmd-->>Card: { commitAddress, commitAmountSats, estimatedFeeSats }
+  Note over Card: Confirm control disabled={isBroadcasting || !canSign} (already wired)
+  User->>Card: Click "Confirm & Broadcast"
+  Card->>Ctl: broadcast()
+  Ctl->>Ctl: phase = 'broadcasting'  (HW: isAwaitingDevice = true)
+  Ctl->>Api: broadcastProposal(actionId)
+  Api->>Cmd: proposals_broadcast  (single awaited IPC — blocks through signing)
+  Cmd->>App: broadcast_commit_then_reveal(...)
+  App->>WS: build_signed_commit (guard → allowed_on → sync → build_psbt)
+  WS->>Sig: sign_psbt(&mut psbt)
+  alt Mnemonic (simulated HW)
+    Sig-->>WS: signed instantly (no prompt window)
+  else Real hardware
+    Sig->>Dev: spawn_blocking → re-open by fingerprint → key-path sign
+    Note over User,Dev: User physically confirms on the device screen
+    Dev-->>Sig: taproot key-spend signature (or HwUserRefused / HwDisconnected)
+  end
+  WS-->>App: finalize + extract_tx → signed commit Transaction
+  App->>App: build+sign reveal (ephemeral) → drop key → pending_reveals.insert
+  App->>RPC: submit_package([commit,reveal]) or sequential
+  App->>Orch: commit_broadcasted ; reveal_broadcasted
+  App->>RPC: (regtest) mine ; wait confirm
+  App->>Orch: reveal_confirmed ; pending_reveals.remove
+  App-->>Cmd: (commit_txid, reveal_txid)
+  Cmd-->>Api: BroadcastResultDto  OR  Err({ code, message })
+  Api-->>Ctl: ApiResult (ok | raw error string)
+  Ctl->>Ctl: error string → deriveBroadcastError → { code, message, recovery }
+  Ctl->>Card: phase = 'done'  OR  phase = 'error' (kind-specific copy)
+```
+
+### The blocking pre-sign window (what the user sees)
+
+`proposals_broadcast` is **one awaited IPC call** that does not return until commit signing, reveal
+signing, broadcast and confirmation have all completed (or failed). For the HW path, the device prompt
+happens *inside* this single call (within `spawn_blocking`). The frontend therefore cannot receive
+fine-grained progress for free — it only knows "the call is in flight". The design (see §DDD-9 and Open
+notes (a)) uses a **coarse `awaiting-device` state** derived from `inFlight` + signer kind: enough to render
+"Confirm on your device" without a Rust→JS event channel. For the mnemonic path the signer returns in
+microseconds, so the coarse state is never observed and the card is visually unchanged from R1.0.1.
+
+### The broadcast boundary (the recovery invariant)
+
+Every failure is classified as **before** or **after** the *broadcast boundary* — the moment the commit
+first hits the network. This single fact decides the recovery action offered to the user:
+
+- **Before** the boundary (signer-not-allowed, device absent/refused, read-only/no-signer, prepare/auth
+  failures): nothing is on-chain. Note (NIT-3): a `PendingReveal` **may already exist** for these cases,
+  because the signed reveal is inserted into the store *before* the commit is broadcast — so presence of a
+  `PendingReveal` does NOT prove the commit was sent. The boundary is decided by whether the broadcast was
+  reached/attempted, not by `PendingReveal` presence. Recovery = fix the cause and **retry from scratch**;
+  "Resubmit reveal" MUST NOT be offered even if a `PendingReveal` is in the store.
+- **After** the boundary (transient RPC blip on the sequential path, confirm-timeout) with a live
+  `PendingReveal`: the commit may be in the mempool and the signed reveal is stored. Recovery =
+  **resubmit reveal** (eligibility = AFTER-boundary AND a live `PendingReveal` exists).
+
+---
+
+## Structured broadcast error contract (DDD-8)
+
+### Problem
+
+Today `proposals_broadcast` collapses every failure to a flat `String` via `map_broadcast_error`; the
+controller stores it as `error: string | null` and the UI renders it verbatim in
+`broadcast-phase-progress.tsx`. The UI **cannot branch on error kind**. There is no `deriveBroadcastError`
+and no resubmit-reveal control on the broadcast card **yet** — but the resubmit IPC
+(`proposals_resubmit_reveal`) already exists on the backend, and the natural next step (surfacing a
+"Resubmit reveal" affordance) would, if naively gated on "is there an error", be a **latent bug** for the
+HW path: a commit-signing failure (device absent/refused) happens **before** the broadcast boundary, so no
+`PendingReveal` exists — yet a presence-gated control would still offer "Resubmit reveal", which is wrong
+and misleading. DDD-8 + DDD-9 make the contract kind-aware **before** that control is ever wired, so the
+bug is structurally impossible: resubmit is gated on `recovery === 'resubmit-reveal'`, never on error
+presence.
+
+### The DTO
+
+`proposals_broadcast` (and `proposals_resubmit_reveal`) return a structured, backward-compatible error
+shape over IPC:
+
+```jsonc
+{ "code": "HwUserRefused", "message": "You declined the transaction on your device." }
+```
+
+- `code`: a stable machine-readable enum string (below). `message`: a human-readable fallback.
+- **Backward compatible**: Tauri still rejects the IPC promise with a JSON **string**; today's consumers
+  that read it as a bare message keep working because `deriveBroadcastError` parses-or-passes-through. The
+  change is additive — `map_broadcast_error` now returns `serde_json::json!({ "code", "message" })`
+  (stringified), mirroring the existing `serialize_wallet_error` `{ type, message }` precedent in
+  `commands/admin_wallet.rs`.
+
+### Code set, boundary, copy and recovery
+
+| `code` | When it fires | Boundary | User-facing message (English) | Recovery |
+|---|---|---|---|---|
+| `SignerNotAllowedOnNetwork` | `AdminWalletError::SignerNotAllowedOnNetwork` — e.g. mnemonic signer on mainnet; fired by `allowed_on` **before** sync/build | BEFORE | "This signer is not allowed on the current network. Use a hardware wallet for mainnet." | retry-from-scratch (after switching signer/network) |
+| `HwDisconnected` | `WalletError::HwDisconnected` — device not present / lost at re-open or during signing | BEFORE | "Hardware wallet not detected. Reconnect your device and try again." | reconnect-device → retry |
+| `HwUserRefused` | device reported user rejection (if distinguishable from a generic failure) | BEFORE | "You declined the transaction on your device." | retry-from-scratch |
+| `HwSigningFailed` | `WalletError::HwSigningFailed` — device present but signing failed (wrong app, locked, firmware, fingerprint mismatch) | BEFORE | "The device could not sign this transaction. Check it is unlocked and on the Bitcoin app, then try again." | reconnect-device → retry |
+| `ReadOnly` | `AdminWalletError::ReadOnly` — no signer attached (watch-only, or HW session in the (a)→(b) window) | BEFORE | "This wallet cannot sign. Connect a hardware wallet to broadcast." | retry-from-scratch (after attaching signer) |
+| `BitcoinRpc` | `BroadcastError::BitcoinRpc` — node/Esplora RPC error | BEFORE or AFTER | "The Bitcoin node rejected or could not process the broadcast." | resubmit-reveal **iff** the broadcast was reached/attempted (AFTER boundary) **and** a live `PendingReveal` exists (NIT-3); else retry-from-scratch |
+| `Timeout` | confirmation poll exceeded `confirm_timeout_ms` after broadcast | AFTER | "Broadcast sent but confirmation timed out. You can resubmit the reveal." | resubmit-reveal |
+| `OrchestratorUnauthorized` | orchestrator returns 401 (`BroadcastError::ProposalFetch(Backend{401})`) | BEFORE (pre-broadcast fetch) | "Your orchestrator session expired (401). Re-authenticate and retry." | re-auth → retry |
+| `NoPendingReveal` | `proposals_resubmit_reveal` called but the store has no entry for `action_id` | n/a (resubmit only) | "No pending reveal to resubmit — re-run the broadcast." | retry-from-scratch |
+| `Unknown` | any unmapped error / legacy flat string | unknown | (the raw message, or "Broadcast failed for an unknown reason.") | retry-from-scratch |
+
+Recovery values collapse on the UI to three actions: `retry` (re-run broadcast / fix cause),
+`resubmit-reveal` (offer the resubmit control), `reconnect-device` (prompt to reconnect, then retry). The
+**critical invariant**: `resubmit-reveal` is the recovery for **`Timeout`** and a post-broadcast
+**`BitcoinRpc`** only; never for any `Hw*`, `SignerNotAllowedOnNetwork`, `ReadOnly`, or
+`OrchestratorUnauthorized` code.
+
+### Backend mapping site
+
+> **Invariant (NIT-3) — PendingReveal presence does NOT prove the commit was broadcast.** Verify against
+> the real code in `application/proposals.rs::broadcast_commit_then_reveal`: today the signed reveal is
+> inserted into `PendingReveals` **before** the commit is broadcast (the insert step precedes the
+> broadcast step). Therefore the existence of a `PendingReveal` for an `action_id` does **not** by itself
+> prove the commit hit the network — a build / sign / sync failure can leave a `PendingReveal` in the
+> store while nothing was ever submitted. The BEFORE/AFTER-broadcast-boundary classification (for
+> `BitcoinRpc` and **any** post-sign error) MUST be derived from **whether the broadcast call was actually
+> reached / attempted** — e.g. the orchestrator `commit_broadcasted` (or `reveal_broadcasted`) report was
+> sent, or an explicit in-flow boundary flag — **not** merely from `pending.get(action_id).is_some()`.
+>
+> Concretely:
+> - A commit/reveal **BUILD**, **SIGN**, or **sync** failure (pre-broadcast) → **BEFORE** boundary →
+>   recovery = retry-from-scratch, and **resubmit-reveal MUST NOT be offered** even though a
+>   `PendingReveal` may already be in the store.
+> - A failure **at or after** the `submit_package` / sequential-send step → **AFTER** boundary →
+>   resubmit-reveal eligible.
+> - **Recommended signal:** thread a boundary flag from the broadcast flow (or gate on the
+>   `commit_broadcasted` / `reveal_broadcasted` report having been sent) into `map_broadcast_error`, rather
+>   than inferring the boundary from `PendingReveal` presence.
+> - **Resubmit eligibility = AFTER-boundary AND a live `PendingReveal` exists** (both conditions, not
+>   presence alone).
+
+`commands/proposals.rs::map_broadcast_error` is extended (not replaced) to:
+1. Classify the `BroadcastError` / underlying `AdminWalletError` / `WalletError` into a `code`.
+2. Determine the boundary for `BitcoinRpc` from **whether the broadcast call was reached/attempted** (the
+   boundary flag or the `commit_broadcasted` report), **then** require a live `PendingReveal` for the
+   `action_id` before treating it as resubmittable (the store is already in scope for `proposals_broadcast`).
+   Presence of a `PendingReveal` alone is **not** sufficient (NIT-3).
+3. Return `serde_json::json!({ "code": code, "message": msg }).to_string()`.
+
+The existing 401 special-case becomes `code = OrchestratorUnauthorized`. `NoPendingReveal` is mapped in the
+`proposals_resubmit_reveal` arm (already special-cased today). A new small pure helper
+`broadcast_error_code(&BroadcastError, broadcast_reached: bool, has_pending: bool) -> &'static str` is
+unit-testable in isolation (Test 19). Per NIT-3 the helper takes **both** the boundary signal
+(`broadcast_reached` — was `submit_package` / sequential-send reached, e.g. via the boundary flag or the
+`commit_broadcasted` report) **and** `has_pending`; resubmit eligibility requires `broadcast_reached &&
+has_pending`, never `has_pending` alone.
+
+---
+
+## Frontend / UI impact (DDD-9)
+
+The desktop surface needs three changes — none of which alter the locked backend ports.
+
+**Controller input (NIT-2, slice (b) only — consistent with NIT-1):** `useBroadcastProposal` receives
+`signerKind` (and `canSignReason`) as an **optional parameter passed from the screen** (sourced from
+`useAdminWalletCapability()`), **not** sourced internally; it computes
+`awaiting-device = inFlight && signerKind === 'hardware'`. In slice (a) the parameter is absent, so the
+expression is never true and the controller stays on today's path (per the NIT-1 fail-safe rule).
+
+Per-file:
+
+| File | Verdict | Change |
+|---|---|---|
+| `domain/broadcast-proposal/model/broadcast-proposal.ts` | EXTEND | Add a `BroadcastError` view-model `{ code, message, recovery }`; add `BroadcastErrorCode` and `BroadcastRecovery` narrow-union types; add a new pure `deriveBroadcastError(raw: string): BroadcastError` that parses the `{ code, message }` JSON (or falls back for a legacy string) and maps `code → recovery` + kind-specific copy — mirroring the existing `parseAdminWalletError` precedent in `domain/admin-wallet/hooks/parse-admin-wallet-error.ts`. Add `'awaiting-device'` to `BroadcastPhase`. |
+| `domain/broadcast-proposal/hooks/use-broadcast-proposal.ts` | EXTEND | Change `error` from `string | null` to `BroadcastError | null` (run the raw IPC reject through `deriveBroadcastError`). Expose `canResubmit = error?.recovery === 'resubmit-reveal'` (the forward-looking gating contract — never `Boolean(error)`). Add an `awaiting-device` transient phase for the HW path: set when `broadcast()` starts **and** `signerKind === 'hardware'`. Expose `isAwaitingDevice`. Signer kind is passed in from the screen (sourced by `useAdminWalletCapability`), keeping the controller a thin consumer. |
+| `domain/broadcast-proposal/components/broadcast-details-card.tsx` | EXTEND | Render `<BroadcastDevicePrompt>` when `isAwaitingDevice`. Use the kind-specific disabled tooltip (replacing the single `Hardware wallet required to sign` string) driven by `canSignReason`. If/when a resubmit control is added here, gate it on `canResubmit` (recovery-driven), never on error presence. No change to `disabled={isBroadcasting || !canSign}`. |
+| `domain/broadcast-proposal/components/broadcast-phase-progress.tsx` | EXTEND | Render `error.message` (kind-specific copy) in the error banner instead of a flat string. Treat `'awaiting-device'` like `'broadcasting'` for step ranking (commit/reveal group active) so the rail does not regress. |
+| `domain/broadcast-proposal/components/broadcast-device-prompt.tsx` | CREATE NEW | Small presentational component: "Confirm on your device" with a device glyph; mounted only during the HW pre-sign window. Single responsibility; no IPC. For the mnemonic path it is never mounted. |
+| `domain/admin-wallet/hooks/use-admin-wallet-capability.ts` | EXTEND | This is the **real `canSign` source** (`useAdminWalletCapability`). Surface a `signerKind` (`'hardware' | 'mnemonic' | 'none'`) and an optional `canSignReason` alongside `canSign`, sourced from the wallet-status DTO (see §"Wallet-status / canSign contract"). Drives the device-prompt branch and the disabled-tooltip wording. |
+| `screens/broadcast-proposal-screen.tsx` | EXTEND (wiring) | Pass `signerKind` / `canSignReason` from `useAdminWalletCapability()` into `useBroadcastProposal` and `BroadcastDetailsCard`. Route composition only (no business logic), per the React rules. |
+| `api/proposals.ts` + `api/ipc-schemas.ts` | EXTEND | `broadcastProposal` already returns `ApiResult` whose `error` is the raw reject string — feed that string to `deriveBroadcastError` in the controller. Extend the `admin_wallet_can_sign` wrapper / add a Zod schema for the new `{ canSign, signerKind, reason? }` DTO if the backend adds them. Happy-path result schemas unchanged. |
+| `domain/cancel-proposal/hooks/use-cancel-broadcast.ts` | VERIFY (likely small change) | Spreads `useBroadcastProposal`'s return; once `error` becomes `BroadcastError | null`, the cancel-broadcast consumers that read `error` as a string must read `error?.message`. Audit and adjust the 1–2 call sites. |
+
+### Device-interaction UX
+
+> **Slice boundary (NIT-1, ties to §"Wallet-status / canSign contract").** The device affordance and the
+> `signerKind` / `canSignReason` capability fields land **together in slice (b)** — they are introduced as
+> one unit so the prompt always has a signer kind to branch on. In **slice (a)** the device prompt is
+> **not rendered at all**: `signerKind` / `canSignReason` are absent from the capability surface (the
+> `admin_wallet_can_sign` command still returns a bare `bool`), so slice (a) has nothing to branch on and
+> **MUST NOT attempt to branch on `signerKind`**. Slice (a) therefore reproduces **identical-to-today modal
+> behavior on regtest via the simulated-HW (mnemonic) path**; the "Confirm on your device" affordance and
+> the `awaiting-device` state arrive in slice (b) alongside the `signerKind` capability field.
+>
+> **Fail-safe rule (applies in both slices):** if `signerKind` is unavailable the controller treats the
+> flow as the mnemonic / instant path — **no device affordance**. In slice (a) `signerKind` is always
+> unavailable, so this rule deterministically yields today's behavior.
+
+- **HW path (slice (b))**: when `confirm()` runs and `signerKind === 'hardware'`, the controller enters
+  `awaiting-device` immediately (before the IPC resolves) and `BroadcastDevicePrompt` shows
+  "Confirm on your device". Because the single IPC blocks through signing, this coarse state remains until
+  the call resolves to `confirmed` or an error. No Rust→JS event channel is needed for R1.1 (Open note (a)).
+- **Mnemonic / simulated-HW path**: when `signerKind === 'mnemonic'` (slice (b)) **or `signerKind` is
+  absent (slice (a))**, the controller **skips** the `awaiting-device` state (the signer returns
+  instantly, or there is no kind to branch on). The card behaves exactly as R1.0.1 — this is a hard
+  requirement so slice (a) ships with zero UI regression.
+- **Graceful degradation**: if `signerKind` is unavailable (slice (a), or an older backend in slice (b)),
+  default to **not** showing the prompt (fail safe toward the unchanged mnemonic behavior). This is the
+  same fail-safe rule above, made explicit for forward/backward compatibility.
+
+### Button / title messaging
+
+`disabled={isBroadcasting || !canSign}` is **unchanged** (the design win — the control already auto-enables
+when `can_sign` flips true; verified in `broadcast-details-card.tsx` line ~158). What improves is the
+*reason* shown when `canSign === false`:
+
+- Today the card renders a single hard-coded string `Hardware wallet required to sign` (and the same on the
+  retry control in `broadcast-proposal-screen.tsx`).
+- With `canSignReason` from the status DTO, the disabled tooltip becomes specific:
+  - `not-allowed-on-network` → "This signer is not allowed on the current network. Use a hardware wallet for mainnet."
+  - `watch-only-no-signer` → "Connect a hardware wallet to sign and broadcast."
+  - `no-session` → "Connect a wallet to broadcast."
+- **Recommended approach**: carry a machine-readable `canSignReason` in the wallet-status DTO
+  (see next section) rather than inferring in the controller. Reason: the backend already knows *why*
+  (`signer.allowed_on(network)` vs no signer vs no session); re-deriving it in TS would duplicate the
+  capability rule (DDD-3) and risk drift. The controller stays a thin consumer.
+
+### Copy strings (English, authoritative)
+
+- Disabled tooltip (network): "This signer is not allowed on the current network. Use a hardware wallet for mainnet."
+- Disabled tooltip (watch-only): "Connect a hardware wallet to sign and broadcast."
+- Disabled tooltip (no session): "Connect a wallet to broadcast."
+- Device prompt title: "Confirm on your device"
+- Device prompt body: "Review the transaction on your hardware wallet and approve it to continue."
+- Error messages: per the §DDD-8 table (one per `code`).
+- Success state: "Broadcast confirmed." (commit + reveal txids shown as today).
+
+All copy obeys the repo TS/React conventions (tabs, single quotes, ~120 cols, strict equality, kebab-case
+filenames, PascalCase components, camelCase hooks, Zod-parsed IPC at the boundary).
+
+---
+
+## Wallet-status / canSign contract
+
+`admin_wallet_can_sign` today returns a bare `bool` (`wallet_session.can_sign()`), and `getAdminWalletInfo`
+merges it into `AdminWalletInfo.canSign`. Under R1.1:
+
+- It returns `true` for an HW session whose `HwPsbtSigner` is attached and `allowed_on(active_network)`;
+  `true` for a mnemonic session on regtest/testnet; **`false`** for watch-only/no-signer, no session, or a
+  signer not allowed on the active network (e.g. mnemonic on mainnet). This falls directly out of
+  `WalletService::can_sign` (D-locked) — no new rule. (Verified: the backend command
+  `admin_wallet_can_sign` returns `wallet_session.can_sign()`; the existing test
+  `admin_wallet_can_sign_returns_false_after_watch_only_init` continues to hold — a watch-only session with
+  no attached signer is still `false`, and only attaching `HwPsbtSigner` flips it true.)
+- **Recommendation (resolves Open question) — DTO fields land in slice (b) (NIT-1):** the `signerKind` /
+  `reason` capability fields are added in **slice (b)** together with the device prompt; in **slice (a)**
+  the command keeps returning the bare `bool` and the UI has no `signerKind` to branch on (slice (a) MUST
+  NOT branch on `signerKind`). Evolve the command (`admin_wallet_can_sign` returns a bare
+  `bool` today, consumed by `getAdminWalletCanSign()` in `api/admin-wallet.ts`) to return a small DTO
+  instead of a bare bool, e.g. `{ canSign: bool, signerKind: 'hardware'|'mnemonic'|'none', reason?: 'not-allowed-on-network'|'watch-only-no-signer'|'no-session' }`.
+  The `reason` is `Some` only when `canSign === false`. This is the single source of truth for both the
+  device-prompt branch (`signerKind`) and the disabled tooltip (`reason`), keeping the capability rule on
+  the backend. The change is additive and Zod-parsed; the legacy bare-bool is still accepted (graceful
+  degradation → `signerKind: 'none'`, no specific reason). Naming the command `admin_wallet_sign_status`
+  (new) vs overloading `admin_wallet_can_sign` is an implementer choice; either keeps the bool meaning.
+
 ---
 
 ## Module structure
@@ -192,7 +554,32 @@ a correctness dependency for D7, not just for device re-open.
   `BdkAdminWalletMnemonic` keep their surface; routes through the session signer transparently.
 - `infrastructure/hw_wallet/{trezor,ledger}.rs` (**extend**) — add `sign_psbt` (taproot key-path).
 - `infrastructure/broadcast_env.rs` (**extend**) — drop `allow_dev_mnemonic_signing`.
-- `application/proposals.rs`, `commands/proposals.rs` (**no / minimal change**) — downstream unchanged.
+- `application/proposals.rs` (**no change**) — downstream orchestration unchanged.
+- `commands/proposals.rs` (**extend**) — `map_broadcast_error` now classifies into a `{ code, message }`
+  structured error (DDD-8); new pure helper `broadcast_error_code`. IPC happy-path contracts unchanged.
+
+### Frontend (desktop-app/src/domain/broadcast-proposal) — single responsibility per file
+
+- `model/broadcast-proposal.ts` (**extend**) — *Error/phase domain model*: `BroadcastErrorCode` /
+  `BroadcastRecovery` types, `deriveBroadcastError` (parses `{ code, message }`, maps to copy + recovery),
+  `'awaiting-device'` phase.
+- `hooks/use-broadcast-proposal.ts` (**extend**) — *Broadcast controller*: recovery-driven `canResubmit`
+  (latent-bug fix), `awaiting-device` transient phase, `isAwaitingDevice`.
+- `components/broadcast-details-card.tsx` (**extend**) — *Broadcast card UI*: recovery-gated resubmit,
+  device prompt mount, kind-specific error copy; `disabled={!canSign || inFlight}` unchanged.
+- `components/broadcast-device-prompt.tsx` (**new**) — *"Confirm on your device" affordance*; presentational
+  only, HW path only.
+- `components/broadcast-phase-progress.tsx` (**extend, minor**) — rank `'awaiting-device'` as commit-active.
+- `domain/admin-wallet/hooks/use-admin-wallet-capability.ts` (**extend**) — *real canSign source*
+  (`useAdminWalletCapability`): surfaces `signerKind` + `canSignReason`.
+- `screens/broadcast-proposal-screen.tsx` (**extend, wiring only**) — passes `signerKind`/`canSignReason`
+  into the controller + card (route composition only).
+- `api/proposals.ts` + `api/ipc-schemas.ts` (**extend**) — parse structured error + optional wallet-status
+  DTO fields; happy-path schemas unchanged.
+
+Frontend dependency direction: **UI (component) → controller (hook) → api (`invoke` wrapper) → Tauri command
+→ application**. Components stay declarative; IPC lives only in `api/*`; the capability rule (DDD-3) stays on
+the backend and the frontend consumes `canSign` / `signerKind` / `reason` as data.
 
 Dependency direction: ports live in `application/`; concrete signers live with their substrate
 (`MnemonicPsbtSigner` in application because it is pure BDK; `HwPsbtSigner` in infrastructure because it
@@ -240,6 +627,32 @@ touches a device). `WalletService` depends on the `PsbtSigner` abstraction, neve
   key-spend signature in the PSBT) before committing to the full on-device flow. If the pinned versions do
   not support it, that is a go/no-go gate for (b) — surface it before building out the adapter path.
 
+### Frontend / end-to-end open notes
+
+- **(a) Device progress: coarse pending state vs event channel.** `proposals_broadcast` is a single awaited
+  IPC call that blocks through device signing; the frontend cannot get intra-call progress without a
+  Rust→JS event channel (e.g. `app_handle.emit`). **Recommendation: a coarse `awaiting-device` state is
+  enough for R1.1.** It is derived from `inFlight` + `signerKind === 'hardware'` and needs no new channel,
+  no new IPC, and no backend change. A fine-grained event stream (e.g. "device opened", "awaiting button")
+  is a Phase-7 nicety, not an R1.1 requirement. Document the trade-off; do not build the channel now.
+- **(b) `map_broadcast_error` → `{ code, message }` migration touches three files.** The change is
+  localized: `commands/proposals.rs` (classify + emit JSON; new `broadcast_error_code` helper), and the two
+  TS consumers `model/broadcast-proposal.ts` (`deriveBroadcastError` parses it) and — transitively —
+  `hooks/use-broadcast-proposal.ts` (recovery-gated `canResubmit`). Keep it backward compatible: a bare
+  legacy string must still parse to `{ code: 'Unknown', message }`. This belongs in **slice (a)** — it is
+  device-independent and fixes the latent resubmit bug regardless of HW.
+- **(c) Mnemonic / simulated-HW path must be visually unchanged in slice (a).** The simulated-HW (mnemonic)
+  signer returns instantly, so the `awaiting-device` state is never observed and `BroadcastDevicePrompt` is
+  never mounted. Slice (a) ships the structured error + resubmit-gating fix + button-auto-enable
+  verification on regtest with **zero device**, and the broadcast card must render and advance exactly as
+  R1.0.1. Test 23 guards this; treat any visual delta on the mnemonic path as a slice-(a) regression.
+- **Resubmit-reveal latent bug is a slice (a) fix.** `canResubmit: Boolean(error)` →
+  `error?.recovery === 'resubmit-reveal'`. This is device-independent (the bug is reachable today on the
+  mnemonic path for any non-resubmittable error) and must not wait for slice (b).
+- **Button auto-enable is a regression obligation, not new code.** `disabled={!canSign || inFlight}` already
+  enables the control when `can_sign` flips true for an HW session. No new gating is written; Test 18 is a
+  characterization test guarding the win.
+
 ---
 
 ## Changed Assumptions
@@ -254,3 +667,32 @@ on mainnet would violate PRD §3.2 (all signing hardware-mediated). The replacem
 per-signer network capability — `MnemonicPsbtSigner.allowed_on` = regtest | testnet only;
 `HwPsbtSigner.allowed_on` = any network. On mainnet only the real hardware signer is permitted, while the
 unified flow (same port, same steps) is preserved end-to-end.
+
+---
+
+## Slicing — UI folded into D6 (no change to D6 itself)
+
+The frontend work distributes across the two existing R1.1 slices; D6 is **extended, not contradicted**:
+
+- **Slice (a) — device-independent, fully shippable on regtest with the simulated-HW (mnemonic) path and
+  ZERO device:** `PsbtSigner` port + `MnemonicPsbtSigner` + flow unification + `ALLOW_DEV_MNEMONIC_SIGNING`
+  removal (all D-locked) **plus** the structured broadcast error contract (DDD-8), the
+  `deriveBroadcastError` rewrite + recovery-gated resubmit fix (DDD-9), and the button-auto-enable
+  regression test. The broadcast card behaves byte-identically to R1.0.1 (no device prompt). The
+  structured-error contract and the resubmit-gating fix **belong in slice (a)** because they are
+  device-independent and fix a latent bug that is reachable today.
+
+  **What slice (a) does and does not ship for resubmit (NIT-4):** slice (a) introduces the
+  recovery-driven **gating data contract** (`canResubmit = error?.recovery === 'resubmit-reveal'`) **and
+  its unit tests** (Test 21). It does **not** wire a visible "Resubmit reveal" control into
+  `broadcast-details-card.tsx` — no such control exists there today. The visible resubmit affordance, if
+  and when designed, is a **later slice**; slice (a) prevents the latent bug **structurally** via the data
+  contract so any future control can only ever be gated on `recovery`, never on error presence. The
+  `proposals_resubmit_reveal` IPC stays **as-is** (it already exists from R1.0.1) — slice (a) adds no new
+  IPC for resubmit.
+- **Slice (b) — adds the on-device pieces:** real `HwPsbtSigner` device signing **plus** `signerKind`/
+  `canSignReason` in the wallet-status DTO, `BroadcastDevicePrompt`, the `awaiting-device` controller state,
+  and the network/watch-only-specific disabled tooltips. The manual real-device test procedure (Test 25)
+  is part of slice (b)'s release checklist.
+
+Both ship under R1.1; (a) de-risks (b) and independently improves error UX and fixes the resubmit bug.
