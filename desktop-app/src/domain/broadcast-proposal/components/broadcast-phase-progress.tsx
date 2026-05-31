@@ -57,8 +57,14 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	const isDone = phase === 'done'
 	const isEnacted = proposalStatus === 'enacted'
 
-	// broadcasting = step 0 active, done = all steps complete
-	const activeStep = phase === 'broadcasting' ? 0 : isDone ? STEPS.length : -1
+	// Commit (0) + Reveal (1) are broadcast together (one package), so they light up
+	// simultaneously while broadcasting; Enactment (2) follows after confirmation.
+	const BROADCAST_GROUP_LAST = 1
+	function stepState(index: number): 'done' | 'active' | 'pending' {
+		if (isDone) return 'done'
+		if (phase === 'broadcasting' && index <= BROADCAST_GROUP_LAST) return 'active'
+		return 'pending'
+	}
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
@@ -78,8 +84,9 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 				{!isError && (
 					<div className="mb-6 space-y-3">
 						{STEPS.map((step, i) => {
-							const done = activeStep > i || isDone
-							const active = activeStep === i && !isDone
+							const state = stepState(i)
+							const done = state === 'done'
+							const active = state === 'active'
 
 							return (
 								<div key={step.label} className="flex items-start gap-3">
