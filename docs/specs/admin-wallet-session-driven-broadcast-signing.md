@@ -46,7 +46,7 @@ DDD-8 and DDD-9 are **added**.
   network.
 - Attach the correct signer per login type at session init (`wallet_session.rs`).
 - Typed errors: `AdminWalletError::SignerNotAllowedOnNetwork` and HW-side
-  `WalletError::HwSigningFailed` / `HwDisconnected` returned **before** any broadcast.
+  `WalletError::HwSigningFailed` / `HwDisconnected` / `HwUserRefused` returned **before** any broadcast.
 - HW device access in the pre-sign window via `tokio::task::spawn_blocking` (the Trezor client is
   synchronous); the device is re-opened by fingerprint at sign time (no live connection held in the
   session).
@@ -134,6 +134,12 @@ recognizes its own inputs when it receives the PSBT; an incorrect origin fingerp
 refuse to sign. Capturing the master fingerprint at connect (not deriving it from the xpub) is therefore
 a correctness dependency for D7, not just for device re-open.
 
+**spawn_blocking timeout.** The `HwPsbtSigner.sign_psbt` call runs inside `tokio::task::spawn_blocking`
+(synchronous HID client). Wrap it with `tokio::time::timeout` at **60 seconds** so that if the device
+is unresponsive, the user is not stuck indefinitely. On timeout, return `HwSigningFailed` with message
+"Device did not respond within 60 seconds. Check the connection and try again." This also handles the
+case where the user closes the app mid-sign — the blocking task is cancelled and no broadcast occurs.
+
 ### Production functions / types
 
 | Function / Type | Module | Responsibility |
@@ -146,95 +152,155 @@ a correctness dependency for D7, not just for device re-open.
 | `WalletService::build_signed_commit` | `application/wallet_service.rs` | **Single authoritative enforcement point.** Calls `signer.allowed_on(network)` **FIRST** and returns `SignerNotAllowedOnNetwork` **BEFORE** any sync / RPC / PSBT build. Order: guard (signer present) → `allowed_on` → sync → build_psbt → `signer.sign_psbt` → finalize → extract_tx |
 | `WalletService::can_sign` | `application/wallet_service.rs` | signer present AND `signer.allowed_on(network)` |
 | `AdminWalletError::SignerNotAllowedOnNetwork` | `infrastructure/admin_wallet/wallet.rs` | Typed error replacing the `Disabled`/env-flag gate |
-| `WalletError::HwSigningFailed` / `HwDisconnected` | `application/wallet_session.rs` (or shared) | Device absent / user refusal, returned before broadcast |
+| `WalletError::HwSigningFailed` / `HwDisconnected` / `HwUserRefused` | `application/wallet_session.rs` (or shared) | Device absent / user refusal / device-reported rejection, returned before broadcast |
 | `TrezorAdapter::sign_psbt` / `LedgerAdapter::sign_psbt` | `infrastructure/hw_wallet/{trezor,ledger}.rs` | New: taproot key-path PSBT signing (synchronous client) |
-| `WalletSession::init_from_mnemonic` / `init_from_xpub` | `application/wallet_session.rs` | Attach `MnemonicPsbtSigner` / `HwPsbtSigner` per login type |
+| `WalletSession::init_from_mnemonic` / `init_from_xpub` | `application/wallet_session.rs` | Attach `MnemonicPsbtSigner` / `HwPsbtSigner` per login type. **`init_from_xpub` signature changes**: must accept `master_fingerprint` alongside `account_xpub` + `network` (captured at connect time, not derived from xpub). |
 
 ---
 
 ## Test Cases
 
-1. **Happy path — mnemonic-mock (simulated HW), regtest.** Mnemonic login → `MnemonicPsbtSigner`
-   attached → `build_signed_commit` produces a valid extractable commit tx; broadcast completes
-   commit → reveal → confirmed.
-2. **Happy path — HW on-device.** HW login → `HwPsbtSigner` attached → `sign_psbt` runs inside
-   `spawn_blocking`, re-opens device by fingerprint, taproot key-path signs; commit finalizes and
-   broadcasts.
-3. **Signer selection unit tests.** `init_from_mnemonic` attaches `MnemonicPsbtSigner`;
-   `init_from_xpub` attaches `HwPsbtSigner`; `can_sign()` reflects `signer.allowed_on(network)`.
-4. **MnemonicPsbtSigner rejected on mainnet — fail fast, no side effects.** `allowed_on(Network::Bitcoin)`
-   = false; broadcast on mainnet with a mnemonic signer returns `AdminWalletError::SignerNotAllowedOnNetwork`.
-   Assert the `allowed_on` check fires **first**: **no `sync()` / RPC call and no PSBT build occurs** on the
-   reject path (the enforcement point short-circuits before any sync/RPC/build), and nothing is broadcast.
-5. **MnemonicPsbtSigner accepted on regtest and testnet.** `allowed_on` true for both.
-6. **HwPsbtSigner allowed on any network** including mainnet (`allowed_on(Network::Bitcoin)` = true).
-12. **Capability matrix — direct `allowed_on` assertions.** Assert the per-signer capability directly:
-    `MnemonicPsbtSigner.allowed_on(Network::Testnet) == true`, `allowed_on(Network::Regtest) == true`,
-    `allowed_on(Network::Bitcoin) == false`; and `HwPsbtSigner.allowed_on(_) == true` for any network
-    (Regtest, Testnet, Bitcoin).
-13. **HW session present but no signer attached yet (step-(a)→(b) intermediate window).** A HW session
-    exists but no `PsbtSigner` is attached (the window after the unified flow lands in (a) but before
-    `HwPsbtSigner` is wired in (b)). `build_signed_commit` returns a typed error (the missing-signer guard,
-    e.g. `ReadOnly`) — **not a panic, and never a silent software/mnemonic sign** — and **nothing is
-    broadcast**.
-7. **Device-absent / user-refusal typed error before any broadcast.** `HwPsbtSigner.sign_psbt`
-   surfaces `HwSigningFailed` / `HwDisconnected`; `build_signed_commit` returns the error and
-   `broadcast_commit_then_reveal` never reaches the network (commit not sent).
-8. **Reveal still ephemeral.** Reveal is signed by the per-broadcast envelope key; assert the reveal
-   path never calls `PsbtSigner`.
-9. **Regtest e2e — mnemonic-mock walking skeleton.** Full broadcast on the real Tauri binary using the
-   "Palabras" login with zero device; commit + reveal confirmed.
-10. **Regression — downstream unchanged.** Existing `broadcast_commit_then_reveal` and `CommitFunding`
-    tests stay green (port signature and orchestration untouched).
-11. **CI no longer needs `ALLOW_DEV_MNEMONIC_SIGNING`.** Remove the variable from CI/e2e env; tests on
-    regtest pass because `MnemonicPsbtSigner.allowed_on(regtest)` = true.
+### Backend signing (slice (a) unless noted)
 
-### Frontend / end-to-end (slice (a) unless noted) — see §"Frontend / UI impact (DDD-9)"
+**BE-01. Happy path — mnemonic (simulated HW), regtest.** Mnemonic login → `MnemonicPsbtSigner`
+attached → `build_signed_commit` produces a valid extractable commit tx; broadcast completes
+commit → reveal → confirmed.
 
-18. **Button auto-enables when `can_sign` flips true — regression, no new gating code.** The broadcast
-    confirm control already renders `disabled={isBroadcasting || !canSign}` and `canSign` already flows from
-    `useAdminWalletCapability()` → `admin_wallet_can_sign`. Assert: when `admin_wallet_can_sign` returns
-    `true` for an HW session, the confirm control is enabled with **no change** to gating logic. This is a
-    *characterization / regression* test guarding the design win — not a new feature. Extend the existing
-    `broadcast-details-card-can-sign.test.ts` (which already encodes `broadcastButtonDisabled(isBroadcasting,
-    canSign)`).
-19. **Structured-error mapping — backend variant → `code`.** Unit test `map_broadcast_error` /
-    `map_admin_wallet_error_for_broadcast` (Rust): each `BroadcastError` / `AdminWalletError` variant maps
-    to the expected `{ code }` per the §DDD-8 table (`SignerNotAllowedOnNetwork`, `HwDisconnected`,
-    `HwSigningFailed`, `HwUserRefused`, `ReadOnly`, `BitcoinRpc`, `Timeout`, `OrchestratorUnauthorized`,
-    `NoPendingReveal`, `Unknown`), and carries a non-empty `message`.
-20. **`deriveBroadcastError` consumes the structured code (TS).** Given `{ code, message }` JSON (the new
-    DTO), `deriveBroadcastError` returns `{ code, message, recovery }` with kind-specific copy; given a bare
-    legacy string it falls back to `{ code: 'Unknown', message, recovery: 'retry' }` (backward compatible).
-21. **Resubmit-reveal gating — structural prevention of the latent bug (CRITICAL).** `canResubmit` is
-    `true` **only** when `error.recovery === 'resubmit-reveal'` (a post-broadcast-boundary error with a live
-    `PendingReveal`), and **false** for `HwDisconnected` / `HwUserRefused` / `HwSigningFailed` /
-    `SignerNotAllowedOnNetwork` / `ReadOnly` / `OrchestratorUnauthorized` (all pre-broadcast-boundary). The
-    gating contract MUST be `recovery`-driven, never `Boolean(error)`. Assert that a device-absent
-    commit-signing failure yields `canResubmit === false` (so no resubmit affordance can ever be offered for
-    it). This guards the bug structurally before any resubmit control is wired into the card.
-22. **Device-prompt state appears during the HW pre-sign window; skipped for the mnemonic path.** For an HW
-    session the controller exposes an `awaiting-device` phase while `proposals_broadcast` is in flight, and
-    `BroadcastDevicePrompt` renders "Confirm on your device". For the mnemonic / simulated-HW session the
-    signer returns instantly, so the prompt is transient/never shown and the card behaves byte-identically
-    to today (no device affordance). Assert both branches off the `canSign`-source signer kind. (Slice (b)
-    for the real prompt content; slice (a) must prove the mnemonic path is unchanged.)
-23. **Mnemonic / simulated-HW path keeps card behavior identical (slice (a) regression).** With a mnemonic
-    session, the broadcast card renders no device prompt, advances commit → reveal → confirmed exactly as
-    R1.0.1, and the only observable change is structured-error copy + corrected resubmit gating.
-24. **E2E webdriver — mnemonic/simulated-HW walking skeleton (slice (a) GATE).** This is the slice (a)
-    completion gate: extend the existing `desktop-app/e2e-webdriver` broadcast spec
-    (`specs/broadcast-flow.e2e.ts`) per the repo README pattern — with the "Palabras" (mnemonic) login and
-    zero device, an approved proposal broadcasts through the unified flow; the phase progress advances
-    commit → reveal → confirmed; no device prompt appears. Run via the package's `test:e2e:*` scripts per
-    `desktop-app/e2e-webdriver/README.md`. Slice (a) is not done until this gate is green.
-25. **Manual / instrumented real-device path (slice (b), NOT CI-automatable).** Slice (b) gate (manual,
-    no device in CI). Document a manual regtest /
-    testnet procedure: connect a real Trezor/Ledger, log in via HW, broadcast an approved proposal, observe
-    the "Confirm on your device" prompt, physically confirm on-device, and verify commit + reveal confirm.
-    A second manual case: unplug / refuse on the device and assert the UI shows the `HwDisconnected` /
-    `HwUserRefused` copy with **no** "Resubmit reveal" control and nothing broadcast. This is a release
-    checklist item, not a CI gate (no device in CI).
+**BE-02. Happy path — HW on-device (slice (b)).** HW login → `HwPsbtSigner` attached → `sign_psbt` runs inside
+`spawn_blocking` (wrapped in 60s timeout), re-opens device by fingerprint, taproot key-path signs; commit finalizes and
+broadcasts.
+
+**BE-03a. Signer selection — mnemonic.** `init_from_mnemonic` attaches `MnemonicPsbtSigner`.
+
+**BE-03b. Signer selection — HW.** `init_from_xpub` (with `master_fingerprint`) attaches `HwPsbtSigner`.
+
+**BE-03c. can_sign reflects network capability.** `can_sign()` returns `signer.allowed_on(network)` for the attached signer.
+
+**BE-04. Capability matrix — parametrized `allowed_on` assertions.** All signer/network combinations in one test:
+`(MnemonicPsbtSigner, Testnet) → true`, `(MnemonicPsbtSigner, Regtest) → true`,
+`(MnemonicPsbtSigner, Bitcoin) → false`; `(HwPsbtSigner, Regtest) → true`,
+`(HwPsbtSigner, Testnet) → true`, `(HwPsbtSigner, Bitcoin) → true`.
+
+**BE-05. Mnemonic rejected on mainnet — fail fast, no side effects.** `allowed_on(Network::Bitcoin)`
+= false; broadcast on mainnet with a mnemonic signer returns `AdminWalletError::SignerNotAllowedOnNetwork`.
+Assert the `allowed_on` check fires **first**: **no `sync()` / RPC call and no PSBT build occurs** on the
+reject path, and nothing is broadcast.
+
+**BE-06. HW session present but no signer attached (step-(a)→(b) intermediate window).** A HW session
+exists but no `PsbtSigner` is attached. `build_signed_commit` returns `ReadOnly` — **not a panic, and never a silent software/mnemonic sign** — and **nothing is broadcast**.
+
+**BE-07. Device-absent typed error before any broadcast.** `HwPsbtSigner.sign_psbt`
+surfaces `HwDisconnected`; `build_signed_commit` returns the error and
+`broadcast_commit_then_reveal` never reaches the network (commit not sent).
+
+**BE-08. Device disconnects mid-sign — timeout or HID error.** `HwPsbtSigner.sign_psbt` is in progress
+inside `spawn_blocking`; device is unplugged. Either the 60s timeout fires or the HID call returns an error.
+Result: `HwSigningFailed` or `HwDisconnected` returned, **no broadcast occurs**.
+
+**BE-09. Fingerprint mismatch — different device plugged in at sign time.** `HwPsbtSigner` was initialized
+with fingerprint A; device with fingerprint B is plugged in. `sign_psbt` detects mismatch and returns
+`HwSigningFailed` with message indicating wrong device. **No broadcast occurs.**
+
+**BE-10. Reveal still ephemeral.** Reveal is signed by the per-broadcast envelope key; assert the reveal
+path never calls `PsbtSigner`.
+
+**BE-11. Session expiry during broadcast (OrchestratorUnauthorized).** Orchestrator returns 401 during
+`proposals_broadcast`. Error maps to `code = OrchestratorUnauthorized`, boundary = BEFORE, recovery = `re-auth → retry`.
+**No broadcast occurs.**
+
+**BE-12. Confirmation timeout (Timeout).** Broadcast succeeds but confirmation poll exceeds
+`confirm_timeout_ms`. Error maps to `code = Timeout`, boundary = AFTER, recovery = `resubmit-reveal`.
+`canResubmit === true`.
+
+**BE-13. BitcoinRpc failure — BEFORE boundary (build/sign failure).** RPC error occurs before
+`submit_package` is reached (e.g. during sync). Error maps to `code = BitcoinRpc`, boundary = BEFORE,
+recovery = `retry-from-scratch`. `canResubmit === false` even if `PendingReveal` exists in store (NIT-3).
+
+**BE-14. BitcoinRpc failure — AFTER boundary (post-broadcast).** RPC error occurs after
+`submit_package` / sequential-send was attempted. `PendingReveal` exists. Error maps to
+`code = BitcoinRpc`, boundary = AFTER, recovery = `resubmit-reveal`. `canResubmit === true`.
+
+**BE-15. Regression — downstream unchanged.** Existing `broadcast_commit_then_reveal` and `CommitFunding`
+tests stay green (port signature and orchestration untouched).
+
+**BE-16. Mnemonic on regtest without `ALLOW_DEV_MNEMONIC_SIGNING` env var.** Full broadcast succeeds
+because `MnemonicPsbtSigner.allowed_on(regtest)` = true. This test runs with the env var **unset**,
+validating that the flag removal does not break regtest.
+
+### Frontend (slice (a) unless noted) — see §"Frontend / UI impact (DDD-9)"
+
+**FE-01. Button auto-enables when `can_sign` flips true — regression, no new gating code.** The broadcast
+confirm control already renders `disabled={isBroadcasting || !canSign}` and `canSign` already flows from
+`useAdminWalletCapability()` → `admin_wallet_can_sign`. Assert: when `admin_wallet_can_sign` returns
+`true` for an HW session, the confirm control is enabled with **no change** to gating logic. This is a
+*characterization / regression* test guarding the design win — not a new feature. Extend the existing
+`broadcast-details-card-can-sign.test.ts` (which already encodes `broadcastButtonDisabled(isBroadcasting,
+canSign)`). **Note:** the existing test file uses Node `assert` as a script that reimplements component logic.
+Replace with a proper Vitest test using `@testing-library/react` that renders the actual component and
+asserts DOM state.
+
+**FE-02. Structured-error mapping — all 10 error codes.** Unit test `broadcast_error_code` (Rust pure helper):
+each `BroadcastError` / `AdminWalletError` / `WalletError` variant maps to the expected `{ code }` per the
+§DDD-8 table (`SignerNotAllowedOnNetwork`, `HwDisconnected`, `HwSigningFailed`, `HwUserRefused`, `ReadOnly`,
+`BitcoinRpc`, `Timeout`, `OrchestratorUnauthorized`, `NoPendingReveal`, `Unknown`), and carries a non-empty `message`.
+Parametrized — one assertion per code.
+
+**FE-03a. `deriveBroadcastError` parses structured JSON.** Given `{ code: 'HwDisconnected', message: '...' }`
+JSON, `deriveBroadcastError` returns `{ code, message, recovery: 'reconnect-device' }` with kind-specific copy.
+
+**FE-03b. `deriveBroadcastError` falls back for legacy string.** Given a bare legacy error string,
+`deriveBroadcastError` returns `{ code: 'Unknown', message: <raw>, recovery: 'retry' }` (backward compatible).
+
+**FE-04. Resubmit-reveal gating — structural prevention of the latent bug (CRITICAL).** `canResubmit` is
+`true` **only** when `error.recovery === 'resubmit-reveal'` (a post-broadcast-boundary error with a live
+`PendingReveal`), and **false** for `HwDisconnected` / `HwUserRefused` / `HwSigningFailed` /
+`SignerNotAllowedOnNetwork` / `ReadOnly` / `OrchestratorUnauthorized` (all pre-broadcast-boundary). The
+gating contract MUST be `recovery`-driven, never `Boolean(error)`. Assert that a device-absent
+commit-signing failure yields `canResubmit === false` (so no resubmit affordance can ever be offered for
+it). This guards the bug structurally before any resubmit control is wired into the card.
+
+**FE-05a. Device-prompt state appears during HW pre-sign window (slice (b)).** For an HW
+session the controller exposes an `awaiting-device` phase while `proposals_broadcast` is in flight, and
+`BroadcastDevicePrompt` renders "Confirm on your device".
+
+**FE-05b. Mnemonic path skips device prompt (slice (a) regression).** For the mnemonic / simulated-HW session the
+signer returns instantly, so the prompt is transient/never shown and the card behaves byte-identically
+to today (no device affordance). Assert both branches off the `canSign`-source signer kind.
+
+**FE-06. Mnemonic / simulated-HW path keeps card behavior identical (slice (a) regression).** With a mnemonic
+session, the broadcast card renders no device prompt, advances commit → reveal → confirmed exactly as
+R1.0.1, and the only observable change is structured-error copy + corrected resubmit gating.
+
+### E2E
+
+**E2E-01. Regtest e2e — mnemonic walking skeleton.** Full broadcast on the real Tauri binary using the
+"Palabras" login with zero device; commit + reveal confirmed.
+
+**E2E-02. Webdriver — mnemonic walking skeleton (slice (a) GATE).** This is the slice (a)
+completion gate: extend the existing `desktop-app/e2e-webdriver` broadcast spec
+(`specs/broadcast-flow.e2e.ts`) per the repo README pattern — with the "Palabras" (mnemonic) login and
+zero device, an approved proposal broadcasts through the unified flow; the phase progress advances
+commit → reveal → confirmed; no device prompt appears. Run via the package's `test:e2e:*` scripts per
+`desktop-app/e2e-webdriver/README.md`. Slice (a) is not done until this gate is green.
+
+### Release checklist (manual, NOT CI-automatable)
+
+**REG-01. Manual real-device path (slice (b)).** Connect a real Trezor/Ledger, log in via HW, broadcast an approved proposal, observe
+the "Confirm on your device" prompt, physically confirm on-device, and verify commit + reveal confirm.
+A second manual case: unplug / refuse on the device and assert the UI shows the `HwDisconnected` /
+`HwUserRefused` copy with **no** "Resubmit reveal" control and nothing broadcast. This is a release
+checklist item, not a CI gate (no device in CI).
+
+### Test doubles policy
+
+- **`MockBitcoinRpc`**: validates RPC method names, simulates `submit_package` success / unknown-method / RPC error.
+  Must reject invalid inputs (empty tx hex, malformed txid) like the real adapter.
+- **`MockOrchestratorClient`**: validates auth token present, simulates 200 / 401 / 409 responses.
+- **`InMemoryCommitFunding`**: validates network, address format, amount > 0. Returns a deterministic signed `Transaction`.
+- **`FakeHwDevice`**: simulates fingerprint match/mismatch, signing success/failure, device absent, user refusal.
+  Used to test `HwPsbtSigner` without physical USB device. Must validate that fingerprint is non-empty before signing.
+- **Real I/O**: `E2E-01` and `E2E-02` use real Tauri binary, real BDK wallet, real regtest RPC.
+  `REG-01` uses real hardware device (manual).
 
 ---
 
@@ -424,7 +490,7 @@ Recovery values collapse on the UI to three actions: `retry` (re-run broadcast /
 The existing 401 special-case becomes `code = OrchestratorUnauthorized`. `NoPendingReveal` is mapped in the
 `proposals_resubmit_reveal` arm (already special-cased today). A new small pure helper
 `broadcast_error_code(&BroadcastError, broadcast_reached: bool, has_pending: bool) -> &'static str` is
-unit-testable in isolation (Test 19). Per NIT-3 the helper takes **both** the boundary signal
+unit-testable in isolation (FE-02). Per NIT-3 the helper takes **both** the boundary signal
 (`broadcast_reached` — was `submit_package` / sequential-send reached, e.g. via the boundary flag or the
 `commit_broadcasted` report) **and** `has_pending`; resubmit eligibility requires `broadcast_reached &&
 has_pending`, never `has_pending` alone.
@@ -645,12 +711,12 @@ touches a device). `WalletService` depends on the `PsbtSigner` abstraction, neve
   signer returns instantly, so the `awaiting-device` state is never observed and `BroadcastDevicePrompt` is
   never mounted. Slice (a) ships the structured error + resubmit-gating fix + button-auto-enable
   verification on regtest with **zero device**, and the broadcast card must render and advance exactly as
-  R1.0.1. Test 23 guards this; treat any visual delta on the mnemonic path as a slice-(a) regression.
+  R1.0.1. Test FE-06 guards this; treat any visual delta on the mnemonic path as a slice-(a) regression.
 - **Resubmit-reveal latent bug is a slice (a) fix.** `canResubmit: Boolean(error)` →
   `error?.recovery === 'resubmit-reveal'`. This is device-independent (the bug is reachable today on the
   mnemonic path for any non-resubmittable error) and must not wait for slice (b).
 - **Button auto-enable is a regression obligation, not new code.** `disabled={!canSign || inFlight}` already
-  enables the control when `can_sign` flips true for an HW session. No new gating is written; Test 18 is a
+  enables the control when `can_sign` flips true for an HW session. No new gating is written; Test FE-01 is a
   characterization test guarding the win.
 
 ---
@@ -684,7 +750,7 @@ The frontend work distributes across the two existing R1.1 slices; D6 is **exten
 
   **What slice (a) does and does not ship for resubmit (NIT-4):** slice (a) introduces the
   recovery-driven **gating data contract** (`canResubmit = error?.recovery === 'resubmit-reveal'`) **and
-  its unit tests** (Test 21). It does **not** wire a visible "Resubmit reveal" control into
+  its unit tests** (FE-04). It does **not** wire a visible "Resubmit reveal" control into
   `broadcast-details-card.tsx` — no such control exists there today. The visible resubmit affordance, if
   and when designed, is a **later slice**; slice (a) prevents the latent bug **structurally** via the data
   contract so any future control can only ever be gated on `recovery`, never on error presence. The
@@ -692,7 +758,7 @@ The frontend work distributes across the two existing R1.1 slices; D6 is **exten
   IPC for resubmit.
 - **Slice (b) — adds the on-device pieces:** real `HwPsbtSigner` device signing **plus** `signerKind`/
   `canSignReason` in the wallet-status DTO, `BroadcastDevicePrompt`, the `awaiting-device` controller state,
-  and the network/watch-only-specific disabled tooltips. The manual real-device test procedure (Test 25)
+  and the network/watch-only-specific disabled tooltips. The manual real-device test procedure (REG-01)
   is part of slice (b)'s release checklist.
 
 Both ship under R1.1; (a) de-risks (b) and independently improves error UX and fixes the resubmit bug.
