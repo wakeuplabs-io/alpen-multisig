@@ -38,7 +38,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
 | R1.0 ✅ | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0`; merged PR #195 |
 | R1.0.1 ✅ | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, broadcast commit→reveal (`submitpackage` if available, else sequential); closes the R1.0 crash window via atomicity; merged PR #198, [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) |
-| R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3 — commit funding signed by session signer (HW on-device PSBT / mnemonic software); reveal by ephemeral key |
+| R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3, [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — unified `PsbtSigner` driven port; mnemonic login = software signer (simulated HW), HW login = on-device PSBT signer; reveal by ephemeral key; `ALLOW_DEV_MNEMONIC_SIGNING` replaced by per-signer network capability |
 | R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
 | R1.3 | Receive rotation | PRD §4.3.4 |
 | R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
@@ -379,9 +379,20 @@ The next shippable increment, built on the Foundation. Six steps, in order. Each
 
 #### R1.1 — Session-driven broadcast signing (adds HW path)
 
-**Goal:** With the reveal key now ephemeral (R1.0), broadcast signing is driven by the session only for the part that spends **real funds** — the **commit funding** tx. HW login signs that tx **on-device (PSBT, key-path)**; mnemonic login signs it in software (BDK). The reveal is signed by the ephemeral envelope key in both cases. This unblocks HW logins (today watch-only) from broadcasting.
+**Spec:** [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — full technical design, decisions (D1–D7), and test plan.
 
-**Done when:** On regtest/testnet, an approved proposal broadcasts for both login types — the commit funding tx is HW-signed on-device for a HW login and software-signed for a mnemonic login, and the reveal is signed by the ephemeral key. No out-of-session custody key is consulted.
+**Goal:** Unify broadcast signing behind a single `PsbtSigner` **driven port** on `WalletService`. The commit PSBT is always built by BDK from the wallet descriptor (fully annotated with taproot/BIP32 derivation) and handed to the selected signer; only the signer differs — `MnemonicPsbtSigner` (software, a **simulated hardware wallet** for the "Palabras"/mnemonic login) or `HwPsbtSigner` (real Trezor/Ledger **on-device, PSBT key-path** for the HW login). The mnemonic path therefore exercises the *exact same unified flow* as the HW path, end-to-end on regtest with no device. The reveal stays signed by the ephemeral envelope key in both cases and is never routed to the signer. This unblocks HW logins (today watch-only → `ReadOnly`) from broadcasting. Downstream `CommitFunding` and `broadcast_commit_then_reveal` are unchanged.
+
+`ALLOW_DEV_MNEMONIC_SIGNING` is **removed** and replaced by a typed, per-signer network capability (`signer.allowed_on(network)`): `MnemonicPsbtSigner` is allowed on **regtest/testnet only** (a software hot key must never sign mainnet, per PRD §3.2); `HwPsbtSigner` is allowed on **any** network. `WalletService.can_sign: bool` becomes an optional signer capability.
+
+Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsbtSigner` + flow unification + flag removal — the walking skeleton, verifiable on regtest with the mnemonic login and zero device; then (b) `HwPsbtSigner` real on-device taproot key-path PSBT signing. (a) de-risks (b).
+
+**Done when:**
+- A unified `PsbtSigner` port exists with `MnemonicPsbtSigner` and `HwPsbtSigner` implementors; `WalletService` builds the PSBT via BDK for both paths, signs through the port, finalizes and extracts the tx.
+- On regtest, the mnemonic login broadcasts an approved proposal end-to-end with **no device** (slice a); the HW login broadcasts with real on-device taproot key-path signing (slice b); the reveal is signed by the ephemeral key in both.
+- `ALLOW_DEV_MNEMONIC_SIGNING` is removed from code, CI, e2e, and `.env`; the mnemonic signer is rejected on mainnet with `SignerNotAllowedOnNetwork` and accepted on regtest/testnet; the HW signer is allowed on any network.
+- Device-absent / user-refusal returns a typed error **before** any broadcast (nothing hits the network).
+- Existing `CommitFunding` and `broadcast_commit_then_reveal` tests stay green; no out-of-session custody key is consulted.
 
 #### R1.2 — Clean wallet UI
 
@@ -521,7 +532,7 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Removed in Phase 3.6** (broadcast path); verify non-broadcast usages before full removal |
 | `COMMIT_FUNDING` | `bitcoind` (default) \| `admin_wallet` | **Removed in Phase 3.6** — Admin Wallet is the sole commit funder from Phase 3.6 onward |
 | `ADMIN_WALLET_REGTEST_MNEMONIC` | **Removed in Phase 3.7c.** Admin Wallet mnemonic and commit/reveal key come from the login session (`wallet_session_init`) only. `.env` keeps RPC/asm vars + `ALLOW_DEV_MNEMONIC_SIGNING`. |
-| `ALLOW_DEV_MNEMONIC_SIGNING` | Gate dev signing — covers both Admin Wallet funding (Phase 1) and reveal signing (Phase 3.5+) | Align with existing `dev_secrets.rs` |
+| `ALLOW_DEV_MNEMONIC_SIGNING` | **Removed in R1.1** — replaced by per-signer network capability (`MnemonicPsbtSigner`: regtest/testnet only; `HwPsbtSigner`: any). See [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md). | Retired |
 | `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Dev hot key for SPS-50 commit/reveal internal key; superseded by Admin Wallet derivation at `m/86'/0'/73'/2/0` | Retired |
 | `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |
 
