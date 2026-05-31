@@ -14,7 +14,7 @@ type Step = { label: string; detail: string }
 
 const STEPS: Step[] = [
 	{ label: 'Commit', detail: 'Sending commit transaction to Bitcoin' },
-	{ label: 'Reveal', detail: 'Sending reveal transaction once commit confirms' },
+	{ label: 'Reveal', detail: 'Broadcasting reveal transaction together with commit' },
 	{ label: 'Enactment', detail: 'ASM applies the governance change after the confirmation delay' },
 ]
 
