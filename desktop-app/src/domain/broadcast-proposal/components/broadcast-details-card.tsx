@@ -112,7 +112,7 @@ export function BroadcastDetailsCard({
 				<div>
 					<SectionLabel>Reveal TX</SectionLabel>
 					<p className="text-[13px] text-[#6b7280]">
-						Broadcast automatically once the commit transaction confirms on-chain.
+						Signed locally and broadcast in the same package as the commit — no separate confirmation wait.
 					</p>
 				</div>
 
