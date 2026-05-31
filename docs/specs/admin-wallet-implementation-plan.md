@@ -37,7 +37,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 3.7 ✅ | Session-bound Admin Wallet (mnemonic) | PRD §3.2 — wallet/commit/broadcast key from login session; `ADMIN_WALLET_REGTEST_MNEMONIC` removed (3.7c), [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md) |
 | 3.8 ✅ | Watch-only Admin Wallet (HW login) | PRD §3.2 — HW login path gets a read-only BDK wallet from xpub; balance/addresses visible, signing deferred to R1.1 (broadcast) / Phase 7 (Send) |
 | R1.0 ✅ | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0`; merged PR #195 |
-| R1.0.1 | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, broadcast commit→reveal (`submitpackage` if available, else sequential); closes the R1.0 crash window via atomicity, [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) |
+| R1.0.1 ✅ | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, broadcast commit→reveal (`submitpackage` if available, else sequential); closes the R1.0 crash window via atomicity; merged PR #198, [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) |
 | R1.1 | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3 — commit funding signed by session signer (HW on-device PSBT / mnemonic software); reveal by ephemeral key |
 | R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
 | R1.3 | Receive rotation | PRD §4.3.4 |
@@ -365,9 +365,11 @@ The next shippable increment, built on the Foundation. Six steps, in order. Each
 
 **Why / notes:** Revisits the Phase 3.5 decision (which folded the operator key into the wallet seed). That rationale treated the envelope carrier key as custody-significant; it is not — and a HW cannot sign the SPS-50 reveal (taproot **script-path** over a custom envelope leaf) anyway, so an in-app key is unavoidable for the reveal. Known limitation until R1.0.1: the ephemeral key lives across the commit→reveal window; loss on crash is bounded to the commit dust + fee. See [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) for the updated protocol description.
 
-#### R1.0.1 — Build and sign commit + reveal before broadcasting
+#### R1.0.1 — Build and sign commit + reveal before broadcasting ✅
 
 **Spec:** [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) — full technical design, decisions, and test plan.
+
+**Status:** Done — merged PR #198 (2026-05-30). 8 TDD steps; `submit_package` + sequential fallback, in-memory `PendingReveals` + `proposals_resubmit_reveal`, single regtest mine, `commit_confirmed` PATCH dropped. Evolution: [`docs/evolution/2026-05-30-admin-wallet-presign-commit-reveal.md`](../evolution/2026-05-30-admin-wallet-presign-commit-reveal.md).
 
 **Goal:** Reorder the broadcast flow so the commit and the reveal are both built and signed **before either is broadcast**, then broadcast commit→reveal (atomically via `submitpackage` when the node supports it, otherwise sequentially). Drop the ephemeral key immediately after both are signed. This removes the crash-loss window R1.0 introduces: once the reveal is signed the ephemeral key is no longer needed.
 
