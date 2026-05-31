@@ -104,3 +104,74 @@ Back-propagated change to `docs/specs/admin-wallet-implementation-plan.md` §R1.
 - **Propagation:** plan §R1.0.1 done-when updated; protocol spec `proposal-broadcast-commit-reveal.md`
   updated to describe pre-sign ordering and the resubmit path. No upstream user-story/acceptance-criteria
   change (no DISCUSS artifacts exist for this lean step).
+
+## Wave: DELIVER / [REF] Implementation Summary
+
+R1.0.1 pre-sign commit+reveal shipped across 8 TDD steps on the `docs/admin-wallet-presign-commit-reveal` branch. The broadcast flow in `proposals.rs` now builds and signs both the commit and reveal transactions before any network call, drops the ephemeral keypair immediately after signing, and broadcasts atomically via `submitpackage` (Bitcoin Core 24+) with a sequential `sendrawtransaction` fallback. The `get_raw_transaction` round-trip and the `commit_confirmed` orchestrator report are eliminated. A session-scoped `PendingReveals` store enables live-session resubmit via the new `proposals_resubmit_reveal` IPC command; the store is cleared on `auth_logout`.
+
+## Wave: DELIVER / [REF] Files Modified
+
+**Production:**
+- `infrastructure/bitcoin_rpc.rs` — `BitcoinRpcClient::submit_package` trait method + `HttpBitcoinRpcClient` impl
+- `application/pending_reveals.rs` (NEW) — `PendingReveal` struct, `PendingReveals` type alias, `new()` constructor
+- `application/mod.rs` — `pub mod pending_reveals` declaration
+- `application/commit_funding.rs` — `CommitFunding::build_signed_commit` (renamed from `fund_commit`, returns `Transaction`)
+- `application/wallet_service.rs` — `WalletService::build_signed_commit` (renamed, broadcast step removed)
+- `application/proposals.rs` — `BroadcastError::NoPendingReveal`, `resubmit_reveal`, rewritten `broadcast_commit_then_reveal`
+- `commands/proposals.rs` — `proposals_broadcast` wired with `PendingReveals` state; new `proposals_resubmit_reveal` command
+- `commands/authentication.rs` — `auth_logout` clears `PendingReveals`
+- `commands/invoke.rs` — `proposals_resubmit_reveal` registered
+- `main.rs` — `PendingReveals` registered as Tauri managed state
+
+**Tests (all in `#[cfg(test)]`):**
+- `bitcoin_rpc.rs` — 3 tests: compile-gate, parsing success/non-success
+- `pending_reveals.rs` — 2 tests: empty store, insert+retrieve
+- `commit_funding.rs` — compile-gate for new trait shape
+- `wallet_service.rs` — renamed `build_signed_commit` tests (ReadOnly, Disabled guards)
+- `proposals.rs` — 7 new/updated tests covering all acceptance criteria
+- `commands/proposals.rs` — compile-gate for `proposals_resubmit_reveal`
+- `commands/authentication.rs` — compile-gate for `auth_logout` with `PendingReveals`
+
+## Wave: DELIVER / [REF] Scenarios Green Count
+
+14 of 17 spec test cases covered by automated unit tests (130 desktop-app tests passing, 18 commands tests passing). Cases 7 (regtest e2e), 13 (manual-fallback bundle), and 16 (compilation regression) are verified by `cargo build` and existing CI.
+
+## Wave: DELIVER / [REF] DoD Check
+
+| Item | Status |
+|---|---|
+| `CommitFunding::build_signed_commit` returns `Transaction` (no broadcast) | ✅ |
+| `WalletService::build_signed_commit` removes `send_raw_transaction` | ✅ |
+| `BitcoinRpcClient::submit_package` added | ✅ |
+| `PendingReveals` store created | ✅ |
+| `broadcast_commit_then_reveal` pre-signs both txs | ✅ |
+| `get_raw_transaction` round-trip eliminated | ✅ |
+| Ephemeral key dropped before broadcast | ✅ |
+| `submit_package` atomic path tested | ✅ |
+| Sequential fallback tested | ✅ |
+| `commit_confirmed` NOT reported | ✅ |
+| Single `mine_blocks(1)` on regtest | ✅ |
+| `resubmit_reveal` function + `NoPendingReveal` error | ✅ |
+| `proposals_resubmit_reveal` IPC command registered | ✅ |
+| `auth_logout` clears `PendingReveals` | ✅ |
+| `cargo test --workspace` green (all 8 steps) | ✅ |
+| `cargo clippy --workspace --all-targets -- -D warnings` clean | ✅ |
+| `cargo fmt --check` clean | ✅ |
+| DES integrity: 8/8 steps with complete traces | ✅ |
+
+## Wave: DELIVER / [REF] Quality Gates
+
+| Gate | Result |
+|---|---|
+| DES integrity verification | 8/8 PASS |
+| `cargo test --workspace` | 130 desktop + 18 commands + others — all PASS |
+| `cargo clippy -- -D warnings` | PASS |
+| `cargo fmt --check` | PASS |
+| Roadmap review | N/A (no adversarial reviewer dispatched — lean profile) |
+| Mutation testing | N/A (per-feature but no cargo-mutants tooling — lean skip) |
+
+## Wave: DELIVER / [REF] Pre-requisites
+
+- DESIGN wave: `docs/feature/admin-wallet-presign-commit-reveal/feature-delta.md` (DDD D1–D10, component decomposition)
+- R1.0 ephemeral reveal key: `docs/specs/admin-wallet-ephemeral-reveal-key.md`
+- Spec R1.0.1: `docs/specs/admin-wallet-presign-commit-reveal.md`

@@ -1,5 +1,4 @@
 use crate::infrastructure::admin_wallet::AdminWalletError;
-use bdk_bitcoind_rpc::bitcoincore_rpc::Auth;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -277,7 +276,7 @@ impl WalletService {
     }
 
     async fn do_sync(&self) -> Result<(), AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::Client;
+        use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
         use bdk_bitcoind_rpc::Emitter;
 
         let rpc = Client::new(
@@ -460,16 +459,14 @@ impl WalletService {
         Ok(addresses)
     }
 
-    /// Syncs the wallet then builds, signs and broadcasts a commit transaction.
+    /// Syncs the wallet then builds and signs a commit transaction. Does NOT broadcast.
     /// Single source of truth for the BDK wallet — no ephemeral instances created.
-    pub async fn fund_commit(
+    pub async fn build_signed_commit(
         &self,
         commit_address: &str,
         amount_sats: u64,
         fee_rate: u64,
-    ) -> Result<String, AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::{Client, RpcApi};
-
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
         // 0. ReadOnly guard — must run before any RPC contact or env checks
         if !self.can_sign() {
             return Err(AdminWalletError::ReadOnly);
@@ -496,26 +493,8 @@ impl WalletService {
         let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
             .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
 
-        let tx = self
-            .build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
-            .await?;
-
-        // 4. Broadcast via RPC
-        let rpc = Client::new(
-            &self.rpc_url,
-            Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
-        )
-        .map_err(|e| AdminWalletError::RpcUnreachable {
-            message: e.to_string(),
-        })?;
-
-        let txid = rpc
-            .send_raw_transaction(&tx)
-            .map_err(|e| AdminWalletError::RpcUnreachable {
-                message: e.to_string(),
-            })?;
-
-        Ok(txid.to_string())
+        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
+            .await
     }
 
     /// Returns the next unused internal (change) keychain address.
@@ -912,31 +891,31 @@ mod tests {
         assert!(!svc.can_sign(), "new_watch_only must return can_sign=false");
     }
 
-    // Acceptance test (step 01-03): fund_commit on watch-only returns ReadOnly without contacting RPC
+    // Acceptance test (step 01-03): build_signed_commit on watch-only returns ReadOnly without contacting RPC
     #[tokio::test]
-    async fn fund_commit_on_watch_only_returns_read_only_error() {
+    async fn build_signed_commit_on_watch_only_returns_read_only_error() {
         use crate::infrastructure::admin_wallet::load_admin_wallet;
         use bdk_wallet::bitcoin::Network;
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        // No RPC URL set — if fund_commit contacts RPC it would fail with RpcUnreachable, not ReadOnly
+        // No RPC URL set — if build_signed_commit contacts RPC it would fail with RpcUnreachable, not ReadOnly
         let svc = WalletService::new_watch_only(wallet);
 
         let result = svc
-            .fund_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
             .await;
 
         assert!(
             matches!(result, Err(AdminWalletError::ReadOnly)),
-            "fund_commit on watch-only wallet must return ReadOnly, got: {:?}",
+            "build_signed_commit on watch-only wallet must return ReadOnly, got: {:?}",
             result
         );
     }
 
-    // Unit test (step 01-03): fund_commit on watch-only returns ReadOnly even with regtest env set (guard before check_enabled)
+    // Unit test (step 01-03): build_signed_commit on watch-only returns ReadOnly even with regtest env set (guard before check_enabled)
     #[tokio::test]
-    async fn fund_commit_on_watch_only_returns_read_only_before_enabled_check() {
+    async fn build_signed_commit_on_watch_only_returns_read_only_before_enabled_check() {
         use crate::infrastructure::admin_wallet::load_admin_wallet;
         use bdk_wallet::bitcoin::Network;
         {
@@ -950,7 +929,7 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet);
 
         let result = svc
-            .fund_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
             .await;
 
         std::env::remove_var("BITCOIN_NETWORK");
@@ -958,7 +937,7 @@ mod tests {
 
         assert!(
             matches!(result, Err(AdminWalletError::ReadOnly)),
-            "fund_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
+            "build_signed_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
             result
         );
     }
