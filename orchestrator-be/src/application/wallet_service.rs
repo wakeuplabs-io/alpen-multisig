@@ -33,12 +33,19 @@ impl WalletService {
     }
 
     /// Build a signed commit. Returns ReadOnly if no signer is attached.
+    /// Rejects early if the signer is not allowed on this network (before any I/O).
     pub(crate) fn build_signed_commit(
         &self,
-        _psbt: &mut bitcoin::psbt::Psbt,
+        psbt: &mut bitcoin::psbt::Psbt,
     ) -> Result<(), AdminWalletError> {
-        self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
-        // TODO: actual signing in future steps
+        let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
+        if !signer.allowed_on(self.network) {
+            return Err(AdminWalletError::SignerNotAllowedOnNetwork {
+                network: self.network,
+            });
+        }
+        // TODO: actual signing in future steps (sync → build_psbt → sign → finalize → extract_tx)
+        let _ = psbt;
         Ok(())
     }
 }
@@ -87,6 +94,26 @@ mod tests {
         assert!(
             matches!(result, Err(AdminWalletError::ReadOnly)),
             "no signer attached → build_signed_commit returns ReadOnly"
+        );
+    }
+
+    #[test]
+    fn test_mnemonic_rejected_on_mainnet_fail_fast() {
+        // Mnemonic signer present but wallet is on mainnet → SignerNotAllowedOnNetwork
+        // Must fail BEFORE any sync/RPC/PSBT build (no network I/O)
+        let signer = Arc::new(MnemonicPsbtSigner::new(Network::Regtest));
+        let svc = WalletService::new(Network::Bitcoin, Some(signer));
+        let tx = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![],
+        };
+        let mut psbt = bitcoin::psbt::Psbt::from_unsigned_tx(tx).unwrap();
+        let result = svc.build_signed_commit(&mut psbt);
+        assert!(
+            matches!(result, Err(AdminWalletError::SignerNotAllowedOnNetwork { .. })),
+            "mnemonic signer on mainnet → build_signed_commit returns SignerNotAllowedOnNetwork before any I/O"
         );
     }
 }
