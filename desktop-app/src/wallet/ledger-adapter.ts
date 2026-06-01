@@ -64,9 +64,17 @@ export function createLedgerAdapter(): WalletAdapter {
 		},
 
 		async getMasterFingerprint(): Promise<number> {
-			const result = await tauriCall<number>('get_ledger_master_fingerprint', {})
-			if (!result.ok) throw new Error(result.error)
-			return result.data
+			try {
+				const result = await tauriCall<number>('get_ledger_master_fingerprint', {})
+				if (!result.ok) {
+					console.warn('[ledger] getMasterFingerprint failed, using fallback:', result.error)
+					return 0
+				}
+				return result.data
+			} catch (err) {
+				console.warn('[ledger] getMasterFingerprint exception, using fallback:', err)
+				return 0
+			}
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {

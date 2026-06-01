@@ -120,9 +120,12 @@ pub async fn get_ledger_admin_wallet_xpub() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_ledger_master_fingerprint() -> Result<u32, String> {
-    tokio::task::spawn_blocking(ledger::get_master_fingerprint)
+    eprintln!("[ledger] get_master_fingerprint called");
+    let result = tokio::task::spawn_blocking(ledger::get_master_fingerprint)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    eprintln!("[ledger] get_master_fingerprint result: {:?}", result);
+    result
 }
 
 #[tauri::command]
