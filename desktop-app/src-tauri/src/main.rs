@@ -4,7 +4,6 @@ mod commands;
 
 use tauri::Manager;
 
-
 fn main() {
     desktop_app::infrastructure::env_loader::load_dotenv_files();
     let wallet_session = desktop_app::application::wallet_session::WalletSession::empty();

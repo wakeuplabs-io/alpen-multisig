@@ -1,8 +1,8 @@
 use axum::{
-    Json, Router,
     extract::{Query, State},
     http::StatusCode,
     routing::post,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -19,18 +19,38 @@ struct Rpc {
 impl Rpc {
     fn new(url: String, user: String, pass: String, wallet: String) -> Self {
         let wallet_url = format!("{}/wallet/{}", url.trim_end_matches('/'), wallet);
-        Self { url, wallet_url, user, pass, client: reqwest::Client::new() }
+        Self {
+            url,
+            wallet_url,
+            user,
+            pass,
+            client: reqwest::Client::new(),
+        }
     }
 
-    async fn call(&self, method: &str, params: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    async fn call(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
         self.call_url(&self.url.clone(), method, params).await
     }
 
-    async fn call_wallet(&self, method: &str, params: serde_json::Value) -> anyhow::Result<serde_json::Value> {
-        self.call_url(&self.wallet_url.clone(), method, params).await
+    async fn call_wallet(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        self.call_url(&self.wallet_url.clone(), method, params)
+            .await
     }
 
-    async fn call_url(&self, url: &str, method: &str, params: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    async fn call_url(
+        &self,
+        url: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
         let body = serde_json::json!({ "jsonrpc": "1.0", "method": method, "params": params });
         let res = self
             .client
@@ -53,7 +73,12 @@ impl Rpc {
         if let Ok(w) = std::env::var("BITCOIN_RPC_WALLET") {
             return Ok(w);
         }
-        let probe = Rpc::new(url.to_string(), user.to_string(), pass.to_string(), String::new());
+        let probe = Rpc::new(
+            url.to_string(),
+            user.to_string(),
+            pass.to_string(),
+            String::new(),
+        );
         let wallets = probe.call("listwallets", serde_json::json!([])).await?;
         let first = wallets
             .as_array()
@@ -97,10 +122,13 @@ async fn mine(
         .await
         .map_err(rpc_err)?;
 
-    let block_hashes: Vec<String> = serde_json::from_value(hashes)
-        .map_err(|e| rpc_err(e.into()))?;
+    let block_hashes: Vec<String> =
+        serde_json::from_value(hashes).map_err(|e| rpc_err(e.into()))?;
 
-    Ok(Json(MineResponse { blocks_mined: block_hashes.len() as u32, block_hashes }))
+    Ok(Json(MineResponse {
+        blocks_mined: block_hashes.len() as u32,
+        block_hashes,
+    }))
 }
 
 // --- Faucet ---
@@ -122,7 +150,10 @@ async fn faucet(
     Json(req): Json<FaucetRequest>,
 ) -> Result<Json<FaucetResponse>, (StatusCode, String)> {
     let txid = rpc
-        .call_wallet("sendtoaddress", serde_json::json!([req.address, req.amount_btc]))
+        .call_wallet(
+            "sendtoaddress",
+            serde_json::json!([req.address, req.amount_btc]),
+        )
         .await
         .map_err(rpc_err)?
         .as_str()
