@@ -34,6 +34,18 @@ assert.equal(cannotSignResult.signerKind, 'none')
 assert.equal(cannotSignResult.reason, 'No session initialized')
 console.log('parses cannot-sign with reason OK')
 
+// ── Behavior 2b: reason as null (Rust Option<String> serialization) ──────────
+
+const nullReasonResult = adminWalletCapabilitySchema.parse({
+	canSign: true,
+	signerKind: 'mnemonic',
+	reason: null,
+})
+assert.equal(nullReasonResult.canSign, true)
+assert.equal(nullReasonResult.signerKind, 'mnemonic')
+assert.equal(nullReasonResult.reason, undefined)
+console.log('parses reason: null as undefined OK')
+
 // ── Behavior 3: Graceful degradation of legacy bare-bool ─────────────────────
 
 const legacyTrueResult = adminWalletCapabilitySchema.parse(true)

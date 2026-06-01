@@ -157,12 +157,12 @@ export const adminWalletCapabilitySchema = z.union([
 		.object({
 			canSign: z.boolean(),
 			signerKind: signerKindSchema,
-			reason: z.string().optional(),
+			reason: z.string().nullish(),
 		})
 		.transform((d) => ({
 			canSign: d.canSign,
 			signerKind: d.signerKind,
-			reason: d.reason,
+			reason: d.reason ?? undefined,
 		})),
 	z.boolean().transform((b) => ({
 		canSign: b,
