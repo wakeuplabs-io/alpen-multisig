@@ -396,6 +396,35 @@ mod broadcast_error_code_tests {
         }
     }
 
+    /// BE-13: BitcoinRpc failure BEFORE broadcast boundary.
+    ///
+    /// When a Bitcoin RPC error occurs before submit_package is reached (e.g. during
+    /// sync/build), the error maps to code=BitcoinRpc with boundary=BEFORE.
+    /// Recovery is retry-from-scratch and canResubmit=false — even if a PendingReveal
+    /// exists in the store (NIT-3: presence doesn't prove broadcast).
+    #[test]
+    fn test_broadcast_error_bitcoin_rpc_before_boundary() {
+        let error = BroadcastError::BitcoinRpc("node rejected".to_string());
+
+        // BEFORE boundary: broadcast was never reached
+        let code = broadcast_error_code(&error, false, false);
+        assert_eq!(code, "BitcoinRpc");
+
+        // NIT-3: even with a live PendingReveal, BEFORE boundary → canResubmit=false
+        let code_with_pending = broadcast_error_code(&error, false, true);
+        assert_eq!(code_with_pending, "BitcoinRpc");
+
+        // The message should NOT mention resubmit (BEFORE boundary = retry-from-scratch)
+        let error_msg = map_broadcast_error(error);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "BitcoinRpc");
+        assert!(
+            !parsed["message"].as_str().unwrap().contains("resubmit"),
+            "BEFORE boundary BitcoinRpc message should NOT mention resubmit: {}",
+            parsed["message"]
+        );
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
