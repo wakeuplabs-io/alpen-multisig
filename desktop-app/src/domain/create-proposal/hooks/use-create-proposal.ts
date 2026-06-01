@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { getMultisigConfig } from '@/api/asm-state'
-import { buildAdminMultisigUpdateHex } from '@/api/action-builder'
+import { getCurrentVk, getMultisigConfig } from '@/api/asm-state'
+import type { CurrentVk } from '@/api/asm-state'
+import { buildAdminMultisigUpdateHex, buildVkUpdateHex } from '@/api/action-builder'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
-import type { CreateProposalFormValues } from '../model/create-proposal.schema'
+import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
@@ -27,6 +28,8 @@ export type UseCreateProposalReturn = {
 	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
+	currentVk: CurrentVk | null
+	isLoadingCurrentVk: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -43,6 +46,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const [isLoadingConfig, setIsLoadingConfig] = useState(true)
 	const [nextSeqNo, setNextSeqNo] = useState<number | null>(null)
 	const [isLoadingSeqNo, setIsLoadingSeqNo] = useState(true)
+	const [currentVk, setCurrentVk] = useState<CurrentVk | null>(null)
+	const [isLoadingCurrentVk, setIsLoadingCurrentVk] = useState(true)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [createdProposal, setCreatedProposal] = useState<Proposal | null>(null)
@@ -62,7 +67,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				throw new Error('Threshold must be an integer between 1 and 255')
 			}
 			const hexResult = await buildAdminMultisigUpdateHex({
-				role: 'strata_admin',
+				role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager',
 				addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				newThreshold: threshold,
@@ -70,10 +75,14 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			if (!hexResult.ok) throw new Error(hexResult.error)
 			return hexResult.data.actionHex
 		}
-		if (formData.newVkHex.trim().length === 0) {
-			throw new Error('New verification key is required')
-		}
-		throw new Error('Verification key update is not yet supported by the backend')
+		const typeId = VK_PREDICATE_TYPE_IDS[formData.vkTypeId]
+		const hexResult = await buildVkUpdateHex({
+			authority: authorityFromRole(selectedRole),
+			typeId,
+			conditionHex: formData.newVkHex.trim(),
+		})
+		if (!hexResult.ok) throw new Error(hexResult.error)
+		return hexResult.data.actionHex
 	}
 
 	useEffect(() => {
@@ -101,6 +110,19 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			if (cancelled) return
 			setIsLoadingSeqNo(false)
 			if (result.ok) setNextSeqNo(result.data)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	useEffect(() => {
+		let cancelled = false
+		setIsLoadingCurrentVk(true)
+		getCurrentVk().then((result) => {
+			if (cancelled) return
+			setIsLoadingCurrentVk(false)
+			if (result.ok) setCurrentVk(result.data)
 		})
 		return () => {
 			cancelled = true
@@ -171,6 +193,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		isLoadingConfig,
 		nextSeqNo,
 		isLoadingSeqNo,
+		currentVk,
+		isLoadingCurrentVk,
 		isSubmitting,
 		error,
 		createdProposal,

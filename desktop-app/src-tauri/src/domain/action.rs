@@ -59,13 +59,25 @@ pub struct MultisigUpdate {
     pub new_threshold: NonZeroU8,
 }
 
-/// A governance action that a signer can propose.
+/// A verification key update action.
 ///
-/// Single variant for POC-4; more variants (`Cancel`, `OperatorSetUpdate`, etc.) will
-/// be added as the feature set grows.
+/// The `authority` determines the wire action variant:
+/// - `StrataAdmin` → `OlStfVkUpdate` (OL STF predicate in CheckpointState)
+/// - `AlpenAdmin`  → `EeStfVkUpdate` (EE predicate)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VkUpdate {
+    pub authority: Authority,
+    /// `PredicateTypeId` as raw byte: 0=NeverAccept, 1=AlwaysAccept, 10=Bip340Schnorr, 20=Sp1Groth16
+    pub type_id: u8,
+    /// Backend-specific condition bytes (empty for Never/Always, 32 for Schnorr, 356 for SP1).
+    pub condition: Vec<u8>,
+}
+
+/// A governance action that a signer can propose.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     MultisigUpdate(MultisigUpdate),
+    VkUpdate(VkUpdate),
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -107,6 +119,7 @@ mod tests {
         let action = Action::MultisigUpdate(update.clone());
         match action {
             Action::MultisigUpdate(u) => assert_eq!(u, update),
+            Action::VkUpdate(_) => panic!("unexpected variant"),
         }
     }
 }

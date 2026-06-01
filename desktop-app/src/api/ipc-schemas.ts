@@ -33,6 +33,7 @@ export const proposalSchema = z
 		status: proposalStatusSchema,
 		requiredSignatures: z.number(),
 		actionHex: z.string(),
+		actionType: z.enum(['multisig_update', 'vk_update', 'cancel', 'unknown']),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),
@@ -156,9 +157,43 @@ export const multisigConfigSchema = z.object({
 	threshold: z.number(),
 })
 
+export const currentVkSchema = z.object({
+	typeId: z.number(),
+	typeName: z.string(),
+	conditionHex: z.string(),
+})
+
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
 
 // action-builder.ts schema
 export const buildActionHexResponseSchema = z.object({
 	actionHex: z.string(),
+})
+
+// node-config.ts schemas
+export const connectionModeSchema = z.enum(['local', 'trusted', 'custom'])
+
+export const nodeConfigSchema = z.object({
+	mode: connectionModeSchema,
+	customStrataRpcUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcUser: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcPass: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+})
+
+export const localNodeStatusSchema = z.object({
+	strataReachable: z.boolean(),
+	btcReachable: z.boolean(),
 })

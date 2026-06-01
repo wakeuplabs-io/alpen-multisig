@@ -3,12 +3,12 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-const CONFIG_FILE: &str = "node-config.json";
+use crate::config::{
+    LOCAL_BTC_RPC_PASS, LOCAL_BTC_RPC_URL, LOCAL_BTC_RPC_USER, LOCAL_STRATA_RPC_URL,
+    TRUSTED_BTC_RPC_URL, TRUSTED_STRATA_RPC_URL,
+};
 
-const LOCAL_STRATA_RPC_URL: &str = "http://127.0.0.1:8080";
-const LOCAL_BTC_RPC_URL: &str = "http://127.0.0.1:18443";
-const TRUSTED_STRATA_RPC_URL: &str = "https://rpc.stratabtc.org";
-const TRUSTED_BTC_RPC_URL: &str = "https://btc-rpc.stratabtc.org";
+const CONFIG_FILE: &str = "node-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -56,11 +56,19 @@ impl NodeConfig {
     }
 
     pub fn btc_rpc_user(&self) -> &str {
-        self.custom_btc_rpc_user.as_deref().unwrap_or("")
+        match &self.mode {
+            ConnectionMode::Local => LOCAL_BTC_RPC_USER,
+            ConnectionMode::Trusted => "",
+            ConnectionMode::Custom => self.custom_btc_rpc_user.as_deref().unwrap_or_default(),
+        }
     }
 
     pub fn btc_rpc_pass(&self) -> &str {
-        self.custom_btc_rpc_pass.as_deref().unwrap_or("")
+        match &self.mode {
+            ConnectionMode::Local => LOCAL_BTC_RPC_PASS,
+            ConnectionMode::Trusted => "",
+            ConnectionMode::Custom => self.custom_btc_rpc_pass.as_deref().unwrap_or_default(),
+        }
     }
 }
 
@@ -97,10 +105,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn local_mode_returns_localhost_urls() {
+    fn local_mode_returns_localhost_urls_and_credentials() {
         let cfg = NodeConfig::default();
         assert_eq!(cfg.strata_rpc_url(), LOCAL_STRATA_RPC_URL);
         assert_eq!(cfg.btc_rpc_url(), LOCAL_BTC_RPC_URL);
+        assert_eq!(cfg.btc_rpc_user(), LOCAL_BTC_RPC_USER);
+        assert_eq!(cfg.btc_rpc_pass(), LOCAL_BTC_RPC_PASS);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate, VkUpdate};
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::asm_status_rpc;
@@ -35,7 +35,7 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
             new_threshold: update.new_threshold.get(),
         },
-        Err(_) => DecodedAction::Unknown { raw_hex: hex },
+        Ok(Action::VkUpdate(_)) | Err(_) => DecodedAction::Unknown { raw_hex: hex },
     }
 }
 
@@ -88,14 +88,47 @@ pub fn build_admin_multisig_update_hex(
     Ok(BuildActionHexResponse { action_hex })
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildVkUpdateHexInput {
+    pub authority: String,
+    pub type_id: u8,
+    pub condition_hex: String,
+}
+
+#[tauri::command]
+pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHexResponse, String> {
+    let authority = Authority::from_wire(input.authority.trim())
+        .map_err(|e| format!("invalid authority `{}`: {e}", input.authority))?;
+    let condition = if input.condition_hex.trim().is_empty() {
+        vec![]
+    } else {
+        hex::decode(input.condition_hex.trim())
+            .map_err(|e| format!("invalid condition hex: {e}"))?
+    };
+    let action = Action::VkUpdate(VkUpdate {
+        authority,
+        type_id: input.type_id,
+        condition,
+    });
+    let action_hex =
+        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
 #[tauri::command]
 pub async fn build_cancel_action_hex(
     target_action_hex: String,
     wallet_session: tauri::State<'_, desktop_app::application::wallet_session::WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<BuildActionHexResponse, String> {
-    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
-    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let update_id = asm_status_rpc::find_update_id_in_queue(&env.asm_rpc_url, &target_action_hex)
         .await?
         .ok_or_else(|| {

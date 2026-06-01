@@ -68,7 +68,7 @@ impl HttpBitcoinRpcClient {
                 .send(),
         )
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("{e}")))?;
+        .map_err(|e| AppError::BadRequest(format!("bitcoin rpc `{method}` request failed: {e}")))?;
 
         let status = resp.status();
 
@@ -82,13 +82,13 @@ impl HttpBitcoinRpcClient {
                         .map(str::to_string)
                 })
                 .unwrap_or(body_text);
-            return Err(AppError::Internal(anyhow::anyhow!(
+            return Err(AppError::BadRequest(format!(
                 "bitcoin rpc `{method}` failed (HTTP {status}): {msg}"
             )));
         }
 
         let body: Value = resp.json().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("bitcoin rpc `{method}` invalid json: {e}"))
+            AppError::BadRequest(format!("bitcoin rpc `{method}` invalid json: {e}"))
         })?;
 
         if let Some(err) = body.get("error").filter(|v| !v.is_null()) {
@@ -97,13 +97,13 @@ impl HttpBitcoinRpcClient {
                 .and_then(|v| v.as_str())
                 .unwrap_or(&err.to_string())
                 .to_string();
-            return Err(AppError::Internal(anyhow::anyhow!(
+            return Err(AppError::BadRequest(format!(
                 "bitcoin rpc `{method}` error: {msg}"
             )));
         }
 
         body.get("result").cloned().ok_or_else(|| {
-            AppError::Internal(anyhow::anyhow!("bitcoin rpc `{method}` missing result"))
+            AppError::BadRequest(format!("bitcoin rpc `{method}` missing result"))
         })
     }
 }
@@ -125,14 +125,36 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
     }
 
     async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
-        let result = self.call("gettransaction", json!([txid, true])).await?;
+        // getrawtransaction works for any tx via txindex, unlike gettransaction which
+        // requires the tx to be in the node's wallet.
+        let result = self
+            .call("getrawtransaction", json!([txid, true]))
+            .await?;
 
-        result
-            .get("blockheight")
+        // Bitcoin Core 23+ includes blockheight directly; fall back to getblockheader.
+        if let Some(h) = result.get("blockheight").and_then(|v| v.as_u64()) {
+            return Ok(h);
+        }
+
+        let blockhash = result
+            .get("blockhash")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "getrawtransaction: tx {txid} has no blockhash — not yet confirmed"
+                ))
+            })?;
+
+        let header = self
+            .call("getblockheader", json!([blockhash, true]))
+            .await?;
+
+        header
+            .get("height")
             .and_then(|v| v.as_u64())
             .ok_or_else(|| {
-                AppError::Internal(anyhow::anyhow!(
-                    "gettransaction: missing `blockheight` for txid {txid} — not yet confirmed?"
+                AppError::BadRequest(format!(
+                    "getblockheader: missing `height` for blockhash {blockhash}"
                 ))
             })
     }

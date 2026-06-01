@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
+use desktop_app::config::{LOCAL_BTC_RPC_URL, LOCAL_STRATA_RPC_URL};
 use desktop_app::infrastructure::node_config_store::{
     self, ConnectionMode, NodeConfig, NodeConfigState,
 };
@@ -80,9 +81,9 @@ pub async fn check_local_node() -> Result<LocalNodeStatusDto, String> {
         .build()
         .map_err(|e| format!("failed to build http client: {e}"))?;
 
-    let strata_reachable = client.get("http://127.0.0.1:8080").send().await.is_ok();
+    let strata_reachable = client.get(LOCAL_STRATA_RPC_URL).send().await.is_ok();
 
-    let btc_reachable = client.get("http://127.0.0.1:18443").send().await.is_ok();
+    let btc_reachable = client.get(LOCAL_BTC_RPC_URL).send().await.is_ok();
 
     Ok(LocalNodeStatusDto {
         strata_reachable,

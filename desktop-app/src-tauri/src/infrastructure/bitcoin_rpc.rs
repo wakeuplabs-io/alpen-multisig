@@ -19,6 +19,9 @@ pub trait BitcoinRpcClient: Send + Sync {
 
     /// Mine `count` blocks to an internally generated address. Regtest only.
     async fn mine_blocks(&self, count: u32) -> Result<(), String>;
+
+    /// Return the current chain tip block height.
+    async fn get_block_count(&self) -> Result<u64, String>;
 }
 
 pub struct HttpBitcoinRpcClient {
@@ -148,6 +151,13 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
             .to_string();
         self.call("generatetoaddress", json!([count, addr])).await?;
         Ok(())
+    }
+
+    async fn get_block_count(&self) -> Result<u64, String> {
+        let result = self.call("getblockcount", json!([])).await?;
+        result
+            .as_u64()
+            .ok_or_else(|| "getblockcount: expected u64".to_string())
     }
 
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String> {

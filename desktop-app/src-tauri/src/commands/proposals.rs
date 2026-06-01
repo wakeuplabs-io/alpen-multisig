@@ -90,6 +90,7 @@ pub struct ProposalDto {
     pub status: String,
     pub required_signatures: u16,
     pub action_hex: String,
+    pub action_type: String,
     pub signatures: Vec<ProposalSignatureDto>,
     pub broadcast_status: String,
     pub commit_txid: Option<String>,
@@ -153,6 +154,18 @@ pub struct BroadcastResultDto {
     pub reveal_txid: String,
 }
 
+fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> String {
+    if target_action_id.is_some() {
+        return "cancel".to_string();
+    }
+    let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
+    match desktop_app::infrastructure::action_codec::decode_hex(hex) {
+        Ok(desktop_app::domain::action::Action::MultisigUpdate(_)) => "multisig_update".to_string(),
+        Ok(desktop_app::domain::action::Action::VkUpdate(_)) => "vk_update".to_string(),
+        Err(_) => "unknown".to_string(),
+    }
+}
+
 fn map_signature(signature: ProposalSignature) -> ProposalSignatureDto {
     ProposalSignatureDto {
         signer_pubkey: signature.signer_pubkey,
@@ -170,6 +183,7 @@ fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDt
 }
 
 fn map_proposal(proposal: Proposal) -> ProposalDto {
+    let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     ProposalDto {
         action_id: proposal.action_id,
         seq_no: proposal.seq_no,
@@ -177,6 +191,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         status: proposal.status,
         required_signatures: proposal.required_signatures,
         action_hex: proposal.action_hex,
+        action_type,
         signatures: proposal.signatures.into_iter().map(map_signature).collect(),
         broadcast_status: proposal.broadcast_status,
         commit_txid: proposal.commit_txid,
@@ -198,6 +213,12 @@ fn validate_orchestrator_base_url(base_url: &str) -> Result<(), String> {
         || trimmed.starts_with("http://127.0.0.1")
         || trimmed.starts_with("http://[::1]")
     {
+        return Ok(());
+    }
+    let allow_insecure = std::env::var("ALLOW_INSECURE_HTTP_URL")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if allow_insecure {
         return Ok(());
     }
     Err(
@@ -343,8 +364,13 @@ pub async fn proposals_prepare_broadcast(
     node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
-    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
@@ -377,8 +403,13 @@ pub async fn proposals_broadcast(
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
     let client = build_client(input.base_url)?;
-    let cfg = node_config.0.read().map_err(|e| format!("lock error: {e}"))?.clone();
-    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
         &env.btc_rpc_user,

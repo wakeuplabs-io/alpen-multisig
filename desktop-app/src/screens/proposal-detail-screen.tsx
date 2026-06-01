@@ -5,6 +5,7 @@ import { ActivationCountdown } from '@/domain/cancel-proposal/components/activat
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -24,6 +25,7 @@ export function ProposalDetailScreen() {
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
+	const currentBlockHeight = useBlockHeight()
 
 	async function handleBack() {
 		await disconnectSession()
@@ -109,7 +111,10 @@ export function ProposalDetailScreen() {
 							{/* Activation countdown */}
 							{proposal.activationHeight !== null && proposal.status === 'approved' && (
 								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-									<ActivationCountdown activationHeight={proposal.activationHeight} />
+									<ActivationCountdown
+										activationHeight={proposal.activationHeight}
+										currentHeight={currentBlockHeight}
+									/>
 								</div>
 							)}
 

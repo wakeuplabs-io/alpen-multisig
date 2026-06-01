@@ -6,6 +6,7 @@ import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-de
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -24,6 +25,7 @@ export function CancelProposalScreen() {
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
+	const currentBlockHeight = useBlockHeight()
 
 	async function handleBack() {
 		await disconnectSession()
@@ -113,7 +115,10 @@ export function CancelProposalScreen() {
 							{/* Activation countdown */}
 							{proposal.activationHeight !== null && proposal.status === 'approved' && (
 								<div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-									<ActivationCountdown activationHeight={proposal.activationHeight} />
+									<ActivationCountdown
+										activationHeight={proposal.activationHeight}
+										currentHeight={currentBlockHeight}
+									/>
 								</div>
 							)}
 

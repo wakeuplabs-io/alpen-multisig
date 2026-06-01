@@ -7,12 +7,15 @@
 use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
-use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
+use strata_asm_txs_admin::actions::updates::{
+    EeStfVkUpdate, OlStfVkUpdate, StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
+};
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+use strata_predicate::{PredicateKey, PredicateTypeId};
 
-use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate, PubKeyError};
+use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate, PubKeyError, VkUpdate};
 use crate::domain::authority::Authority;
 
 /// Errors produced when encoding/decoding an `Action`.
@@ -32,6 +35,10 @@ pub enum CodecError {
     InvalidThreshold,
     #[error("unsupported authority: {0}")]
     UnsupportedAuthority(String),
+    #[error("unsupported predicate type id: {0}")]
+    UnsupportedPredicateType(u8),
+    #[error("invalid predicate condition: {0}")]
+    InvalidCondition(String),
 }
 
 /// Encodes a domain `Action` to canonical SSZ bytes (the signed form).
@@ -96,12 +103,37 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                         StrataAdminMultisigUpdate::new(config_update),
                     )))
                 }
+                Authority::SequencerManager => Ok(MultisigAction::Update(
+                    UpdateAction::StrataSeqManagerMultisig(StrataSeqManagerMultisigUpdate::new(
+                        config_update,
+                    )),
+                )),
                 other => Err(CodecError::UnsupportedAuthority(format!(
                     "encoding not implemented for authority `{other:?}`"
                 ))),
             }
         }
+        Action::VkUpdate(update) => {
+            let predicate = predicate_key_from_domain(update)?;
+            match update.authority {
+                Authority::StrataAdmin => Ok(MultisigAction::Update(UpdateAction::OlStfVk(
+                    OlStfVkUpdate::new(predicate),
+                ))),
+                Authority::AlpenAdmin => Ok(MultisigAction::Update(UpdateAction::EeStfVk(
+                    EeStfVkUpdate::new(predicate),
+                ))),
+                other => Err(CodecError::UnsupportedAuthority(format!(
+                    "vk update not implemented for authority `{other:?}`"
+                ))),
+            }
+        }
     }
+}
+
+fn predicate_key_from_domain(update: &VkUpdate) -> Result<PredicateKey, CodecError> {
+    let type_id = PredicateTypeId::try_from(update.type_id)
+        .map_err(|_| CodecError::UnsupportedPredicateType(update.type_id))?;
+    Ok(PredicateKey::new(type_id, update.condition.clone()))
 }
 
 fn threshold_config_update_from_domain(
@@ -147,14 +179,24 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::Sequencer(_)) => {
             Err(CodecError::UnsupportedVariant("Sequencer"))
         }
-        MultisigAction::Update(UpdateAction::OlStfVk(_)) => {
-            Err(CodecError::UnsupportedVariant("OlStfVk"))
+        MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
+            let key = update.into_key();
+            Ok(Action::VkUpdate(VkUpdate {
+                authority: Authority::StrataAdmin,
+                type_id: key.id(),
+                condition: key.condition().to_vec(),
+            }))
+        }
+        MultisigAction::Update(UpdateAction::EeStfVk(update)) => {
+            let key = update.into_key();
+            Ok(Action::VkUpdate(VkUpdate {
+                authority: Authority::AlpenAdmin,
+                type_id: key.id(),
+                condition: key.condition().to_vec(),
+            }))
         }
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
-        }
-        MultisigAction::Update(UpdateAction::EeStfVk(_)) => {
-            Err(CodecError::UnsupportedVariant("EeStfVk"))
         }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }

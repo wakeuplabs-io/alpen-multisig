@@ -1072,6 +1072,10 @@ mod tests {
         async fn mine_blocks(&self, _: u32) -> Result<(), String> {
             Ok(())
         }
+
+        async fn get_block_count(&self) -> Result<u64, String> {
+            Ok(0)
+        }
     }
 
     /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.

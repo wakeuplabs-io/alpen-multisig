@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
+use tauri::State;
 
 use desktop_app::domain::auth::AuthRole;
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::asm_status_rpc;
+use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+use desktop_app::infrastructure::bitcoin_rpc::BitcoinRpcClient;
+use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,8 +17,19 @@ pub struct MultisigConfigDto {
     pub threshold: u8,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentVkDto {
+    pub type_id: u8,
+    pub type_name: String,
+    pub condition_hex: String,
+}
+
 #[tauri::command]
-pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto, String> {
+pub async fn get_multisig_config(
+    authority: String,
+    node_config: State<'_, NodeConfigState>,
+) -> Result<MultisigConfigDto, String> {
     let parsed = Authority::from_wire(authority.trim())
         .map_err(|e| format!("invalid authority `{}`: {e}", authority))?;
 
@@ -30,7 +45,12 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
         }
     };
 
-    let rpc_url = asm_status_rpc::default_rpc_url();
+    let rpc_url = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .strata_rpc_url()
+        .to_string();
     let config = asm_status_rpc::fetch_multisig_config(&rpc_url, role).await?;
 
     Ok(MultisigConfigDto {
@@ -40,10 +60,47 @@ pub async fn get_multisig_config(authority: String) -> Result<MultisigConfigDto,
 }
 
 #[tauri::command]
+pub async fn get_current_vk(
+    node_config: State<'_, NodeConfigState>,
+) -> Result<CurrentVkDto, String> {
+    let rpc_url = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .strata_rpc_url()
+        .to_string();
+    let vk = asm_status_rpc::fetch_current_vk(&rpc_url).await?;
+    Ok(CurrentVkDto {
+        type_id: vk.type_id,
+        type_name: vk.type_name,
+        condition_hex: vk.condition_hex,
+    })
+}
+
+#[tauri::command]
+pub async fn get_bitcoin_block_height(
+    node_config: State<'_, NodeConfigState>,
+) -> Result<u64, String> {
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let btc_rpc = HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass());
+    btc_rpc.get_block_count().await
+}
+
+#[tauri::command]
 pub async fn check_authority_memberships(
     pubkey_hex: String,
+    node_config: State<'_, NodeConfigState>,
 ) -> Result<HashMap<String, bool>, String> {
-    let rpc_url = asm_status_rpc::default_rpc_url();
+    let rpc_url = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .strata_rpc_url()
+        .to_string();
     let (role_to_keys, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
 
     let mut result = HashMap::new();
