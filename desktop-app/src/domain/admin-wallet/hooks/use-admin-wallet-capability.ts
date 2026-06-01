@@ -8,7 +8,9 @@ export function useAdminWalletCapability() {
 	const [canSignReason, setCanSignReason] = useState<string | undefined>(undefined)
 
 	useEffect(() => {
-		getAdminWalletCanSign().then((result) => {
+		let active = true
+		void getAdminWalletCanSign().then((result) => {
+			if (!active) return
 			if (result.ok) {
 				const parsed = adminWalletCapabilitySchema.parse(result.data)
 				setCanSign(parsed.canSign)
@@ -20,6 +22,9 @@ export function useAdminWalletCapability() {
 				setCanSignReason(undefined)
 			}
 		})
+		return () => {
+			active = false
+		}
 	}, [])
 
 	return { canSign, signerKind, canSignReason }

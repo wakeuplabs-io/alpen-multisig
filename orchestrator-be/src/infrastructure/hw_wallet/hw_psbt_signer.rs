@@ -13,6 +13,7 @@ use crate::error::AppError;
 ///
 /// Real implementations (Ledger/Trezor) perform actual USB HID I/O.
 /// The device is opened by fingerprint at sign time — no live connection held.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) trait HwDevice: Send + Sync {
     /// Returns the master fingerprint of the connected device.
     fn device_fingerprint(&self) -> u32;
@@ -114,6 +115,7 @@ impl PsbtSigner for HwPsbtSigner {
 }
 
 /// Default stub device — errors on sign until real device type is resolved.
+#[cfg_attr(not(test), allow(dead_code))]
 struct StubHwDevice;
 
 impl HwDevice for StubHwDevice {

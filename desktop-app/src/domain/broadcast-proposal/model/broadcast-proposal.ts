@@ -12,7 +12,6 @@ export type BroadcastErrorCode =
 	| 'device_disconnected'
 	| 'session_expired'
 	| 'unknown_error'
-	| 'Unknown'
 
 export type BroadcastRecovery = 'retry' | 'resubmit-reveal' | 'reconnect-device' | 're-auth'
 
@@ -45,7 +44,7 @@ export function deriveBroadcastError(raw: string): BroadcastError {
 		}
 	} catch {
 		return {
-			code: 'Unknown',
+			code: 'unknown_error',
 			message: raw,
 			recovery: 'retry',
 		}

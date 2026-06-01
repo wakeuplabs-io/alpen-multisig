@@ -4,6 +4,7 @@ use bitcoin::Network;
 use thiserror::Error;
 
 /// Errors specific to admin wallet operations.
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Error)]
 pub(crate) enum AdminWalletError {
     #[error("wallet is read-only — no signer attached")]

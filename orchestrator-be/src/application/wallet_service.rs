@@ -11,13 +11,13 @@ use crate::application::psbt_signer::PsbtSigner;
 use crate::infrastructure::admin_wallet::wallet::AdminWalletError;
 
 /// Application service that manages signing capability for a wallet.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct WalletService {
-    #[allow(dead_code)]
     network: Network,
     signer: Option<Arc<dyn PsbtSigner>>,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 impl WalletService {
     pub(crate) fn new(network: Network, signer: Option<Arc<dyn PsbtSigner>>) -> Self {
         Self { network, signer }

@@ -26,7 +26,7 @@ export function CancelProposalBroadcastScreen() {
 	if (actionId === undefined) return <Navigate to="/proposals" replace />
 
 	const isLoading = isResolvingCancel || phase === 'idle' || phase === 'preparing'
-	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
+	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
 	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
 
 	return (

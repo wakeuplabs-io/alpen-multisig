@@ -7,7 +7,7 @@
 use bitcoin::Network;
 
 /// Driven port: signs PSBTs and declares which networks it is allowed on.
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) trait PsbtSigner: Send + Sync {
     /// Sign a PSBT in-place using the signer's key material.
     fn sign_psbt(
@@ -62,6 +62,7 @@ impl MnemonicPsbtSigner {
     }
 
     /// Access the underlying BDK wallet for funding operations.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn wallet(&self) -> &bdk_wallet::Wallet {
         &self.wallet
     }

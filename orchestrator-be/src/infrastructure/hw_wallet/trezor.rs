@@ -6,14 +6,11 @@ use crate::error::AppError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDevice;
 
 /// Adapter for Trezor hardware wallet communication.
+#[allow(dead_code)]
 pub(crate) struct TrezorAdapter;
 
 #[allow(dead_code)]
 impl TrezorAdapter {
-    pub(crate) fn new() -> Self {
-        Self
-    }
-
     /// Sign a PSBT using taproot key-path on Trezor device.
     pub(crate) fn sign_psbt(
         &self,

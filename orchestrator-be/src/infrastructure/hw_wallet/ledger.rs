@@ -6,14 +6,11 @@ use crate::error::AppError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDevice;
 
 /// Adapter for Ledger hardware wallet communication.
+#[allow(dead_code)]
 pub(crate) struct LedgerAdapter;
 
 #[allow(dead_code)]
 impl LedgerAdapter {
-    pub(crate) fn new() -> Self {
-        Self
-    }
-
     /// Sign a PSBT using taproot key-path on Ledger device.
     pub(crate) fn sign_psbt(
         &self,

@@ -13,13 +13,13 @@ use crate::error::AppError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
 
 /// A wallet session that holds an optional signer.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct WalletSession {
-    #[allow(dead_code)]
     network: Network,
     signer: Option<Arc<dyn PsbtSigner>>,
 }
 
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 impl WalletSession {
     /// Create a new session initialized with a mnemonic-derived signer.
     pub(crate) fn init_from_mnemonic(network: Network, mnemonic: &str) -> Result<Self, AppError> {

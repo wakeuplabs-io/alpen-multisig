@@ -25,13 +25,13 @@ pub enum AppError {
 
     /// Hardware wallet device physically disconnected or absent.
     /// Used by hardware device adapters (Ledger/Trezor) when device is not present.
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     #[error("hardware wallet device disconnected")]
     HwDisconnected,
 
     /// Hardware wallet signing failed due to device mismatch or signing error.
     /// Used when the plugged-in device doesn't match the expected fingerprint.
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     #[error("hardware wallet signing failed: {0}")]
     HwSigningFailed(String),
 }
