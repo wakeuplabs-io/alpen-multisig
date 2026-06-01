@@ -12,7 +12,7 @@ pub(crate) struct TrezorAdapter;
 #[allow(dead_code)]
 impl TrezorAdapter {
     /// Sign a PSBT using taproot key-path on Trezor device.
-    pub(crate) fn sign_psbt(
+    pub(crate) fn sign_psbt_on_device(
         &self,
         _psbt: &mut bitcoin::psbt::Psbt,
         _fingerprint: u32,
@@ -30,6 +30,6 @@ impl HwDevice for TrezorAdapter {
     }
 
     fn sign_psbt(&self, fingerprint: u32, psbt: &mut bitcoin::psbt::Psbt) -> Result<(), AppError> {
-        self.sign_psbt(psbt, fingerprint)
+        self.sign_psbt_on_device(psbt, fingerprint)
     }
 }

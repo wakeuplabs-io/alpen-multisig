@@ -21,14 +21,14 @@ type UseCancelBroadcastReturn = {
 export function useCancelBroadcast(baseUrl: string, targetActionId: string): UseCancelBroadcastReturn {
 	const { proposal: targetProposal, isLoading, error: targetError } = useProposalDetail(baseUrl, targetActionId)
 
-	const cancelActionId = targetProposal?.cancelProposal?.actionId ?? ''
+	const cancelActionId = targetProposal?.cancelProposal?.actionId ?? null
 
-	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId)
+	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '')
 
 	return {
 		isResolvingCancel: isLoading,
 		cancelResolveError: targetError != null ? deriveBroadcastError(targetError) : null,
-		cancelActionId: cancelActionId || null,
+		cancelActionId,
 		...broadcastState,
 	}
 }

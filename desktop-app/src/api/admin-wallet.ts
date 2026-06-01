@@ -66,12 +66,14 @@ export function listAdminWalletUtxos(): Promise<ApiResult<UtxoDto[]>> {
 	return tauriCall<UtxoDto[]>('admin_wallet_list_utxos', {})
 }
 
+const MAX_PAGE_SIZE = 20
+
 export function listAdminWalletAddresses(
 	keychain: KeychainDto = 'External',
 	pageIndex = 0,
 	pageSize = 20,
 ): Promise<ApiResult<AddressDto[]>> {
-	const clampedPageSize = Math.min(pageSize, 20)
+	const clampedPageSize = Math.min(pageSize, MAX_PAGE_SIZE)
 	return tauriCall<AddressDto[]>('admin_wallet_list_addresses', {
 		keychain,
 		pageIndex,

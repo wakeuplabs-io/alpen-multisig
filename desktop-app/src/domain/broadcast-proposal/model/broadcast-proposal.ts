@@ -43,12 +43,16 @@ export function deriveBroadcastError(raw: string): BroadcastError {
 			recovery: CODE_RECOVERY_MAP[code],
 		}
 	} catch {
-		return {
-			code: 'unknown_error',
-			message: raw,
-			recovery: 'retry',
-		}
+		return makeBroadcastError('unknown_error', raw, 'retry')
 	}
+}
+
+function makeBroadcastError(
+	code: BroadcastErrorCode,
+	message: string,
+	recovery: BroadcastRecovery,
+): BroadcastError {
+	return { code, message, recovery }
 }
 
 export function satsToBtc(sats: number): string {

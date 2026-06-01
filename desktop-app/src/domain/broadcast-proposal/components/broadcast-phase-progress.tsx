@@ -18,6 +18,9 @@ const STEPS: Step[] = [
 	{ label: 'Enactment', detail: 'ASM applies the governance change after the confirmation delay' },
 ]
 
+/** Commit (0) + Reveal (1) are broadcast together as one package. */
+const BROADCAST_GROUP_LAST_INDEX = 1
+
 function CopyButton({ text }: { text: string }) {
 	const [copied, setCopied] = useState(false)
 
@@ -58,12 +61,9 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	const isEnacted = proposalStatus === 'enacted'
 	const isAwaitingDevice = phase === 'awaiting-device'
 
-	// Commit (0) + Reveal (1) are broadcast together (one package), so they light up
-	// simultaneously while broadcasting; Enactment (2) follows after confirmation.
-	const BROADCAST_GROUP_LAST = 1
 	function stepState(index: number): 'done' | 'active' | 'pending' {
 		if (isDone) return 'done'
-		if ((phase === 'broadcasting' || isAwaitingDevice) && index <= BROADCAST_GROUP_LAST) return 'active'
+		if ((phase === 'broadcasting' || isAwaitingDevice) && index <= BROADCAST_GROUP_LAST_INDEX) return 'active'
 		return 'pending'
 	}
 

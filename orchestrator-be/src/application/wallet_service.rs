@@ -50,18 +50,7 @@ impl WalletService {
             });
         }
 
-        let mut tx_builder = wallet.build_tx();
-        tx_builder.add_recipient(
-            commit_addr.script_pubkey(),
-            bitcoin::Amount::from_sat(amount_sats),
-        );
-        let fee_rate = bitcoin::FeeRate::from_sat_per_vb(fee_rate_sats_per_vb)
-            .unwrap_or(bitcoin::FeeRate::BROADCAST_MIN);
-        tx_builder.fee_rate(fee_rate);
-
-        let mut psbt = tx_builder
-            .finish()
-            .map_err(|e| AdminWalletError::PsbtBuild(e.to_string()))?;
+        let mut psbt = self.build_psbt(wallet, &commit_addr, amount_sats, fee_rate_sats_per_vb)?;
 
         signer
             .sign_psbt(wallet, &mut psbt)
@@ -80,6 +69,27 @@ impl WalletService {
 
         psbt.extract_tx()
             .map_err(|e| AdminWalletError::ExtractFailed(e.to_string()))
+    }
+
+    fn build_psbt(
+        &self,
+        wallet: &mut bdk_wallet::Wallet,
+        commit_addr: &bitcoin::Address,
+        amount_sats: u64,
+        fee_rate_sats_per_vb: u64,
+    ) -> Result<bitcoin::psbt::Psbt, AdminWalletError> {
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(
+            commit_addr.script_pubkey(),
+            bitcoin::Amount::from_sat(amount_sats),
+        );
+        let fee_rate = bitcoin::FeeRate::from_sat_per_vb(fee_rate_sats_per_vb)
+            .unwrap_or(bitcoin::FeeRate::BROADCAST_MIN);
+        tx_builder.fee_rate(fee_rate);
+
+        tx_builder
+            .finish()
+            .map_err(|e| AdminWalletError::PsbtBuild(e.to_string()))
     }
 }
 

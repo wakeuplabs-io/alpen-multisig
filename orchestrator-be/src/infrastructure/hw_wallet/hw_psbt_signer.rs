@@ -34,6 +34,15 @@ pub(crate) struct HwPsbtSigner {
 }
 
 impl HwPsbtSigner {
+    fn validate_xpub(account_xpub: &str) -> Result<(), AppError> {
+        if account_xpub.is_empty() {
+            return Err(AppError::BadRequest(
+                "account_xpub must not be empty".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Create a new hardware wallet signer.
     ///
     /// The `master_fingerprint` is captured at connect time — NOT derived from
@@ -46,11 +55,7 @@ impl HwPsbtSigner {
         account_xpub: &str,
         master_fingerprint: u32,
     ) -> Result<Self, AppError> {
-        if account_xpub.is_empty() {
-            return Err(AppError::BadRequest(
-                "account_xpub must not be empty".to_string(),
-            ));
-        }
+        Self::validate_xpub(account_xpub)?;
 
         // Default device stub — real device type (Ledger/Trezor) will be
         // determined by the HW connect flow. For now, this is a placeholder
@@ -73,11 +78,7 @@ impl HwPsbtSigner {
         master_fingerprint: u32,
         device: Box<dyn HwDevice>,
     ) -> Result<Self, AppError> {
-        if account_xpub.is_empty() {
-            return Err(AppError::BadRequest(
-                "account_xpub must not be empty".to_string(),
-            ));
-        }
+        Self::validate_xpub(account_xpub)?;
 
         Ok(Self {
             master_fingerprint,
