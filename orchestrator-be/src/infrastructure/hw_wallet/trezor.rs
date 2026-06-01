@@ -3,6 +3,7 @@
 //! Provides taproot key-path signing via Trezor device.
 
 use crate::error::AppError;
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDevice;
 
 /// Adapter for Trezor hardware wallet communication.
 pub(crate) struct TrezorAdapter;
@@ -22,5 +23,11 @@ impl TrezorAdapter {
         Err(AppError::Internal(anyhow::anyhow!(
             "Trezor signing not yet implemented"
         )))
+    }
+}
+
+impl HwDevice for TrezorAdapter {
+    fn sign_psbt(&self, fingerprint: u32, psbt: &mut bitcoin::psbt::Psbt) -> Result<(), AppError> {
+        self.sign_psbt(psbt, fingerprint)
     }
 }
