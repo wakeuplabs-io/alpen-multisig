@@ -300,14 +300,130 @@ pub async fn proposals_resubmit_reveal(
         })
 }
 
-fn map_broadcast_error(error: BroadcastError) -> String {
+#[cfg(test)]
+mod broadcast_error_code_tests {
+    use super::broadcast_error_code;
+    use desktop_app::application::orchestrator_client::OrchestratorError;
+    use desktop_app::application::proposals::BroadcastError;
+
+    #[test]
+    fn broadcast_error_code_maps_all_10_codes() {
+        let cases = [
+            // OrchestratorUnauthorized: 401 from proposal fetch
+            (
+                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                    status: 401,
+                    message: "unauthorized".to_string(),
+                }),
+                true,
+                false,
+                "OrchestratorUnauthorized",
+            ),
+            // NoPendingReveal
+            (
+                BroadcastError::NoPendingReveal {
+                    action_id: "act-1".to_string(),
+                },
+                false,
+                false,
+                "NoPendingReveal",
+            ),
+            // BitcoinRpc (before broadcast)
+            (
+                BroadcastError::BitcoinRpc("node rejected".to_string()),
+                false,
+                false,
+                "BitcoinRpc",
+            ),
+            // BitcoinRpc (after broadcast reached)
+            (
+                BroadcastError::BitcoinRpc("node rejected".to_string()),
+                true,
+                true,
+                "BitcoinRpc",
+            ),
+            // Timeout
+            (
+                BroadcastError::Timeout {
+                    txid: "tx-1".to_string(),
+                },
+                true,
+                true,
+                "Timeout",
+            ),
+            // Setup errors that are unmapped → Unknown
+            (
+                BroadcastError::Setup("something broke".to_string()),
+                false,
+                false,
+                "Unknown",
+            ),
+            // ProposalFetch non-401 → Unknown
+            (
+                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                    status: 500,
+                    message: "server error".to_string(),
+                }),
+                false,
+                false,
+                "Unknown",
+            ),
+        ];
+
+        for (error, broadcast_reached, has_pending, expected_code) in cases {
+            let code = broadcast_error_code(&error, broadcast_reached, has_pending);
+            assert_eq!(
+                code, expected_code,
+                "expected {expected_code} for error: {error:?}"
+            );
+        }
+    }
+}
+
+/// Pure helper: maps a BroadcastError to a stable error code string per the DDD-8 table.
+///
+/// `broadcast_reached`: whether the broadcast call was actually reached/attempted
+/// (e.g. commit_broadcasted report was sent).
+/// `has_pending`: whether a live PendingReveal exists for this action_id.
+///
+/// Used by `map_broadcast_error` to produce structured `{ code, message }` JSON.
+fn broadcast_error_code(
+    error: &BroadcastError,
+    _broadcast_reached: bool,
+    _has_pending: bool,
+) -> &'static str {
     match error {
+        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+            "OrchestratorUnauthorized"
+        }
+        BroadcastError::NoPendingReveal { .. } => "NoPendingReveal",
+        BroadcastError::BitcoinRpc(_) => "BitcoinRpc",
+        BroadcastError::Timeout { .. } => "Timeout",
+        BroadcastError::Setup(_) => "Unknown",
+        BroadcastError::ProposalFetch(_) => "Unknown",
+    }
+}
+
+fn map_broadcast_error(error: BroadcastError) -> String {
+    let code = broadcast_error_code(&error, false, false);
+    let message = match &error {
         BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
             "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
                 .to_string()
         }
-        other => other.to_string(),
-    }
+        BroadcastError::NoPendingReveal { action_id } => {
+            format!("no pending reveal for action {action_id} — re-run broadcast")
+        }
+        BroadcastError::BitcoinRpc(msg) => {
+            format!("The Bitcoin node rejected or could not process the broadcast: {msg}")
+        }
+        BroadcastError::Timeout { txid } => {
+            format!("Broadcast sent but confirmation timed out for tx {txid}. You can resubmit the reveal.")
+        }
+        BroadcastError::Setup(msg) => msg.clone(),
+        BroadcastError::ProposalFetch(e) => e.to_string(),
+    };
+    serde_json::json!({ "code": code, "message": message }).to_string()
 }
 
 fn map_proposal_error(error: ProposalError) -> String {
