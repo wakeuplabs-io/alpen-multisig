@@ -116,4 +116,25 @@ mod tests {
             "mnemonic signer on mainnet → build_signed_commit returns SignerNotAllowedOnNetwork before any I/O"
         );
     }
+
+    #[test]
+    fn test_mnemonic_on_regtest_without_env_flag_succeeds() {
+        // Mnemonic signer on regtest — no ALLOW_DEV_MNEMONIC_SIGNING env var needed.
+        // The per-signer network capability (allowed_on) replaces the legacy env flag.
+        // Broadcast must succeed purely based on signer capability.
+        let signer = Arc::new(MnemonicPsbtSigner::new(Network::Regtest));
+        let svc = WalletService::new(Network::Regtest, Some(signer));
+        let tx = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![],
+        };
+        let mut psbt = bitcoin::psbt::Psbt::from_unsigned_tx(tx).unwrap();
+        let result = svc.build_signed_commit(&mut psbt);
+        assert!(
+            result.is_ok(),
+            "mnemonic signer on regtest without ALLOW_DEV_MNEMONIC_SIGNING → build_signed_commit succeeds"
+        );
+    }
 }
