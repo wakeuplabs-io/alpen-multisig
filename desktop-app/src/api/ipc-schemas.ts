@@ -162,3 +162,25 @@ export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
 export const buildActionHexResponseSchema = z.object({
 	actionHex: z.string(),
 })
+
+// admin-wallet capability DTO — evolved from bare-bool to {canSign, signerKind, reason?}
+export const signerKindSchema = z.enum(['hardware', 'mnemonic', 'none'])
+
+export const adminWalletCapabilitySchema = z.union([
+	z
+		.object({
+			canSign: z.boolean(),
+			signerKind: signerKindSchema,
+			reason: z.string().optional(),
+		})
+		.transform((d) => ({
+			canSign: d.canSign,
+			signerKind: d.signerKind,
+			reason: d.reason,
+		})),
+	z.boolean().transform((b) => ({
+		canSign: b,
+		signerKind: 'none' as const,
+		reason: undefined,
+	})),
+])

@@ -105,6 +105,14 @@ export function walletSessionInitWatchOnly(input: WalletSessionInitWatchOnlyInpu
 	return tauriCall<null>('wallet_session_init_watch_only', { input })
 }
 
-export function getAdminWalletCanSign(): Promise<ApiResult<boolean>> {
-	return tauriCall<boolean>('admin_wallet_can_sign', {})
+export type SignerKind = 'hardware' | 'mnemonic' | 'none'
+
+export type AdminWalletCapability = {
+	canSign: boolean
+	signerKind: SignerKind
+	reason?: string
+}
+
+export function getAdminWalletCanSign(): Promise<ApiResult<AdminWalletCapability>> {
+	return tauriCall<AdminWalletCapability>('admin_wallet_can_sign', {})
 }
