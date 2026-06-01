@@ -29,6 +29,8 @@ pub enum AdminWalletError {
     Disabled,
     #[error("admin wallet is watch-only; hardware wallet required to sign")]
     ReadOnly,
+    #[error("signer not allowed on this network")]
+    SignerNotAllowedOnNetwork,
 }
 
 /// Load a BIP-86 taproot wallet for account 73' from a mnemonic phrase.

@@ -87,5 +87,11 @@ export function createTrezorAdapter(): WalletAdapter {
 			if (!result.ok) throw new Error(result.error)
 			return result.data
 		},
+
+		async getMasterFingerprint(): Promise<number> {
+			const result = await tauriCall<number>('get_trezor_master_fingerprint', {})
+			if (!result.ok) throw new Error(result.error)
+			return result.data
+		},
 	}
 }

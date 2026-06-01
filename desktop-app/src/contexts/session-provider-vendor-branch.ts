@@ -5,14 +5,19 @@ import type { MnemonicAdapter } from '@/wallet/mnemonic-adapter.ts'
 /**
  * Performs vendor-specific Admin Wallet session init after authentication.
  * - mnemonic: calls walletSessionInit with the mnemonic
- * - trezor/ledger: fetches xpub via getAccountXpub, calls walletSessionInitWatchOnly
+ * - trezor/ledger: fetches xpub + masterFingerprint via getAccountXpub + getMasterFingerprint,
+ *   calls walletSessionInitWatchOnly with deviceType
  * - mock: skips both inits
  *
  * Failures are non-fatal: callers should warn and continue.
  */
 export async function initAdminWalletForAdapter(
 	adapter: WalletAdapter,
-	walletSessionInitWatchOnly: (input: { xpub: string }) => Promise<ApiResult<null>>,
+	walletSessionInitWatchOnly: (input: {
+		xpub: string
+		masterFingerprint?: number
+		deviceType?: string
+	}) => Promise<ApiResult<null>>,
 	walletSessionInit: (input: { mnemonic: string }) => Promise<ApiResult<null>>,
 ): Promise<void> {
 	if (adapter.vendor === 'mnemonic') {
@@ -22,15 +27,19 @@ export async function initAdminWalletForAdapter(
 			console.warn('[admin-wallet] session init failed:', result.error)
 		}
 	} else if (adapter.vendor === 'trezor' || adapter.vendor === 'ledger') {
-		if (adapter.getAccountXpub) {
+		if (adapter.getAccountXpub && adapter.getMasterFingerprint) {
 			try {
-				const xpub = await adapter.getAccountXpub()
-				const result = await walletSessionInitWatchOnly({ xpub })
+				const [xpub, masterFingerprint] = await Promise.all([adapter.getAccountXpub(), adapter.getMasterFingerprint()])
+				const result = await walletSessionInitWatchOnly({
+					xpub,
+					masterFingerprint,
+					deviceType: adapter.vendor,
+				})
 				if (!result.ok) {
 					console.warn('[admin-wallet] watch-only session init failed:', result.error)
 				}
 			} catch (err) {
-				console.warn('[admin-wallet] failed to fetch account xpub from device:', err)
+				console.warn('[admin-wallet] failed to fetch account xpub or fingerprint from device:', err)
 			}
 		}
 	}
