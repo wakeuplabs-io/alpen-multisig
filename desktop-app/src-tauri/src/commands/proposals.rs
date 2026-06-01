@@ -306,6 +306,23 @@ mod broadcast_error_code_tests {
     use desktop_app::application::orchestrator_client::OrchestratorError;
     use desktop_app::application::proposals::BroadcastError;
 
+    /// BE-11: Orchestrator session expiry during broadcast (boundary=BEFORE).
+    ///
+    /// When the orchestrator returns 401 during the pre-broadcast proposal fetch,
+    /// the error maps to code=OrchestratorUnauthorized with recovery=re-auth→retry.
+    ///
+    /// This is a focused regression test for the 401 case; the full error-code
+    /// matrix is covered by `broadcast_error_code_maps_all_10_codes` (step 01-10).
+    #[test]
+    fn test_broadcast_error_orchestrator_unauthorized() {
+        let error = BroadcastError::ProposalFetch(OrchestratorError::Backend {
+            status: 401,
+            message: "unauthorized".to_string(),
+        });
+        let code = broadcast_error_code(&error, false, false);
+        assert_eq!(code, "OrchestratorUnauthorized");
+    }
+
     #[test]
     fn broadcast_error_code_maps_all_10_codes() {
         let cases = [
