@@ -10,4 +10,12 @@ pub(crate) enum AdminWalletError {
     ReadOnly,
     #[error("signer not allowed on network {network:?}")]
     SignerNotAllowedOnNetwork { network: Network },
+    #[error("PSBT build failed: {0}")]
+    PsbtBuild(String),
+    #[error("signing failed: {0}")]
+    SigningFailed(String),
+    #[error("PSBT finalize failed: {0}")]
+    FinalizeFailed(String),
+    #[error("tx extract failed: {0}")]
+    ExtractFailed(String),
 }

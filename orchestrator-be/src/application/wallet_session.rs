@@ -8,6 +8,7 @@ use std::sync::Arc;
 use bitcoin::Network;
 
 use crate::application::psbt_signer::{MnemonicPsbtSigner, PsbtSigner};
+use crate::error::AppError;
 
 /// A wallet session that holds an optional signer.
 pub(crate) struct WalletSession {
@@ -19,12 +20,12 @@ pub(crate) struct WalletSession {
 #[allow(dead_code)]
 impl WalletSession {
     /// Create a new session initialized with a mnemonic-derived signer.
-    pub(crate) fn init_from_mnemonic(network: Network) -> Self {
-        let signer = Arc::new(MnemonicPsbtSigner::new(network));
-        Self {
+    pub(crate) fn init_from_mnemonic(network: Network, mnemonic: &str) -> Result<Self, AppError> {
+        let signer = Arc::new(MnemonicPsbtSigner::new(network, mnemonic)?);
+        Ok(Self {
             network,
             signer: Some(signer),
-        }
+        })
     }
 
     /// Whether the session has signing capability.
@@ -45,9 +46,13 @@ impl WalletSession {
 mod tests {
     use super::*;
 
+    const TEST_MNEMONIC: &str =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
     #[test]
     fn test_init_from_mnemonic_attaches_mnemonic_signer() {
-        let session = WalletSession::init_from_mnemonic(Network::Regtest);
+        let session = WalletSession::init_from_mnemonic(Network::Regtest, TEST_MNEMONIC)
+            .expect("session must be created");
 
         assert!(session.has_signer());
         assert!(session.signer_allowed_on_network());

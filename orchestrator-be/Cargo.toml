@@ -35,6 +35,11 @@ strata-crypto = { workspace = true }
 strata-l1-txfmt = { workspace = true }
 strata-l1-envelope-fmt = { workspace = true }
 
+bdk_wallet = { workspace = true, features = ["test-utils"] }
+bip39 = { version = "2.0", features = ["rand"] }
+
 [dev-dependencies]
+bdk_chain = "0.21"
+bip39 = { version = "2.0", features = ["rand"] }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
