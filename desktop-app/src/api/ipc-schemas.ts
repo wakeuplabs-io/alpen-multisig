@@ -2,6 +2,16 @@ import { z } from 'zod'
 
 import { AuthRole } from '@/types/auth-role'
 
+/** Reusable schema combinator: accepts null or undefined, transforms to undefined. */
+function nullishToUndefined<T extends z.ZodType>(schema: T) {
+	return schema.nullish().transform((v) => v ?? undefined)
+}
+
+/** Reusable schema combinator: accepts null or undefined, transforms to null. */
+function nullishToNull<T extends z.ZodType>(schema: T) {
+	return schema.nullish().transform((v) => v ?? null)
+}
+
 export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
 
 export const broadcastStatusSchema = z.enum([
@@ -41,31 +51,13 @@ export const proposalSchema = z
 		),
 		broadcastStatus: broadcastStatusSchema,
 		// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
-		commitTxid: z
-			.string()
-			.nullish()
-			.transform((v) => v ?? undefined),
-		revealTxid: z
-			.string()
-			.nullish()
-			.transform((v) => v ?? undefined),
-		broadcastError: z
-			.string()
-			.nullish()
-			.transform((v) => v ?? undefined),
-		targetActionId: z
-			.string()
-			.nullish()
-			.transform((v) => v ?? null),
-		activationHeight: z
-			.number()
-			.nullish()
-			.transform((v) => v ?? null),
-		updateIdInQueue: z
-			.number()
-			.nullish()
-			.transform((v) => v ?? null),
-		cancelProposal: cancelProposalSummarySchema.nullish().transform((v) => v ?? null),
+		commitTxid: nullishToUndefined(z.string()),
+		revealTxid: nullishToUndefined(z.string()),
+		broadcastError: nullishToUndefined(z.string()),
+		targetActionId: nullishToNull(z.string()),
+		activationHeight: nullishToNull(z.number()),
+		updateIdInQueue: nullishToNull(z.number()),
+		cancelProposal: nullishToNull(cancelProposalSummarySchema),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 
@@ -90,23 +82,17 @@ export const authSessionSchema = z.object({
 	membershipFetchedAtUnixMs: z.number(),
 })
 
-export const authSessionResultSchema = z.object({
-	authenticated: z.boolean(),
-	session: authSessionSchema.nullish().transform((v) => v ?? null),
-})
+	export const authSessionResultSchema = z.object({
+		authenticated: z.boolean(),
+		session: nullishToNull(authSessionSchema),
+	})
 
 export const broadcastResultSchema = z.object({
 	actionId: z.string(),
 	proposalStatus: proposalStatusSchema,
 	broadcastStatus: broadcastStatusSchema,
-	commitTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	revealTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
+	commitTxid: nullishToUndefined(z.string()),
+	revealTxid: nullishToUndefined(z.string()),
 })
 
 // signing.ts schemas
