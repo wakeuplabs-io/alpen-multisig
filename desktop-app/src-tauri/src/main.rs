@@ -29,6 +29,7 @@ fn main() {
     let pending_reveals = desktop_app::application::pending_reveals::new();
     commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .manage(wallet_session)
+        .manage(pending_reveals)
         .setup(|app| {
             use desktop_app::infrastructure::node_config_store::{
                 load_node_config, NodeConfigState,

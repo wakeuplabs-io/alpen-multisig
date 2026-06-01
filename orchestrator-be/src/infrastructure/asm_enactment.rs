@@ -38,13 +38,11 @@ pub(crate) async fn is_proposal_enacted_on_asm(
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor =
-        decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
+    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
 
     match &action {
         MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
-            let checkpoint =
-                decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
+            let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
             Ok(predicate_keys_match(
                 update.key(),
                 checkpoint.checkpoint_predicate(),
@@ -52,9 +50,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         }
         MultisigAction::Update(UpdateAction::EeStfVk(_)) => Ok(false),
         MultisigAction::Update(_) => {
-            let Some(config_update) =
-                extract_multisig_config_update(&action, authority)?
-            else {
+            let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
                 return Ok(false);
             };
             let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
@@ -259,9 +255,7 @@ fn decode_checkpoint_state(anchor: &AnchorState) -> Result<CheckpointState, Stri
     })?;
     section
         .try_to_state::<CheckpointSubprotocol>()
-        .map_err(|e| {
-            format!("Checkpoint section (id {id}) does not decode with this app ({e:?}).")
-        })
+        .map_err(|e| format!("Checkpoint section (id {id}) does not decode with this app ({e:?})."))
 }
 
 #[cfg(test)]

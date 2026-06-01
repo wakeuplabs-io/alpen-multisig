@@ -102,9 +102,9 @@ impl HttpBitcoinRpcClient {
             )));
         }
 
-        body.get("result").cloned().ok_or_else(|| {
-            AppError::BadRequest(format!("bitcoin rpc `{method}` missing result"))
-        })
+        body.get("result")
+            .cloned()
+            .ok_or_else(|| AppError::BadRequest(format!("bitcoin rpc `{method}` missing result")))
     }
 }
 
@@ -127,9 +127,7 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
     async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
         // getrawtransaction works for any tx via txindex, unlike gettransaction which
         // requires the tx to be in the node's wallet.
-        let result = self
-            .call("getrawtransaction", json!([txid, true]))
-            .await?;
+        let result = self.call("getrawtransaction", json!([txid, true])).await?;
 
         // Bitcoin Core 23+ includes blockheight directly; fall back to getblockheader.
         if let Some(h) = result.get("blockheight").and_then(|v| v.as_u64()) {

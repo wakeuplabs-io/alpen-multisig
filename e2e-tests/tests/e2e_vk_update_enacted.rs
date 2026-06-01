@@ -30,7 +30,7 @@ use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::Amount;
-use bitcoind_async_client::traits::Reader;
+use bitcoind_async_client::traits::{Reader, Wallet};
 use rand::rngs::OsRng;
 use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
@@ -158,6 +158,8 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
     // Mine the commit block before broadcasting the reveal.
     let _ = harness.mine_block(None).await?;
 
+    let change_addr: bitcoin::Address = harness.client.get_new_address().await?;
+    let change_spk = change_addr.script_pubkey();
     let action_strata = MultisigAction::from_ssz_bytes(&hex::decode(&action_hex)?)?;
     let reveal_tx = anyhow_string(broadcast_tx::build_reveal_tx(
         &envelope_keypair,
@@ -167,7 +169,7 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
         &commit_address.script_pubkey(),
         &action_strata,
         harness.asm_params.magic,
-        bitcoin::Network::Regtest,
+        change_spk,
         1_000,
     ))?;
 

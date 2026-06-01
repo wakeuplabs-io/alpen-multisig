@@ -38,9 +38,13 @@ pub struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub fn new(base_url: &str, user: &str, pass: &str) -> Self {
+    pub fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
+        let url = match wallet_name.filter(|w| !w.is_empty()) {
+            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
+            None => base_url.to_string(),
+        };
         Self {
-            url: base_url.to_string(),
+            url,
             user: user.to_string(),
             pass: pass.to_string(),
             client: super::rpc_timeout::rpc_client(),

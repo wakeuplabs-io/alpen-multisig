@@ -320,8 +320,14 @@ pub async fn proposals_resubmit_reveal(
         .read()
         .map_err(|e| format!("lock error: {e}"))?
         .clone();
-    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
     proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
         .await
         .map_err(|e| match e {
@@ -427,7 +433,12 @@ pub async fn proposals_prepare_broadcast(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
         proposals::prepare_broadcast_local(
@@ -468,6 +479,7 @@ pub async fn proposals_broadcast(
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));

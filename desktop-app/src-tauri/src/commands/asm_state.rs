@@ -6,8 +6,8 @@ use tauri::State;
 use desktop_app::domain::auth::AuthRole;
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::asm_status_rpc;
-use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::bitcoin_rpc::BitcoinRpcClient;
+use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
 #[derive(Debug, Serialize)]
@@ -86,7 +86,15 @@ pub async fn get_bitcoin_block_height(
         .read()
         .map_err(|e| format!("lock error: {e}"))?
         .clone();
-    let btc_rpc = HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass());
+    let wallet_name = std::env::var("BITCOIN_WALLET_NAME")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        cfg.btc_rpc_url(),
+        wallet_name.as_deref(),
+        cfg.btc_rpc_user(),
+        cfg.btc_rpc_pass(),
+    );
     btc_rpc.get_block_count().await
 }
 

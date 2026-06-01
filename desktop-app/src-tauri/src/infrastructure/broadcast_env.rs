@@ -35,6 +35,7 @@ pub struct BroadcastEnv {
     pub btc_rpc_url: String,
     pub btc_rpc_user: String,
     pub btc_rpc_pass: String,
+    pub btc_wallet_name: Option<String>,
     pub magic_bytes: MagicBytes,
     pub asm_rpc_url: String,
     pub network: Network,
@@ -69,6 +70,9 @@ pub fn load_broadcast_env(
     let btc_rpc_url = node_config.btc_rpc_url().to_string();
     let btc_rpc_user = node_config.btc_rpc_user().to_string();
     let btc_rpc_pass = node_config.btc_rpc_pass().to_string();
+    let btc_wallet_name = std::env::var("BITCOIN_WALLET_NAME")
+        .ok()
+        .filter(|s| !s.is_empty());
     let asm_rpc_url = node_config.strata_rpc_url().to_string();
     let magic_hex =
         std::env::var("BITCOIN_MAGIC_BYTES_HEX").unwrap_or_else(|_| "414c504e".to_string());
@@ -85,6 +89,7 @@ pub fn load_broadcast_env(
         btc_rpc_url,
         btc_rpc_user,
         btc_rpc_pass,
+        btc_wallet_name,
         magic_bytes: parse_magic_bytes(&magic_hex)?,
         asm_rpc_url,
         network,
@@ -121,7 +126,6 @@ pub(crate) static ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(()
 mod tests {
     use super::*;
     use crate::application::wallet_session::WalletSession;
-    use crate::infrastructure::admin_wallet::commit_reveal_key::derive_commit_reveal_keypair;
     use crate::infrastructure::node_config_store::NodeConfig;
     use bdk_wallet::bitcoin::Network;
 
@@ -253,12 +257,6 @@ mod tests {
         assert_eq!(env.confirm_timeout_ms, 56789);
     }
 
-    // with_env_var is retained for potential future use; suppress dead_code.
-    #[allow(dead_code)]
-    fn _with_env_var_used(key: &str, value: Option<&str>, f: impl FnOnce()) {
-        with_env_var(key, value, f);
-    }
-
     fn derive_regtest_xpub(mnemonic_str: &str) -> String {
         use bdk_wallet::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
         use bdk_wallet::bitcoin::secp256k1::Secp256k1;
@@ -287,7 +285,7 @@ mod tests {
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let xpub = derive_regtest_xpub(TEST_MNEMONIC);
         let session = session_with_xpub(&xpub);
-        let result = load_broadcast_env(&session);
+        let result = load_broadcast_env(&session, &test_node_config());
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::ReadOnly)),
@@ -301,7 +299,7 @@ mod tests {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let session = WalletSession::empty();
-        let result = load_broadcast_env(&session);
+        let result = load_broadcast_env(&session, &test_node_config());
         std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::WalletSessionRequired)),
@@ -313,15 +311,11 @@ mod tests {
     #[test]
     fn load_broadcast_env_mnemonic_session_passes_gates() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("BITCOIN_RPC_URL", "http://127.0.0.1:18443");
-        std::env::set_var("BITCOIN_RPC_USER", "user");
-        std::env::set_var("BITCOIN_RPC_PASS", "pass");
-        std::env::set_var("STRATA_ADMIN_STATE_RPC_URL", "http://127.0.0.1:9000");
         std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         let session = session_with_mnemonic(TEST_MNEMONIC);
-        let result = load_broadcast_env(&session);
-        clear_broadcast_rpc_env();
+        let result = load_broadcast_env(&session, &test_node_config());
+        clear_dev_env();
         assert!(
             result.is_ok(),
             "expected Ok with mnemonic session, got: {:?}",
