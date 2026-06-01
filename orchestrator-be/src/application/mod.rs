@@ -8,3 +8,4 @@
 pub(crate) mod proposals;
 pub(crate) mod psbt_signer;
 pub(crate) mod traits;
+pub(crate) mod wallet_session;
