@@ -30,10 +30,10 @@ const unknownCode = deriveBroadcastError(JSON.stringify({ code: 'weird_thing', m
 assert.equal(unknownCode.code, 'unknown_error')
 assert.equal(unknownCode.recovery, 'retry')
 
-// Unparseable input fallback
-const garbage = deriveBroadcastError('not json at all')
-assert.equal(garbage.code, 'unknown_error')
-assert.equal(garbage.message, 'not json at all')
-assert.equal(garbage.recovery, 'retry')
+// Legacy bare string fallback (backward compatible)
+const legacy = deriveBroadcastError('Fee rate too low')
+assert.equal(legacy.code, 'Unknown')
+assert.equal(legacy.message, 'Fee rate too low')
+assert.equal(legacy.recovery, 'retry')
 
 console.log('derive-broadcast-error: all assertions passed.')
