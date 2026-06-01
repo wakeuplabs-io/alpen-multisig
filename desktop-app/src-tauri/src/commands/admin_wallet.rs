@@ -210,19 +210,9 @@ pub fn admin_wallet_sync_status(wallet_session: tauri::State<'_, WalletSession>)
 mod tests {
     use super::*;
     use desktop_app::application::wallet_session::WalletSession;
-    use desktop_app::infrastructure::admin_wallet::load_admin_wallet;
-    use tokio::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-
-    fn build_test_service() -> WalletService {
-        let wallet = load_admin_wallet(TEST_MNEMONIC, bdk_wallet::bitcoin::Network::Regtest)
-            .expect("wallet creation must succeed");
-        WalletService::new(wallet)
-    }
 
     /// Verifies wallet_session_init is importable (compile-time check).
     #[test]

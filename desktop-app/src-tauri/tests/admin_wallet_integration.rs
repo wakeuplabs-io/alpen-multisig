@@ -7,20 +7,8 @@
 ///   BITCOIN_NETWORK=regtest \
 ///   cargo test -p desktop-app --test admin_wallet_integration -- --ignored
 use desktop_app::application::wallet_service::WalletService;
-use std::sync::Mutex;
 
-// Serialize env-var tests to avoid cross-test pollution.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-fn clear_guard_env_vars() {
-    std::env::remove_var("BITCOIN_NETWORK");
-}
-
-fn set_all_guard_env_vars() {
-    std::env::set_var("BITCOIN_NETWORK", "regtest");
-}
-
-// ── Regtest tests (require running bitcoind) ──────────────────────────────────
+// ─ Regtest tests (require running bitcoind) ─────────────────────────────────
 
 const REGTEST_MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";

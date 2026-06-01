@@ -533,7 +533,6 @@ impl WalletService {
 mod tests {
     use super::*;
     use crate::infrastructure::admin_wallet::AdminWalletError;
-    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
 
     // Acceptance test: struct fields and AdminWalletError::Disabled variant exist
     #[test]
