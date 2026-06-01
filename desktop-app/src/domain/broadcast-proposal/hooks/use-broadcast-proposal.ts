@@ -9,7 +9,8 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 
-import type { BroadcastPhase } from '../model/broadcast-proposal'
+import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
+import { deriveBroadcastError } from '../model/broadcast-proposal'
 
 const inFlightActionIds = new Set<string>()
 
@@ -19,7 +20,9 @@ type UseBroadcastProposalReturn = {
 	result: BroadcastResult | null
 	/** Authoritative proposal row from orchestrator after broadcast (P-062). */
 	proposal: Proposal | null
-	error: string | null
+	error: BroadcastError | null
+	/** True ONLY when error.recovery === 'resubmit-reveal'; false for all other errors. */
+	canResubmit: boolean
 	prepare: () => Promise<void>
 	broadcast: () => Promise<void>
 }
@@ -44,7 +47,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 	const [bundle, setBundle] = useState<PrepareBroadcastResult | null>(null)
 	const [result, setResult] = useState<BroadcastResult | null>(null)
 	const [proposal, setProposal] = useState<Proposal | null>(null)
-	const [error, setError] = useState<string | null>(null)
+	const [error, setError] = useState<BroadcastError | null>(null)
 	const broadcastStarted = useRef(false)
 
 	useEffect(() => {
@@ -58,7 +61,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		]).then(([res, proposalRes]) => {
 			if (!active) return
 			if (!res.ok) {
-				setError(res.error)
+				setError(deriveBroadcastError(res.error))
 				setPhase('error')
 				return
 			}
@@ -99,7 +102,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 			getProposalByActionId({ baseUrl, actionId }),
 		])
 		if (!res.ok) {
-			setError(res.error)
+			setError(deriveBroadcastError(res.error))
 			setPhase('error')
 			return
 		}
@@ -121,7 +124,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		try {
 			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
 			if (!res.ok) {
-				setError(res.error)
+				setError(deriveBroadcastError(res.error))
 				setPhase('error')
 				return
 			}
@@ -139,5 +142,14 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		}
 	}
 
-	return { phase, bundle, result, proposal, error, prepare, broadcast }
+	return {
+		phase,
+		bundle,
+		result,
+		proposal,
+		error,
+		canResubmit: error?.recovery === 'resubmit-reveal',
+		prepare,
+		broadcast,
+	}
 }

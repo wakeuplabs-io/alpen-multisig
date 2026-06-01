@@ -1,6 +1,6 @@
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
-import type { BroadcastPhase } from '@/domain/broadcast-proposal/model/broadcast-proposal'
+import type { BroadcastError, BroadcastPhase } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import type { BroadcastResult, PrepareBroadcastResult, Proposal } from '@/api/proposals'
 
 type UseCancelBroadcastReturn = {
@@ -11,7 +11,8 @@ type UseCancelBroadcastReturn = {
 	bundle: PrepareBroadcastResult | null
 	result: BroadcastResult | null
 	proposal: Proposal | null
-	error: string | null
+	error: BroadcastError | null
+	canResubmit: boolean
 	prepare: () => Promise<void>
 	broadcast: () => Promise<void>
 }
