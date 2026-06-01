@@ -79,7 +79,7 @@ export function CancelProposalBroadcastScreen() {
 
 					{cancelResolveError !== null && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">{cancelResolveError}</p>
+							<p className="m-0 text-sm text-[#991b1b]">{cancelResolveError.message}</p>
 						</div>
 					)}
 

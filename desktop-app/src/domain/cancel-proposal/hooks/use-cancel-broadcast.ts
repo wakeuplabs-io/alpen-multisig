@@ -1,11 +1,12 @@
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import type { BroadcastError, BroadcastPhase } from '@/domain/broadcast-proposal/model/broadcast-proposal'
+import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import type { BroadcastResult, PrepareBroadcastResult, Proposal } from '@/api/proposals'
 
 type UseCancelBroadcastReturn = {
 	isResolvingCancel: boolean
-	cancelResolveError: string | null
+	cancelResolveError: BroadcastError | null
 	cancelActionId: string | null
 	phase: BroadcastPhase
 	bundle: PrepareBroadcastResult | null
@@ -26,7 +27,7 @@ export function useCancelBroadcast(baseUrl: string, targetActionId: string): Use
 
 	return {
 		isResolvingCancel: isLoading,
-		cancelResolveError: targetError,
+		cancelResolveError: targetError != null ? deriveBroadcastError(targetError) : null,
 		cancelActionId: cancelActionId || null,
 		...broadcastState,
 	}

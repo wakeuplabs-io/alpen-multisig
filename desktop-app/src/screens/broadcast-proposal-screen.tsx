@@ -29,7 +29,7 @@ export function BroadcastProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { adminWalletInfo } = useAdminWalletInfo()
-	const { canSign } = useAdminWalletCapability()
+	const { canSign, canSignReason } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
 	const signerKind: SignerKind = canSign ? 'mnemonic' : 'hardware'
 
@@ -153,6 +153,7 @@ export function BroadcastProposalScreen() {
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting'}
 							canSign={canSign}
+							canSignReason={canSignReason}
 							phase={phase}
 							adminWalletInfo={adminWalletInfo}
 							utxoCount={utxoCount}
@@ -203,7 +204,9 @@ export function BroadcastProposalScreen() {
 							>
 								Retry
 							</button>
-							{!canSign && <p className="mt-2 text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
+							{!canSign && (
+								<p className="mt-2 text-[12px] text-[#6b7280]">{canSignReason ?? 'Hardware wallet required to sign'}</p>
+							)}
 						</div>
 					)}
 				</div>

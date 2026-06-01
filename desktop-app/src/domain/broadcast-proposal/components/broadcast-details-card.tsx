@@ -18,6 +18,7 @@ type Props = {
 	onBroadcast: () => void
 	isBroadcasting: boolean
 	canSign?: boolean
+	canSignReason?: string
 	adminWalletInfo?: AdminWalletInfoView | null
 	utxoCount?: number
 	lastSyncedAt?: string | null
@@ -53,6 +54,7 @@ export function BroadcastDetailsCard({
 	onBroadcast,
 	isBroadcasting,
 	canSign = true,
+	canSignReason,
 	adminWalletInfo,
 	utxoCount,
 	lastSyncedAt,
@@ -170,7 +172,11 @@ export function BroadcastDetailsCard({
 				>
 					{isBroadcasting ? 'Broadcasting…' : 'Confirm & Broadcast'}
 				</button>
-				{!canSign && <p className="mt-2 text-center text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
+				{!canSign && (
+					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+						{canSignReason ?? 'Hardware wallet required to sign'}
+					</p>
+				)}
 			</div>
 		</div>
 	)
