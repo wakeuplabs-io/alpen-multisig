@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import type { AdminWalletError } from '@/api/admin-wallet'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
@@ -21,6 +22,68 @@ import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 
+type WalletPanelData = {
+	isOpen: boolean
+	open: () => void
+	close: () => void
+	balanceSats: number
+	isBalanceLoading: boolean
+	receiveAddress: string | null
+	isAddressesLoading: boolean
+	addressRows: ReturnType<typeof useAddressesWithBalance>['data']
+	addressRowsLoading: boolean
+	addressRowsError: ReturnType<typeof useAddressesWithBalance>['error']
+	expandedSection: ReturnType<typeof useWalletPanelState>['expandedSection']
+	syncStatus: ReturnType<typeof useAdminWalletSync>['syncStatus']
+	isSyncRefreshing: boolean
+	syncError: ReturnType<typeof useAdminWalletSync>['error'] | null
+	onToggleAddresses: () => void
+	onRefreshSync: () => Promise<void>
+	disabledError: AdminWalletError | null
+}
+
+function useWalletPanelData(isAdminWalletMode: boolean): WalletPanelData {
+	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
+	const balanceHook = useAdminWalletBalance()
+	const addressesHook = useAdminWalletAddresses('External', 0, 20)
+	const syncHook = useAdminWalletSync()
+	const addressesWithBalanceHook = useAddressesWithBalance()
+
+	const walletDisabledError =
+		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
+			? balanceHook.error
+			: addressesHook.error?.type === 'Disabled' || addressesHook.error?.type === 'RegtestGuardViolation'
+				? addressesHook.error
+				: null
+
+	const receiveAddress = addressesHook.data?.find((a) => !a.isUsed)?.address ?? null
+
+	return {
+		isOpen,
+		open,
+		close,
+		balanceSats: balanceHook.data?.confirmedSats ?? 0,
+		isBalanceLoading: balanceHook.isLoading,
+		receiveAddress,
+		isAddressesLoading: addressesHook.isLoading,
+		addressRows: addressesWithBalanceHook.data,
+		addressRowsLoading: addressesWithBalanceHook.isLoading,
+		addressRowsError: addressesWithBalanceHook.error,
+		expandedSection,
+		syncStatus: syncHook.syncStatus,
+		isSyncRefreshing: syncHook.isLoading,
+		syncError: syncHook.error,
+		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
+		onRefreshSync: async () => {
+			await syncHook.triggerSync()
+			balanceHook.refresh()
+			addressesHook.refresh()
+			addressesWithBalanceHook.refresh()
+		},
+		disabledError: isAdminWalletMode ? walletDisabledError : null,
+	}
+}
+
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
@@ -36,20 +99,7 @@ export function BroadcastProposalScreen() {
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
 
-	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
-	const balanceHook = useAdminWalletBalance()
-	const addressesHook = useAdminWalletAddresses('External', 0, 20)
-	const syncHook = useAdminWalletSync()
-	const addressesWithBalanceHook = useAddressesWithBalance()
-
-	const walletDisabledError =
-		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
-			? balanceHook.error
-			: addressesHook.error?.type === 'Disabled' || addressesHook.error?.type === 'RegtestGuardViolation'
-				? addressesHook.error
-				: null
-
-	const receiveAddress = addressesHook.data?.find((a) => !a.isUsed)?.address ?? null
+	const panel = useWalletPanelData(isAdminWalletMode)
 
 	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
 	useEffect(() => {
@@ -105,8 +155,8 @@ export function BroadcastProposalScreen() {
 						timeLabel={sessionTimeLabel}
 						signerLabel={signerLabel}
 						warning={sessionWarning}
-						onActivate={() => (isOpen ? close() : open())}
-						isActive={isOpen}
+						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
+						isActive={panel.isOpen}
 						panelId="wallet-slide-dialog"
 					/>
 					<button
@@ -212,28 +262,23 @@ export function BroadcastProposalScreen() {
 				</div>
 			</div>
 
-			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
+				<WalletPanelHeader onClose={panel.close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
-					disabledError={walletDisabledError}
-					balanceSats={balanceHook.data?.confirmedSats ?? 0}
-					isBalanceLoading={balanceHook.isLoading}
-					receiveAddress={receiveAddress}
-					isAddressesLoading={addressesHook.isLoading}
-					addressRows={addressesWithBalanceHook.data}
-					addressRowsLoading={addressesWithBalanceHook.isLoading}
-					addressRowsError={addressesWithBalanceHook.error}
-					expandedSection={expandedSection}
-					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
-					syncStatus={syncHook.syncStatus}
-					isSyncRefreshing={syncHook.isLoading}
-					syncError={syncHook.error}
-					onRefreshSync={async () => {
-						await syncHook.triggerSync()
-						balanceHook.refresh()
-						addressesHook.refresh()
-						addressesWithBalanceHook.refresh()
-					}}
+					disabledError={panel.disabledError}
+					balanceSats={panel.balanceSats}
+					isBalanceLoading={panel.isBalanceLoading}
+					receiveAddress={panel.receiveAddress}
+					isAddressesLoading={panel.isAddressesLoading}
+					addressRows={panel.addressRows}
+					addressRowsLoading={panel.addressRowsLoading}
+					addressRowsError={panel.addressRowsError}
+					expandedSection={panel.expandedSection}
+					onToggleAddresses={panel.onToggleAddresses}
+					syncStatus={panel.syncStatus}
+					isSyncRefreshing={panel.isSyncRefreshing}
+					syncError={panel.syncError}
+					onRefreshSync={panel.onRefreshSync}
 				/>
 			</WalletPanel>
 		</ScreenShell>

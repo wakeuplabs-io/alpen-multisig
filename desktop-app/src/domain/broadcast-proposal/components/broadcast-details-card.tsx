@@ -26,15 +26,23 @@ type Props = {
 	phase?: BroadcastPhase
 }
 
+const TIME_UNITS = [
+	{ label: 'h', seconds: 3600 },
+	{ label: 'm', seconds: 60 },
+	{ label: 's', seconds: 1 },
+] as const
+
 function relativeTime(isoStr: string): string {
-	// Handle both ISO-8601 strings and legacy numeric-only strings (bare Unix epoch seconds)
 	const ts = isNaN(Number(isoStr)) ? Date.parse(isoStr) : Number(isoStr) * 1000
 	const diffSeconds = Math.floor((Date.now() - ts) / 1000)
-	if (diffSeconds < 60) return `${diffSeconds}s ago`
-	const diffMinutes = Math.floor(diffSeconds / 60)
-	if (diffMinutes < 60) return `${diffMinutes}m ago`
-	const diffHours = Math.floor(diffMinutes / 60)
-	return `${diffHours}h ago`
+
+	for (const unit of TIME_UNITS) {
+		const value = Math.floor(diffSeconds / unit.seconds)
+		if (value >= 1 || unit.label === 's') {
+			return `${value}${unit.label} ago`
+		}
+	}
+	return '0s ago'
 }
 
 function LastSyncLabel({ lastSyncedAt }: { lastSyncedAt: string }) {
