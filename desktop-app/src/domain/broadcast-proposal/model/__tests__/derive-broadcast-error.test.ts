@@ -4,7 +4,9 @@ import { deriveBroadcastError } from '../broadcast-proposal'
 describe('deriveBroadcastError', () => {
 	describe('structured JSON parsing', () => {
 		it('parses a structured error with code, message, and recovery', () => {
-			const result = deriveBroadcastError(JSON.stringify({ code: 'device_disconnected', message: 'Hardware wallet not detected' }))
+			const result = deriveBroadcastError(
+				JSON.stringify({ code: 'device_disconnected', message: 'Hardware wallet not detected' }),
+			)
 			expect(result.code).toBe('device_disconnected')
 			expect(result.message).toBe('Hardware wallet not detected')
 			expect(result.recovery).toBe('reconnect-device')

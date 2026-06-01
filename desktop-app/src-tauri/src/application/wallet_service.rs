@@ -1,3 +1,4 @@
+use crate::application::psbt_signer::PsbtSigner;
 use crate::infrastructure::admin_wallet::AdminWalletError;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -104,7 +105,8 @@ pub struct WalletService {
     rpc_url: String,
     rpc_user: String,
     rpc_pass: String,
-    can_sign: bool,
+    signer: Option<Arc<dyn PsbtSigner>>,
+    network: bdk_wallet::bitcoin::Network,
 }
 
 /// Keychain selection for address listing.
@@ -177,11 +179,13 @@ pub fn error_code(e: &AdminWalletError) -> String {
         AdminWalletError::Descriptor(_) => "Descriptor".into(),
         AdminWalletError::WalletCreation(_) => "WalletCreation".into(),
         AdminWalletError::ReadOnly => "ReadOnly".into(),
+        AdminWalletError::SignerNotAllowedOnNetwork => "SignerNotAllowedOnNetwork".into(),
     }
 }
 
 impl WalletService {
     pub fn new(wallet: bdk_wallet::Wallet) -> Self {
+        let network = wallet.network();
         let rpc_url =
             std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
         let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
@@ -196,20 +200,39 @@ impl WalletService {
             rpc_url,
             rpc_user,
             rpc_pass,
-            can_sign: true,
+            signer: None,
+            network,
         }
+    }
+
+    /// Creates a WalletService with an attached signer for session-driven signing.
+    pub(crate) fn with_signer(wallet: bdk_wallet::Wallet, signer: Arc<dyn PsbtSigner>) -> Self {
+        let mut svc = Self::new(wallet);
+        svc.signer = Some(signer);
+        svc
     }
 
     /// Creates a watch-only WalletService that cannot sign transactions.
     pub fn new_watch_only(wallet: bdk_wallet::Wallet) -> Self {
-        let mut svc = Self::new(wallet);
-        svc.can_sign = false;
-        svc
+        Self::new(wallet)
     }
 
     /// Returns whether this wallet service can sign transactions.
+    /// Returns true only when a signer is attached AND the signer is allowed on the active network.
     pub fn can_sign(&self) -> bool {
-        self.can_sign
+        match &self.signer {
+            Some(signer) => signer.allowed_on(self.network),
+            None => false,
+        }
+    }
+
+    /// Returns the kind of signer attached to this wallet service.
+    /// Returns "mnemonic", "trezor", "ledger", or "none".
+    pub fn signer_kind(&self) -> String {
+        match &self.signer {
+            Some(signer) => signer.kind().to_string(),
+            None => "none".to_string(),
+        }
     }
 
     /// Returns a lock-free snapshot of the current sync state.
@@ -468,8 +491,15 @@ impl WalletService {
         fee_rate: u64,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
         // 0. ReadOnly guard — must run before any RPC contact or env checks
-        if !self.can_sign() {
-            return Err(AdminWalletError::ReadOnly);
+        let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
+
+        // 0b. Network capability check — before any sync/RPC/PSBT build
+        let network = {
+            let wallet = self.wallet.lock().await;
+            wallet.network()
+        };
+        if !signer.allowed_on(network) {
+            return Err(AdminWalletError::SignerNotAllowedOnNetwork);
         }
 
         // 1. Guard check
@@ -479,11 +509,6 @@ impl WalletService {
         self.sync().await?;
 
         // 3. Acquire wallet lock, build + sign PSBT, release
-        let network = {
-            let wallet = self.wallet.lock().await;
-            wallet.network()
-        };
-
         let commit_addr: bdk_wallet::bitcoin::Address<_> = commit_address
             .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
@@ -865,17 +890,20 @@ mod tests {
         assert!(!err.message.is_empty(), "error message must be non-empty");
     }
 
-    // Unit test (step 01-02): new().can_sign() returns true
+    // Unit test (step 01-02): with_signer().can_sign() returns true
     #[test]
-    fn new_can_sign_returns_true() {
+    fn with_signer_can_sign_returns_true() {
+        use crate::application::psbt_signer::MnemonicPsbtSigner;
         use crate::infrastructure::admin_wallet::load_admin_wallet;
         use bdk_wallet::bitcoin::Network;
+        use std::sync::Arc;
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let signer = Arc::new(MnemonicPsbtSigner::new(Network::Regtest));
+        let svc = WalletService::with_signer(wallet, signer);
 
-        assert!(svc.can_sign(), "new() must return can_sign=true");
+        assert!(svc.can_sign(), "with_signer() must return can_sign=true");
     }
 
     // Acceptance test (step 01-02): new_watch_only().can_sign() returns false

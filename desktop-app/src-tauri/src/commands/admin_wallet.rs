@@ -34,6 +34,8 @@ pub async fn wallet_session_init(
 pub struct WatchOnlyInitInput {
     pub xpub: String,
     pub network: Option<String>,
+    pub master_fingerprint: Option<u32>,
+    pub device_type: Option<String>,
 }
 
 #[tauri::command]
@@ -41,17 +43,66 @@ pub async fn wallet_session_init_watch_only(
     input: WatchOnlyInitInput,
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<(), String> {
-    wallet_session
-        .init_from_xpub(&input.xpub, input.network.as_deref())
-        .await
-        .map_err(serialize_wallet_error)
+    if let Some(fp) = input.master_fingerprint {
+        let device_type =
+            match input.device_type.as_deref() {
+                Some("trezor") => {
+                    desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType::Trezor
+                }
+                Some("ledger") => {
+                    desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType::Ledger
+                }
+                _ => return Err(
+                    "device_type must be 'trezor' or 'ledger' when master_fingerprint is provided"
+                        .to_string(),
+                ),
+            };
+        wallet_session
+            .init_from_xpub_with_hw(&input.xpub, fp, device_type, input.network.as_deref())
+            .await
+            .map_err(serialize_wallet_error)
+    } else {
+        wallet_session
+            .init_from_xpub(&input.xpub, input.network.as_deref())
+            .await
+            .map_err(serialize_wallet_error)
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminWalletSignStatus {
+    pub can_sign: bool,
+    pub signer_kind: String,
+    pub reason: Option<String>,
 }
 
 #[tauri::command]
 pub async fn admin_wallet_can_sign(
     wallet_session: tauri::State<'_, WalletSession>,
-) -> Result<bool, String> {
-    Ok(wallet_session.can_sign())
+) -> Result<AdminWalletSignStatus, String> {
+    let can_sign = wallet_session.can_sign();
+    let (signer_kind, reason) = if can_sign {
+        // Detect signer kind from the active session.
+        // HW signers report 'trezor' or 'ledger'; mnemonic reports 'mnemonic'.
+        match wallet_session.current() {
+            Some(svc) => {
+                let kind = svc.signer_kind();
+                (kind, None)
+            }
+            None => ("none".to_string(), Some("no-session".to_string())),
+        }
+    } else {
+        match wallet_session.current() {
+            None => ("none".to_string(), Some("no-session".to_string())),
+            Some(_) => ("none".to_string(), Some("watch-only-no-signer".to_string())),
+        }
+    };
+    Ok(AdminWalletSignStatus {
+        can_sign,
+        signer_kind,
+        reason,
+    })
 }
 
 #[derive(Debug, serde::Serialize)]

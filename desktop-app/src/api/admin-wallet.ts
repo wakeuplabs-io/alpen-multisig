@@ -101,6 +101,8 @@ export async function walletSessionInit(input: WalletSessionInitInput): Promise<
 export type WalletSessionInitWatchOnlyInput = {
 	xpub: string
 	network?: string
+	masterFingerprint?: number
+	deviceType?: string
 }
 
 export function walletSessionInitWatchOnly(input: WalletSessionInitWatchOnlyInput): Promise<ApiResult<null>> {
