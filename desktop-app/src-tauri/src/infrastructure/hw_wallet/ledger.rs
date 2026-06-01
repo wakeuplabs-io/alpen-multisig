@@ -384,31 +384,23 @@ pub fn get_account_xpub(path: &str) -> Result<String, String> {
     }
 }
 
-/// Returns the master fingerprint (first 4 bytes of hash160 of master public key) from the Ledger.
-/// Computed from the master xpub at path `m/`.
+/// Returns the master fingerprint from the Ledger device.
+/// Uses the BitcoinClient's native get_master_fingerprint method.
 pub fn get_master_fingerprint() -> Result<u32, String> {
-    use bitcoin::hashes::hash160;
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
-    let master_path = DerivationPath::from_str("m/").map_err(|e| format!("Invalid path: {e}"))?;
-
     if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
         let transport = SpeculosTransport::new(url);
         let client = BitcoinClient::new(transport);
         rt.block_on(async {
-            let master_xpub = client
-                .get_extended_pubkey(&master_path, false)
+            let fp = client
+                .get_master_fingerprint()
                 .await
-                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))?;
-            let hash = hash160::Hash::hash(&master_xpub.public_key.serialize());
-            let bytes = &hash[..4];
-            let mut arr = [0u8; 4];
-            arr.copy_from_slice(bytes);
-            Ok(u32::from_le_bytes(arr))
+                .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+            Ok(u32::from_le_bytes(fp.to_bytes()))
         })
     } else {
         let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
@@ -416,15 +408,11 @@ pub fn get_master_fingerprint() -> Result<u32, String> {
             .map_err(|e| format!("Ledger not found or locked: {e}"))?;
         let client = BitcoinClient::new(HidTransport(transport));
         rt.block_on(async {
-            let master_xpub = client
-                .get_extended_pubkey(&master_path, false)
+            let fp = client
+                .get_master_fingerprint()
                 .await
-                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))?;
-            let hash = hash160::Hash::hash(&master_xpub.public_key.serialize());
-            let bytes = &hash[..4];
-            let mut arr = [0u8; 4];
-            arr.copy_from_slice(bytes);
-            Ok(u32::from_le_bytes(arr))
+                .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+            Ok(u32::from_le_bytes(fp.to_bytes()))
         })
     }
 }
