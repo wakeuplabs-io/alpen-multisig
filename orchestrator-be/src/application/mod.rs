@@ -6,4 +6,5 @@
 //! `crate::infrastructure::action_codec` and `asm_role_membership`.
 
 pub(crate) mod proposals;
+pub(crate) mod psbt_signer;
 pub(crate) mod traits;
