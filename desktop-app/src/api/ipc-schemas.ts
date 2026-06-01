@@ -82,10 +82,10 @@ export const authSessionSchema = z.object({
 	membershipFetchedAtUnixMs: z.number(),
 })
 
-	export const authSessionResultSchema = z.object({
-		authenticated: z.boolean(),
-		session: nullishToNull(authSessionSchema),
-	})
+export const authSessionResultSchema = z.object({
+	authenticated: z.boolean(),
+	session: nullishToNull(authSessionSchema),
+})
 
 export const broadcastResultSchema = z.object({
 	actionId: z.string(),

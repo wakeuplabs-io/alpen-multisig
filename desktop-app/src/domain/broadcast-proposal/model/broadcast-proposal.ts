@@ -47,11 +47,7 @@ export function deriveBroadcastError(raw: string): BroadcastError {
 	}
 }
 
-function makeBroadcastError(
-	code: BroadcastErrorCode,
-	message: string,
-	recovery: BroadcastRecovery,
-): BroadcastError {
+function makeBroadcastError(code: BroadcastErrorCode, message: string, recovery: BroadcastRecovery): BroadcastError {
 	return { code, message, recovery }
 }
 
