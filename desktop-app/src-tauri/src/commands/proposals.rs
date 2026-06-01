@@ -302,7 +302,7 @@ pub async fn proposals_resubmit_reveal(
 
 #[cfg(test)]
 mod broadcast_error_code_tests {
-    use super::{broadcast_error_code, map_broadcast_error};
+    use super::{broadcast_error_code, map_broadcast_error, map_broadcast_error_with_boundary};
     use desktop_app::application::orchestrator_client::OrchestratorError;
     use desktop_app::application::proposals::BroadcastError;
 
@@ -425,6 +425,28 @@ mod broadcast_error_code_tests {
         );
     }
 
+    /// BE-14: BitcoinRpc failure AFTER broadcast boundary — code=BitcoinRpc, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true.
+    ///
+    /// When a Bitcoin RPC error occurs after submit_package was attempted (boundary=AFTER)
+    /// and a live PendingReveal exists, the error maps to code=BitcoinRpc with
+    /// canResubmit=true — the user can resubmit the reveal transaction.
+    /// Resubmit eligibility requires BOTH: AFTER-boundary AND a live PendingReveal.
+    #[test]
+    fn test_broadcast_error_bitcoin_rpc_after_boundary() {
+        let error = BroadcastError::BitcoinRpc("submit_package failed".to_string());
+
+        // AFTER boundary + live PendingReveal → canResubmit=true
+        let error_msg = map_broadcast_error_with_boundary(error, true, true);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "BitcoinRpc");
+        assert_eq!(parsed["canResubmit"], true);
+        assert!(
+            parsed["message"].as_str().unwrap().contains("resubmit"),
+            "AFTER boundary BitcoinRpc message should mention resubmit: {}",
+            parsed["message"]
+        );
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
@@ -473,8 +495,19 @@ fn broadcast_error_code(
     }
 }
 
-fn map_broadcast_error(error: BroadcastError) -> String {
-    let code = broadcast_error_code(&error, false, false);
+/// Pure helper: maps a BroadcastError to a structured JSON error string with boundary context.
+///
+/// `broadcast_reached`: whether the broadcast call was actually reached/attempted
+/// `has_pending`: whether a live PendingReveal exists for this action_id.
+///
+/// canResubmit = true only when BOTH: AFTER-boundary (broadcast_reached) AND live PendingReveal.
+fn map_broadcast_error_with_boundary(
+    error: BroadcastError,
+    broadcast_reached: bool,
+    has_pending: bool,
+) -> String {
+    let code = broadcast_error_code(&error, broadcast_reached, has_pending);
+    let can_resubmit = broadcast_reached && has_pending;
     let message = match &error {
         BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
             "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
@@ -484,7 +517,11 @@ fn map_broadcast_error(error: BroadcastError) -> String {
             format!("no pending reveal for action {action_id} — re-run broadcast")
         }
         BroadcastError::BitcoinRpc(msg) => {
-            format!("The Bitcoin node rejected or could not process the broadcast: {msg}")
+            if can_resubmit {
+                format!("The Bitcoin node rejected or could not process the broadcast: {msg}. You can resubmit the reveal.")
+            } else {
+                format!("The Bitcoin node rejected or could not process the broadcast: {msg}")
+            }
         }
         BroadcastError::Timeout { txid } => {
             format!("Broadcast sent but confirmation timed out for tx {txid}. You can resubmit the reveal.")
@@ -492,7 +529,11 @@ fn map_broadcast_error(error: BroadcastError) -> String {
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::ProposalFetch(e) => e.to_string(),
     };
-    serde_json::json!({ "code": code, "message": message }).to_string()
+    serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
+}
+
+fn map_broadcast_error(error: BroadcastError) -> String {
+    map_broadcast_error_with_boundary(error, false, false)
 }
 
 fn map_proposal_error(error: ProposalError) -> String {
