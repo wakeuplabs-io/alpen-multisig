@@ -29,7 +29,6 @@ async fn main() -> anyhow::Result<()> {
 
     let btc_client = Arc::new(infrastructure::bitcoin_rpc::HttpBitcoinRpcClient::new(
         &config.bitcoin_rpc_url,
-        config.bitcoin_wallet_name.as_deref(),
         &config.bitcoin_rpc_user,
         &config.bitcoin_rpc_pass,
     ));
@@ -52,7 +51,6 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
         )
-        .with_dev_mine(config.dev_mine_enabled)
     } else {
         tracing::warn!("DATABASE_URL not set — using in-memory storage (data will not persist)");
         let repo = Arc::new(infrastructure::memory_repo::InMemoryProposalRepository::new());
@@ -63,7 +61,6 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
         )
-        .with_dev_mine(config.dev_mine_enabled)
     };
 
     let cors = CorsLayer::new()

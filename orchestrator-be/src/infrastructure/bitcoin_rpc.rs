@@ -16,18 +16,6 @@ pub(crate) trait BitcoinRpcClient: Send + Sync {
     ///
     /// Fails if the transaction is not yet in a block.
     async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError>;
-
-    /// Generate a fresh address from the Bitcoin node wallet.
-    ///
-    /// Used by the dev mine endpoint to produce a valid coinbase recipient.
-    async fn get_new_address(&self) -> Result<String, AppError>;
-
-    /// Mine `count` blocks and send coinbase rewards to `address`.
-    ///
-    /// Returns the list of block hashes for the newly mined blocks.
-    /// Only available in regtest — gated by `DEV_MINE_ENABLED` at the handler level.
-    async fn generate_to_address(&self, count: u32, address: &str)
-        -> Result<Vec<String>, AppError>;
 }
 
 pub(crate) struct HttpBitcoinRpcClient {
@@ -38,13 +26,9 @@ pub(crate) struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub(crate) fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
-        let url = match wallet_name.filter(|w| !w.is_empty()) {
-            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
-            None => base_url.to_string(),
-        };
+    pub(crate) fn new(base_url: &str, user: &str, pass: &str) -> Self {
         Self {
-            url,
+            url: base_url.trim_end_matches('/').to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
             client: reqwest::Client::new(),
@@ -154,34 +138,6 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
                 AppError::BadRequest(format!(
                     "getblockheader: missing `height` for blockhash {blockhash}"
                 ))
-            })
-    }
-
-    async fn get_new_address(&self) -> Result<String, AppError> {
-        let result = self.call("getnewaddress", json!([])).await?;
-        result
-            .as_str()
-            .map(str::to_string)
-            .ok_or_else(|| AppError::Internal(anyhow::anyhow!("getnewaddress: unexpected result")))
-    }
-
-    async fn generate_to_address(
-        &self,
-        count: u32,
-        address: &str,
-    ) -> Result<Vec<String>, AppError> {
-        let result = self
-            .call("generatetoaddress", json!([count, address]))
-            .await?;
-        result
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect()
-            })
-            .ok_or_else(|| {
-                AppError::Internal(anyhow::anyhow!("generatetoaddress: unexpected result"))
             })
     }
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = ['orchestrator-be', 'desktop-app/src-tauri', 'e2e-tests']
+members = ['orchestrator-be', 'desktop-app/src-tauri', 'e2e-tests', 'regtest-dev-api']
 resolver = '2'
 
 # Vendored `trezor-client` 0.1.5: SLIP-0132 xpub normalization (see vendor README if present) and
