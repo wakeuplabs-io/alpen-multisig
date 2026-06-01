@@ -27,6 +27,11 @@ impl LedgerAdapter {
 }
 
 impl HwDevice for LedgerAdapter {
+    fn device_fingerprint(&self) -> u32 {
+        // TODO: query actual device fingerprint via Ledger HID protocol
+        0
+    }
+
     fn sign_psbt(&self, fingerprint: u32, psbt: &mut bitcoin::psbt::Psbt) -> Result<(), AppError> {
         self.sign_psbt(psbt, fingerprint)
     }

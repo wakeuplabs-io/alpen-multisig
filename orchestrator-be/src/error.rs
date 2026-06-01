@@ -28,6 +28,12 @@ pub enum AppError {
     #[allow(dead_code)]
     #[error("hardware wallet device disconnected")]
     HwDisconnected,
+
+    /// Hardware wallet signing failed due to device mismatch or signing error.
+    /// Used when the plugged-in device doesn't match the expected fingerprint.
+    #[allow(dead_code)]
+    #[error("hardware wallet signing failed: {0}")]
+    HwSigningFailed(String),
 }
 
 impl IntoResponse for AppError {
@@ -45,6 +51,11 @@ impl IntoResponse for AppError {
                 StatusCode::PRECONDITION_FAILED,
                 self.to_string(),
                 "hw_disconnected",
+            ),
+            AppError::HwSigningFailed(msg) => (
+                StatusCode::PRECONDITION_FAILED,
+                msg.clone(),
+                "hw_signing_failed",
             ),
             AppError::Internal(e) => {
                 tracing::error!("internal error: {e}");

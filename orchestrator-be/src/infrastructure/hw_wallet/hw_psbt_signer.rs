@@ -14,6 +14,9 @@ use crate::error::AppError;
 /// Real implementations (Ledger/Trezor) perform actual USB HID I/O.
 /// The device is opened by fingerprint at sign time — no live connection held.
 pub(crate) trait HwDevice: Send + Sync {
+    /// Returns the master fingerprint of the connected device.
+    fn device_fingerprint(&self) -> u32;
+
     /// Sign the PSBT in-place using on-device key material.
     ///
     /// The `fingerprint` is used to re-open the device at sign time.
@@ -90,6 +93,15 @@ impl PsbtSigner for HwPsbtSigner {
         _wallet: &mut bdk_wallet::Wallet,
         psbt: &mut bitcoin::psbt::Psbt,
     ) -> Result<(), AppError> {
+        // Verify the plugged-in device matches the expected fingerprint.
+        let actual = self.device.device_fingerprint();
+        if actual != self.master_fingerprint {
+            return Err(AppError::HwSigningFailed(format!(
+                "wrong device: expected fingerprint 0x{:08X}, got 0x{:08X}",
+                self.master_fingerprint, actual
+            )));
+        }
+
         // Re-open device by fingerprint and sign (spawn_blocking + 60s timeout
         // applied at the application-layer call site).
         self.device.sign_psbt(self.master_fingerprint, psbt)
@@ -105,6 +117,10 @@ impl PsbtSigner for HwPsbtSigner {
 struct StubHwDevice;
 
 impl HwDevice for StubHwDevice {
+    fn device_fingerprint(&self) -> u32 {
+        0 // stub has no fingerprint
+    }
+
     fn sign_psbt(
         &self,
         _fingerprint: u32,
@@ -143,12 +159,21 @@ mod tests {
     /// Supports device-absent simulation via interior mutability.
     struct FakeHwDevice {
         connected: Arc<AtomicBool>,
+        fingerprint: u32,
     }
 
     impl FakeHwDevice {
         fn new() -> Self {
             Self {
                 connected: Arc::new(AtomicBool::new(true)),
+                fingerprint: 0x12345678, // default matches typical test signer
+            }
+        }
+
+        fn with_fingerprint(fingerprint: u32) -> Self {
+            Self {
+                connected: Arc::new(AtomicBool::new(true)),
+                fingerprint,
             }
         }
 
@@ -158,6 +183,10 @@ mod tests {
     }
 
     impl HwDevice for FakeHwDevice {
+        fn device_fingerprint(&self) -> u32 {
+            self.fingerprint
+        }
+
         fn sign_psbt(
             &self,
             _fingerprint: u32,
@@ -183,9 +212,23 @@ mod tests {
     /// Fake hardware device that simulates a disconnect MID-SIGN operation.
     /// Automatically fails after processing the first input, simulating a device
     /// unplugged during HID communication (no external `disconnect()` call needed).
-    struct FakeHwDeviceMidSignDisconnect;
+    struct FakeHwDeviceMidSignDisconnect {
+        fingerprint: u32,
+    }
+
+    impl FakeHwDeviceMidSignDisconnect {
+        fn new() -> Self {
+            Self {
+                fingerprint: 0x12345678,
+            }
+        }
+    }
 
     impl HwDevice for FakeHwDeviceMidSignDisconnect {
+        fn device_fingerprint(&self) -> u32 {
+            self.fingerprint
+        }
+
         fn sign_psbt(
             &self,
             _fingerprint: u32,
@@ -409,7 +452,7 @@ mod tests {
             Network::Regtest,
             "tpubD6NzVbkrYhZ4X8L36T1DKRzVJQKJH7YbF3xGqVz5k3Z9w8R7T6Y5X4W3V2U1S0",
             0x12345678,
-            Box::new(FakeHwDeviceMidSignDisconnect),
+            Box::new(FakeHwDeviceMidSignDisconnect::new()),
         )
         .expect("signer must be created");
 
@@ -432,6 +475,44 @@ mod tests {
             matches!(result, Err(AppError::HwDisconnected)),
             "sign_psbt must return HwDisconnected when device disconnects mid-sign: {:?}",
             result
+        );
+    }
+
+    #[test]
+    fn test_hw_psbt_signer_fingerprint_mismatch() {
+        // Given: HwPsbtSigner initialized with fingerprint A (0x12345678),
+        // but a different device with fingerprint B (0xDEADBEEF) is plugged in.
+        let wrong_device = FakeHwDevice::with_fingerprint(0xDEADBEEF);
+        let signer = HwPsbtSigner::with_device(
+            Network::Regtest,
+            "tpubD6NzVbkrYhZ4X8L36T1DKRzVJQKJH7YbF3xGqVz5k3Z9w8R7T6Y5X4W3V2U1S0",
+            0x12345678, // expected fingerprint A
+            Box::new(wrong_device),
+        )
+        .expect("signer must be created");
+
+        let mut wallet = build_test_wallet(Network::Regtest);
+        let change_addr = wallet.peek_address(KeychainKind::Internal, 0).address;
+
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(change_addr.script_pubkey(), Amount::from_sat(50_000));
+        tx_builder.fee_rate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        let mut psbt = tx_builder.finish().expect("PSBT must build");
+
+        // When: sign_psbt is called through the driving port (PsbtSigner trait)
+        let result = signer.sign_psbt(&mut wallet, &mut psbt);
+
+        // Then: signing fails with HwSigningFailed indicating wrong device;
+        // no broadcast occurs (PSBT is not mutated with signatures).
+        assert!(
+            matches!(result, Err(AppError::HwSigningFailed(_))),
+            "sign_psbt must return HwSigningFailed on fingerprint mismatch: {:?}",
+            result
+        );
+        // Verify PSBT was NOT signed (no tap_key_sig added)
+        assert!(
+            psbt.inputs.iter().all(|i| i.tap_key_sig.is_none()),
+            "PSBT must NOT have signatures after fingerprint mismatch"
         );
     }
 }
