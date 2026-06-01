@@ -1,6 +1,6 @@
 import type { BroadcastStatus } from '@/api/proposals'
 
-export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting' | 'done' | 'error'
+export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'awaiting-device' | 'broadcasting' | 'done' | 'error'
 
 export type BroadcastErrorCode =
 	| 'insufficient_fee'

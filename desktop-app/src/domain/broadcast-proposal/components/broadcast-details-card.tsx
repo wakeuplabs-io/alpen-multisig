@@ -4,6 +4,8 @@ import type { AdminWalletError } from '@/api/admin-wallet'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
+import type { BroadcastPhase } from '../model/broadcast-proposal'
+import { BroadcastDevicePrompt } from './broadcast-device-prompt'
 
 type AdminWalletInfoView = {
 	address: string
@@ -20,6 +22,7 @@ type Props = {
 	utxoCount?: number
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
+	phase?: BroadcastPhase
 }
 
 function relativeTime(isoStr: string): string {
@@ -54,6 +57,7 @@ export function BroadcastDetailsCard({
 	utxoCount,
 	lastSyncedAt,
 	syncError,
+	phase,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -62,6 +66,11 @@ export function BroadcastDetailsCard({
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+			{phase === 'awaiting-device' && (
+				<div className="border-b border-[#f3f4f6] p-6">
+					<BroadcastDevicePrompt />
+				</div>
+			)}
 			{proposal && (
 				<div className="border-b border-[#f3f4f6] p-6 pb-5">
 					<div className="flex items-start justify-between gap-3">

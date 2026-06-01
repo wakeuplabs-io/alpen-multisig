@@ -6,6 +6,7 @@ import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
@@ -30,6 +31,7 @@ export function BroadcastProposalScreen() {
 	const { adminWalletInfo } = useAdminWalletInfo()
 	const { canSign } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
+	const signerKind: SignerKind = canSign ? 'mnemonic' : 'hardware'
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
@@ -59,6 +61,7 @@ export function BroadcastProposalScreen() {
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
+		signerKind,
 	)
 
 	async function handleBack() {
@@ -78,8 +81,9 @@ export function BroadcastProposalScreen() {
 		: 'Unknown'
 
 	const isLoading = phase === 'idle' || phase === 'preparing'
-	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
-	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
+	const showDetails =
+		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
+	const showProgress = phase === 'awaiting-device' || phase === 'broadcasting' || phase === 'done' || phase === 'error'
 
 	const utxoCount = isAdminWalletMode && utxos != null ? utxos.length : undefined
 	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined
@@ -149,6 +153,7 @@ export function BroadcastProposalScreen() {
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting'}
 							canSign={canSign}
+							phase={phase}
 							adminWalletInfo={adminWalletInfo}
 							utxoCount={utxoCount}
 							lastSyncedAt={lastSyncedAt}

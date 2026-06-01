@@ -56,13 +56,14 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	const isError = phase === 'error'
 	const isDone = phase === 'done'
 	const isEnacted = proposalStatus === 'enacted'
+	const isAwaitingDevice = phase === 'awaiting-device'
 
 	// Commit (0) + Reveal (1) are broadcast together (one package), so they light up
 	// simultaneously while broadcasting; Enactment (2) follows after confirmation.
 	const BROADCAST_GROUP_LAST = 1
 	function stepState(index: number): 'done' | 'active' | 'pending' {
 		if (isDone) return 'done'
-		if (phase === 'broadcasting' && index <= BROADCAST_GROUP_LAST) return 'active'
+		if ((phase === 'broadcasting' || isAwaitingDevice) && index <= BROADCAST_GROUP_LAST) return 'active'
 		return 'pending'
 	}
 
@@ -76,7 +77,9 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 							: 'Reveal confirmed — awaiting enactment'
 						: isError
 							? 'Broadcast failed'
-							: 'Broadcasting…'}
+							: isAwaitingDevice
+								? 'Waiting for device…'
+								: 'Broadcasting…'}
 				</h3>
 			</div>
 

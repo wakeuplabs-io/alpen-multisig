@@ -12,6 +12,8 @@ import {
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 import { deriveBroadcastError } from '../model/broadcast-proposal'
 
+export type SignerKind = 'hardware' | 'mnemonic'
+
 const inFlightActionIds = new Set<string>()
 
 type UseBroadcastProposalReturn = {
@@ -42,7 +44,11 @@ function buildBroadcastInput(baseUrl: string, actionId: string): BroadcastInput 
 	return { baseUrl, actionId }
 }
 
-export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroadcastProposalReturn {
+export function useBroadcastProposal(
+	baseUrl: string,
+	actionId: string,
+	signerKind: SignerKind = 'mnemonic',
+): UseBroadcastProposalReturn {
 	const [phase, setPhase] = useState<BroadcastPhase>('idle')
 	const [bundle, setBundle] = useState<PrepareBroadcastResult | null>(null)
 	const [result, setResult] = useState<BroadcastResult | null>(null)
@@ -119,8 +125,12 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		}
 		broadcastStarted.current = true
 		inFlightActionIds.add(actionId)
-		setPhase('broadcasting')
 		setError(null)
+		if (signerKind === 'hardware') {
+			setPhase('awaiting-device')
+			await new Promise((resolve) => setTimeout(resolve, 800))
+		}
+		setPhase('broadcasting')
 		try {
 			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
 			if (!res.ok) {
