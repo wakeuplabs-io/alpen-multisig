@@ -1,39 +1,47 @@
-import assert from 'node:assert/strict'
-import { deriveBroadcastError } from '../broadcast-proposal.ts'
+import { describe, it, expect } from 'vitest'
+import { deriveBroadcastError } from '../broadcast-proposal'
 
-// Structured JSON parsing
-const insufficientFee = deriveBroadcastError(JSON.stringify({ code: 'insufficient_fee', message: 'Fee rate too low' }))
-assert.equal(insufficientFee.code, 'insufficient_fee')
-assert.equal(insufficientFee.message, 'Fee rate too low')
-assert.equal(insufficientFee.recovery, 'retry')
+describe('deriveBroadcastError', () => {
+	describe('structured JSON parsing', () => {
+		it('parses a structured error with code, message, and recovery', () => {
+			const result = deriveBroadcastError(JSON.stringify({ code: 'device_disconnected', message: 'Hardware wallet not detected' }))
+			expect(result.code).toBe('device_disconnected')
+			expect(result.message).toBe('Hardware wallet not detected')
+			expect(result.recovery).toBe('reconnect-device')
+		})
 
-// All code → recovery mappings (single iteration, reports all at once)
-const allMappings: Array<{ code: string; expected: string }> = [
-	{ code: 'insufficient_fee', expected: 'retry' },
-	{ code: 'mempool_rejected', expected: 'retry' },
-	{ code: 'double_spend', expected: 'retry' },
-	{ code: 'consensus_violation', expected: 'resubmit-reveal' },
-	{ code: 'invalid_reveal', expected: 'resubmit-reveal' },
-	{ code: 'orphan_commit', expected: 'resubmit-reveal' },
-	{ code: 'device_disconnected', expected: 'reconnect-device' },
-	{ code: 'session_expired', expected: 're-auth' },
-	{ code: 'unknown_error', expected: 'retry' },
-]
-for (const { code, expected } of allMappings) {
-	const result = deriveBroadcastError(JSON.stringify({ code, message: 'test' }))
-	assert.equal(result.code, code, `${code} should parse`)
-	assert.equal(result.recovery, expected, `${code} → ${expected}`)
-}
+		it('maps all error codes to correct recovery actions', () => {
+			const mappings: Array<{ code: string; expected: string }> = [
+				{ code: 'insufficient_fee', expected: 'retry' },
+				{ code: 'mempool_rejected', expected: 'retry' },
+				{ code: 'double_spend', expected: 'retry' },
+				{ code: 'consensus_violation', expected: 'resubmit-reveal' },
+				{ code: 'invalid_reveal', expected: 'resubmit-reveal' },
+				{ code: 'orphan_commit', expected: 'resubmit-reveal' },
+				{ code: 'device_disconnected', expected: 'reconnect-device' },
+				{ code: 'session_expired', expected: 're-auth' },
+				{ code: 'unknown_error', expected: 'retry' },
+			]
+			for (const { code, expected } of mappings) {
+				const result = deriveBroadcastError(JSON.stringify({ code, message: 'test' }))
+				expect(result.code).toBe(code)
+				expect(result.recovery).toBe(expected)
+			}
+		})
 
-// Unknown code falls back to unknown_error
-const unknownCode = deriveBroadcastError(JSON.stringify({ code: 'weird_thing', message: 'huh' }))
-assert.equal(unknownCode.code, 'unknown_error')
-assert.equal(unknownCode.recovery, 'retry')
+		it('falls back to unknown_error for unrecognized codes', () => {
+			const result = deriveBroadcastError(JSON.stringify({ code: 'weird_thing', message: 'huh' }))
+			expect(result.code).toBe('unknown_error')
+			expect(result.recovery).toBe('retry')
+		})
+	})
 
-// Legacy bare string fallback (backward compatible)
-const legacy = deriveBroadcastError('Fee rate too low')
-assert.equal(legacy.code, 'Unknown')
-assert.equal(legacy.message, 'Fee rate too low')
-assert.equal(legacy.recovery, 'retry')
-
-console.log('derive-broadcast-error: all assertions passed.')
+	describe('legacy string fallback', () => {
+		it('returns unknown_error for bare error strings (backward compatible)', () => {
+			const result = deriveBroadcastError('Fee rate too low')
+			expect(result.code).toBe('unknown_error')
+			expect(result.message).toBe('Fee rate too low')
+			expect(result.recovery).toBe('retry')
+		})
+	})
+})

@@ -92,9 +92,9 @@ export function BroadcastProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { adminWalletInfo } = useAdminWalletInfo()
-	const { canSign, canSignReason } = useAdminWalletCapability()
+	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
-	const signerKind: SignerKind = canSign ? 'mnemonic' : 'hardware'
+	const signerKind: SignerKind = rawSignerKind === 'none' ? 'mnemonic' : rawSignerKind
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()

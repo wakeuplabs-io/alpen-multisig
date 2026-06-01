@@ -10,6 +10,7 @@ export type BroadcastErrorCode =
 	| 'invalid_reveal'
 	| 'orphan_commit'
 	| 'device_disconnected'
+	| 'hw_signing_failed'
 	| 'session_expired'
 	| 'unknown_error'
 
@@ -29,6 +30,7 @@ const CODE_RECOVERY_MAP: Record<string, BroadcastRecovery> = {
 	invalid_reveal: 'resubmit-reveal',
 	orphan_commit: 'resubmit-reveal',
 	device_disconnected: 'reconnect-device',
+	hw_signing_failed: 'reconnect-device',
 	session_expired: 're-auth',
 	unknown_error: 'retry',
 }
