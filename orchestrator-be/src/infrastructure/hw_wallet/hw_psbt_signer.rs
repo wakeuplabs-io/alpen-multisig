@@ -180,6 +180,34 @@ mod tests {
         }
     }
 
+    /// Fake hardware device that simulates a disconnect MID-SIGN operation.
+    /// Automatically fails after processing the first input, simulating a device
+    /// unplugged during HID communication (no external `disconnect()` call needed).
+    struct FakeHwDeviceMidSignDisconnect;
+
+    impl HwDevice for FakeHwDeviceMidSignDisconnect {
+        fn sign_psbt(
+            &self,
+            _fingerprint: u32,
+            psbt: &mut bitcoin::psbt::Psbt,
+        ) -> Result<(), AppError> {
+            // Simulate mid-sign disconnect: process first input, then fail on
+            // subsequent inputs as if the HID device was unplugged mid-operation.
+            for (i, input) in psbt.inputs.iter_mut().enumerate() {
+                if i > 0 {
+                    return Err(AppError::HwDisconnected);
+                }
+                let dummy_sig = bitcoin::secp256k1::schnorr::Signature::from_slice(&[0u8; 64])
+                    .expect("valid dummy sig");
+                input.tap_key_sig = Some(bitcoin::taproot::Signature {
+                    signature: dummy_sig,
+                    sighash_type: bitcoin::sighash::TapSighashType::Default,
+                });
+            }
+            Ok(())
+        }
+    }
+
     fn build_test_wallet(network: bitcoin::Network) -> bdk_wallet::Wallet {
         let mnemonic = Mnemonic::parse(TEST_MNEMONIC).expect("valid mnemonic");
         let seed = mnemonic.to_seed("");
@@ -224,6 +252,83 @@ mod tests {
                     hash: BlockHash::all_zeros(),
                 },
                 confirmation_time: 1000,
+            },
+        );
+
+        wallet
+    }
+
+    /// Build a test wallet with 2 confirmed UTXOs (for multi-input PSBT tests).
+    fn build_test_wallet_multi_utxo(network: bitcoin::Network) -> bdk_wallet::Wallet {
+        let mnemonic = Mnemonic::parse(TEST_MNEMONIC).expect("valid mnemonic");
+        let seed = mnemonic.to_seed("");
+        let secp = Secp256k1::new();
+        let xpriv = Xpriv::new_master(network, &seed).expect("master key");
+        let path = DerivationPath::from_str("m/86'/0'/73'").expect("valid path");
+        let account_xpriv = xpriv.derive_priv(&secp, &path).expect("derive");
+
+        let external_desc = format!("tr({}/0/*)", account_xpriv);
+        let internal_desc = format!("tr({}/1/*)", account_xpriv);
+
+        let mut wallet = bdk_wallet::Wallet::create(external_desc, internal_desc)
+            .network(network)
+            .create_wallet_no_persist()
+            .expect("wallet creation");
+
+        let receive_addr_0 = wallet.peek_address(KeychainKind::External, 0).address;
+        let receive_addr_1 = wallet.peek_address(KeychainKind::External, 1).address;
+
+        insert_checkpoint(
+            &mut wallet,
+            BlockId {
+                height: 100,
+                hash: BlockHash::all_zeros(),
+            },
+        );
+
+        // First UTXO
+        let funding_tx_0 = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: receive_addr_0.script_pubkey(),
+            }],
+        };
+        insert_tx(&mut wallet, funding_tx_0.clone());
+        insert_anchor(
+            &mut wallet,
+            funding_tx_0.compute_txid(),
+            ConfirmationBlockTime {
+                block_id: BlockId {
+                    height: 100,
+                    hash: BlockHash::all_zeros(),
+                },
+                confirmation_time: 1000,
+            },
+        );
+
+        // Second UTXO
+        let funding_tx_1 = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: receive_addr_1.script_pubkey(),
+            }],
+        };
+        insert_tx(&mut wallet, funding_tx_1.clone());
+        insert_anchor(
+            &mut wallet,
+            funding_tx_1.compute_txid(),
+            ConfirmationBlockTime {
+                block_id: BlockId {
+                    height: 101,
+                    hash: BlockHash::all_zeros(),
+                },
+                confirmation_time: 1010,
             },
         );
 
@@ -293,6 +398,39 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::HwDisconnected)),
             "sign_psbt must return HwDisconnected when device is absent: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_hw_psbt_signer_device_disconnect_mid_sign_returns_error() {
+        // Given: Hardware signer with a fake device that disconnects mid-sign
+        let signer = HwPsbtSigner::with_device(
+            Network::Regtest,
+            "tpubD6NzVbkrYhZ4X8L36T1DKRzVJQKJH7YbF3xGqVz5k3Z9w8R7T6Y5X4W3V2U1S0",
+            0x12345678,
+            Box::new(FakeHwDeviceMidSignDisconnect),
+        )
+        .expect("signer must be created");
+
+        // Multi-input PSBT so mid-sign disconnect can trigger (device unplugged
+        // after first input is signed, before second).
+        let mut wallet = build_test_wallet_multi_utxo(Network::Regtest);
+        let change_addr = wallet.peek_address(KeychainKind::Internal, 0).address;
+
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(change_addr.script_pubkey(), Amount::from_sat(150_000));
+        tx_builder.fee_rate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        let mut psbt = tx_builder.finish().expect("PSBT must build");
+        assert!(psbt.inputs.len() >= 2, "need 2+ inputs for mid-sign test");
+
+        // When: sign_psbt is called through the driving port (PsbtSigner trait)
+        let result = signer.sign_psbt(&mut wallet, &mut psbt);
+
+        // Then: signing fails with HwDisconnected — no broadcast occurs
+        assert!(
+            matches!(result, Err(AppError::HwDisconnected)),
+            "sign_psbt must return HwDisconnected when device disconnects mid-sign: {:?}",
             result
         );
     }
