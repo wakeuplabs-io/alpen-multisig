@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { Paginator } from '@/components/paginator'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
 import {
 	CheckCircleEmeraldIcon,
@@ -9,6 +10,9 @@ import {
 } from '@/assets/icons'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
+const PAGE_SIZE = 10
+
+type Tab = 'pending' | 'past'
 
 type Props = {
 	authorityLabel: string
@@ -43,19 +47,29 @@ export function ProposalsDashboard({
 	onViewProposal,
 	onCancelProposal,
 }: Props) {
-	const isEmpty =
-		!isLoading &&
-		!error &&
-		quorumReached.length + pending.length + executedOrCanceled.length + expiredOrSkipped.length === 0
+	const [activeTab, setActiveTab] = useState<Tab>('pending')
+	const [pastPage, setPastPage] = useState(1)
+
+	const activeProposals = [...quorumReached, ...pending]
+	const pastProposals = [...executedOrCanceled, ...expiredOrSkipped]
+	const totalPastPages = Math.ceil(pastProposals.length / PAGE_SIZE)
+	const pagedPastProposals = pastProposals.slice((pastPage - 1) * PAGE_SIZE, pastPage * PAGE_SIZE)
+
+	const isEmpty = !isLoading && !error && activeProposals.length === 0 && pastProposals.length === 0
+
+	const handleTabChange = (tab: Tab) => {
+		setActiveTab(tab)
+		setPastPage(1)
+	}
 
 	return (
-		<section className="mx-auto w-full max-w-[800px]">
+		<section className="mx-auto w-full max-w-200">
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
 					<h1 className="m-0 font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
 						Proposals
 					</h1>
-					<p className="m-0 mt-1 text-[13px] leading-[1.5] text-[#6b7280]">
+					<p className="m-0 mt-1 text-[13px] leading-normal text-[#6b7280]">
 						Proposals you can sign, broadcast, or review under {authorityLabel}.
 					</p>
 				</div>
@@ -90,62 +104,172 @@ export function ProposalsDashboard({
 			) : isEmpty ? (
 				<EmptyState authorityLabel={authorityLabel} onCreateProposal={onCreateProposal} />
 			) : (
-				<div className="flex flex-col gap-7">
-					<ProposalGroup
-						title="Quorum reached"
-						count={quorumReached.length}
-						groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
-						initialOpen
-						emptyMessage="No proposal has reached quorum yet."
-						proposals={quorumReached}
-						signerPubkey={signerPubkey}
-						onSignProposal={onSignProposal}
-						onBroadcastProposal={onBroadcastProposal}
-						onViewProposal={onViewProposal}
-						onCancelProposal={onCancelProposal}
-					/>
-					<ProposalGroup
-						title="Pending"
-						count={pending.length}
-						groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
-						initialOpen
-						emptyMessage="No proposals are currently collecting signatures."
-						proposals={pending}
-						signerPubkey={signerPubkey}
-						onSignProposal={onSignProposal}
-						onBroadcastProposal={onBroadcastProposal}
-						onViewProposal={onViewProposal}
-						onCancelProposal={onCancelProposal}
-					/>
-					<ProposalGroup
-						title="Executed & Canceled"
-						count={executedOrCanceled.length}
-						groupIcon={null}
-						initialOpen={false}
-						emptyMessage="No executed or canceled proposals yet."
-						proposals={executedOrCanceled}
-						signerPubkey={signerPubkey}
-						onSignProposal={onSignProposal}
-						onBroadcastProposal={onBroadcastProposal}
-						onViewProposal={onViewProposal}
-						onCancelProposal={onCancelProposal}
-					/>
-					<ProposalGroup
-						title="Expired / Skipped"
-						count={expiredOrSkipped.length}
-						groupIcon={null}
-						initialOpen={false}
-						emptyMessage="No expired proposals."
-						proposals={expiredOrSkipped}
-						signerPubkey={signerPubkey}
-						onSignProposal={onSignProposal}
-						onBroadcastProposal={onBroadcastProposal}
-						onViewProposal={onViewProposal}
-						onCancelProposal={onCancelProposal}
-					/>
-				</div>
+				<>
+					{/* Tabs */}
+					<div className="mb-5 flex gap-0.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] p-1">
+						{(['pending', 'past'] as Tab[]).map((tab) => (
+							<button
+								key={tab}
+								type="button"
+								className="flex-1 rounded-lg py-2 text-[13px] font-medium transition"
+								style={
+									activeTab === tab
+										? { background: '#fff', color: '#0a0a0a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
+										: { background: 'transparent', color: '#6b7280' }
+								}
+								onClick={() => handleTabChange(tab)}
+							>
+								{tab === 'pending' ? 'Pending' : 'Past'}
+								{tab === 'pending' && activeProposals.length > 0 && (
+									<span
+										className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+										style={
+											activeTab === 'pending'
+												? { background: '#0a0a0a', color: '#fff' }
+												: { background: '#e5e7eb', color: '#6b7280' }
+										}
+									>
+										{activeProposals.length}
+									</span>
+								)}
+							</button>
+						))}
+					</div>
+
+					{/* Tab content */}
+					{activeTab === 'pending' ? (
+						<PendingTab
+							quorumReached={quorumReached}
+							pending={pending}
+							signerPubkey={signerPubkey}
+							onSignProposal={onSignProposal}
+							onBroadcastProposal={onBroadcastProposal}
+							onViewProposal={onViewProposal}
+							onCancelProposal={onCancelProposal}
+						/>
+					) : (
+						<PastTab
+							proposals={pagedPastProposals}
+							totalProposals={pastProposals.length}
+							page={pastPage}
+							totalPages={totalPastPages}
+							signerPubkey={signerPubkey}
+							onPageChange={setPastPage}
+							onSignProposal={onSignProposal}
+							onBroadcastProposal={onBroadcastProposal}
+							onViewProposal={onViewProposal}
+							onCancelProposal={onCancelProposal}
+						/>
+					)}
+				</>
 			)}
 		</section>
+	)
+}
+
+function PendingTab({
+	quorumReached,
+	pending,
+	signerPubkey,
+	onSignProposal,
+	onBroadcastProposal,
+	onViewProposal,
+	onCancelProposal,
+}: {
+	quorumReached: Proposal[]
+	pending: Proposal[]
+	signerPubkey: string | null
+	onSignProposal: (actionId: string) => void
+	onBroadcastProposal: (actionId: string) => void
+	onViewProposal: (actionId: string) => void
+	onCancelProposal: (actionId: string) => void
+}) {
+	if (quorumReached.length === 0 && pending.length === 0) {
+		return (
+			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-[13px] text-[#9ca3af]">
+				No proposals are currently collecting signatures.
+			</div>
+		)
+	}
+
+	return (
+		<div className="flex flex-col gap-7">
+			{quorumReached.length > 0 && (
+				<ProposalGroup
+					title="Quorum reached"
+					count={quorumReached.length}
+					groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
+					proposals={quorumReached}
+					signerPubkey={signerPubkey}
+					onSignProposal={onSignProposal}
+					onBroadcastProposal={onBroadcastProposal}
+					onViewProposal={onViewProposal}
+					onCancelProposal={onCancelProposal}
+				/>
+			)}
+			{pending.length > 0 && (
+				<ProposalGroup
+					title="Pending"
+					count={pending.length}
+					groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
+					proposals={pending}
+					signerPubkey={signerPubkey}
+					onSignProposal={onSignProposal}
+					onBroadcastProposal={onBroadcastProposal}
+					onViewProposal={onViewProposal}
+					onCancelProposal={onCancelProposal}
+				/>
+			)}
+		</div>
+	)
+}
+
+function PastTab({
+	proposals,
+	totalProposals,
+	page,
+	totalPages,
+	signerPubkey,
+	onPageChange,
+	onSignProposal,
+	onBroadcastProposal,
+	onViewProposal,
+	onCancelProposal,
+}: {
+	proposals: Proposal[]
+	totalProposals: number
+	page: number
+	totalPages: number
+	signerPubkey: string | null
+	onPageChange: (page: number) => void
+	onSignProposal: (actionId: string) => void
+	onBroadcastProposal: (actionId: string) => void
+	onViewProposal: (actionId: string) => void
+	onCancelProposal: (actionId: string) => void
+}) {
+	if (totalProposals === 0) {
+		return (
+			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-[13px] text-[#9ca3af]">
+				No past proposals yet.
+			</div>
+		)
+	}
+
+	return (
+		<div className="flex flex-col gap-2.5">
+			{proposals.map((proposal) => (
+				<ProposalCard
+					key={proposal.actionId}
+					proposal={proposal}
+					signerPubkey={signerPubkey}
+					onSignProposal={onSignProposal}
+					onBroadcastProposal={onBroadcastProposal}
+					onViewProposal={onViewProposal}
+					onCancelProposal={onCancelProposal}
+				/>
+			))}
+			<Paginator page={page} totalPages={totalPages} onPageChange={onPageChange} />
+		</div>
 	)
 }
 
@@ -175,8 +299,6 @@ function ProposalGroup({
 	title,
 	count,
 	groupIcon,
-	initialOpen,
-	emptyMessage,
 	proposals,
 	signerPubkey,
 	onSignProposal,
@@ -187,8 +309,6 @@ function ProposalGroup({
 	title: string
 	count: number
 	groupIcon: ReactNode
-	initialOpen: boolean
-	emptyMessage: string
 	proposals: Proposal[]
 	signerPubkey: string | null
 	onSignProposal: (actionId: string) => void
@@ -196,7 +316,7 @@ function ProposalGroup({
 	onViewProposal: (actionId: string) => void
 	onCancelProposal: (actionId: string) => void
 }) {
-	const [open, setOpen] = useState(initialOpen)
+	const [open, setOpen] = useState(true)
 
 	return (
 		<section>
@@ -213,7 +333,7 @@ function ProposalGroup({
 				/>
 				{groupIcon}
 				<h2
-					className="m-0 text-[13px] font-semibold uppercase tracking-[0.05em]"
+					className="m-0 text-[13px] font-semibold uppercase tracking-wider"
 					style={{ color: '#6b7280', fontFamily: 'inherit' }}
 				>
 					{title}
@@ -221,26 +341,21 @@ function ProposalGroup({
 				</h2>
 			</button>
 
-			{open &&
-				(proposals.length === 0 ? (
-					<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-[13px] text-[#9ca3af]">
-						{emptyMessage}
-					</div>
-				) : (
-					<div className="flex flex-col gap-2.5">
-						{proposals.map((proposal) => (
-							<ProposalCard
-								key={proposal.actionId}
-								proposal={proposal}
-								signerPubkey={signerPubkey}
-								onSignProposal={onSignProposal}
-								onBroadcastProposal={onBroadcastProposal}
-								onViewProposal={onViewProposal}
-								onCancelProposal={onCancelProposal}
-							/>
-						))}
-					</div>
-				))}
+			{open && (
+				<div className="flex flex-col gap-2.5">
+					{proposals.map((proposal) => (
+						<ProposalCard
+							key={proposal.actionId}
+							proposal={proposal}
+							signerPubkey={signerPubkey}
+							onSignProposal={onSignProposal}
+							onBroadcastProposal={onBroadcastProposal}
+							onViewProposal={onViewProposal}
+							onCancelProposal={onCancelProposal}
+						/>
+					))}
+				</div>
+			)}
 		</section>
 	)
 }
@@ -317,9 +432,9 @@ function ProposalCard({
 					</p>
 				</div>
 
-				<div className="h-[7px] rounded-full bg-[#ebedf0]">
+				<div className="h-1.75 rounded-full bg-[#ebedf0]">
 					<div
-						className="h-[7px] rounded-full transition-all"
+						className="h-1.75 rounded-full transition-all"
 						style={{
 							width: `${signaturesProgress}%`,
 							background: hasQuorum ? '#0f9d7a' : '#d97706',
@@ -412,13 +527,11 @@ function buildProposalTitle(proposal: Proposal): string {
 
 function inferProposalType(proposal: Proposal): string {
 	if (proposal.kind === 'cancel') return 'Cancel'
-	if (proposal.authority.toLowerCase().includes('sequencer')) {
-		return 'Sequencer update'
+	if (proposal.actionType === 'vk_update') return 'Verification key update'
+	if (proposal.actionType === 'multisig_update') {
+		return proposal.authority.toLowerCase().includes('sequencer') ? 'Sequencer update' : 'Signer update'
 	}
-	if (proposal.actionHex.toLowerCase().startsWith('0x01')) {
-		return 'Verification key update'
-	}
-	return 'Signer update'
+	return 'Unknown'
 }
 
 const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =

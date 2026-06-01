@@ -12,6 +12,8 @@ strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
 strata-asm-common.workspace = true
 strata-asm-proto-admin = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }

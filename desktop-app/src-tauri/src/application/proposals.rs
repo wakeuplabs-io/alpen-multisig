@@ -1168,8 +1168,16 @@ mod tests {
             Ok(())
         }
 
+        async fn get_new_address(&self) -> Result<String, String> {
+            Ok("bcrt1qmockaddress0000000000000000000000000000".to_string())
+        }
+
         async fn submit_package(&self, _: &[String]) -> Result<(), String> {
             self.submit_package_result.clone()
+        }
+
+        async fn get_block_count(&self) -> Result<u64, String> {
+            Ok(0)
         }
     }
 

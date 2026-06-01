@@ -15,6 +15,8 @@ export type BroadcastStatus =
 
 export type ProposalKind = 'update' | 'cancel'
 
+export type ActionType = 'multisig_update' | 'vk_update' | 'cancel' | 'unknown'
+
 export type CancelProposalSummary = {
 	actionId: string
 	status: ProposalStatus
@@ -29,6 +31,7 @@ export type Proposal = {
 	status: ProposalStatus
 	requiredSignatures: number
 	actionHex: string
+	actionType: ActionType
 	signatures: Array<{
 		signerPubkey: string
 		signatureHex: string

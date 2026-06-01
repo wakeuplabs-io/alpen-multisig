@@ -113,7 +113,9 @@ export function BlockPayoutsDashboard({
 				<PasteSignaturesModal txId={pasteTxId} onSubmit={handlePasteSignatures} onClose={closeModal} />
 			)}
 
-			{activeModal?.kind === 'create' && <CreateBlockPayoutModal onConfirm={handleCreateTx} onClose={closeModal} />}
+			{activeModal?.kind === 'create' && (
+				<CreateBlockPayoutModal walletBalanceSats={500_000} onConfirm={handleCreateTx} onClose={closeModal} />
+			)}
 
 			{/* Toast */}
 			{toast && (

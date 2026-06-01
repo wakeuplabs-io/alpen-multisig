@@ -3,7 +3,12 @@ import type { BlockPayoutInput, FalseClaimReport, ParsedReport } from '../model/
 
 const MAX_INPUTS = 50
 
+const ESTIMATED_VBYTES_OVERHEAD = 11
+const ESTIMATED_VBYTES_PER_INPUT = 68
+const ESTIMATED_VBYTES_OUTPUT = 31
+
 type Props = {
+	walletBalanceSats: number
 	onConfirm: (inputs: BlockPayoutInput[], feeRateSatPerVb: number) => void
 	onClose: () => void
 }
@@ -68,7 +73,7 @@ function truncate(str: string, head = 16, tail = 6): string {
 	return `${str.slice(0, head)}…${str.slice(-tail)}`
 }
 
-export function CreateBlockPayoutModal({ onConfirm, onClose }: Props) {
+export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }: Props) {
 	const [step, setStep] = useState<Step>(1)
 	const [rawReports, setRawReports] = useState('')
 	const [parsed, setParsed] = useState<ParsedReport[]>([])
@@ -78,6 +83,10 @@ export function CreateBlockPayoutModal({ onConfirm, onClose }: Props) {
 
 	const invalidReports = parsed.filter((p) => !p.valid)
 	const exceedsLimit = inputs.length > MAX_INPUTS
+	const estimatedVsize =
+		ESTIMATED_VBYTES_OVERHEAD + (inputs.length + 1) * ESTIMATED_VBYTES_PER_INPUT + ESTIMATED_VBYTES_OUTPUT
+	const estimatedFeeSats = Math.ceil(estimatedVsize * feeRate)
+	const insufficientBalance = estimatedFeeSats > walletBalanceSats
 
 	function handleParseReports() {
 		const results = parseReports(rawReports)
@@ -299,10 +308,41 @@ export function CreateBlockPayoutModal({ onConfirm, onClose }: Props) {
 								<circle cx="12" cy="16" r="1" fill="currentColor" />
 							</svg>
 							<p className="m-0 text-[13px] text-[#6b7280]">
-								Fee paid from <strong className="text-[#374151]">Admin Wallet</strong> · Change returned to first unused
-								change address.
+								Fee paid from <strong className="text-[#374151]">Admin Wallet</strong>.
 							</p>
 						</div>
+
+						<div className="rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3">
+							<div className="flex items-center justify-between gap-3">
+								<span className="text-[12px] text-[#6b7280]">Estimated fee</span>
+								<span className="text-[13px] font-medium text-[#0a0a0a]">{formatSats(estimatedFeeSats)}</span>
+							</div>
+							<div className="mt-1.5 flex items-center justify-between gap-3">
+								<span className="text-[12px] text-[#6b7280]">Admin Wallet balance</span>
+								<span className="text-[13px] font-medium text-[#0a0a0a]">{formatSats(walletBalanceSats)}</span>
+							</div>
+						</div>
+
+						{insufficientBalance && (
+							<div className="flex items-start gap-2.5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+								<svg
+									width={14}
+									height={14}
+									viewBox="0 0 24 24"
+									fill="none"
+									aria-hidden
+									className="mt-0.5 shrink-0 text-[#dc2626]"
+								>
+									<circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+									<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+									<circle cx="12" cy="16" r="1" fill="currentColor" />
+								</svg>
+								<p className="m-0 text-[13px] text-[#991b1b]">
+									Admin Wallet balance is insufficient to cover the estimated fee. Lower the fee rate or fund the
+									wallet.
+								</p>
+							</div>
+						)}
 
 						<div className="flex items-center justify-between gap-2.5">
 							<button
@@ -314,7 +354,8 @@ export function CreateBlockPayoutModal({ onConfirm, onClose }: Props) {
 							</button>
 							<button
 								type="button"
-								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a]"
+								disabled={insufficientBalance}
+								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={() => setStep(4)}
 							>
 								Next
@@ -335,23 +376,18 @@ export function CreateBlockPayoutModal({ onConfirm, onClose }: Props) {
 							</dl>
 						</div>
 
-						<div className="flex items-start gap-2.5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+						<div className="flex items-start gap-2.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3">
 							<svg
-								width={15}
-								height={15}
+								width={14}
+								height={14}
 								viewBox="0 0 24 24"
 								fill="none"
 								aria-hidden
-								className="mt-0.5 shrink-0 text-[#d97706]"
+								className="mt-0.5 shrink-0 text-[#6b7280]"
 							>
-								<path
-									d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-									stroke="currentColor"
-									strokeWidth="1.5"
-									strokeLinejoin="round"
-								/>
-								<path d="M12 9v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-								<circle cx="12" cy="17" r="1" fill="currentColor" />
+								<circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+								<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+								<circle cx="12" cy="16" r="1" fill="currentColor" />
 							</svg>
 							<p className="m-0 text-[13px] text-[#92400e]">
 								Clicking <strong>Confirm</strong> will create this transaction and add your signature to it.

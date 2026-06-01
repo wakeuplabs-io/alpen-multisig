@@ -112,6 +112,26 @@ export const MOCK_PENDING_TXS: PendingBlockPayoutTx[] = [
 export const MOCK_PAST_TXS: PastBlockPayoutTx[] = [
 	{
 		id: 'bp-past-001',
+		inputs: [
+			{
+				outpoint: 'aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff666600001111222233330000000000000000:0',
+				amount: 95000,
+				claimId: 'claim-past-001',
+				isConflicting: false,
+			},
+			{
+				outpoint: 'bbbb2222cccc3333dddd4444eeee5555ffff666600001111222233334444555500000000000000:1',
+				amount: 80000,
+				claimId: 'claim-past-002',
+				isConflicting: false,
+			},
+			{
+				outpoint: 'cccc3333dddd4444eeee5555ffff666600001111222233334444555566667777000000000000:0',
+				amount: 120000,
+				claimId: 'claim-past-003',
+				isConflicting: false,
+			},
+		],
 		status: 'unconfirmed',
 		broadcastAt: daysAgo(0.5),
 		rawTx:
@@ -119,6 +139,20 @@ export const MOCK_PAST_TXS: PastBlockPayoutTx[] = [
 	},
 	{
 		id: 'bp-past-002',
+		inputs: [
+			{
+				outpoint: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef:0',
+				amount: 1000000,
+				claimId: 'claim-past-010',
+				isConflicting: false,
+			},
+			{
+				outpoint: 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210:1',
+				amount: 500000,
+				claimId: 'claim-past-011',
+				isConflicting: false,
+			},
+		],
 		status: 'confirmed',
 		broadcastAt: daysAgo(3),
 		blockTimestamp: daysAgo(2.9),

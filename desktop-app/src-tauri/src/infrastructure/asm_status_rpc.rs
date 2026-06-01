@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_checkpoint::{state::CheckpointState, subprotocol::CheckpointSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::auth::AuthRole;
@@ -22,6 +23,12 @@ pub fn default_rpc_url() -> String {
 pub struct MultisigConfig {
     pub signers: Vec<String>,
     pub threshold: u8,
+}
+
+pub struct CurrentVk {
+    pub type_id: u8,
+    pub type_name: String,
+    pub condition_hex: String,
 }
 
 pub async fn fetch_multisig_config(
@@ -69,6 +76,26 @@ pub async fn fetch_role_membership(
     );
 
     Ok((role_to_keys, now_unix_ms()))
+}
+
+pub async fn fetch_current_vk(rpc_url: &str) -> Result<CurrentVk, String> {
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    let checkpoint = decode_checkpoint_state(&anchor)?;
+    let predicate = checkpoint.checkpoint_predicate();
+    let type_name = match predicate.id() {
+        0 => "NeverAccept",
+        1 => "AlwaysAccept",
+        10 => "Bip340Schnorr",
+        20 => "Sp1Groth16",
+        _ => "Unknown",
+    }
+    .to_string();
+    Ok(CurrentVk {
+        type_id: predicate.id(),
+        type_name,
+        condition_hex: hex::encode(predicate.condition()),
+    })
 }
 
 /// Search the live ASM queue for the `UpdateId` matching `action_hex`.
@@ -169,6 +196,16 @@ fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState,
     let bytes = decode_state_bytes_from_status(status_result)?;
     AnchorState::from_ssz_bytes(&bytes)
         .map_err(|err| format!("failed to SSZ-decode AnchorState from status state bytes: {err}"))
+}
+
+fn decode_checkpoint_state(anchor: &AnchorState) -> Result<CheckpointState, String> {
+    let id = CheckpointSubprotocol::ID;
+    let section = anchor.find_section(id).ok_or_else(|| {
+        format!("AnchorState has no checkpoint subprotocol section (expected id {id})")
+    })?;
+    section
+        .try_to_state::<CheckpointSubprotocol>()
+        .map_err(|e| format!("Checkpoint section SSZ decode failed: {e:?}"))
 }
 
 fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {

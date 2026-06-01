@@ -233,6 +233,20 @@ export function UndoIcon({ width = 16, height = 16, ...rest }: IconProps) {
 	)
 }
 
+export function SettingsGearIcon({ width = 16, height = 16, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
+			<circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+			<path
+				d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+		</svg>
+	)
+}
+
 /** Trash can; pair with parent `text-*` for stroke color. */
 export function TrashIcon({ width = 16, height = 16, ...rest }: IconProps) {
 	return (
