@@ -302,7 +302,7 @@ pub async fn proposals_resubmit_reveal(
 
 #[cfg(test)]
 mod broadcast_error_code_tests {
-    use super::broadcast_error_code;
+    use super::{broadcast_error_code, map_broadcast_error};
     use desktop_app::application::orchestrator_client::OrchestratorError;
     use desktop_app::application::proposals::BroadcastError;
 
@@ -394,6 +394,29 @@ mod broadcast_error_code_tests {
                 "expected {expected_code} for error: {error:?}"
             );
         }
+    }
+
+    /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
+    ///
+    /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
+    /// was sent, the error maps to code=Timeout with recovery=resubmit-reveal.
+    /// The user can resubmit the reveal transaction.
+    #[test]
+    fn test_broadcast_error_confirmation_timeout() {
+        let error = BroadcastError::Timeout {
+            txid: "abc123".to_string(),
+        };
+        let code = broadcast_error_code(&error, true, true);
+        assert_eq!(code, "Timeout");
+
+        let error_msg = map_broadcast_error(error);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "Timeout");
+        assert!(
+            parsed["message"].as_str().unwrap().contains("resubmit"),
+            "Timeout message should mention resubmit: {}",
+            parsed["message"]
+        );
     }
 }
 
