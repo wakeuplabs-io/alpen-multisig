@@ -22,6 +22,12 @@ pub enum AppError {
 
     #[error("internal error")]
     Internal(#[from] anyhow::Error),
+
+    /// Hardware wallet device physically disconnected or absent.
+    /// Used by hardware device adapters (Ledger/Trezor) when device is not present.
+    #[allow(dead_code)]
+    #[error("hardware wallet device disconnected")]
+    HwDisconnected,
 }
 
 impl IntoResponse for AppError {
@@ -35,6 +41,11 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string(), "not_found"),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone(), "bad_request"),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone(), "conflict"),
+            AppError::HwDisconnected => (
+                StatusCode::PRECONDITION_FAILED,
+                self.to_string(),
+                "hw_disconnected",
+            ),
             AppError::Internal(e) => {
                 tracing::error!("internal error: {e}");
                 (

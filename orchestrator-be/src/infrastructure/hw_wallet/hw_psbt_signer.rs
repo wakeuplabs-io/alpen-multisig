@@ -136,8 +136,26 @@ mod tests {
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
     /// Fake hardware device that simulates successful on-device signing.
-    struct FakeHwDevice;
+    /// Supports device-absent simulation via interior mutability.
+    struct FakeHwDevice {
+        connected: Arc<AtomicBool>,
+    }
+
+    impl FakeHwDevice {
+        fn new() -> Self {
+            Self {
+                connected: Arc::new(AtomicBool::new(true)),
+            }
+        }
+
+        fn disconnect(&self) {
+            self.connected.store(false, Ordering::SeqCst);
+        }
+    }
 
     impl HwDevice for FakeHwDevice {
         fn sign_psbt(
@@ -145,6 +163,9 @@ mod tests {
             _fingerprint: u32,
             psbt: &mut bitcoin::psbt::Psbt,
         ) -> Result<(), AppError> {
+            if !self.connected.load(Ordering::SeqCst) {
+                return Err(AppError::HwDisconnected);
+            }
             // Simulate taproot key-path signing: add a dummy witness to each input.
             // A real device would produce a 64-byte Schnorr signature.
             for input in &mut psbt.inputs {
@@ -212,7 +233,7 @@ mod tests {
     #[test]
     fn test_hw_psbt_signer_happy_path_with_fake_device() {
         // Given: Hardware signer with a fake device that simulates signing success
-        let device: Box<dyn HwDevice> = Box::new(FakeHwDevice);
+        let device: Box<dyn HwDevice> = Box::new(FakeHwDevice::new());
         let signer = HwPsbtSigner::with_device(
             Network::Regtest,
             "tpubD6NzVbkrYhZ4X8L36T1DKRzVJQKJH7YbF3xGqVz5k3Z9w8R7T6Y5X4W3V2U1S0",
@@ -241,6 +262,38 @@ mod tests {
         assert!(
             psbt.inputs.iter().all(|i| i.tap_key_sig.is_some()),
             "each PSBT input must have a tap_key_sig after HW signing"
+        );
+    }
+
+    #[test]
+    fn test_hw_psbt_signer_device_absent_returns_hw_disconnected() {
+        // Given: Hardware signer with a fake device that simulates device absence
+        let device = FakeHwDevice::new();
+        device.disconnect();
+        let signer = HwPsbtSigner::with_device(
+            Network::Regtest,
+            "tpubD6NzVbkrYhZ4X8L36T1DKRzVJQKJH7YbF3xGqVz5k3Z9w8R7T6Y5X4W3V2U1S0",
+            0x12345678,
+            Box::new(device),
+        )
+        .expect("signer must be created");
+
+        let mut wallet = build_test_wallet(Network::Regtest);
+        let change_addr = wallet.peek_address(KeychainKind::Internal, 0).address;
+
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.add_recipient(change_addr.script_pubkey(), Amount::from_sat(50_000));
+        tx_builder.fee_rate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        let mut psbt = tx_builder.finish().expect("PSBT must build");
+
+        // When: sign_psbt is called through the driving port (PsbtSigner trait)
+        let result = signer.sign_psbt(&mut wallet, &mut psbt);
+
+        // Then: signing fails with HwDisconnected — nothing is broadcast
+        assert!(
+            matches!(result, Err(AppError::HwDisconnected)),
+            "sign_psbt must return HwDisconnected when device is absent: {:?}",
+            result
         );
     }
 }
