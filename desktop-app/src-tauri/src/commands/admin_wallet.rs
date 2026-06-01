@@ -18,7 +18,6 @@ pub async fn wallet_session_init(
     input: WalletSessionInitInput,
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<(), String> {
-    desktop_app::infrastructure::dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
     wallet_session
         .init_from_mnemonic(
             &input.mnemonic,
@@ -113,10 +112,8 @@ pub struct AdminWalletInfo {
 
 /// Read admin wallet info from the shared `WalletService` — single source of truth.
 ///
-/// Triggers a sync (which applies `WalletService::check_enabled` guard),
-/// then returns the confirmed balance and external address index 0.
-/// Returns `Err(Disabled)` if `BITCOIN_NETWORK=regtest` or `ALLOW_DEV_MNEMONIC_SIGNING=1`
-/// is not set.
+/// Triggers a sync, then returns the confirmed balance and external address index 0.
+/// Returns `Err(Disabled)` if no wallet session is active.
 pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
     svc.sync().await.map_err(serialize_wallet_error)?;
     let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
@@ -225,49 +222,6 @@ mod tests {
         let wallet = load_admin_wallet(TEST_MNEMONIC, bdk_wallet::bitcoin::Network::Regtest)
             .expect("wallet creation must succeed");
         WalletService::new(wallet)
-    }
-
-    fn clear_guard_env_vars() {
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-    }
-
-    /// REGRESSION: `admin_wallet_info` and `WalletService::sync()` MUST share the same guard.
-    /// If `ALLOW_DEV_MNEMONIC_SIGNING` is absent the guard rejects — this prevents the broadcast
-    /// screen from showing a balance while UTXOs/list silently return empty.
-    #[tokio::test]
-    async fn admin_wallet_info_rejects_when_allow_dev_mnemonic_signing_missing() {
-        let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        let svc = build_test_service();
-        let result = admin_wallet_info(&svc).await;
-
-        clear_guard_env_vars();
-        assert!(
-            result.is_err(),
-            "admin_wallet_info must reject when ALLOW_DEV_MNEMONIC_SIGNING is absent. Got: {:?}",
-            result
-        );
-    }
-
-    #[tokio::test]
-    async fn admin_wallet_info_rejects_when_bitcoin_network_not_regtest() {
-        let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        std::env::set_var("BITCOIN_NETWORK", "bitcoin");
-
-        let svc = build_test_service();
-        let result = admin_wallet_info(&svc).await;
-
-        clear_guard_env_vars();
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-        assert!(
-            result.is_err(),
-            "admin_wallet_info must reject when BITCOIN_NETWORK != regtest. Got: {:?}",
-            result
-        );
     }
 
     /// Verifies wallet_session_init is importable (compile-time check).

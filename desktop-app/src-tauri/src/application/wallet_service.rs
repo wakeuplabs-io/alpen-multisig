@@ -265,9 +265,6 @@ impl WalletService {
     /// Sync the wallet with the Bitcoin RPC node.
     /// Collapses concurrent callers — if a sync is already in-flight, waits for it.
     pub async fn sync(&self) -> Result<SyncStatusDto, AdminWalletError> {
-        // Check disabled guard first
-        WalletService::check_enabled()?;
-
         // Collapse concurrent calls: if already syncing, spin-wait (simple approach for regtest)
         if self
             .sync_in_flight
@@ -490,29 +487,22 @@ impl WalletService {
         amount_sats: u64,
         fee_rate: u64,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
-        // 0. ReadOnly guard — must run before any RPC contact or env checks
+        // 0. ReadOnly guard — must run before any RPC contact
         let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
 
         // 0b. Network capability check — before any sync/RPC/PSBT build
-        let network = {
-            let wallet = self.wallet.lock().await;
-            wallet.network()
-        };
-        if !signer.allowed_on(network) {
+        if !signer.allowed_on(self.network) {
             return Err(AdminWalletError::SignerNotAllowedOnNetwork);
         }
 
-        // 1. Guard check
-        WalletService::check_enabled()?;
-
-        // 2. Sync so UTXOs are fresh
+        // 1. Sync so UTXOs are fresh
         self.sync().await?;
 
         // 3. Acquire wallet lock, build + sign PSBT, release
         let commit_addr: bdk_wallet::bitcoin::Address<_> = commit_address
             .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
-            .require_network(network)
+            .require_network(self.network)
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
 
         let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
@@ -536,19 +526,6 @@ impl WalletService {
     /// Uses notify_waiters() to wake all current waiters (the select! loop observes it).
     pub fn shutdown(&self) {
         self.cancel.notify_waiters();
-    }
-
-    /// Guard: returns Disabled unless running on regtest with dev-mnemonic signing enabled.
-    pub fn check_enabled() -> Result<(), AdminWalletError> {
-        let is_regtest = std::env::var("BITCOIN_NETWORK").unwrap_or_default() == "regtest";
-        let dev_signing_allowed =
-            std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").unwrap_or_default() == "1";
-
-        if is_regtest && dev_signing_allowed {
-            Ok(())
-        } else {
-            Err(AdminWalletError::Disabled)
-        }
     }
 }
 
@@ -585,77 +562,6 @@ mod tests {
             last_error: None,
         };
         assert!(!status.is_syncing);
-    }
-
-    // Unit test: guard returns Disabled when BITCOIN_NETWORK is missing
-    #[test]
-    fn check_enabled_returns_disabled_when_bitcoin_network_missing() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        let result = WalletService::check_enabled();
-        assert!(
-            matches!(result, Err(AdminWalletError::Disabled)),
-            "Expected Disabled when BITCOIN_NETWORK missing"
-        );
-    }
-
-    // Unit test: guard returns Disabled when ALLOW_DEV_MNEMONIC_SIGNING is missing
-    #[test]
-    fn check_enabled_returns_disabled_when_allow_dev_mnemonic_signing_missing() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        let result = WalletService::check_enabled();
-
-        std::env::remove_var("BITCOIN_NETWORK");
-
-        assert!(
-            matches!(result, Err(AdminWalletError::Disabled)),
-            "Expected Disabled when ALLOW_DEV_MNEMONIC_SIGNING missing"
-        );
-    }
-
-    // Unit test: guard returns Ok with only regtest + ALLOW_DEV_MNEMONIC_SIGNING (no COMMIT_FUNDING needed)
-    #[test]
-    fn check_enabled_returns_ok_without_commit_funding_var() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("COMMIT_FUNDING");
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-
-        let result = WalletService::check_enabled();
-
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        assert!(
-            result.is_ok(),
-            "Expected Ok with regtest + ALLOW_DEV_MNEMONIC_SIGNING=1, without COMMIT_FUNDING"
-        );
-    }
-
-    // Unit test: COMMIT_FUNDING set to any value has no effect on the guard
-    #[test]
-    fn check_enabled_commit_funding_value_is_irrelevant() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        // Even setting COMMIT_FUNDING=bitcoind must not block when regtest + allow_dev are set
-        std::env::set_var("COMMIT_FUNDING", "bitcoind");
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-
-        let result = WalletService::check_enabled();
-
-        std::env::remove_var("COMMIT_FUNDING");
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        assert!(
-            result.is_ok(),
-            "COMMIT_FUNDING must have no effect; Ok expected when regtest + ALLOW_DEV_MNEMONIC_SIGNING=1"
-        );
     }
 
     // Acceptance test (step 01-01): secs_to_iso8601 formats Unix epoch as ISO-8601 UTC string
@@ -941,16 +847,11 @@ mod tests {
         );
     }
 
-    // Unit test (step 01-03): build_signed_commit on watch-only returns ReadOnly even with regtest env set (guard before check_enabled)
+    // Unit test (step 01-03): build_signed_commit on watch-only returns ReadOnly (signer absent guard fires first)
     #[tokio::test]
     async fn build_signed_commit_on_watch_only_returns_read_only_before_enabled_check() {
         use crate::infrastructure::admin_wallet::load_admin_wallet;
         use bdk_wallet::bitcoin::Network;
-        {
-            let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            std::env::set_var("BITCOIN_NETWORK", "regtest");
-            std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        } // _guard dropped before .await
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
@@ -960,12 +861,9 @@ mod tests {
             .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
             .await;
 
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
         assert!(
             matches!(result, Err(AdminWalletError::ReadOnly)),
-            "build_signed_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
+            "build_signed_commit on watch-only must return ReadOnly (signer absent), got: {:?}",
             result
         );
     }
