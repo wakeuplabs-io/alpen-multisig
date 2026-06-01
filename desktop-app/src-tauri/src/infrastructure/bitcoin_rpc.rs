@@ -20,8 +20,14 @@ pub trait BitcoinRpcClient: Send + Sync {
     /// Mine `count` blocks to an internally generated address. Regtest only.
     async fn mine_blocks(&self, count: u32) -> Result<(), String>;
 
-    /// Return the current chain tip block height.
+    /// Get a newly generated Bitcoin address.
+    async fn get_new_address(&self) -> Result<String, String>;
+
+    /// Get the current block count.
     async fn get_block_count(&self) -> Result<u64, String>;
+
+    /// Submit a package of transactions.
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String>;
 }
 
 pub struct HttpBitcoinRpcClient {
@@ -143,12 +149,16 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(sats_per_vb.max(1))
     }
 
-    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
-        let addr_result = self.call("getnewaddress", json!([])).await?;
-        let addr = addr_result
+    async fn get_new_address(&self) -> Result<String, String> {
+        let result = self.call("getnewaddress", json!([])).await?;
+        result
             .as_str()
-            .ok_or_else(|| "getnewaddress: expected string address".to_string())?
-            .to_string();
+            .map(str::to_string)
+            .ok_or_else(|| "getnewaddress: expected string address".to_string())
+    }
+
+    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
+        let addr = self.get_new_address().await?;
         self.call("generatetoaddress", json!([count, addr])).await?;
         Ok(())
     }
@@ -158,6 +168,21 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         result
             .as_u64()
             .ok_or_else(|| "getblockcount: expected u64".to_string())
+    }
+
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String> {
+        let result = self
+            .call("submitpackage", serde_json::json!([tx_hexes]))
+            .await?;
+        let pkg_msg = result
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if pkg_msg == "success" {
+            Ok(())
+        } else {
+            Err(format!("submitpackage: unexpected result: {result}"))
+        }
     }
 
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String> {
@@ -177,6 +202,33 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 #[cfg(test)]
 mod tests {
     use super::super::rpc_timeout::{rpc_client, RPC_TIMEOUT};
+    use super::BitcoinRpcClient;
+
+    #[test]
+    fn submit_package_is_on_bitcoin_rpc_client_trait() {
+        // compile-gate: submit_package must be on BitcoinRpcClient
+        fn _accepts_trait_object(_: &dyn BitcoinRpcClient) {}
+    }
+
+    #[test]
+    fn submit_package_parses_non_success_package_msg_as_error() {
+        let result_value = serde_json::json!({"package_msg": "some-failure"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_ne!(pkg_msg, "success");
+    }
+
+    #[test]
+    fn submit_package_parses_success_package_msg() {
+        let result_value = serde_json::json!({"package_msg": "success"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_eq!(pkg_msg, "success");
+    }
 
     #[test]
     fn rpc_timeout_is_thirty_seconds() {

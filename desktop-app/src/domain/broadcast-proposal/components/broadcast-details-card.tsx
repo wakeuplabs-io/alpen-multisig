@@ -15,6 +15,7 @@ type Props = {
 	proposal: Proposal | null
 	onBroadcast: () => void
 	isBroadcasting: boolean
+	canSign?: boolean
 	adminWalletInfo?: AdminWalletInfoView | null
 	utxoCount?: number
 	lastSyncedAt?: string | null
@@ -48,6 +49,7 @@ export function BroadcastDetailsCard({
 	proposal,
 	onBroadcast,
 	isBroadcasting,
+	canSign = true,
 	adminWalletInfo,
 	utxoCount,
 	lastSyncedAt,
@@ -94,7 +96,7 @@ export function BroadcastDetailsCard({
 
 			<div className="space-y-5 p-6">
 				<div>
-					<SectionLabel>Commit TX</SectionLabel>
+					<SectionLabel>Commit TX (preview)</SectionLabel>
 					<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
 						<span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]">
 							{bundle.commitAddress}
@@ -110,7 +112,7 @@ export function BroadcastDetailsCard({
 				<div>
 					<SectionLabel>Reveal TX</SectionLabel>
 					<p className="text-[13px] text-[#6b7280]">
-						Broadcast automatically once the commit transaction confirms on-chain.
+						Signed locally and broadcast in the same package as the commit — no separate confirmation wait.
 					</p>
 				</div>
 
@@ -164,12 +166,13 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={isBroadcasting}
+					disabled={isBroadcasting || !canSign}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{isBroadcasting ? 'Broadcasting…' : 'Confirm & Broadcast'}
 				</button>
+				{!canSign && <p className="mt-2 text-center text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
 			</div>
 		</div>
 	)

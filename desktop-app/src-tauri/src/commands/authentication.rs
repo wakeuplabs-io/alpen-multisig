@@ -20,7 +20,9 @@ pub fn auth_get_session() -> Result<authentication::SessionResult, String> {
 #[tauri::command]
 pub fn auth_logout(
     wallet_session: tauri::State<'_, desktop_app::application::wallet_session::WalletSession>,
+    pending_reveals: tauri::State<'_, desktop_app::application::pending_reveals::PendingReveals>,
 ) -> Result<(), String> {
+    pending_reveals.lock().unwrap().clear();
     authentication::logout()?;
     wallet_session.clear();
     Ok(())
@@ -28,6 +30,8 @@ pub fn auth_logout(
 
 #[cfg(test)]
 mod tests {
+    use super::auth_logout;
+    use desktop_app::application::pending_reveals::PendingReveals;
     use desktop_app::application::wallet_session::WalletSession;
 
     const TEST_MNEMONIC: &str =
@@ -55,5 +59,12 @@ mod tests {
             session.current().is_none(),
             "current() must be None after auth_logout clears the session"
         );
+    }
+
+    #[test]
+    fn auth_logout_accepts_pending_reveals_state() {
+        fn _check(ws: tauri::State<'_, WalletSession>, pr: tauri::State<'_, PendingReveals>) {
+            let _ = auth_logout(ws, pr);
+        }
     }
 }

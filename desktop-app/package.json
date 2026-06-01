@@ -9,6 +9,7 @@
     "lint": "eslint src",
     "format:check": "prettier --check src",
     "test:ipc-schemas": "tsx src/api/ipc-schemas.test.ts",
+    "test:api-admin-wallet-watch-only": "tsx src/api/admin-wallet-watch-only.test.ts",
     "test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
     "test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
     "test:model-format-signed-sats": "tsx src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts",
@@ -20,6 +21,7 @@
     "test:model-format-admin-wallet-error": "tsx src/domain/admin-wallet/model/__tests__/format-admin-wallet-error.test.ts",
     "test:hooks-use-wallet-panel-state": "tsx src/domain/admin-wallet/hooks/__tests__/use-wallet-panel-state.test.ts",
     "test:hooks-use-addresses-with-balance": "tsx src/domain/admin-wallet/hooks/__tests__/use-addresses-with-balance.test.ts",
+    "test:hooks-use-admin-wallet-capability": "tsx src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-capability.test.ts",
     "test:architecture": "tsx src/domain/admin-wallet/architecture.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"

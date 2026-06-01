@@ -1,5 +1,4 @@
 use crate::infrastructure::admin_wallet::AdminWalletError;
-use bdk_bitcoind_rpc::bitcoincore_rpc::Auth;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -105,6 +104,7 @@ pub struct WalletService {
     rpc_url: String,
     rpc_user: String,
     rpc_pass: String,
+    can_sign: bool,
 }
 
 /// Keychain selection for address listing.
@@ -165,7 +165,7 @@ fn rpc_error_from_message(msg: String) -> AdminWalletError {
     }
 }
 
-fn error_code(e: &AdminWalletError) -> String {
+pub fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
         AdminWalletError::RpcAuthFailed { .. } => "RpcAuthFailed".into(),
@@ -176,6 +176,7 @@ fn error_code(e: &AdminWalletError) -> String {
         AdminWalletError::InvalidMnemonic(_) => "InvalidMnemonic".into(),
         AdminWalletError::Descriptor(_) => "Descriptor".into(),
         AdminWalletError::WalletCreation(_) => "WalletCreation".into(),
+        AdminWalletError::ReadOnly => "ReadOnly".into(),
     }
 }
 
@@ -195,7 +196,20 @@ impl WalletService {
             rpc_url,
             rpc_user,
             rpc_pass,
+            can_sign: true,
         }
+    }
+
+    /// Creates a watch-only WalletService that cannot sign transactions.
+    pub fn new_watch_only(wallet: bdk_wallet::Wallet) -> Self {
+        let mut svc = Self::new(wallet);
+        svc.can_sign = false;
+        svc
+    }
+
+    /// Returns whether this wallet service can sign transactions.
+    pub fn can_sign(&self) -> bool {
+        self.can_sign
     }
 
     /// Returns a lock-free snapshot of the current sync state.
@@ -262,7 +276,7 @@ impl WalletService {
     }
 
     async fn do_sync(&self) -> Result<(), AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::Client;
+        use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
         use bdk_bitcoind_rpc::Emitter;
 
         let rpc = Client::new(
@@ -445,15 +459,18 @@ impl WalletService {
         Ok(addresses)
     }
 
-    /// Syncs the wallet then builds, signs and broadcasts a commit transaction.
+    /// Syncs the wallet then builds and signs a commit transaction. Does NOT broadcast.
     /// Single source of truth for the BDK wallet — no ephemeral instances created.
-    pub async fn fund_commit(
+    pub async fn build_signed_commit(
         &self,
         commit_address: &str,
         amount_sats: u64,
         fee_rate: u64,
-    ) -> Result<String, AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::{Client, RpcApi};
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
+        // 0. ReadOnly guard — must run before any RPC contact or env checks
+        if !self.can_sign() {
+            return Err(AdminWalletError::ReadOnly);
+        }
 
         // 1. Guard check
         WalletService::check_enabled()?;
@@ -476,26 +493,18 @@ impl WalletService {
         let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
             .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
 
-        let tx = self
-            .build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
-            .await?;
+        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
+            .await
+    }
 
-        // 4. Broadcast via RPC
-        let rpc = Client::new(
-            &self.rpc_url,
-            Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
-        )
-        .map_err(|e| AdminWalletError::RpcUnreachable {
-            message: e.to_string(),
-        })?;
-
-        let txid = rpc
-            .send_raw_transaction(&tx)
-            .map_err(|e| AdminWalletError::RpcUnreachable {
-                message: e.to_string(),
-            })?;
-
-        Ok(txid.to_string())
+    /// Returns the next unused internal (change) keychain address.
+    /// Each call advances the BDK internal keychain index, so consecutive calls return distinct addresses.
+    pub async fn reveal_change_address(
+        &self,
+    ) -> Result<bdk_wallet::bitcoin::Address, AdminWalletError> {
+        let mut wallet = self.wallet.lock().await;
+        let info = wallet.reveal_next_address(bdk_wallet::KeychainKind::Internal);
+        Ok(info.address)
     }
 
     /// Signals the background sync loop to exit. Idempotent — safe to call multiple times.
@@ -854,6 +863,108 @@ mod tests {
             .expect("last_error must be Some for Disabled state");
         assert_eq!(err.code, "Disabled", "error code must be 'Disabled'");
         assert!(!err.message.is_empty(), "error message must be non-empty");
+    }
+
+    // Unit test (step 01-02): new().can_sign() returns true
+    #[test]
+    fn new_can_sign_returns_true() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        assert!(svc.can_sign(), "new() must return can_sign=true");
+    }
+
+    // Acceptance test (step 01-02): new_watch_only().can_sign() returns false
+    #[test]
+    fn new_watch_only_can_sign_returns_false() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new_watch_only(wallet);
+
+        assert!(!svc.can_sign(), "new_watch_only must return can_sign=false");
+    }
+
+    // Acceptance test (step 01-03): build_signed_commit on watch-only returns ReadOnly without contacting RPC
+    #[tokio::test]
+    async fn build_signed_commit_on_watch_only_returns_read_only_error() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        // No RPC URL set — if build_signed_commit contacts RPC it would fail with RpcUnreachable, not ReadOnly
+        let svc = WalletService::new_watch_only(wallet);
+
+        let result = svc
+            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .await;
+
+        assert!(
+            matches!(result, Err(AdminWalletError::ReadOnly)),
+            "build_signed_commit on watch-only wallet must return ReadOnly, got: {:?}",
+            result
+        );
+    }
+
+    // Unit test (step 01-03): build_signed_commit on watch-only returns ReadOnly even with regtest env set (guard before check_enabled)
+    #[tokio::test]
+    async fn build_signed_commit_on_watch_only_returns_read_only_before_enabled_check() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+        {
+            let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            std::env::set_var("BITCOIN_NETWORK", "regtest");
+            std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
+        } // _guard dropped before .await
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new_watch_only(wallet);
+
+        let result = svc
+            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .await;
+
+        std::env::remove_var("BITCOIN_NETWORK");
+        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
+
+        assert!(
+            matches!(result, Err(AdminWalletError::ReadOnly)),
+            "build_signed_commit on watch-only must return ReadOnly even when regtest env is set, got: {:?}",
+            result
+        );
+    }
+
+    // Unit test (step 01-03): reveal_change_address returns distinct addresses on consecutive calls
+    #[tokio::test]
+    async fn reveal_change_address_returns_distinct_addresses_on_consecutive_calls() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        let addr1: bdk_wallet::bitcoin::Address = svc
+            .reveal_change_address()
+            .await
+            .expect("first reveal_change_address must succeed");
+        let addr2: bdk_wallet::bitcoin::Address = svc
+            .reveal_change_address()
+            .await
+            .expect("second reveal_change_address must succeed");
+
+        assert_ne!(
+            addr1, addr2,
+            "consecutive reveal_change_address calls must return distinct addresses"
+        );
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto

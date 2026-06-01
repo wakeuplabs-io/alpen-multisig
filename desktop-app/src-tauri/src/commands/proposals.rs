@@ -3,6 +3,7 @@ use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
 };
+use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::wallet_session::WalletSession;
@@ -255,8 +256,30 @@ mod url_tests {
 }
 
 #[cfg(test)]
+mod resubmit_reveal_tests {
+    use super::{proposals_resubmit_reveal, ResubmitRevealInput};
+    use desktop_app::application::pending_reveals::PendingReveals;
+    use desktop_app::application::wallet_session::WalletSession;
+
+    #[test]
+    #[allow(clippy::let_underscore_future)]
+    fn proposals_resubmit_reveal_uses_pending_reveals_state() {
+        use desktop_app::infrastructure::node_config_store::NodeConfigState;
+        fn _check(
+            input: ResubmitRevealInput,
+            s: tauri::State<'_, WalletSession>,
+            nc: tauri::State<'_, NodeConfigState>,
+            p: tauri::State<'_, PendingReveals>,
+        ) {
+            let _ = proposals_resubmit_reveal(input, s, nc, p);
+        }
+    }
+}
+
+#[cfg(test)]
 mod wallet_session_state_tests {
     use super::proposals_broadcast;
+    use desktop_app::application::pending_reveals::PendingReveals;
     use desktop_app::application::wallet_session::WalletSession;
     use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
@@ -270,10 +293,43 @@ mod wallet_session_state_tests {
             input: super::BroadcastInput,
             s: tauri::State<'_, WalletSession>,
             nc: tauri::State<'_, NodeConfigState>,
+            p: tauri::State<'_, PendingReveals>,
         ) {
-            let _ = proposals_broadcast(input, s, nc);
+            let _ = proposals_broadcast(input, s, nc, p);
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResubmitRevealInput {
+    pub base_url: String,
+    pub action_id: String,
+}
+
+#[tauri::command]
+pub async fn proposals_resubmit_reveal(
+    input: ResubmitRevealInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
+    pending: tauri::State<'_, PendingReveals>,
+) -> Result<String, String> {
+    let client = build_client(input.base_url)?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env = broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
+        .await
+        .map_err(|e| match e {
+            BroadcastError::NoPendingReveal { action_id } => {
+                format!("no pending reveal for action {action_id} — re-run broadcast")
+            }
+            other => map_broadcast_error(other),
+        })
 }
 
 fn map_broadcast_error(error: BroadcastError) -> String {
@@ -378,7 +434,6 @@ pub async fn proposals_prepare_broadcast(
             &client,
             &btc_rpc,
             &env.asm_rpc_url,
-            &env.commit_reveal_keypair,
             env.network,
             &input.action_id,
         )
@@ -398,6 +453,7 @@ pub async fn proposals_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
+    pending: tauri::State<'_, PendingReveals>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
@@ -416,18 +472,24 @@ pub async fn proposals_broadcast(
         &env.btc_rpc_pass,
     ));
     let commit_funding = BdkAdminWalletMnemonic::new(std::sync::Arc::clone(&wallet_service));
+    let reveal_change_address = wallet_service
+        .reveal_change_address()
+        .await
+        .map_err(|e| e.to_string())?;
+    let reveal_change_spk = reveal_change_address.script_pubkey();
 
     let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
         &client,
         btc_rpc.as_ref(),
         &env.asm_rpc_url,
-        &env.commit_reveal_keypair,
         env.magic_bytes,
         env.network,
         &input.action_id,
         env.confirm_poll_interval_ms,
         env.confirm_timeout_ms,
         &commit_funding,
+        reveal_change_spk,
+        &pending,
     )
     .await
     .map_err(map_broadcast_error)?;
