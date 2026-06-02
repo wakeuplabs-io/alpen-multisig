@@ -98,7 +98,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has three parts: the completed **Foundation** (Phases 1–3.8), the next shippable increment **Release 1**, and the **Remaining phases (4–9)**.
+The plan has three parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.4), and the **Remaining phases (4–9)**.
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -351,9 +351,11 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ---
 
-### Release 1 — in progress (next: R1.4)
+### Release 1 — complete
 
-Release 1 is built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs. **Next shippable increment:** R1.4 (Remove connect-time derivation picking).
+Release 1 is built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs. **All R1 steps shipped to `develop`.** **Next shippable increment:** Phase 4 (Send BTC happy path on regtest).
+
+**Closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -418,7 +420,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.4 — Remove connect-time derivation picking ✅
 
-**Status:** Complete — branch `feature/admin-wallet-canonical-connect-paths` (2026-06-02). Spec: [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
+**Status:** Complete — merged to `develop` via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Spec: [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
 **Goal:** Drop the connect-flow step where the user manually picks a derivation path/account; derive Admin ID and Admin Wallet automatically at their canonical paths.
 

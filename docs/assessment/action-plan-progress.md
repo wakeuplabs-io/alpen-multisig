@@ -64,6 +64,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | 2026-05-19 Track A worktree | PASS — 3 proposal WDIO | 250 | ASM log OK |
 | 2026-05-19 **`develop`** (`30ca94f`) | **PASS** — add-signer, co-sign-row1, broadcast-quorum | 548 | **Yes** — 3 Strata Administrator signers incl. `03dd6d7…427c` |
 | 2026-05-20 **`develop`** (`cc996de`) Wave 3 tip | **PASS** — `npm run test:e2e:all` | — | All specs green; develop → main gate open |
+| 2026-06-02 **`develop`** (`9bf5c3f`) R1.4 | **PASS** — add-signer, co-sign-mnemonic, broadcast-quorum | 250 | **Yes** — 2-of-3 Strata Admin; cosign seed `… absent` at canonical path |
 
 ---
 

@@ -51,7 +51,7 @@ flow with that same canonical-only model.
 - `list_mnemonic_addresses` command removal — it remains as the mnemonic derivation primitive
   used by mnemonic connect.
 - Changing the Admin Wallet account path or descriptor derivation (already canonical).
-- Seeding a second canonical signer for multi-signer e2e (follow-up; see Known limitations).
+- Seeding a second canonical signer for multi-signer e2e — **delivered in PR #206** via `DEMO_MNEMONIC_COSIGN` and `proposal-co-sign-mnemonic`.
 - Payout Administrator flows.
 
 ## Technical Design
@@ -177,10 +177,9 @@ abstraction; adapters depend on the Tauri IPC bridge. No inversion is introduced
 
 ## Known limitations (post-R1.4)
 
-- **Multi-signer e2e:** `proposal-co-sign-row1` simulated a second signer by picking row #1 of
-  the **same** mnemonic. Canonical-only connect removes that capability. The spec retires that
-  manual spec; a faithful co-sign e2e must use **two distinct mnemonics** whose
-  `m/84'/0'/73'/0/0` keys are both present in the authority signer set. Wiring a second
-  canonical signer into the regtest signer set is a follow-up, out of scope here.
+- **Multi-signer e2e (resolved in PR #206):** `proposal-co-sign-row1` was retired; replacement is
+  `proposal-co-sign-mnemonic` with `DEMO_MNEMONIC_COSIGN` at the same canonical path, present in
+  `asm-params` `strata_administrator.keys[1]`. After `from-scratch`, copy
+  `scripts/asm-params.example.json` or re-bootstrap so `keys[1]` matches the cosign seed.
 - `list_mnemonic_addresses` still derives a window when called with a larger `count`; only
   connect's `count: 1` usage changes. The command is retained as the derivation primitive.
