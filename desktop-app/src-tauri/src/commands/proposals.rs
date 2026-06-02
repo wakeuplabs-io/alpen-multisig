@@ -12,6 +12,7 @@ use desktop_app::domain::proposal::{
 };
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::broadcast_env;
+use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +91,7 @@ pub struct ProposalDto {
     pub status: String,
     pub required_signatures: u16,
     pub action_hex: String,
+    pub action_type: String,
     pub signatures: Vec<ProposalSignatureDto>,
     pub broadcast_status: String,
     pub commit_txid: Option<String>,
@@ -153,6 +155,18 @@ pub struct BroadcastResultDto {
     pub reveal_txid: String,
 }
 
+fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> String {
+    if target_action_id.is_some() {
+        return "cancel".to_string();
+    }
+    let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
+    match desktop_app::infrastructure::action_codec::decode_hex(hex) {
+        Ok(desktop_app::domain::action::Action::MultisigUpdate(_)) => "multisig_update".to_string(),
+        Ok(desktop_app::domain::action::Action::VkUpdate(_)) => "vk_update".to_string(),
+        Err(_) => "unknown".to_string(),
+    }
+}
+
 fn map_signature(signature: ProposalSignature) -> ProposalSignatureDto {
     ProposalSignatureDto {
         signer_pubkey: signature.signer_pubkey,
@@ -170,6 +184,7 @@ fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDt
 }
 
 fn map_proposal(proposal: Proposal) -> ProposalDto {
+    let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     ProposalDto {
         action_id: proposal.action_id,
         seq_no: proposal.seq_no,
@@ -177,6 +192,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         status: proposal.status,
         required_signatures: proposal.required_signatures,
         action_hex: proposal.action_hex,
+        action_type,
         signatures: proposal.signatures.into_iter().map(map_signature).collect(),
         broadcast_status: proposal.broadcast_status,
         commit_txid: proposal.commit_txid,
@@ -198,6 +214,12 @@ fn validate_orchestrator_base_url(base_url: &str) -> Result<(), String> {
         || trimmed.starts_with("http://127.0.0.1")
         || trimmed.starts_with("http://[::1]")
     {
+        return Ok(());
+    }
+    let allow_insecure = std::env::var("ALLOW_INSECURE_HTTP_URL")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if allow_insecure {
         return Ok(());
     }
     Err(
@@ -242,12 +264,14 @@ mod resubmit_reveal_tests {
     #[test]
     #[allow(clippy::let_underscore_future)]
     fn proposals_resubmit_reveal_uses_pending_reveals_state() {
+        use desktop_app::infrastructure::node_config_store::NodeConfigState;
         fn _check(
             input: ResubmitRevealInput,
             s: tauri::State<'_, WalletSession>,
+            nc: tauri::State<'_, NodeConfigState>,
             p: tauri::State<'_, PendingReveals>,
         ) {
-            let _ = proposals_resubmit_reveal(input, s, p);
+            let _ = proposals_resubmit_reveal(input, s, nc, p);
         }
     }
 }
@@ -255,7 +279,9 @@ mod resubmit_reveal_tests {
 #[cfg(test)]
 mod wallet_session_state_tests {
     use super::proposals_broadcast;
+    use desktop_app::application::pending_reveals::PendingReveals;
     use desktop_app::application::wallet_session::WalletSession;
+    use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
     /// REGRESSION: proposals_broadcast must take WalletSession (not Arc<WalletService>).
     /// Phase 3.7 migrated managed state to WalletSession; a stale Arc<WalletService> param
@@ -263,13 +289,13 @@ mod wallet_session_state_tests {
     #[test]
     #[allow(clippy::let_underscore_future)]
     fn proposals_broadcast_uses_wallet_session_state() {
-        use desktop_app::application::pending_reveals::PendingReveals;
         fn _check(
             input: super::BroadcastInput,
             s: tauri::State<'_, WalletSession>,
+            nc: tauri::State<'_, NodeConfigState>,
             p: tauri::State<'_, PendingReveals>,
         ) {
-            let _ = proposals_broadcast(input, s, p);
+            let _ = proposals_broadcast(input, s, nc, p);
         }
     }
 }
@@ -285,11 +311,23 @@ pub struct ResubmitRevealInput {
 pub async fn proposals_resubmit_reveal(
     input: ResubmitRevealInput,
     wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
     pending: tauri::State<'_, PendingReveals>,
 ) -> Result<String, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
     proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
         .await
         .map_err(|e| match e {
@@ -611,10 +649,22 @@ pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDt
 pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
         proposals::prepare_broadcast_local(
@@ -639,15 +689,23 @@ pub async fn proposals_prepare_broadcast(
 pub async fn proposals_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
-    pending_reveals: tauri::State<'_, PendingReveals>,
+    node_config: tauri::State<'_, NodeConfigState>,
+    pending: tauri::State<'_, PendingReveals>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
     let client = build_client(input.base_url)?;
-    let env = broadcast_env::load_broadcast_env(&wallet_session).map_err(|e| e.to_string())?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
@@ -669,7 +727,7 @@ pub async fn proposals_broadcast(
         env.confirm_timeout_ms,
         &commit_funding,
         reveal_change_spk,
-        &pending_reveals,
+        &pending,
     )
     .await
     .map_err(map_broadcast_error)?;

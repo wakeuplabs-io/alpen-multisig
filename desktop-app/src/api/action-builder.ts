@@ -3,7 +3,7 @@ import { tauriCall } from '@/api/tauri-bridge'
 import { buildActionHexResponseSchema } from '@/api/ipc-schemas'
 
 export type BuildAdminMultisigUpdateHexInput = {
-	role: 'strata_admin'
+	role: 'strata_admin' | 'sequencer_manager'
 	addKeys: string[]
 	removeKeys: string[]
 	newThreshold: number
@@ -17,6 +17,16 @@ export function buildAdminMultisigUpdateHex(
 	input: BuildAdminMultisigUpdateHexInput,
 ): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_admin_multisig_update_hex', { input }, buildActionHexResponseSchema)
+}
+
+export type BuildVkUpdateHexInput = {
+	authority: string
+	typeId: number
+	conditionHex: string
+}
+
+export function buildVkUpdateHex(input: BuildVkUpdateHexInput): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_vk_update_hex', { input }, buildActionHexResponseSchema)
 }
 
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {

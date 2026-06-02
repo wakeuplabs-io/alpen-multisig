@@ -24,6 +24,12 @@ export function ActivationCountdown({ activationHeight, currentHeight }: Props) 
 			<span aria-hidden="true">⏱</span>
 			<span>
 				Activation in block <span className="font-mono font-medium">{activationHeight.toLocaleString()}</span>
+				{currentHeight != null && (
+					<span className="text-[#b45309]">
+						{' '}
+						· current block <span className="font-mono font-medium">{currentHeight.toLocaleString()}</span>
+					</span>
+				)}
 				{timeLabel !== null && <> · {timeLabel}</>}
 			</span>
 		</div>

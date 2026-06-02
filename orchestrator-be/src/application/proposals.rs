@@ -273,14 +273,24 @@ pub(crate) async fn reconcile_enacted_for_authority(
         if proposal.reveal_txid.is_none() {
             continue;
         }
-        if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+        let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
             asm_rpc_url,
             proposal.authority,
             proposal.seq_no,
             &proposal.action_hex,
         )
-        .await?
+        .await
         {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "reconcile_enacted_for_authority: ASM enactment check failed: {e}"
+                );
+                continue;
+            }
+        };
+        if !enacted {
             continue;
         }
         repo.update_broadcast_status(
@@ -356,14 +366,24 @@ pub(crate) async fn reconcile_enacted_for_action(
         return Ok(());
     }
 
-    if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+    let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
         asm_rpc_url,
         proposal.authority,
         proposal.seq_no,
         &proposal.action_hex,
     )
-    .await?
+    .await
     {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                action_id = %action_id.0,
+                "reconcile_enacted_for_action: ASM enactment check failed: {e}"
+            );
+            return Ok(());
+        }
+    };
+    if !enacted {
         return Ok(());
     }
 
@@ -596,18 +616,6 @@ mod tests {
 
         async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
             Ok(self.block_height)
-        }
-
-        async fn get_new_address(&self) -> Result<String, AppError> {
-            Ok("bcrt1qtest000000000000000000000000000000000000".to_string())
-        }
-
-        async fn generate_to_address(
-            &self,
-            _count: u32,
-            _address: &str,
-        ) -> Result<Vec<String>, AppError> {
-            Ok(vec![])
         }
     }
 

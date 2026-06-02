@@ -8,6 +8,7 @@ const proposalWithNullBroadcastFields = {
 	status: 'pending',
 	requiredSignatures: 2,
 	actionHex: '0x01',
+	actionType: 'multisig_update',
 	signatures: [],
 	broadcastStatus: 'idle',
 	commitTxid: null,

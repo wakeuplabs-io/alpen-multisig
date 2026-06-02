@@ -19,6 +19,7 @@ export type PendingBlockPayoutTx = {
 
 export type PastBlockPayoutTx = {
 	id: string
+	inputs: BlockPayoutInput[]
 	status: 'unconfirmed' | 'confirmed'
 	broadcastAt: Date
 	blockTimestamp?: Date

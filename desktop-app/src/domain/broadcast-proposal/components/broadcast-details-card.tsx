@@ -142,32 +142,43 @@ export function BroadcastDetailsCard({
 					</span>
 				</div>
 
-				{adminWalletInfo != null && (
+				{adminWalletInfo !== undefined && (
 					<div>
 						<SectionLabel>Funding Source</SectionLabel>
-						<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-							<span
-								data-testid="e2e-admin-wallet-external-address-0"
-								className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
-							>
-								{adminWalletInfo.address}
-							</span>
-							<CopyButton text={adminWalletInfo.address} />
-						</div>
-						<p className="mt-2 text-[13px] text-[#6b7280]">
-							Admin Wallet (BDK){' '}
-							<span className="text-[12px] text-[#9ca3af]">({adminWalletInfo.balanceSats.toLocaleString()} sats)</span>
-						</p>
-						{utxoCount !== undefined && <p className="mt-1 text-[12px] text-[#9ca3af]">UTXOs: {utxoCount}</p>}
-						{syncError != null ? (
-							<p className="mt-1 text-[12px] text-[#ef4444]">
-								Sync error: {'message' in syncError ? syncError.message : syncError.type}
-							</p>
-						) : lastSyncedAt != null ? (
-							<p className="mt-1">
-								<LastSyncLabel lastSyncedAt={lastSyncedAt} />
-							</p>
-						) : null}
+						{adminWalletInfo == null ? (
+							<div className="animate-pulse space-y-2">
+								<div className="h-10 rounded-lg bg-[#f3f4f6]" />
+								<div className="h-4 w-48 rounded-md bg-[#f3f4f6]" />
+							</div>
+						) : (
+							<>
+								<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+									<span
+										data-testid="e2e-admin-wallet-external-address-0"
+										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
+									>
+										{adminWalletInfo.address}
+									</span>
+									<CopyButton text={adminWalletInfo.address} />
+								</div>
+								<p className="mt-2 text-[13px] text-[#6b7280]">
+									Admin Wallet (BDK){' '}
+									<span className="text-[12px] text-[#9ca3af]">
+										({adminWalletInfo.balanceSats.toLocaleString()} sats)
+									</span>
+								</p>
+								{utxoCount !== undefined && <p className="mt-1 text-[12px] text-[#9ca3af]">UTXOs: {utxoCount}</p>}
+								{syncError != null ? (
+									<p className="mt-1 text-[12px] text-[#ef4444]">
+										Sync error: {'message' in syncError ? syncError.message : syncError.type}
+									</p>
+								) : lastSyncedAt != null ? (
+									<p className="mt-1">
+										<LastSyncLabel lastSyncedAt={lastSyncedAt} />
+									</p>
+								) : null}
+							</>
+						)}
 					</div>
 				)}
 

@@ -1,7 +1,12 @@
 import type { Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
 import { useState } from 'react'
-import { countSignersAfterUpdate, normalizeSignerKey } from '../model/create-proposal.schema'
+import {
+	countSignersAfterUpdate,
+	normalizeSignerKey,
+	VK_PREDICATE_TYPE_LABELS,
+	type VkPredicateType,
+} from '../model/create-proposal.schema'
 
 type Props = {
 	title: string
@@ -10,6 +15,7 @@ type Props = {
 	keysToAdd: string[]
 	keysToRemove: string[]
 	threshold: string
+	vkTypeId: VkPredicateType
 	newVkHex: string
 	sighashHex: string | null
 	authorityLabel: string
@@ -45,6 +51,7 @@ export function CreateProposalPreview({
 	keysToAdd,
 	keysToRemove,
 	threshold,
+	vkTypeId,
 	newVkHex,
 	sighashHex,
 	authorityLabel,
@@ -165,9 +172,14 @@ export function CreateProposalPreview({
 					<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						New Verification Key
 					</p>
-					<p className="m-0 break-all rounded-lg border border-[#e5e7eb] px-4 py-3 font-mono text-sm text-[#111827]">
-						{newVkHex || '—'}
-					</p>
+					<div className="flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-4 py-3">
+						<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-xs font-medium text-[#92400e]">
+							{VK_PREDICATE_TYPE_LABELS[vkTypeId]}
+						</span>
+						{newVkHex.trim().length > 0 && (
+							<span className="break-all font-mono text-sm text-[#111827]">{newVkHex.trim()}</span>
+						)}
+					</div>
 				</div>
 			)}
 

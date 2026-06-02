@@ -70,6 +70,7 @@ dependencies = [
  "strata-asm-params",
  "strata-asm-proto-admin",
  "strata-asm-proto-admin-txs",
+ "strata-asm-proto-checkpoint",
  "strata-asm-proto-txs-test-utils",
  "strata-asm-spec",
  "strata-asm-worker",
@@ -80,6 +81,7 @@ dependencies = [
  "strata-l1-envelope-fmt",
  "strata-l1-txfmt",
  "strata-merkle",
+ "strata-predicate",
  "strata-tasks",
  "strata-test-utils-arb",
  "strata-test-utils-btcio",
@@ -1210,9 +1212,11 @@ dependencies = [
  "strata-asm-params",
  "strata-asm-proto-admin",
  "strata-asm-proto-admin-txs",
+ "strata-asm-proto-checkpoint",
  "strata-crypto",
  "strata-l1-envelope-fmt",
  "strata-l1-txfmt",
+ "strata-predicate",
  "tauri",
  "tauri-build",
  "thiserror 2.0.18",
@@ -3392,9 +3396,11 @@ dependencies = [
  "strata-asm-params",
  "strata-asm-proto-admin",
  "strata-asm-proto-admin-txs",
+ "strata-asm-proto-checkpoint",
  "strata-crypto",
  "strata-l1-envelope-fmt",
  "strata-l1-txfmt",
+ "strata-predicate",
  "thiserror 1.0.69",
  "tokio",
  "tower",
@@ -3944,6 +3950,18 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+
+[[package]]
+name = "regtest-dev-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "reqwest"

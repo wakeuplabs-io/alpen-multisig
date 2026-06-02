@@ -20,8 +20,13 @@ pub trait BitcoinRpcClient: Send + Sync {
     /// Mine `count` blocks to an internally generated address. Regtest only.
     async fn mine_blocks(&self, count: u32) -> Result<(), String>;
 
-    /// Submit a package of transactions. Returns Ok(()) if the node accepts the package.
-    /// Unknown-method errors are propagated verbatim so callers can branch on them.
+    /// Get a newly generated Bitcoin address.
+    async fn get_new_address(&self) -> Result<String, String>;
+
+    /// Get the current block count.
+    async fn get_block_count(&self) -> Result<u64, String>;
+
+    /// Submit a package of transactions.
     async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String>;
 }
 
@@ -33,9 +38,13 @@ pub struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub fn new(base_url: &str, user: &str, pass: &str) -> Self {
+    pub fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
+        let url = match wallet_name.filter(|w| !w.is_empty()) {
+            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
+            None => base_url.to_string(),
+        };
         Self {
-            url: base_url.to_string(),
+            url,
             user: user.to_string(),
             pass: pass.to_string(),
             client: super::rpc_timeout::rpc_client(),
@@ -144,14 +153,25 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(sats_per_vb.max(1))
     }
 
-    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
-        let addr_result = self.call("getnewaddress", json!([])).await?;
-        let addr = addr_result
+    async fn get_new_address(&self) -> Result<String, String> {
+        let result = self.call("getnewaddress", json!([])).await?;
+        result
             .as_str()
-            .ok_or_else(|| "getnewaddress: expected string address".to_string())?
-            .to_string();
+            .map(str::to_string)
+            .ok_or_else(|| "getnewaddress: expected string address".to_string())
+    }
+
+    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
+        let addr = self.get_new_address().await?;
         self.call("generatetoaddress", json!([count, addr])).await?;
         Ok(())
+    }
+
+    async fn get_block_count(&self) -> Result<u64, String> {
+        let result = self.call("getblockcount", json!([])).await?;
+        result
+            .as_u64()
+            .ok_or_else(|| "getblockcount: expected u64".to_string())
     }
 
     async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String> {

@@ -25,6 +25,7 @@ const fakeProposal: Proposal = {
 	authority: 'admin-1',
 	status: 'approved',
 	actionHex: '00deadbeef',
+	actionType: 'multisig_update',
 	signatures: [
 		{ signerPubkey: 'pub1', signatureHex: 'sig1' },
 		{ signerPubkey: 'pub2', signatureHex: 'sig2' },

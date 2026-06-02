@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Paginator } from '@/components/paginator'
 import type { PastBlockPayoutTx } from '../model/block-payouts.types'
 import { PastTransactionRow } from './past-transaction-row'
 
@@ -7,7 +9,13 @@ type Props = {
 	onCopyRawTx: (txId: string) => void
 }
 
+const PAGE_SIZE = 10
+
 export function PastTransactionsList({ txs, onRebroadcast, onCopyRawTx }: Props) {
+	const [page, setPage] = useState(1)
+	const totalPages = Math.ceil(txs.length / PAGE_SIZE)
+	const paged = txs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
 	if (txs.length === 0) {
 		return (
 			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-12 text-center">
@@ -31,7 +39,7 @@ export function PastTransactionsList({ txs, onRebroadcast, onCopyRawTx }: Props)
 				<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Timestamp</span>
 				<span />
 			</div>
-			{txs.map((tx) => (
+			{paged.map((tx) => (
 				<PastTransactionRow
 					key={tx.id}
 					tx={tx}
@@ -39,6 +47,7 @@ export function PastTransactionsList({ txs, onRebroadcast, onCopyRawTx }: Props)
 					onCopyRawTx={() => onCopyRawTx(tx.id)}
 				/>
 			))}
+			<Paginator page={page} totalPages={totalPages} onPageChange={setPage} />
 		</div>
 	)
 }
