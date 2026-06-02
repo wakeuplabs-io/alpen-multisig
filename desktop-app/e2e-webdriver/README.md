@@ -79,6 +79,7 @@ npm run test:e2e                    # wallet smoke only (canonical Admin ID)
 npm run test:e2e:all                # every *.e2e.js spec in one run (discouraged for heavy flows)
 npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (canonical Admin ID)
+npm run test:e2e:proposal-co-sign-mnemonic # second signer (cosign mnemonic, same canonical path)
 npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
 ```
 
@@ -87,13 +88,15 @@ Skip the automatic Tauri build (if you already ran `npm run tauri build -- --deb
 ```bash
 SKIP_E2E_BUILD=1 npm run test:e2e
 SKIP_E2E_BUILD=1 npm run test:e2e:proposal-add-signer
+SKIP_E2E_BUILD=1 npm run test:e2e:proposal-co-sign-mnemonic
 SKIP_E2E_BUILD=1 npm run test:e2e:proposal-broadcast-quorum
 ```
 
-### Manual two-step: create → broadcast
+### Manual three-step: create → co-sign → broadcast
 
-1. **`npm run test:e2e:proposal-add-signer`** — connects with the canonical Admin ID, creates and signs the draft.
-2. **`npm run test:e2e:proposal-broadcast-quorum`** — connects again with the canonical Admin ID, opens the first **Broadcast** in **Quorum reached**, runs **Prepare broadcast** then **Confirm & Broadcast**, and waits for **Proposal enacted onchain** (`e2e-broadcast-done-banner`). Requires Bitcoin RPC / operator env vars in **`desktop-app/.env`** (see `use-broadcast-proposal`).
+1. **`npm run test:e2e:proposal-add-signer`** — demo mnemonic; creates and signs the draft.
+2. **`npm run test:e2e:proposal-co-sign-mnemonic`** — cosign mnemonic (`DEMO_MNEMONIC_COSIGN`); signs the pending proposal for quorum.
+3. **`npm run test:e2e:proposal-broadcast-quorum`** — demo mnemonic again; opens the first **Broadcast** in **Quorum reached**, runs **Prepare broadcast** then **Confirm & Broadcast**, and waits for **Proposal enacted onchain** (`e2e-broadcast-done-banner`). Requires Bitcoin RPC / operator env vars in **`desktop-app/.env`** (see `use-broadcast-proposal`).
 
 Broadcast uses the **first** `e2e-proposal-broadcast-button` in **Quorum reached**.
 
@@ -112,6 +115,10 @@ Shared steps live in [`test/helpers/login-mnemonic.mjs`](test/helpers/login-mnem
 ### [`test/specs/proposal-add-signer.e2e.js`](test/specs/proposal-add-signer.e2e.js)
 
 After the same login helper, clicks **Create proposal** on the dashboard (client-side route to **`/proposals/create`** — avoid `browser.url(…/proposals/create)` in Tauri builds: the custom protocol has no SPA fallback and returns “asset not found”). Then keeps **Signer update**, sets a title, adds compressed pubkey **`03dd6d7…427c`** via **+ Add**, opens **Preview and Create**, then **Sign and Create Proposal**, and waits for the **Signature collected** success panel (`data-testid="e2e-proposal-signature-success"`).
+
+### [`test/specs/proposal-co-sign-mnemonic.e2e.js`](test/specs/proposal-co-sign-mnemonic.e2e.js)
+
+After login with **`DEMO_MNEMONIC_COSIGN`** (second seed at the same canonical Admin path, present in asm-params `keys[1]`), clicks **Sign** on the first pending proposal and submits the second signature.
 
 ### [`test/specs/proposal-broadcast-quorum.e2e.js`](test/specs/proposal-broadcast-quorum.e2e.js)
 

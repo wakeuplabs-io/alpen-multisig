@@ -22,7 +22,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await broadcastBtn.waitForDisplayed({
 			timeout: 120000,
 			timeoutMsg:
-				'No Broadcast in Quorum reached — run add-signer then co-sign-row1 first, or pick the first quorum card manually.',
+				'No Broadcast in Quorum reached — run add-signer then co-sign-mnemonic first, or pick the first quorum card manually.',
 		})
 		await broadcastBtn.waitForClickable({ timeout: 30000 })
 		await broadcastBtn.click()

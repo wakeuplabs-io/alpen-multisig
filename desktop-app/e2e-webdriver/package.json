@@ -9,6 +9,7 @@
 		"test:e2e:all": "wdio run wdio.conf.js",
 		"test:e2e:wallet-smoke": "wdio run wdio.conf.js --spec ./test/specs/wallet-smoke.e2e.js",
 		"test:e2e:proposal-add-signer": "wdio run wdio.conf.js --spec ./test/specs/proposal-add-signer.e2e.js",
+		"test:e2e:proposal-co-sign-mnemonic": "wdio run wdio.conf.js --spec ./test/specs/proposal-co-sign-mnemonic.e2e.js",
 		"test:e2e:proposal-broadcast-quorum": "wdio run wdio.conf.js --spec ./test/specs/proposal-broadcast-quorum.e2e.js",
 		"format": "prettier --write \"./**/*.{js,mjs}\""
 	},
