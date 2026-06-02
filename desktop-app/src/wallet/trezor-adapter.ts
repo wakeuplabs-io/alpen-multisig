@@ -8,6 +8,7 @@ type HwWalletInfo = {
 	deviceLabel: string
 	derivationPath: string
 	addressSample?: string
+	publicKeyHex?: string
 	xpubOrFingerprint?: string
 	keyLabel?: string
 }
@@ -29,12 +30,13 @@ export function createTrezorAdapter(): WalletAdapter {
 			const result = await tauriCall<HwWalletInfo>('get_trezor_info', { derivationPath: ADMIN_ID_PATH })
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
-			publicKeyHex = info.xpubOrFingerprint ?? null
+			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
 			currentDerivationPath = ADMIN_ID_PATH
 			return {
 				deviceLabel: info.deviceLabel,
 				derivationPath: info.derivationPath,
 				addressSample: info.addressSample,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: info.xpubOrFingerprint,
 				keyLabel: info.keyLabel,
 			}

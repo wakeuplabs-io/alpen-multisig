@@ -160,6 +160,7 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
         device_label: "Trezor".to_string(),
         derivation_path: path_str,
         address_sample: Some(address.to_string()),
+        public_key_hex: Some(pubkey_hex.clone()),
         xpub_or_fingerprint: Some(format!("{}…", &pubkey_hex[..16.min(pubkey_hex.len())])),
         key_label: Some("Public key".to_string()),
     })

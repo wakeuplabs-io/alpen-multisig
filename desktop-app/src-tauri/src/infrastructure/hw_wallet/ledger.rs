@@ -414,6 +414,7 @@ where
         device_label: "Ledger".to_string(),
         derivation_path: path_str.to_string(),
         address_sample: Some(address.to_string()),
+        public_key_hex: Some(pubkey_hex.clone()),
         xpub_or_fingerprint: Some(format!("{}…", &pubkey_hex[..16.min(pubkey_hex.len())])),
         key_label: Some("Public key".to_string()),
     })

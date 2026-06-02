@@ -11,6 +11,8 @@ export type WalletAccountInfo = {
 	deviceLabel: string
 	derivationPath: string
 	addressSample?: string
+	/** Full compressed pubkey hex — required for ASM membership checks on HW connect. */
+	publicKeyHex?: string
 	xpubOrFingerprint?: string
 	/** Display label for xpubOrFingerprint (e.g. 'Public key', 'xpub', 'Fingerprint') */
 	keyLabel?: string

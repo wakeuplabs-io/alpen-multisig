@@ -43,6 +43,7 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 				deviceLabel: 'Mnemonic Wallet (BIP39)',
 				derivationPath,
 				addressSample: selectedAddress,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: publicKeyHex,
 				keyLabel: 'Public key',
 			}
