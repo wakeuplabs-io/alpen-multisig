@@ -42,6 +42,8 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.2 ✅ | Clean wallet UI | PRD §4, Alta WalletPanel, [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md) |
 | R1.3 ✅ | Receive rotation | PRD §4.3.4, [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) — BDK `next_unused_address` rotation; `admin_wallet_next_receive_address` IPC + `useAdminWalletReceiveAddress` hook |
 | R1.4 ✅ | Remove connect-time derivation picking | PRD §3.2 — canonical paths only, [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
+| R1.5 | Balance UX (§4.3.1 complete) | PRD §4.3.1, [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) — confirmed hero + unconfirmed net line; Alta parity |
+| R1.6 | Addresses UX (§4.3.2 complete) | PRD §4.3.2, [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — per-address confirmed + unconfirmed; Alta parity |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 6 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
@@ -87,7 +89,7 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> R1[Release 1: R1.0 Ephemeral reveal key → R1.0.1 Pre-sign commit+reveal → R1.1 HW commit-funding signing → R1.2 Clean UI → R1.3 Receive rotation → R1.4 Drop derivation picking]
+  P38 --> R1[Release 1: R1.0 … R1.4 → R1.5 Balance UX → R1.6 Addresses UX]
   R1 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
   P5 --> P6[Phase 6 Admin ID UI]
@@ -98,7 +100,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has three parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.4), and the **Remaining phases (4–9)**.
+The plan has three parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.4 shipped; R1.5–R1.6 close §4.3.1–§4.3.2 UX), and the **Remaining phases (4–9)**.
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -351,11 +353,13 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ---
 
-### Release 1 — complete
+### Release 1
 
-Release 1 is built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs. **All R1 steps shipped to `develop`.** **Next shippable increment:** Phase 4 (Send BTC happy path on regtest).
+Release 1 is built on the Foundation. Steps R1.0–R1.4 shipped to `develop`; **R1.5 and R1.6 close Release 1** by completing PRD §4.3.1–§4.3.2 with polished wallet UX/UI before Phase 4. Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
 
-**Closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
+**R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
+
+**Next shippable increment:** R1.5 (Balance UX — PRD §4.3.1).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -428,11 +432,75 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Later (optional, not in Release 1):** Admin ID display/copy (Phase 6), Send-on-HW + verify-on-device (Phase 7), QR for receive, fee-bump (Phase 5) — pull forward only if a Release 1 step needs them.
 
+#### R1.5 — Balance UX (PRD §4.3.1 complete)
+
+**Spec:** [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) — UX copy, wireframes, view-model contracts, and test plan.
+
+**Goal:** Close the remaining PRD §4.3.1 gap in the wallet slide-over. The signer MUST see (1) total BTC balance **net of unconfirmed** send/receive transactions and (2) the **net balance of unconfirmed** movements as a separate line. Phase 2 already exposes `BalanceDto.confirmedSats` and `BalanceDto.unconfirmedSats`; R1.2 wired the hero to `confirmedSats` only — R1.5 surfaces unconfirmed in the UI with Alta visual parity.
+
+**PRD gap (today):** `WalletBalance` receives a single `balanceSats` prop (`confirmedSats` from the screen); `unconfirmedSats` is never rendered.
+
+**In scope (frontend-only)**
+
+- **`WalletBalance`:** keep confirmed sats as the hero (`BIZ_UDPMincho`, BTC ↔ sats toggle unchanged). Add a tertiary line when `unconfirmedSats !== 0`: signed net unconfirmed in sats (and optionally BTC when sats mode is off), muted styling — not alarmist. Hide the line when zero (no noise).
+- **Copy:** use PRD-aligned wording (`unconfirmed`, not internal phase names). Positive net: `+N sats unconfirmed`; negative net: `−N sats unconfirmed`.
+- **Panel wiring:** pass `confirmedSats` and `unconfirmedSats` from `useAdminWalletBalance()` through `WalletPanelContent` on dashboard and broadcast screens.
+- **Header polish (balance slice):** optional `Admin Wallet` title with session/signer subtitle (replacing session-first-only header) — spec decides exact copy; watch-only / signing-unavailable badge deferred to R1.6 if it touches addresses context.
+- **States:** loading skeleton unchanged; stale data + sync error unchanged (balance visible, error on `SyncChip`).
+- **Tests:** pure helpers for signed unconfirmed formatting (if extracted); update architecture/copy guards as needed.
+
+**Out of scope**
+
+- Per-address unconfirmed breakdown → R1.6.
+- Send, transactions, QR, Admin ID, tabs/navigation for Phase 4+.
+- Rust / IPC / DTO changes — consume existing `BalanceDto` verbatim.
+
+**Done when**
+
+- On regtest with an unconfirmed incoming or outgoing Admin Wallet movement, the panel hero shows confirmed balance and a separate signed unconfirmed line; with no unconfirmed UTXOs the tertiary line is absent.
+- Visual parity with Alta `WalletPanel` balance block (typography, spacing, toggle).
+- PRD §4.3.1 marked **PASS** in spec-compliance matrix; frontend CI green.
+
+**Primary code areas:** `domain/admin-wallet/components/wallet-balance.tsx`, `wallet-panel-content.tsx`, `screens/proposals-dashboard-screen.tsx`, `screens/broadcast-proposal-screen.tsx`, `model/` (format helper if any).
+
+#### R1.6 — Addresses UX (PRD §4.3.2 complete)
+
+**Spec:** [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — UX copy, wireframes, view-model contracts, and test plan.
+
+**Goal:** Close the remaining PRD §4.3.2 gap. The signer MUST see each address that holds a balance with its current balance **net of unconfirmed transactions**, and unconfirmed effects per address must be visible separately where non-zero. Phase 2 `UtxoDto.confirmations` and `composeAddressesWithBalance` already aggregate sats by derivation index — R1.6 splits confirmed vs unconfirmed per address in the view-model and renders it in the addresses table.
+
+**PRD gap (today):** `AddressWithBalanceView` exposes a single `balanceSats` (all UTXOs summed); rows do not distinguish pending credits/debits.
+
+**In scope (frontend-only)**
+
+- **View-model:** extend `composeAddressesWithBalance` (or adjacent mapper) to produce `confirmedSats` and `unconfirmedSats` per row (`confirmations === 0` → unconfirmed bucket).
+- **`AddressRow` / `AddressesWithBalanceList`:** hero column shows confirmed balance; when `unconfirmedSats !== 0`, show a muted sub-line (`±N sats unconfirmed`) matching R1.5 copy conventions.
+- **Accordion UX:** header copy `Addresses with balance · N` (drop redundant "All"); keep default collapsed; empty/loading/error states from R1.2 unchanged.
+- **Optional polish:** per-row copy address via shared `CopyButton`; full address on `title` / expand — spec decides.
+- **Header / capability:** `Admin Wallet` title + session subtitle if not done in R1.5; subtle watch-only badge when `canSign === false` (uses existing `useAdminWalletCapability`).
+- **Tests:** unit tests for confirmed/unconfirmed split in `compose-addresses-with-balance`; row formatter tests if extracted.
+
+**Out of scope**
+
+- Wallet-level unconfirmed line → R1.5 (must ship first or in parallel only after R1.5 merge).
+- Internal/change address listing policy changes (external-only with balance remains default).
+- Send, QR, new IPC, pagination beyond existing address page.
+
+**Done when**
+
+- Fund two external indices on regtest; credit one with unconfirmed UTXOs — expanded list shows per-address confirmed balance and unconfirmed sub-line where applicable.
+- PRD §4.3.2 marked **PASS** in spec-compliance matrix; Release 1 **closed** (§4.3.1–§4.3.2 complete, receive rotation in R1.3, clean shell in R1.2).
+- Frontend CI green.
+
+**Primary code areas:** `domain/admin-wallet/model/compose-addresses-with-balance.ts`, `components/address-row.tsx`, `components/addresses-with-balance-list.tsx`, `components/wallet-panel-header.tsx`, `hooks/use-admin-wallet-capability.ts`.
+
+**Release 1 closure:** merge R1.6 → evolution note → **next program increment is Phase 4** (Send BTC happy path).
+
 ---
 
 ### Remaining phases (4–9)
 
-Phases 4–9 continue after Release 1. **Phase 6 (receive) and Phase 7 (HW) overlap with Release 1** — their entries below list only what remains after Release 1 ships.
+Phases 4–9 continue after Release 1 (including R1.5–R1.6). **Phase 6 (receive QR) and Phase 7 (HW Send) overlap with Release 1** — their entries below list only what remains after Release 1 ships.
 
 #### Phase 4 — Send BTC happy path (regtest, dev mnemonic)
 
