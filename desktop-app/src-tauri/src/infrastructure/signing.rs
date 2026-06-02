@@ -365,6 +365,20 @@ mod tests {
         assert_eq!(result.signatures_verified, 0);
     }
 
+    /// Ledger regtest Admin ID (`m/84'/1'/73'/0/0`) for the demo seed is asm-params keys[2].
+    #[test]
+    fn demo_seed_ledger_regtest_admin_id_matches_asm_params() {
+        let mnemonic =
+            "multiply toss magic exclude crawl obey garden black apart room village neglect";
+        let sk =
+            derive_secret_key_from_mnemonic_path(mnemonic, "", "m/84'/1'/73'/0/0").expect("derive");
+        let pk = PublicKey::from_secret_key(SECP256K1, &sk);
+        assert_eq!(
+            hex::encode(pk.serialize()),
+            "03950345fe8eb7dc8975c774aacb3f1afcae77a88bb0ab1cce227e7690aa62229f"
+        );
+    }
+
     #[test]
     fn test_mnemonic_signature_verifies_against_raw_sighash() {
         // Regression: sign_with_mnemonic_path previously used signed_msg_hash (Bitcoin message

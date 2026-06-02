@@ -8,6 +8,7 @@ type HwWalletInfo = {
 	deviceLabel: string
 	derivationPath: string
 	addressSample?: string
+	publicKeyHex?: string
 	xpubOrFingerprint?: string
 	keyLabel?: string
 }
@@ -31,12 +32,13 @@ export function createLedgerAdapter(): WalletAdapter {
 			})
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
-			publicKeyHex = info.xpubOrFingerprint ?? null
+			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
 			currentDerivationPath = ADMIN_ID_PATH
 			return {
 				deviceLabel: info.deviceLabel,
 				derivationPath: info.derivationPath,
 				addressSample: info.addressSample,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: info.xpubOrFingerprint,
 				keyLabel: info.keyLabel,
 			}
