@@ -192,6 +192,23 @@ pub async fn admin_wallet_list_addresses(
         .map_err(serialize_wallet_error)
 }
 
+/// Returns the next unused external (receive) address (R1.3 — receive rotation).
+///
+/// Idempotent until the address is credited and observed during sync, after which it
+/// rotates to the next unused index. Returns the tagged `Disabled` error if no session
+/// is active.
+#[tauri::command]
+pub async fn admin_wallet_next_receive_address(
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<AddressDto, String> {
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    svc.next_receive_address()
+        .await
+        .map_err(serialize_wallet_error)
+}
+
 #[tauri::command]
 pub async fn admin_wallet_sync(
     wallet_session: tauri::State<'_, WalletSession>,
@@ -362,6 +379,33 @@ mod tests {
         assert_eq!(
             error_code, "Disabled",
             "disabled_default last_error.code must be Disabled, got: {error_code}"
+        );
+    }
+
+    /// Compile-time check: admin_wallet_next_receive_address takes State<WalletSession>.
+    #[test]
+    #[allow(clippy::let_underscore_future)]
+    fn next_receive_address_command_uses_wallet_session_state() {
+        fn _check(s: tauri::State<'_, WalletSession>) {
+            let _ = admin_wallet_next_receive_address(s);
+        }
+        let _ = _check;
+    }
+
+    /// Disabled session: the no-session path surfaces the tagged `Disabled` error that
+    /// admin_wallet_next_receive_address returns via `current_or_fallback` + `serialize_wallet_error`.
+    #[test]
+    fn next_receive_address_no_session_surfaces_tagged_disabled_error() {
+        let session = WalletSession::empty();
+        let err = match session.current_or_fallback() {
+            Err(e) => e,
+            Ok(_) => panic!("empty session must yield Disabled"),
+        };
+        let json = serialize_wallet_error(err);
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(
+            value["type"], "Disabled",
+            "no-session next_receive_address must surface the tagged Disabled error"
         );
     }
 

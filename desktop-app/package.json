@@ -12,6 +12,7 @@
     "test:admin-wallet-capability-schema": "tsx src/api/__tests__/admin-wallet-capability-schema.test.ts",
     "test:derive-broadcast-error": "tsx src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts",
     "test:api-admin-wallet-watch-only": "tsx src/api/admin-wallet-watch-only.test.ts",
+    "test:api-admin-wallet-receive-rotation": "tsx src/api/admin-wallet-receive-rotation.test.ts",
     "test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
     "test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
     "test:model-format-signed-sats": "tsx src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts",

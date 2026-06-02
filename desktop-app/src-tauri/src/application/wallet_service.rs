@@ -593,6 +593,23 @@ impl WalletService {
         Ok(info.address)
     }
 
+    /// Returns the next unused **external** (receive) address (R1.3 — receive rotation).
+    ///
+    /// Uses BDK's gap-aware `next_unused_address`, which returns the lowest external
+    /// index not yet observed in a transaction. The call is **idempotent**: it returns
+    /// the same address until that address is used (credited and observed during sync),
+    /// after which it rotates to the next unused index. Pure public derivation — works
+    /// identically for mnemonic and watch-only/HW sessions; no signing material is touched.
+    pub async fn next_receive_address(&self) -> Result<AddressDto, AdminWalletError> {
+        let mut wallet = self.wallet.lock().await;
+        let info = wallet.next_unused_address(bdk_wallet::KeychainKind::External);
+        Ok(AddressDto {
+            index: info.index,
+            address: info.address.to_string(),
+            is_used: false,
+        })
+    }
+
     /// Signals the background sync loop to exit. Idempotent — safe to call multiple times.
     /// Uses notify_waiters() to wake all current waiters (the select! loop observes it).
     pub fn shutdown(&self) {
@@ -961,6 +978,75 @@ mod tests {
             addr1, addr2,
             "consecutive reveal_change_address calls must return distinct addresses"
         );
+    }
+
+    // R1.3 (receive rotation): next_receive_address on a fresh wallet returns external index 0, unused.
+    #[tokio::test]
+    async fn next_receive_address_on_fresh_wallet_returns_index_0_unused() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        let addr = svc
+            .next_receive_address()
+            .await
+            .expect("next_receive_address must succeed");
+
+        assert_eq!(addr.index, 0, "fresh wallet must return external index 0");
+        assert!(
+            !addr.is_used,
+            "freshly issued receive address must be unused"
+        );
+        assert!(
+            addr.address.starts_with("bcrt1p"),
+            "regtest receive address must be a P2TR bcrt1p address, got: {}",
+            addr.address
+        );
+    }
+
+    // R1.3: idempotency guard — consecutive calls return the SAME address until it is used.
+    // (Contrast with reveal_change_address, which always advances.)
+    #[tokio::test]
+    async fn next_receive_address_is_idempotent_until_used() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet);
+
+        let a1 = svc.next_receive_address().await.expect("first call ok");
+        let a2 = svc.next_receive_address().await.expect("second call ok");
+
+        assert_eq!(
+            a1.index, a2.index,
+            "next_receive_address must not advance the index while the address is unused"
+        );
+        assert_eq!(
+            a1.address, a2.address,
+            "consecutive next_receive_address calls must return the same unused address"
+        );
+    }
+
+    // R1.3: watch-only / HW compatibility — pure derivation, no ReadOnly error.
+    #[tokio::test]
+    async fn next_receive_address_on_watch_only_returns_ok() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new_watch_only(wallet);
+
+        let addr = svc
+            .next_receive_address()
+            .await
+            .expect("watch-only next_receive_address must succeed (pure derivation)");
+
+        assert_eq!(addr.index, 0, "watch-only fresh wallet must return index 0");
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
