@@ -39,4 +39,26 @@ const syncIncomplete = formatAdminWalletError({ type: 'SyncIncomplete', message:
 assert.equal(syncIncomplete.severity, 'warning')
 assert.equal(syncIncomplete.body, syncMsg)
 
+// No dev/roadmap wording leaks into user-facing copy (R1.2 cleanup).
+const variants: AdminWalletError[] = [
+	{ type: 'Disabled' },
+	{ type: 'RpcUnreachable', message: 'x' },
+	{ type: 'RpcAuthFailed', message: 'x' },
+	{ type: 'DescriptorParseError', message: 'x' },
+	{ type: 'SyncIncomplete', message: 'x' },
+	{ type: 'RegtestGuardViolation', message: 'x' },
+	{ type: 'ReadOnly' },
+	{ type: 'InvalidMnemonic', message: 'x' },
+	{ type: 'Descriptor', message: 'x' },
+	{ type: 'WalletCreation', message: 'x' },
+]
+const forbiddenWording = [/dev mnemonic/i, /palabras/i]
+for (const variant of variants) {
+	const view = formatAdminWalletError(variant)
+	const text = `${view.title} ${view.body}`
+	for (const pattern of forbiddenWording) {
+		assert.ok(!pattern.test(text), `error copy for ${variant.type} must not contain ${pattern}`)
+	}
+}
+
 console.log('format-admin-wallet-error: all assertions passed.')

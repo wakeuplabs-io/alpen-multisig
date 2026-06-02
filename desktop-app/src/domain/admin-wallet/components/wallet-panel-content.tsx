@@ -6,9 +6,6 @@ import { DisabledWalletCard } from './disabled-wallet-card'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
 import { AddressesWithBalanceList } from './addresses-with-balance-list'
-import { ReceiveSection } from './receive-section'
-import { TxHistoryList } from './tx-history-list'
-import { SendPlaceholder } from './send-placeholder'
 import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
@@ -60,18 +57,7 @@ export function WalletPanelContent({
 				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
 			</div>
 
-			<div className="px-[18px] pt-[18px]">
-				<ReceiveSection address={receiveAddress} isLoading={isAddressesLoading} />
-			</div>
-
-			<div className="px-[18px] pt-[18px]">
-				<TxHistoryList />
-			</div>
-
 			<div className="mt-[18px] border-t border-[#f3f4f6] pt-3">
-				<p className="px-[18px] pb-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9ca3af]">
-					Admin tools
-				</p>
 				<AddressesWithBalanceList
 					rows={addressRows}
 					isLoading={addressRowsLoading}
@@ -79,17 +65,10 @@ export function WalletPanelContent({
 					isExpanded={expandedSection === 'addresses'}
 					onToggle={onToggleAddresses}
 				/>
-				<div className="px-[18px] py-3">
-					<SendPlaceholder />
-				</div>
-				<div className="px-[18px] pb-4 pt-1">
-					<SyncChip
-						syncStatus={syncStatus}
-						isRefreshing={isSyncRefreshing}
-						error={syncError}
-						onRefresh={onRefreshSync}
-					/>
-				</div>
+			</div>
+
+			<div className="mt-auto border-t border-[#f3f4f6] px-[18px] py-3">
+				<SyncChip syncStatus={syncStatus} isRefreshing={isSyncRefreshing} error={syncError} onRefresh={onRefreshSync} />
 			</div>
 		</div>
 	)

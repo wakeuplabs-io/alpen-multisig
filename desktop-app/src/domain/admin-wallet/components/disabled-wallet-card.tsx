@@ -4,8 +4,7 @@ type DisabledWalletCardProps = {
 	error: AdminWalletError & ({ type: 'Disabled' } | { type: 'RegtestGuardViolation' })
 }
 
-const DISABLED_MESSAGE =
-	'Admin Wallet is not enabled for this environment. Connect a wallet (Palabras on regtest/testnet, or a hardware wallet on any network) to enable signing.'
+const DISABLED_MESSAGE = 'Admin Wallet is not enabled for this environment. Connect your wallet to enable signing.'
 
 export function DisabledWalletCard({ error }: DisabledWalletCardProps) {
 	const message = error.type === 'Disabled' ? DISABLED_MESSAGE : error.message
