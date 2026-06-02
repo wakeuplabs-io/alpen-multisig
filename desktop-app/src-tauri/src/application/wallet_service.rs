@@ -838,22 +838,19 @@ mod tests {
 
         let cancel = Arc::clone(&svc.cancel);
 
-        // Create the notified() future BEFORE calling shutdown().
-        // notify_waiters() wakes futures already registered; it does not store a permit.
-        let notified = cancel.notified();
+        // Register the waiter in a spawned task, then yield so it polls `notified()` before
+        // shutdown(). Avoids a fixed sleep + short timeout race that flakes on loaded CI runners.
+        let waiter = tokio::spawn(async move { cancel.notified().await });
 
-        // Call shutdown from a separate task to avoid blocking
-        let svc2 = Arc::clone(&svc);
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-            svc2.shutdown();
-        });
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
 
-        let result: Result<(), tokio::time::error::Elapsed> =
-            tokio::time::timeout(std::time::Duration::from_millis(100), notified).await;
+        svc.shutdown();
+
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), waiter).await;
         assert!(
-            result.is_ok(),
-            "notified() future registered before shutdown() must wake when shutdown() fires"
+            result.is_ok() && result.unwrap().is_ok(),
+            "notified() waiter registered before shutdown() must complete when shutdown() fires"
         );
     }
 
