@@ -242,6 +242,33 @@ pub fn get_account_xpub(path: &str) -> Result<String, String> {
     Ok(xpub.to_string())
 }
 
+/// Returns the master fingerprint (first 4 bytes of hash160 of master public key) from the Trezor.
+/// Obtained by requesting the master xpub at path `m/` and reading the root_fingerprint from the response.
+pub fn get_master_fingerprint() -> Result<u32, String> {
+    let mut trezor = open_trezor()?;
+    let master_path = DerivationPath::from_str("m/").map_err(|e| format!("Invalid path: {e}"))?;
+
+    // Call GetPublicKey on master path to get root_fingerprint from the response
+    let mut req = protos::GetPublicKey::new();
+    req.address_n = utils::convert_path(&master_path);
+    req.set_show_display(false);
+    req.set_coin_name(utils::coin_name(Network::Bitcoin).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_script_type(InputScriptType::SPENDTAPROOT);
+    req.set_ignore_xpub_magic(true);
+
+    let response = trezor
+        .call(
+            req,
+            Box::new(|_, m: protos::PublicKey| {
+                // root_fingerprint is available on the PublicKey response
+                Ok(m.root_fingerprint())
+            }),
+        )
+        .map_err(|e: trezor_client::Error| e.to_string())?;
+
+    resolve(response)
+}
+
 /// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
 ///
 /// `message` must be the human-readable string produced by
@@ -282,4 +309,17 @@ pub fn sign_admin_sps65_binding(
         public_key_hex: hex::encode(xpub.public_key.serialize()),
         signature_hex: hex::encode(recoverable_sig),
     })
+}
+
+/// Taproot key-path PSBT signing for Admin Wallet commit funding (not yet implemented).
+pub fn sign_admin_wallet_psbt(
+    _psbt: &mut bitcoin::psbt::Psbt,
+    _account_xpub: &str,
+    _master_fingerprint: u32,
+    _network: Network,
+) -> Result<(), String> {
+    Err(
+        "Trezor Admin Wallet PSBT signing is not implemented yet; use Ledger or mnemonic (Palabras) on regtest"
+            .to_string(),
+    )
 }

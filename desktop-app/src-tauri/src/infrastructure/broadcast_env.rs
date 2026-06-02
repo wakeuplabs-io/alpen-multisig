@@ -13,9 +13,9 @@ pub enum BroadcastEnvError {
     InvalidNetwork(String),
     #[error("invalid magic bytes hex: {0}")]
     InvalidMagicBytes(String),
-    #[error("dev mnemonic signing is disabled (set ALLOW_DEV_MNEMONIC_SIGNING=1 for regtest)")]
-    MnemonicSigningDisabled,
-    #[error("wallet session required — log in with Palabras (dev mnemonic) before broadcast")]
+    #[error(
+        "admin wallet session required — disconnect and reconnect your wallet (Ledger, Trezor, or Palabras) before broadcast"
+    )]
     WalletSessionRequired,
     #[error("admin wallet is watch-only; hardware wallet required to sign")]
     ReadOnly,
@@ -51,18 +51,12 @@ pub fn load_broadcast_env(
     let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
     let network = parse_network(&network_str)?;
 
-    // Gate 1: dev mnemonic signing must be explicitly enabled
-    let allow = std::env::var("ALLOW_DEV_MNEMONIC_SIGNING")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    if !allow {
-        return Err(BroadcastEnvError::MnemonicSigningDisabled);
-    }
-    // Gate 2: wallet session must be active
+    // Gate 1: wallet session must be active
     if wallet_session.current().is_none() {
         return Err(BroadcastEnvError::WalletSessionRequired);
     }
-    // Gate 3: session must not be read-only
+    // Gate 2: session must be able to sign on this network (per-signer capability —
+    // mnemonic signer = regtest/testnet only; hardware signer = any network).
     if !wallet_session.can_sign() {
         return Err(BroadcastEnvError::ReadOnly);
     }
@@ -142,13 +136,11 @@ mod tests {
     }
 
     fn set_dev_env() {
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
     }
 
     fn clear_dev_env() {
         for k in [
-            "ALLOW_DEV_MNEMONIC_SIGNING",
             "BITCOIN_NETWORK",
             "BITCOIN_MAGIC_BYTES_HEX",
             "BROADCAST_CONFIRM_POLL_MS",
@@ -188,40 +180,6 @@ mod tests {
     }
 
     #[test]
-    fn load_broadcast_env_missing_dev_guard_returns_mnemonic_signing_disabled() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-        std::env::remove_var("BITCOIN_NETWORK");
-
-        let session = WalletSession::empty();
-        let result = load_broadcast_env(&session, &test_node_config());
-
-        assert!(
-            matches!(result, Err(BroadcastEnvError::MnemonicSigningDisabled)),
-            "expected MnemonicSigningDisabled, got: {:?}",
-            result
-        );
-    }
-
-    #[test]
-    fn load_broadcast_env_dev_guard_false_returns_mnemonic_signing_disabled() {
-        let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "0");
-        std::env::remove_var("BITCOIN_NETWORK");
-
-        let session = WalletSession::empty();
-        let result = load_broadcast_env(&session, &test_node_config());
-
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        assert!(
-            matches!(result, Err(BroadcastEnvError::MnemonicSigningDisabled)),
-            "expected MnemonicSigningDisabled, got: {:?}",
-            result
-        );
-    }
-
-    #[test]
     fn load_broadcast_env_invalid_magic_bytes_returns_invalid_magic_bytes_error() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         set_dev_env();
@@ -241,7 +199,6 @@ mod tests {
     #[test]
     fn load_broadcast_env_regression_adjacent_parsing_preserved() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "signet");
         std::env::set_var("BITCOIN_MAGIC_BYTES_HEX", "deadbeef");
         std::env::set_var("BROADCAST_CONFIRM_POLL_MS", "1234");
@@ -282,11 +239,9 @@ mod tests {
     #[test]
     fn load_broadcast_env_watch_only_session_returns_read_only() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let xpub = derive_regtest_xpub(TEST_MNEMONIC);
         let session = session_with_xpub(&xpub);
         let result = load_broadcast_env(&session, &test_node_config());
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::ReadOnly)),
             "expected ReadOnly, got: {:?}",
@@ -297,10 +252,8 @@ mod tests {
     #[test]
     fn load_broadcast_env_no_session_returns_wallet_session_required() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         let session = WalletSession::empty();
         let result = load_broadcast_env(&session, &test_node_config());
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
         assert!(
             matches!(result, Err(BroadcastEnvError::WalletSessionRequired)),
             "expected WalletSessionRequired, got: {:?}",
@@ -311,7 +264,6 @@ mod tests {
     #[test]
     fn load_broadcast_env_mnemonic_session_passes_gates() {
         let _g = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
         std::env::set_var("BITCOIN_NETWORK", "regtest");
         let session = session_with_mnemonic(TEST_MNEMONIC);
         let result = load_broadcast_env(&session, &test_node_config());

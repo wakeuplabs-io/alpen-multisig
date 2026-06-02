@@ -1,6 +1,6 @@
 # Admin Wallet — Session-Driven Broadcast Signing (R1.1)
 
-**Status:** Designed
+**Status:** Shipped — merged to `develop` (R1.1 complete). Evolution: [`admin-wallet-session-driven-broadcast-signing-evolution.md`](../evolution/admin-wallet-session-driven-broadcast-signing-evolution.md).
 **Release:** R1.1 (adds the hardware-wallet signing path)
 **Implementation plan:** [admin-wallet-implementation-plan.md](./admin-wallet-implementation-plan.md) — R1.1 row (§2) and §4 Release 1
 **Related proposal:** [proposal-broadcast-commit-reveal.md](./proposal-broadcast-commit-reveal.md)

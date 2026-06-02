@@ -99,6 +99,7 @@ else
 fi
 docker run --rm --name alpen-speculos \
 	-p 5001:5000 \
+	-p 9999:9999 \
 	-v "$APP_DIR:/apps" \
 	ghcr.io/ledgerhq/speculos:latest \
 	--model "$MODEL" \

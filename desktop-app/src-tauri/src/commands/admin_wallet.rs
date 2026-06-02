@@ -18,7 +18,6 @@ pub async fn wallet_session_init(
     input: WalletSessionInitInput,
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<(), String> {
-    desktop_app::infrastructure::dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
     wallet_session
         .init_from_mnemonic(
             &input.mnemonic,
@@ -34,6 +33,8 @@ pub async fn wallet_session_init(
 pub struct WatchOnlyInitInput {
     pub xpub: String,
     pub network: Option<String>,
+    pub master_fingerprint: Option<u32>,
+    pub device_type: Option<String>,
 }
 
 #[tauri::command]
@@ -41,17 +42,70 @@ pub async fn wallet_session_init_watch_only(
     input: WatchOnlyInitInput,
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<(), String> {
-    wallet_session
-        .init_from_xpub(&input.xpub, input.network.as_deref())
-        .await
-        .map_err(serialize_wallet_error)
+    if let Some(fp) = input.master_fingerprint {
+        let device_type =
+            match input.device_type.as_deref() {
+                Some("trezor") => {
+                    desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType::Trezor
+                }
+                Some("ledger") => {
+                    desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType::Ledger
+                }
+                _ => return Err(
+                    "device_type must be 'trezor' or 'ledger' when master_fingerprint is provided"
+                        .to_string(),
+                ),
+            };
+        wallet_session
+            .init_from_xpub_with_hw(&input.xpub, fp, device_type, input.network.as_deref())
+            .await
+            .map_err(serialize_wallet_error)
+    } else {
+        wallet_session
+            .init_from_xpub(&input.xpub, input.network.as_deref())
+            .await
+            .map_err(serialize_wallet_error)
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminWalletSignStatus {
+    pub can_sign: bool,
+    pub signer_kind: String,
+    pub reason: Option<String>,
+}
+
+/// Maps internal signer labels to the FE capability DTO (`hardware` | `mnemonic` | `none`).
+fn capability_signer_kind(raw: &str) -> &'static str {
+    match raw {
+        "trezor" | "ledger" => "hardware",
+        "mnemonic" => "mnemonic",
+        _ => "none",
+    }
 }
 
 #[tauri::command]
 pub async fn admin_wallet_can_sign(
     wallet_session: tauri::State<'_, WalletSession>,
-) -> Result<bool, String> {
-    Ok(wallet_session.can_sign())
+) -> Result<AdminWalletSignStatus, String> {
+    let can_sign = wallet_session.can_sign();
+    let (signer_kind, reason) = if can_sign {
+        match wallet_session.current() {
+            Some(svc) => (capability_signer_kind(&svc.signer_kind()).to_string(), None),
+            None => ("none".to_string(), Some("no-session".to_string())),
+        }
+    } else {
+        match wallet_session.current() {
+            None => ("none".to_string(), Some("no-session".to_string())),
+            Some(_) => ("none".to_string(), Some("watch-only-no-signer".to_string())),
+        }
+    };
+    Ok(AdminWalletSignStatus {
+        can_sign,
+        signer_kind,
+        reason,
+    })
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -62,10 +116,8 @@ pub struct AdminWalletInfo {
 
 /// Read admin wallet info from the shared `WalletService` — single source of truth.
 ///
-/// Triggers a sync (which applies `WalletService::check_enabled` guard),
-/// then returns the confirmed balance and external address index 0.
-/// Returns `Err(Disabled)` if `BITCOIN_NETWORK=regtest` or `ALLOW_DEV_MNEMONIC_SIGNING=1`
-/// is not set.
+/// Triggers a sync, then returns the confirmed balance and external address index 0.
+/// Returns `Err(Disabled)` if no wallet session is active.
 pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
     svc.sync().await.map_err(serialize_wallet_error)?;
     let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
@@ -162,62 +214,9 @@ pub fn admin_wallet_sync_status(wallet_session: tauri::State<'_, WalletSession>)
 mod tests {
     use super::*;
     use desktop_app::application::wallet_session::WalletSession;
-    use desktop_app::infrastructure::admin_wallet::load_admin_wallet;
-    use tokio::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-
-    fn build_test_service() -> WalletService {
-        let wallet = load_admin_wallet(TEST_MNEMONIC, bdk_wallet::bitcoin::Network::Regtest)
-            .expect("wallet creation must succeed");
-        WalletService::new(wallet)
-    }
-
-    fn clear_guard_env_vars() {
-        std::env::remove_var("BITCOIN_NETWORK");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-    }
-
-    /// REGRESSION: `admin_wallet_info` and `WalletService::sync()` MUST share the same guard.
-    /// If `ALLOW_DEV_MNEMONIC_SIGNING` is absent the guard rejects — this prevents the broadcast
-    /// screen from showing a balance while UTXOs/list silently return empty.
-    #[tokio::test]
-    async fn admin_wallet_info_rejects_when_allow_dev_mnemonic_signing_missing() {
-        let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("BITCOIN_NETWORK", "regtest");
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-
-        let svc = build_test_service();
-        let result = admin_wallet_info(&svc).await;
-
-        clear_guard_env_vars();
-        assert!(
-            result.is_err(),
-            "admin_wallet_info must reject when ALLOW_DEV_MNEMONIC_SIGNING is absent. Got: {:?}",
-            result
-        );
-    }
-
-    #[tokio::test]
-    async fn admin_wallet_info_rejects_when_bitcoin_network_not_regtest() {
-        let _guard = ENV_LOCK.lock().await;
-        std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
-        std::env::set_var("BITCOIN_NETWORK", "bitcoin");
-
-        let svc = build_test_service();
-        let result = admin_wallet_info(&svc).await;
-
-        clear_guard_env_vars();
-        std::env::remove_var("ALLOW_DEV_MNEMONIC_SIGNING");
-        assert!(
-            result.is_err(),
-            "admin_wallet_info must reject when BITCOIN_NETWORK != regtest. Got: {:?}",
-            result
-        );
-    }
 
     /// Verifies wallet_session_init is importable (compile-time check).
     #[test]
@@ -319,6 +318,14 @@ mod tests {
             !session.can_sign(),
             "can_sign must be false for watch-only session"
         );
+    }
+
+    #[test]
+    fn capability_signer_kind_maps_hw_vendors_to_hardware() {
+        assert_eq!(super::capability_signer_kind("ledger"), "hardware");
+        assert_eq!(super::capability_signer_kind("trezor"), "hardware");
+        assert_eq!(super::capability_signer_kind("mnemonic"), "mnemonic");
+        assert_eq!(super::capability_signer_kind("unknown"), "none");
     }
 
     /// Unit: admin_wallet_can_sign returns false when no session.

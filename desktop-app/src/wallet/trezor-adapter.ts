@@ -87,5 +87,16 @@ export function createTrezorAdapter(): WalletAdapter {
 			if (!result.ok) throw new Error(result.error)
 			return result.data
 		},
+
+		async getMasterFingerprint(): Promise<number> {
+			const result = await tauriCall<number>('get_trezor_master_fingerprint', {})
+			if (!result.ok) {
+				throw new Error(result.error)
+			}
+			if (result.data === 0) {
+				throw new Error('Trezor returned an invalid master fingerprint')
+			}
+			return result.data
+		},
 	}
 }

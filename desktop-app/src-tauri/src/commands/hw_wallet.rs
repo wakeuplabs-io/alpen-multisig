@@ -57,6 +57,13 @@ pub async fn get_trezor_admin_wallet_xpub() -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn get_trezor_master_fingerprint() -> Result<u32, String> {
+    tokio::task::spawn_blocking(trezor::get_master_fingerprint)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 // ---------------------------------------------------------------------------
 // Ledger commands
 // ---------------------------------------------------------------------------
@@ -109,6 +116,16 @@ pub async fn get_ledger_admin_wallet_xpub() -> Result<String, String> {
     tokio::task::spawn_blocking(move || ledger::get_account_xpub(&path))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_ledger_master_fingerprint() -> Result<u32, String> {
+    eprintln!("[ledger] get_master_fingerprint called");
+    let result = tokio::task::spawn_blocking(ledger::get_master_fingerprint)
+        .await
+        .map_err(|e| e.to_string())?;
+    eprintln!("[ledger] get_master_fingerprint result: {:?}", result);
+    result
 }
 
 #[tauri::command]

@@ -70,7 +70,11 @@ export function ConnectPhase({
 
 			{/* Heading */}
 			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[32px] font-normal leading-[1.2] tracking-[-0.01em] text-[#0a0a0a]">
-				{isSuccess ? 'Device connected' : 'Connect your hardware wallet'}
+				{isSuccess
+					? 'Device connected'
+					: walletVendor === 'mnemonic'
+						? 'Connect with your seed words'
+						: 'Connect your hardware wallet'}
 			</h1>
 
 			{/* Subtitle */}
@@ -192,7 +196,9 @@ export function ConnectPhase({
 			{/* Security note */}
 			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-[12px] text-[#9ca3af]">
 				<ShieldCheckMutedIcon width={16} height={16} className="block shrink-0" />
-				Your keys never leave the device. Alpen only receives signatures.
+				{walletVendor === 'mnemonic'
+					? 'Your seed words are used locally to derive keys. Alpen only receives signatures.'
+					: 'Your keys never leave the device. Alpen only receives signatures.'}
 			</p>
 
 			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}

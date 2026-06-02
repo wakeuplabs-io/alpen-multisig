@@ -75,8 +75,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 				setSigningStep({ challengeHex, step: 1, totalSteps: 2 })
 				return adapter.signSighash(challengeHex)
 			})
-			// Bind Admin Wallet to the session (vendor-specific, non-fatal)
-			await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
+			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
+			if (!adminWalletInit.ok) {
+				throw new Error(
+					adminWalletInit.error ?? 'Admin Wallet session could not be started — reconnect your wallet and try again',
+				)
+			}
 			const challengeResult = await orchestratorAuthStart({
 				baseUrl: ORCHESTRATOR_BASE_URL,
 				authority: authorityFromRole(selectedRole),

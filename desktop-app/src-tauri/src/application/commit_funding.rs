@@ -1,6 +1,6 @@
 //! Commit funding via the Admin Wallet (BDK).
 //!
-//! `BdkAdminWalletMnemonic` is the sole implementor of `CommitFunding`.
+//! `AdminWalletCommitFunding` is the sole implementor of `CommitFunding`.
 //! The legacy `BitcoindSendToAddress` path and the `COMMIT_FUNDING` env-var toggle
 //! were removed in Phase 3.6 — the Admin Wallet is the only commit funder.
 
@@ -17,7 +17,7 @@ pub enum CommitFundingError {
 }
 
 /// Abstraction seam for commit funding. Phase 7 HW signing will plug in at the `WalletService`
-/// level; this trait's single implementor remains `BdkAdminWalletMnemonic`.
+/// level; this trait's single implementor remains `AdminWalletCommitFunding`.
 #[async_trait]
 pub trait CommitFunding: Send + Sync {
     async fn build_signed_commit(
@@ -29,24 +29,24 @@ pub trait CommitFunding: Send + Sync {
 }
 
 // ---------------------------------------------------------------------------
-// BdkAdminWalletMnemonic — sole commit funder via BDK Admin Wallet
+// AdminWalletCommitFunding — sole commit funder via BDK Admin Wallet
 // ---------------------------------------------------------------------------
 
 /// Funds the commit transaction from the Admin Wallet descriptors.
-/// Requires `BITCOIN_NETWORK=regtest` and `ALLOW_DEV_MNEMONIC_SIGNING=1`
-/// (enforced by `WalletService::check_enabled()` inside `fund_commit`).
-pub struct BdkAdminWalletMnemonic {
+/// Signing capability is decided per-signer by network (`PsbtSigner::allowed_on`):
+/// the mnemonic signer is allowed on regtest/testnet only, a hardware signer on any network.
+pub struct AdminWalletCommitFunding {
     pub wallet_service: Arc<WalletService>,
 }
 
-impl BdkAdminWalletMnemonic {
+impl AdminWalletCommitFunding {
     pub fn new(wallet_service: Arc<WalletService>) -> Self {
         Self { wallet_service }
     }
 }
 
 #[async_trait]
-impl CommitFunding for BdkAdminWalletMnemonic {
+impl CommitFunding for AdminWalletCommitFunding {
     async fn build_signed_commit(
         &self,
         commit_address: &str,
@@ -86,14 +86,14 @@ mod tests {
         fn _assert_build_signed_commit_exists<T: CommitFunding>() {}
     }
 
-    // BdkAdminWalletMnemonic stores the injected WalletService — no ephemeral wallet on construction.
+    // AdminWalletCommitFunding stores the injected WalletService — no ephemeral wallet on construction.
     #[test]
     fn bdk_admin_wallet_mnemonic_stores_injected_wallet_service() {
         let wallet_service = make_wallet_service();
-        let funder = BdkAdminWalletMnemonic::new(Arc::clone(&wallet_service));
+        let funder = AdminWalletCommitFunding::new(Arc::clone(&wallet_service));
         assert!(
             Arc::ptr_eq(&funder.wallet_service, &wallet_service),
-            "BdkAdminWalletMnemonic must store the injected WalletService Arc (same pointer)"
+            "AdminWalletCommitFunding must store the injected WalletService Arc (same pointer)"
         );
     }
 }

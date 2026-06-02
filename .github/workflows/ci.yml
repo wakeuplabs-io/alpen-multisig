@@ -111,5 +111,10 @@ jobs:
       - name: IPC schema contract tests
         run: npm run test:ipc-schemas --workspace desktop-app
 
+      - name: Admin-wallet capability + broadcast-error contract tests
+        run: |
+          npm run test:admin-wallet-capability-schema --workspace desktop-app
+          npm run test:derive-broadcast-error --workspace desktop-app
+
       - name: Build
         run: npm run build --workspace desktop-app

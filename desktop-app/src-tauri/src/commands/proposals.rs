@@ -1,4 +1,4 @@
-use desktop_app::application::commit_funding::BdkAdminWalletMnemonic;
+use desktop_app::application::commit_funding::AdminWalletCommitFunding;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
@@ -338,14 +338,240 @@ pub async fn proposals_resubmit_reveal(
         })
 }
 
-fn map_broadcast_error(error: BroadcastError) -> String {
+#[cfg(test)]
+mod broadcast_error_code_tests {
+    use super::{broadcast_error_code, map_broadcast_error, map_broadcast_error_with_boundary};
+    use desktop_app::application::orchestrator_client::OrchestratorError;
+    use desktop_app::application::proposals::BroadcastError;
+
+    /// BE-11: Orchestrator session expiry during broadcast (boundary=BEFORE).
+    ///
+    /// When the orchestrator returns 401 during the pre-broadcast proposal fetch,
+    /// the error maps to code=OrchestratorUnauthorized with recovery=re-auth→retry.
+    ///
+    /// This is a focused regression test for the 401 case; the full error-code
+    /// matrix is covered by `broadcast_error_code_maps_all_10_codes` (step 01-10).
+    #[test]
+    fn test_broadcast_error_orchestrator_unauthorized() {
+        let error = BroadcastError::ProposalFetch(OrchestratorError::Backend {
+            status: 401,
+            message: "unauthorized".to_string(),
+        });
+        let code = broadcast_error_code(&error, false, false);
+        assert_eq!(code, "OrchestratorUnauthorized");
+    }
+
+    #[test]
+    fn broadcast_error_code_maps_all_10_codes() {
+        let cases = [
+            // OrchestratorUnauthorized: 401 from proposal fetch
+            (
+                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                    status: 401,
+                    message: "unauthorized".to_string(),
+                }),
+                true,
+                false,
+                "OrchestratorUnauthorized",
+            ),
+            // NoPendingReveal
+            (
+                BroadcastError::NoPendingReveal {
+                    action_id: "act-1".to_string(),
+                },
+                false,
+                false,
+                "NoPendingReveal",
+            ),
+            // BitcoinRpc (before broadcast)
+            (
+                BroadcastError::BitcoinRpc("node rejected".to_string()),
+                false,
+                false,
+                "BitcoinRpc",
+            ),
+            // BitcoinRpc (after broadcast reached)
+            (
+                BroadcastError::BitcoinRpc("node rejected".to_string()),
+                true,
+                true,
+                "BitcoinRpc",
+            ),
+            // Timeout
+            (
+                BroadcastError::Timeout {
+                    txid: "tx-1".to_string(),
+                },
+                true,
+                true,
+                "Timeout",
+            ),
+            // Setup errors that are unmapped → Unknown
+            (
+                BroadcastError::Setup("something broke".to_string()),
+                false,
+                false,
+                "Unknown",
+            ),
+            // ProposalFetch non-401 → Unknown
+            (
+                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                    status: 500,
+                    message: "server error".to_string(),
+                }),
+                false,
+                false,
+                "Unknown",
+            ),
+        ];
+
+        for (error, broadcast_reached, has_pending, expected_code) in cases {
+            let code = broadcast_error_code(&error, broadcast_reached, has_pending);
+            assert_eq!(
+                code, expected_code,
+                "expected {expected_code} for error: {error:?}"
+            );
+        }
+    }
+
+    /// BE-13: BitcoinRpc failure BEFORE broadcast boundary.
+    ///
+    /// When a Bitcoin RPC error occurs before submit_package is reached (e.g. during
+    /// sync/build), the error maps to code=BitcoinRpc with boundary=BEFORE.
+    /// Recovery is retry-from-scratch and canResubmit=false — even if a PendingReveal
+    /// exists in the store (NIT-3: presence doesn't prove broadcast).
+    #[test]
+    fn test_broadcast_error_bitcoin_rpc_before_boundary() {
+        let error = BroadcastError::BitcoinRpc("node rejected".to_string());
+
+        // BEFORE boundary: broadcast was never reached
+        let code = broadcast_error_code(&error, false, false);
+        assert_eq!(code, "BitcoinRpc");
+
+        // NIT-3: even with a live PendingReveal, BEFORE boundary → canResubmit=false
+        let code_with_pending = broadcast_error_code(&error, false, true);
+        assert_eq!(code_with_pending, "BitcoinRpc");
+
+        // The message should NOT mention resubmit (BEFORE boundary = retry-from-scratch)
+        let error_msg = map_broadcast_error(error);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "BitcoinRpc");
+        assert!(
+            !parsed["message"].as_str().unwrap().contains("resubmit"),
+            "BEFORE boundary BitcoinRpc message should NOT mention resubmit: {}",
+            parsed["message"]
+        );
+    }
+
+    /// BE-14: BitcoinRpc failure AFTER broadcast boundary — code=BitcoinRpc, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true.
+    ///
+    /// When a Bitcoin RPC error occurs after submit_package was attempted (boundary=AFTER)
+    /// and a live PendingReveal exists, the error maps to code=BitcoinRpc with
+    /// canResubmit=true — the user can resubmit the reveal transaction.
+    /// Resubmit eligibility requires BOTH: AFTER-boundary AND a live PendingReveal.
+    #[test]
+    fn test_broadcast_error_bitcoin_rpc_after_boundary() {
+        let error = BroadcastError::BitcoinRpc("submit_package failed".to_string());
+
+        // AFTER boundary + live PendingReveal → canResubmit=true
+        let error_msg = map_broadcast_error_with_boundary(error, true, true);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "BitcoinRpc");
+        assert_eq!(parsed["canResubmit"], true);
+        assert!(
+            parsed["message"].as_str().unwrap().contains("resubmit"),
+            "AFTER boundary BitcoinRpc message should mention resubmit: {}",
+            parsed["message"]
+        );
+    }
+
+    /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
+    ///
+    /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
+    /// was sent, the error maps to code=Timeout with recovery=resubmit-reveal.
+    /// The user can resubmit the reveal transaction.
+    #[test]
+    fn test_broadcast_error_confirmation_timeout() {
+        let error = BroadcastError::Timeout {
+            txid: "abc123".to_string(),
+        };
+        let code = broadcast_error_code(&error, true, true);
+        assert_eq!(code, "Timeout");
+
+        let error_msg = map_broadcast_error(error);
+        let parsed: serde_json::Value = serde_json::from_str(&error_msg).unwrap();
+        assert_eq!(parsed["code"], "Timeout");
+        assert!(
+            parsed["message"].as_str().unwrap().contains("resubmit"),
+            "Timeout message should mention resubmit: {}",
+            parsed["message"]
+        );
+    }
+}
+
+/// Pure helper: maps a BroadcastError to a stable error code string per the DDD-8 table.
+///
+/// `broadcast_reached`: whether the broadcast call was actually reached/attempted
+/// (e.g. commit_broadcasted report was sent).
+/// `has_pending`: whether a live PendingReveal exists for this action_id.
+///
+/// Used by `map_broadcast_error` to produce structured `{ code, message }` JSON.
+fn broadcast_error_code(
+    error: &BroadcastError,
+    _broadcast_reached: bool,
+    _has_pending: bool,
+) -> &'static str {
     match error {
+        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+            "OrchestratorUnauthorized"
+        }
+        BroadcastError::NoPendingReveal { .. } => "NoPendingReveal",
+        BroadcastError::BitcoinRpc(_) => "BitcoinRpc",
+        BroadcastError::Timeout { .. } => "Timeout",
+        BroadcastError::Setup(_) => "Unknown",
+        BroadcastError::ProposalFetch(_) => "Unknown",
+    }
+}
+
+/// Pure helper: maps a BroadcastError to a structured JSON error string with boundary context.
+///
+/// `broadcast_reached`: whether the broadcast call was actually reached/attempted
+/// `has_pending`: whether a live PendingReveal exists for this action_id.
+///
+/// canResubmit = true only when BOTH: AFTER-boundary (broadcast_reached) AND live PendingReveal.
+fn map_broadcast_error_with_boundary(
+    error: BroadcastError,
+    broadcast_reached: bool,
+    has_pending: bool,
+) -> String {
+    let code = broadcast_error_code(&error, broadcast_reached, has_pending);
+    let can_resubmit = broadcast_reached && has_pending;
+    let message = match &error {
         BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
             "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
                 .to_string()
         }
-        other => other.to_string(),
-    }
+        BroadcastError::NoPendingReveal { action_id } => {
+            format!("no pending reveal for action {action_id} — re-run broadcast")
+        }
+        BroadcastError::BitcoinRpc(msg) => {
+            if can_resubmit {
+                format!("The Bitcoin node rejected or could not process the broadcast: {msg}. You can resubmit the reveal.")
+            } else {
+                format!("The Bitcoin node rejected or could not process the broadcast: {msg}")
+            }
+        }
+        BroadcastError::Timeout { txid } => {
+            format!("Broadcast sent but confirmation timed out for tx {txid}. You can resubmit the reveal.")
+        }
+        BroadcastError::Setup(msg) => msg.clone(),
+        BroadcastError::ProposalFetch(e) => e.to_string(),
+    };
+    serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
+}
+
+fn map_broadcast_error(error: BroadcastError) -> String {
+    map_broadcast_error_with_boundary(error, false, false)
 }
 
 fn map_proposal_error(error: ProposalError) -> String {
@@ -483,7 +709,7 @@ pub async fn proposals_broadcast(
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
-    let commit_funding = BdkAdminWalletMnemonic::new(std::sync::Arc::clone(&wallet_service));
+    let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
         .await

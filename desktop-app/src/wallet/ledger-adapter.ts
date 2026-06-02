@@ -63,6 +63,17 @@ export function createLedgerAdapter(): WalletAdapter {
 			return result.data
 		},
 
+		async getMasterFingerprint(): Promise<number> {
+			const result = await tauriCall<number>('get_ledger_master_fingerprint', {})
+			if (!result.ok) {
+				throw new Error(result.error)
+			}
+			if (result.data === 0) {
+				throw new Error('Ledger returned an invalid master fingerprint')
+			}
+			return result.data
+		},
+
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
 			if (!publicKeyHex) throw new Error('Connect the Ledger first.')
 			if (!context) {

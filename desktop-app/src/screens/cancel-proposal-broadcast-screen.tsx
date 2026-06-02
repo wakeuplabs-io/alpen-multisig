@@ -26,7 +26,8 @@ export function CancelProposalBroadcastScreen() {
 	if (actionId === undefined) return <Navigate to="/proposals" replace />
 
 	const isLoading = isResolvingCancel || phase === 'idle' || phase === 'preparing'
-	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
+	const showDetails =
+		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
 	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
 
 	return (
@@ -79,7 +80,7 @@ export function CancelProposalBroadcastScreen() {
 
 					{cancelResolveError !== null && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">{cancelResolveError}</p>
+							<p className="m-0 text-sm text-[#991b1b]">{cancelResolveError.message}</p>
 						</div>
 					)}
 
@@ -88,7 +89,7 @@ export function CancelProposalBroadcastScreen() {
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting'}
+							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 						/>
 					)}
 

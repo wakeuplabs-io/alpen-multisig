@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { CopyClipboardIcon } from '@/assets/icons'
-import type { BroadcastPhase } from '../model/broadcast-proposal'
+import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
 	phase: BroadcastPhase
 	proposalStatus?: string
 	commitTxid?: string
 	revealTxid?: string
-	error?: string | null
+	error?: BroadcastError | null
 }
 
 type Step = { label: string; detail: string }
@@ -17,6 +17,9 @@ const STEPS: Step[] = [
 	{ label: 'Reveal', detail: 'Carries the action — broadcast with the commit' },
 	{ label: 'Enactment', detail: 'ASM applies the governance change after the confirmation delay' },
 ]
+
+/** Commit (0) + Reveal (1) are broadcast together as one package. */
+const BROADCAST_GROUP_LAST_INDEX = 1
 
 function CopyButton({ text }: { text: string }) {
 	const [copied, setCopied] = useState(false)
@@ -56,13 +59,11 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	const isError = phase === 'error'
 	const isDone = phase === 'done'
 	const isEnacted = proposalStatus === 'enacted'
+	const isAwaitingDevice = phase === 'awaiting-device'
 
-	// Commit (0) + Reveal (1) are broadcast together (one package), so they light up
-	// simultaneously while broadcasting; Enactment (2) follows after confirmation.
-	const BROADCAST_GROUP_LAST = 1
 	function stepState(index: number): 'done' | 'active' | 'pending' {
 		if (isDone) return 'done'
-		if (phase === 'broadcasting' && index <= BROADCAST_GROUP_LAST) return 'active'
+		if ((phase === 'broadcasting' || isAwaitingDevice) && index <= BROADCAST_GROUP_LAST_INDEX) return 'active'
 		return 'pending'
 	}
 
@@ -76,7 +77,9 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 							: 'Reveal confirmed — awaiting enactment'
 						: isError
 							? 'Broadcast failed'
-							: 'Broadcasting…'}
+							: isAwaitingDevice
+								? 'Waiting for device…'
+								: 'Broadcasting…'}
 				</h3>
 			</div>
 
@@ -134,7 +137,7 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 				{isError && error && (
 					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-[13px] text-[#b91c1c]">{error}</p>
+						<p className="m-0 text-[13px] text-[#b91c1c]">{error.message}</p>
 					</div>
 				)}
 			</div>

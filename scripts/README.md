@@ -183,6 +183,19 @@ LEDGER_SPECULOS_URL=http://localhost:5001
 
 Then restart `npm run tauri dev`. The Tauri backend will route all Ledger calls through the emulator instead of HID.
 
+#### Manual vs auto approval
+
+By default, broadcast PSBT signing on Speculos is **auto-approved** (the backend uploads `/automation` rules), so the flow runs without interaction — handy for the integration test / CI.
+
+To observe the real on-device interaction (and exercise the frontend "Confirm on your device" prompt + the 180s timeout, just like a physical Ledger), disable it:
+
+```
+LEDGER_SPECULOS_URL=http://localhost:5001
+LEDGER_SPECULOS_AUTO_APPROVE=0
+```
+
+With `LEDGER_SPECULOS_AUTO_APPROVE=0` you must approve the transaction yourself on the Speculos screen (web UI at the emulator port, or the emulated buttons).
+
 ### Physical Ledger device
 
 Leave `LEDGER_SPECULOS_URL` commented out. Connect the device via USB, unlock it, and open the **Bitcoin** app before connecting from the desktop app.

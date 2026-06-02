@@ -4,6 +4,8 @@ import type { AdminWalletError } from '@/api/admin-wallet'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
+import type { BroadcastPhase } from '../model/broadcast-proposal'
+import { BroadcastDevicePrompt } from './broadcast-device-prompt'
 
 type AdminWalletInfoView = {
 	address: string
@@ -16,21 +18,31 @@ type Props = {
 	onBroadcast: () => void
 	isBroadcasting: boolean
 	canSign?: boolean
+	canSignReason?: string
 	adminWalletInfo?: AdminWalletInfoView | null
 	utxoCount?: number
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
+	phase?: BroadcastPhase
 }
 
+const TIME_UNITS = [
+	{ label: 'h', seconds: 3600 },
+	{ label: 'm', seconds: 60 },
+	{ label: 's', seconds: 1 },
+] as const
+
 function relativeTime(isoStr: string): string {
-	// Handle both ISO-8601 strings and legacy numeric-only strings (bare Unix epoch seconds)
 	const ts = isNaN(Number(isoStr)) ? Date.parse(isoStr) : Number(isoStr) * 1000
 	const diffSeconds = Math.floor((Date.now() - ts) / 1000)
-	if (diffSeconds < 60) return `${diffSeconds}s ago`
-	const diffMinutes = Math.floor(diffSeconds / 60)
-	if (diffMinutes < 60) return `${diffMinutes}m ago`
-	const diffHours = Math.floor(diffMinutes / 60)
-	return `${diffHours}h ago`
+
+	for (const unit of TIME_UNITS) {
+		const value = Math.floor(diffSeconds / unit.seconds)
+		if (value >= 1 || unit.label === 's') {
+			return `${value}${unit.label} ago`
+		}
+	}
+	return '0s ago'
 }
 
 function LastSyncLabel({ lastSyncedAt }: { lastSyncedAt: string }) {
@@ -50,10 +62,12 @@ export function BroadcastDetailsCard({
 	onBroadcast,
 	isBroadcasting,
 	canSign = true,
+	canSignReason,
 	adminWalletInfo,
 	utxoCount,
 	lastSyncedAt,
 	syncError,
+	phase,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -62,6 +76,11 @@ export function BroadcastDetailsCard({
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+			{phase === 'awaiting-device' && (
+				<div className="border-b border-[#f3f4f6] p-6">
+					<BroadcastDevicePrompt />
+				</div>
+			)}
 			{proposal && (
 				<div className="border-b border-[#f3f4f6] p-6 pb-5">
 					<div className="flex items-start justify-between gap-3">
@@ -170,9 +189,17 @@ export function BroadcastDetailsCard({
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					{isBroadcasting ? 'Broadcasting…' : 'Confirm & Broadcast'}
+					{phase === 'awaiting-device'
+						? 'Approve on device…'
+						: isBroadcasting
+							? 'Broadcasting…'
+							: 'Confirm & Broadcast'}
 				</button>
-				{!canSign && <p className="mt-2 text-center text-[12px] text-[#6b7280]">Hardware wallet required to sign</p>}
+				{!canSign && (
+					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+						{canSignReason ?? 'Hardware wallet required to sign'}
+					</p>
+				)}
 			</div>
 		</div>
 	)

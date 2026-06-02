@@ -9,7 +9,15 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 
-import type { BroadcastPhase } from '../model/broadcast-proposal'
+import { getAdminWalletCanSign, walletSessionInit, walletSessionInitWatchOnly } from '@/api/admin-wallet'
+import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
+import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
+import type { WalletAdapter } from '@/wallet/types'
+
+import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
+import { deriveBroadcastError } from '../model/broadcast-proposal'
+
+export type SignerKind = 'hardware' | 'mnemonic'
 
 const inFlightActionIds = new Set<string>()
 
@@ -19,7 +27,9 @@ type UseBroadcastProposalReturn = {
 	result: BroadcastResult | null
 	/** Authoritative proposal row from orchestrator after broadcast (P-062). */
 	proposal: Proposal | null
-	error: string | null
+	error: BroadcastError | null
+	/** True ONLY when error.recovery === 'resubmit-reveal'; false for all other errors. */
+	canResubmit: boolean
 	prepare: () => Promise<void>
 	broadcast: () => Promise<void>
 }
@@ -39,12 +49,17 @@ function buildBroadcastInput(baseUrl: string, actionId: string): BroadcastInput 
 	return { baseUrl, actionId }
 }
 
-export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroadcastProposalReturn {
+export function useBroadcastProposal(
+	baseUrl: string,
+	actionId: string,
+	signerKind: SignerKind = 'mnemonic',
+	adapter?: WalletAdapter,
+): UseBroadcastProposalReturn {
 	const [phase, setPhase] = useState<BroadcastPhase>('idle')
 	const [bundle, setBundle] = useState<PrepareBroadcastResult | null>(null)
 	const [result, setResult] = useState<BroadcastResult | null>(null)
 	const [proposal, setProposal] = useState<Proposal | null>(null)
-	const [error, setError] = useState<string | null>(null)
+	const [error, setError] = useState<BroadcastError | null>(null)
 	const broadcastStarted = useRef(false)
 
 	useEffect(() => {
@@ -58,7 +73,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		]).then(([res, proposalRes]) => {
 			if (!active) return
 			if (!res.ok) {
-				setError(res.error)
+				setError(deriveBroadcastError(res.error))
 				setPhase('error')
 				return
 			}
@@ -99,7 +114,7 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 			getProposalByActionId({ baseUrl, actionId }),
 		])
 		if (!res.ok) {
-			setError(res.error)
+			setError(deriveBroadcastError(res.error))
 			setPhase('error')
 			return
 		}
@@ -114,14 +129,43 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 		if (broadcastStarted.current || inFlightActionIds.has(actionId)) {
 			return
 		}
+		if (adapter !== undefined) {
+			const sessionInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
+			if (!sessionInit.ok) {
+				setError(
+					deriveBroadcastError(
+						sessionInit.error ?? 'Admin Wallet session could not be started — disconnect and reconnect your wallet',
+					),
+				)
+				setPhase('error')
+				return
+			}
+			if (adapter.vendor === 'ledger' || adapter.vendor === 'trezor') {
+				const capability = await getAdminWalletCanSign()
+				const parsed = capability.ok ? adminWalletCapabilitySchema.safeParse(capability.data) : null
+				if (parsed?.success && parsed.data.signerKind !== 'hardware') {
+					setError(
+						deriveBroadcastError(
+							'Admin Wallet is not bound to your hardware device. Disconnect, connect with Ledger (not Palabras), authenticate, then try again.',
+						),
+					)
+					setPhase('error')
+					return
+				}
+			}
+		}
 		broadcastStarted.current = true
 		inFlightActionIds.add(actionId)
-		setPhase('broadcasting')
 		setError(null)
+		if (signerKind === 'hardware') {
+			setPhase('awaiting-device')
+		} else {
+			setPhase('broadcasting')
+		}
 		try {
 			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
 			if (!res.ok) {
-				setError(res.error)
+				setError(deriveBroadcastError(res.error))
 				setPhase('error')
 				return
 			}
@@ -135,9 +179,19 @@ export function useBroadcastProposal(baseUrl: string, actionId: string): UseBroa
 			}
 			setPhase('done')
 		} finally {
+			broadcastStarted.current = false
 			inFlightActionIds.delete(actionId)
 		}
 	}
 
-	return { phase, bundle, result, proposal, error, prepare, broadcast }
+	return {
+		phase,
+		bundle,
+		result,
+		proposal,
+		error,
+		canResubmit: error?.recovery === 'resubmit-reveal',
+		prepare,
+		broadcast,
+	}
 }

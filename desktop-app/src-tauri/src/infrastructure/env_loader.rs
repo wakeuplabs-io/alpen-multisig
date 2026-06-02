@@ -89,23 +89,13 @@ mod tests {
         const TEST_MNEMONIC: &str =
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-        let keys = [
-            "ALLOW_DEV_MNEMONIC_SIGNING",
-            "BITCOIN_NETWORK",
-            "BITCOIN_MAGIC_BYTES_HEX",
-        ];
+        let keys = ["BITCOIN_NETWORK", "BITCOIN_MAGIC_BYTES_HEX"];
         let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for key in keys {
             std::env::remove_var(key);
         }
 
         try_load_dotenv(&path);
-        if std::env::var("ALLOW_DEV_MNEMONIC_SIGNING").is_err() {
-            for (key, prev) in saved {
-                restore_var(key, prev);
-            }
-            return;
-        }
 
         let session = crate::application::wallet_session::WalletSession::empty();
         tokio::runtime::Runtime::new()
