@@ -152,16 +152,27 @@ export const buildActionHexResponseSchema = z.object({
 // admin-wallet capability DTO — evolved from bare-bool to {canSign, signerKind, reason?}
 export const signerKindSchema = z.enum(['hardware', 'mnemonic', 'none'])
 
+/** Normalizes backend device labels and legacy values to the FE capability union. */
+export function normalizeCapabilitySignerKind(raw: string): z.infer<typeof signerKindSchema> {
+	if (raw === 'trezor' || raw === 'ledger' || raw === 'hardware') {
+		return 'hardware'
+	}
+	if (raw === 'mnemonic') {
+		return 'mnemonic'
+	}
+	return 'none'
+}
+
 export const adminWalletCapabilitySchema = z.union([
 	z
 		.object({
 			canSign: z.boolean(),
-			signerKind: signerKindSchema,
+			signerKind: z.string(),
 			reason: z.string().nullish(),
 		})
 		.transform((d) => ({
 			canSign: d.canSign,
-			signerKind: d.signerKind,
+			signerKind: normalizeCapabilitySignerKind(d.signerKind),
 			reason: d.reason ?? undefined,
 		})),
 	z.boolean().transform((b) => ({

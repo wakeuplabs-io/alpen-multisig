@@ -310,3 +310,16 @@ pub fn sign_admin_sps65_binding(
         signature_hex: hex::encode(recoverable_sig),
     })
 }
+
+/// Taproot key-path PSBT signing for Admin Wallet commit funding (not yet implemented).
+pub fn sign_admin_wallet_psbt(
+    _psbt: &mut bitcoin::psbt::Psbt,
+    _account_xpub: &str,
+    _master_fingerprint: u32,
+    _network: Network,
+) -> Result<(), String> {
+    Err(
+        "Trezor Admin Wallet PSBT signing is not implemented yet; use Ledger or mnemonic (Palabras) on regtest"
+            .to_string(),
+    )
+}

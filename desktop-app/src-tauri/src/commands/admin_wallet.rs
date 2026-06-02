@@ -76,19 +76,23 @@ pub struct AdminWalletSignStatus {
     pub reason: Option<String>,
 }
 
+/// Maps internal signer labels to the FE capability DTO (`hardware` | `mnemonic` | `none`).
+fn capability_signer_kind(raw: &str) -> &'static str {
+    match raw {
+        "trezor" | "ledger" => "hardware",
+        "mnemonic" => "mnemonic",
+        _ => "none",
+    }
+}
+
 #[tauri::command]
 pub async fn admin_wallet_can_sign(
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<AdminWalletSignStatus, String> {
     let can_sign = wallet_session.can_sign();
     let (signer_kind, reason) = if can_sign {
-        // Detect signer kind from the active session.
-        // HW signers report 'trezor' or 'ledger'; mnemonic reports 'mnemonic'.
         match wallet_session.current() {
-            Some(svc) => {
-                let kind = svc.signer_kind();
-                (kind, None)
-            }
+            Some(svc) => (capability_signer_kind(&svc.signer_kind()).to_string(), None),
             None => ("none".to_string(), Some("no-session".to_string())),
         }
     } else {
@@ -314,6 +318,14 @@ mod tests {
             !session.can_sign(),
             "can_sign must be false for watch-only session"
         );
+    }
+
+    #[test]
+    fn capability_signer_kind_maps_hw_vendors_to_hardware() {
+        assert_eq!(super::capability_signer_kind("ledger"), "hardware");
+        assert_eq!(super::capability_signer_kind("trezor"), "hardware");
+        assert_eq!(super::capability_signer_kind("mnemonic"), "mnemonic");
+        assert_eq!(super::capability_signer_kind("unknown"), "none");
     }
 
     /// Unit: admin_wallet_can_sign returns false when no session.

@@ -1,4 +1,4 @@
-use bdk_wallet::bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
+use bdk_wallet::bitcoin::bip32::{DerivationPath, Fingerprint, Xpriv, Xpub};
 use bdk_wallet::bitcoin::secp256k1::Secp256k1;
 use bdk_wallet::bitcoin::{Address, Network};
 use bip39::Mnemonic;
@@ -59,11 +59,21 @@ pub fn load_admin_wallet(
     Ok(wallet)
 }
 
+/// BIP-86 account origin path segment for Admin Wallet (`m/86'/{coin}'/73'`).
+fn admin_wallet_account_origin_path(network: Network) -> &'static str {
+    match network {
+        Network::Bitcoin => "86'/0'/73'",
+        _ => "86'/1'/73'",
+    }
+}
+
 /// Load a BIP-86 taproot watch-only wallet from an account-level xpub string.
 /// Builds tr(xpub/0/*) external and tr(xpub/1/*) internal descriptors — no private key.
+/// When `master_fingerprint` is set, embeds BIP-380 origin info so HW PSBT signing can match inputs.
 pub fn load_watch_only_admin_wallet(
     account_xpub: &str,
     network: Network,
+    master_fingerprint: Option<u32>,
 ) -> Result<bdk_wallet::Wallet, AdminWalletError> {
     let mut xpub =
         Xpub::from_str(account_xpub).map_err(|e| AdminWalletError::Descriptor(e.to_string()))?;
@@ -73,8 +83,20 @@ pub fn load_watch_only_admin_wallet(
     // target network so the descriptor matches the wallet network without altering the derived
     // keys — the addresses stay identical to the same seed's wallet (D7 equivalence preserved).
     xpub.network = bdk_wallet::bitcoin::NetworkKind::from(network);
-    let external_desc = format!("tr({}/0/*)", xpub);
-    let internal_desc = format!("tr({}/1/*)", xpub);
+    let account_key = match master_fingerprint {
+        Some(fp) => {
+            let fingerprint = Fingerprint::from(fp.to_le_bytes());
+            format!(
+                "[{}/{}]{}",
+                fingerprint,
+                admin_wallet_account_origin_path(network),
+                xpub
+            )
+        }
+        None => xpub.to_string(),
+    };
+    let external_desc = format!("tr({}/0/*)", account_key);
+    let internal_desc = format!("tr({}/1/*)", account_key);
     let wallet = bdk_wallet::Wallet::create(external_desc, internal_desc)
         .network(network)
         .create_wallet_no_persist()
@@ -101,7 +123,7 @@ mod tests {
             .expect("mnemonic wallet must succeed");
         let xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
             .expect("xpub derivation must succeed");
-        let result = load_watch_only_admin_wallet(&xpub, Network::Regtest);
+        let result = load_watch_only_admin_wallet(&xpub, Network::Regtest, None);
         assert!(result.is_ok(), "Expected Ok but got: {:?}", result.err());
         let _ = wallet;
     }
@@ -140,7 +162,7 @@ mod tests {
         // external[0] from mnemonic wallet (TEST_MNEMONIC) — same seed, Regtest network.
         let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
             .expect("mnemonic wallet must succeed");
-        let watch_wallet = load_watch_only_admin_wallet(TEST_ACCOUNT_XPUB, Network::Regtest)
+        let watch_wallet = load_watch_only_admin_wallet(TEST_ACCOUNT_XPUB, Network::Regtest, None)
             .expect("watch-only wallet must succeed");
         assert_eq!(
             get_external_address(&mnemonic_wallet),
@@ -156,7 +178,7 @@ mod tests {
             .expect("mnemonic wallet must succeed");
         let xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
             .expect("xpub derivation must succeed");
-        let watch_wallet = load_watch_only_admin_wallet(&xpub, Network::Regtest)
+        let watch_wallet = load_watch_only_admin_wallet(&xpub, Network::Regtest, None)
             .expect("watch-only wallet must succeed");
         assert_eq!(
             get_external_address(&mnemonic_wallet),
@@ -167,7 +189,7 @@ mod tests {
 
     #[test]
     fn load_watch_only_admin_wallet_returns_error_for_malformed_xpub() {
-        let result = load_watch_only_admin_wallet("not-a-valid-xpub", Network::Regtest);
+        let result = load_watch_only_admin_wallet("not-a-valid-xpub", Network::Regtest, None);
         assert!(result.is_err(), "Expected Err for malformed xpub");
     }
 
@@ -182,7 +204,7 @@ mod tests {
             mainnet_xpub.starts_with("xpub"),
             "precondition: expected a mainnet xpub, got: {mainnet_xpub}"
         );
-        let watch_wallet = load_watch_only_admin_wallet(&mainnet_xpub, Network::Regtest)
+        let watch_wallet = load_watch_only_admin_wallet(&mainnet_xpub, Network::Regtest, None)
             .expect("watch-only must accept a mainnet xpub on regtest");
         let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
             .expect("mnemonic wallet must succeed");

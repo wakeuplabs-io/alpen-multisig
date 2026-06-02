@@ -9,6 +9,11 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 
+import { getAdminWalletCanSign, walletSessionInit, walletSessionInitWatchOnly } from '@/api/admin-wallet'
+import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
+import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
+import type { WalletAdapter } from '@/wallet/types'
+
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 import { deriveBroadcastError } from '../model/broadcast-proposal'
 
@@ -48,6 +53,7 @@ export function useBroadcastProposal(
 	baseUrl: string,
 	actionId: string,
 	signerKind: SignerKind = 'mnemonic',
+	adapter?: WalletAdapter,
 ): UseBroadcastProposalReturn {
 	const [phase, setPhase] = useState<BroadcastPhase>('idle')
 	const [bundle, setBundle] = useState<PrepareBroadcastResult | null>(null)
@@ -123,14 +129,39 @@ export function useBroadcastProposal(
 		if (broadcastStarted.current || inFlightActionIds.has(actionId)) {
 			return
 		}
+		if (adapter !== undefined) {
+			const sessionInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
+			if (!sessionInit.ok) {
+				setError(
+					deriveBroadcastError(
+						sessionInit.error ?? 'Admin Wallet session could not be started — disconnect and reconnect your wallet',
+					),
+				)
+				setPhase('error')
+				return
+			}
+			if (adapter.vendor === 'ledger' || adapter.vendor === 'trezor') {
+				const capability = await getAdminWalletCanSign()
+				const parsed = capability.ok ? adminWalletCapabilitySchema.safeParse(capability.data) : null
+				if (parsed?.success && parsed.data.signerKind !== 'hardware') {
+					setError(
+						deriveBroadcastError(
+							'Admin Wallet is not bound to your hardware device. Disconnect, connect with Ledger (not Palabras), authenticate, then try again.',
+						),
+					)
+					setPhase('error')
+					return
+				}
+			}
+		}
 		broadcastStarted.current = true
 		inFlightActionIds.add(actionId)
 		setError(null)
 		if (signerKind === 'hardware') {
 			setPhase('awaiting-device')
-			await new Promise((resolve) => setTimeout(resolve, 800))
+		} else {
+			setPhase('broadcasting')
 		}
-		setPhase('broadcasting')
 		try {
 			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
 			if (!res.ok) {
@@ -148,6 +179,7 @@ export function useBroadcastProposal(
 			}
 			setPhase('done')
 		} finally {
+			broadcastStarted.current = false
 			inFlightActionIds.delete(actionId)
 		}
 	}

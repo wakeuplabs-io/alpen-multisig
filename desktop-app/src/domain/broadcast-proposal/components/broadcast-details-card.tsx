@@ -178,7 +178,11 @@ export function BroadcastDetailsCard({
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					{isBroadcasting ? 'Broadcasting…' : 'Confirm & Broadcast'}
+					{phase === 'awaiting-device'
+						? 'Approve on device…'
+						: isBroadcasting
+							? 'Broadcasting…'
+							: 'Confirm & Broadcast'}
 				</button>
 				{!canSign && (
 					<p className="mt-2 text-center text-[12px] text-[#6b7280]">

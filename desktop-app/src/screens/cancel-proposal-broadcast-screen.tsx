@@ -89,7 +89,7 @@ export function CancelProposalBroadcastScreen() {
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting'}
+							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 						/>
 					)}
 

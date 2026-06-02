@@ -16,7 +16,9 @@ pub enum BroadcastEnvError {
     InvalidMagicBytes(String),
     #[error("dev mnemonic signing is disabled (set ALLOW_DEV_MNEMONIC_SIGNING=1 for regtest)")]
     MnemonicSigningDisabled,
-    #[error("wallet session required — log in with Palabras (dev mnemonic) before broadcast")]
+    #[error(
+        "admin wallet session required — disconnect and reconnect your wallet (Ledger, Trezor, or Palabras) before broadcast"
+    )]
     WalletSessionRequired,
     #[error("admin wallet is watch-only; hardware wallet required to sign")]
     ReadOnly,

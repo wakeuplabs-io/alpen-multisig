@@ -1,12 +1,15 @@
+use std::any::Any;
+
 use bdk_wallet::bitcoin::psbt::Psbt;
 use bdk_wallet::bitcoin::Network;
 
 /// Driven port for PSBT signing — shared by mnemonic (simulated HW) and real hardware wallets.
 #[allow(dead_code)]
 pub(crate) trait PsbtSigner: Send + Sync {
-    fn sign_psbt(&self, psbt: &mut Psbt) -> Result<(), String>;
+    fn sign_psbt(&self, wallet: &mut bdk_wallet::Wallet, psbt: &mut Psbt) -> Result<(), String>;
     fn allowed_on(&self, network: Network) -> bool;
     fn kind(&self) -> &str;
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Software signer wrapping BDK wallet.sign — behaves as a simulated hardware wallet.
@@ -23,9 +26,13 @@ impl MnemonicPsbtSigner {
 }
 
 impl PsbtSigner for MnemonicPsbtSigner {
-    fn sign_psbt(&self, _psbt: &mut Psbt) -> Result<(), String> {
-        // Signing is done by the caller (WalletService) via wallet.sign().
-        // This method is a no-op placeholder for the port interface.
+    fn sign_psbt(&self, wallet: &mut bdk_wallet::Wallet, psbt: &mut Psbt) -> Result<(), String> {
+        let signed = wallet
+            .sign(psbt, bdk_wallet::SignOptions::default())
+            .map_err(|e| e.to_string())?;
+        if !signed {
+            return Err("mnemonic wallet did not sign any inputs".to_string());
+        }
         Ok(())
     }
 
@@ -38,6 +45,10 @@ impl PsbtSigner for MnemonicPsbtSigner {
 
     fn kind(&self) -> &str {
         "mnemonic"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

@@ -63,7 +63,7 @@ impl WalletSession {
         account_xpub: &str,
         network: bdk_wallet::bitcoin::Network,
     ) -> Result<SessionState, AdminWalletError> {
-        let wallet = load_watch_only_admin_wallet(account_xpub, network)?;
+        let wallet = load_watch_only_admin_wallet(account_xpub, network, None)?;
         // HW path: attach HwPsbtSigner when master_fingerprint is provided (slice b).
         // For now (slice a), this creates a watch-only session with no signer.
         let wallet = Arc::new(WalletService::new_watch_only(wallet));
@@ -80,8 +80,13 @@ impl WalletSession {
         network: Option<&str>,
     ) -> Result<(), AdminWalletError> {
         let net = parse_network(network);
-        let wallet = load_watch_only_admin_wallet(account_xpub, net)?;
-        let signer = Arc::new(HwPsbtSigner::new(master_fingerprint, device_type));
+        let wallet = load_watch_only_admin_wallet(account_xpub, net, Some(master_fingerprint))?;
+        let signer = Arc::new(HwPsbtSigner::new(
+            master_fingerprint,
+            device_type,
+            account_xpub.to_string(),
+            net,
+        ));
         let wallet = Arc::new(WalletService::with_signer(wallet, signer));
         let state = SessionState { wallet };
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());

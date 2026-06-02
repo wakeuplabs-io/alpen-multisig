@@ -17,6 +17,16 @@ assert.equal(hardwareResult.signerKind, 'hardware')
 assert.equal(hardwareResult.reason, undefined)
 console.log('parses hardware signer capability OK')
 
+const ledgerResult = adminWalletCapabilitySchema.parse({ canSign: true, signerKind: 'ledger' })
+assert.equal(ledgerResult.canSign, true)
+assert.equal(ledgerResult.signerKind, 'hardware')
+console.log('maps ledger signerKind to hardware OK')
+
+const trezorResult = adminWalletCapabilitySchema.parse({ canSign: true, signerKind: 'trezor' })
+assert.equal(trezorResult.canSign, true)
+assert.equal(trezorResult.signerKind, 'hardware')
+console.log('maps trezor signerKind to hardware OK')
+
 const mnemonicResult = adminWalletCapabilitySchema.parse({ canSign: true, signerKind: 'mnemonic' })
 assert.equal(mnemonicResult.canSign, true)
 assert.equal(mnemonicResult.signerKind, 'mnemonic')

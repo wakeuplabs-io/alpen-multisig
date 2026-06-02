@@ -1,5 +1,7 @@
 use crate::application::psbt_signer::PsbtSigner;
 use crate::infrastructure::admin_wallet::AdminWalletError;
+use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
+use crate::infrastructure::hw_wallet::ledger;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -352,19 +354,83 @@ impl WalletService {
         amount_sats: u64,
         fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
-        let mut wallet = self.wallet.lock().await;
-        let mut tx_builder = wallet.build_tx();
-        tx_builder.add_recipient(
-            commit_addr.script_pubkey(),
-            bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
-        );
-        tx_builder.fee_rate(fee_rate);
-        let mut psbt = tx_builder
-            .finish()
+        let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
+
+        let mut psbt = {
+            let mut wallet = self.wallet.lock().await;
+            let mut tx_builder = wallet.build_tx();
+            tx_builder.add_recipient(
+                commit_addr.script_pubkey(),
+                bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
+            );
+            tx_builder.fee_rate(fee_rate);
+            tx_builder
+                .finish()
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
+        };
+
+        if matches!(signer.kind(), "ledger" | "trezor") {
+            let hw = signer
+                .as_any()
+                .downcast_ref::<HwPsbtSigner>()
+                .ok_or_else(|| {
+                    AdminWalletError::WalletCreation(
+                        "hardware signer metadata missing from session".to_string(),
+                    )
+                })?;
+            if hw.device_type != HwDeviceType::Ledger {
+                return Err(AdminWalletError::WalletCreation(
+                    "Trezor Admin Wallet PSBT signing is not implemented yet".to_string(),
+                ));
+            }
+            eprintln!(
+                "[ledger] signing commit PSBT on device (fp=0x{:08X})…",
+                hw.master_fingerprint
+            );
+            let account_xpub = hw.account_xpub.clone();
+            let master_fingerprint = hw.master_fingerprint;
+            let network = hw.network;
+            let mut psbt_for_ledger = psbt.clone();
+            let sign_result = tokio::time::timeout(
+                std::time::Duration::from_secs(180),
+                tokio::task::spawn_blocking(move || {
+                    ledger::sign_admin_wallet_psbt(
+                        &mut psbt_for_ledger,
+                        &account_xpub,
+                        master_fingerprint,
+                        network,
+                    )
+                    .map(|()| psbt_for_ledger)
+                }),
+            )
+            .await
+            .map_err(|_| {
+                AdminWalletError::WalletCreation(
+                    "Ledger did not respond within 180 seconds. Check Speculos/device and approve the transaction."
+                        .to_string(),
+                )
+            })?
+            .map_err(|e| AdminWalletError::WalletCreation(format!("ledger sign task failed: {e}")))?;
+            psbt = sign_result.map_err(AdminWalletError::WalletCreation)?;
+            eprintln!("[ledger] commit PSBT signed on device");
+        } else {
+            eprintln!("[admin-wallet] signing commit PSBT in software (mnemonic / BDK) — no Ledger prompt");
+            let mut wallet = self.wallet.lock().await;
+            signer
+                .sign_psbt(&mut wallet, &mut psbt)
+                .map_err(AdminWalletError::WalletCreation)?;
+        }
+
+        let wallet = self.wallet.lock().await;
+        let finalized = wallet
+            .finalize_psbt(&mut psbt, bdk_wallet::SignOptions::default())
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
-        wallet
-            .sign(&mut psbt, bdk_wallet::SignOptions::default())
-            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+        if !finalized {
+            return Err(AdminWalletError::WalletCreation(
+                "PSBT not fully finalized after signing".to_string(),
+            ));
+        }
+
         psbt.extract_tx()
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))
     }
@@ -489,6 +555,11 @@ impl WalletService {
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
         // 0. ReadOnly guard — must run before any RPC contact
         let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
+        eprintln!(
+            "[admin-wallet] build_signed_commit: signer={} network={:?}",
+            signer.kind(),
+            self.network
+        );
 
         // 0b. Network capability check — before any sync/RPC/PSBT build
         if !signer.allowed_on(self.network) {

@@ -5,6 +5,7 @@ import type { AdminWalletError } from '@/api/admin-wallet'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
+import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
@@ -18,6 +19,7 @@ import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-address
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -87,14 +89,15 @@ function useWalletPanelData(isAdminWalletMode: boolean): WalletPanelData {
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	useEnsureAdminWalletSession(adapter)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	const { adminWalletInfo } = useAdminWalletInfo()
 	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
-	const signerKind: SignerKind = rawSignerKind === 'none' ? 'mnemonic' : rawSignerKind
+	const signerKind: SignerKind = rawSignerKind === 'hardware' ? 'hardware' : 'mnemonic'
 
 	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
@@ -112,6 +115,7 @@ export function BroadcastProposalScreen() {
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
 		signerKind,
+		adapter,
 	)
 
 	async function handleBack() {
@@ -187,6 +191,8 @@ export function BroadcastProposalScreen() {
 				</p>
 
 				<div className="mt-6 space-y-4">
+					<BroadcastFundingSignerBanner backendSignerKind={rawSignerKind} connectVendor={adapter.vendor} />
+
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<div className="h-7 w-48 rounded-lg bg-[#f3f4f6]" />
@@ -201,7 +207,7 @@ export function BroadcastProposalScreen() {
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting'}
+							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 							canSign={canSign}
 							canSignReason={canSignReason}
 							phase={phase}

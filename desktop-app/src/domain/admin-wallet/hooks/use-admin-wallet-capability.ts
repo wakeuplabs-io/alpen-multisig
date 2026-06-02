@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getAdminWalletCanSign } from '@/api/admin-wallet'
 import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
+import { formatCanSignReason } from '@/domain/admin-wallet/model/format-can-sign-reason'
 
 const CAPABILITY_POLL_INTERVAL_MS = 2_000
 
@@ -12,16 +13,23 @@ export function useAdminWalletCapability() {
 
 	const fetchCapability = () => {
 		void getAdminWalletCanSign().then((result) => {
-			if (result.ok) {
-				const parsed = adminWalletCapabilitySchema.parse(result.data)
-				setCanSign(parsed.canSign)
-				setSignerKind(parsed.signerKind)
-				setCanSignReason(parsed.reason)
-			} else {
+			if (!result.ok) {
 				setCanSign(false)
 				setSignerKind('none')
 				setCanSignReason(undefined)
+				return
 			}
+			const parsed = adminWalletCapabilitySchema.safeParse(result.data)
+			if (!parsed.success) {
+				console.warn('[admin-wallet] invalid capability DTO:', parsed.error.message)
+				setCanSign(false)
+				setSignerKind('none')
+				setCanSignReason(undefined)
+				return
+			}
+			setCanSign(parsed.data.canSign)
+			setSignerKind(parsed.data.signerKind)
+			setCanSignReason(formatCanSignReason(parsed.data.reason))
 		})
 	}
 

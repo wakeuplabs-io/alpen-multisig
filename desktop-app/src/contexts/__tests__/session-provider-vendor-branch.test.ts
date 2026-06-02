@@ -22,10 +22,19 @@ const trezorAdapter: WalletAdapter = {
 	disconnect: stubDisconnect,
 	signSighash: stubSignSighash,
 	getAccountXpub: async () => 'xpub_from_device',
+	getMasterFingerprint: async () => 0xabcd1234,
 }
 
-let watchOnlyCalledWith: { xpub: string } | null = null
-const mockWalletSessionInitWatchOnly = async (input: { xpub: string }): Promise<ApiResult<null>> => {
+let watchOnlyCalledWith: {
+	xpub: string
+	masterFingerprint?: number
+	deviceType?: string
+} | null = null
+const mockWalletSessionInitWatchOnly = async (input: {
+	xpub: string
+	masterFingerprint?: number
+	deviceType?: string
+}): Promise<ApiResult<null>> => {
 	watchOnlyCalledWith = input
 	return { ok: true, data: null }
 }
@@ -34,11 +43,11 @@ const mockWalletSessionInit = async (_input: { mnemonic: string }): Promise<ApiR
 }
 
 await initAdminWalletForAdapter(trezorAdapter, mockWalletSessionInitWatchOnly, mockWalletSessionInit)
-assert.deepEqual(
-	watchOnlyCalledWith,
-	{ xpub: 'xpub_from_device' },
-	'trezor: walletSessionInitWatchOnly called with xpub',
-)
+assert.deepEqual(watchOnlyCalledWith, {
+	xpub: 'xpub_from_device',
+	masterFingerprint: 0xabcd1234,
+	deviceType: 'trezor',
+})
 console.log('session-provider-vendor-branch: trezor calls walletSessionInitWatchOnly OK')
 
 // ledger same behavior
@@ -50,9 +59,14 @@ const ledgerAdapter: WalletAdapter = {
 	disconnect: stubDisconnect,
 	signSighash: stubSignSighash,
 	getAccountXpub: async () => 'xpub_ledger',
+	getMasterFingerprint: async () => 0xdeadbeef,
 }
 await initAdminWalletForAdapter(ledgerAdapter, mockWalletSessionInitWatchOnly, mockWalletSessionInit)
-assert.deepEqual(watchOnlyCalledWith, { xpub: 'xpub_ledger' }, 'ledger: walletSessionInitWatchOnly called with xpub')
+assert.deepEqual(watchOnlyCalledWith, {
+	xpub: 'xpub_ledger',
+	masterFingerprint: 0xdeadbeef,
+	deviceType: 'ledger',
+})
 console.log('session-provider-vendor-branch: ledger calls walletSessionInitWatchOnly OK')
 
 // --- Behavior 2: mnemonic vendor calls walletSessionInit (regression) ---
