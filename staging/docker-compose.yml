@@ -72,6 +72,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  regtest-dev-api:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.regtest-dev-api
+    ports:
+      - "3001:3001"
+    environment:
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+      BITCOIN_RPC_WALLET: staging
+      SERVER_PORT: "3001"
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   bitcoin-data:
   asm-data:
