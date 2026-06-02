@@ -44,8 +44,11 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
     let seq_no = fixture.seq_no;
 
     let addrs = anyhow_string(signing::list_mnemonic_addresses(mnemonic, passphrase, 3))?;
-    let cosign_addrs =
-        anyhow_string(signing::list_mnemonic_addresses(DEMO_COSIGN_MNEMONIC, passphrase, 1))?;
+    let cosign_addrs = anyhow_string(signing::list_mnemonic_addresses(
+        DEMO_COSIGN_MNEMONIC,
+        passphrase,
+        1,
+    ))?;
     let a_hex = addrs[0].public_key_hex.clone();
     let b_hex = cosign_addrs[0].public_key_hex.clone();
     let d_hex = addrs[2].public_key_hex.clone();
