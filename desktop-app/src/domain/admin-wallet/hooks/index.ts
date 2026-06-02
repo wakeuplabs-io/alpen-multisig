@@ -1,6 +1,7 @@
 export { useAdminWalletBalance } from './use-admin-wallet-balance'
 export { useAdminWalletUtxos } from './use-admin-wallet-utxos'
 export { useAdminWalletAddresses } from './use-admin-wallet-addresses'
+export { useAdminWalletReceiveAddress } from './use-admin-wallet-receive-address'
 export { useAdminWalletSync } from './use-admin-wallet-sync'
 export { useWalletPanelState } from './use-wallet-panel-state'
 export type { WalletPanelSection } from './use-wallet-panel-state'

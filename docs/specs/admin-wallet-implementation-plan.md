@@ -40,7 +40,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.0.1 ✅ | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, broadcast commit→reveal (`submitpackage` if available, else sequential); closes the R1.0 crash window via atomicity; merged PR #198, [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) |
 | R1.1 ✅ | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3, [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — unified `PsbtSigner` driven port; mnemonic login = software signer (simulated HW), HW login = on-device PSBT signer; reveal by ephemeral key; `ALLOW_DEV_MNEMONIC_SIGNING` replaced by per-signer network capability |
 | R1.2 ✅ | Clean wallet UI | PRD §4, Alta WalletPanel, [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md) |
-| R1.3 | Receive rotation | PRD §4.3.4 |
+| R1.3 | Receive rotation | PRD §4.3.4, [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) |
 | R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -406,7 +406,11 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.3 — Receive rotation
 
+**Spec:** [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) — full technical design, decisions, and test plan.
+
 **Goal:** The Receive tab issues a fresh address and rotates to the next unused index after the current one is credited (PRD §4.3.4).
+
+**Design:** A `WalletService::next_receive_address` method backed by BDK's gap-aware `next_unused_address(External)`, exposed via the `admin_wallet_next_receive_address` IPC command and a `useAdminWalletReceiveAddress` hook. The method is idempotent until the displayed address is observed in a transaction during sync, then rotates — replacing the prior front-end `find((a) => !a.isUsed)` window scan. Pure public derivation, so it works for mnemonic and HW/watch-only sessions alike.
 
 **Done when:** After incoming funds confirm, the displayed receive address rotates to the next unused index on regtest.
 

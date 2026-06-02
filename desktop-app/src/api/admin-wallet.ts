@@ -81,6 +81,12 @@ export function listAdminWalletAddresses(
 	})
 }
 
+// R1.3 (receive rotation): returns the next unused external (receive) address.
+// Idempotent until the address is credited and observed during sync, then rotates.
+export function nextAdminWalletReceiveAddress(): Promise<ApiResult<AddressDto>> {
+	return tauriCall<AddressDto>('admin_wallet_next_receive_address', {})
+}
+
 export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
 	return tauriCall<void>('admin_wallet_sync', {})
 }

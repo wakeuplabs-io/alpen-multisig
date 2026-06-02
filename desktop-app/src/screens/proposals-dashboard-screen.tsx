@@ -10,7 +10,7 @@ import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
 import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
-import { useAdminWalletAddresses } from '@/domain/admin-wallet/hooks/use-admin-wallet-addresses'
+import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
 import { useAdminWalletSync } from '@/domain/admin-wallet/hooks/use-admin-wallet-sync'
 import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
@@ -28,18 +28,18 @@ export function ProposalsDashboardScreen() {
 
 	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
 	const balanceHook = useAdminWalletBalance()
-	const addressesHook = useAdminWalletAddresses('External', 0, 20)
+	const receiveAddressHook = useAdminWalletReceiveAddress()
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
 			? balanceHook.error
-			: addressesHook.error?.type === 'Disabled' || addressesHook.error?.type === 'RegtestGuardViolation'
-				? addressesHook.error
+			: receiveAddressHook.error?.type === 'Disabled' || receiveAddressHook.error?.type === 'RegtestGuardViolation'
+				? receiveAddressHook.error
 				: null
 
-	const receiveAddress = addressesHook.data?.find((a) => !a.isUsed)?.address ?? null
+	const receiveAddress = receiveAddressHook.address
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
@@ -174,7 +174,7 @@ export function ProposalsDashboardScreen() {
 					balanceSats={balanceHook.data?.confirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}
 					receiveAddress={receiveAddress}
-					isAddressesLoading={addressesHook.isLoading}
+					isAddressesLoading={receiveAddressHook.isLoading}
 					addressRows={addressesWithBalanceHook.data}
 					addressRowsLoading={addressesWithBalanceHook.isLoading}
 					addressRowsError={addressesWithBalanceHook.error}
@@ -186,7 +186,7 @@ export function ProposalsDashboardScreen() {
 					onRefreshSync={async () => {
 						await syncHook.triggerSync()
 						balanceHook.refresh()
-						addressesHook.refresh()
+						receiveAddressHook.refresh()
 						addressesWithBalanceHook.refresh()
 					}}
 				/>
