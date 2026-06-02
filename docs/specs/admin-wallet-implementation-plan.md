@@ -39,7 +39,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.0 ✅ | Ephemeral reveal key | SPS-50 — per-broadcast envelope key, reveal change → Admin Wallet; supersedes `m/86'/0'/73'/2/0`; merged PR #195 |
 | R1.0.1 ✅ | Sign commit + reveal before broadcast | SPS-50 — pre-sign both, broadcast commit→reveal (`submitpackage` if available, else sequential); closes the R1.0 crash window via atomicity; merged PR #198, [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) |
 | R1.1 ✅ | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3, [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — unified `PsbtSigner` driven port; mnemonic login = software signer (simulated HW), HW login = on-device PSBT signer; reveal by ephemeral key; `ALLOW_DEV_MNEMONIC_SIGNING` replaced by per-signer network capability |
-| R1.2 | Clean wallet UI | PRD §4, Alta WalletPanel |
+| R1.2 ✅ | Clean wallet UI | PRD §4, Alta WalletPanel, [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md) |
 | R1.3 | Receive rotation | PRD §4.3.4 |
 | R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
@@ -351,9 +351,9 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ---
 
-### Release 1 — next deliverable
+### Release 1 — in progress (next: R1.3)
 
-The next shippable increment, built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs.
+Release 1 is built on the Foundation. Six steps, in order. Each step lists only its goal and "done when"; full design lives in the per-phase sections and specs. **Next shippable increment:** R1.3 (Receive rotation).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -396,7 +396,9 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 - Device-absent / user-refusal returns a typed error **before** any broadcast (nothing hits the network).
 - Existing `CommitFunding` and `broadcast_commit_then_reveal` tests stay green; no out-of-session custody key is consulted.
 
-#### R1.2 — Clean wallet UI
+#### R1.2 — Clean wallet UI ✅
+
+**Status:** Complete — branch `feature/admin-wallet-clean-wallet-ui` (commit `138412d`, 2026-06-02). Spec: [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md`](../evolution/2026-06-02-admin-wallet-clean-wallet-ui.md).
 
 **Goal:** Bring the wallet panel to production quality — remove dev-only affordances and placeholders, consistent loading/empty/error states.
 

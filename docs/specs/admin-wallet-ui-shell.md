@@ -1,5 +1,8 @@
 # Spec: Admin Wallet UI Shell (Phase 3)
 
+> **⚠️ Panel placeholders superseded in R1.2** ([`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md)).
+> Send, transaction-history, and QR placeholder sections described below were removed; the production panel shows balance, receive address, addresses-with-balance, and sync only. Error/disabled copy no longer references "dev mnemonic" or roadmap phases.
+>
 > **⚠️ Guard condition updated in Phase 3.6** ([`admin-wallet-commit-funding-only.md`](./admin-wallet-commit-funding-only.md)).
 > The Disabled-card copy and dev recipes below referencing `COMMIT_FUNDING=admin_wallet` are obsolete:
 > the `COMMIT_FUNDING` env var was removed. The Admin Wallet is enabled by

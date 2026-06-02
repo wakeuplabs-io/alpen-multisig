@@ -65,7 +65,7 @@ DDD-8 and DDD-9 are **added**.
 - **Verify-on-device** (address/amount confirmation UX beyond the device's native prompt) — Phase 7.
 - **Mainnet/testnet remote-RPC hardening** (Esplora/electrum endpoints, auth, retries) — Phase 9.
 - Any change to **SPS-50/51/65 envelope or reveal semantics**.
-- **Receive flow** (R1.2) and **receive rotation** (R1.3).
+- **Clean wallet UI** (R1.2) and **receive rotation** (R1.3).
 - Persistent storage of pre-signed reveals (still in-memory, inherited from R1.0.1).
 
 ---

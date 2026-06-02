@@ -1,5 +1,7 @@
 # Spec: Admin Wallet — Clean Wallet UI (R1.2)
 
+> **Status:** Complete — branch `feature/admin-wallet-clean-wallet-ui` (commit `138412d`, 2026-06-02). Evolution: [`docs/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md`](../evolution/2026-06-02-admin-wallet-clean-wallet-ui.md).
+>
 > Release 1, step R1.2 of [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md).
 > Builds directly on the Phase 3 UI shell ([`admin-wallet-ui-shell.md`](./admin-wallet-ui-shell.md)) — same slide-over panel, no new data sources.
 
