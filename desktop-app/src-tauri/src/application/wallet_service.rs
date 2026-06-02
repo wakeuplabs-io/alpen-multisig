@@ -876,7 +876,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let signer = Arc::new(MnemonicPsbtSigner::new(Network::Regtest));
+        let signer = Arc::new(MnemonicPsbtSigner::new());
         let svc = WalletService::with_signer(wallet, signer);
 
         assert!(svc.can_sign(), "with_signer() must return can_sign=true");

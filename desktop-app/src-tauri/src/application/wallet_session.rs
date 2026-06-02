@@ -54,7 +54,7 @@ impl WalletSession {
         network: bdk_wallet::bitcoin::Network,
     ) -> Result<SessionState, AdminWalletError> {
         let wallet = load_admin_wallet(mnemonic, network)?;
-        let signer = Arc::new(MnemonicPsbtSigner::new(network));
+        let signer = Arc::new(MnemonicPsbtSigner::new());
         let wallet = Arc::new(WalletService::with_signer(wallet, signer));
         Ok(SessionState { wallet })
     }
