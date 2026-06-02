@@ -1,4 +1,4 @@
-use desktop_app::application::commit_funding::BdkAdminWalletMnemonic;
+use desktop_app::application::commit_funding::AdminWalletCommitFunding;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
@@ -709,7 +709,7 @@ pub async fn proposals_broadcast(
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
-    let commit_funding = BdkAdminWalletMnemonic::new(std::sync::Arc::clone(&wallet_service));
+    let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
         .await

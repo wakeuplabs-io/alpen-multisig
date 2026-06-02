@@ -51,5 +51,3 @@ services:
         value: "staging"
       - key: DEV_MINE_ENABLED
         value: "1"
-      - key: ALLOW_DEV_MNEMONIC_SIGNING
-        value: "1"

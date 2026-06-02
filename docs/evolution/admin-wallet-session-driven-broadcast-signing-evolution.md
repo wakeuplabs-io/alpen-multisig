@@ -45,9 +45,10 @@ All 9 domain-driven decisions from the DESIGN wave were implemented and locked:
 ## Test Coverage
 
 - **31 roadmap steps** executed with TDD (PREPARE → RED → GREEN → COMMIT)
-- **72 Rust tests** passing (clippy clean, fmt clean)
-- **12+ TypeScript tests** passing (lint clean, build clean)
-- **E2E:** Mnemonic walking skeleton (regtest, no device)
+- Rust workspace tests passing (clippy clean with `-D warnings`, fmt clean)
+- TypeScript contract tests run as `tsx` scripts (repo convention): IPC schemas, admin-wallet
+  capability DTO parsing/degradation, and `deriveBroadcastError` mapping — all wired into CI
+- **E2E:** Mnemonic walking skeleton (regtest, no device); real Ledger PSBT signing verified against Speculos
 - **Release checklist:** 6 manual real-device test paths documented
 
 ## Quality Gates
@@ -62,7 +63,32 @@ All 9 domain-driven decisions from the DESIGN wave were implemented and locked:
 | All tests passing | ✅ |
 | Clippy + fmt + lint + build | ✅ |
 
+## Post-merge hardening & R1.1 closure
+
+After the initial DELIVER wave, the following landed before R1.1 was closed:
+
+- **Real Ledger on-device signing:** commit-PSBT signing verified end-to-end against Speculos
+  (`tests/ledger_speculos_sign_integration.rs`), including master-fingerprint capture at connect and
+  signing without `register_wallet`. The Trezor on-device path is stubbed (`HwSigningFailed`) pending Phase 7.
+- **Merged latest `develop`** (proposal `actionType`, node-config) — single conflict in `api/ipc-schemas.ts`
+  resolved additively.
+- **`ALLOW_DEV_MNEMONIC_SIGNING` fully removed as a signing/broadcast gate.** The leftover `broadcast_env.rs`
+  "Gate 1" (and the `MnemonicSigningDisabled` variant) were deleted; broadcast capability is now decided solely
+  by `WalletService::can_sign()` → `PsbtSigner::allowed_on(network)`. The flag and its references were removed
+  from `.env.example`, `render.yaml`, `staging/*`, the e2e-webdriver docs, and the Ledger integration test. The
+  env name survives **only** as the dev-only mnemonic/raw-key signing IPC exposure gate (`dev_secrets.rs`, P-040;
+  debug builds auto-enable).
+- **`BdkAdminWalletMnemonic` → `AdminWalletCommitFunding`** rename completed (the name no longer implies mnemonic
+  once a HW signer can be attached).
+- **Cleanup / simplification:**
+  - Removed a dead, duplicated admin-wallet signing stack that had been added to `orchestrator-be`
+    (`psbt_signer`/`wallet_service`/`wallet_session`/`admin_wallet`/`hw_wallet`, ~1.6k LOC) — it was never wired and
+    violated "backend is coordination only".
+  - Dropped the `vitest` + `@testing-library` toolchain (introduced for a few DOM-render tests CI never ran) and
+    kept only the high-value pure-logic tests as `tsx` scripts, wired into CI.
+  - Simplified `MnemonicPsbtSigner` (removed an unused `network` field) and removed dead-code allowances.
+
 ## Commits
 
-35 commits total (31 roadmap steps + 4 refactoring/review commits).
-See `git log --oneline --grep="Step-ID"` for full list.
+Initial DELIVER wave plus post-merge hardening/cleanup commits on
+`feature/admin-wallet-session-driven-broadcast-signing`. See `git log --oneline develop..HEAD` for the full list.

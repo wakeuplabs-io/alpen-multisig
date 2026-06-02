@@ -3,7 +3,7 @@
 //! Run when Speculos and bitcoind are up:
 //!   LEDGER_SPECULOS_URL=http://localhost:5001 \
 //!   BITCOIN_RPC_URL=http://127.0.0.1:18443 BITCOIN_RPC_USER=user BITCOIN_RPC_PASS=password \
-//!   BITCOIN_NETWORK=regtest ALLOW_DEV_MNEMONIC_SIGNING=1 \
+//!   BITCOIN_NETWORK=regtest \
 //!   cargo test -p desktop-app --test ledger_speculos_sign_integration -- --nocapture
 
 use bdk_bitcoind_rpc::bitcoincore_rpc::RpcApi;
@@ -31,7 +31,6 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
         std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into()),
     );
     std::env::set_var("BITCOIN_NETWORK", "regtest");
-    std::env::set_var("ALLOW_DEV_MNEMONIC_SIGNING", "1");
 
     let account_xpub = tokio::task::spawn_blocking(|| ledger::get_account_xpub("m/86'/1'/73'"))
         .await
