@@ -45,7 +45,11 @@ export function AddressesWithBalanceList({
 						<div className="px-4 py-3 text-[12px] text-[#ef4444]">{formatAdminWalletError(error).body}</div>
 					)}
 
-					{rows !== null && (
+					{rows !== null && rows.length === 0 && !isLoading && error === null && (
+						<div className="px-4 py-3 text-[12px] text-[#9ca3af]">No addresses with balance yet</div>
+					)}
+
+					{rows !== null && rows.length > 0 && (
 						<table className="w-full">
 							<thead>
 								<tr className="text-[11px] text-[#9ca3af]">

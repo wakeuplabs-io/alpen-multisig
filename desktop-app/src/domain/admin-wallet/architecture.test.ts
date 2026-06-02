@@ -102,4 +102,26 @@ assert.equal(
 )
 console.log(`Rule 3 PASS: ${allProductionFiles.length} production file(s) checked — no __fixtures__ imports`)
 
+// ── Rule 4: no dev/roadmap placeholder copy leaks into the wallet panel (R1.2) ──
+
+const roadmapCopyPatterns = [/arrives in Phase/i, /not available yet/i, /QR preview unavailable/i, /Admin tools/]
+
+const rule4Violations: string[] = []
+for (const file of componentFiles) {
+	if (isTestFile(file)) continue
+	const content = fs.readFileSync(file, 'utf8')
+	for (const pattern of roadmapCopyPatterns) {
+		if (pattern.test(content)) {
+			rule4Violations.push(`${path.relative(domainRoot, file)}: matches ${pattern}`)
+		}
+	}
+}
+
+assert.equal(
+	rule4Violations.length,
+	0,
+	`Rule 4 violations — wallet panel must not contain dev/roadmap placeholder copy:\n  ${rule4Violations.join('\n  ')}`,
+)
+console.log(`Rule 4 PASS: ${componentFiles.length} component file(s) checked — no roadmap placeholder copy`)
+
 console.log('All architecture compliance checks passed.')

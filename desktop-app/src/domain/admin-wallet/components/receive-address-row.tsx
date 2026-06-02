@@ -15,7 +15,14 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 		)
 	}
 
-	if (!address) return null
+	if (!address) {
+		return (
+			<div className="flex min-w-0 flex-col gap-1">
+				<span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9ca3af]">Receive address</span>
+				<span className="text-[12px] text-[#9ca3af]">No receive address yet</span>
+			</div>
+		)
+	}
 
 	return (
 		<div className="flex min-w-0 flex-col gap-1">
