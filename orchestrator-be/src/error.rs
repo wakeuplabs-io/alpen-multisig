@@ -31,14 +31,6 @@ impl AppError {
                 status: StatusCode::CONFLICT,
                 error_code: "conflict",
             },
-            AppError::HwDisconnected => ErrorMeta {
-                status: StatusCode::PRECONDITION_FAILED,
-                error_code: "hw_disconnected",
-            },
-            AppError::HwSigningFailed(_) => ErrorMeta {
-                status: StatusCode::PRECONDITION_FAILED,
-                error_code: "hw_signing_failed",
-            },
             AppError::Internal(_) => ErrorMeta {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 error_code: "internal_error",
@@ -63,18 +55,6 @@ pub enum AppError {
 
     #[error("internal error")]
     Internal(#[from] anyhow::Error),
-
-    /// Hardware wallet device physically disconnected or absent.
-    /// Used by hardware device adapters (Ledger/Trezor) when device is not present.
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[error("hardware wallet device disconnected")]
-    HwDisconnected,
-
-    /// Hardware wallet signing failed due to device mismatch or signing error.
-    /// Used when the plugged-in device doesn't match the expected fingerprint.
-    #[cfg_attr(not(test), allow(dead_code))]
-    #[error("hardware wallet signing failed: {0}")]
-    HwSigningFailed(String),
 }
 
 impl IntoResponse for AppError {
