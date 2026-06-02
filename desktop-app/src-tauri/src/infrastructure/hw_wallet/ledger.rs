@@ -91,14 +91,35 @@ async fn upload_speculos_sign_automation(base_url: &str) -> bool {
     }
 }
 
-/// Loads Speculos `/automation` rules for headless PSBT approval via REST API.
+/// Whether Speculos PSBT approval should be auto-clicked via `/automation` rules.
+///
+/// Default: enabled (keeps the integration test / CI non-interactive). Set
+/// `LEDGER_SPECULOS_AUTO_APPROVE=0` (or `false`/`no`) to **require manual approval**
+/// on the Speculos screen — useful to observe the real on-device interaction and the
+/// frontend "Confirm on your device" / timeout flow, mirroring a physical Ledger.
+fn speculos_auto_approve_enabled() -> bool {
+    match std::env::var("LEDGER_SPECULOS_AUTO_APPROVE") {
+        Ok(v) => !(v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("no")),
+        Err(_) => true,
+    }
+}
+
+/// Loads Speculos `/automation` rules for headless PSBT approval via REST API,
+/// unless manual approval was requested (`LEDGER_SPECULOS_AUTO_APPROVE=0`).
 async fn with_speculos_auto_approve<F, Fut, T>(f: F) -> T
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
 {
     if let Ok(base) = std::env::var("LEDGER_SPECULOS_URL") {
-        let _ = upload_speculos_sign_automation(&base).await;
+        if speculos_auto_approve_enabled() {
+            let _ = upload_speculos_sign_automation(&base).await;
+        } else {
+            eprintln!(
+                "[speculos] auto-approve disabled (LEDGER_SPECULOS_AUTO_APPROVE=0) — \
+                 approve the transaction manually on the Speculos screen"
+            );
+        }
     }
     f().await
 }
