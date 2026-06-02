@@ -33,6 +33,7 @@ type Props = {
 		onContinueToAuthenticate: () => void
 		onBackToAuthority: () => void
 		onAuthenticate: () => void
+		onManualProposal: () => void
 	} | null
 }
 
@@ -114,6 +115,7 @@ export function HwWalletConnect({
 						signingStep={authoritySelection.signingStep}
 						onBackToAuthority={authoritySelection.onBackToAuthority}
 						onAuthenticate={authoritySelection.onAuthenticate}
+						onManualProposal={authoritySelection.onManualProposal}
 					/>
 				)}
 			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection === null && (

@@ -10,3 +10,4 @@ pub(crate) mod node_config;
 pub(crate) mod orchestrator_auth;
 pub(crate) mod proposals;
 pub(crate) mod signing;
+pub(crate) mod system;

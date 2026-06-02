@@ -1,6 +1,8 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { approveProposal } from '@/api/proposals'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
@@ -29,6 +31,14 @@ export function ProposalDetailScreen() {
 
 	async function handleBack() {
 		await disconnectSession()
+	}
+
+	async function handlePasteSignatures(sigs: PastedSignature[]) {
+		if (!actionId) return
+		for (const sig of sigs) {
+			await approveProposal({ baseUrl: ORCHESTRATOR_BASE_URL, actionId, ...sig })
+		}
+		reload()
 	}
 
 	if (wallet === null) {
@@ -106,6 +116,22 @@ export function ProposalDetailScreen() {
 								decodedData={decodedData}
 								onSign={() => navigate(`/proposals/${actionId}/sign`)}
 								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+								onPasteSignatures={(sigs) => void handlePasteSignatures(sigs)}
+								onManualExecute={() =>
+									navigate('/manual', {
+										state: {
+											prefill: {
+												actionHex: proposal.actionHex,
+												seqNo: proposal.seqNo,
+												authority: proposal.authority,
+												signatures: proposal.signatures.map((s) => ({
+													signerPubkey: s.signerPubkey,
+													signatureHex: s.signatureHex,
+												})),
+											},
+										},
+									})
+								}
 							/>
 
 							{/* Activation countdown */}

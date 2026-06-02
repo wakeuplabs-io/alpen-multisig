@@ -65,9 +65,11 @@ export function WalletConnectScreen() {
 		adapter,
 		selectAdapter,
 		isAuthenticated,
+		isOrchestratorSessionActive,
 		selectedRole,
 		setSelectedRole,
-		connectSession,
+		connectOrchestratorSession,
+		connectOnChainSession,
 		disconnectSession,
 		signingStep,
 	} = useSession()
@@ -115,9 +117,27 @@ export function WalletConnectScreen() {
 		setAuthOkMessage(null)
 		setIsAuthenticating(true)
 		try {
-			await connectSession()
+			await connectOrchestratorSession()
 			setAuthOkMessage('Success: authenticated.')
 			navigate(selectedRole === AuthRole.PayoutAdministrator ? '/block-payouts' : '/proposals')
+		} catch (e) {
+			const message = String(e)
+			if (message.toLowerCase().includes('not a member')) {
+				setAuthError('You do not have permissions for the selected role.')
+			} else {
+				setAuthError(message)
+			}
+		} finally {
+			setIsAuthenticating(false)
+		}
+	}
+
+	async function handleManualProposalAuth() {
+		setAuthError(null)
+		setIsAuthenticating(true)
+		try {
+			await connectOnChainSession()
+			navigate('/manual')
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -139,7 +159,7 @@ export function WalletConnectScreen() {
 		const roleChanged = selectedAuthority.role !== selectedRole
 		setSelectedRole(selectedAuthority.role)
 
-		if (isAuthenticated && roleChanged) {
+		if ((isAuthenticated || isOrchestratorSessionActive) && roleChanged) {
 			setAuthError('Authority changed. Re-authenticate to continue.')
 		} else {
 			setAuthError(null)
@@ -251,6 +271,7 @@ export function WalletConnectScreen() {
 									onContinueToAuthenticate: handleContinueToAuthenticate,
 									onBackToAuthority: handleBackToAuthoritySelection,
 									onAuthenticate: () => void handleAuthenticate(),
+									onManualProposal: () => void handleManualProposalAuth(),
 								}
 							: null
 					}

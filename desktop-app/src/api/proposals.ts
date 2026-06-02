@@ -136,3 +136,18 @@ export type CreateCancelProposalInput = {
 export function createCancelProposal(input: CreateCancelProposalInput): Promise<ApiResult<Proposal>> {
 	return tauriCall('proposals_create_cancel', { input }, proposalSchema)
 }
+
+export type BroadcastManualInput = {
+	actionHex: string
+	seqNo: number
+	authority: string
+	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+}
+
+export function prepareBroadcastManual(input: BroadcastManualInput): Promise<ApiResult<PrepareBroadcastResult>> {
+	return tauriCall<PrepareBroadcastResult>('proposals_prepare_broadcast_manual', { input })
+}
+
+export function broadcastManualProposal(input: BroadcastManualInput): Promise<ApiResult<BroadcastResult>> {
+	return tauriCall('proposals_broadcast_manual', { input }, broadcastResultSchema)
+}

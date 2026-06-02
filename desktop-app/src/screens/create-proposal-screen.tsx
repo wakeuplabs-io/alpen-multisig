@@ -7,7 +7,7 @@ import { ScreenShell } from '@/screens/screen-shell'
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
-	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession, connectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, disconnectSession, connectOrchestratorSession } = useSession()
 	const createProposal = useCreateProposal()
 
 	if (wallet === null) {
@@ -21,7 +21,7 @@ export function CreateProposalScreen() {
 		? `${wallet.addressSample.slice(0, 6)}...${wallet.addressSample.slice(-6)}`
 		: 'Unknown'
 
-	const sessionLabel = session === null ? 'Session' : `Session · ${sessionTimeLabel}`
+	const sessionLabel = sessionTimeLabel === '--:--' ? 'Session' : `Session · ${sessionTimeLabel}`
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -66,7 +66,7 @@ export function CreateProposalScreen() {
 					onCancel={() => navigate('/proposals')}
 					onPreviewValid={(data) => createProposal.computeProposalPreview(data)}
 					onSubmitValid={(data) => createProposal.submitCreateProposal(data)}
-					onReauthenticate={connectSession}
+					onReauthenticate={connectOrchestratorSession}
 				/>
 			</div>
 		</ScreenShell>

@@ -142,7 +142,9 @@ export function useBlockPayouts(): BlockPayoutsHook {
 			const a = document.createElement('a')
 			a.href = url
 			a.download = `block-payout-${txId.slice(0, 8)}.txt`
+			document.body.appendChild(a)
 			a.click()
+			document.body.removeChild(a)
 			URL.revokeObjectURL(url)
 		},
 		[rawPending],

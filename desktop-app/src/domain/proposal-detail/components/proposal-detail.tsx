@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
-import { CheckCircleEmeraldIcon, CopyClipboardIcon, SignaturePenMutedIcon } from '@/assets/icons'
+import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
+import {
+	CheckCircleEmeraldIcon,
+	ClipboardPasteIcon,
+	CopyClipboardIcon,
+	DownloadIcon,
+	SignaturePenMutedIcon,
+} from '@/assets/icons'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
+import { PasteSignaturesModal } from '@/domain/manual-proposal/components/paste-signatures-modal'
 
 type Props = {
 	proposal: Proposal
@@ -9,6 +18,8 @@ type Props = {
 	decodedData: DecodedProposalData
 	onSign: () => void
 	onBroadcast: () => void
+	onPasteSignatures?: (sigs: PastedSignature[]) => void
+	onManualExecute?: () => void
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -83,17 +94,30 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 	return parts.length > 0 ? parts.join(' & ') : `Proposal #${proposal.seqNo}`
 }
 
-export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, onBroadcast }: Props) {
+export function ProposalDetail({
+	proposal,
+	signerPubkey,
+	decodedData,
+	onSign,
+	onBroadcast,
+	onPasteSignatures,
+	onManualExecute,
+}: Props) {
 	const collectedSignatures = proposal.signatures.length
 	const requiredSignatures = proposal.requiredSignatures
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
 	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
+	const alreadyBroadcast = Boolean(proposal.commitTxid ?? proposal.revealTxid)
+	const hasQuorum =
+		!isTerminal && !alreadyBroadcast && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
 	const alreadySigned =
 		signerPubkey !== null &&
 		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+
+	const [showPasteModal, setShowPasteModal] = useState(false)
+	const [bundleCopied, setBundleCopied] = useState(false)
 
 	const title = deriveProposalTitle(proposal, decodedData)
 
@@ -102,6 +126,24 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 		null,
 		2,
 	)
+
+	const bundle = {
+		actionHex: proposal.actionHex,
+		seqNo: proposal.seqNo,
+		authority: proposal.authority,
+		signatures: proposal.signatures.map((s) => ({ signerPubkey: s.signerPubkey, signatureHex: s.signatureHex })),
+	}
+
+	function handleCopyBundle() {
+		void writeClipboard(JSON.stringify(bundle, null, 2)).then(() => {
+			setBundleCopied(true)
+			setTimeout(() => setBundleCopied(false), 2000)
+		})
+	}
+
+	function handleDownloadBundle() {
+		void saveJsonFile(JSON.stringify(bundle, null, 2), `proposal-${proposal.seqNo}.json`)
+	}
 
 	return (
 		<div className="space-y-4">
@@ -316,34 +358,81 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 			)}
 
 			{/* ── Action buttons ── */}
-			{hasQuorum && (
-				<button
-					type="button"
-					data-testid="e2e-detail-broadcast-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onBroadcast}
-				>
-					Broadcast
-				</button>
-			)}
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex-1">
+					{hasQuorum && (
+						<button
+							type="button"
+							data-testid="e2e-detail-broadcast-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onBroadcast}
+						>
+							Broadcast
+						</button>
+					)}
 
-			{!isTerminal && !hasQuorum && !alreadySigned && (
-				<button
-					type="button"
-					data-testid="e2e-detail-sign-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onSign}
-				>
-					Sign
-				</button>
-			)}
+					{!isTerminal && !hasQuorum && !alreadySigned && (
+						<button
+							type="button"
+							data-testid="e2e-detail-sign-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onSign}
+						>
+							Sign
+						</button>
+					)}
 
-			{!isTerminal && !hasQuorum && alreadySigned && (
-				<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-					<p className="m-0 text-[13px] font-medium text-[#065f46]">
-						You have signed this proposal. Waiting for other signers to reach quorum.
-					</p>
+					{!isTerminal && !hasQuorum && alreadySigned && (
+						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+							<p className="m-0 text-[13px] font-medium text-[#065f46]">
+								You have signed this proposal. Waiting for other signers to reach quorum.
+							</p>
+						</div>
+					)}
 				</div>
+
+				{/* Utility buttons */}
+				<div className="flex shrink-0 items-center gap-1.5">
+					{onPasteSignatures !== undefined && (
+						<button
+							type="button"
+							title="Paste signatures"
+							onClick={() => setShowPasteModal(true)}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							<ClipboardPasteIcon width={12} height={12} className="text-current" />
+						</button>
+					)}
+					<button
+						type="button"
+						title={bundleCopied ? 'Copied!' : 'Copy bundle'}
+						onClick={handleCopyBundle}
+						className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+					>
+						<CopyClipboardIcon width={12} height={12} className="text-current" />
+					</button>
+					<button
+						type="button"
+						title="Download bundle"
+						onClick={handleDownloadBundle}
+						className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+					>
+						<DownloadIcon width={12} height={12} className="text-current" />
+					</button>
+				</div>
+			</div>
+
+			{/* Paste signatures modal */}
+			{showPasteModal && onPasteSignatures !== undefined && (
+				<PasteSignaturesModal
+					existingSignatures={proposal.signatures}
+					knownSigners={decodedData.allSigners}
+					onImport={(sigs) => {
+						onPasteSignatures(sigs)
+						setShowPasteModal(false)
+					}}
+					onClose={() => setShowPasteModal(false)}
+				/>
 			)}
 		</div>
 	)
