@@ -17,7 +17,7 @@ This crate is a member of the Cargo workspace and is gated by the workspace `rus
 
 ## Shared fixtures (`src/fixtures`)
 
-Deterministic JSON + mnemonic profiles live in the library crate so integration tests stay thin. [`fixtures::signer_update_enacted`](./src/fixtures/signer_update_enacted.rs) defines `DEFAULT_REPO_ASM` and `FAST_ENACTMENT`; the derivation prefix must stay aligned with `desktop_app::infrastructure::signing::list_mnemonic_addresses` (`m/84'/0'/73'/0/{n}`).
+Deterministic JSON + mnemonic profiles live in the library crate so integration tests stay thin. [`fixtures::signer_update_enacted`](./src/fixtures/signer_update_enacted.rs) defines `DEFAULT_REPO_ASM` and `FAST_ENACTMENT`; signer A uses the primary demo mnemonic at `m/84'/0'/73'/0/0`, signer B uses `DEMO_COSIGN_MNEMONIC` at the same path (see `scripts/asm-params.example.json` `keys[1]`). Derivation must stay aligned with `desktop_app::infrastructure::signing::list_mnemonic_addresses`.
 
 ## Requirements
 
