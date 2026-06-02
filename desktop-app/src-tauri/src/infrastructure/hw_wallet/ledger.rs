@@ -31,7 +31,6 @@ fn with_ledger_device<R>(f: impl FnOnce() -> Result<R, String>) -> Result<R, Str
 }
 
 const ADMIN_ID_PATH: &str = "m/84'/1'/73'/0/0";
-const ADMIN_ID_PATH_PREFIX: &str = "m/84'/1'/73'/0/";
 
 /// Empty label for `sign_psbt` / `get_wallet_address` (matches ledger_bitcoin_client test vectors).
 const LEDGER_ADMIN_WALLET_POLICY_NAME: &str = "";
@@ -467,46 +466,6 @@ fn recover_pubkey_from_message(message: &str, sig_bytes: &[u8; 65]) -> Result<St
     Ok(hex::encode(pubkey.serialize()))
 }
 
-async fn list_with<T>(
-    client: &BitcoinClient<T>,
-    count: usize,
-) -> Result<Vec<super::HwAddressEntry>, String>
-where
-    T: async_client::Transport,
-    T::Error: std::fmt::Debug,
-{
-    // Fetch the account xpub once (hardened prefix only) and software-derive each index.
-    let account_path = parse_path("m/84'/1'/73'")?;
-    let account_xpub = client
-        .get_extended_pubkey(&account_path, false)
-        .await
-        .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))?;
-
-    let secp = Secp256k1::verification_only();
-    let mut entries = Vec::with_capacity(count);
-
-    for n in 0..count {
-        let suffix =
-            DerivationPath::from(vec![ChildNumber::from(0u32), ChildNumber::from(n as u32)]);
-        let leaf_xpub = account_xpub
-            .derive_pub(&secp, &suffix)
-            .map_err(|e| format!("BIP32 derivation failed at index {n}: {e}"))?;
-
-        let public_key_hex = hex::encode(leaf_xpub.public_key.serialize());
-        let compressed = bitcoin::CompressedPublicKey(leaf_xpub.public_key);
-        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
-
-        entries.push(super::HwAddressEntry {
-            index: n as u32,
-            derivation_path: format!("{ADMIN_ID_PATH_PREFIX}{n}"),
-            address: address.to_string(),
-            public_key_hex,
-        });
-    }
-
-    Ok(entries)
-}
-
 // ---------------------------------------------------------------------------
 // Public API — sync wrappers called from spawn_blocking in Tauri commands
 // ---------------------------------------------------------------------------
@@ -535,32 +494,6 @@ fn connect_unlocked(derivation_path: Option<String>) -> Result<HwWalletInfo, Str
             .map_err(|e| format!("Ledger not found or locked: {e}"))?;
         let client = BitcoinClient::new(HidTransport(transport));
         rt.block_on(get_info_with(&client, &path_str))
-    }
-}
-
-pub fn list_addresses(count: usize) -> Result<Vec<super::HwAddressEntry>, String> {
-    with_ledger_device(|| list_addresses_unlocked(count))
-}
-
-fn list_addresses_unlocked(count: usize) -> Result<Vec<super::HwAddressEntry>, String> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| format!("tokio runtime: {e}"))?;
-
-    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
-        rt.block_on(async {
-            let client = bitcoin_client_for_speculos(&url)
-                .await
-                .map_err(|e| e.to_string())?;
-            list_with(&client, count).await
-        })
-    } else {
-        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
-        let transport = TransportNativeHID::new(&hidapi)
-            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
-        let client = BitcoinClient::new(HidTransport(transport));
-        rt.block_on(list_with(&client, count))
     }
 }
 

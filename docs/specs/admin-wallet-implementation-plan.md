@@ -41,7 +41,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.1 ✅ | Session-driven broadcast signing (adds HW path) | PRD §3.2, §5.3.3, [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — unified `PsbtSigner` driven port; mnemonic login = software signer (simulated HW), HW login = on-device PSBT signer; reveal by ephemeral key; `ALLOW_DEV_MNEMONIC_SIGNING` replaced by per-signer network capability |
 | R1.2 ✅ | Clean wallet UI | PRD §4, Alta WalletPanel, [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md) |
 | R1.3 ✅ | Receive rotation | PRD §4.3.4, [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) — BDK `next_unused_address` rotation; `admin_wallet_next_receive_address` IPC + `useAdminWalletReceiveAddress` hook |
-| R1.4 | Remove connect-time derivation picking | PRD §3.2 — canonical paths only |
+| R1.4 ✅ | Remove connect-time derivation picking | PRD §3.2 — canonical paths only, [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 6 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
@@ -416,11 +416,13 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Done when:** After incoming funds confirm, the displayed receive address rotates to the next unused index on regtest.
 
-#### R1.4 — Remove connect-time derivation picking
+#### R1.4 — Remove connect-time derivation picking ✅
+
+**Status:** Complete — branch `feature/admin-wallet-canonical-connect-paths` (2026-06-02). Spec: [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
 **Goal:** Drop the connect-flow step where the user manually picks a derivation path/account; derive Admin ID and Admin Wallet automatically at their canonical paths.
 
-**Done when:** Connecting a HW wallet derives Admin ID (`m/84'/0'/73'/0/0`) and Admin Wallet (`m/86'/0'/73'/n/n`) with no manual path-selection UI.
+**Done when:** Connecting a HW wallet derives Admin ID (`m/84'/0'/73'/0/0`; Ledger regtest/testnet follows its existing `m/84'/1'/73'/0/0` app convention) and Admin Wallet (`m/86'/0'/73'/n/n`; Ledger regtest/testnet uses `m/86'/1'/73'`) with no manual path-selection UI.
 
 **Later (optional, not in Release 1):** Admin ID display/copy (Phase 6), Send-on-HW + verify-on-device (Phase 7), QR for receive, fee-bump (Phase 5) — pull forward only if a Release 1 step needs them.
 

@@ -1,19 +1,11 @@
 //! Hardware wallet Tauri commands.
 
-use desktop_app::infrastructure::hw_wallet::{ledger, trezor, HwAddressEntry, HwWalletInfo};
+use desktop_app::infrastructure::hw_wallet::{ledger, trezor, HwWalletInfo};
 use desktop_app::infrastructure::signing::{self, SignatureResult};
 
 #[tauri::command]
 pub async fn get_trezor_info(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
     trezor::connect(derivation_path)
-}
-
-#[tauri::command]
-pub async fn list_hw_addresses(count: Option<u32>) -> Result<Vec<HwAddressEntry>, String> {
-    let n = count.unwrap_or(20) as usize;
-    tokio::task::spawn_blocking(move || trezor::list_addresses(n))
-        .await
-        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -67,14 +59,6 @@ pub async fn get_trezor_master_fingerprint() -> Result<u32, String> {
 // ---------------------------------------------------------------------------
 // Ledger commands
 // ---------------------------------------------------------------------------
-
-#[tauri::command]
-pub async fn list_ledger_addresses(count: Option<u32>) -> Result<Vec<HwAddressEntry>, String> {
-    let n = count.unwrap_or(20) as usize;
-    tokio::task::spawn_blocking(move || ledger::list_addresses(n))
-        .await
-        .map_err(|e| e.to_string())?
-}
 
 #[tauri::command]
 pub async fn get_ledger_info(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {

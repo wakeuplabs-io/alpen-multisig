@@ -1,8 +1,7 @@
 /**
  * Broadcast a multisig update proposal after quorum (commit/reveal via orchestrator).
- * Run only when the "Quorum reached" list shows **Broadcast** (e.g. after
- * `test:e2e:proposal-add-signer` then `test:e2e:proposal-co-sign-row1`).
- * Uses address row #0 session (same as wallet smoke).
+ * Run only when the "Quorum reached" list shows **Broadcast**.
+ * Uses the canonical Admin ID session (same as wallet smoke).
  *
  * Mnemonic walking skeleton gate (slice a): Palabras login → unified flow →
  * phase progress commit→reveal→confirmed → no device affordance.
@@ -23,7 +22,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await broadcastBtn.waitForDisplayed({
 			timeout: 120000,
 			timeoutMsg:
-				'No Broadcast in Quorum reached — run add-signer then co-sign-row1 first, or pick the first quorum card manually.',
+				'No Broadcast in Quorum reached — run add-signer then co-sign-mnemonic first, or pick the first quorum card manually.',
 		})
 		await broadcastBtn.waitForClickable({ timeout: 30000 })
 		await broadcastBtn.click()

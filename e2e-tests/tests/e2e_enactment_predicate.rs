@@ -6,7 +6,7 @@ use std::process::Command;
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
     decode_administration_subproto, parse_admin_section, strata_admin_confirmation_depth,
-    strata_admin_keys_hex, SignerUpdateEnactedFixture, FAST_ENACTMENT,
+    strata_admin_keys_hex, SignerUpdateEnactedFixture, DEMO_COSIGN_MNEMONIC, FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
@@ -44,8 +44,13 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
     let seq_no = fixture.seq_no;
 
     let addrs = anyhow_string(signing::list_mnemonic_addresses(mnemonic, passphrase, 3))?;
+    let cosign_addrs = anyhow_string(signing::list_mnemonic_addresses(
+        DEMO_COSIGN_MNEMONIC,
+        passphrase,
+        1,
+    ))?;
     let a_hex = addrs[0].public_key_hex.clone();
-    let b_hex = addrs[1].public_key_hex.clone();
+    let b_hex = cosign_addrs[0].public_key_hex.clone();
     let d_hex = addrs[2].public_key_hex.clone();
 
     let admin_section = parse_admin_section(fixture.admin_section_json);
@@ -72,7 +77,7 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
 
     let sighash = anyhow_string(signing::compute_sighash(seq_no, &action_hex))?;
     let path_a = format!("{path_prefix}/0");
-    let path_b = format!("{path_prefix}/1");
+    let path_b = format!("{path_prefix}/0");
     let sig_a = anyhow_string(signing::sign_with_mnemonic_path(
         mnemonic,
         passphrase,
@@ -80,7 +85,7 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         &sighash.sighash_hex,
     ))?;
     let sig_b = anyhow_string(signing::sign_with_mnemonic_path(
-        mnemonic,
+        DEMO_COSIGN_MNEMONIC,
         passphrase,
         &path_b,
         &sighash.sighash_hex,

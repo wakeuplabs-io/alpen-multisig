@@ -6,7 +6,6 @@ import {
 import { AuthenticateSessionPhase } from '@/domain/connect-wallet/components/authenticate-session-phase'
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
-import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
@@ -47,7 +46,7 @@ export function HwWalletConnect({
 	authoritySelection,
 }: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
-	const isWidePhase = state.phase === 'picking' || (state.phase === 'selected' && authoritySelection !== null)
+	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
 	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
@@ -85,15 +84,6 @@ export function HwWalletConnect({
 					onSelectWalletMethod={onSelectWalletMethod}
 				/>
 			)}
-			{state.phase === 'picking' && (
-				<PickingPhase
-					addresses={state.addresses}
-					selectedIndex={state.selectedIndex}
-					onSelectIndex={actions.selectAddressIndex}
-					onBack={actions.goBackToConnect}
-					onUseAddress={actions.useAddress}
-				/>
-			)}
 			{state.phase === 'selected' &&
 				state.selectedEntry &&
 				state.account &&
@@ -105,7 +95,7 @@ export function HwWalletConnect({
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
-						onBackToAddresses={actions.changeAddress}
+						onBack={actions.goBackToConnect}
 					/>
 				)}
 			{state.phase === 'selected' &&
@@ -133,7 +123,6 @@ export function HwWalletConnect({
 					isVerifyingAddress={state.isVerifyingAddress}
 					verifyMessage={state.verifyMessage}
 					onVerifyOnDevice={() => void actions.verifyOnDevice()}
-					onChangeAddress={actions.changeAddress}
 				/>
 			)}
 		</section>

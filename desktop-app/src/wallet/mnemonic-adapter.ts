@@ -24,7 +24,7 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 			const addressesResult = await tauriCall<HwAddressEntry[]>('list_mnemonic_addresses', {
 				mnemonic: opts.mnemonic,
 				passphrase: opts.passphrase,
-				count: 20,
+				count: 1,
 			})
 			if (!addressesResult.ok) {
 				throw new Error(addressesResult.error)
@@ -53,10 +53,6 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 			selectedAddress = null
 		},
 
-		setDerivationPath(nextPath: string): void {
-			derivationPath = nextPath
-		},
-
 		async signSighash(sighashHex: string): Promise<SignSighashResult> {
 			if (!publicKeyHex) {
 				throw new Error('Connect the mnemonic wallet first.')
@@ -79,18 +75,6 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 
 		getMnemonic(): string {
 			return opts.mnemonic
-		},
-
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_mnemonic_addresses', {
-				mnemonic: opts.mnemonic,
-				passphrase: opts.passphrase,
-				count,
-			})
-			if (!result.ok) {
-				throw new Error(result.error)
-			}
-			return result.data
 		},
 	}
 }
