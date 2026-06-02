@@ -165,9 +165,9 @@ npm run lint
 npm run build
 ```
 
-Plus a manual regtest run of the WebDriver three-step playbook
-(`proposal-add-signer` → `proposal-co-sign-row1` → `proposal-broadcast-quorum`) with the new Admin
-Wallet funding step, confirming the broadcast reaches `e2e-broadcast-done-banner`.
+Plus a manual regtest run of the WebDriver playbook
+(`proposal-add-signer` → `proposal-broadcast-quorum`) with the new Admin Wallet funding step,
+confirming the broadcast reaches `e2e-broadcast-done-banner`.
 
 ## Done when
 

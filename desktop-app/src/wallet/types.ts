@@ -42,9 +42,7 @@ export type WalletAdapter = {
 	readonly supportsSighashSigning: boolean
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
-	setDerivationPath?(derivationPath: string): void
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
-	listAddresses?(count?: number): Promise<HwAddressEntry[]>
 	getAccountXpub?(): Promise<string>
 	getMasterFingerprint?(): Promise<number>
 }

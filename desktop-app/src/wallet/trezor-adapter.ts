@@ -1,5 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
+import type { SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
 
 /** BIP-84 Admin ID path (P2WPKH) for message signing — non-Payout-Admin multisigs. */
 const ADMIN_ID_PATH = "m/84'/0'/73'/0/0"
@@ -45,10 +45,6 @@ export function createTrezorAdapter(): WalletAdapter {
 			currentDerivationPath = ADMIN_ID_PATH
 		},
 
-		setDerivationPath(nextPath: string): void {
-			currentDerivationPath = nextPath
-		},
-
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
 			if (!publicKeyHex) throw new Error('Connect the Trezor first.')
 			if (!context) {
@@ -74,12 +70,6 @@ export function createTrezorAdapter(): WalletAdapter {
 				signatureHex: result.data.signatureHex,
 				signatureFormat: 'bitcoin-message',
 			}
-		},
-
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_hw_addresses', { count })
-			if (!result.ok) throw new Error(result.error)
-			return result.data
 		},
 
 		async getAccountXpub(): Promise<string> {

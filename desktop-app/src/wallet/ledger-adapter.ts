@@ -1,5 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
+import type { SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
 
 /** BIP-84 Admin ID path (P2WPKH) for message signing — testnet coin type. */
 const ADMIN_ID_PATH = "m/84'/1'/73'/0/0"
@@ -42,19 +42,9 @@ export function createLedgerAdapter(): WalletAdapter {
 			}
 		},
 
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_ledger_addresses', { count })
-			if (!result.ok) throw new Error(result.error)
-			return result.data
-		},
-
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 			currentDerivationPath = ADMIN_ID_PATH
-		},
-
-		setDerivationPath(nextPath: string): void {
-			currentDerivationPath = nextPath
 		},
 
 		async getAccountXpub(): Promise<string> {

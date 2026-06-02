@@ -17,7 +17,7 @@ type Props = {
 	isChecking?: boolean
 	onSelectAuthority: (authorityId: string) => void
 	onContinueToAuthenticate: () => void
-	onBackToAddresses: () => void
+	onBack: () => void
 }
 
 export function AuthoritySelectionPhase({
@@ -26,7 +26,7 @@ export function AuthoritySelectionPhase({
 	isChecking = false,
 	onSelectAuthority,
 	onContinueToAuthenticate,
-	onBackToAddresses,
+	onBack,
 }: Props) {
 	const selectedOption = options.find((option) => option.id === selectedAuthorityId) ?? null
 	const canContinue = !isChecking && selectedOption?.enabled === true
@@ -40,13 +40,13 @@ export function AuthoritySelectionPhase({
 				<button
 					type="button"
 					className="inline-flex items-center gap-1 text-sm text-[#666] transition hover:text-[#0a0a0a]"
-					onClick={onBackToAddresses}
+					onClick={onBack}
 				>
 					<span aria-hidden="true">←</span>
 					Back
 				</button>
 				<p className="m-0 w-22 text-right text-[0.68rem] font-medium uppercase tracking-[0.22em] tabular-nums text-[#9ca3af]">
-					Step 3 of 4
+					Step 2 of 3
 				</p>
 			</div>
 

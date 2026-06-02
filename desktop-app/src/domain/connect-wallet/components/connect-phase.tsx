@@ -80,7 +80,7 @@ export function ConnectPhase({
 			{/* Subtitle */}
 			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
 				{isSuccess
-					? 'Device detected. Loading available addresses…'
+					? 'Device detected. Loading canonical signer…'
 					: walletVendor === 'mnemonic'
 						? 'Mnemonic mode selected. Connect to continue with the words provided below.'
 						: walletVendor === 'ledger'
@@ -162,7 +162,7 @@ export function ConnectPhase({
 						<div className="font-medium text-[#059669]">
 							{walletVendor === 'ledger' ? 'Ledger detected' : 'Trezor detected'}
 						</div>
-						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to address selection…</div>
+						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to authority selection…</div>
 					</div>
 				</div>
 			)}

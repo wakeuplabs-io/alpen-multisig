@@ -5,14 +5,11 @@ use bitcoin::bip32::{DerivationPath, Xpub};
 use bitcoin::Network;
 use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
-use super::{HwAddressEntry, HwWalletInfo};
+use super::HwWalletInfo;
 use crate::infrastructure::signing::SignatureResult;
 
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
 const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
-
-/// BIP-84 path template for Admin ID (P2WPKH message signing).
-const ADMIN_ID_PATH_PREFIX: &str = "m/84'/0'/73'/0/";
 
 fn open_trezor() -> Result<Trezor, String> {
     let mut attempts = Vec::with_capacity(2);
@@ -166,44 +163,6 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
         xpub_or_fingerprint: Some(format!("{}…", &pubkey_hex[..16.min(pubkey_hex.len())])),
         key_label: Some("Public key".to_string()),
     })
-}
-
-/// Fetch the first `count` P2WPKH Admin ID addresses at `m/84'/0'/73'/0/{n}` (BIP-84).
-///
-/// Opens a single HID session and loops `count` `get_public_key` calls with
-/// `InputScriptType::SPENDWITNESS`. Returns on the first error encountered.
-pub fn list_addresses(count: usize) -> Result<Vec<HwAddressEntry>, String> {
-    let mut trezor = open_trezor()?;
-    let mut entries = Vec::with_capacity(count);
-
-    for n in 0..count {
-        let path_str = format!("{ADMIN_ID_PATH_PREFIX}{n}");
-        let path = parse_path(&path_str)?;
-
-        let xpub: Xpub = resolve(
-            get_xpub(
-                &mut trezor,
-                &path,
-                InputScriptType::SPENDWITNESS,
-                Network::Bitcoin,
-                false,
-            )
-            .map_err(|e| format!("Trezor get_public_key at {path_str} failed: {e}"))?,
-        )?;
-
-        let public_key_hex = hex::encode(xpub.public_key.serialize());
-        let compressed = bitcoin::CompressedPublicKey(xpub.public_key);
-        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
-
-        entries.push(HwAddressEntry {
-            index: n as u32,
-            derivation_path: path_str,
-            address: address.to_string(),
-            public_key_hex,
-        });
-    }
-
-    Ok(entries)
 }
 
 pub fn verify_address_on_device(derivation_path: String) -> Result<(), String> {

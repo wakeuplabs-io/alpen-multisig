@@ -4,20 +4,14 @@ export const DEMO_MNEMONIC = 'multiply toss magic exclude crawl obey garden blac
 /**
  * Full wallet connect + session auth until URL is /proposals.
  * @param {string} [mnemonic]
- * @param {{ pickingRowIndex?: number }} [opts] — BIP-84 row index (default `0`). Use `1` for co-signer / “#1” session.
  */
-export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC, opts = {}) {
-	const pickingRowIndex = opts.pickingRowIndex ?? 0
+export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 	const ta = await $('textarea[data-testid="e2e-connect-mnemonic-textarea"]')
 	await ta.waitForDisplayed({ timeout: 90000 })
 	await ta.setValue(mnemonic)
 
 	await $('button[data-testid="e2e-connect-palabras"]').click()
 	await $('button[data-testid="e2e-connect-with-words"]').click()
-
-	await $('//h1[contains(.,"Select your signer address")]').waitForDisplayed({ timeout: 90000 })
-	await $(`button[data-testid="e2e-picking-row-${pickingRowIndex}"]`).click()
-	await $('button[data-testid="e2e-picking-continue"]').click()
 
 	await $('//h1[contains(.,"Select authority")]').waitForDisplayed({ timeout: 60000 })
 	// Membership check disables Continue until ASM confirms the signer; wait for Strata Admin.

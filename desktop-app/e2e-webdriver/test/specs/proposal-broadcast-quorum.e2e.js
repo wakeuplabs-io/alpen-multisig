@@ -1,8 +1,7 @@
 /**
  * Broadcast a multisig update proposal after quorum (commit/reveal via orchestrator).
- * Run only when the "Quorum reached" list shows **Broadcast** (e.g. after
- * `test:e2e:proposal-add-signer` then `test:e2e:proposal-co-sign-row1`).
- * Uses address row #0 session (same as wallet smoke).
+ * Run only when the "Quorum reached" list shows **Broadcast**.
+ * Uses the canonical Admin ID session (same as wallet smoke).
  *
  * Mnemonic walking skeleton gate (slice a): Palabras login → unified flow →
  * phase progress commit→reveal→confirmed → no device affordance.
