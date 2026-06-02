@@ -19,13 +19,16 @@ COPY Cargo.toml Cargo.lock ./
 COPY orchestrator-be/Cargo.toml orchestrator-be/
 COPY desktop-app/src-tauri/Cargo.toml desktop-app/src-tauri/
 COPY e2e-tests/Cargo.toml e2e-tests/
+COPY regtest-dev-api/Cargo.toml regtest-dev-api/
 
 RUN mkdir -p orchestrator-be/src \
     && echo 'fn main(){}' > orchestrator-be/src/main.rs \
     && mkdir -p desktop-app/src-tauri/src \
     && echo 'fn main(){}' > desktop-app/src-tauri/src/main.rs \
     && mkdir -p e2e-tests/src \
-    && touch e2e-tests/src/lib.rs
+    && touch e2e-tests/src/lib.rs \
+    && mkdir -p regtest-dev-api/src \
+    && echo 'fn main(){}' > regtest-dev-api/src/main.rs
 
 RUN cargo fetch
 
