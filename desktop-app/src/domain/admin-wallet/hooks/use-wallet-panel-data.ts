@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { AdminWalletError } from '@/api/admin-wallet'
 import { useWalletPanelState } from './use-wallet-panel-state'
 import { useAdminWalletBalance } from './use-admin-wallet-balance'
@@ -39,6 +40,16 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const { canSign } = useAdminWalletCapability()
+
+	const { refresh: refreshBalance } = balanceHook
+	const { refresh: refreshReceiveAddress } = receiveAddressHook
+	const { refresh: refreshAddresses } = addressesWithBalanceHook
+	useEffect(() => {
+		if (!isOpen) return
+		refreshBalance()
+		refreshReceiveAddress()
+		refreshAddresses()
+	}, [isOpen, refreshBalance, refreshReceiveAddress, refreshAddresses])
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
