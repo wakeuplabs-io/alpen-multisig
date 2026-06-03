@@ -27,8 +27,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_DIR="$SCRIPT_DIR/../local"
-COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yml"
+COMPOSE_DIR="$SCRIPT_DIR/../staging"
+COMPOSE_FILE="$COMPOSE_DIR/docker-compose.local.yml"
 
 CLEAN=0
 CLEAN_ORCHESTRATOR=0
