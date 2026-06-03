@@ -46,7 +46,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.4 ✅ | Remove connect-time derivation picking | PRD §3.2 — canonical paths only, [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | R1.5 ✅ | Balance UX (§4.3.1 PASS) | PRD §4.3.1 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md); PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) |
 | R1.6 ✅ | Addresses UX (§4.3.2 PASS) | PRD §4.3.2 **PASS** in compliance matrix; [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md); PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) |
-| R1.7 | Wallet panel UI polish | Alta parity for wallet slide-over (layout, typography, interaction) — **planned** |
+| R1.7 ✅ | Wallet panel UI polish | Visual hierarchy + affordances; [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md); PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214) |
 | **4** | **Governance broadcast fee rate (priority)** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -360,7 +360,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ### Release 1
 
-Release 1 is built on the Foundation. Steps **R1.0–R1.6** are complete (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212)). **R1.7** (wallet panel UI polish) is the remaining Release 1 slice — Release 1 closes after R1.7 ships. PRD §4.3.1 and §4.3.2 are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3–§4.3.5, §4.3.4 (QR/HW verify), §4.1–4.2, and **US-H4 broadcast fee** remain open (Phases 4–10). **Suggested order:** R1.7 → Phase 4. Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
+**Release 1 is complete.** Steps **R1.0–R1.7** are done (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); R1.7: PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214)). PRD §4.3.1, §4.3.2, and **§4.3.4 rotation** are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3 (tx list/RBF), §4.3.4 (QR/HW verify), §4.3.5 (Send), §4.1–4.2 (Admin ID), and **US-H4 broadcast fee** remain open (Phases 4–10). **Next:** Phase 4 (broadcast fee rate control).
 
 **R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
@@ -368,7 +368,9 @@ Release 1 is built on the Foundation. Steps **R1.0–R1.6** are complete (R1.5: 
 
 **R1.6 closure:** Branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) (`0c0c01c` spec, `3d0a5e4` implementation). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md). Manual regtest: per-address confirmed/unconfirmed sub-lines verified.
 
-**R1.0–R1.6 closed.** Next Release 1 slice: **R1.7** (wallet panel UI). Then **Phase 4** (broadcast fee).
+**R1.7 closure:** Branch `feature/admin-wallet-r17-ui-polish`, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Two passes: (a) visual hierarchy + layout refinement, (b) affordances & polish (icon-only copy, wallet avatar, count badge, session chevron, drawer easing/shadow). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
+
+**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Phase 4** (broadcast fee rate control).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
