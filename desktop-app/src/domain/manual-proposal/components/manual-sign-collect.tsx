@@ -13,6 +13,7 @@ type Props = {
 	hasQuorum: boolean
 	isSigning: boolean
 	signError: string | null
+	signerPubkey: string | null
 	onSign: () => void
 	onBroadcast: () => void
 }
@@ -31,6 +32,7 @@ export function ManualSignCollect({
 	hasQuorum,
 	isSigning,
 	signError,
+	signerPubkey,
 	onSign,
 	onBroadcast,
 }: Props) {
@@ -81,14 +83,6 @@ export function ManualSignCollect({
 
 	return (
 		<div className="space-y-4">
-			<ProposalDetail
-				proposal={syntheticProposal}
-				signerPubkey={null}
-				decodedData={decodedData}
-				onSign={onSign}
-				onBroadcast={onBroadcast}
-			/>
-
 			{isSigning && (
 				<div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3">
 					<p className="m-0 text-[13px] text-[#1d4ed8]">Waiting for hardware wallet approval…</p>
@@ -97,9 +91,18 @@ export function ManualSignCollect({
 
 			{signError && (
 				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-[13px] text-[#dc2626]">{signError}</p>
+					<p className="m-0 text-[13px] font-medium text-[#dc2626]">Signing failed</p>
+					<p className="m-0 mt-0.5 text-[12px] text-[#991b1b]">{signError}</p>
 				</div>
 			)}
+
+			<ProposalDetail
+				proposal={syntheticProposal}
+				signerPubkey={signerPubkey}
+				decodedData={decodedData}
+				onSign={isSigning ? () => {} : onSign}
+				onBroadcast={onBroadcast}
+			/>
 
 			{hasQuorum && (
 				<div className="flex items-center justify-between gap-3 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-3">

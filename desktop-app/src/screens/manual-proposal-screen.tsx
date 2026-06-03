@@ -1,4 +1,4 @@
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { LogOutMutedIcon } from '@/assets/icons'
 import { ManualImportForm } from '@/domain/manual-proposal/components/manual-import-form'
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
@@ -7,17 +7,39 @@ import type { ManualBundleJson } from '@/domain/manual-proposal/model/manual-pro
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
+import { DownloadButton } from '@/components/download-button'
+import { SessionChip } from '@/components/session-chip'
+import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
+import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
+import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
+import { useAdminWalletSync } from '@/domain/admin-wallet/hooks/use-admin-wallet-sync'
+import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
+import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
+import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 
 const STEP_LABELS = ['Import', 'Sign & Collect', 'Broadcast']
 
 type LocationState = { prefill?: ManualBundleJson }
 
 export function ManualProposalScreen() {
-	const navigate = useNavigate()
 	const location = useLocation()
-	const { wallet, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const prefill = (location.state as LocationState | null)?.prefill ?? null
 	const manual = useManualProposal(prefill)
+
+	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
+	const balanceHook = useAdminWalletBalance()
+	const receiveAddressHook = useAdminWalletReceiveAddress()
+	const syncHook = useAdminWalletSync()
+	const addressesWithBalanceHook = useAddressesWithBalance()
+
+	const walletDisabledError =
+		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
+			? balanceHook.error
+			: receiveAddressHook.error?.type === 'Disabled' || receiveAddressHook.error?.type === 'RegtestGuardViolation'
+				? receiveAddressHook.error
+				: null
 
 	async function handleBack() {
 		await disconnectSession()
@@ -27,15 +49,30 @@ export function ManualProposalScreen() {
 		return <Navigate to="/" replace />
 	}
 
+	const signerLabel = wallet.addressSample
+		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
+		: wallet.publicKeyHex
+			? `${wallet.publicKeyHex.slice(0, 10)}…${wallet.publicKeyHex.slice(-6)}`
+			: 'Unknown'
+
 	const stepIndex = manual.step === 'import' ? 0 : manual.step === 'sign-collect' ? 1 : 2
 
 	return (
+		<>
 		<ScreenShell
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
+					<span className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
+						<span className="text-[11px] font-medium text-[#6b7280]">{wallet.deviceLabel}</span>
 					</span>
+					<SessionChip
+						timeLabel={sessionTimeLabel}
+						signerLabel={signerLabel}
+						warning={sessionWarning}
+						onActivate={() => (isOpen ? close() : open())}
+						isActive={isOpen}
+						panelId="wallet-slide-dialog"
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
@@ -48,15 +85,7 @@ export function ManualProposalScreen() {
 			}
 		>
 			<div className="mx-auto w-full max-w-190">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
-					onClick={() => navigate('/proposals')}
-				>
-					← Back to proposals
-				</button>
-
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Manual execution
 				</h1>
 				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
@@ -88,8 +117,8 @@ export function ManualProposalScreen() {
 						<div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<h2 className="m-0 mb-5 text-[15px] font-semibold text-[#111827]">Enter proposal data</h2>
 							<ManualImportForm
-								errors={manual.importErrors}
 								isValidating={manual.isValidating}
+								error={manual.importErrors.authority ?? manual.importErrors.actionHex ?? manual.importErrors.seqNo}
 								onLoadJson={(file) => void manual.handleLoadFromJson(file)}
 							/>
 						</div>
@@ -106,8 +135,10 @@ export function ManualProposalScreen() {
 								hasQuorum={manual.hasQuorum}
 								isSigning={manual.isSigning}
 								signError={manual.signError}
+								signerPubkey={wallet.publicKeyHex ?? null}
 								onSign={() => void manual.handleSign()}
 								onBroadcast={() => void manual.handleAdvanceToBroadcast()}
+								onPasteSignatures={manual.handlePasteSignatures}
 							/>
 						</div>
 					)}
@@ -175,46 +206,81 @@ export function ManualProposalScreen() {
 							)}
 
 							{/* Done */}
-							{manual.broadcastPhase === 'done' && (
+							{manual.broadcastPhase === 'done' && manual.importData && (
 								<div className="space-y-4">
 									<div className="rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-4 shadow-sm">
 										<p className="m-0 text-[13px] font-semibold text-[#065f46]">✓ Broadcast successful</p>
 									</div>
 
-									{manual.commitTxid && (
-										<div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-											<p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
-												Commit TXID
+									<div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+										<div className="mb-3 flex items-center justify-between">
+											<p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
+												Export full proposal
 											</p>
-											<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+											<div className="flex items-center gap-2">
+												<CopyButton
+													text={JSON.stringify(
+														{
+															actionHex: manual.importData.actionHex,
+															seqNo: manual.importData.seqNo,
+															authority: manual.importData.authority,
+															sighashHex: manual.importData.sighashHex,
+															signatures: manual.localSignatures.map(({ signerPubkey, signatureHex }) => ({
+																signerPubkey,
+																signatureHex,
+															})),
+															commitTxid: manual.commitTxid,
+															revealTxid: manual.revealTxid,
+														},
+														null,
+														2,
+													)}
+												/>
+												<DownloadButton
+													text={JSON.stringify(
+														{
+															actionHex: manual.importData.actionHex,
+															seqNo: manual.importData.seqNo,
+															authority: manual.importData.authority,
+															sighashHex: manual.importData.sighashHex,
+															signatures: manual.localSignatures.map(({ signerPubkey, signatureHex }) => ({
+																signerPubkey,
+																signatureHex,
+															})),
+															commitTxid: manual.commitTxid,
+															revealTxid: manual.revealTxid,
+														},
+														null,
+														2,
+													)}
+													filename={`proposal-${manual.importData.authority}-${manual.importData.seqNo}.json`}
+												/>
+											</div>
+										</div>
+										{manual.commitTxid && (
+											<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2 mb-2">
+												<span className="text-[11px] text-[#9ca3af] shrink-0">Commit</span>
 												<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">
 													{manual.commitTxid}
 												</span>
-												<CopyButton text={manual.commitTxid} />
 											</div>
-										</div>
-									)}
-
-									{manual.revealTxid && (
-										<div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-											<p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
-												Reveal TXID
-											</p>
-											<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+										)}
+										{manual.revealTxid && (
+											<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2">
+												<span className="text-[11px] text-[#9ca3af] shrink-0">Reveal</span>
 												<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">
 													{manual.revealTxid}
 												</span>
-												<CopyButton text={manual.revealTxid} />
 											</div>
-										</div>
-									)}
+										)}
+									</div>
 
 									<button
 										type="button"
 										className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-										onClick={() => navigate('/proposals')}
+										onClick={manual.handleReset}
 									>
-										Back to proposals
+										New execution
 									</button>
 								</div>
 							)}
@@ -242,5 +308,31 @@ export function ManualProposalScreen() {
 				</div>
 			</div>
 		</ScreenShell>
+
+		<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
+			<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+			<WalletPanelContent
+				disabledError={walletDisabledError}
+				balanceSats={balanceHook.data?.confirmedSats ?? 0}
+				isBalanceLoading={balanceHook.isLoading}
+				receiveAddress={receiveAddressHook.address}
+				isAddressesLoading={receiveAddressHook.isLoading}
+				addressRows={addressesWithBalanceHook.data}
+				addressRowsLoading={addressesWithBalanceHook.isLoading}
+				addressRowsError={addressesWithBalanceHook.error}
+				expandedSection={expandedSection}
+				onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
+				syncStatus={syncHook.syncStatus}
+				isSyncRefreshing={syncHook.isLoading}
+				syncError={syncHook.error}
+				onRefreshSync={async () => {
+					await syncHook.triggerSync()
+					balanceHook.refresh()
+					receiveAddressHook.refresh()
+					addressesWithBalanceHook.refresh()
+				}}
+			/>
+		</WalletPanel>
+		</>
 	)
 }

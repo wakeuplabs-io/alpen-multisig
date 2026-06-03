@@ -10,6 +10,7 @@ type Props = {
 	connectViewState: ConnectViewState
 	error: string | null
 	onConnect: () => void
+	onConnectMnemonic?: (mnemonic: string) => void
 	walletVendor: WalletVendor
 	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 }
@@ -19,6 +20,7 @@ export function ConnectPhase({
 	connectViewState,
 	error,
 	onConnect,
+	onConnectMnemonic,
 	walletVendor,
 	onSelectWalletMethod,
 }: Props) {
@@ -175,7 +177,11 @@ export function ConnectPhase({
 						? 'cursor-not-allowed border border-[#a3a3a3] bg-[#a3a3a3] text-white opacity-70'
 						: 'border border-[#0a0a0a] bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
 				}`}
-				onClick={onConnect}
+				onClick={
+					walletVendor === 'mnemonic' && onConnectMnemonic
+						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
+						: onConnect
+				}
 				disabled={loading || isSuccess}
 			>
 				{isSuccess ? (

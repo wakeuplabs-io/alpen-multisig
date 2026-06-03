@@ -1,18 +1,15 @@
 import { useRef, useState } from 'react'
 import { ImportJsonIcon } from '@/assets/icons'
-import type { ManualImportErrors } from '@/domain/manual-proposal/model/manual-proposal.types'
 
 type Props = {
 	isValidating: boolean
-	errors: ManualImportErrors
+	error?: string
 	onLoadJson: (file: File) => void
 }
 
-export function ManualImportForm({ isValidating, errors, onLoadJson }: Props) {
+export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [isDragging, setIsDragging] = useState(false)
-
-	const errorMessage = errors.actionHex ?? errors.seqNo ?? errors.authority
 
 	function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0]
@@ -49,28 +46,18 @@ export function ManualImportForm({ isValidating, errors, onLoadJson }: Props) {
 				}}
 				onDragLeave={() => setIsDragging(false)}
 				onDrop={handleDrop}
-				className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition
+				className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition
 					${isDragging ? 'border-[#111827] bg-[#f3f4f6]' : 'border-[#e5e7eb] bg-[#f9fafb] hover:border-[#9ca3af] hover:bg-[#f3f4f6]'}
-					${isValidating ? 'cursor-not-allowed opacity-60' : ''}
-					${errorMessage ? 'border-[#fca5a5] bg-[#fef2f2]' : ''}`}
+					${isValidating ? 'cursor-not-allowed opacity-60' : ''}`}
 			>
-				{isValidating ? (
-					<>
-						<div className="h-6 w-6 animate-spin rounded-full border-2 border-[#9ca3af] border-t-[#111827]" />
-						<p className="m-0 text-[13px] font-medium text-[#6b7280]">Validating…</p>
-					</>
-				) : (
-					<>
-						<ImportJsonIcon width={24} height={24} className="text-[#9ca3af]" />
-						<div>
-							<p className="m-0 text-[13px] font-medium text-[#374151]">Drop your JSON file here</p>
-							<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">or click to browse</p>
-						</div>
-					</>
-				)}
+				<ImportJsonIcon width={20} height={20} className="text-[#9ca3af]" />
+				<div>
+					<p className="m-0 text-[12px] font-medium text-[#374151]">Drop bundle JSON here</p>
+					<p className="m-0 mt-0.5 text-[11px] text-[#9ca3af]">or click to browse</p>
+				</div>
 			</div>
 
-			{errorMessage && <p className="text-[12px] text-[#dc2626]">{errorMessage}</p>}
+			{error && <p className="text-[12px] text-[#dc2626]">{error}</p>}
 		</div>
 	)
 }

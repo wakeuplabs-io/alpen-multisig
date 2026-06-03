@@ -3,14 +3,11 @@ import type { Proposal, ProposalStatus } from '@/api/proposals'
 import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import {
 	CheckCircleEmeraldIcon,
-	ClipboardPasteIcon,
 	CopyClipboardIcon,
 	DownloadIcon,
 	SignaturePenMutedIcon,
 } from '@/assets/icons'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
-import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
-import { PasteSignaturesModal } from '@/domain/manual-proposal/components/paste-signatures-modal'
 
 type Props = {
 	proposal: Proposal
@@ -18,7 +15,6 @@ type Props = {
 	decodedData: DecodedProposalData
 	onSign: () => void
 	onBroadcast: () => void
-	onPasteSignatures?: (sigs: PastedSignature[]) => void
 	onManualExecute?: () => void
 }
 
@@ -100,8 +96,7 @@ export function ProposalDetail({
 	decodedData,
 	onSign,
 	onBroadcast,
-	onPasteSignatures,
-	onManualExecute,
+	onManualExecute: _onManualExecute,
 }: Props) {
 	const collectedSignatures = proposal.signatures.length
 	const requiredSignatures = proposal.requiredSignatures
@@ -116,8 +111,8 @@ export function ProposalDetail({
 		signerPubkey !== null &&
 		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
 
-	const [showPasteModal, setShowPasteModal] = useState(false)
 	const [bundleCopied, setBundleCopied] = useState(false)
+	const [bundleDownloaded, setBundleDownloaded] = useState(false)
 
 	const title = deriveProposalTitle(proposal, decodedData)
 
@@ -127,22 +122,18 @@ export function ProposalDetail({
 		2,
 	)
 
-	const bundle = {
-		actionHex: proposal.actionHex,
-		seqNo: proposal.seqNo,
-		authority: proposal.authority,
-		signatures: proposal.signatures.map((s) => ({ signerPubkey: s.signerPubkey, signatureHex: s.signatureHex })),
-	}
-
 	function handleCopyBundle() {
-		void writeClipboard(JSON.stringify(bundle, null, 2)).then(() => {
+		void writeClipboard(JSON.stringify(proposal, null, 2)).then(() => {
 			setBundleCopied(true)
 			setTimeout(() => setBundleCopied(false), 2000)
 		})
 	}
 
 	function handleDownloadBundle() {
-		void saveJsonFile(JSON.stringify(bundle, null, 2), `proposal-${proposal.seqNo}.json`)
+		void saveJsonFile(JSON.stringify(proposal, null, 2), `proposal-${proposal.seqNo}.json`).then(() => {
+			setBundleDownloaded(true)
+			setTimeout(() => setBundleDownloaded(false), 2000)
+		})
 	}
 
 	return (
@@ -393,47 +384,44 @@ export function ProposalDetail({
 
 				{/* Utility buttons */}
 				<div className="flex shrink-0 items-center gap-1.5">
-					{onPasteSignatures !== undefined && (
+					<div className="group relative">
 						<button
 							type="button"
-							title="Paste signatures"
-							onClick={() => setShowPasteModal(true)}
+							onClick={handleCopyBundle}
 							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 						>
-							<ClipboardPasteIcon width={12} height={12} className="text-current" />
+							{bundleCopied ? (
+								<span className="text-[#0f9d7a]">Copied!</span>
+							) : (
+								<CopyClipboardIcon width={12} height={12} className="text-current" />
+							)}
 						</button>
-					)}
-					<button
-						type="button"
-						title={bundleCopied ? 'Copied!' : 'Copy bundle'}
-						onClick={handleCopyBundle}
-						className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-					>
-						<CopyClipboardIcon width={12} height={12} className="text-current" />
-					</button>
-					<button
-						type="button"
-						title="Download bundle"
-						onClick={handleDownloadBundle}
-						className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-					>
-						<DownloadIcon width={12} height={12} className="text-current" />
-					</button>
+						{!bundleCopied && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Copy bundle
+							</span>
+						)}
+					</div>
+					<div className="group relative">
+						<button
+							type="button"
+							onClick={handleDownloadBundle}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							{bundleDownloaded ? (
+								<span className="text-[#0f9d7a]">Saved!</span>
+							) : (
+								<DownloadIcon width={12} height={12} className="text-current" />
+							)}
+						</button>
+						{!bundleDownloaded && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Download bundle
+							</span>
+						)}
+					</div>
 				</div>
 			</div>
-
-			{/* Paste signatures modal */}
-			{showPasteModal && onPasteSignatures !== undefined && (
-				<PasteSignaturesModal
-					existingSignatures={proposal.signatures}
-					knownSigners={decodedData.allSigners}
-					onImport={(sigs) => {
-						onPasteSignatures(sigs)
-						setShowPasteModal(false)
-					}}
-					onClose={() => setShowPasteModal(false)}
-				/>
-			)}
 		</div>
 	)
 }

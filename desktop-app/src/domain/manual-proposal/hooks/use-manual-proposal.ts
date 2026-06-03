@@ -33,7 +33,7 @@ function normalizeHex(s: string): string {
 export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting' | 'done' | 'error'
 
 export function useManualProposal(initialBundle?: ManualBundleJson | null) {
-	const { adapter } = useSession()
+	const { adapter, wallet } = useSession()
 
 	const [step, setStep] = useState<ManualStep>('import')
 
@@ -166,7 +166,11 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 		setImportErrors({})
 
 		try {
-			const [decodeRes, sighashRes] = await Promise.all([decodeActionHex(rawHex), computeSighash(seqNoNum, rawHex)])
+			const [decodeRes, sighashRes, configRes] = await Promise.all([
+				decodeActionHex(rawHex),
+				computeSighash(seqNoNum, rawHex),
+				getMultisigConfig(importForm.authority),
+			])
 
 			if (!decodeRes.ok) {
 				setImportErrors({ actionHex: `Decode failed: ${decodeRes.error}` })
@@ -178,6 +182,12 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			}
 			if (!sighashRes.ok) {
 				setImportErrors({ actionHex: `Sighash computation failed: ${sighashRes.error}` })
+				return
+			}
+
+			const pubkey = wallet?.publicKeyHex?.toLowerCase()
+			if (pubkey && configRes.ok && !configRes.data.signers.some((s) => s.toLowerCase() === pubkey)) {
+				setImportErrors({ authority: `Your key is not a signer for ${importForm.authority}` })
 				return
 			}
 
@@ -233,7 +243,11 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 		setIsValidating(true)
 
 		try {
-			const [decodeRes, sighashRes] = await Promise.all([decodeActionHex(rawHex), computeSighash(bundle.seqNo, rawHex)])
+			const [decodeRes, sighashRes, configRes] = await Promise.all([
+				decodeActionHex(rawHex),
+				computeSighash(bundle.seqNo, rawHex),
+				getMultisigConfig(bundle.authority),
+			])
 
 			if (!decodeRes.ok) {
 				setImportErrors({ actionHex: `Decode failed: ${decodeRes.error}` })
@@ -245,6 +259,12 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			}
 			if (!sighashRes.ok) {
 				setImportErrors({ actionHex: `Sighash failed: ${sighashRes.error}` })
+				return
+			}
+
+			const pubkey = wallet?.publicKeyHex?.toLowerCase()
+			if (pubkey && configRes.ok && !configRes.data.signers.some((s) => s.toLowerCase() === pubkey)) {
+				setImportErrors({ authority: `Your key is not a signer for ${bundle.authority}` })
 				return
 			}
 
@@ -297,6 +317,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 	const initialBundleRef = useRef(initialBundle)
 	useEffect(() => {
 		if (initialBundleRef.current) void processBundle(initialBundleRef.current)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []) // runs once on mount — initialBundleRef is stable
 
 	function handlePasteSignatures(sigs: PastedSignature[]) {
@@ -362,6 +383,24 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 		setBroadcastBundle(null)
 	}
 
+	function handleReset() {
+		setStep('import')
+		setImportForm({ actionHex: '', seqNo: '', authority: '' })
+		setImportErrors({})
+		setIsValidating(false)
+		setImportData(null)
+		setDecodedData({ sighashHex: null, signerSetChange: null, allSigners: [], isLoading: false })
+		setLocalSignatures([])
+		setRequiredSignatures(null)
+		setIsSigning(false)
+		setSignError(null)
+		setBroadcastPhase('idle')
+		setBroadcastBundle(null)
+		setBroadcastError(null)
+		setCommitTxid(null)
+		setRevealTxid(null)
+	}
+
 	return {
 		step,
 		// step 1
@@ -390,5 +429,6 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 		revealTxid,
 		handleConfirmBroadcast,
 		handleBackToSignCollect,
+		handleReset,
 	}
 }
