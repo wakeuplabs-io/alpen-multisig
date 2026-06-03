@@ -27,6 +27,8 @@ import type { AddressWithBalanceView } from '../use-addresses-with-balance.ts'
 const _sample: AddressWithBalanceView = {
 	index: 0,
 	address: 'bc1q...',
+	confirmedSats: 800,
+	unconfirmedSats: 200,
 	balanceSats: 1000,
 	isUsed: true,
 }

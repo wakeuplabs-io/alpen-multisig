@@ -1,5 +1,8 @@
 # Spec: Admin Wallet - Addresses UX (R1.6)
 
+> **Status:** Complete — branch `feature/admin-wallet-addresses-ux`.
+> Evolution: [`docs/evolution/2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+
 Implements **Release 1, step R1.6** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
 Source of truth: **PRD §4.3.2**.
 

@@ -1,21 +1,35 @@
 type WalletPanelHeaderProps = {
 	onClose(): void
-	/** Optional primary title (e.g. `Session · 12:00`). Defaults to "Admin Wallet". */
+	/** Primary title. Defaults to "Admin Wallet". */
 	title?: string
-	/** Optional secondary line shown under the title (e.g. truncated signer address). */
+	/** Secondary line shown under the title (e.g. session and signer context). */
 	subtitle?: string
+	/** When true, shows a subtle watch-only badge (HW session without signing). */
+	isWatchOnly?: boolean
 }
 
-export function WalletPanelHeader({ onClose, title = 'Admin Wallet', subtitle }: WalletPanelHeaderProps) {
+export function WalletPanelHeader({
+	onClose,
+	title = 'Admin Wallet',
+	subtitle,
+	isWatchOnly = false,
+}: WalletPanelHeaderProps) {
 	return (
 		<div className="flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-[18px] py-4">
 			<div className="min-w-0 flex-1">
-				<h2
-					id="wallet-panel-title"
-					className="m-0 truncate font-mono text-[14px] font-medium tracking-[0.02em] text-[#111827]"
-				>
-					{title}
-				</h2>
+				<div className="flex min-w-0 items-center gap-2">
+					<h2
+						id="wallet-panel-title"
+						className="m-0 truncate font-mono text-[14px] font-medium tracking-[0.02em] text-[#111827]"
+					>
+						{title}
+					</h2>
+					{isWatchOnly && (
+						<span className="shrink-0 rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#6b7280]">
+							Watch-only
+						</span>
+					)}
+				</div>
 				{subtitle && <p className="m-0 mt-0.5 truncate font-mono text-[11px] text-[#6b7280]">{subtitle}</p>}
 			</div>
 			<button
