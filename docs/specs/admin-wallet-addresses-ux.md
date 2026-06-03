@@ -281,12 +281,12 @@ cargo test --workspace
 
 - Met on regtest — funded addresses show confirmed hero; unconfirmed credit without mine shows per-row sub-line; line hidden
   when fully confirmed at address level.
-- PRD §4.3.2 marked **PASS**; Release 1 **closed** (§4.3.1 in R1.5, §4.3.2 in R1.6).
+- PRD §4.3.2 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); R1.0–R1.6 done; R1.7 wallet UI polish planned (§4.3.3–§4.3.5 still FAIL).
 - Frontend and workspace CI green.
 
 ## Release 1 closure
 
-- `docs/specs/admin-wallet-implementation-plan.md` — R1.6 ✅, Release 1 closed.
+- `docs/specs/admin-wallet-implementation-plan.md` — R1.6 ✅; PRD status in `admin-wallet-prd-compliance.md`.
 - `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md` — evolution record.
 - **Next program increment:** Phase 4 (Send BTC happy path).
 
