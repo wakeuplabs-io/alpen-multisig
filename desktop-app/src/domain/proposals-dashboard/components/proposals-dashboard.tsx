@@ -8,6 +8,7 @@ import {
 	FileTextMutedIcon,
 	SignaturePenMutedIcon,
 } from '@/assets/icons'
+import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
@@ -382,14 +383,23 @@ function ProposalCard({
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalType(proposal)
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
+	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
 	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
 	const awaitingEnactment = proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
-	const canBroadcast = hasQuorum && proposal.status === 'approved' && proposal.broadcastStatus === 'idle'
-	const alreadySigned =
-		signerPubkey !== null &&
-		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+
+	const signButton = canSign ? (
+		<button
+			type="button"
+			data-testid="e2e-proposal-sign-button"
+			className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+			onClick={(e) => {
+				e.stopPropagation()
+				onSignProposal(proposal.actionId)
+			}}
+		>
+			Sign
+		</button>
+	) : null
 
 	return (
 		<div
@@ -449,17 +459,20 @@ function ProposalCard({
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
 						Quorum reached - ready to broadcast
 					</p>
-					<button
-						type="button"
-						className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						onClick={(e) => {
-							e.stopPropagation()
-							onBroadcastProposal(proposal.actionId)
-						}}
-						data-testid="e2e-proposal-broadcast-button"
-					>
-						Broadcast
-					</button>
+					<div className="flex shrink-0 items-center gap-2">
+						{signButton}
+						<button
+							type="button"
+							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+							onClick={(e) => {
+								e.stopPropagation()
+								onBroadcastProposal(proposal.actionId)
+							}}
+							data-testid="e2e-proposal-broadcast-button"
+						>
+							Broadcast
+						</button>
+					</div>
 				</div>
 			) : awaitingEnactment ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
@@ -489,11 +502,12 @@ function ProposalCard({
 					<p className="m-0 text-[14px] font-medium text-[#6b7280]">Broadcast in progress</p>
 				</div>
 			) : hasQuorum ? (
-				<div className="mt-4 border-t border-[#eceff3] pt-3">
+				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
 					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
 						Quorum reached
 					</p>
+					{signButton}
 				</div>
 			) : (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
@@ -501,19 +515,7 @@ function ProposalCard({
 						<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
 						{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
 					</p>
-					{!isTerminal && !alreadySigned && (
-						<button
-							type="button"
-							data-testid="e2e-proposal-sign-button"
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-							onClick={(e) => {
-								e.stopPropagation()
-								onSignProposal(proposal.actionId)
-							}}
-						>
-							Sign
-						</button>
-					)}
+					{signButton}
 				</div>
 			)}
 		</div>

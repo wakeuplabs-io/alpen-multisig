@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, SignaturePenMutedIcon } from '@/assets/icons'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 type Props = {
 	proposal: Proposal
@@ -89,11 +90,7 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
-	const alreadySigned =
-		signerPubkey !== null &&
-		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 
 	const title = deriveProposalTitle(proposal, decodedData)
 
@@ -327,7 +324,7 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 				</button>
 			)}
 
-			{!isTerminal && !hasQuorum && !alreadySigned && (
+			{canSign && (
 				<button
 					type="button"
 					data-testid="e2e-detail-sign-button"
