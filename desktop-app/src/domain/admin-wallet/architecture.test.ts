@@ -124,4 +124,38 @@ assert.equal(
 )
 console.log(`Rule 4 PASS: ${componentFiles.length} component file(s) checked — no roadmap placeholder copy`)
 
+// ── Rule 5: R1.5 balance wiring — panel passes confirmed + unconfirmed to WalletBalance ──
+
+const walletPanelContentPath = path.join(componentsDir, 'wallet-panel-content.tsx')
+const walletBalancePath = path.join(componentsDir, 'wallet-balance.tsx')
+const panelContent = fs.readFileSync(walletPanelContentPath, 'utf8')
+const walletBalance = fs.readFileSync(walletBalancePath, 'utf8')
+
+const rule5Violations: string[] = []
+if (!panelContent.includes('confirmedBalanceSats')) {
+	rule5Violations.push('wallet-panel-content.tsx: missing confirmedBalanceSats prop')
+}
+if (!panelContent.includes('unconfirmedBalanceSats')) {
+	rule5Violations.push('wallet-panel-content.tsx: missing unconfirmedBalanceSats prop')
+}
+if (!panelContent.includes('confirmedSats={confirmedBalanceSats}')) {
+	rule5Violations.push('wallet-panel-content.tsx: must forward confirmedSats to WalletBalance')
+}
+if (!panelContent.includes('unconfirmedSats={unconfirmedBalanceSats}')) {
+	rule5Violations.push('wallet-panel-content.tsx: must forward unconfirmedSats to WalletBalance')
+}
+if (!walletBalance.includes('formatUnconfirmedBalanceLine')) {
+	rule5Violations.push('wallet-balance.tsx: must use formatUnconfirmedBalanceLine for unconfirmed copy')
+}
+if (walletBalance.includes('balanceSats:')) {
+	rule5Violations.push('wallet-balance.tsx: must not use legacy single balanceSats prop')
+}
+
+assert.equal(
+	rule5Violations.length,
+	0,
+	`Rule 5 violations — R1.5 balance UX wiring:\n  ${rule5Violations.join('\n  ')}`,
+)
+console.log('Rule 5 PASS: wallet panel balance wiring (confirmed + unconfirmed)')
+
 console.log('All architecture compliance checks passed.')

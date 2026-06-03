@@ -171,7 +171,8 @@ export function ProposalsDashboardScreen() {
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
-					balanceSats={balanceHook.data?.confirmedSats ?? 0}
+					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
+					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}
 					receiveAddress={receiveAddress}
 					isAddressesLoading={receiveAddressHook.isLoading}

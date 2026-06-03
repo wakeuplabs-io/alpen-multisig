@@ -1,5 +1,7 @@
 # Spec: Admin Wallet - Balance UX (R1.5)
 
+> **Status:** In progress — branch `feature/admin-wallet-balance-ux`.
+
 Implements **Release 1, step R1.5** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
 Source of truth: **PRD §4.3.1**.
 

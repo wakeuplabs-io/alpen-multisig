@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { formatBtcFromSats } from '@/domain/admin-wallet/model/format-btc-from-sats'
+import { formatUnconfirmedBalanceLine } from '@/domain/admin-wallet/model/format-unconfirmed-balance-line'
 
 export type WalletBalanceProps = {
-	balanceSats: number
+	confirmedSats: number
+	unconfirmedSats: number
 	isLoading: boolean
 }
 
-export function WalletBalance({ balanceSats, isLoading }: WalletBalanceProps) {
+export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: WalletBalanceProps) {
 	const [showSats, setShowSats] = useState(false)
 
 	if (isLoading) {
@@ -18,16 +20,17 @@ export function WalletBalance({ balanceSats, isLoading }: WalletBalanceProps) {
 		)
 	}
 
-	const btcStr = `${formatBtcFromSats(balanceSats)} BTC`
-	const satsStr = `${balanceSats.toLocaleString()} sats`
+	const btcStr = `${formatBtcFromSats(confirmedSats)} BTC`
+	const satsStr = `${confirmedSats.toLocaleString()} sats`
 	const primary = showSats ? satsStr : btcStr
 	const secondary = showSats ? btcStr : satsStr
+	const unconfirmedLine = formatUnconfirmedBalanceLine(unconfirmedSats)
 
 	return (
 		<div className="flex-none px-[18px] pt-[18px]">
 			<div className="flex items-baseline gap-2 flex-wrap">
 				<span className="font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] text-[#111827]">
-					{showSats ? balanceSats.toLocaleString() : formatBtcFromSats(balanceSats)}
+					{showSats ? confirmedSats.toLocaleString() : formatBtcFromSats(confirmedSats)}
 				</span>
 				<span className="text-[13px] font-medium text-[#6b7280]">{showSats ? 'sats' : 'BTC'}</span>
 			</div>
@@ -40,7 +43,11 @@ export function WalletBalance({ balanceSats, isLoading }: WalletBalanceProps) {
 				Show {showSats ? 'BTC' : 'sats'}
 			</button>
 			<div className="mt-1.5 font-mono text-[12px] text-[#9ca3af]">{secondary}</div>
-			<span className="sr-only">Primary balance: {primary}</span>
+			{unconfirmedLine !== null && <div className="mt-1 font-mono text-[12px] text-[#6b7280]">{unconfirmedLine}</div>}
+			<span className="sr-only">
+				Primary balance: {primary}
+				{unconfirmedLine !== null ? `. Unconfirmed: ${unconfirmedLine}` : ''}
+			</span>
 		</div>
 	)
 }
