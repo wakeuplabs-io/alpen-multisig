@@ -86,6 +86,21 @@ docker compose -f staging/docker-compose.local.yml logs -f
 ./scripts/local-stack.sh --clean --orchestrator
 ```
 
+### Local helpers (no stack needed)
+
+These commands work against the regtest-dev-api running in Docker:
+
+```bash
+# Mine blocks
+./scripts/local-stack.sh --mine 5
+
+# Fund an address (default: 1 BTC)
+./scripts/local-stack.sh --fund bcrt1q... 0.5
+
+# Mine 1 block
+./scripts/local-stack.sh --mine
+```
+
 ### Endpoints
 
 ```bash

@@ -5,6 +5,8 @@
 #   ./local-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
 #   ./local-stack.sh --status
 #   ./local-stack.sh --stop
+#   ./local-stack.sh --mine [N]
+#   ./local-stack.sh --fund <address> [amount_btc]
 #   ./local-stack.sh -h
 #
 # Options:
@@ -13,6 +15,8 @@
 #   --regtest-dev-api       With --clean: also prune regtest-dev-api build cache
 #   --no-build              Skip docker build (use existing images)
 #   --no-orchestrator       Don't start orchestrator (for local dev scenarios)
+#   --mine [N]              Mine N blocks (default: 1)
+#   --fund <address> [N]    Fund address with N BTC (default: 1 BTC)
 #
 # Prerequisites:
 #   - docker available in PATH
@@ -39,9 +43,12 @@ NO_BUILD=0
 NO_ORCHESTRATOR=0
 STOP=0
 STATUS=0
+MINE_COUNT=0
+FUND_ADDRESS=""
+FUND_AMOUNT=1.0
 
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --clean) CLEAN=1 ;;
     --orchestrator) CLEAN_ORCHESTRATOR=1 ;;
     --regtest-dev-api) CLEAN_REGTEST_DEV_API=1 ;;
@@ -49,12 +56,27 @@ for arg in "$@"; do
     --no-orchestrator) NO_ORCHESTRATOR=1 ;;
     --stop) STOP=1 ;;
     --status) STATUS=1 ;;
-    -h|--help) STATUS=1; HELP=1 ;;
+    --mine)
+      MINE_COUNT="${2:-1}"
+      [[ "$MINE_COUNT" =~ ^[0-9]+$ ]] || MINE_COUNT=1
+      [[ "$MINE_COUNT" =~ ^[0-9]+$ ]] && shift || true
+      ;;
+    --fund)
+      FUND_ADDRESS="${2:-}"
+      FUND_AMOUNT="${3:-1.0}"
+      if [[ -z "$FUND_ADDRESS" ]]; then
+        echo "error: --fund requires an address" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    -h|--help) HELP=1 ;;
     *)
-      echo "usage: $0 [--clean [--orchestrator] [--regtest-dev-api]] [--no-build] [--no-orchestrator] [--stop] [--status] [-h]" >&2
+      echo "usage: $0 [--clean [--orchestrator] [--regtest-dev-api]] [--no-build] [--no-orchestrator] [--stop] [--status] [--mine N] [--fund <address> [btc]] [-h]" >&2
       exit 1
       ;;
   esac
+  shift
 done
 
 die() {
@@ -67,6 +89,8 @@ require_cmd() {
 }
 
 require_cmd docker "install docker or add it to PATH"
+require_cmd curl "install curl"
+require_cmd jq "install jq"
 
 # Detect docker compose variant
 DOCKER_COMPOSE=(docker)
@@ -100,6 +124,8 @@ Usage:
   ./local-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
   ./local-stack.sh --status
   ./local-stack.sh --stop
+  ./local-stack.sh --mine [N]
+  ./local-stack.sh --fund <address> [amount_btc]
   ./local-stack.sh -h
 
 Options:
@@ -108,9 +134,12 @@ Options:
   --regtest-dev-api       With --clean: also prune regtest-dev-api build cache
   --no-build              Skip docker build (use existing images)
   --no-orchestrator       Don't start orchestrator container (use when running orchestrator locally)
+  --mine [N]              Mine N blocks on regtest (default: 1)
+  --fund <address> [N]    Fund address with N BTC (default: 1 BTC)
 
 Prerequisites:
   - docker in PATH
+  - curl and jq in PATH
   - asm/ submodule populated (git submodule update --init asm)
 
 Ports:
@@ -126,6 +155,10 @@ Volumes (clean with --clean):
 
 First run: bitcoin entrypoint creates 'staging' wallet + mines 101 blocks.
             asm entrypoint generates asm-params.json from template.
+
+Examples:
+  ./local-stack.sh --mine 5
+  ./local-stack.sh --fund bcrt1q... 0.5
 
 EOF
 }
@@ -151,6 +184,42 @@ do_stop() {
   echo "Stopping stack..."
   "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" down 2>/dev/null || true
   echo "OK stopped"
+}
+
+do_mine() {
+  local count=${1:-1}
+  echo ""
+  echo "=== mining ${count} block(s) ==="
+  local result
+  result=$(curl -sf -X POST "http://localhost:3001/mine?count=${count}" 2>&1) || {
+    echo "ERROR: failed to mine blocks (is regtest-dev-api running?)" >&2
+    echo "$result" >&2
+    return 1
+  }
+  echo "$result" | jq -r '.block_hashes[]' 2>/dev/null | while read -r hash; do
+    echo "  Block: $hash"
+  done
+  echo "Done."
+}
+
+do_fund() {
+  local address=$1
+  local amount=${2:-1.0}
+  echo ""
+  echo "=== funding ${address} with ${amount} BTC ==="
+  local result
+  result=$(curl -sf -X POST "http://localhost:3001/faucet" \
+    -H "Content-Type: application/json" \
+    -d "{\"address\":\"${address}\",\"amount_btc\":${amount}}" 2>&1) || {
+    echo "ERROR: failed to fund address (is regtest-dev-api running?)" >&2
+    echo "$result" >&2
+    return 1
+  }
+  local txid=$(echo "$result" | jq -r '.txid' 2>/dev/null)
+  local block=$(echo "$result" | jq -r '.block_hash' 2>/dev/null)
+  echo "  TXID: $txid"
+  echo "  Block: $block"
+  echo "Done."
 }
 
 do_clean() {
@@ -282,6 +351,17 @@ fi
 
 if [[ "$STOP" == "1" ]]; then
   do_stop
+  exit 0
+fi
+
+# These commands don't need the stack to be running
+if [[ "$MINE_COUNT" -gt 0 ]]; then
+  do_mine "$MINE_COUNT"
+  exit 0
+fi
+
+if [[ -n "$FUND_ADDRESS" ]]; then
+  do_fund "$FUND_ADDRESS" "$FUND_AMOUNT"
   exit 0
 fi
 
