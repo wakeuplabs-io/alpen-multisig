@@ -178,8 +178,9 @@ if (addressRow.includes('balanceSats')) {
 if (!addressesList.includes('confirmedSats={row.confirmedSats}')) {
 	rule6Violations.push('addresses-with-balance-list.tsx: must forward confirmedSats to AddressRow')
 }
-if (!addressesList.includes('Addresses with balance ·')) {
-	rule6Violations.push('addresses-with-balance-list.tsx: must use R1.6 accordion header copy')
+// R1.7 pass 2: "·" interpunct replaced by a count badge chip (intentional design change).
+if (!addressesList.includes('Addresses with balance')) {
+	rule6Violations.push('addresses-with-balance-list.tsx: must keep the accordion header label')
 }
 
 assert.equal(

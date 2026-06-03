@@ -1,6 +1,9 @@
 import { ReactNode, useEffect, useRef, useState } from 'react'
 
-export const WALLET_SLIDE_TRANSITION_MS = 240
+export const WALLET_SLIDE_TRANSITION_MS = 300
+
+/** iOS sheet / drawer easing — feels deliberate on open and close. */
+const WALLET_SLIDE_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)'
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
@@ -97,11 +100,11 @@ export function WalletPanel({ isOpen, onClose, panelId = 'wallet-slide-dialog', 
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby="wallet-panel-title"
+				style={{ transitionTimingFunction: WALLET_SLIDE_EASING, transitionDuration: `${WALLET_SLIDE_TRANSITION_MS}ms` }}
 				className={[
 					'fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col border-l border-[#e5e7eb] bg-white',
-					'shadow-[-4px_0_24px_rgba(10,10,10,0.06)]',
-					'transition-transform ease-in-out',
-					`duration-[${WALLET_SLIDE_TRANSITION_MS}ms]`,
+					'shadow-[-8px_0_32px_rgba(10,10,10,0.10)]',
+					'transition-transform',
 					entered ? 'translate-x-0' : 'translate-x-full',
 				].join(' ')}
 			>
