@@ -8,26 +8,29 @@ export type ReceiveAddressRowProps = {
 export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps) {
 	if (isLoading) {
 		return (
-			<div className="flex items-center gap-2">
-				<div className="h-4 flex-1 animate-pulse rounded bg-[#e5e7eb]" />
-				<div className="h-7 w-14 animate-pulse rounded bg-[#e5e7eb]" />
+			<div className="rounded-xl border border-[#f3f4f6] px-4 py-3">
+				<div className="mb-2 h-3 w-24 animate-pulse rounded bg-[#e5e7eb]" />
+				<div className="flex items-center justify-between gap-2">
+					<div className="h-4 flex-1 animate-pulse rounded bg-[#e5e7eb]" />
+					<div className="h-7 w-14 animate-pulse rounded bg-[#e5e7eb]" />
+				</div>
 			</div>
 		)
 	}
 
 	if (!address) {
 		return (
-			<div className="flex min-w-0 flex-col gap-1">
-				<span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9ca3af]">Receive address</span>
-				<span className="text-[12px] text-[#9ca3af]">No receive address yet</span>
+			<div className="rounded-xl border border-[#f3f4f6] px-4 py-3">
+				<span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
+				<p className="mt-1.5 text-[12px] text-[#9ca3af]">No receive address yet</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className="flex min-w-0 flex-col gap-1">
-			<span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9ca3af]">Receive address</span>
-			<div className="flex min-w-0 items-center gap-2">
+		<div className="rounded-xl border border-[#f3f4f6] px-4 py-3">
+			<span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
+			<div className="mt-1.5 flex items-center justify-between gap-2">
 				<span className="min-w-0 flex-1 truncate font-mono text-[12px] leading-[1.45] text-[#374151]" title={address}>
 					{address}
 				</span>

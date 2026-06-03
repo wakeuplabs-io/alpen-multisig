@@ -39,12 +39,18 @@ export function SyncChip({ syncStatus, isRefreshing, error, onRefresh, now }: Sy
 
 	return (
 		<div className="flex items-center gap-2">
-			<span className="text-[12px] text-[#9ca3af]">{label}</span>
+			{isRefreshing && (
+				<span
+					className="motion-safe:animate-pulse h-1.5 w-1.5 flex-none rounded-full bg-[#9480f5]"
+					aria-hidden="true"
+				/>
+			)}
+			<span className="text-[12px] text-[#6b7280]">{label}</span>
 			<button
 				type="button"
 				disabled={isRefreshing}
 				onClick={onRefresh}
-				className="rounded px-2 py-0.5 text-[11px] font-medium text-[#6b7280] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-50"
+				className="rounded-md px-2 py-1 text-[11px] font-medium text-[#9480f5] transition hover:bg-[#f4f2ff] disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{isRefreshing ? 'Refreshing…' : 'Refresh'}
 			</button>
