@@ -93,3 +93,13 @@ Bring the wallet slide-over from "raw Tailwind with placeholders" to a designed 
 - Sync footer: ghost violet refresh button, pulse dot during sync.
 - Loading states: match final layout proportions (no layout shift).
 - `npm run lint`, `npm run format:check`, `npm run build`, `npm test` all pass.
+
+## Pass 2 — refinement (post-live review)
+
+After reviewing the live result, a second affordance/polish pass:
+
+- **Copy buttons → icon-only ghost** in the wallet (table + receive): redundant "Copy" text dropped; clipboard icon at rest, emerald ✓ on copied; `aria-label` + `title` preserve a11y. Implemented via a non-breaking `variant?: 'labeled' | 'icon'` prop on the shared `CopyButton` (default `labeled` keeps all other usages — proposals, broadcast — unchanged).
+- **Header identity:** wallet icon (`WalletIcon`) in a violet-tinted (`#f4f2ff`) rounded square left of the title.
+- **Addresses header:** the `· N` interpunct replaced by a count **badge chip** (`bg-[#f3f4f6]` rounded pill). Contract test updated accordingly (the `·` literal is no longer required).
+- **Session chip:** trailing **chevron** (rotates 180° when the panel is open) signals it opens the wallet panel; only rendered in the interactive (`onActivate`) branch.
+- **Panel motion + elevation:** slide easing → `cubic-bezier(0.32, 0.72, 0, 1)` (drawer curve) via inline style; duration 240 → 300ms; shadow strengthened to `-8px 0 32px rgba(10,10,10,0.10)` for clearer elevation. Drawer stays flush to the right edge (correct pattern — not floated).

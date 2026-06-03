@@ -20,7 +20,7 @@ export function AddressRow({ index: _index, address, confirmedSats, unconfirmedS
 				<div className="flex items-center gap-1.5">
 					<span className="min-w-0 truncate">{truncAddress(address)}</span>
 					<span className="opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-						<CopyButton text={address} />
+						<CopyButton text={address} variant="icon" />
 					</span>
 				</div>
 			</td>

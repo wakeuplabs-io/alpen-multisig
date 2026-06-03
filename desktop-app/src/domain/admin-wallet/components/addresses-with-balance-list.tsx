@@ -27,8 +27,11 @@ export function AddressesWithBalanceList({
 				onClick={onToggle}
 				className="flex w-full items-center justify-between px-0 py-2.5 text-left hover:bg-transparent"
 			>
-				<span className="font-sans text-[13px] font-medium text-[#374151]">
-					Addresses with balance · <span className="text-[#9ca3af]">{count}</span>
+				<span className="flex items-center font-sans text-[13px] font-medium text-[#374151]">
+					Addresses with balance
+					<span className="ml-2 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[11px] tabular-nums text-[#6b7280]">
+						{count}
+					</span>
 				</span>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

@@ -34,7 +34,7 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 				<span className="min-w-0 flex-1 truncate font-mono text-[12px] leading-[1.45] text-[#374151]" title={address}>
 					{address}
 				</span>
-				<CopyButton text={address} />
+				<CopyButton text={address} variant="icon" />
 			</div>
 		</div>
 	)

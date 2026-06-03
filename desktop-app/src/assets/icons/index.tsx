@@ -261,3 +261,14 @@ export function TrashIcon({ width = 16, height = 16, ...rest }: IconProps) {
 		</svg>
 	)
 }
+
+/** Wallet glyph (body + top seam + clasp); pair with parent `text-*` for color. */
+export function WalletIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<rect x="3" y="6" width="18" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+			<path d="M3 9.5h18" stroke="currentColor" strokeWidth="1.6" />
+			<circle cx="16.5" cy="13.5" r="1.25" fill="currentColor" />
+		</svg>
+	)
+}
