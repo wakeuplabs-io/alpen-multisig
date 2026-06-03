@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
-import type { AdminWalletError } from '@/api/admin-wallet'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
@@ -12,10 +11,7 @@ import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
-import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
-import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
-import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
@@ -23,70 +19,6 @@ import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ens
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
-
-type WalletPanelData = {
-	isOpen: boolean
-	open: () => void
-	close: () => void
-	confirmedBalanceSats: number
-	unconfirmedBalanceSats: number
-	isBalanceLoading: boolean
-	receiveAddress: string | null
-	isAddressesLoading: boolean
-	addressRows: ReturnType<typeof useAddressesWithBalance>['data']
-	addressRowsLoading: boolean
-	addressRowsError: ReturnType<typeof useAddressesWithBalance>['error']
-	expandedSection: ReturnType<typeof useWalletPanelState>['expandedSection']
-	syncStatus: ReturnType<typeof useAdminWalletSync>['syncStatus']
-	isSyncRefreshing: boolean
-	syncError: ReturnType<typeof useAdminWalletSync>['error'] | null
-	onToggleAddresses: () => void
-	onRefreshSync: () => Promise<void>
-	disabledError: AdminWalletError | null
-}
-
-function useWalletPanelData(isAdminWalletMode: boolean): WalletPanelData {
-	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
-	const balanceHook = useAdminWalletBalance()
-	const receiveAddressHook = useAdminWalletReceiveAddress()
-	const syncHook = useAdminWalletSync()
-	const addressesWithBalanceHook = useAddressesWithBalance()
-
-	const walletDisabledError =
-		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
-			? balanceHook.error
-			: receiveAddressHook.error?.type === 'Disabled' || receiveAddressHook.error?.type === 'RegtestGuardViolation'
-				? receiveAddressHook.error
-				: null
-
-	const receiveAddress = receiveAddressHook.address
-
-	return {
-		isOpen,
-		open,
-		close,
-		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
-		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
-		isBalanceLoading: balanceHook.isLoading,
-		receiveAddress,
-		isAddressesLoading: receiveAddressHook.isLoading,
-		addressRows: addressesWithBalanceHook.data,
-		addressRowsLoading: addressesWithBalanceHook.isLoading,
-		addressRowsError: addressesWithBalanceHook.error,
-		expandedSection,
-		syncStatus: syncHook.syncStatus,
-		isSyncRefreshing: syncHook.isLoading,
-		syncError: syncHook.error,
-		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
-		onRefreshSync: async () => {
-			await syncHook.triggerSync()
-			balanceHook.refresh()
-			receiveAddressHook.refresh()
-			addressesWithBalanceHook.refresh()
-		},
-		disabledError: isAdminWalletMode ? walletDisabledError : null,
-	}
-}
 
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()

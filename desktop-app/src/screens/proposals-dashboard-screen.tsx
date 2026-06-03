@@ -8,11 +8,7 @@ import { AuthRole } from '@/types'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
-import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
-import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
-import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
-import { useAdminWalletSync } from '@/domain/admin-wallet/hooks/use-admin-wallet-sync'
-import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
@@ -27,21 +23,8 @@ export function ProposalsDashboardScreen() {
 	const [error, setError] = useState<string | null>(null)
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
-	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
-	const balanceHook = useAdminWalletBalance()
-	const receiveAddressHook = useAdminWalletReceiveAddress()
-	const syncHook = useAdminWalletSync()
-	const addressesWithBalanceHook = useAddressesWithBalance()
+	const panel = useWalletPanelData()
 	const { canSign } = useAdminWalletCapability()
-
-	const walletDisabledError =
-		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
-			? balanceHook.error
-			: receiveAddressHook.error?.type === 'Disabled' || receiveAddressHook.error?.type === 'RegtestGuardViolation'
-				? receiveAddressHook.error
-				: null
-
-	const receiveAddress = receiveAddressHook.address
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
@@ -110,8 +93,8 @@ export function ProposalsDashboardScreen() {
 						timeLabel={sessionTimeLabel}
 						signerLabel={signerLabel}
 						warning={sessionWarning}
-						onActivate={() => (isOpen ? close() : open())}
-						isActive={isOpen}
+						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
+						isActive={panel.isOpen}
 						panelId="wallet-slide-dialog"
 					/>
 
@@ -169,33 +152,28 @@ export function ProposalsDashboardScreen() {
 				}}
 			/>
 
-			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
+			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
 				<WalletPanelHeader
-					onClose={close}
+					onClose={panel.close}
 					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
 					isWatchOnly={!canSign}
 				/>
 				<WalletPanelContent
-					disabledError={walletDisabledError}
-					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
-					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
-					isBalanceLoading={balanceHook.isLoading}
-					receiveAddress={receiveAddress}
-					isAddressesLoading={receiveAddressHook.isLoading}
-					addressRows={addressesWithBalanceHook.data}
-					addressRowsLoading={addressesWithBalanceHook.isLoading}
-					addressRowsError={addressesWithBalanceHook.error}
-					expandedSection={expandedSection}
-					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
-					syncStatus={syncHook.syncStatus}
-					isSyncRefreshing={syncHook.isLoading}
-					syncError={syncHook.error}
-					onRefreshSync={async () => {
-						await syncHook.triggerSync()
-						balanceHook.refresh()
-						receiveAddressHook.refresh()
-						addressesWithBalanceHook.refresh()
-					}}
+					disabledError={panel.disabledError}
+					confirmedBalanceSats={panel.confirmedBalanceSats}
+					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
+					isBalanceLoading={panel.isBalanceLoading}
+					receiveAddress={panel.receiveAddress}
+					isAddressesLoading={panel.isAddressesLoading}
+					addressRows={panel.addressRows}
+					addressRowsLoading={panel.addressRowsLoading}
+					addressRowsError={panel.addressRowsError}
+					expandedSection={panel.expandedSection}
+					onToggleAddresses={panel.onToggleAddresses}
+					syncStatus={panel.syncStatus}
+					isSyncRefreshing={panel.isSyncRefreshing}
+					syncError={panel.syncError}
+					onRefreshSync={panel.onRefreshSync}
 				/>
 			</WalletPanel>
 		</ScreenShell>

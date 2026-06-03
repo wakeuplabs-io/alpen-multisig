@@ -4,11 +4,20 @@ import { useCreateProposal } from '@/domain/create-proposal/hooks/use-create-pro
 import { useSession } from '@/hooks/use-session'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
+import { SessionChip } from '@/components/session-chip'
+import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
+import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
+import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
+import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
-	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession, connectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, connectSession } = useSession()
 	const createProposal = useCreateProposal()
+	const panel = useWalletPanelData()
+	const { canSign } = useAdminWalletCapability()
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -18,10 +27,8 @@ export function CreateProposalScreen() {
 		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
 
 	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 6)}...${wallet.addressSample.slice(-6)}`
+		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
 		: 'Unknown'
-
-	const sessionLabel = session === null ? 'Session' : `Session · ${sessionTimeLabel}`
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -31,20 +38,24 @@ export function CreateProposalScreen() {
 		<ScreenShell
 			headerContent={
 				<>
-					<span className="inline-flex items-center rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1 text-xs font-medium text-[#5b44c9]">
+					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
+						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-xs text-[#111827]">
-						{sessionLabel}
-					</span>
-					<span className="inline-flex items-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 font-mono text-[11px] text-[#6b7280]">
-						{signerLabel}
-					</span>
+					<SessionChip
+						timeLabel={sessionTimeLabel}
+						signerLabel={signerLabel}
+						warning={sessionWarning}
+						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
+						isActive={panel.isOpen}
+						panelId="wallet-slide-dialog"
+					/>
 					<button
 						type="button"
-						className="inline-flex items-center rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-xs font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleDisconnect()}
 					>
+						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
 						Disconnect
 					</button>
 				</>
@@ -69,6 +80,31 @@ export function CreateProposalScreen() {
 					onReauthenticate={connectSession}
 				/>
 			</div>
+
+			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
+				<WalletPanelHeader
+					onClose={panel.close}
+					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
+					isWatchOnly={!canSign}
+				/>
+				<WalletPanelContent
+					disabledError={panel.disabledError}
+					confirmedBalanceSats={panel.confirmedBalanceSats}
+					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
+					isBalanceLoading={panel.isBalanceLoading}
+					receiveAddress={panel.receiveAddress}
+					isAddressesLoading={panel.isAddressesLoading}
+					addressRows={panel.addressRows}
+					addressRowsLoading={panel.addressRowsLoading}
+					addressRowsError={panel.addressRowsError}
+					expandedSection={panel.expandedSection}
+					onToggleAddresses={panel.onToggleAddresses}
+					syncStatus={panel.syncStatus}
+					isSyncRefreshing={panel.isSyncRefreshing}
+					syncError={panel.syncError}
+					onRefreshSync={panel.onRefreshSync}
+				/>
+			</WalletPanel>
 		</ScreenShell>
 	)
 }
