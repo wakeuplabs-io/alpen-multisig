@@ -64,8 +64,8 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 4.1 | See Admin ID, copy to clipboard | **FAIL** | — | Phase 6; today only truncated signer in `SessionChip` |
-| 4.2 | View Admin ID on HW to verify | **FAIL** | — | Phase 6 |
+| 4.1 | See Admin ID, copy to clipboard | **FAIL** | — | Phase 7; today only truncated signer in `SessionChip` |
+| 4.2 | View Admin ID on HW to verify | **FAIL** | — | Phase 7 |
 
 ### PRD §4.3 — Admin Wallet management
 
@@ -73,21 +73,23 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----|------------------------|--------|------------------|-------|
 | 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above |
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
-| 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 5 |
+| 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 6 |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
-| 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 6 |
+| 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 7 |
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
-| 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 6 / 7 |
+| 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 7 / 8 |
 | 4.3.4.3 | Rotate after credit (one-time use) | **PASS** | R1.3, `next_receive_address` | BDK “used” on observe-in-tx |
-| 4.3.5 | Send BTC form + validations | **FAIL** | — | Phase 4 (mnemonic regtest), Phase 7 (HW) |
-| 4.3.5.5.1 | Confirm → HW signs spend | **FAIL** | — | Phase 7 for product path |
+| 4.3.5 | Send BTC form + validations | **FAIL** | — | Phase 5 (mnemonic regtest), Phase 8 (HW) |
+| 4.3.5.3 | Manual fee rate (0.1 s/vB, default next-block) | **FAIL** | — | Phase 5 Send (reuse Phase 4 control) |
+| 4.3.5.5.1 | Confirm → HW signs spend | **FAIL** | — | Phase 8 for product path |
 
 ### PRD §5.3 — Governance broadcast (Alpen / Strata admins)
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
 | 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 8 shared UX |
-| 5.3 (fees) | Manual fee rate 0.1 s/vB steps | **DEFER** | Phase 8 / US-H4 | — |
+| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **FAIL** | — | **Phase 4** (priority); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
+| 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 5 / Phase 9 shared Send | — |
 | Broadcast commit | Funded from Admin Wallet | **PASS** | Phase 3.6+, `WalletService` | — |
 | Broadcast commit sign | HW or regtest mnemonic PSBT | **PASS** | R1.1 `PsbtSigner` | Reveal: ephemeral in-app (SPS-50), not HW — protocol constraint |
 | Broadcast reveal | Signed and broadcast | **PASS** | R1.0, R1.0.1 | Ephemeral key; change → Admin Wallet |
@@ -116,9 +118,10 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.1 | R1.5 | **PASS** |
 | §4.3.2 | R1.6 | **PASS** |
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
-| §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 5, 4, 7) |
+| §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
+| US-H4 broadcast fee | Not in Release 1 | **FAIL** (**Phase 4** priority) |
 
-**Release 1 closed** means: Foundation + R1.0–R1.6 **engineering steps** are done. It does **not** mean PRD §4.3 or §4 as a whole is PASS.
+**Release 1 closed** means: Foundation + R1.0–R1.6 **engineering steps** are done. It does **not** mean PRD §4.3 or §4 as a whole is PASS. **Next priority:** Phase 4 (US-H4 broadcast fee). **Release 2 (planned):** R2.1 UX/UI polish — see implementation plan.
 
 ---
 
@@ -127,6 +130,14 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 The implementation plan previously stated post-Foundation reveal key at `m/86'/0'/73'/2/0`. **Current behavior:** per-broadcast ephemeral reveal key (R1.0). See §5 baseline table in the updated plan.
 
 Legacy feature roadmaps under `docs/feature/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
+
+---
+
+## Release 2 (planned — UX only)
+
+| ID | Requirement (summary) | Status | Notes |
+|----|------------------------|--------|-------|
+| R2.1 | Wallet + governance UX/UI polish (Alta parity, broadcast/proposal affordances) | **PLANNED** | No PRD MUST mapping yet; see implementation plan R2.1 |
 
 ---
 
