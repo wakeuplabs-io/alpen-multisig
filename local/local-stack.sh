@@ -301,5 +301,5 @@ trap 'echo "Interrupted"; do_stop; exit 1' INT TERM
 do_start
 
 echo ""
-echo "Ready. To stop: ./docker-start-stack.sh --stop"
-echo "To clean and restart: ./docker-start-stack.sh --clean"
+echo "Ready. To stop: ./local-stack.sh --stop"
+echo "To clean and restart: ./local-stack.sh --clean"
