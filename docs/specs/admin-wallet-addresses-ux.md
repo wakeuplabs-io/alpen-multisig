@@ -281,7 +281,7 @@ cargo test --workspace
 
 - Met on regtest — funded addresses show confirmed hero; unconfirmed credit without mine shows per-row sub-line; line hidden
   when fully confirmed at address level.
-- PRD §4.3.2 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); Release 1 closed for R1 slices (§4.3.3–§4.3.5 still FAIL).
+- PRD §4.3.2 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); R1.0–R1.6 done; R1.7 wallet UI polish planned (§4.3.3–§4.3.5 still FAIL).
 - Frontend and workspace CI green.
 
 ## Release 1 closure

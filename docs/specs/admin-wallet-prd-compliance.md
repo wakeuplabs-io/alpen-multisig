@@ -118,10 +118,11 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.1 | R1.5 | **PASS** |
 | §4.3.2 | R1.6 | **PASS** |
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
+| Wallet panel UI | R1.7 (planned) | **PLANNED** |
 | §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
 | US-H4 broadcast fee | Not in Release 1 | **FAIL** (**Phase 4** priority) |
 
-**Release 1 closed** means: Foundation + R1.0–R1.6 **engineering steps** are done. It does **not** mean PRD §4.3 or §4 as a whole is PASS. **Next priority:** Phase 4 (US-H4 broadcast fee). **Release 2 (planned):** R2.1 UX/UI polish — see implementation plan.
+**Release 1:** R1.0–R1.6 are done; **R1.7** (wallet panel UI polish) is the remaining Release 1 slice. It does **not** mean PRD §4.3 or §4 as a whole is PASS. **Suggested order:** R1.7 → Phase 4 (US-H4 broadcast fee).
 
 ---
 
@@ -133,11 +134,11 @@ Legacy feature roadmaps under `docs/feature/admin-wallet-*` may still mention `C
 
 ---
 
-## Release 2 (planned — UX only)
+## Release 1 — R1.7 (planned — wallet UI only)
 
 | ID | Requirement (summary) | Status | Notes |
 |----|------------------------|--------|-------|
-| R2.1 | Wallet + governance UX/UI polish (Alta parity, broadcast/proposal affordances) | **PLANNED** | No PRD MUST mapping yet; see implementation plan R2.1 |
+| R1.7 | Wallet slide-over UI polish (Alta parity: balance, receive, addresses, sync) | **PLANNED** | Extends R1.2–R1.6; no new PRD MUST until spec; see implementation plan |
 
 ---
 

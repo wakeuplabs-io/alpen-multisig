@@ -46,6 +46,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.4 ✅ | Remove connect-time derivation picking | PRD §3.2 — canonical paths only, [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | R1.5 ✅ | Balance UX (§4.3.1 PASS) | PRD §4.3.1 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md); PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) |
 | R1.6 ✅ | Addresses UX (§4.3.2 PASS) | PRD §4.3.2 **PASS** in compliance matrix; [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md); PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) |
+| R1.7 | Wallet panel UI polish | Alta parity for wallet slide-over (layout, typography, interaction) — **planned** |
 | **4** | **Governance broadcast fee rate (priority)** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -53,7 +54,6 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 9 | Shared Send + governance broadcast UX | Alta S9/S11, PRD §5.3.2 (shared Send chrome; fee entry → Phase 4/5) |
 | 10 | Hardening + remote testnet/mainnet RPC | PRD §2 (no local node assumption) |
-| R2.1 | Wallet & governance UX/UI polish | Alta parity + proposal/broadcast interaction pass — **planned** (post–Release 1) |
 
 ## 3. Architecture
 
@@ -93,20 +93,20 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> R1[Release 1: R1.0 … R1.6 complete]
-  R1 --> P4[Phase 4 Broadcast fee rate]
+  P38 --> R1[Release 1: R1.0–R1.6 done]
+  R1 --> R17[R1.7 Wallet UI polish]
+  R17 --> P4[Phase 4 Broadcast fee rate]
   P4 --> P5[Phase 5 Send happy path]
   P5 --> P6[Phase 6 Tx list + RBF]
   P6 --> P7[Phase 7 Admin ID UI]
   P7 --> P8[Phase 8 HW Send-on-HW]
   P8 --> P9[Phase 9 Shared Gov + Send UX]
   P9 --> P10[Phase 10 Remote RPC hardening]
-  R1 -.-> R21[R2.1 UX polish planned]
 ```
 
 ## 4. Phased plan
 
-The plan has four parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.6), **Remaining phases (4–10)** — **Phase 4 (broadcast fee rate) is the priority increment** — and **Release 2** (R2.1 UX/UI polish, planned). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
+The plan has three parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.6 shipped; **R1.7** wallet UI polish planned), and **Remaining phases (4–10)** — **Phase 4 (broadcast fee rate) is the priority functional increment** after R1.7. PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -360,7 +360,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ### Release 1
 
-Release 1 is built on the Foundation. Steps R1.0–R1.6 are complete (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212)). **Release 1 is closed** — all R1 engineering steps shipped; PRD §4.3.1 and §4.3.2 are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3–§4.3.5, §4.3.4 (QR/HW verify), §4.1–4.2, and **US-H4 broadcast fee** remain open. **Next program increment: Phase 4** (governance broadcast fee rate). Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
+Release 1 is built on the Foundation. Steps **R1.0–R1.6** are complete (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212)). **R1.7** (wallet panel UI polish) is the remaining Release 1 slice — Release 1 closes after R1.7 ships. PRD §4.3.1 and §4.3.2 are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3–§4.3.5, §4.3.4 (QR/HW verify), §4.1–4.2, and **US-H4 broadcast fee** remain open (Phases 4–10). **Suggested order:** R1.7 → Phase 4. Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
 
 **R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
@@ -368,7 +368,7 @@ Release 1 is built on the Foundation. Steps R1.0–R1.6 are complete (R1.5: PR [
 
 **R1.6 closure:** Branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) (`0c0c01c` spec, `3d0a5e4` implementation). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md). Manual regtest: per-address confirmed/unconfirmed sub-lines verified.
 
-**Release 1 closed.** Next program increment: **Phase 4** (governance broadcast fee rate — priority).
+**R1.0–R1.6 closed.** Next Release 1 slice: **R1.7** (wallet panel UI). Then **Phase 4** (broadcast fee).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -485,7 +485,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 **Done when**
 
 - Fund two external indices on regtest; credit one with unconfirmed UTXOs — expanded list shows per-address confirmed balance and unconfirmed sub-line where applicable.
-- PRD §4.3.2 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); Release 1 **closed** (R1.0–R1.6 shipped; §4.3.1–§4.3.2 PASS; §4.3.4 rotation PASS, QR/HW verify FAIL).
+- PRD §4.3.2 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); R1.0–R1.6 shipped; **R1.7** wallet UI polish remains; §4.3.4 rotation PASS, QR/HW verify FAIL.
 - Frontend CI green.
 
 **Primary code areas:** `domain/admin-wallet/model/compose-addresses-with-balance.ts`, `components/address-row.tsx`, `components/addresses-with-balance-list.tsx`, `components/wallet-panel-header.tsx`, `hooks/use-admin-wallet-capability.ts`.
@@ -497,29 +497,23 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 - **Header:** `Admin Wallet` title, session/signer subtitle, **Watch-only** badge when `canSign === false`.
 - **Tests:** compose/group model tests, address-row contract test, architecture Rule 6.
 
-**Release 1 closure:** R1.6 shipped on PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); **next program increment is Phase 4** (governance broadcast fee rate).
+**R1.6 closure:** PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212). **Next in Release 1:** R1.7 (wallet panel UI polish).
 
----
+#### R1.7 — Wallet panel UI polish (planned)
 
-### Release 2 (planned)
+**Goal:** Visual and interaction quality pass on the **Admin Wallet slide-over** only — closer to Alta `WalletPanel` handoff (balance, receive, addresses-with-balance, sync footer).
 
-Release 2 items are **UX/UI-only** slices after functional phases; they do not change protocol or custody rules.
+**In scope (kickoff TBD):** typography/spacing parity, section hierarchy, loading/empty/error consistency, copy review; optional tab layout vs current single-scroll panel (design decision at spec time).
 
-#### R2.1 — Wallet & governance UX/UI polish (planned)
+**Out of scope:** Governance/broadcast screens (Phase 9 shared UX); new IPC; Send (Phase 5); fee-bump (Phase 6); QR (Phase 7).
 
-**Goal:** Visual and interaction quality pass on the wallet slide-over and governance/broadcast screens — closer to Alta handoff, clearer signer context, consistent empty/loading/error patterns.
-
-**In scope (kickoff TBD):** typography/spacing parity, broadcast step copy, harmonize session chip vs wallet header, proposal-dashboard affordances, accessibility touch targets.
-
-**Out of scope:** New IPC, Send pipeline (Phase 5), fee-bump (Phase 6), protocol changes.
-
-**Done when:** TBD at R2.1 spec time.
+**Done when:** TBD at R1.7 spec time; Release 1 then **fully closed**.
 
 ---
 
 ### Remaining phases (4–10)
 
-Phases 4–10 continue after Release 1. **Phase 4 is prioritized** before wallet Send (Phase 5). **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
+Phases 4–10 continue after Release 1 (**R1.7** first). **Phase 4** is the priority **functional** increment after R1.7. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
 
 #### Phase 4 — Governance broadcast fee rate (priority)
 
