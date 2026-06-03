@@ -43,7 +43,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.3 ✅ | Receive rotation | PRD §4.3.4, [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) — BDK `next_unused_address` rotation; `admin_wallet_next_receive_address` IPC + `useAdminWalletReceiveAddress` hook |
 | R1.4 ✅ | Remove connect-time derivation picking | PRD §3.2 — canonical paths only, [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | R1.5 ✅ | Balance UX (§4.3.1 complete) | PRD §4.3.1, [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) — confirmed hero + unconfirmed net line; mempool sync in `do_sync`; PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) |
-| R1.6 | Addresses UX (§4.3.2 complete) | PRD §4.3.2, [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — per-address confirmed + unconfirmed; Alta parity |
+| R1.6 ✅ | Addresses UX (§4.3.2 complete) | PRD §4.3.2, [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — per-address confirmed + unconfirmed; PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) |
 | 4 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic) |
 | 5 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 6 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
@@ -89,7 +89,7 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> R1[Release 1: R1.0 … R1.4 → R1.5 Balance UX → R1.6 Addresses UX]
+  P38 --> R1[Release 1: R1.0 … R1.6 complete]
   R1 --> P4[Phase 4 Send happy path]
   P4 --> P5[Phase 5 Tx list + RBF]
   P5 --> P6[Phase 6 Admin ID UI]
@@ -100,7 +100,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has three parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.5 shipped — PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6 closes §4.3.2 UX), and the **Remaining phases (4–9)**.
+The plan has three parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.6 complete — PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) R1.5, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) R1.6; §4.3.1–§4.3.2 UX closed), and the **Remaining phases (4–9)**.
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -355,13 +355,15 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ### Release 1
 
-Release 1 is built on the Foundation. Steps R1.0–R1.5 shipped on branch `feature/admin-wallet-balance-ux` (PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211)); **R1.6 closes Release 1** by completing PRD §4.3.2 before Phase 4. Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
+Release 1 is built on the Foundation. Steps R1.0–R1.6 are complete (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212)). **Release 1 is closed** — PRD §4.3.1–§4.3.2 wallet read UX shipped; next program increment is Phase 4. Each step lists its goal and "done when"; full design lives in the per-phase sections and linked specs.
 
 **R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
 **R1.5 closure:** Branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211). Evolution: [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
 
-**Next shippable increment:** R1.6 (Addresses UX — PRD §4.3.2).
+**R1.6 closure:** Branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) (`0c0c01c` spec, `3d0a5e4` implementation). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md). Manual regtest: per-address confirmed/unconfirmed sub-lines verified.
+
+**Release 1 closed.** Next program increment: **Phase 4** (Send BTC happy path).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -450,7 +452,9 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Done when:** Met on regtest — unconfirmed receive without mining shows tertiary line and rotates receive address after Refresh; line hidden when fully confirmed; CI green.
 
-#### R1.6 — Addresses UX (PRD §4.3.2 complete)
+#### R1.6 — Addresses UX (PRD §4.3.2 complete) ✅
+
+**Status:** Complete — branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
 
 **Spec:** [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — UX copy, wireframes, view-model contracts, and test plan.
 
@@ -481,7 +485,14 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Primary code areas:** `domain/admin-wallet/model/compose-addresses-with-balance.ts`, `components/address-row.tsx`, `components/addresses-with-balance-list.tsx`, `components/wallet-panel-header.tsx`, `hooks/use-admin-wallet-capability.ts`.
 
-**Release 1 closure:** merge R1.6 → evolution note → **next program increment is Phase 4** (Send BTC happy path).
+**Delivered**
+
+- **View-model:** `groupUtxoBalancesByDerivation` + `composeAddressesWithBalance` with `confirmedSats` / `unconfirmedSats` per row.
+- **UI:** `AddressRow` confirmed hero + unconfirmed sub-line; accordion `Addresses with balance · N`; per-row `CopyButton`.
+- **Header:** `Admin Wallet` title, session/signer subtitle, **Watch-only** badge when `canSign === false`.
+- **Tests:** compose/group model tests, address-row contract test, architecture Rule 6.
+
+**Release 1 closure:** R1.6 shipped on PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); **next program increment is Phase 4** (Send BTC happy path).
 
 ---
 

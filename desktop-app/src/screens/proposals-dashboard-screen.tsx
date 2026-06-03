@@ -13,6 +13,7 @@ import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wal
 import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
 import { useAdminWalletSync } from '@/domain/admin-wallet/hooks/use-admin-wallet-sync'
 import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
+import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
@@ -31,6 +32,7 @@ export function ProposalsDashboardScreen() {
 	const receiveAddressHook = useAdminWalletReceiveAddress()
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
+	const { canSign } = useAdminWalletCapability()
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
@@ -168,7 +170,11 @@ export function ProposalsDashboardScreen() {
 			/>
 
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+				<WalletPanelHeader
+					onClose={close}
+					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
+					isWatchOnly={!canSign}
+				/>
 				<WalletPanelContent
 					disabledError={walletDisabledError}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}

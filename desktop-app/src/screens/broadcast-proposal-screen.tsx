@@ -271,7 +271,11 @@ export function BroadcastProposalScreen() {
 			</div>
 
 			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={panel.close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+				<WalletPanelHeader
+					onClose={panel.close}
+					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
+					isWatchOnly={!canSign}
+				/>
 				<WalletPanelContent
 					disabledError={panel.disabledError}
 					confirmedBalanceSats={panel.confirmedBalanceSats}

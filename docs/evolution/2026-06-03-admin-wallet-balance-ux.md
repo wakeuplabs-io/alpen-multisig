@@ -65,12 +65,12 @@ PRD §4.3.1 requires the signer to see total balance net of unconfirmed movement
 
 ## Known Limitations (post-R1.5)
 
-- **Per-address unconfirmed** → R1.6 (`admin-wallet-addresses-ux.md`).
-- **Negative unconfirmed net** depends on BDK `trusted_pending` + `untrusted_pending`; outgoing mempool spends are not separately modeled beyond that net.
-- **R1.6 not included:** addresses table still shows single `balanceSats` per row until R1.6.
+- **Per-address unconfirmed** — delivered in R1.6 ([`admin-wallet-addresses-ux.md`](../specs/admin-wallet-addresses-ux.md), PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212)).
+- **Negative unconfirmed net** depends on BDK `trusted_pending` + `untrusted_pending`; outgoing mempool spends are not separately modeled beyond that net (wallet-level and per-address).
 
 ## Links
 
-- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (R1.5 ✅; next: R1.6)
+- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (Release 1 closed; next: Phase 4)
 - Spec: [`admin-wallet-balance-ux.md`](../specs/admin-wallet-balance-ux.md)
+- Successor: [`admin-wallet-addresses-ux.md`](../specs/admin-wallet-addresses-ux.md) (R1.6)
 - PR: https://github.com/wakeuplabs-io/alpen-multisig/pull/211

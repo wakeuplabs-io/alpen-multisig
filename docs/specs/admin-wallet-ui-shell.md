@@ -70,7 +70,7 @@ Port the Alta `WalletPanel` into the desktop-app as a **slide-over modal** that 
   | PRD subsection | Phase 3 coverage | Coverage by |
   |---|---|---|
   | §4.3.1 Balance (net of unconfirmed) | ✅ R1.5 | `WalletBalance` hero = `confirmedSats`; tertiary `unconfirmedSats` line; mempool in `do_sync` |
-  | §4.3.2 Addresses with balance | ✓ | `AddressesWithBalanceList` (derived from UTXOs) |
+  | §4.3.2 Addresses with balance | ✓ (R1.6) | `AddressesWithBalanceList` — confirmed hero + unconfirmed sub-line per row |
   | §4.3.3 Transactions + fee-bump | placeholder | `TxHistoryList` empty state → Phase 5 |
   | §4.3.4 Receive (address + QR + rotation) | partial (address + copy) | `ReceiveSection` placeholder → Phase 6 |
   | §4.3.5 Send | placeholder | `SendPlaceholder` → Phase 4 |
@@ -429,7 +429,7 @@ Phase 3 adds no broadcast or signing path. The Phase 1 manual hex export from th
 | 3 | Receive tab without QR | Explicit placeholder + copyable address. QR library introduced in Phase 6. |
 | 4 | URL-search-params for state | **Yes** — `?wallet=open&walletSection=<section>`. |
 | 5 | Header entry point | **`ScreenShell.headerContent` button** in dashboard and broadcast only; left-rail nav deferred. |
-| 6 | PRD §4.3.2 per-address balance gap | **Derive locally** from `useAdminWalletUtxos` aggregated by `derivationIndex`. No Phase 2 changes. |
+| 6 | PRD §4.3.2 per-address balance gap | **Closed in R1.6** — `groupUtxoBalancesByDerivation` + confirmed/unconfirmed row display. See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md). |
 | 7 | Promote `CopyButton` / `SectionLabel` / `LastSyncLabel` from broadcast-details-card | **Yes** — move to `components/` and `domain/admin-wallet/components/sync-chip.tsx`; `broadcast-details-card.tsx` updates imports. |
 
 ## Links
