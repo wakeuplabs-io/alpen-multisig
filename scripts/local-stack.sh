@@ -168,16 +168,51 @@ show_status() {
   echo "Docker compose stack: $COMPOSE_DIR"
   echo ""
   "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" ps --format table 2>/dev/null || true
+
   echo ""
-  echo "Ports:"
-  echo "  18443  bitcoin"
-  echo "  8080   asm"
+  echo "Live health checks:"
+  check_service() {
+    local name=$1
+    local port=$2
+    local endpoint=${3:-}
+    local status="❌ not running"
+    local detail=""
+
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_PREFIX}-${name}-1$"; then
+      if [[ -n "$endpoint" ]]; then
+        local result
+        result=$(curl -sf -m 3 "http://localhost:${port}${endpoint}" 2>/dev/null || echo "FAIL")
+        if [[ "$result" != "FAIL" ]]; then
+          status="✅ healthy"
+        else
+          status="⚠️  running (endpoint failed)"
+        fi
+      else
+        local health
+        health=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}-${name}-1" 2>/dev/null || echo "none")
+        case "$health" in
+          healthy) status="✅ healthy" ;;
+          starting) status="🔄 starting" ;;
+          unhealthy) status="❌ unhealthy" ;;
+          "<no value>"|none) status="✅ running" ;;
+          *) status="⚠️  $health" ;;
+        esac
+      fi
+    else
+      status="— stopped"
+    fi
+    printf "  %-20s %-12s %s\n" "$name" "$status" "(:${port})"
+  }
+
+  check_service "bitcoin" "18443"
+  check_service "asm" "8080" "/"
+  check_service "postgres" "5432"
   if [[ "$NO_ORCHESTRATOR" == "1" ]]; then
-    echo "  3000   orchestrator (skipped --no-orchestrator)"
+    printf "  %-20s %-12s %s\n" "orchestrator" "— skipped" "(--no-orchestrator)"
   else
-    echo "  3000   orchestrator"
+    check_service "orchestrator" "3000" "/api/v1/health"
   fi
-  echo "  3001   regtest-dev-api"
+  check_service "regtest-dev-api" "3001" "/mine"
 }
 
 do_stop() {
