@@ -28,7 +28,8 @@ type WalletPanelData = {
 	isOpen: boolean
 	open: () => void
 	close: () => void
-	balanceSats: number
+	confirmedBalanceSats: number
+	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
 	isAddressesLoading: boolean
@@ -64,7 +65,8 @@ function useWalletPanelData(isAdminWalletMode: boolean): WalletPanelData {
 		isOpen,
 		open,
 		close,
-		balanceSats: balanceHook.data?.confirmedSats ?? 0,
+		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
+		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
 		isBalanceLoading: balanceHook.isLoading,
 		receiveAddress,
 		isAddressesLoading: receiveAddressHook.isLoading,
@@ -269,10 +271,15 @@ export function BroadcastProposalScreen() {
 			</div>
 
 			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader onClose={panel.close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
+				<WalletPanelHeader
+					onClose={panel.close}
+					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
+					isWatchOnly={!canSign}
+				/>
 				<WalletPanelContent
 					disabledError={panel.disabledError}
-					balanceSats={panel.balanceSats}
+					confirmedBalanceSats={panel.confirmedBalanceSats}
+					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
 					receiveAddress={panel.receiveAddress}
 					isAddressesLoading={panel.isAddressesLoading}

@@ -124,4 +124,69 @@ assert.equal(
 )
 console.log(`Rule 4 PASS: ${componentFiles.length} component file(s) checked — no roadmap placeholder copy`)
 
+// ── Rule 5: R1.5 balance wiring — panel passes confirmed + unconfirmed to WalletBalance ──
+
+const walletPanelContentPath = path.join(componentsDir, 'wallet-panel-content.tsx')
+const walletBalancePath = path.join(componentsDir, 'wallet-balance.tsx')
+const panelContent = fs.readFileSync(walletPanelContentPath, 'utf8')
+const walletBalance = fs.readFileSync(walletBalancePath, 'utf8')
+
+const rule5Violations: string[] = []
+if (!panelContent.includes('confirmedBalanceSats')) {
+	rule5Violations.push('wallet-panel-content.tsx: missing confirmedBalanceSats prop')
+}
+if (!panelContent.includes('unconfirmedBalanceSats')) {
+	rule5Violations.push('wallet-panel-content.tsx: missing unconfirmedBalanceSats prop')
+}
+if (!panelContent.includes('confirmedSats={confirmedBalanceSats}')) {
+	rule5Violations.push('wallet-panel-content.tsx: must forward confirmedSats to WalletBalance')
+}
+if (!panelContent.includes('unconfirmedSats={unconfirmedBalanceSats}')) {
+	rule5Violations.push('wallet-panel-content.tsx: must forward unconfirmedSats to WalletBalance')
+}
+if (!walletBalance.includes('formatUnconfirmedBalanceLine')) {
+	rule5Violations.push('wallet-balance.tsx: must use formatUnconfirmedBalanceLine for unconfirmed copy')
+}
+if (walletBalance.includes('balanceSats:')) {
+	rule5Violations.push('wallet-balance.tsx: must not use legacy single balanceSats prop')
+}
+
+assert.equal(
+	rule5Violations.length,
+	0,
+	`Rule 5 violations — R1.5 balance UX wiring:\n  ${rule5Violations.join('\n  ')}`,
+)
+console.log('Rule 5 PASS: wallet panel balance wiring (confirmed + unconfirmed)')
+
+// ── Rule 6: R1.6 address row wiring — confirmed hero + unconfirmed sub-line ──
+
+const addressRowPath = path.join(componentsDir, 'address-row.tsx')
+const addressesListPath = path.join(componentsDir, 'addresses-with-balance-list.tsx')
+const addressRow = fs.readFileSync(addressRowPath, 'utf8')
+const addressesList = fs.readFileSync(addressesListPath, 'utf8')
+
+const rule6Violations: string[] = []
+if (!addressRow.includes('confirmedSats')) {
+	rule6Violations.push('address-row.tsx: missing confirmedSats prop')
+}
+if (!addressRow.includes('formatUnconfirmedBalanceLine')) {
+	rule6Violations.push('address-row.tsx: must use formatUnconfirmedBalanceLine')
+}
+if (addressRow.includes('balanceSats')) {
+	rule6Violations.push('address-row.tsx: must not use legacy balanceSats prop')
+}
+if (!addressesList.includes('confirmedSats={row.confirmedSats}')) {
+	rule6Violations.push('addresses-with-balance-list.tsx: must forward confirmedSats to AddressRow')
+}
+if (!addressesList.includes('Addresses with balance ·')) {
+	rule6Violations.push('addresses-with-balance-list.tsx: must use R1.6 accordion header copy')
+}
+
+assert.equal(
+	rule6Violations.length,
+	0,
+	`Rule 6 violations — R1.6 addresses UX wiring:\n  ${rule6Violations.join('\n  ')}`,
+)
+console.log('Rule 6 PASS: address row wiring (confirmed + unconfirmed per address)')
+
 console.log('All architecture compliance checks passed.')

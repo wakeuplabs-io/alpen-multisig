@@ -10,7 +10,8 @@ import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
 	disabledError: AdminWalletError | null
-	balanceSats: number
+	confirmedBalanceSats: number
+	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
 	isAddressesLoading: boolean
@@ -27,7 +28,8 @@ export type WalletPanelContentProps = {
 
 export function WalletPanelContent({
 	disabledError,
-	balanceSats,
+	confirmedBalanceSats,
+	unconfirmedBalanceSats,
 	isBalanceLoading,
 	receiveAddress,
 	isAddressesLoading,
@@ -51,7 +53,11 @@ export function WalletPanelContent({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-			<WalletBalance balanceSats={balanceSats} isLoading={isBalanceLoading} />
+			<WalletBalance
+				confirmedSats={confirmedBalanceSats}
+				unconfirmedSats={unconfirmedBalanceSats}
+				isLoading={isBalanceLoading}
+			/>
 
 			<div className="px-[18px] pt-[18px]">
 				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />

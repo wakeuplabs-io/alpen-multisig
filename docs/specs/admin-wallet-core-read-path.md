@@ -309,6 +309,24 @@ Phase 2 introduces no manual fallback path — it adds read-only observability. 
 | 5 | Env vars | Reuse Phase 1 exactly; no new env in Phase 2 |
 | 6 | Module naming | Introduce `application/wallet_service.rs` as the read-API owner; `commit_funding.rs` unchanged externally; Phase 4 Send will extend `WalletService` and `CommitFunding` may delegate to it later |
 
+## Amendment (R1.5 — balance UX)
+
+`WalletService::do_sync` originally synced **blocks only** (`Emitter::next_block` + `apply_block_connected_to`). That left `BalanceDto.unconfirmed_sats` at zero and prevented mempool-driven receive rotation until a block was mined.
+
+**R1.5 addition:** after the block loop, `do_sync` calls `Emitter::mempool()` and `wallet.apply_unconfirmed_txs(...)`. IPC contracts and DTO shapes are unchanged; `admin_wallet_get_balance` and `admin_wallet_sync` behavior now reflect mempool credits/spends before confirmation.
+
+See [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) and [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
+
+## Amendment (R1.6 — addresses UX)
+
+The Phase 2 read path already returns `UtxoDto.confirmations` on each UTXO. R1.6 does **not** change IPC or DTOs; the
+desktop app splits external UTXOs per derivation index into `confirmedSats` and `unconfirmedSats` in
+`groupUtxoBalancesByDerivation` / `composeAddressesWithBalance` and renders per-address unconfirmed sub-lines in the
+wallet panel (PRD §4.3.2). Mempool visibility for unconfirmed UTXOs on regtest depends on the R1.5 `do_sync` amendment
+above.
+
+See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) and [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+
 ## Links
 
 - Program phases: [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)

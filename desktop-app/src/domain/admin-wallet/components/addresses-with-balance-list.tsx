@@ -27,7 +27,7 @@ export function AddressesWithBalanceList({
 				onClick={onToggle}
 				className="flex w-full items-center justify-between px-4 py-2.5 text-left text-[13px] font-medium text-[#374151] hover:bg-[#f9fafb]"
 			>
-				<span>All addresses with balance · {count}</span>
+				<span>Addresses with balance · {count}</span>
 				<span className="text-[#9ca3af]">{isExpanded ? '▲' : '▼'}</span>
 			</button>
 
@@ -64,7 +64,8 @@ export function AddressesWithBalanceList({
 										key={row.index}
 										index={row.index}
 										address={row.address}
-										balanceSats={row.balanceSats}
+										confirmedSats={row.confirmedSats}
+										unconfirmedSats={row.unconfirmedSats}
 										isUsed={row.isUsed}
 									/>
 								))}
