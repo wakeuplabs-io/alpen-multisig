@@ -2,6 +2,9 @@ import { ReactNode, useEffect, useRef, useState } from 'react'
 
 export const WALLET_SLIDE_TRANSITION_MS = 300
 
+/** Shared DOM id linking the session chip trigger (aria-controls) to the slide dialog. */
+export const WALLET_PANEL_ID = 'wallet-slide-dialog'
+
 /** iOS sheet / drawer easing — feels deliberate on open and close. */
 const WALLET_SLIDE_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)'
 
@@ -14,7 +17,7 @@ export type WalletPanelProps = {
 	children: ReactNode
 }
 
-export function WalletPanel({ isOpen, onClose, panelId = 'wallet-slide-dialog', children }: WalletPanelProps) {
+export function WalletPanel({ isOpen, onClose, panelId = WALLET_PANEL_ID, children }: WalletPanelProps) {
 	const [entered, setEntered] = useState(false)
 	const panelRef = useRef<HTMLDivElement>(null)
 	const previousFocusRef = useRef<Element | null>(null)

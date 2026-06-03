@@ -6,11 +6,15 @@ import { useAdminWalletSync } from './use-admin-wallet-sync'
 import { useAddressesWithBalance } from './use-addresses-with-balance'
 import type { AddressWithBalanceView } from './use-addresses-with-balance'
 import type { WalletPanelSection } from './use-wallet-panel-state'
+import { useAdminWalletCapability } from './use-admin-wallet-capability'
 
 export type WalletPanelData = {
 	isOpen: boolean
 	open: () => void
 	close: () => void
+	toggle: () => void
+	/** True when the session can view but not sign (HW connected without signing capability). */
+	isWatchOnly: boolean
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
@@ -34,6 +38,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const receiveAddressHook = useAdminWalletReceiveAddress()
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
+	const { canSign } = useAdminWalletCapability()
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
@@ -46,6 +51,8 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		isOpen,
 		open,
 		close,
+		toggle: () => (isOpen ? close() : open()),
+		isWatchOnly: !canSign,
 		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
 		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
 		isBalanceLoading: balanceHook.isLoading,

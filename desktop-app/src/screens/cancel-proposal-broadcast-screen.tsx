@@ -1,7 +1,6 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
@@ -9,10 +8,7 @@ import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
-import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
-import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function CancelProposalBroadcastScreen() {
 	const navigate = useNavigate()
@@ -21,7 +17,6 @@ export function CancelProposalBroadcastScreen() {
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
-	const { canSign } = useAdminWalletCapability()
 
 	const { isResolvingCancel, cancelResolveError, phase, bundle, result, proposal, error, prepare, broadcast } =
 		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '')
@@ -32,10 +27,6 @@ export function CancelProposalBroadcastScreen() {
 
 	if (wallet === null) return <Navigate to="/" replace />
 	if (actionId === undefined) return <Navigate to="/proposals" replace />
-
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
 
 	const isLoading = isResolvingCancel || phase === 'idle' || phase === 'preparing'
 	const showDetails =
@@ -50,13 +41,11 @@ export function CancelProposalBroadcastScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
-						isActive={panel.isOpen}
-						panelId="wallet-slide-dialog"
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
 					/>
 					<button
 						type="button"
@@ -146,30 +135,6 @@ export function CancelProposalBroadcastScreen() {
 					)}
 				</div>
 			</div>
-			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader
-					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
-					isWatchOnly={!canSign}
-				/>
-				<WalletPanelContent
-					disabledError={panel.disabledError}
-					confirmedBalanceSats={panel.confirmedBalanceSats}
-					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
-					isBalanceLoading={panel.isBalanceLoading}
-					receiveAddress={panel.receiveAddress}
-					isAddressesLoading={panel.isAddressesLoading}
-					addressRows={panel.addressRows}
-					addressRowsLoading={panel.addressRowsLoading}
-					addressRowsError={panel.addressRowsError}
-					expandedSection={panel.expandedSection}
-					onToggleAddresses={panel.onToggleAddresses}
-					syncStatus={panel.syncStatus}
-					isSyncRefreshing={panel.isSyncRefreshing}
-					syncError={panel.syncError}
-					onRefreshSync={panel.onRefreshSync}
-				/>
-			</WalletPanel>
 		</ScreenShell>
 	)
 }

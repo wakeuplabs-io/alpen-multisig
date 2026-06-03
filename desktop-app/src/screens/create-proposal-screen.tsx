@@ -4,20 +4,15 @@ import { useCreateProposal } from '@/domain/create-proposal/hooks/use-create-pro
 import { useSession } from '@/hooks/use-session'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
-import { SessionChip } from '@/components/session-chip'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
-import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
-import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
 	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, connectSession } = useSession()
 	const createProposal = useCreateProposal()
 	const panel = useWalletPanelData()
-	const { canSign } = useAdminWalletCapability()
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -25,10 +20,6 @@ export function CreateProposalScreen() {
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
-
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -42,13 +33,11 @@ export function CreateProposalScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
-						isActive={panel.isOpen}
-						panelId="wallet-slide-dialog"
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
 					/>
 					<button
 						type="button"
@@ -80,31 +69,6 @@ export function CreateProposalScreen() {
 					onReauthenticate={connectSession}
 				/>
 			</div>
-
-			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader
-					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
-					isWatchOnly={!canSign}
-				/>
-				<WalletPanelContent
-					disabledError={panel.disabledError}
-					confirmedBalanceSats={panel.confirmedBalanceSats}
-					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
-					isBalanceLoading={panel.isBalanceLoading}
-					receiveAddress={panel.receiveAddress}
-					isAddressesLoading={panel.isAddressesLoading}
-					addressRows={panel.addressRows}
-					addressRowsLoading={panel.addressRowsLoading}
-					addressRowsError={panel.addressRowsError}
-					expandedSection={panel.expandedSection}
-					onToggleAddresses={panel.onToggleAddresses}
-					syncStatus={panel.syncStatus}
-					isSyncRefreshing={panel.isSyncRefreshing}
-					syncError={panel.syncError}
-					onRefreshSync={panel.onRefreshSync}
-				/>
-			</WalletPanel>
 		</ScreenShell>
 	)
 }

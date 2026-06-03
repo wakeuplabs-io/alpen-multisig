@@ -5,17 +5,13 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { SessionChip } from '@/components/session-chip'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
-import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
-import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function SignScreen() {
 	const navigate = useNavigate()
@@ -30,7 +26,6 @@ export function SignScreen() {
 		ensureOrchestratorSession,
 	} = useSession()
 	const panel = useWalletPanelData()
-	const { canSign: canSignWallet } = useAdminWalletCapability()
 	const [isSigning, setIsSigning] = useState(false)
 	const [isLoading, setIsLoading] = useState(true)
 	const [proposal, setProposal] = useState<Proposal | null>(null)
@@ -43,10 +38,6 @@ export function SignScreen() {
 	const [decodedAction, setDecodedAction] = useState<DecodedAction | null>(null)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
-
-	const signerLabel = wallet?.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
 
 	const signerAlreadySigned =
 		proposal !== null &&
@@ -230,13 +221,11 @@ export function SignScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
-						isActive={panel.isOpen}
-						panelId="wallet-slide-dialog"
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
 					/>
 					<button
 						type="button"
@@ -320,30 +309,6 @@ export function SignScreen() {
 					</div>
 				) : null}
 			</div>
-			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader
-					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
-					isWatchOnly={!canSignWallet}
-				/>
-				<WalletPanelContent
-					disabledError={panel.disabledError}
-					confirmedBalanceSats={panel.confirmedBalanceSats}
-					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
-					isBalanceLoading={panel.isBalanceLoading}
-					receiveAddress={panel.receiveAddress}
-					isAddressesLoading={panel.isAddressesLoading}
-					addressRows={panel.addressRows}
-					addressRowsLoading={panel.addressRowsLoading}
-					addressRowsError={panel.addressRowsError}
-					expandedSection={panel.expandedSection}
-					onToggleAddresses={panel.onToggleAddresses}
-					syncStatus={panel.syncStatus}
-					isSyncRefreshing={panel.isSyncRefreshing}
-					syncError={panel.syncError}
-					onRefreshSync={panel.onRefreshSync}
-				/>
-			</WalletPanel>
 		</ScreenShell>
 	)
 }

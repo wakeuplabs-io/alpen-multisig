@@ -3,16 +3,12 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { LogOutMutedIcon, LogOutRedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { SessionChip } from '@/components/session-chip'
 import { AuthRole } from '@/types'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
-import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
-import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function ProposalsDashboardScreen() {
 	const navigate = useNavigate()
@@ -24,7 +20,6 @@ export function ProposalsDashboardScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const panel = useWalletPanelData()
-	const { canSign } = useAdminWalletCapability()
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
@@ -76,9 +71,6 @@ export function ProposalsDashboardScreen() {
 	if (wallet === null) {
 		return <Navigate to="/" replace />
 	}
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
 
 	return (
 		<ScreenShell
@@ -89,13 +81,11 @@ export function ProposalsDashboardScreen() {
 						{authorityLabel}
 					</span>
 
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
-						isActive={panel.isOpen}
-						panelId="wallet-slide-dialog"
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
 					/>
 
 					<button
@@ -151,31 +141,6 @@ export function ProposalsDashboardScreen() {
 					navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })
 				}}
 			/>
-
-			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader
-					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
-					isWatchOnly={!canSign}
-				/>
-				<WalletPanelContent
-					disabledError={panel.disabledError}
-					confirmedBalanceSats={panel.confirmedBalanceSats}
-					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
-					isBalanceLoading={panel.isBalanceLoading}
-					receiveAddress={panel.receiveAddress}
-					isAddressesLoading={panel.isAddressesLoading}
-					addressRows={panel.addressRows}
-					addressRowsLoading={panel.addressRowsLoading}
-					addressRowsError={panel.addressRowsError}
-					expandedSection={panel.expandedSection}
-					onToggleAddresses={panel.onToggleAddresses}
-					syncStatus={panel.syncStatus}
-					isSyncRefreshing={panel.isSyncRefreshing}
-					syncError={panel.syncError}
-					onRefreshSync={panel.onRefreshSync}
-				/>
-			</WalletPanel>
 		</ScreenShell>
 	)
 }
