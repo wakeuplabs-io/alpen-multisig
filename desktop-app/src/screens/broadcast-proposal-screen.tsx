@@ -1,9 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
-import type { AdminWalletError } from '@/api/admin-wallet'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { SessionChip } from '@/components/session-chip'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
@@ -12,81 +10,12 @@ import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
-import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
-import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
-import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
-import { useAddressesWithBalance } from '@/domain/admin-wallet/hooks/use-addresses-with-balance'
-import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
-import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
-import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
-
-type WalletPanelData = {
-	isOpen: boolean
-	open: () => void
-	close: () => void
-	confirmedBalanceSats: number
-	unconfirmedBalanceSats: number
-	isBalanceLoading: boolean
-	receiveAddress: string | null
-	isAddressesLoading: boolean
-	addressRows: ReturnType<typeof useAddressesWithBalance>['data']
-	addressRowsLoading: boolean
-	addressRowsError: ReturnType<typeof useAddressesWithBalance>['error']
-	expandedSection: ReturnType<typeof useWalletPanelState>['expandedSection']
-	syncStatus: ReturnType<typeof useAdminWalletSync>['syncStatus']
-	isSyncRefreshing: boolean
-	syncError: ReturnType<typeof useAdminWalletSync>['error'] | null
-	onToggleAddresses: () => void
-	onRefreshSync: () => Promise<void>
-	disabledError: AdminWalletError | null
-}
-
-function useWalletPanelData(isAdminWalletMode: boolean): WalletPanelData {
-	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
-	const balanceHook = useAdminWalletBalance()
-	const receiveAddressHook = useAdminWalletReceiveAddress()
-	const syncHook = useAdminWalletSync()
-	const addressesWithBalanceHook = useAddressesWithBalance()
-
-	const walletDisabledError =
-		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
-			? balanceHook.error
-			: receiveAddressHook.error?.type === 'Disabled' || receiveAddressHook.error?.type === 'RegtestGuardViolation'
-				? receiveAddressHook.error
-				: null
-
-	const receiveAddress = receiveAddressHook.address
-
-	return {
-		isOpen,
-		open,
-		close,
-		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
-		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
-		isBalanceLoading: balanceHook.isLoading,
-		receiveAddress,
-		isAddressesLoading: receiveAddressHook.isLoading,
-		addressRows: addressesWithBalanceHook.data,
-		addressRowsLoading: addressesWithBalanceHook.isLoading,
-		addressRowsError: addressesWithBalanceHook.error,
-		expandedSection,
-		syncStatus: syncHook.syncStatus,
-		isSyncRefreshing: syncHook.isLoading,
-		syncError: syncHook.error,
-		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
-		onRefreshSync: async () => {
-			await syncHook.triggerSync()
-			balanceHook.refresh()
-			receiveAddressHook.refresh()
-			addressesWithBalanceHook.refresh()
-		},
-		disabledError: isAdminWalletMode ? walletDisabledError : null,
-	}
-}
 
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
@@ -132,10 +61,6 @@ export function BroadcastProposalScreen() {
 		return <Navigate to="/proposals" replace />
 	}
 
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
-
 	const isLoading = phase === 'idle' || phase === 'preparing'
 	const showDetails =
 		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
@@ -157,13 +82,11 @@ export function BroadcastProposalScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<SessionChip
-						timeLabel={sessionTimeLabel}
-						signerLabel={signerLabel}
-						warning={sessionWarning}
-						onActivate={() => (panel.isOpen ? panel.close() : panel.open())}
-						isActive={panel.isOpen}
-						panelId="wallet-slide-dialog"
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
 					/>
 					<button
 						type="button"
@@ -269,31 +192,6 @@ export function BroadcastProposalScreen() {
 					)}
 				</div>
 			</div>
-
-			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId="wallet-slide-dialog">
-				<WalletPanelHeader
-					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
-					isWatchOnly={!canSign}
-				/>
-				<WalletPanelContent
-					disabledError={panel.disabledError}
-					confirmedBalanceSats={panel.confirmedBalanceSats}
-					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
-					isBalanceLoading={panel.isBalanceLoading}
-					receiveAddress={panel.receiveAddress}
-					isAddressesLoading={panel.isAddressesLoading}
-					addressRows={panel.addressRows}
-					addressRowsLoading={panel.addressRowsLoading}
-					addressRowsError={panel.addressRowsError}
-					expandedSection={panel.expandedSection}
-					onToggleAddresses={panel.onToggleAddresses}
-					syncStatus={panel.syncStatus}
-					isSyncRefreshing={panel.isSyncRefreshing}
-					syncError={panel.syncError}
-					onRefreshSync={panel.onRefreshSync}
-				/>
-			</WalletPanel>
 		</ScreenShell>
 	)
 }

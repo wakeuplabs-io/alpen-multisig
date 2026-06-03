@@ -4,11 +4,15 @@ import { useCreateProposal } from '@/domain/create-proposal/hooks/use-create-pro
 import { useSession } from '@/hooks/use-session'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
+import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
-	const { wallet, selectedRole, session, sessionTimeLabel, disconnectSession, connectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, connectSession } = useSession()
 	const createProposal = useCreateProposal()
+	const panel = useWalletPanelData()
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -16,12 +20,6 @@ export function CreateProposalScreen() {
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
-
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 6)}...${wallet.addressSample.slice(-6)}`
-		: 'Unknown'
-
-	const sessionLabel = session === null ? 'Session' : `Session · ${sessionTimeLabel}`
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -31,20 +29,22 @@ export function CreateProposalScreen() {
 		<ScreenShell
 			headerContent={
 				<>
-					<span className="inline-flex items-center rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1 text-xs font-medium text-[#5b44c9]">
+					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
+						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-xs text-[#111827]">
-						{sessionLabel}
-					</span>
-					<span className="inline-flex items-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 font-mono text-[11px] text-[#6b7280]">
-						{signerLabel}
-					</span>
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
+					/>
 					<button
 						type="button"
-						className="inline-flex items-center rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-xs font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleDisconnect()}
 					>
+						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
 						Disconnect
 					</button>
 				</>
