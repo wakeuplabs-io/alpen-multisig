@@ -370,7 +370,7 @@ keeps transport DTOs at the screen/hook boundary and preserves presentational co
 - The line says `unconfirmed` and uses positive/negative signed sats copy.
 - Dashboard and broadcast wallet panels behave consistently.
 - Existing loading, disabled, stale data, sync error, receive address, and addresses-with-balance behavior is unchanged.
-- PRD §4.3.1 can be marked PASS in the spec-compliance matrix.
+- PRD §4.3.1 is **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 - Frontend checks are green; full SDD verification is reported.
 
 ## Links
