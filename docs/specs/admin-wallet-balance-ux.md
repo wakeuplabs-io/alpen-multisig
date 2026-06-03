@@ -1,6 +1,7 @@
 # Spec: Admin Wallet - Balance UX (R1.5)
 
-> **Status:** In progress — branch `feature/admin-wallet-balance-ux`.
+> **Status:** Complete — branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211).
+> Evolution: [`docs/evolution/2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
 
 Implements **Release 1, step R1.5** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
 Source of truth: **PRD §4.3.1**.
@@ -53,12 +54,16 @@ confirm or leave the mempool.
 ### Not included
 
 - Per-address confirmed/unconfirmed splitting or row rendering. That is R1.6.
-- Rust code, Tauri IPC commands, DTO shape changes, BDK sync behavior, wallet session lifecycle, or backend changes.
+- New Tauri IPC commands or `BalanceDto` field changes (existing contract unchanged).
 - New balance fetch hooks or new API calls. Consume `BalanceDto` verbatim.
 - Send, transactions, fee bump, QR rendering, Admin ID display, new tabs, or route changes.
 - Watch-only or signing-capability badges. If needed, defer to R1.6 where addresses/capability context is in scope.
 - New runtime dependencies or React testing dependencies.
-- Durable persistence, mempool policy handling, or transaction classification beyond the existing `unconfirmedSats` value.
+- Durable persistence or transaction classification beyond the existing `unconfirmedSats` value.
+
+### Scope amendment (delivered with R1.5)
+
+Manual regtest showed block-only `do_sync` never populated `unconfirmedSats` or mempool-driven receive rotation. **Shipped fix:** after the block loop in `WalletService::do_sync`, call `bdk_bitcoind_rpc::Emitter::mempool()` and `wallet.apply_unconfirmed_txs`. No IPC/DTO change; enables PRD §4.3.1 and R1.3 mempool semantics on regtest without mining.
 
 ## Technical Design
 

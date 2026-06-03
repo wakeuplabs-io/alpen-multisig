@@ -126,7 +126,7 @@ No new modules. Changes live in existing files, each retaining a single responsi
 
 ## Edge cases (notes)
 
-- **Unconfirmed funds:** BDK marks an address used as soon as a crediting tx is observed during sync (mempool-included). The displayed receive address therefore rotates on first observation, before confirmation — intended (prevents reuse).
+- **Unconfirmed funds:** BDK marks an address used as soon as a crediting tx is observed during sync (mempool-included). The displayed receive address therefore rotates on first observation, before confirmation — intended (prevents reuse). **Requires mempool sync in `do_sync`** (added in R1.5 — see [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md)); block-only sync does not rotate until a block is mined.
 - **Repeated sync / repeated calls:** idempotent; the same next-unused address is returned until it is used. No index "leak" from merely opening the Receive tab.
 - **App restart / session change:** the BDK wallet is non-persistent (`create_wallet_no_persist`); on a fresh session the revealed index starts at 0 but `next_unused_address` recomputes the correct next-unused index from on-chain usage after the first sync. Logout drops the `WalletService`; login rebuilds it. No stale address is shown after a sync.
 - **Address window exhaustion:** the old front-end heuristic could return `null` once all 20 windowed addresses were used; the BDK-native method has no such ceiling (gap-limit aware), removing that failure mode.

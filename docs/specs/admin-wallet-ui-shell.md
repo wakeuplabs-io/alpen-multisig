@@ -69,7 +69,7 @@ Port the Alta `WalletPanel` into the desktop-app as a **slide-over modal** that 
 - **PRD §4.3 coverage (Phase 3 scope):**
   | PRD subsection | Phase 3 coverage | Coverage by |
   |---|---|---|
-  | §4.3.1 Balance (net of unconfirmed) | ✓ | `WalletBalance` + `BalanceDto.totalSats` / `unconfirmedSats` |
+  | §4.3.1 Balance (net of unconfirmed) | ✅ R1.5 | `WalletBalance` hero = `confirmedSats`; tertiary `unconfirmedSats` line; mempool in `do_sync` |
   | §4.3.2 Addresses with balance | ✓ | `AddressesWithBalanceList` (derived from UTXOs) |
   | §4.3.3 Transactions + fee-bump | placeholder | `TxHistoryList` empty state → Phase 5 |
   | §4.3.4 Receive (address + QR + rotation) | partial (address + copy) | `ReceiveSection` placeholder → Phase 6 |
