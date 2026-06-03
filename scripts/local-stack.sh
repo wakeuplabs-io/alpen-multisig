@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# docker-start-stack.sh — Bootstrap the full Docker local stack (bitcoin + asm + orchestrator + regtest-dev-api).
+# local-stack.sh — Bootstrap the full Docker local stack (bitcoin + asm + orchestrator + regtest-dev-api).
 #
 # Usage:
-#   ./docker-start-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
-#   ./docker-start-stack.sh --status
-#   ./docker-start-stack.sh --stop
-#   ./docker-start-stack.sh -h
+#   ./local-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
+#   ./local-stack.sh --status
+#   ./local-stack.sh --stop
+#   ./local-stack.sh -h
 #
 # Options:
 #   --clean                 Clean volumes (bitcoin-data, asm-data) and residual state
@@ -27,7 +27,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_DIR="$SCRIPT_DIR"
+COMPOSE_DIR="$SCRIPT_DIR/../local"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yml"
 
 CLEAN=0
@@ -92,13 +92,13 @@ source "$REPO_DIR/runtests/env.sh" 2>/dev/null || true
 
 show_help() {
   cat <<'EOF'
-docker-start-stack.sh — Bootstrap the full Docker local stack.
+local-stack.sh — Bootstrap the full Docker local stack.
 
 Usage:
-  ./docker-start-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
-  ./docker-start-stack.sh --status
-  ./docker-start-stack.sh --stop
-  ./docker-start-stack.sh -h
+  ./local-stack.sh --clean [--orchestrator] [--regtest-dev-api] [--no-build] [--no-orchestrator]
+  ./local-stack.sh --status
+  ./local-stack.sh --stop
+  ./local-stack.sh -h
 
 Options:
   --clean                 Clean volumes (bitcoin-data, asm-data) and residual state
