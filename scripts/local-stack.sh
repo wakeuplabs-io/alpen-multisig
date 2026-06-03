@@ -29,6 +29,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="$SCRIPT_DIR/../staging"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.local.yml"
+COMPOSE_PROJECT=$(basename "$COMPOSE_DIR" | tr '[:lower:]' '[:upper:]')
+CONTAINER_PREFIX="${COMPOSE_PROJECT,,}"
 
 CLEAN=0
 CLEAN_ORCHESTRATOR=0
@@ -202,10 +204,10 @@ do_start() {
     echo -n "  waiting for $svc..."
     while (( i < max )); do
       local status
-      status=$(docker inspect --format='{{.State.Health.Status}}' "local-${svc}-1" 2>/dev/null || echo "")
+      status=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}-${svc}-1" 2>/dev/null || echo "")
       if [[ -z "$status" ]]; then
         local running
-        running=$(docker inspect --format='{{.State.Running}}' "local-${svc}-1" 2>/dev/null || echo "false")
+        running=$(docker inspect --format='{{.State.Running}}' "${CONTAINER_PREFIX}-${svc}-1" 2>/dev/null || echo "false")
         if [[ "$running" == "true" ]]; then
           echo " ready"
           return 0
@@ -215,7 +217,7 @@ do_start() {
         return 0
       elif [[ "$status" == "<no value>" ]]; then
         local running
-        running=$(docker inspect --format='{{.State.Running}}' "local-${svc}-1" 2>/dev/null || echo "false")
+        running=$(docker inspect --format='{{.State.Running}}' "${CONTAINER_PREFIX}-${svc}-1" 2>/dev/null || echo "false")
         if [[ "$running" == "true" ]]; then
           echo " ready"
           return 0
