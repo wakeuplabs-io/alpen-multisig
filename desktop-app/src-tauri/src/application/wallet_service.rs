@@ -329,6 +329,15 @@ impl WalletService {
             }
         }
 
+        // Mempool txs are not included in `next_block`; apply them so balance, UTXOs, receive
+        // rotation, and R1.5 unconfirmed UX reflect pending credits/spends before the next block.
+        let mempool_txs = emitter
+            .mempool()
+            .map_err(|e| rpc_error_from_message(e.to_string()))?;
+        if !mempool_txs.is_empty() {
+            wallet.apply_unconfirmed_txs(mempool_txs);
+        }
+
         let tip_height = wallet.latest_checkpoint().height();
         let last_synced_at = secs_to_iso8601(
             std::time::SystemTime::now()

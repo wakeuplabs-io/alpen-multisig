@@ -17,6 +17,7 @@
     "test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
     "test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
     "test:model-format-signed-sats": "tsx src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts",
+    "test:model-format-unconfirmed-balance-line": "tsx src/domain/admin-wallet/model/__tests__/format-unconfirmed-balance-line.test.ts",
     "test:model-trunc-address": "tsx src/domain/admin-wallet/model/__tests__/trunc-address.test.ts",
     "test:model-trunc-txid": "tsx src/domain/admin-wallet/model/__tests__/trunc-txid.test.ts",
     "test:model-relative-time": "tsx src/domain/admin-wallet/model/__tests__/relative-time.test.ts",
