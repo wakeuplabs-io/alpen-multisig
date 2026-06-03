@@ -379,6 +379,7 @@ keeps transport DTOs at the screen/hook boundary and preserves presentational co
 - PRD source: [`../0-prd/03-prd-update.md`](../0-prd/03-prd-update.md) (§4.3.1)
 - Predecessor UI cleanup: [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md) (R1.2)
 - Receive rotation: [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) (R1.3)
-- Next slice: [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) (R1.6, per-address unconfirmed breakdown)
+- Successor (shipped): [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) (R1.6, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212))
+- Next program increment: Phase 4 Send ([`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md))
 - Frontend rules: `.claude/rules/react-frontend-patterns.md`, `.claude/rules/typescript-standards.md`
 - Visual source: `miniwallet/Alpen-v0.1-Alta-handoff/Alpen v0.1 - Alta/WalletPanel/*`

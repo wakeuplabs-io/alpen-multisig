@@ -2,7 +2,9 @@
 
 **Date:** 2026-06-03
 **Branch:** `feature/admin-wallet-addresses-ux`
+**Commits:** `0c0c01c` (spec), `3d0a5e4` (implementation + docs finalize)
 **Spec:** [`docs/specs/admin-wallet-addresses-ux.md`](../specs/admin-wallet-addresses-ux.md)
+**PR:** [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) — merge manually to `develop`
 **Predecessor:** R1.5 Balance UX ([`2026-06-03-admin-wallet-balance-ux.md`](2026-06-03-admin-wallet-balance-ux.md))
 
 ## Summary
@@ -10,7 +12,7 @@
 R1.6 closes PRD §4.3.2 in the Admin Wallet slide-over: each funded external address shows **confirmed** sats as the
 primary BTC amount and, when applicable, a muted signed unconfirmed sub-line (`±N sats unconfirmed`) matching R1.5 copy.
 The wallet panel header defaults to **Admin Wallet**, shows session/signer context as subtitle, and displays a
-**Watch-only** badge when `canSign === false`.
+**Watch-only** badge when `canSign === false`. **Release 1 is closed** after this slice.
 
 ## Business Context
 
@@ -29,9 +31,15 @@ activity, with unconfirmed effects visible. Phase 2 already exposed `UtxoDto.con
 | `WalletPanelHeader` — Admin Wallet title + watch-only badge | Done |
 | Panel wiring (dashboard + broadcast) + `useAdminWalletCapability` | Done |
 | Architecture Rule 6 (address row wiring guard) | Done |
-| PRD §4.3.2 | **PASS** (frontend-only; relies on R1.5 mempool sync for regtest unconfirmed UTXOs) |
-| Release 1 | **Closed** (§4.3.1–§4.3.2 complete) |
-| Rust + frontend CI | Green |
+| Manual regtest (per-address unconfirmed sub-line) | Verified |
+| PRD §4.3.2 | **PASS** |
+| Release 1 (§4.3.1–§4.3.2) | **Closed** |
+| `cargo fmt --check` | PASS |
+| `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
+| `cargo test --workspace` | PASS |
+| `npm run format:check` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS |
 
 ## Key Decisions
 
@@ -40,6 +48,14 @@ activity, with unconfirmed effects visible. Phase 2 already exposed `UtxoDto.con
 - **Reuse `formatUnconfirmedBalanceLine`** — no duplicate formatter.
 - **No backend/IPC changes** — R1.5 mempool sync is sufficient for regtest pending UTXOs.
 - **Per-row `CopyButton`** — optional polish included using shared component.
+
+## Spec compliance (PRD §4.3.2)
+
+| Requirement | Evidence | Status |
+|-------------|----------|--------|
+| List each address that holds a balance | `composeAddressesWithBalance` filters `balanceSats > 0`; `AddressesWithBalanceList` | **PASS** |
+| Current balance net of unconfirmed | Confirmed hero + signed unconfirmed sub-line per row | **PASS** |
+| Unconfirmed visible when non-zero | `formatUnconfirmedBalanceLine` on `AddressRow` | **PASS** |
 
 ## Files Changed
 
@@ -60,12 +76,17 @@ activity, with unconfirmed effects visible. Phase 2 already exposed `UtxoDto.con
 - `address-row-contract.test.ts` (new)
 - `use-addresses-with-balance.test.ts` (type contract)
 - `architecture.test.ts` — Rule 6
+- `desktop-app/package.json` — test scripts
 
 **Documentation:**
 
 - `docs/specs/admin-wallet-addresses-ux.md`
-- `docs/specs/admin-wallet-implementation-plan.md` (R1.6 ✅; Release 1 closed)
+- `docs/specs/admin-wallet-implementation-plan.md`
+- `docs/specs/admin-wallet-balance-ux.md` (links)
+- `docs/specs/admin-wallet-core-read-path.md` (R1.6 amendment)
+- `docs/specs/admin-wallet-ui-shell.md` (§4.3.2 note)
 - `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md` (this file)
+- `docs/evolution/2026-06-03-admin-wallet-balance-ux.md` (post-R1.6 links)
 
 ## Known Limitations
 
@@ -76,4 +97,5 @@ activity, with unconfirmed effects visible. Phase 2 already exposed `UtxoDto.con
 
 - Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md)
 - Spec: [`admin-wallet-addresses-ux.md`](../specs/admin-wallet-addresses-ux.md)
+- PR: https://github.com/wakeuplabs-io/alpen-multisig/pull/212
 - Next increment: **Phase 4** — Send BTC happy path

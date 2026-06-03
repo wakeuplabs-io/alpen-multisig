@@ -317,6 +317,16 @@ Phase 2 introduces no manual fallback path — it adds read-only observability. 
 
 See [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) and [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
 
+## Amendment (R1.6 — addresses UX)
+
+The Phase 2 read path already returns `UtxoDto.confirmations` on each UTXO. R1.6 does **not** change IPC or DTOs; the
+desktop app splits external UTXOs per derivation index into `confirmedSats` and `unconfirmedSats` in
+`groupUtxoBalancesByDerivation` / `composeAddressesWithBalance` and renders per-address unconfirmed sub-lines in the
+wallet panel (PRD §4.3.2). Mempool visibility for unconfirmed UTXOs on regtest depends on the R1.5 `do_sync` amendment
+above.
+
+See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) and [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+
 ## Links
 
 - Program phases: [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)

@@ -1,7 +1,8 @@
 # Spec: Admin Wallet - Addresses UX (R1.6)
 
-> **Status:** Complete — branch `feature/admin-wallet-addresses-ux`.
+> **Status:** Complete — branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212).
 > Evolution: [`docs/evolution/2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+> Manual regtest verified (per-address confirmed + unconfirmed sub-line).
 
 Implements **Release 1, step R1.6** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
 Source of truth: **PRD §4.3.2**.
@@ -265,11 +266,34 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-## Release 1 closure updates
+## Delivered
 
-After implementation and verification:
+- **Model:** `groupUtxoBalancesByDerivation` splits external UTXOs by `confirmations`; `composeAddressesWithBalance` exposes
+  `confirmedSats`, `unconfirmedSats`, and `balanceSats` per row.
+- **UI:** `AddressRow` confirmed BTC hero + `formatUnconfirmedBalanceLine` sub-line; `Addresses with balance · N` accordion;
+  per-row `CopyButton`; full address on `title`.
+- **Header:** `Admin Wallet` title, `Session · … · signer` subtitle, **Watch-only** badge when `canSign === false` on
+  dashboard and broadcast panels.
+- **Tests:** extended compose tests, `group-utxo-balances-by-derivation` tests, address-row contract test, architecture
+  Rule 6.
 
-- update `docs/specs/admin-wallet-implementation-plan.md` to mark R1.6 complete;
-- add `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md`;
-- record PRD §4.3.2 as PASS in the R1.6/evolution compliance notes; and
-- note that the next Admin Wallet program increment is Phase 4 (Send BTC happy path).
+## Done when
+
+- Met on regtest — funded addresses show confirmed hero; unconfirmed credit without mine shows per-row sub-line; line hidden
+  when fully confirmed at address level.
+- PRD §4.3.2 marked **PASS**; Release 1 **closed** (§4.3.1 in R1.5, §4.3.2 in R1.6).
+- Frontend and workspace CI green.
+
+## Release 1 closure
+
+- `docs/specs/admin-wallet-implementation-plan.md` — R1.6 ✅, Release 1 closed.
+- `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md` — evolution record.
+- **Next program increment:** Phase 4 (Send BTC happy path).
+
+## Links
+
+- Program plan: [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)
+- PRD source: [`../0-prd/03-prd-update.md`](../0-prd/03-prd-update.md) (§4.3.2)
+- Predecessor: [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) (R1.5 wallet-level unconfirmed line)
+- Core read path: [`admin-wallet-core-read-path.md`](./admin-wallet-core-read-path.md) (`UtxoDto.confirmations`, R1.5 mempool sync)
+- PR: https://github.com/wakeuplabs-io/alpen-multisig/pull/212
