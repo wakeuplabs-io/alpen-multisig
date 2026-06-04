@@ -127,6 +127,19 @@ jobs:
           name: macos-bundles
           path: artifacts
 
+      - name: Flatten artifacts
+        working-directory: artifacts
+        run: |
+          # upload-artifact@v4 preserves the directory structure under each
+          # path's common ancestor, so the Linux bundles land in deb/, rpm/,
+          # appimage/ subdirs. Flatten everything to the artifacts root so the
+          # manifest, signature, and release attachments use bare filenames.
+          find . -mindepth 2 -type f \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.dmg' \) \
+            -exec mv -t . {} +
+          find . -mindepth 1 -type d -empty -delete
+          ls -la
+
       - name: Generate SHA256SUMS manifest
         working-directory: artifacts
         run: |
