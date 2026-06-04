@@ -75,7 +75,7 @@ After the initial DELIVER wave, the following landed before R1.1 was closed:
 - **`ALLOW_DEV_MNEMONIC_SIGNING` fully removed as a signing/broadcast gate.** The leftover `broadcast_env.rs`
   "Gate 1" (and the `MnemonicSigningDisabled` variant) were deleted; broadcast capability is now decided solely
   by `WalletService::can_sign()` → `PsbtSigner::allowed_on(network)`. The flag and its references were removed
-  from `.env.example`, `render.yaml`, `staging/*`, the e2e-webdriver docs, and the Ledger integration test. The
+  from `.env.example`, `staging/*`, the e2e-webdriver docs, and the Ledger integration test. The
   env name survives **only** as the dev-only mnemonic/raw-key signing IPC exposure gate (`dev_secrets.rs`, P-040;
   debug builds auto-enable).
 - **`BdkAdminWalletMnemonic` → `AdminWalletCommitFunding`** rename completed (the name no longer implies mnemonic

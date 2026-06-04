@@ -37,7 +37,7 @@ Admin Wallet the single source of truth for commit funding before Phase 3.7 (ses
 - Hardware-wallet signing for commit (Phase 7).
 - **`BITCOIN_WALLET_NAME` for `orchestrator-be`** — it is still used there for wallet-scoped RPC
   (`getnewaddress` / `generatetoaddress`). It MUST be retained in `orchestrator-be/.env.example`,
-  `orchestrator-be/src/config.rs`, `render.yaml`, and `staging/docker-compose.yml`.
+  `orchestrator-be/src/config.rs`, and `staging/docker-compose.yml`.
 - Changing SPS-50/51 envelope shape or commit/reveal protocol semantics — only the funding source.
 
 ## Technical Design
@@ -87,7 +87,7 @@ so every funding/read path remains guarded; no per-construction network check is
 |---|---|
 | `desktop-app/.env.example` | Remove the `COMMIT_FUNDING` comment block + `# COMMIT_FUNDING=admin_wallet` and `BITCOIN_WALLET_NAME`. Keep `ADMIN_WALLET_REGTEST_MNEMONIC` + `ALLOW_DEV_MNEMONIC_SIGNING=1`. |
 | `docs/specs/admin-wallet-regtest-commit-funding.md` | Update to reflect the single funding path (no `COMMIT_FUNDING` toggle, no `sendtoaddress` fallback). |
-| `orchestrator-be/.env.example`, `orchestrator-be/src/config.rs`, `render.yaml`, `staging/docker-compose.yml` | **Untouched** — `BITCOIN_WALLET_NAME` stays for the orchestrator. |
+| `orchestrator-be/.env.example`, `orchestrator-be/src/config.rs`, `staging/docker-compose.yml` | **Untouched** — `BITCOIN_WALLET_NAME` stays for the orchestrator. |
 
 ### WebDriver E2E (`desktop-app/e2e-webdriver`)
 

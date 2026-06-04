@@ -679,7 +679,6 @@ touches a device). `WalletService` depends on the `PsbtSigner` abstraction, neve
   - [ ] `.env.example`
   - [ ] `desktop-app/e2e-webdriver/README.md`
   - [ ] CI workflow YAML (GitHub Actions env)
-  - [ ] `render.yaml`
   - [ ] `staging/docker-compose.yml`
   - [ ] `dev_secrets.rs` (if it references the flag)
   - [ ] `wallet_service.rs::check_enabled` (code site — delete the gate)

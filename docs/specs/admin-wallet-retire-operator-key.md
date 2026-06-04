@@ -274,7 +274,6 @@ CI / infra recipes:
 - `.github/workflows/*` — every workflow that exports the retired vars.
 - `scripts/` — regtest setup/runner scripts.
 - `staging/docker-compose.yml`
-- `render.yaml`
 
 Carve-out (must **not** be edited):
 
