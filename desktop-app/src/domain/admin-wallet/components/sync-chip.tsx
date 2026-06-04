@@ -45,11 +45,15 @@ export function SyncChip({ syncStatus, isRefreshing, error, onRefresh, now }: Sy
 					aria-hidden="true"
 				/>
 			)}
-			<span className="text-[12px] text-[#6b7280]">{label}</span>
+			<span className="text-[12px] text-[#6b7280]" data-testid="e2e-wallet-sync-label">
+				{label}
+			</span>
 			<button
 				type="button"
 				disabled={isRefreshing}
 				onClick={onRefresh}
+				data-testid="e2e-wallet-sync-refresh"
+				data-syncing={isRefreshing ? 'true' : 'false'}
 				className="rounded-md px-2 py-1 text-[11px] font-medium text-[#9480f5] transition hover:bg-[#f4f2ff] disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{isRefreshing ? 'Refreshing…' : 'Refresh'}
