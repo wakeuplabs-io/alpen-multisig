@@ -15,7 +15,7 @@ type Step = { label: string; detail: string }
 const STEPS: Step[] = [
 	{ label: 'Commit', detail: 'Funds the reveal output (signed locally)' },
 	{ label: 'Reveal', detail: 'Carries the action — broadcast with the commit' },
-	{ label: 'Enactment', detail: 'ASM applies the governance change after the confirmation delay' },
+	{ label: 'Broadcasted', detail: 'Confirmed on Bitcoin — awaiting ASM enactment' },
 ]
 
 /** Commit (0) + Reveal (1) are broadcast together as one package. */
