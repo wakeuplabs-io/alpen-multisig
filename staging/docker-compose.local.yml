@@ -1,4 +1,16 @@
 services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+    # Internal network only — not exposed to host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   bitcoin:
     build:
       context: ..
@@ -15,7 +27,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
 
   asm:
     build:
@@ -40,7 +52,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 20
-      start_period: 120s
+      start_period: 180s
 
   orchestrator:
     build:
@@ -54,21 +66,30 @@ services:
       BITCOIN_RPC_URL: http://bitcoin:18443
       BITCOIN_RPC_USER: user
       BITCOIN_RPC_PASS: password
+      BITCOIN_WALLET_NAME: staging
       STRATA_ADMIN_STATE_RPC_URL: http://asm:8080
-      DATABASE_URL: "postgresql://neondb_owner:npg_HuMb6SVQxW7s@ep-proud-star-aqpu1w7v-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/postgres"
+      DEV_MINE_ENABLED: "1"
       ALLOW_DEV_OPERATOR_KEY: "1"
-      OPERATOR_SECRET_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000001"
       BITCOIN_NETWORK: "regtest"
       BITCOIN_MAGIC_BYTES_HEX: "414c504e"
       ALLOW_INSECURE_HTTP_URL: "1"
       ADMIN_WALLET_REGTEST_MNEMONIC: "multiply toss magic exclude crawl obey garden black apart room village neglect"
       COMMIT_FUNDING: "admin_wallet"
     depends_on:
+      postgres:
+        condition: service_healthy
       bitcoin:
         condition: service_healthy
       asm:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   regtest-dev-api:
     build:
@@ -86,6 +107,12 @@ services:
       bitcoin:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "http://localhost:3001/mine"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   bitcoin-data:

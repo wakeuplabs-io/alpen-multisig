@@ -35,7 +35,6 @@ pub struct BroadcastEnv {
     pub btc_rpc_url: String,
     pub btc_rpc_user: String,
     pub btc_rpc_pass: String,
-    pub btc_wallet_name: Option<String>,
     pub magic_bytes: MagicBytes,
     pub asm_rpc_url: String,
     pub network: Network,
@@ -64,9 +63,6 @@ pub fn load_broadcast_env(
     let btc_rpc_url = node_config.btc_rpc_url().to_string();
     let btc_rpc_user = node_config.btc_rpc_user().to_string();
     let btc_rpc_pass = node_config.btc_rpc_pass().to_string();
-    let btc_wallet_name = std::env::var("BITCOIN_WALLET_NAME")
-        .ok()
-        .filter(|s| !s.is_empty());
     let asm_rpc_url = node_config.strata_rpc_url().to_string();
     let magic_hex =
         std::env::var("BITCOIN_MAGIC_BYTES_HEX").unwrap_or_else(|_| "414c504e".to_string());
@@ -83,7 +79,6 @@ pub fn load_broadcast_env(
         btc_rpc_url,
         btc_rpc_user,
         btc_rpc_pass,
-        btc_wallet_name,
         magic_bytes: parse_magic_bytes(&magic_hex)?,
         asm_rpc_url,
         network,

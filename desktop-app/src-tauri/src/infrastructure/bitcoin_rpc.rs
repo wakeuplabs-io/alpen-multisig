@@ -17,12 +17,6 @@ pub trait BitcoinRpcClient: Send + Sync {
     /// Fetch and decode a transaction by txid.
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String>;
 
-    /// Mine `count` blocks to an internally generated address. Regtest only.
-    async fn mine_blocks(&self, count: u32) -> Result<(), String>;
-
-    /// Get a newly generated Bitcoin address.
-    async fn get_new_address(&self) -> Result<String, String>;
-
     /// Get the current block count.
     async fn get_block_count(&self) -> Result<u64, String>;
 
@@ -38,13 +32,14 @@ pub struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
-        let url = match wallet_name.filter(|w| !w.is_empty()) {
-            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
-            None => base_url.to_string(),
-        };
+    /// Build a node-level Bitcoin RPC client. The broadcast path only uses node/mempool
+    /// RPCs (sendrawtransaction, submitpackage, estimatesmartfee, getrawtransaction,
+    /// gettransaction, getblockcount), so the client is NEVER wallet-scoped. Any
+    /// bitcoind Core-wallet operation (funding, addresses, mining) is out of scope —
+    /// funding/signing goes through the BDK Admin Wallet, mining through the dev faucet.
+    pub fn new(base_url: &str, user: &str, pass: &str) -> Self {
         Self {
-            url,
+            url: base_url.to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
             client: super::rpc_timeout::rpc_client(),
@@ -153,20 +148,6 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(sats_per_vb.max(1))
     }
 
-    async fn get_new_address(&self) -> Result<String, String> {
-        let result = self.call("getnewaddress", json!([])).await?;
-        result
-            .as_str()
-            .map(str::to_string)
-            .ok_or_else(|| "getnewaddress: expected string address".to_string())
-    }
-
-    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
-        let addr = self.get_new_address().await?;
-        self.call("generatetoaddress", json!([count, addr])).await?;
-        Ok(())
-    }
-
     async fn get_block_count(&self) -> Result<u64, String> {
         let result = self.call("getblockcount", json!([])).await?;
         result
@@ -242,5 +223,18 @@ mod tests {
     #[test]
     fn rpc_client_builds_without_panic() {
         let _client = rpc_client();
+    }
+
+    /// Regression (RCA: getnewaddress "wallet does not exist or is not loaded").
+    /// The production RPC client must be node-level — never wallet-scoped — so the
+    /// broadcast path never depends on a bitcoind Core wallet being loaded.
+    #[test]
+    fn http_client_is_node_level_not_wallet_scoped() {
+        let client = super::HttpBitcoinRpcClient::new("http://127.0.0.1:18443", "user", "pass");
+        assert_eq!(client.url, "http://127.0.0.1:18443");
+        assert!(
+            !client.url.contains("/wallet/"),
+            "production RPC client must not be wallet-scoped"
+        );
     }
 }
