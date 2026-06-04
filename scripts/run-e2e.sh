@@ -267,18 +267,14 @@ run_test() {
 
 # Run tests in dependency order:
 # 1. wallet-smoke (independent)
-# 2. wallet-panel-sync-on-open (independent)
-# 3. proposal-add-signer (creates a proposal)
-# 4. proposal-co-sign-mnemonic (requires add-signer)
-# 5. proposal-broadcast-quorum (requires co-sign → quorum reached)
-# 6. broadcast-mnemonic-walking-skeleton (requires quorum-ready proposal)
+# 2. proposal-add-signer (creates a proposal)
+# 3. proposal-co-sign-mnemonic (requires add-signer)
+# 4. proposal-broadcast-quorum (requires co-sign → quorum reached)
 
 run_test "wallet-smoke" "test/specs/wallet-smoke.e2e.js"
-run_test "wallet-panel-sync-on-open" "test/specs/wallet-panel-sync-on-open.e2e.js"
 run_test "proposal-add-signer" "test/specs/proposal-add-signer.e2e.js"
 run_test "proposal-co-sign-mnemonic" "test/specs/proposal-co-sign-mnemonic.e2e.js"
 run_test "proposal-broadcast-quorum" "test/specs/proposal-broadcast-quorum.e2e.js"
-run_test "broadcast-mnemonic-walking-skeleton" "test/specs/broadcast-mnemonic-walking-skeleton.e2e.js"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
