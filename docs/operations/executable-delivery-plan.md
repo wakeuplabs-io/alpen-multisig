@@ -90,7 +90,13 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** An independent party can rebuild from the same source and confirm a bit-for-bit
   identical artifact, with documented steps.
 - **Closes:** PRD §1.2, NF-2.
-- **Status:** Not started.
+- **Status:** Research done — see
+  [`reproducible-builds-research.md`](./reproducible-builds-research.md). Foundation already in
+  place (pinned toolchain, committed lockfiles, containerized CI). Honest finding: reproducibility
+  is achievable at the **binary + frontend** layer (Tier 1) and is the recommended D4 deliverable;
+  installer-wrapper reproducibility (`.deb`/`.rpm`/AppImage) is hard-but-partial (Tier 2); a
+  signed/notarized macOS `.dmg` is **infeasible** bit-for-bit by construction (reproduce the
+  unsigned `.app` payload instead). Implementation not started.
 
 ### D5 · Cross-platform builds (Windows)
 - **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
@@ -135,6 +141,8 @@ earlier ones. Status is tracked here as the plan progresses.
 
 - [`desktop-build-linux.md`](./desktop-build-linux.md) — Linux local build steps (D1).
 - [`release-signing-mvp.md`](./release-signing-mvp.md) — Linux PGP MVP detail (feeds D3).
+- [`verifying-releases.md`](./verifying-releases.md) — user-facing release verification guide (D3).
+- [`reproducible-builds-research.md`](./reproducible-builds-research.md) — reproducibility research and plan (D4).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
 - [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) — NFR-SUPPLY-CHAIN (P-011 full).
