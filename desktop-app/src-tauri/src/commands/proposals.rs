@@ -709,15 +709,8 @@ pub async fn proposals_resolve_broadcast_status(
         .map_err(|e| format!("lock error: {e}"))?
         .clone();
 
-    let wallet_name = std::env::var("BITCOIN_WALLET_NAME")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let btc_rpc = HttpBitcoinRpcClient::new(
-        cfg.btc_rpc_url(),
-        wallet_name.as_deref(),
-        cfg.btc_rpc_user(),
-        cfg.btc_rpc_pass(),
-    );
+    let btc_rpc =
+        HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass());
 
     let reveal_confs = if let Some(txid) = &input.reveal_txid {
         btc_rpc.get_transaction_confirmations(txid).await.ok()
@@ -870,12 +863,7 @@ pub async fn proposals_prepare_broadcast_manual(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(
-        &env.btc_rpc_url,
-        env.btc_wallet_name.as_deref(),
-        &env.btc_rpc_user,
-        &env.btc_rpc_pass,
-    );
+    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
 
     let signatures: Vec<Signature> = input
         .signatures
@@ -929,7 +917,6 @@ pub async fn proposals_broadcast_manual(
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
     let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
         &env.btc_rpc_url,
-        env.btc_wallet_name.as_deref(),
         &env.btc_rpc_user,
         &env.btc_rpc_pass,
     ));
