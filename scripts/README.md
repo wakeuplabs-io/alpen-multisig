@@ -5,6 +5,7 @@ Helper scripts for development and testing of the Alpen Multisig project.
 ## Table of Contents
 
 - [Local Docker Stack](#local-docker-stack) — Full stack via Docker Compose
+- [WebDriver E2E Tests](#webdriver-e2e-tests) — Full UI test suite on real Tauri binary
 - [Bitcoin regtest node](#bitcoin-regtest-node) — Standalone bitcoind for ASM runner
 - [ASM Runner](#asm-runner) — Strata ASM binary
 - [Trezor emulator](#trezor-emulator) — Emulated Trezor device
@@ -120,6 +121,92 @@ curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"strata_asm_getStatus","id":1}'
 ```
+
+---
+
+## WebDriver E2E Tests
+
+End-to-end UI tests for the Tauri desktop app using WebdriverIO + `tauri-driver` + WebKitWebDriver. Runs against the real Tauri binary with the full Docker stack.
+
+### Prerequisites
+
+| Requirement | How |
+|---|---|
+| Docker + Docker Compose | Already installed |
+| Node 18+ | `nvm install 18` |
+| `tauri-driver` | `cargo install tauri-driver --locked` |
+| `WebKitWebDriver` | `sudo apt install webkit2gtk-driver` |
+| Graphical session | Run from desktop (not SSH-only) |
+
+### Quick Start
+
+```bash
+# Full run: clean stack → build Tauri → run all 4 e2e specs → stop stack
+./scripts/run-e2e.sh --clean --stop-after
+```
+
+### All Options
+
+| Flag | Description |
+|---|---|
+| `--clean` | Clean Docker volumes before starting the stack |
+| `--no-build` | Skip Docker image build (use existing images) |
+| `--stop-after` | Stop the stack after tests complete |
+| `--skip-stack` | Assume the stack is already running (only run tests) |
+| `--skip-tauri-build` | Skip Tauri binary build (use existing `target/debug/desktop-app`) |
+| `-h` | Show help |
+
+### Common Workflows
+
+```bash
+# First run (clean everything, full build)
+./scripts/run-e2e.sh --clean --stop-after
+
+# Re-run after code changes (reuse Docker images, rebuild Tauri)
+./scripts/run-e2e.sh --stop-after
+
+# Fast re-run (reuse Docker images + Tauri binary)
+./scripts/run-e2e.sh --skip-stack --skip-tauri-build --stop-after
+
+# Keep stack running after tests (for debugging)
+./scripts/run-e2e.sh --skip-stack --skip-tauri-build
+```
+
+### Test Suite (4 specs, run in dependency order)
+
+| # | Test | Purpose |
+|---|---|---|
+| 1 | `wallet-smoke` | Login with mnemonic → reach `/proposals` |
+| 2 | `proposal-add-signer` | Create signer-update proposal + sign |
+| 3 | `proposal-co-sign-mnemonic` | Co-sign with second mnemonic (quorum) |
+| 4 | `proposal-broadcast-quorum` | Broadcast proposal → commit→reveal→confirmed |
+
+Specs 2–4 are sequential: each depends on the previous one's state.
+
+### Individual Specs (manual)
+
+```bash
+cd desktop-app/e2e-webdriver
+
+# Build the Tauri binary first (if not already built)
+cd ../ && npm run tauri build -- --debug --no-bundle && cd e2e-webdriver
+
+# Run a single spec (skip Tauri rebuild)
+SKIP_E2E_BUILD=1 npx wdio run wdio.conf.js --spec ./test/specs/wallet-smoke.e2e.js
+SKIP_E2E_BUILD=1 npx wdio run wdio.conf.js --spec ./test/specs/proposal-add-signer.e2e.js
+SKIP_E2E_BUILD=1 npx wdio run wdio.conf.js --spec ./test/specs/proposal-co-sign-mnemonic.e2e.js
+SKIP_E2E_BUILD=1 npx wdio run wdio.conf.js --spec ./test/specs/proposal-broadcast-quorum.e2e.js
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `tauri-driver not found` | `cargo install tauri-driver --locked` or set `TAURI_DRIVER_PATH` |
+| Port 4444 in use | `pkill -f tauri-driver` |
+| Tests hang at login | Stack not running or `.env` URLs wrong |
+| Broadcast fails at prepare | Check `desktop-app/.env` has `BITCOIN_RPC_*` vars matching Docker creds |
+| `e2e-admin-wallet-external-address-0` not found | Admin Wallet sync failed — verify `BITCOIN_RPC_URL`, `BITCOIN_RPC_USER`, `BITCOIN_RPC_PASS` in `desktop-app/.env` |
 
 ---
 
