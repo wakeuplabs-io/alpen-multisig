@@ -47,7 +47,3 @@ services:
         value: "user"
       - key: BITCOIN_RPC_PASS
         value: "password"
-      - key: BITCOIN_WALLET_NAME
-        value: "staging"
-      - key: DEV_MINE_ENABLED
-        value: "1"

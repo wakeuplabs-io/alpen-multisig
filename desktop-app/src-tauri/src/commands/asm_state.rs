@@ -86,15 +86,9 @@ pub async fn get_bitcoin_block_height(
         .read()
         .map_err(|e| format!("lock error: {e}"))?
         .clone();
-    let wallet_name = std::env::var("BITCOIN_WALLET_NAME")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let btc_rpc = HttpBitcoinRpcClient::new(
-        cfg.btc_rpc_url(),
-        wallet_name.as_deref(),
-        cfg.btc_rpc_user(),
-        cfg.btc_rpc_pass(),
-    );
+    // getblockcount is a node-level RPC — no bitcoind Core wallet needed.
+    let btc_rpc =
+        HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass());
     btc_rpc.get_block_count().await
 }
 
