@@ -552,13 +552,6 @@ pub async fn broadcast_manual(
             Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
         }
 
-        if network == Network::Regtest {
-            btc_rpc
-                .mine_blocks(1)
-                .await
-                .map_err(BroadcastError::BitcoinRpc)?;
-        }
-
         wait_for_confirmation(
             btc_rpc,
             &reveal_txid,
