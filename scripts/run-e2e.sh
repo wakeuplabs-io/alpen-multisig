@@ -107,12 +107,18 @@ echo ""
 
 echo "=== setting up .env files ==="
 
-# desktop-app/.env — read by Tauri at startup (not exposed to webview)
+# desktop-app/.env — read by Tauri at startup (not exposed to webview).
+# WalletService reads BITCOIN_RPC_* env vars for Admin Wallet sync — must match
+# the Docker stack credentials (user/password in docker-compose.local.yml).
 DESKTOP_ENV="$REPO_DIR/desktop-app/.env"
 cat > "$DESKTOP_ENV" <<'EOF'
 VITE_ORCHESTRATOR_BASE_URL=http://127.0.0.1:3000/api/v1
 BITCOIN_NETWORK=regtest
 BITCOIN_MAGIC_BYTES_HEX=414c504e
+BITCOIN_RPC_URL=http://127.0.0.1:18443
+BITCOIN_RPC_USER=user
+BITCOIN_RPC_PASS=password
+STRATA_ADMIN_STATE_RPC_URL=http://127.0.0.1:8080
 EOF
 echo "  desktop-app/.env → created"
 
