@@ -258,7 +258,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 - `desktop-app/src-tauri/src/application/commit_funding.rs` — remove `BitcoindSendToAddress`, `select_commit_funding`, and `COMMIT_FUNDING` dispatch
 - `desktop-app/src-tauri/src/commands/proposals.rs` — wire directly to BDK funding path; remove `select_commit_funding` call
-- `desktop-app/.env.example`, CI workflows, `scripts/`, `staging/docker-compose.yml`, `render.yaml` — remove `COMMIT_FUNDING` and `BITCOIN_WALLET_NAME` from broadcast recipes
+- `desktop-app/.env.example`, CI workflows, `scripts/`, `staging/docker-compose.yml` — remove `COMMIT_FUNDING` and `BITCOIN_WALLET_NAME` from broadcast recipes
 - `docs/specs/admin-wallet-regtest-commit-funding.md` — update to reflect single funding path
 
 **Risks / notes**
