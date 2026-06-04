@@ -44,3 +44,4 @@ ssz.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }

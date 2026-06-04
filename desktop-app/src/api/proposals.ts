@@ -45,6 +45,8 @@ export type Proposal = {
 	activationHeight: number | null
 	updateIdInQueue: number | null
 	cancelProposal: CancelProposalSummary | null
+	createdAtMs: number
+	expiresAtMs: number
 }
 
 export type PrepareBroadcastResult = {

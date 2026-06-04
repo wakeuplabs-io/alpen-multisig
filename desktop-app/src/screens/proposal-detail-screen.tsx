@@ -5,6 +5,7 @@ import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
+import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
@@ -185,6 +186,13 @@ export function ProposalDetailScreen() {
 									})
 								}
 							/>
+
+							{/* Expiry countdown for pending proposals */}
+							{proposal.status === 'pending' && (
+								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+								</div>
+							)}
 
 							{/* Activation countdown */}
 							{proposal.activationHeight !== null && proposal.status === 'approved' && (

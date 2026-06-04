@@ -99,6 +99,7 @@ mod tests {
             120_000,
             240_000,
             btc_client,
+            7,
         ))
     }
 
@@ -355,6 +356,7 @@ mod tests {
             target_action_id: None,
             activation_height: None,
             update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
         })
         .await
         .unwrap();
@@ -373,6 +375,7 @@ mod tests {
                 120_000,
                 240_000,
                 btc_client,
+                7,
             ))
         };
 

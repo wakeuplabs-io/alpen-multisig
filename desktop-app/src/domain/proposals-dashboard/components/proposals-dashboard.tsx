@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Paginator } from '@/components/paginator'
+import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
 import {
 	CheckCircleEmeraldIcon,
@@ -451,6 +452,12 @@ function ProposalCard({
 						}}
 					/>
 				</div>
+
+				{proposal.status === 'pending' && (
+					<div className="mt-1.5">
+						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+					</div>
+				)}
 			</div>
 
 			{canBroadcast ? (

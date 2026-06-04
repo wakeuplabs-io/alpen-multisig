@@ -1,4 +1,5 @@
 use desktop_app::application::commit_funding::AdminWalletCommitFunding;
+use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
@@ -102,6 +103,8 @@ pub struct ProposalDto {
     pub activation_height: Option<u64>,
     pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummaryDto>,
+    pub created_at_ms: u64,
+    pub expires_at_ms: u64,
 }
 
 #[tauri::command]
@@ -186,6 +189,8 @@ fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDt
 
 fn map_proposal(proposal: Proposal) -> ProposalDto {
     let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
+    let created_at_ms = proposal.created_at as u64;
+    let expires_at_ms = created_at_ms + PROPOSAL_EXPIRY_DAYS * 24 * 3600 * 1000;
     ProposalDto {
         action_id: proposal.action_id,
         seq_no: proposal.seq_no,
@@ -203,6 +208,8 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         activation_height: proposal.activation_height,
         update_id_in_queue: proposal.update_id_in_queue,
         cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
+        created_at_ms,
+        expires_at_ms,
     }
 }
 
