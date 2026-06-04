@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { AdminWalletError } from '@/api/admin-wallet'
 import { useWalletPanelState } from './use-wallet-panel-state'
 import { useAdminWalletBalance } from './use-admin-wallet-balance'
@@ -41,15 +41,31 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const { canSign } = useAdminWalletCapability()
 
+	// All refresh callbacks below are referentially stable (each is a `useCallback(…, [])`
+	// or depends only on other stable callbacks), so the effect/useCallback deps stay
+	// stable across renders. Do NOT add `syncHook.isLoading` (or other per-render state)
+	// to these deps — that would re-fire the open effect on every load toggle and loop.
 	const { refresh: refreshBalance } = balanceHook
 	const { refresh: refreshReceiveAddress } = receiveAddressHook
 	const { refresh: refreshAddresses } = addressesWithBalanceHook
-	useEffect(() => {
-		if (!isOpen) return
+	const { triggerSync } = syncHook
+
+	// Sync the BDK wallet against the chain, then re-read the derived views. Without the
+	// sync, the reads return a stale/zero balance ("Never synced"). Shared by the on-open
+	// auto-sync and the manual Refresh button.
+	const syncAndRefresh = useCallback(async () => {
+		await triggerSync()
 		refreshBalance()
 		refreshReceiveAddress()
 		refreshAddresses()
-	}, [isOpen, refreshBalance, refreshReceiveAddress, refreshAddresses])
+	}, [triggerSync, refreshBalance, refreshReceiveAddress, refreshAddresses])
+
+	// Initial refresh: when the panel opens, sync + re-read once so the signer sees a
+	// fresh, chain-synced balance without having to press Refresh manually.
+	useEffect(() => {
+		if (!isOpen) return
+		void syncAndRefresh()
+	}, [isOpen, syncAndRefresh])
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
@@ -77,12 +93,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		isSyncRefreshing: syncHook.isLoading,
 		syncError: syncHook.error,
 		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
-		onRefreshSync: async () => {
-			await syncHook.triggerSync()
-			balanceHook.refresh()
-			receiveAddressHook.refresh()
-			addressesWithBalanceHook.refresh()
-		},
+		onRefreshSync: syncAndRefresh,
 		disabledError: showDisabledError ? walletDisabledError : null,
 	}
 }
