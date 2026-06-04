@@ -72,12 +72,19 @@ earlier ones. Status is tracked here as the plan progresses.
   workflow artifact. A dedicated `release` job downloads both platforms' artifacts and attaches the
   `.deb`, `.rpm`, AppImage, and `.dmg` to the GitHub Release on tag builds.
 
-### D3 · Signed Linux release + published verification instructions
-- **Value:** A signer can download the Linux binary, verify a detached signature, and trust it came
-  from the project. Single-key signing as the first trust anchor.
-- **Closes:** PRD §1.3, NF-3 — partial (single signer, one OS). Builds on
+### D3 · Signed release + published verification instructions
+- **Value:** A signer can download a binary, verify a detached signature over the published
+  `SHA256SUMS` manifest, and trust it came from the project. Single named-employee signing as the
+  first trust anchor, using the manifest-and-keyring model (Option A) so D7 is purely additive.
+- **Closes:** PRD §1.3, NF-3 — partial (single signer). Builds on
   [`release-signing-mvp.md`](./release-signing-mvp.md).
-- **Status:** Not started.
+- **Status:** In progress. `release.yml` now generates `SHA256SUMS` over all platform artifacts and
+  publishes a detached signature `SHA256SUMS.<signer>.asc` when a signing key is configured
+  (graceful degradation: checksums always ship; signature ships once `PGP_PRIVATE_KEY` is set).
+  Authorized public keys live in [`release-keys/`](../../release-keys/); user verification guide in
+  [`verifying-releases.md`](./verifying-releases.md). **Remaining (human action):** an Alpen Labs
+  employee must generate a personal key, commit its public half to `release-keys/`, and set the
+  `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE` secrets + `PGP_SIGNER_ID` variable.
 
 ### D4 · Reproducible build verification
 - **Value:** An independent party can rebuild from the same source and confirm a bit-for-bit

@@ -127,15 +127,59 @@ jobs:
           name: macos-bundles
           path: artifacts
 
+      - name: Generate SHA256SUMS manifest
+        working-directory: artifacts
+        run: |
+          # One manifest covers every platform artifact; integrity ships
+          # unconditionally even before a signing key is configured.
+          sha256sum *.deb *.rpm *.AppImage *.dmg > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Sign SHA256SUMS manifest
+        id: sign
+        working-directory: artifacts
+        env:
+          PGP_PRIVATE_KEY: ${{ secrets.PGP_PRIVATE_KEY }}
+          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+          # Filename suffix identifying the signer; lets multiple employees
+          # each attach SHA256SUMS.<signer>.asc (D7) without colliding.
+          PGP_SIGNER_ID: ${{ vars.PGP_SIGNER_ID }}
+        run: |
+          if [ -z "$PGP_PRIVATE_KEY" ]; then
+            echo "::warning::PGP_PRIVATE_KEY secret not set — publishing checksums without a signature (D3 not yet active)."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          export GNUPGHOME="$(mktemp -d)"
+          echo "$PGP_PRIVATE_KEY" | gpg --batch --import
+          signer="${PGP_SIGNER_ID:-alpen}"
+          gpg_args=(--batch --yes --pinentry-mode loopback)
+          if [ -n "$PGP_PASSPHRASE" ]; then
+            gpg_args+=(--passphrase "$PGP_PASSPHRASE")
+          fi
+          gpg "${gpg_args[@]}" \
+            --armor --detach-sign \
+            --output "SHA256SUMS.${signer}.asc" \
+            SHA256SUMS
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "asc_file=SHA256SUMS.${signer}.asc" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          files=(
+            artifacts/*.deb
+            artifacts/*.rpm
+            artifacts/*.AppImage
+            artifacts/*.dmg
+            artifacts/SHA256SUMS
+          )
+          if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
+            files+=(artifacts/SHA256SUMS.*.asc)
+          fi
           gh release create "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
             --title "Release ${{ github.ref_name }}" \
             --generate-notes \
-            artifacts/*.deb \
-            artifacts/*.rpm \
-            artifacts/*.AppImage \
-            artifacts/*.dmg
+            "${files[@]}"
