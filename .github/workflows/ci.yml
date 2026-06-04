@@ -115,6 +115,7 @@ jobs:
         run: |
           npm run test:admin-wallet-capability-schema --workspace desktop-app
           npm run test:derive-broadcast-error --workspace desktop-app
+          npm run test:derive-proposal-actions --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app
