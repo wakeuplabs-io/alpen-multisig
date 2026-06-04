@@ -4,12 +4,11 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - feat/d2-release-workflow  # temporary: remove before merge
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-linux:
