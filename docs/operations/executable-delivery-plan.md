@@ -57,7 +57,11 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** Every release candidate is built automatically; the binary that ships is the one CI
   builds and tests. Closes the assessment CRITICAL "CI never runs `tauri build`".
 - **Closes:** NFR-SUPPLY-CHAIN — partial (build automation).
-- **Status:** Not started.
+- **Status:** Done. `.github/workflows/release.yml` triggers on `v*` tags and
+  `workflow_dispatch`; builds the Tauri bundle on `ubuntu-latest`, uploads `.deb`, `.rpm`, and
+  AppImage as workflow artifacts, and creates a GitHub Release with those files when triggered by
+  a tag. The release workflow is intentionally separate from `ci.yml` (PR validation) to keep
+  the CI feedback loop fast, per ADR-004.
 
 ### D3 · Signed Linux release + published verification instructions
 - **Value:** A signer can download the Linux binary, verify a detached signature, and trust it came
