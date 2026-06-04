@@ -1,6 +1,129 @@
 # Scripts
 
-Helper scripts for running a local Bitcoin regtest node and a Trezor emulator stack needed for development and testing.
+Helper scripts for development and testing of the Alpen Multisig project.
+
+## Table of Contents
+
+- [Local Docker Stack](#local-docker-stack) — Full stack via Docker Compose
+- [Bitcoin regtest node](#bitcoin-regtest-node) — Standalone bitcoind for ASM runner
+- [ASM Runner](#asm-runner) — Strata ASM binary
+- [Trezor emulator](#trezor-emulator) — Emulated Trezor device
+- [Ledger emulator](#ledger-emulator-speculos) — Emulated Ledger device
+
+---
+
+## Local Docker Stack
+
+Manages a complete local development stack via Docker Compose: Bitcoin, ASM, PostgreSQL, Orchestrator, and Regtest Dev API.
+
+**Compose file:** `staging/docker-compose.local.yml`
+
+### Prerequisites
+
+- Docker and Docker Compose v2 in PATH
+- ASM submodule populated: `git submodule update --init asm`
+
+### Quick Start
+
+```bash
+# Start the full stack
+./scripts/local-stack.sh
+
+# Check status
+./scripts/local-stack.sh --status
+
+# Stop the stack
+./scripts/local-stack.sh --stop
+
+# Clean start (removes volumes)
+./scripts/local-stack.sh --clean
+```
+
+### All Options
+
+| Flag | Description |
+|---|---|
+| `--clean` | Remove `bitcoin-data` and `asm-data` volumes before starting |
+| `--orchestrator` | With `--clean`: also prune orchestrator Docker build cache |
+| `--regtest-dev-api` | With `--clean`: also prune regtest-dev-api Docker build cache |
+| `--no-build` | Use existing Docker images (skip build) |
+| `--no-orchestrator` | Don't start orchestrator container (for local `cargo run -p orchestrator-be`) |
+| `--stop` | Stop all containers |
+| `--status` | Show container status |
+| `-h` | Show help |
+
+### Services and Ports
+
+| Service | Port | Description |
+|---|---|---|
+| `bitcoin` | 18443 | Bitcoin Core regtest RPC |
+| `asm` | 8080 | Strata ASM runner admin RPC |
+| `postgres` | 5432 | PostgreSQL database |
+| `orchestrator` | 3000 | Backend API (skipped with `--no-orchestrator`) |
+| `regtest-dev-api` | 3001 | Mining/faucet helper |
+
+### Development Workflows
+
+**Full stack locally:**
+```bash
+./scripts/local-stack.sh
+```
+
+**With orchestrator running from source (for hot reload):**
+```bash
+# Terminal 1: start stack without orchestrator
+./scripts/local-stack.sh --no-orchestrator
+
+# Terminal 2: run orchestrator from source
+cargo run -p orchestrator-be
+
+# Terminal 3: (optional) watch logs
+docker compose -f staging/docker-compose.local.yml logs -f
+```
+
+**Clean rebuild of specific service:**
+```bash
+./scripts/local-stack.sh --clean --orchestrator
+```
+
+### Local helpers (no stack needed)
+
+These commands work against the regtest-dev-api running in Docker:
+
+```bash
+# Mine blocks
+./scripts/local-stack.sh --mine 5
+
+# Fund an address (default: 1 BTC)
+./scripts/local-stack.sh --fund bcrt1q... 0.5
+
+# Mine 1 block
+./scripts/local-stack.sh --mine
+```
+
+### Endpoints
+
+```bash
+# Health check
+curl http://localhost:3000/api/v1/health
+
+# Mine blocks
+curl -X POST http://localhost:3001/mine?count=1
+
+# Fund address
+curl -X POST http://localhost:3001/faucet \
+  -H "Content-Type: application/json" \
+  -d '{"address":"bcrt1q...","amount_btc":1.0}'
+
+# ASM status
+curl -X POST http://localhost:8080/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"strata_asm_getStatus","id":1}'
+```
+
+---
+
+## Bitcoin regtest node
 
 ## Prerequisites
 
