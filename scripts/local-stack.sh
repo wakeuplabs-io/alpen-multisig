@@ -117,9 +117,6 @@ if [[ ! -f "$ASM_DIR/Cargo.toml" ]]; then
   Run: cd \"$REPO_DIR\" && git submodule update --init asm"
 fi
 
-# shellcheck disable=SC1090
-source "$REPO_DIR/runtests/env.sh" 2>/dev/null || true
-
 show_help() {
   cat <<'EOF'
 local-stack.sh — Bootstrap the full Docker local stack.
