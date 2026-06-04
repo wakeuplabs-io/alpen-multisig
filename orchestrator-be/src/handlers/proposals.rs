@@ -122,7 +122,10 @@ pub async fn list_proposals(
 
     let mut checked = Vec::with_capacity(raw.len());
     for p in raw {
-        checked.push(proposals::expire_if_overdue(state.repo.as_ref(), p, state.proposal_expiry_days).await?);
+        checked.push(
+            proposals::expire_if_overdue(state.repo.as_ref(), p, state.proposal_expiry_days)
+                .await?,
+        );
     }
 
     Ok(Json(ProposalListResponse { proposals: checked }))
@@ -147,7 +150,9 @@ pub async fn get_proposal(
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
-    let proposal = proposals::expire_if_overdue(state.repo.as_ref(), proposal, state.proposal_expiry_days).await?;
+    let proposal =
+        proposals::expire_if_overdue(state.repo.as_ref(), proposal, state.proposal_expiry_days)
+            .await?;
 
     let cancel_proposal = state
         .repo
