@@ -29,6 +29,7 @@ allow = [
     "MITNFA",
     "Unlicense",
     "CDLA-Permissive-2.0",
+    "BSL-1.0",
 ]
 exceptions = []
 
