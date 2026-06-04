@@ -68,7 +68,11 @@ while [[ $# -gt 0 ]]; do
         echo "error: --fund requires an address" >&2
         exit 1
       fi
-      shift 2
+      if [[ $# -ge 2 ]]; then
+        shift 2
+      else
+        shift
+      fi
       ;;
     -h|--help) HELP=1 ;;
     *)
@@ -76,7 +80,7 @@ while [[ $# -gt 0 ]]; do
       exit 1
       ;;
   esac
-  shift
+  if [[ $# -gt 0 ]]; then shift; fi
 done
 
 die() {
@@ -245,11 +249,8 @@ do_fund() {
   local result
   result=$(curl -sf -X POST "http://localhost:3001/faucet" \
     -H "Content-Type: application/json" \
-    -d "{\"address\":\"${address}\",\"amount_btc\":${amount}}" 2>&1) || {
-    echo "ERROR: failed to fund address (is regtest-dev-api running?)" >&2
-    echo "$result" >&2
-    return 1
-  }
+    -d "{\"address\":\"${address}\",\"amount_btc\":${amount}}" 2>&1) \
+    || { echo "ERROR: failed to fund address (is regtest-dev-api running?)" >&2; echo "$result" >&2; return 1; }
   local txid=$(echo "$result" | jq -r '.txid' 2>/dev/null)
   local block=$(echo "$result" | jq -r '.block_hash' 2>/dev/null)
   echo "  TXID: $txid"
