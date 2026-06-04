@@ -138,6 +138,12 @@ jobs:
             \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.dmg' \) \
             -exec mv -t . {} +
           find . -mindepth 1 -type d -empty -delete
+          # GitHub Releases rewrites spaces in asset names to dots, which would
+          # break `sha256sum -c` against a manifest built from the original
+          # names. Rename here so the manifest and the published assets match.
+          for f in *\ *; do
+            [ -e "$f" ] && mv -- "$f" "${f// /.}"
+          done
           ls -la
 
       - name: Generate SHA256SUMS manifest
