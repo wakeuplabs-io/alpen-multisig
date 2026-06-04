@@ -63,6 +63,15 @@ earlier ones. Status is tracked here as the plan progresses.
   a tag. The release workflow is intentionally separate from `ci.yml` (PR validation) to keep
   the CI feedback loop fast, per ADR-004.
 
+### D2.1 · CI produces the macOS bundle
+- **Value:** Testers on macOS can download a native `.dmg` artifact produced by CI without building
+  from source.
+- **Closes:** PRD §1.1 (macOS), NF-1 (macOS), NF-4 — partial.
+- **Status:** Done. `.github/workflows/release.yml` now runs a `build-macos` job on
+  `macos-latest` alongside `build-linux`; it builds the Tauri bundle and uploads the `.dmg` as a
+  workflow artifact. A dedicated `release` job downloads both platforms' artifacts and attaches the
+  `.deb`, `.rpm`, AppImage, and `.dmg` to the GitHub Release on tag builds.
+
 ### D3 · Signed Linux release + published verification instructions
 - **Value:** A signer can download the Linux binary, verify a detached signature, and trust it came
   from the project. Single-key signing as the first trust anchor.
@@ -76,8 +85,8 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Closes:** PRD §1.2, NF-2.
 - **Status:** Not started.
 
-### D5 · Cross-platform builds (macOS + Windows)
-- **Value:** Signers on macOS and Windows get a native, installable artifact equivalent to Linux.
+### D5 · Cross-platform builds (Windows)
+- **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
 - **Closes:** PRD §1.1 (full), NF-1 (full), NF-4 (full).
 - **Status:** Not started.
 
@@ -100,8 +109,8 @@ earlier ones. Status is tracked here as the plan progresses.
 
 ## Sequencing notes
 
-- D1 → D2 → D3 form the minimum trustworthy Linux release path and should land first.
-- D4 (reproducibility) can proceed in parallel once D2 exists.
+- D1 → D2 → D2.1 → D3 form the minimum trustworthy Linux + macOS release path and should land first.
+- D4 (reproducibility) can proceed once D2 exists.
 - D5 → D6 → D7 extend trust to all platforms; D7 (multi-employee) is the gate for the first
   external release per NF-3.
 - D8 is optional/deferred and may be dropped from the first external release.
