@@ -4,6 +4,8 @@ import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/asset
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { ManualImportData, ManualSignature } from '@/domain/manual-proposal/model/manual-proposal.types'
+import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 type Props = {
 	importData: ManualImportData
@@ -16,6 +18,7 @@ type Props = {
 	signerPubkey: string | null
 	onSign: () => void
 	onBroadcast: () => void
+	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
 }
 
 function derivedActionType(actionHex: string): ActionType {
@@ -35,6 +38,7 @@ export function ManualSignCollect({
 	signerPubkey,
 	onSign,
 	onBroadcast,
+	onPasteSignatures,
 }: Props) {
 	const [bundleCopied, setBundleCopied] = useState(false)
 
@@ -59,6 +63,9 @@ export function ManualSignCollect({
 		actionHex: importData.actionHex,
 		seqNo: importData.seqNo,
 		authority: importData.authority,
+		status: hasQuorum ? 'approved' : 'pending',
+		broadcastStatus: 'idle',
+		activationHeight: null,
 		signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
 	}
 
@@ -102,6 +109,7 @@ export function ManualSignCollect({
 				decodedData={decodedData}
 				onSign={isSigning ? () => {} : onSign}
 				onBroadcast={onBroadcast}
+				onPasteSignatures={onPasteSignatures}
 			/>
 
 			{hasQuorum && (

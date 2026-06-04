@@ -200,9 +200,6 @@ pub async fn approve_action(
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
 ) -> Result<Json<Proposal>> {
-    if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
-        return Err(AppError::Unauthorized);
-    }
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -212,7 +209,7 @@ pub async fn approve_action(
         state.repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
-            signer_pubkey: &auth.signer_pubkey,
+            signer_pubkey: &sig.signer_pubkey,
         },
         &ActionId(action_id),
         &sig,

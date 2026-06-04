@@ -320,7 +320,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []) // runs once on mount — initialBundleRef is stable
 
-	function handlePasteSignatures(sigs: PastedSignature[]) {
+	function handlePasteSignatures(sigs: PastedSignature[], _broadcastState?: unknown) {
 		setLocalSignatures((prev) => {
 			const existingKeys = new Set(prev.map((s) => s.signerPubkey.toLowerCase()))
 			const newSigs = sigs

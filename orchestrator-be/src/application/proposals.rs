@@ -80,12 +80,6 @@ pub(crate) async fn approve_action(
     action_id: &ActionId,
     sig: &ProposalSignature,
 ) -> Result<Proposal, AppError> {
-    if !sig
-        .signer_pubkey
-        .eq_ignore_ascii_case(session.signer_pubkey)
-    {
-        return Err(AppError::Unauthorized);
-    }
     let existing = repo.find_by_action_id(action_id).await?;
     let proposal = existing.ok_or(AppError::NotFound)?;
     if proposal.authority != session.authority {

@@ -151,3 +151,39 @@ export function prepareBroadcastManual(input: BroadcastManualInput): Promise<Api
 export function broadcastManualProposal(input: BroadcastManualInput): Promise<ApiResult<BroadcastResult>> {
 	return tauriCall('proposals_broadcast_manual', { input }, broadcastResultSchema)
 }
+
+export type ReportBroadcastInput = {
+	baseUrl: string
+	actionId: string
+	broadcastStatus: BroadcastStatus
+	commitTxid?: string
+	revealTxid?: string
+	proposalStatus?: ProposalStatus
+}
+
+export function reportBroadcastProgress(input: ReportBroadcastInput): Promise<ApiResult<Proposal>> {
+	return tauriCall('proposals_report_broadcast', { input }, proposalSchema)
+}
+
+export type ResolveBroadcastStatusInput = {
+	commitTxid?: string
+	revealTxid?: string
+}
+
+export type ResolveBroadcastStatusResult = {
+	broadcastStatus: string
+	commitConfirmations: number | null
+	revealConfirmations: number | null
+}
+
+const resolveBroadcastStatusResultSchema = z.object({
+	broadcastStatus: z.string(),
+	commitConfirmations: z.number().nullable(),
+	revealConfirmations: z.number().nullable(),
+})
+
+export function resolveBroadcastStatus(
+	input: ResolveBroadcastStatusInput,
+): Promise<ApiResult<ResolveBroadcastStatusResult>> {
+	return tauriCall('proposals_resolve_broadcast_status', { input }, resolveBroadcastStatusResultSchema)
+}
