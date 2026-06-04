@@ -70,7 +70,7 @@
     {
       "step_id": "03-01",
       "name": "Cleanup: env, docs, scripts, CI",
-      "description": "Remove all references to OPERATOR_SECRET_KEY_HEX and ALLOW_DEV_OPERATOR_KEY from: desktop-app/.env.example, docs/specs/proposal-broadcast-commit-reveal.md (update to Admin Wallet-derived key), docs/specs/secret-custody-wave2.md, docs/specs/admin-wallet-regtest-commit-funding.md, docs/security/threat-model.md, docs/operations/runbook.md, desktop-app/e2e-webdriver/README.md, .github/workflows/*, scripts/, staging/docker-compose.yml, render.yaml. Do NOT touch docs/assessment/2026-05-13-adversarial/ or docs/assessment/2026-05-14-adversarial/ (immutable historical records).",
+      "description": "Remove all references to OPERATOR_SECRET_KEY_HEX and ALLOW_DEV_OPERATOR_KEY from: desktop-app/.env.example, docs/specs/proposal-broadcast-commit-reveal.md (update to Admin Wallet-derived key), docs/specs/secret-custody-wave2.md, docs/specs/admin-wallet-regtest-commit-funding.md, docs/security/threat-model.md, docs/operations/runbook.md, desktop-app/e2e-webdriver/README.md, .github/workflows/*, scripts/, staging/docker-compose.yml. Do NOT touch docs/assessment/2026-05-13-adversarial/ or docs/assessment/2026-05-14-adversarial/ (immutable historical records).",
       "acceptance_criteria": [
         "grep -r OPERATOR_SECRET_KEY_HEX . --exclude-dir=.git --exclude-dir=docs/assessment returns zero hits",
         "grep -r ALLOW_DEV_OPERATOR_KEY . --exclude-dir=.git --exclude-dir=docs/assessment returns zero hits",

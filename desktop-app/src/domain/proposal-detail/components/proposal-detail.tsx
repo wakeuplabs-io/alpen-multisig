@@ -13,6 +13,7 @@ import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-dec
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 type CheckEnactedResult = { ok: true } | { ok: false; error: string }
+import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 type Props = {
 	proposal: Proposal
@@ -112,13 +113,7 @@ export function ProposalDetail({
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const alreadyBroadcast = Boolean(proposal.commitTxid ?? proposal.revealTxid)
-	const hasQuorum =
-		!isTerminal && !alreadyBroadcast && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
-	const alreadySigned =
-		signerPubkey !== null &&
-		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 
 	const [bundleCopied, setBundleCopied] = useState(false)
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)
@@ -388,7 +383,7 @@ export function ProposalDetail({
 						</button>
 					)}
 
-					{!isTerminal && !hasQuorum && !alreadySigned && (
+					{canSign && (
 						<button
 							type="button"
 							data-testid="e2e-detail-sign-button"

@@ -54,10 +54,8 @@ services:
       BITCOIN_RPC_URL: http://bitcoin:18443
       BITCOIN_RPC_USER: user
       BITCOIN_RPC_PASS: password
-      BITCOIN_WALLET_NAME: staging
       STRATA_ADMIN_STATE_RPC_URL: http://asm:8080
       DATABASE_URL: "postgresql://neondb_owner:npg_HuMb6SVQxW7s@ep-proud-star-aqpu1w7v-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-      DEV_MINE_ENABLED: "1"
       ALLOW_DEV_OPERATOR_KEY: "1"
       OPERATOR_SECRET_KEY_HEX: "0000000000000000000000000000000000000000000000000000000000000001"
       BITCOIN_NETWORK: "regtest"

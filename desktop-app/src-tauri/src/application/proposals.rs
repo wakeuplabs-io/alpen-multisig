@@ -135,8 +135,11 @@ fn is_unknown_method(err: &str) -> bool {
 /// Execute pre-sign commit+reveal, store in PendingReveals, then broadcast atomically.
 ///
 /// New flow: build_signed_commit → build_reveal_tx → drop keypair → insert pending →
-/// submit_package (or sequential fallback) → report → mine ONE block → wait reveal confirm →
+/// submit_package (or sequential fallback) → report → wait reveal confirm →
 /// remove from pending → return `(commit_txid, reveal_txid)`.
+///
+/// The broadcast NEVER advances the chain: on regtest, confirmation is driven by the dev
+/// faucet/harness; on testnet/mainnet by real miners. No bitcoind Core-wallet RPC is used.
 ///
 /// `get_raw_transaction` is NEVER called.
 #[allow(clippy::too_many_arguments)]
@@ -293,15 +296,11 @@ pub async fn broadcast_commit_then_reveal(
         )
         .await?;
 
-        // Step 8: Mine ONE block on regtest (was two).
-        if network == Network::Regtest {
-            btc_rpc
-                .mine_blocks(1)
-                .await
-                .map_err(BroadcastError::BitcoinRpc)?;
-        }
-
-        // Step 9: Wait for reveal confirmation only (no commit confirmation wait).
+        // Wait for reveal confirmation only (no commit confirmation wait).
+        // NOTE: the broadcast path must NEVER advance the chain. On regtest, confirmation
+        // is driven by the dev faucet/harness (see desktop-app/e2e-webdriver mine helpers
+        // and regtest-dev-api); on testnet/mainnet a real miner confirms. This keeps the
+        // production flow free of any bitcoind Core-wallet dependency (getnewaddress).
         wait_for_confirmation(
             btc_rpc,
             &reveal_txid,
@@ -310,7 +309,7 @@ pub async fn broadcast_commit_then_reveal(
         )
         .await?;
 
-        // Step 10: Report reveal_confirmed.
+        // Report reveal_confirmed.
         report_broadcast(
             client,
             action_id,
@@ -322,7 +321,7 @@ pub async fn broadcast_commit_then_reveal(
         )
         .await?;
 
-        // Step 11: Remove from PendingReveals after reveal_confirmed.
+        // Remove from PendingReveals after reveal_confirmed.
         {
             let mut guard = pending.lock().unwrap();
             guard.remove(action_id);
@@ -1307,7 +1306,6 @@ mod tests {
         submit_package_result: Result<(), String>,
         send_raw_transaction_call_count: Mutex<u32>,
         get_raw_transaction_call_count: Mutex<u32>,
-        mine_blocks_call_count: Mutex<u32>,
     }
 
     impl MockBtcRpc {
@@ -1316,7 +1314,6 @@ mod tests {
                 submit_package_result: Ok(()),
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
-                mine_blocks_call_count: Mutex::new(0),
             }
         }
 
@@ -1325,7 +1322,6 @@ mod tests {
                 submit_package_result: Err(err.to_string()),
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
-                mine_blocks_call_count: Mutex::new(0),
             }
         }
 
@@ -1335,10 +1331,6 @@ mod tests {
 
         fn get_raw_transaction_call_count(&self) -> u32 {
             *self.get_raw_transaction_call_count.lock().unwrap()
-        }
-
-        fn mine_blocks_call_count(&self) -> u32 {
-            *self.mine_blocks_call_count.lock().unwrap()
         }
     }
 
@@ -1369,15 +1361,6 @@ mod tests {
                     script_pubkey: bitcoin::ScriptBuf::new(),
                 }],
             })
-        }
-
-        async fn mine_blocks(&self, _: u32) -> Result<(), String> {
-            *self.mine_blocks_call_count.lock().unwrap() += 1;
-            Ok(())
-        }
-
-        async fn get_new_address(&self) -> Result<String, String> {
-            Ok("bcrt1qmockaddress0000000000000000000000000000".to_string())
         }
 
         async fn submit_package(&self, _: &[String]) -> Result<(), String> {
@@ -1659,8 +1642,16 @@ mod tests {
         );
     }
 
+    /// Regression (RCA: getnewaddress "wallet does not exist or is not loaded").
+    ///
+    /// The production broadcast path must NOT advance the chain and must NOT depend on a
+    /// bitcoind Core wallet. Previously Step 8 called `mine_blocks(1)` → `getnewaddress`
+    /// on `/wallet/asm-runner`, which fails whenever that wallet is not loaded. Mining is
+    /// now delegated to the dev faucet/harness. This test proves the broadcast on regtest
+    /// succeeds using ONLY node-level RPCs (the `mine_blocks`/`get_new_address` methods no
+    /// longer exist on `BitcoinRpcClient`, so the regression is also compiler-enforced).
     #[tokio::test]
-    async fn reporting_order_has_no_commit_confirmed_and_mines_one_block() {
+    async fn broadcast_on_regtest_does_not_mine_blocks() {
         use bitcoin::{Network, ScriptBuf};
         use strata_l1_txfmt::MagicBytes;
 
@@ -1685,11 +1676,9 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "broadcast should succeed: {result:?}");
-        assert_eq!(
-            mock_rpc.mine_blocks_call_count(),
-            1,
-            "exactly ONE mine_blocks call expected on regtest"
+        assert!(
+            result.is_ok(),
+            "broadcast on regtest must succeed without mining / wallet RPC: {result:?}"
         );
     }
 

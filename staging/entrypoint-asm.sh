@@ -5,7 +5,7 @@
 #   First run:  fetches block-101 hash, generates asm-params.json.
 #   Subsequent: skips init (flag file on persistent disk).
 #
-# Required env var: BITCOIN_RPC_URL (set in render.yaml to the bitcoin service URL)
+# Required env var: BITCOIN_RPC_URL (set in docker-compose.yml to the bitcoin service URL)
 
 set -euo pipefail
 

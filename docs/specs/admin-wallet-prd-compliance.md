@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-03 (after Release 1 / R1.6, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212))
+**Last updated:** 2026-06-03 (Release 1 complete: R1.0–R1.7 done, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214))
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 

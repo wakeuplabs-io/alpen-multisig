@@ -16,14 +16,25 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 type Flow = 'initiate' | 'approve'
 
 export function CancelProposalSignScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, adapter, selectedRole, sessionTimeLabel, disconnectSession, ensureOrchestratorSession } = useSession()
+	const {
+		wallet,
+		adapter,
+		selectedRole,
+		sessionTimeLabel,
+		sessionWarning,
+		disconnectSession,
+		ensureOrchestratorSession,
+	} = useSession()
 	const authorityLabel = authorityLabelForRole(selectedRole)
+	const panel = useWalletPanelData()
 
 	const [isLoading, setIsLoading] = useState(true)
 	const [loadError, setLoadError] = useState<string | null>(null)
@@ -40,10 +51,6 @@ export function CancelProposalSignScreen() {
 	const [sighashHex, setSighashHex] = useState('')
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 	const [alreadySigned, setAlreadySigned] = useState(false)
-
-	const signerLabel = wallet?.addressSample
-		? `${wallet.addressSample.slice(0, 5)}...${wallet.addressSample.slice(-6)}`
-		: 'Unknown'
 
 	useEffect(() => {
 		let mounted = true
@@ -210,11 +217,12 @@ export function CancelProposalSignScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
-						<span className="h-3 w-px bg-[#e5e7eb]" aria-hidden="true" />
-						<span className="font-mono text-[11px] text-[#6b7280]">{signerLabel}</span>
-					</span>
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"

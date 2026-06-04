@@ -1,0 +1,119 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+    # Internal network only — not exposed to host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bitcoin:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.bitcoin
+    ports:
+      - "18443:18443"
+    volumes:
+      - bitcoin-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "-regtest", "-datadir=/data/bitcoin",
+             "-rpcconnect=127.0.0.1", "-rpcport=18443",
+             "-rpcuser=user", "-rpcpassword=password", "getblockchaininfo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  asm:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.asm
+    ports:
+      - "8080:8080"
+    volumes:
+      - asm-data:/data
+    environment:
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json",
+             "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"strata_asm_getStatus\",\"id\":1}",
+             "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.orchestrator
+    ports:
+      - "3000:3000"
+    environment:
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "3000"
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+      BITCOIN_WALLET_NAME: staging
+      STRATA_ADMIN_STATE_RPC_URL: http://asm:8080
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/postgres"
+      DEV_MINE_ENABLED: "1"
+      ALLOW_DEV_OPERATOR_KEY: "1"
+      BITCOIN_NETWORK: "regtest"
+      BITCOIN_MAGIC_BYTES_HEX: "414c504e"
+      ALLOW_INSECURE_HTTP_URL: "1"
+      ADMIN_WALLET_REGTEST_MNEMONIC: "multiply toss magic exclude crawl obey garden black apart room village neglect"
+      COMMIT_FUNDING: "admin_wallet"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bitcoin:
+        condition: service_healthy
+      asm:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  regtest-dev-api:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.regtest-dev-api
+    ports:
+      - "3001:3001"
+    environment:
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+      BITCOIN_RPC_WALLET: staging
+      SERVER_PORT: "3001"
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "http://localhost:3001/mine"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  bitcoin-data:
+  asm-data:

@@ -52,18 +52,18 @@ export function WalletPanelContent({
 	}
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
 			<WalletBalance
 				confirmedSats={confirmedBalanceSats}
 				unconfirmedSats={unconfirmedBalanceSats}
 				isLoading={isBalanceLoading}
 			/>
 
-			<div className="px-[18px] pt-[18px]">
+			<div className="mt-5">
 				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
 			</div>
 
-			<div className="mt-[18px] border-t border-[#f3f4f6] pt-3">
+			<div className="mt-5 border-t border-[#f3f4f6] pt-4">
 				<AddressesWithBalanceList
 					rows={addressRows}
 					isLoading={addressRowsLoading}
@@ -73,7 +73,7 @@ export function WalletPanelContent({
 				/>
 			</div>
 
-			<div className="mt-auto border-t border-[#f3f4f6] px-[18px] py-3">
+			<div className="mt-auto border-t border-[#f3f4f6] pt-4">
 				<SyncChip syncStatus={syncStatus} isRefreshing={isSyncRefreshing} error={syncError} onRefresh={onRefreshSync} />
 			</div>
 		</div>

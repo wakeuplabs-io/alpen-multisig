@@ -33,10 +33,15 @@ export function useAddressesWithBalance(opts?: {
 			? composeAddressesWithBalance(addressesHook.data, utxosHook.data)
 			: null
 
+	// Depend on the stable inner `refresh` callbacks, not the hook objects (which are
+	// new on every render). Depending on the objects would make this `refresh` change
+	// every render, breaking referential stability for any effect that depends on it.
+	const { refresh: refreshAddresses } = addressesHook
+	const { refresh: refreshUtxos } = utxosHook
 	const refresh = useCallback(() => {
-		addressesHook.refresh()
-		utxosHook.refresh()
-	}, [addressesHook, utxosHook])
+		refreshAddresses()
+		refreshUtxos()
+	}, [refreshAddresses, refreshUtxos])
 
 	return { data, isLoading, error, refresh }
 }
