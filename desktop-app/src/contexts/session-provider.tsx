@@ -18,8 +18,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	const { wallet, setConnectedWallet, clearSession, adapter, selectAdapter } = useWalletSession()
 
 	const [signingStep, setSigningStep] = useState<SigningStepInfo | null>(null)
+	const [isOrchestratorSessionActive, setIsOrchestratorSessionActive] = useState(false)
+	const [orchestratorExpiresAtMs, setOrchestratorExpiresAtMs] = useState<number | null>(null)
 
-	/** Wall clock for session countdown; updated every second (effects may call Date.now). */
+	/** Wall clock for session countdown; updated every second. */
 	const [nowMs, setNowMs] = useState(() => Date.now())
 	useEffect(() => {
 		const id = setInterval(() => setNowMs(Date.now()), 1_000)
@@ -27,13 +29,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	}, [])
 	useEffect(() => {
 		setNowMs(Date.now())
-	}, [session?.expiresAtUnixMs])
+	}, [session?.expiresAtUnixMs, orchestratorExpiresAtMs])
 
-	const remainingMs = Math.max(0, (session?.expiresAtUnixMs ?? 0) - nowMs)
+	const activeExpiresAtMs = orchestratorExpiresAtMs ?? session?.expiresAtUnixMs ?? null
+	const remainingMs = Math.max(0, (activeExpiresAtMs ?? 0) - nowMs)
 	const min = Math.floor(remainingMs / 60_000)
 	const sec = Math.floor((remainingMs % 60_000) / 1_000)
-	const sessionTimeLabel = session ? `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : '--:--'
-	const sessionWarning = session !== null && min < 5
+	const sessionTimeLabel = activeExpiresAtMs
+		? `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+		: '--:--'
+	const sessionWarning = activeExpiresAtMs !== null && min < 5
 
 	const ensureOrchestratorSession = useCallback(async () => {
 		const expectedAuthority = authorityFromRole(selectedRole)
@@ -69,12 +74,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 		}
 	}, [adapter, selectedRole])
 
-	const connectSession = useCallback(async () => {
+	/** Normal flow: admin wallet init + orchestrator auth (1 hardware-wallet signature). */
+	const connectOrchestratorSession = useCallback(async () => {
 		try {
-			await authenticate((challengeHex: string) => {
-				setSigningStep({ challengeHex, step: 1, totalSteps: 2 })
-				return adapter.signSighash(challengeHex)
-			})
 			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
 			if (!adminWalletInit.ok) {
 				throw new Error(
@@ -88,7 +90,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (!challengeResult.ok) {
 				throw new Error(challengeResult.error)
 			}
-			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 2, totalSteps: 2 })
+			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 1, totalSteps: 1 })
 			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
 			const completeResult = await orchestratorAuthComplete({
 				baseUrl: ORCHESTRATOR_BASE_URL,
@@ -100,12 +102,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (!completeResult.ok) {
 				throw new Error(completeResult.error)
 			}
+			setIsOrchestratorSessionActive(true)
+			setOrchestratorExpiresAtMs(completeResult.data.expiresAtUnixMs)
 		} finally {
 			setSigningStep(null)
 		}
-	}, [adapter, authenticate, selectedRole])
+	}, [adapter, selectedRole])
+
+	/** Manual/offline flow: on-chain membership auth + admin wallet init (1 hardware-wallet signature). */
+	const connectOnChainSession = useCallback(async () => {
+		try {
+			await authenticate((challengeHex: string) => {
+				setSigningStep({ challengeHex, step: 1, totalSteps: 1 })
+				return adapter.signSighash(challengeHex)
+			})
+			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
+			if (!adminWalletInit.ok) {
+				throw new Error(
+					adminWalletInit.error ?? 'Admin Wallet session could not be started — reconnect your wallet and try again',
+				)
+			}
+		} finally {
+			setSigningStep(null)
+		}
+	}, [adapter, authenticate])
 
 	const disconnectSession = useCallback(async () => {
+		setIsOrchestratorSessionActive(false)
+		setOrchestratorExpiresAtMs(null)
 		void (await orchestratorAuthLogout(ORCHESTRATOR_BASE_URL))
 		await logout()
 		clearSession()
@@ -116,11 +140,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			remainingMs,
 			sessionTimeLabel,
 			sessionWarning,
-			connectSession,
+			connectOrchestratorSession,
+			connectOnChainSession,
 			disconnectSession,
 			ensureOrchestratorSession,
 			session,
 			isAuthenticated,
+			isOrchestratorSessionActive,
 			isLoading,
 			selectedRole,
 			setSelectedRole,
@@ -135,11 +161,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			remainingMs,
 			sessionTimeLabel,
 			sessionWarning,
-			connectSession,
+			connectOrchestratorSession,
+			connectOnChainSession,
 			disconnectSession,
 			ensureOrchestratorSession,
 			session,
 			isAuthenticated,
+			isOrchestratorSessionActive,
 			isLoading,
 			selectedRole,
 			setSelectedRole,

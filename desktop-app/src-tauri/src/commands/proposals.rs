@@ -2,6 +2,7 @@ use desktop_app::application::commit_funding::AdminWalletCommitFunding;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
+    ReportBroadcastProgressRequest,
 };
 use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
@@ -10,7 +11,7 @@ use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
 };
-use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
 use desktop_app::infrastructure::broadcast_env;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
@@ -640,6 +641,111 @@ pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDt
     Ok(map_proposal(proposal))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportBroadcastInput {
+    pub base_url: String,
+    pub action_id: String,
+    pub broadcast_status: String,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    /// Optional proposal lifecycle status (e.g. "enacted"). Backend validates against ASM.
+    pub proposal_status: Option<String>,
+}
+
+#[tauri::command]
+pub async fn proposals_report_broadcast(
+    input: ReportBroadcastInput,
+) -> Result<ProposalDto, String> {
+    let client = build_client(input.base_url)?;
+    let proposal = client
+        .report_broadcast_progress(
+            &input.action_id,
+            ReportBroadcastProgressRequest {
+                broadcast_status: input.broadcast_status,
+                proposal_status: input.proposal_status,
+                commit_txid: input.commit_txid,
+                reveal_txid: input.reveal_txid,
+                broadcast_error: None,
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            OrchestratorError::Backend { status: 401, .. } => {
+                "orchestrator session unauthorized (401). Re-authenticate and retry.".to_string()
+            }
+            other => other.to_string(),
+        })?;
+    Ok(map_proposal(proposal))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveBroadcastStatusInput {
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveBroadcastStatusResult {
+    /// Derived broadcast status based on on-chain confirmation state.
+    pub broadcast_status: String,
+    pub commit_confirmations: Option<u32>,
+    pub reveal_confirmations: Option<u32>,
+}
+
+/// Check commit/reveal TXIDs on Bitcoin and derive the correct broadcast status.
+///
+/// Uses the Bitcoin RPC read-only — does not require an active wallet signing session.
+#[tauri::command]
+pub async fn proposals_resolve_broadcast_status(
+    input: ResolveBroadcastStatusInput,
+    node_config: tauri::State<'_, NodeConfigState>,
+) -> Result<ResolveBroadcastStatusResult, String> {
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+
+    let wallet_name = std::env::var("BITCOIN_WALLET_NAME")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        cfg.btc_rpc_url(),
+        wallet_name.as_deref(),
+        cfg.btc_rpc_user(),
+        cfg.btc_rpc_pass(),
+    );
+
+    let reveal_confs = if let Some(txid) = &input.reveal_txid {
+        btc_rpc.get_transaction_confirmations(txid).await.ok()
+    } else {
+        None
+    };
+
+    let commit_confs = if let Some(txid) = &input.commit_txid {
+        btc_rpc.get_transaction_confirmations(txid).await.ok()
+    } else {
+        None
+    };
+
+    let broadcast_status = match (reveal_confs, commit_confs) {
+        (Some(r), _) if r >= 1 => "reveal_confirmed",
+        (Some(0), _) => "reveal_broadcasted",
+        (None, Some(c)) if c >= 1 => "commit_confirmed",
+        (None, Some(0)) => "commit_broadcasted",
+        _ => "idle",
+    };
+
+    Ok(ResolveBroadcastStatusResult {
+        broadcast_status: broadcast_status.to_string(),
+        commit_confirmations: commit_confs,
+        reveal_confirmations: reveal_confs,
+    })
+}
+
 #[tauri::command]
 pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
@@ -732,5 +838,143 @@ pub async fn proposals_broadcast(
         broadcast_status: proposal.broadcast_status,
         commit_txid: proposal.commit_txid.unwrap_or(commit_txid),
         reveal_txid: proposal.reveal_txid.unwrap_or(reveal_txid),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BroadcastManualInput {
+    pub action_hex: String,
+    pub seq_no: u64,
+    pub authority: String,
+    pub signatures: Vec<BroadcastManualSignature>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BroadcastManualSignature {
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
+#[tauri::command]
+pub async fn proposals_prepare_broadcast_manual(
+    input: BroadcastManualInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
+) -> Result<PrepareBroadcastDto, String> {
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    );
+
+    let signatures: Vec<Signature> = input
+        .signatures
+        .into_iter()
+        .map(|s| Signature {
+            signer_pubkey: s.signer_pubkey,
+            signature_hex: s.signature_hex,
+        })
+        .collect();
+
+    let (commit_address, commit_amount_sats, estimated_fee_sats) =
+        proposals::prepare_broadcast_manual(
+            &btc_rpc,
+            &env.asm_rpc_url,
+            env.network,
+            &input.action_hex,
+            input.seq_no,
+            &input.authority,
+            &signatures,
+        )
+        .await
+        .map_err(map_broadcast_error)?;
+
+    Ok(PrepareBroadcastDto {
+        action_id: format!(
+            "manual-{}",
+            &input.action_hex[..input.action_hex.len().min(16)]
+        ),
+        commit_address,
+        commit_amount_sats,
+        estimated_fee_sats,
+    })
+}
+
+#[tauri::command]
+pub async fn proposals_broadcast_manual(
+    input: BroadcastManualInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
+    pending: tauri::State<'_, PendingReveals>,
+) -> Result<BroadcastResultDto, String> {
+    let wallet_service = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let env =
+        broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
+    let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
+        &env.btc_rpc_url,
+        env.btc_wallet_name.as_deref(),
+        &env.btc_rpc_user,
+        &env.btc_rpc_pass,
+    ));
+    let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
+    let reveal_change_address = wallet_service
+        .reveal_change_address()
+        .await
+        .map_err(|e| e.to_string())?;
+    let reveal_change_spk = reveal_change_address.script_pubkey();
+
+    let signatures: Vec<Signature> = input
+        .signatures
+        .into_iter()
+        .map(|s| Signature {
+            signer_pubkey: s.signer_pubkey,
+            signature_hex: s.signature_hex,
+        })
+        .collect();
+
+    let (commit_txid, reveal_txid) = proposals::broadcast_manual(
+        btc_rpc.as_ref(),
+        &env.asm_rpc_url,
+        env.magic_bytes,
+        env.network,
+        &input.action_hex,
+        input.seq_no,
+        &input.authority,
+        &signatures,
+        env.confirm_poll_interval_ms,
+        env.confirm_timeout_ms,
+        &commit_funding,
+        reveal_change_spk,
+        &pending,
+    )
+    .await
+    .map_err(map_broadcast_error)?;
+
+    Ok(BroadcastResultDto {
+        action_id: format!(
+            "manual-{}",
+            &input.action_hex[..input.action_hex.len().min(16)]
+        ),
+        proposal_status: "approved".to_string(),
+        broadcast_status: "reveal_broadcasted".to_string(),
+        commit_txid,
+        reveal_txid,
     })
 }

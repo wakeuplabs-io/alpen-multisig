@@ -4,7 +4,7 @@ import { AuthSessionProvider } from '@/contexts/auth-session-provider'
 import { SessionProvider } from '@/contexts/session-provider'
 import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
-import { useAuthSession } from '@/hooks/use-auth-session'
+import { useSession } from '@/hooks/use-session'
 import { BroadcastProposalScreen } from '@/screens/broadcast-proposal-screen'
 import { CancelProposalBroadcastScreen } from '@/screens/cancel-proposal-broadcast-screen'
 import { CancelProposalScreen } from '@/screens/cancel-proposal-screen'
@@ -14,13 +14,14 @@ import { CreateProposalScreen } from '@/screens/create-proposal-screen'
 import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 import { BlockPayoutsScreen } from '@/screens/block-payouts-screen'
+import { ManualProposalScreen } from '@/screens/manual-proposal-screen'
 
 function RequireAuth({ children }: { children: ReactElement }) {
-	const { isAuthenticated, isLoading } = useAuthSession()
+	const { isAuthenticated, isOrchestratorSessionActive, isLoading } = useSession()
 	if (isLoading) {
 		return null
 	}
-	if (!isAuthenticated) {
+	if (!isAuthenticated && !isOrchestratorSessionActive) {
 		return <Navigate to="/" replace />
 	}
 	return children
@@ -114,6 +115,7 @@ export default function App() {
 									</RequireAuth>
 								}
 							/>
+							<Route path="/manual" element={<ManualProposalScreen />} />
 							<Route path="/block-payouts" element={<BlockPayoutsScreen />} />
 							<Route path="*" element={<Navigate to="/" replace />} />
 						</Routes>

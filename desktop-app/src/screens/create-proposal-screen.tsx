@@ -10,7 +10,8 @@ import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-se
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
-	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, connectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession, connectOrchestratorSession } =
+		useSession()
 	const createProposal = useCreateProposal()
 	const panel = useWalletPanelData()
 
@@ -66,7 +67,7 @@ export function CreateProposalScreen() {
 					onCancel={() => navigate('/proposals')}
 					onPreviewValid={(data) => createProposal.computeProposalPreview(data)}
 					onSubmitValid={(data) => createProposal.submitCreateProposal(data)}
-					onReauthenticate={connectSession}
+					onReauthenticate={connectOrchestratorSession}
 				/>
 			</div>
 		</ScreenShell>

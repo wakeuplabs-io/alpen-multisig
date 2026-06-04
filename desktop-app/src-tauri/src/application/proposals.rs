@@ -371,6 +371,214 @@ async fn wait_for_confirmation(
     }
 }
 
+/// Assemble commit/reveal fee estimate for a manual proposal (no orchestrator fetch).
+///
+/// `authority` is the wire-format string (e.g. `"strata_admin"`).
+pub async fn prepare_broadcast_manual(
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    network: Network,
+    action_hex: &str,
+    seq_no: u64,
+    authority: &str,
+    signatures: &[Signature],
+) -> Result<(String, u64, u64), BroadcastError> {
+    let auth = crate::domain::authority::Authority::from_wire(authority)
+        .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+    let canonical_keys = asm_role_membership::ordered_keys_for_authority(asm_rpc_url, auth)
+        .await
+        .map_err(BroadcastError::Setup)?;
+
+    let proxy_sigs: Vec<crate::domain::proposal::ProposalSignature> = signatures
+        .iter()
+        .map(|s| crate::domain::proposal::ProposalSignature {
+            signer_pubkey: s.signer_pubkey.clone(),
+            signature_hex: s.signature_hex.clone(),
+        })
+        .collect();
+
+    let sighash =
+        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        seq_no,
+        action_hex,
+        &proxy_sigs,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let (commit_address, _, _) =
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
+
+    Ok((
+        commit_address.to_string(),
+        commit_amount_sats,
+        estimated_fee_sats,
+    ))
+}
+
+/// Execute commit+reveal broadcast for a manual proposal (no orchestrator — no claim, no reporting).
+///
+/// Uses a derived key `"manual-<first-16-chars-of-sighash>"` as the PendingReveals key.
+#[allow(clippy::too_many_arguments)]
+pub async fn broadcast_manual(
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    magic_bytes: MagicBytes,
+    network: Network,
+    action_hex: &str,
+    seq_no: u64,
+    authority: &str,
+    signatures: &[Signature],
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
+    pending: &PendingReveals,
+) -> Result<(String, String), BroadcastError> {
+    let auth = crate::domain::authority::Authority::from_wire(authority)
+        .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+    let canonical_keys = asm_role_membership::ordered_keys_for_authority(asm_rpc_url, auth)
+        .await
+        .map_err(BroadcastError::Setup)?;
+
+    let proxy_sigs: Vec<crate::domain::proposal::ProposalSignature> = signatures
+        .iter()
+        .map(|s| crate::domain::proposal::ProposalSignature {
+            signer_pubkey: s.signer_pubkey.clone(),
+            signature_hex: s.signature_hex.clone(),
+        })
+        .collect();
+
+    let sighash =
+        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        seq_no,
+        action_hex,
+        &proxy_sigs,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let (commit_address, reveal_script, taproot_spend_info) =
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
+
+    // Use sighash hex prefix as the PendingReveals key (no orchestrator action_id).
+    let sighash_hex = hex::encode(sighash);
+    let pending_key = format!("manual-{}", &sighash_hex[..sighash_hex.len().min(16)]);
+
+    let broadcast_result: Result<(String, String), BroadcastError> = async {
+        let commit_tx = commit_funding
+            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
+            .await
+            .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+
+        let commit_address_script = commit_address.script_pubkey();
+
+        let action_bytes = hex::decode(action_hex)
+            .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+
+        let reveal_tx = broadcast_tx::build_reveal_tx(
+            &envelope_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            reveal_change_spk.clone(),
+            reveal_fee_sats,
+        )
+        .map_err(BroadcastError::Setup)?;
+
+        let _ = envelope_keypair;
+
+        let commit_txid = commit_tx.compute_txid().to_string();
+        let reveal_txid = reveal_tx.compute_txid().to_string();
+        let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
+        let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
+
+        {
+            let mut guard = pending.lock().unwrap();
+            guard.insert(
+                pending_key.clone(),
+                crate::application::pending_reveals::PendingReveal {
+                    reveal_tx_hex: reveal_hex.clone(),
+                    reveal_txid: reveal_txid.clone(),
+                    commit_txid: commit_txid.clone(),
+                },
+            );
+        }
+
+        match btc_rpc
+            .submit_package(&[commit_hex.clone(), reveal_hex.clone()])
+            .await
+        {
+            Ok(()) => {}
+            Err(ref e) if is_unknown_method(e) => {
+                btc_rpc
+                    .send_raw_transaction(&commit_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+                btc_rpc
+                    .send_raw_transaction(&reveal_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+            }
+            Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
+        }
+
+        if network == Network::Regtest {
+            btc_rpc
+                .mine_blocks(1)
+                .await
+                .map_err(BroadcastError::BitcoinRpc)?;
+        }
+
+        wait_for_confirmation(
+            btc_rpc,
+            &reveal_txid,
+            confirm_poll_interval_ms,
+            confirm_timeout_ms,
+        )
+        .await?;
+
+        {
+            let mut guard = pending.lock().unwrap();
+            guard.remove(&pending_key);
+        }
+
+        Ok((commit_txid, reveal_txid))
+    }
+    .await;
+
+    broadcast_result
+}
+
 /// Create a new action and store the creator's signature.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.

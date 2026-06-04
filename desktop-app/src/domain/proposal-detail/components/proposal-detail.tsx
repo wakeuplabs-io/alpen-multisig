@@ -1,7 +1,18 @@
 import { useState } from 'react'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
-import { CheckCircleEmeraldIcon, CopyClipboardIcon, SignaturePenMutedIcon } from '@/assets/icons'
+import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
+import {
+	CheckCircleEmeraldIcon,
+	CopyClipboardIcon,
+	DownloadIcon,
+	ImportJsonIcon,
+	SignaturePenMutedIcon,
+} from '@/assets/icons'
+import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
+
+type CheckEnactedResult = { ok: true } | { ok: false; error: string }
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 type Props = {
@@ -10,6 +21,9 @@ type Props = {
 	decodedData: DecodedProposalData
 	onSign: () => void
 	onBroadcast: () => void
+	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
+	onCheckEnacted?: () => Promise<CheckEnactedResult>
+	onManualExecute?: () => void
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -84,13 +98,42 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 	return parts.length > 0 ? parts.join(' & ') : `Proposal #${proposal.seqNo}`
 }
 
-export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, onBroadcast }: Props) {
+export function ProposalDetail({
+	proposal,
+	signerPubkey,
+	decodedData,
+	onSign,
+	onBroadcast,
+	onPasteSignatures,
+	onCheckEnacted,
+	onManualExecute: _onManualExecute,
+}: Props) {
 	const collectedSignatures = proposal.signatures.length
 	const requiredSignatures = proposal.requiredSignatures
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
+
+	const [bundleCopied, setBundleCopied] = useState(false)
+	const [bundleDownloaded, setBundleDownloaded] = useState(false)
+	const [showImportModal, setShowImportModal] = useState(false)
+	const [isCheckingEnacted, setIsCheckingEnacted] = useState(false)
+	const [checkEnactedError, setCheckEnactedError] = useState<string | null>(null)
+
+	const canCheckEnacted =
+		onCheckEnacted !== undefined && proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+
+	async function handleCheckEnacted() {
+		if (!onCheckEnacted) return
+		setIsCheckingEnacted(true)
+		setCheckEnactedError(null)
+		const result = await onCheckEnacted()
+		setIsCheckingEnacted(false)
+		if (!result.ok) {
+			setCheckEnactedError(result.error)
+		}
+	}
 
 	const title = deriveProposalTitle(proposal, decodedData)
 
@@ -99,6 +142,20 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 		null,
 		2,
 	)
+
+	function handleCopyBundle() {
+		void writeClipboard(JSON.stringify(proposal, null, 2)).then(() => {
+			setBundleCopied(true)
+			setTimeout(() => setBundleCopied(false), 2000)
+		})
+	}
+
+	function handleDownloadBundle() {
+		void saveJsonFile(JSON.stringify(proposal, null, 2), `proposal-${proposal.seqNo}.json`).then(() => {
+			setBundleDownloaded(true)
+			setTimeout(() => setBundleDownloaded(false), 2000)
+		})
+	}
 
 	return (
 		<div className="space-y-4">
@@ -313,34 +370,122 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 			)}
 
 			{/* ── Action buttons ── */}
-			{hasQuorum && (
-				<button
-					type="button"
-					data-testid="e2e-detail-broadcast-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onBroadcast}
-				>
-					Broadcast
-				</button>
-			)}
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex-1">
+					{hasQuorum && (
+						<button
+							type="button"
+							data-testid="e2e-detail-broadcast-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onBroadcast}
+						>
+							Broadcast
+						</button>
+					)}
 
-			{canSign && (
-				<button
-					type="button"
-					data-testid="e2e-detail-sign-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onSign}
-				>
-					Sign
-				</button>
-			)}
+					{canSign && (
+						<button
+							type="button"
+							data-testid="e2e-detail-sign-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onSign}
+						>
+							Sign
+						</button>
+					)}
 
-			{!isTerminal && !hasQuorum && alreadySigned && (
-				<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-					<p className="m-0 text-[13px] font-medium text-[#065f46]">
-						You have signed this proposal. Waiting for other signers to reach quorum.
-					</p>
+					{!isTerminal && !hasQuorum && alreadySigned && !canCheckEnacted && (
+						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+							<p className="m-0 text-[13px] font-medium text-[#065f46]">
+								You have signed this proposal. Waiting for other signers to reach quorum.
+							</p>
+						</div>
+					)}
+
+					{canCheckEnacted && (
+						<div className="space-y-2">
+							<button
+								type="button"
+								disabled={isCheckingEnacted}
+								onClick={() => void handleCheckEnacted()}
+								className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{isCheckingEnacted ? 'Checking on ASM…' : 'Check if enacted'}
+							</button>
+							{checkEnactedError !== null && (
+								<div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<p className="m-0 text-[12px] font-medium text-[#92400e]">Not yet enacted on ASM</p>
+									<p className="m-0 mt-0.5 text-[11px] text-[#92400e] opacity-70">{checkEnactedError}</p>
+								</div>
+							)}
+						</div>
+					)}
 				</div>
+
+				{/* Utility buttons */}
+				<div className="flex shrink-0 items-center gap-1.5">
+					{!isTerminal && onPasteSignatures && (
+						<div className="group relative">
+							<button
+								type="button"
+								onClick={() => setShowImportModal(true)}
+								className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+							>
+								<ImportJsonIcon width={12} height={12} className="text-current" />
+							</button>
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Import signatures
+							</span>
+						</div>
+					)}
+					<div className="group relative">
+						<button
+							type="button"
+							onClick={handleCopyBundle}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							{bundleCopied ? (
+								<span className="text-[#0f9d7a]">Copied!</span>
+							) : (
+								<CopyClipboardIcon width={12} height={12} className="text-current" />
+							)}
+						</button>
+						{!bundleCopied && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Copy bundle
+							</span>
+						)}
+					</div>
+					<div className="group relative">
+						<button
+							type="button"
+							onClick={handleDownloadBundle}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							{bundleDownloaded ? (
+								<span className="text-[#0f9d7a]">Saved!</span>
+							) : (
+								<DownloadIcon width={12} height={12} className="text-current" />
+							)}
+						</button>
+						{!bundleDownloaded && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Download bundle
+							</span>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{showImportModal && onPasteSignatures && (
+				<ImportBundleModal
+					existingSignatures={proposal.signatures}
+					existingBroadcastStatus={proposal.broadcastStatus}
+					existingCommitTxid={proposal.commitTxid ?? null}
+					existingRevealTxid={proposal.revealTxid ?? null}
+					onImport={onPasteSignatures}
+					onClose={() => setShowImportModal(false)}
+				/>
 			)}
 		</div>
 	)

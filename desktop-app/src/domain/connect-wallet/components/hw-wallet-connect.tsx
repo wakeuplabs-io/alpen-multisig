@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import {
 	AuthoritySelectionPhase,
 	type AuthorityOption,
@@ -33,6 +33,7 @@ type Props = {
 		onContinueToAuthenticate: () => void
 		onBackToAuthority: () => void
 		onAuthenticate: () => void
+		onManualProposal: () => void
 	} | null
 }
 
@@ -47,6 +48,22 @@ export function HwWalletConnect({
 }: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
 	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
+
+	const [shouldAutoConnect, setShouldAutoConnect] = useState(false)
+	const connectRef = useRef(actions.connect)
+	useEffect(() => {
+		connectRef.current = actions.connect
+	})
+	useEffect(() => {
+		if (!shouldAutoConnect) return
+		setShouldAutoConnect(false)
+		void connectRef.current()
+	}, [shouldAutoConnect])
+
+	function handleConnectMnemonic(mnemonic: string) {
+		onSelectWalletMethod('mnemonic', mnemonic)
+		setShouldAutoConnect(true)
+	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
 	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
@@ -80,6 +97,7 @@ export function HwWalletConnect({
 					connectViewState={state.connectViewState}
 					error={state.error}
 					onConnect={() => void actions.connect()}
+					onConnectMnemonic={handleConnectMnemonic}
 					walletVendor={walletVendor}
 					onSelectWalletMethod={onSelectWalletMethod}
 				/>
@@ -114,6 +132,7 @@ export function HwWalletConnect({
 						signingStep={authoritySelection.signingStep}
 						onBackToAuthority={authoritySelection.onBackToAuthority}
 						onAuthenticate={authoritySelection.onAuthenticate}
+						onManualProposal={authoritySelection.onManualProposal}
 					/>
 				)}
 			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection === null && (

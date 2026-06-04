@@ -136,3 +136,54 @@ export type CreateCancelProposalInput = {
 export function createCancelProposal(input: CreateCancelProposalInput): Promise<ApiResult<Proposal>> {
 	return tauriCall('proposals_create_cancel', { input }, proposalSchema)
 }
+
+export type BroadcastManualInput = {
+	actionHex: string
+	seqNo: number
+	authority: string
+	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+}
+
+export function prepareBroadcastManual(input: BroadcastManualInput): Promise<ApiResult<PrepareBroadcastResult>> {
+	return tauriCall<PrepareBroadcastResult>('proposals_prepare_broadcast_manual', { input })
+}
+
+export function broadcastManualProposal(input: BroadcastManualInput): Promise<ApiResult<BroadcastResult>> {
+	return tauriCall('proposals_broadcast_manual', { input }, broadcastResultSchema)
+}
+
+export type ReportBroadcastInput = {
+	baseUrl: string
+	actionId: string
+	broadcastStatus: BroadcastStatus
+	commitTxid?: string
+	revealTxid?: string
+	proposalStatus?: ProposalStatus
+}
+
+export function reportBroadcastProgress(input: ReportBroadcastInput): Promise<ApiResult<Proposal>> {
+	return tauriCall('proposals_report_broadcast', { input }, proposalSchema)
+}
+
+export type ResolveBroadcastStatusInput = {
+	commitTxid?: string
+	revealTxid?: string
+}
+
+export type ResolveBroadcastStatusResult = {
+	broadcastStatus: string
+	commitConfirmations: number | null
+	revealConfirmations: number | null
+}
+
+const resolveBroadcastStatusResultSchema = z.object({
+	broadcastStatus: z.string(),
+	commitConfirmations: z.number().nullable(),
+	revealConfirmations: z.number().nullable(),
+})
+
+export function resolveBroadcastStatus(
+	input: ResolveBroadcastStatusInput,
+): Promise<ApiResult<ResolveBroadcastStatusResult>> {
+	return tauriCall('proposals_resolve_broadcast_status', { input }, resolveBroadcastStatusResultSchema)
+}

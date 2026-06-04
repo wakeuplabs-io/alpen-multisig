@@ -2,6 +2,14 @@ import { invoke } from '@tauri-apps/api/core'
 import type { z } from 'zod'
 import type { ApiResult } from '@/types'
 
+export async function writeClipboard(text: string): Promise<void> {
+	await invoke('write_clipboard', { text })
+}
+
+export async function saveJsonFile(content: string, filename: string): Promise<void> {
+	await invoke('save_json_file', { content, filename })
+}
+
 // Thin wrapper around Tauri's invoke() that normalises results into ApiResult<T>.
 // Pass a Zod schema to reject unknown IPC enum variants at the boundary (P-008).
 

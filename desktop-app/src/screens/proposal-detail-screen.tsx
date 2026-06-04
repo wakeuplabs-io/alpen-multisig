@@ -1,6 +1,9 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
@@ -32,6 +35,58 @@ export function ProposalDetailScreen() {
 
 	async function handleBack() {
 		await disconnectSession()
+	}
+
+	async function handlePasteSignatures(sigs: PastedSignature[], broadcastState: ImportBroadcastState) {
+		if (!actionId || !proposal) return
+		for (const sig of sigs) {
+			const res = await approveProposal({ baseUrl: ORCHESTRATOR_BASE_URL, actionId, ...sig })
+			if (!res.ok) {
+				console.warn(`Failed to import signature for ${sig.signerPubkey}: ${res.error}`)
+			}
+		}
+		const hasNewBroadcastData =
+			broadcastState.broadcastStatus !== null ||
+			broadcastState.commitTxid !== null ||
+			broadcastState.revealTxid !== null
+		if (hasNewBroadcastData) {
+			const effectiveBroadcastStatus = broadcastState.broadcastStatus ?? proposal.broadcastStatus
+			// Sync broadcast state without proposalStatus so this call always succeeds.
+			await reportBroadcastProgress({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				actionId,
+				broadcastStatus: effectiveBroadcastStatus,
+				commitTxid: broadcastState.commitTxid ?? undefined,
+				revealTxid: broadcastState.revealTxid ?? undefined,
+			})
+			// If reveal is confirmed, attempt enacted transition in a separate call.
+			// Backend validates against ASM — 409 means not yet confirmed; non-fatal,
+			// reload reconcile will transition when ASM confirms.
+			if (effectiveBroadcastStatus === 'reveal_confirmed') {
+				await reportBroadcastProgress({
+					baseUrl: ORCHESTRATOR_BASE_URL,
+					actionId,
+					broadcastStatus: 'reveal_confirmed',
+					proposalStatus: 'enacted',
+				})
+			}
+		}
+		reload()
+	}
+
+	async function handleCheckEnacted(): Promise<{ ok: true } | { ok: false; error: string }> {
+		if (!actionId) return { ok: false, error: 'No action ID' }
+		const res = await reportBroadcastProgress({
+			baseUrl: ORCHESTRATOR_BASE_URL,
+			actionId,
+			broadcastStatus: 'reveal_confirmed',
+			proposalStatus: 'enacted',
+		})
+		if (res.ok) {
+			reload()
+			return { ok: true }
+		}
+		return { ok: false, error: res.error }
 	}
 
 	if (wallet === null) {
@@ -112,6 +167,23 @@ export function ProposalDetailScreen() {
 								decodedData={decodedData}
 								onSign={() => navigate(`/proposals/${actionId}/sign`)}
 								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+								onPasteSignatures={(sigs, broadcastState) => void handlePasteSignatures(sigs, broadcastState)}
+								onCheckEnacted={handleCheckEnacted}
+								onManualExecute={() =>
+									navigate('/manual', {
+										state: {
+											prefill: {
+												actionHex: proposal.actionHex,
+												seqNo: proposal.seqNo,
+												authority: proposal.authority,
+												signatures: proposal.signatures.map((s) => ({
+													signerPubkey: s.signerPubkey,
+													signatureHex: s.signatureHex,
+												})),
+											},
+										},
+									})
+								}
 							/>
 
 							{/* Activation countdown */}

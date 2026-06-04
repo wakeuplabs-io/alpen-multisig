@@ -11,6 +11,7 @@ type Props = {
 	signingStep: SigningStepInfo | null
 	onBackToAuthority: () => void
 	onAuthenticate: () => void
+	onManualProposal: () => void
 }
 
 export function AuthenticateSessionPhase({
@@ -24,6 +25,7 @@ export function AuthenticateSessionPhase({
 	signingStep,
 	onBackToAuthority,
 	onAuthenticate,
+	onManualProposal,
 }: Props) {
 	const authenticateButtonClassName = isAuthenticating
 		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
@@ -58,8 +60,7 @@ export function AuthenticateSessionPhase({
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
 				Your {adapterLabel} will sign an authentication challenge to prove control of this address. This requires{' '}
-				<strong className="font-medium text-[#374151]">2 signatures</strong>: one for the on-chain session and one for
-				the coordination backend.
+				<strong className="font-medium text-[#374151]">1 signature</strong> for the coordination backend.
 			</p>
 
 			<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-5 py-4">
@@ -118,6 +119,16 @@ export function AuthenticateSessionPhase({
 					disabled={isAuthenticating}
 				>
 					{getButtonLabel()}
+				</button>
+			</div>
+
+			<div className="mt-3 text-center">
+				<button
+					type="button"
+					className="text-[12px] text-[#9ca3af] transition hover:text-[#6b7280]"
+					onClick={onManualProposal}
+				>
+					Enter proposal manually (offline)
 				</button>
 			</div>
 		</div>

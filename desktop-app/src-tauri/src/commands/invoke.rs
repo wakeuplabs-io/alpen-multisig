@@ -34,10 +34,14 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::proposals::proposals_list,
         super::proposals::proposals_get,
         super::proposals::proposals_approve,
+        super::proposals::proposals_report_broadcast,
+        super::proposals::proposals_resolve_broadcast_status,
         super::proposals::proposals_prepare_broadcast,
         super::proposals::proposals_broadcast,
         super::proposals::proposals_create_cancel,
         super::proposals::proposals_resubmit_reveal,
+        super::proposals::proposals_prepare_broadcast_manual,
+        super::proposals::proposals_broadcast_manual,
         super::hw_wallet::get_trezor_info,
         super::hw_wallet::verify_address_on_device,
         super::hw_wallet::sign_with_trezor,
@@ -63,6 +67,8 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::admin_wallet::admin_wallet_sync_status,
         super::admin_wallet::wallet_session_init_watch_only,
         super::admin_wallet::admin_wallet_can_sign,
+        super::system::write_clipboard,
+        super::system::save_json_file,
     ])
 }
 
@@ -89,10 +95,14 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::proposals::proposals_list,
         super::proposals::proposals_get,
         super::proposals::proposals_approve,
+        super::proposals::proposals_report_broadcast,
+        super::proposals::proposals_resolve_broadcast_status,
         super::proposals::proposals_prepare_broadcast,
         super::proposals::proposals_broadcast,
         super::proposals::proposals_create_cancel,
         super::proposals::proposals_resubmit_reveal,
+        super::proposals::proposals_prepare_broadcast_manual,
+        super::proposals::proposals_broadcast_manual,
         super::hw_wallet::get_trezor_info,
         super::hw_wallet::verify_address_on_device,
         super::hw_wallet::sign_with_trezor,
@@ -122,5 +132,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::admin_wallet::wallet_session_init,
         super::admin_wallet::wallet_session_init_watch_only,
         super::admin_wallet::admin_wallet_can_sign,
+        super::system::write_clipboard,
+        super::system::save_json_file,
     ])
 }

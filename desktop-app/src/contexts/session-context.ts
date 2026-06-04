@@ -12,11 +12,13 @@ export type SessionContextValue = {
 	remainingMs: number
 	sessionTimeLabel: string
 	sessionWarning: boolean
-	connectSession: () => Promise<void>
+	connectOrchestratorSession: () => Promise<void>
+	connectOnChainSession: () => Promise<void>
 	disconnectSession: () => Promise<void>
 	ensureOrchestratorSession: () => Promise<void>
 	session: AuthSession | null
 	isAuthenticated: boolean
+	isOrchestratorSessionActive: boolean
 	isLoading: boolean
 	selectedRole: AuthRole
 	setSelectedRole: (role: AuthRole) => void
