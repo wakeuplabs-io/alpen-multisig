@@ -48,7 +48,10 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** A maintainer can produce an installable Linux package (`.deb`/AppImage) from source and
   launch it with a double-click or one command.
 - **Closes:** PRD §1.1 (Linux), §1.4, NF-1 (Linux), NF-4 — partial.
-- **Status:** Not started.
+- **Status:** Done. `npm run tauri build` produces `.deb`, `.rpm`, and AppImage; the AppImage
+  launches with a double-click or one command. Build/install steps documented in
+  [`desktop-build-linux.md`](./desktop-build-linux.md). Bundle icons added (the missing
+  `bundle.icon` config was blocking the AppImage build).
 
 ### D2 · CI produces the Tauri bundle
 - **Value:** Every release candidate is built automatically; the binary that ships is the one CI
@@ -110,6 +113,7 @@ earlier ones. Status is tracked here as the plan progresses.
 
 ## Related documents
 
+- [`desktop-build-linux.md`](./desktop-build-linux.md) — Linux local build steps (D1).
 - [`release-signing-mvp.md`](./release-signing-mvp.md) — Linux PGP MVP detail (feeds D3).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
