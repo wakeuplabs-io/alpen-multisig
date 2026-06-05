@@ -209,16 +209,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Tauri bundle (cross-compile to Windows)
+      - name: Build Tauri app (cross-compile to Windows)
         working-directory: desktop-app
-        run: npm run tauri -- build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
+        # --no-bundle: Tauri's bundler validates --bundles against the *host* OS,
+        # so it cannot produce an NSIS/MSI installer from Linux (only deb/rpm/
+        # appimage are offered). We cross-compile the raw .exe here; producing a
+        # Windows installer from Linux is a separate problem tracked in
+        # docs/operations/windows-build-incompatibilities.md.
+        run: npm run tauri -- build --runner cargo-xwin --target x86_64-pc-windows-msvc --no-bundle
 
       - name: Upload Windows bundles
         uses: actions/upload-artifact@v4
         with:
           name: windows-bundles
           path: |
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            target/x86_64-pc-windows-msvc/release/*.exe
 
   release:
     name: Publish GitHub release
