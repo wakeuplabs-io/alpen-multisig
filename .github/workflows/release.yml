@@ -208,6 +208,56 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Pre-checkout the `asm` git dependency with the git CLI
+        # cargo checks out git dependencies with libgit2, which *unconditionally*
+        # rejects the reserved `aux` directory in alpenlabs/asm on Windows
+        # (`cannot checkout to invalid path ...; class=Checkout (20)`) — even with
+        # core.protectNTFS=false. The git CLI (git-for-windows) CAN write such
+        # paths via the \\?\ namespace when protectNTFS=false + longpaths=true.
+        #
+        # Strategy: let cargo fetch the bare git db (expected to fail at its own
+        # libgit2 checkout), then materialise the worktree ourselves with the git
+        # CLI and drop cargo's `.cargo-ok` marker so the subsequent build reuses
+        # it instead of re-running the failing libgit2 checkout.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # cargo fetch is expected to exit non-zero (asm checkout fails); don't abort.
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
+          $rev = 'e0461f8f520e9be814541d1f76fb961fd847e4ae'
+          $short = $rev.Substring(0, 7)
+
+          Write-Host '== cargo fetch (expected to fail at the asm libgit2 checkout) =='
+          cargo fetch
+          Write-Host "cargo fetch exit: $LASTEXITCODE (non-zero is expected here)"
+
+          $dbRoot = Join-Path $cargoHome 'git\db'
+          $db = Get-ChildItem $dbRoot -Directory -ErrorAction Stop |
+            Where-Object { $_.Name -like 'asm-*' } | Select-Object -First 1
+          if (-not $db) { throw "asm bare db not found under $dbRoot" }
+          $hash = $db.Name -replace '^asm-', ''
+          $dest = Join-Path $cargoHome "git\checkouts\asm-$hash\$short"
+          Write-Host "db   = $($db.FullName)"
+          Write-Host "dest = $dest"
+
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+
+          git clone --no-checkout -- "$($db.FullName)" "$dest"
+          if ($LASTEXITCODE -ne 0) { throw "git clone failed ($LASTEXITCODE)" }
+          git -C "$dest" -c core.protectNTFS=false -c core.longpaths=true checkout --force $rev
+          if ($LASTEXITCODE -ne 0) { throw "git checkout failed ($LASTEXITCODE)" }
+          '{"v":1}' | Out-File -FilePath (Join-Path $dest '.cargo-ok') -Encoding ascii -NoNewline
+
+          # Verify via git (not Win32 path APIs, which also choke on `aux`) that the
+          # reserved path made it onto disk and the worktree is clean.
+          $dirty = git -C "$dest" status --porcelain
+          if ($LASTEXITCODE -ne 0) { throw "git status failed ($LASTEXITCODE)" }
+          if ($dirty) { Write-Host $dirty; throw 'asm worktree not clean — aux likely not checked out' }
+          Write-Host "OK: asm worktree materialised and clean at $dest"
+
       - name: Build Tauri bundle
         working-directory: desktop-app
         run: npm run tauri build
