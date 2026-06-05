@@ -8,6 +8,13 @@ license = "MIT OR Apache-2.0"
 name = "server"
 path = "src/main.rs"
 
+[features]
+# Compiles the in-process ASM mock (mock:// RPC URLs) used by local dev and the
+# Rust e2e suite. MUST NOT be enabled for production builds — the mock bypasses
+# all on-chain authorization checks (membership, threshold, seqno, enactment).
+# See orchestrator-be/src/infrastructure/asm_role_membership.rs.
+dev-mocks = []
+
 [dependencies]
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
