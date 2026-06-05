@@ -123,7 +123,11 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** A release is approved and signed by multiple Alpen Labs employees; users can verify the
   multi-party signature, satisfying the "approved by multiple employees" requirement.
 - **Closes:** PRD §1.3, NF-3 (full).
-- **Status:** Not started.
+- **Status:** Done (documentation). Multi-employee signing requirements and process documented in
+  [`multi-employee-signing-requirements.md`](./multi-employee-signing-requirements.md). The release
+  infrastructure already supports multiple signature files (`SHA256SUMS.<signer>.asc`) without
+  collision. Employees must generate a personal PGP key, commit the public half to `release-keys/`,
+  and provide the private key + signer ID to the development team for GitHub Secrets configuration.
 
 ### D8 · Auto-update with signature verification
 - **Value:** The app can update itself, verifying signatures before applying any update.
@@ -154,6 +158,8 @@ earlier ones. Status is tracked here as the plan progresses.
 - [`verifying-releases.md`](./verifying-releases.md) — user-facing release verification guide (D3).
 - [`reproducible-builds-research.md`](./reproducible-builds-research.md) — reproducibility research and plan (D4).
 - [`reproducible-builds.md`](./reproducible-builds.md) — how to independently reproduce and verify a release (D4).
+- [`platform-code-signing-requirements.md`](./platform-code-signing-requirements.md) — Apple Developer ID and Authenticode requirements for Alpen Labs (D6).
+- [`multi-employee-signing-requirements.md`](./multi-employee-signing-requirements.md) — employee PGP key generation and signing ceremony process (D7).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
 - [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) — NFR-SUPPLY-CHAIN (P-011 full).
