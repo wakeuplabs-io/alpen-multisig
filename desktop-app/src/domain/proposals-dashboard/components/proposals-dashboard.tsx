@@ -8,6 +8,7 @@ import {
 	ClockAmberIcon,
 	FileTextMutedIcon,
 	SignaturePenMutedIcon,
+	UndoIcon,
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
@@ -26,6 +27,7 @@ type Props = {
 	isLoading: boolean
 	error: string | null
 	onRetry: () => void
+	onRefresh: () => void
 	onCreateProposal: () => void
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
@@ -43,6 +45,7 @@ export function ProposalsDashboard({
 	isLoading,
 	error,
 	onRetry,
+	onRefresh,
 	onCreateProposal,
 	onSignProposal,
 	onBroadcastProposal,
@@ -75,15 +78,26 @@ export function ProposalsDashboard({
 						Proposals you can sign, broadcast, or review under {authorityLabel}.
 					</p>
 				</div>
-				<button
-					type="button"
-					data-testid="e2e-dashboard-create-proposal"
-					className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
-					onClick={onCreateProposal}
-				>
-					<span aria-hidden="true">+</span>
-					Create proposal
-				</button>
+				<div className="flex shrink-0 items-center gap-2">
+					<button
+						type="button"
+						aria-label="Refresh proposals"
+						disabled={isLoading}
+						className="inline-flex items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] active:scale-[0.97] disabled:opacity-50"
+						onClick={onRefresh}
+					>
+						<UndoIcon width={16} height={16} className={isLoading ? 'animate-spin' : ''} />
+					</button>
+					<button
+						type="button"
+						data-testid="e2e-dashboard-create-proposal"
+						className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+						onClick={onCreateProposal}
+					>
+						<span aria-hidden="true">+</span>
+						Create proposal
+					</button>
+				</div>
 			</div>
 
 			{error ? (
