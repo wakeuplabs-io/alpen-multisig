@@ -151,8 +151,23 @@ jobs:
   build-windows:
     name: Build Windows artifacts
     runs-on: windows-latest
+    env:
+      # Use the git CLI (configured below) for cargo fetches so the Windows
+      # reserved-name handling applies during dependency resolution.
+      CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Allow Windows-reserved paths in git checkouts
+        # The Alpen `asm` git dependency contains a path under a directory named
+        # `aux`, a reserved device name on Windows. git/libgit2 (used by cargo)
+        # refuse to check such paths out by default (NTFS protection), failing
+        # the fetch with "cannot checkout to invalid path ...; class=Checkout".
+        # Disabling protectNTFS and enabling longpaths makes git use the \\?\
+        # extended-path prefix, which bypasses Win32 reserved-name parsing.
+        run: |
+          git config --global core.protectNTFS false
+          git config --global core.longpaths true
 
       - uses: dtolnay/rust-toolchain@master
         with:
