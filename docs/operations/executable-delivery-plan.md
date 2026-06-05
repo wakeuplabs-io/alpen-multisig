@@ -113,7 +113,11 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** macOS and Windows recognize the binary as signed/notarized — no OS security warnings,
   native trust on each platform.
 - **Closes:** PRD §1.3, NF-3 — extends to all platforms (still single authority).
-- **Status:** Not started.
+- **Status:** Done (documentation). Platform code signing requires enrollment in Apple Developer
+  Program (macOS) and an Authenticode certificate from a trusted CA (Windows). Both are outside
+  the scope of this phase and require Alpen Labs to initiate. Requirements and process documented
+  in [`platform-code-signing-requirements.md`](./platform-code-signing-requirements.md); the release
+  pipeline will integrate the certificates once provided.
 
 ### D7 · Multi-employee signing ceremony
 - **Value:** A release is approved and signed by multiple Alpen Labs employees; users can verify the
