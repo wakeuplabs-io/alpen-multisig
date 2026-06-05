@@ -27,25 +27,30 @@ describe('Alpen Multisig proposal — co-sign with second mnemonic', () => {
 		await signBtn.waitForClickable({ timeout: 60000 })
 		await signBtn.click()
 
-		// After signing, a "Quorum reached" modal may appear. Dismiss it to return to proposals.
+		// After signing, either:
+		// 1. A "Quorum reached" modal appears → click "Later" to dismiss
+		// 2. Navigation happens automatically → URL changes to /proposals
+		//
+		// Strategy: Wait for modal with a reasonable timeout. If it appears, dismiss it.
+		// Then wait for navigation to /proposals.
 		const quorumModalHeading = await $('//h2[contains(.,"Quorum reached")]')
-		const isModalVisible = await quorumModalHeading.isDisplayed({ timeout: 10000 }).catch(() => false)
+		const modalAppeared = await quorumModalHeading.waitForDisplayed({ timeout: 30000 }).then(() => true).catch(() => false)
 
-		if (isModalVisible) {
-			// Click "Later" to dismiss the modal and return to /proposals
-			// (the broadcast-quorum test will handle the broadcast flow)
+		if (modalAppeared) {
+			// Click "Later" to dismiss the modal and trigger navigation to /proposals
 			const laterBtn = await $('//button[contains(.,"Later")]')
 			await laterBtn.waitForClickable({ timeout: 10000 })
 			await laterBtn.click()
 		}
 
+		// Wait for navigation to /proposals (either automatic or after modal dismissal)
 		await browser.waitUntil(
 			async () => {
 				const u = await browser.getUrl()
 				return u.includes('/proposals') && !u.includes('/sign')
 			},
 			{
-				timeout: 120000,
+				timeout: 60000,
 				timeoutMsg: 'expected return to /proposals after co-sign (no /sign in URL)',
 			},
 		)
