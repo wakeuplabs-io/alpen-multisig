@@ -2,9 +2,10 @@ use crate::application::psbt_signer::PsbtSigner;
 use crate::infrastructure::admin_wallet::AdminWalletError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
 use crate::infrastructure::hw_wallet::ledger;
+use crate::infrastructure::node_config_store::NodeConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{sleep, Duration};
@@ -104,9 +105,7 @@ pub struct WalletService {
     pub last_read_at: Arc<RwLock<Option<Instant>>>,
     pub cancel: Arc<tokio::sync::Notify>,
     bg_task_started: Arc<AtomicBool>,
-    rpc_url: String,
-    rpc_user: String,
-    rpc_pass: String,
+    node_config: Arc<StdRwLock<NodeConfig>>,
     signer: Option<Arc<dyn PsbtSigner>>,
     network: bdk_wallet::bitcoin::Network,
 }
@@ -186,12 +185,8 @@ pub fn error_code(e: &AdminWalletError) -> String {
 }
 
 impl WalletService {
-    pub fn new(wallet: bdk_wallet::Wallet) -> Self {
+    pub fn new(wallet: bdk_wallet::Wallet, node_config: Arc<StdRwLock<NodeConfig>>) -> Self {
         let network = wallet.network();
-        let rpc_url =
-            std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
-        let rpc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_default();
-        let rpc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_default();
         Self {
             wallet: Arc::new(Mutex::new(wallet)),
             sync_state: Arc::new(RwLock::new(SyncState::default())),
@@ -199,24 +194,29 @@ impl WalletService {
             last_read_at: Arc::new(RwLock::new(None)),
             cancel: Arc::new(tokio::sync::Notify::new()),
             bg_task_started: Arc::new(AtomicBool::new(false)),
-            rpc_url,
-            rpc_user,
-            rpc_pass,
+            node_config,
             signer: None,
             network,
         }
     }
 
     /// Creates a WalletService with an attached signer for session-driven signing.
-    pub(crate) fn with_signer(wallet: bdk_wallet::Wallet, signer: Arc<dyn PsbtSigner>) -> Self {
-        let mut svc = Self::new(wallet);
+    pub(crate) fn with_signer(
+        wallet: bdk_wallet::Wallet,
+        signer: Arc<dyn PsbtSigner>,
+        node_config: Arc<StdRwLock<NodeConfig>>,
+    ) -> Self {
+        let mut svc = Self::new(wallet, node_config);
         svc.signer = Some(signer);
         svc
     }
 
     /// Creates a watch-only WalletService that cannot sign transactions.
-    pub fn new_watch_only(wallet: bdk_wallet::Wallet) -> Self {
-        Self::new(wallet)
+    pub fn new_watch_only(
+        wallet: bdk_wallet::Wallet,
+        node_config: Arc<StdRwLock<NodeConfig>>,
+    ) -> Self {
+        Self::new(wallet, node_config)
     }
 
     /// Returns whether this wallet service can sign transactions.
@@ -301,11 +301,22 @@ impl WalletService {
         use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
         use bdk_bitcoind_rpc::Emitter;
 
-        let rpc = Client::new(
-            &self.rpc_url,
-            Auth::UserPass(self.rpc_user.clone(), self.rpc_pass.clone()),
-        )
-        .map_err(|e| rpc_error_from_message(e.to_string()))?;
+        let (rpc_url, rpc_user, rpc_pass) = {
+            let cfg = self
+                .node_config
+                .read()
+                .map_err(|_| AdminWalletError::RpcUnreachable {
+                    message: "node config lock poisoned".to_string(),
+                })?;
+            (
+                cfg.btc_rpc_url().to_string(),
+                cfg.btc_rpc_user().to_string(),
+                cfg.btc_rpc_pass().to_string(),
+            )
+        };
+
+        let rpc = Client::new(&rpc_url, Auth::UserPass(rpc_user, rpc_pass))
+            .map_err(|e| rpc_error_from_message(e.to_string()))?;
 
         let mut wallet = self.wallet.lock().await;
         let checkpoint = wallet.latest_checkpoint();
@@ -630,6 +641,11 @@ impl WalletService {
 mod tests {
     use super::*;
     use crate::infrastructure::admin_wallet::AdminWalletError;
+    use crate::infrastructure::node_config_store::NodeConfig;
+
+    fn test_node_config() -> Arc<StdRwLock<NodeConfig>> {
+        Arc::new(StdRwLock::new(NodeConfig::default()))
+    }
 
     // Acceptance test: struct fields and AdminWalletError::Disabled variant exist
     #[test]
@@ -702,7 +718,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let addresses = svc
             .list_addresses(KeychainKind::External, 0, 20)
@@ -722,7 +738,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         // page_index=1 with page_size=20 on a fresh wallet that only has 20 addresses derivable → []
         let addresses = svc
@@ -744,7 +760,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let status = svc.sync_status();
 
@@ -771,7 +787,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         // Simulate a sync in-flight by setting the flag
         svc.sync_in_flight.store(true, Ordering::SeqCst);
@@ -792,7 +808,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = Arc::new(WalletService::new(wallet));
+        let svc = Arc::new(WalletService::new(wallet, test_node_config()));
 
         svc.spawn_background_sync();
 
@@ -827,7 +843,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         // Calling shutdown multiple times must not panic
         svc.shutdown();
@@ -843,7 +859,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = Arc::new(WalletService::new(wallet));
+        let svc = Arc::new(WalletService::new(wallet, test_node_config()));
 
         let cancel = Arc::clone(&svc.cancel);
 
@@ -900,7 +916,7 @@ mod tests {
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
         let signer = Arc::new(MnemonicPsbtSigner::new());
-        let svc = WalletService::with_signer(wallet, signer);
+        let svc = WalletService::with_signer(wallet, signer, test_node_config());
 
         assert!(svc.can_sign(), "with_signer() must return can_sign=true");
     }
@@ -913,7 +929,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new_watch_only(wallet);
+        let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         assert!(!svc.can_sign(), "new_watch_only must return can_sign=false");
     }
@@ -927,7 +943,7 @@ mod tests {
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
         // No RPC URL set — if build_signed_commit contacts RPC it would fail with RpcUnreachable, not ReadOnly
-        let svc = WalletService::new_watch_only(wallet);
+        let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
             .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
@@ -948,7 +964,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new_watch_only(wallet);
+        let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
             .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
@@ -969,7 +985,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let addr1: bdk_wallet::bitcoin::Address = svc
             .reveal_change_address()
@@ -994,7 +1010,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let addr = svc
             .next_receive_address()
@@ -1022,7 +1038,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let a1 = svc.next_receive_address().await.expect("first call ok");
         let a2 = svc.next_receive_address().await.expect("second call ok");
@@ -1045,7 +1061,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new_watch_only(wallet);
+        let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let addr = svc
             .next_receive_address()
@@ -1063,7 +1079,7 @@ mod tests {
 
         const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        let svc = WalletService::new(wallet);
+        let svc = WalletService::new(wallet, test_node_config());
 
         let balance = svc
             .get_balance()

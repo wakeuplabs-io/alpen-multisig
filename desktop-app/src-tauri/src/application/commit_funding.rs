@@ -71,10 +71,13 @@ mod tests {
     use bdk_wallet::bitcoin::Network;
 
     fn make_wallet_service() -> Arc<WalletService> {
+        use crate::infrastructure::node_config_store::NodeConfig;
+        use std::sync::RwLock;
         const TEST_MNEMONIC: &str =
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let bdk_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
-        Arc::new(WalletService::new(bdk_wallet))
+        let node_config = Arc::new(RwLock::new(NodeConfig::default()));
+        Arc::new(WalletService::new(bdk_wallet, node_config))
     }
 
     // compile-gate: CommitFunding trait must have build_signed_commit returning bitcoin::Transaction

@@ -282,7 +282,10 @@ export function WalletConnectScreen() {
 				config={nodeConfig}
 				localNodeStatus={localNodeStatus}
 				isSaving={isSaving}
-				onSave={(draft) => void saveConfig(draft)}
+				onSave={async (draft) => {
+					await saveConfig(draft)
+					setIsNodeConfigOpen(false)
+				}}
 				onClose={() => setIsNodeConfigOpen(false)}
 				onRecheck={recheck}
 			/>
