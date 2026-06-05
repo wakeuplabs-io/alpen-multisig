@@ -9,29 +9,12 @@ import { fileURLToPath } from 'node:url'
  * The Admin Wallet external address (m/86'/0'/73'/0/0) must hold spendable UTXOs before
  * "Confirm & Broadcast", or commit funding fails with an insufficient-funds error.
  *
- * Funds via `bitcoin-cli -rpcwallet=asm-runner` (the same wallet-scoped path the rest of the
- * e2e stack uses — see `runtests/mine-blocks.sh` and `mine-regtest-blocks.mjs`), not raw HTTP RPC.
+ * Uses the regtest-dev-api faucet endpoint (HTTP) — same as local-stack.sh --fund.
  */
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
+const FAUCET_URL = process.env.REGTEST_DEV_API_URL ?? 'http://127.0.0.1:3001'
 const FUND_AMOUNT_BTC = '0.01'
-// Explicit fee rate (sat/vB) so funding works on a fresh regtest chain where fee
-// estimation is unavailable and -fallbackfee is disabled (bitcoind error -6).
-const FUND_FEE_RATE_SAT_VB = '1'
-
-function runtestsDir() {
-	if (process.env.ALPEN_RUNTESTS_DIR) {
-		return process.env.ALPEN_RUNTESTS_DIR
-	}
-	return path.resolve(__dirname, '../../../../../runtests')
-}
-
-function autotestEnvDefaults() {
-	if (process.env.ALPEN_AUTOTEST_DIR) {
-		return path.join(process.env.ALPEN_AUTOTEST_DIR, 'env.defaults.sh')
-	}
-	return path.resolve(__dirname, '../../../../../autotest/env.defaults.sh')
-}
 
 /**
  * Reads the Admin Wallet external address from the broadcast screen UI.
@@ -40,45 +23,35 @@ function autotestEnvDefaults() {
  * @returns {Promise<string>} Admin Wallet external address at index 0
  */
 async function readAdminWalletAddressFromUI() {
-	const addressEl = await $('[data-testid="e2e-admin-wallet-external-address-0"]')
-	await addressEl.waitForDisplayed({ timeout: 30000 })
-	return (await addressEl.getText()).trim()
+  const addressEl = await $('[data-testid="e2e-admin-wallet-external-address-0"]')
+  await addressEl.waitForDisplayed({ timeout: 30000 })
+  return (await addressEl.getText()).trim()
 }
 
 /**
- * Sends `FUND_AMOUNT_BTC` from the `asm-runner` wallet to `address` and mines one block to confirm.
- * Uses the wallet-scoped `bitcoin-cli -rpcwallet=asm-runner` path so it works regardless of how
- * many wallets bitcoind has loaded.
+ * Sends FUND_AMOUNT_BTC from the regtest-dev-api faucet to address.
+ * The faucet also mines 1 block to confirm the transaction.
  *
  * @param {string} address - Admin Wallet external address to fund
  */
-function fundAddressViaCli(address) {
-	const envDefaults = autotestEnvDefaults()
-	const runtests = runtestsDir()
-	const result = spawnSync(
-		'bash',
-		[
-			'-lc',
-			`set -euo pipefail
-[ -f "${envDefaults}" ] && source "${envDefaults}"
-source "${runtests}/env.sh"
-alpen_wait_bitcoind_rpc
-bitcoin-cli $CLI listwallets | grep -q asm-runner || \
-  bitcoin-cli $CLI loadwallet asm-runner 2>/dev/null || \
-  bitcoin-cli $CLI createwallet asm-runner
-# Pass fee_rate explicitly (sat/vB): a fresh regtest chain has no fee history and
-# -fallbackfee is off, so automatic estimation fails with -6.
-bitcoin-cli $CLI -rpcwallet=asm-runner -named sendtoaddress address="${address}" amount=${FUND_AMOUNT_BTC} fee_rate=${FUND_FEE_RATE_SAT_VB}
-CHANGE=$(bitcoin-cli $CLI -rpcwallet=asm-runner getnewaddress)
-bitcoin-cli $CLI generatetoaddress 1 "$CHANGE" >/dev/null
-echo "OK funded ${address} with ${FUND_AMOUNT_BTC} BTC"`,
-		],
-		{ encoding: 'utf8', env: process.env },
-	)
-	if (result.status !== 0) {
-		throw new Error(result.stderr || result.stdout || `fund-admin-wallet failed (${result.status})`)
-	}
-	return result.stdout.trim()
+function fundAddressViaFaucet(address) {
+  const result = spawnSync(
+    'curl',
+    [
+      '-sf',
+      '-X', 'POST',
+      `${FAUCET_URL}/faucet`,
+      '-H', 'Content-Type: application/json',
+      '-d', `{"address":"${address}","amount_btc":${FUND_AMOUNT_BTC}}`,
+    ],
+    { encoding: 'utf8', env: process.env },
+  )
+  if (result.status !== 0) {
+    throw new Error(
+      result.stderr || result.stdout || `faucet call failed (${result.status})`,
+    )
+  }
+  return result.stdout.trim()
 }
 
 /**
@@ -88,7 +61,7 @@ echo "OK funded ${address} with ${FUND_AMOUNT_BTC} BTC"`,
  * @param {string} [address] - Admin Wallet external address. If omitted, reads it from the UI.
  */
 export async function fundAdminWallet(address) {
-	const adminAddr = address ?? (await readAdminWalletAddressFromUI())
-	fundAddressViaCli(adminAddr)
-	return adminAddr
+  const adminAddr = address ?? (await readAdminWalletAddressFromUI())
+  fundAddressViaFaucet(adminAddr)
+  return adminAddr
 }

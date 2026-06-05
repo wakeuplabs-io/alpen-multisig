@@ -4,6 +4,9 @@
   "workspaces": [
     "desktop-app"
   ],
+  "engines": {
+    "node": ">=20 <21"
+  },
   "scripts": {
     "dev:desktop-app": "npm run dev --workspace desktop-app",
     "build:desktop-app": "npm run build --workspace desktop-app",

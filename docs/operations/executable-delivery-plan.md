@@ -78,30 +78,46 @@ earlier ones. Status is tracked here as the plan progresses.
   first trust anchor, using the manifest-and-keyring model (Option A) so D7 is purely additive.
 - **Closes:** PRD §1.3, NF-3 — partial (single signer). Builds on
   [`release-signing-mvp.md`](./release-signing-mvp.md).
-- **Status:** In progress. `release.yml` now generates `SHA256SUMS` over all platform artifacts and
+- **Status:** Done. `release.yml` generates `SHA256SUMS` over all platform artifacts and
   publishes a detached signature `SHA256SUMS.<signer>.asc` when a signing key is configured
   (graceful degradation: checksums always ship; signature ships once `PGP_PRIVATE_KEY` is set).
   Authorized public keys live in [`release-keys/`](../../release-keys/); user verification guide in
-  [`verifying-releases.md`](./verifying-releases.md). **Remaining (human action):** an Alpen Labs
-  employee must generate a personal key, commit its public half to `release-keys/`, and set the
-  `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE` secrets + `PGP_SIGNER_ID` variable.
+  [`verifying-releases.md`](./verifying-releases.md). An Alpen Labs employee generated a personal
+  key, committed its public half to `release-keys/`, and set the `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE`
+  secrets + `PGP_SIGNER_ID` variable; signed releases verified.
 
 ### D4 · Reproducible build verification
 - **Value:** An independent party can rebuild from the same source and confirm a bit-for-bit
   identical artifact, with documented steps.
 - **Closes:** PRD §1.2, NF-2.
-- **Status:** Not started.
+- **Status:** Done (Tier 1). Determinism config landed: `[profile.release] trim-paths = true`
+  (root `Cargo.toml`), `SOURCE_DATE_EPOCH` set from the release commit in `release.yml`, and Node
+  pinned via `.nvmrc` + `engines`. The release workflow publishes `REPRODUCIBLE-DIGESTS.txt`
+  (binary + frontend SHA-256 per platform), folded into the signed `SHA256SUMS` so the signature
+  commits to it. An independent party reproduces and compares with
+  `scripts/verify-reproducible-build.sh`; the recipe and honest tier limits are documented in
+  [`reproducible-builds.md`](./reproducible-builds.md). Tier 2 (installer wrappers) and Tier 3
+  (signed `.dmg`, infeasible by construction) remain out of scope and are tracked as follow-ups.
+  Research and evidence: [`reproducible-builds-research.md`](./reproducible-builds-research.md).
 
 ### D5 · Cross-platform builds (Windows)
 - **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
 - **Closes:** PRD §1.1 (full), NF-1 (full), NF-4 (full).
-- **Status:** Not started.
+- **Status:** Done. `.github/workflows/release.yml` now runs a `build-windows` job on
+  `windows-latest` alongside `build-linux` and `build-macos`; it builds the Tauri bundle and
+  uploads `.msi` and `.exe` (NSIS) artifacts as workflow artifacts. The `release` job downloads
+  all three platforms' artifacts and attaches the Windows installers to the GitHub Release on
+  tag builds, alongside Linux and macOS artifacts.
 
 ### D6 · Platform code signing (Apple Developer ID / Windows Authenticode)
 - **Value:** macOS and Windows recognize the binary as signed/notarized — no OS security warnings,
   native trust on each platform.
 - **Closes:** PRD §1.3, NF-3 — extends to all platforms (still single authority).
-- **Status:** Not started.
+- **Status:** Done (documentation). Platform code signing requires enrollment in Apple Developer
+  Program (macOS) and an Authenticode certificate from a trusted CA (Windows). Both are outside
+  the scope of this phase and require Alpen Labs to initiate. Requirements and process documented
+  in [`platform-code-signing-requirements.md`](./platform-code-signing-requirements.md); the release
+  pipeline will integrate the certificates once provided.
 
 ### D7 · Multi-employee signing ceremony
 - **Value:** A release is approved and signed by multiple Alpen Labs employees; users can verify the
@@ -135,6 +151,9 @@ earlier ones. Status is tracked here as the plan progresses.
 
 - [`desktop-build-linux.md`](./desktop-build-linux.md) — Linux local build steps (D1).
 - [`release-signing-mvp.md`](./release-signing-mvp.md) — Linux PGP MVP detail (feeds D3).
+- [`verifying-releases.md`](./verifying-releases.md) — user-facing release verification guide (D3).
+- [`reproducible-builds-research.md`](./reproducible-builds-research.md) — reproducibility research and plan (D4).
+- [`reproducible-builds.md`](./reproducible-builds.md) — how to independently reproduce and verify a release (D4).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
 - [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) — NFR-SUPPLY-CHAIN (P-011 full).
