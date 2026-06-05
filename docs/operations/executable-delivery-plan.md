@@ -103,7 +103,11 @@ earlier ones. Status is tracked here as the plan progresses.
 ### D5 · Cross-platform builds (Windows)
 - **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
 - **Closes:** PRD §1.1 (full), NF-1 (full), NF-4 (full).
-- **Status:** Not started.
+- **Status:** Done. `.github/workflows/release.yml` now runs a `build-windows` job on
+  `windows-latest` alongside `build-linux` and `build-macos`; it builds the Tauri bundle and
+  uploads `.msi` and `.exe` (NSIS) artifacts as workflow artifacts. The `release` job downloads
+  all three platforms' artifacts and attaches the Windows installers to the GitHub Release on
+  tag builds, alongside Linux and macOS artifacts.
 
 ### D6 · Platform code signing (Apple Developer ID / Windows Authenticode)
 - **Value:** macOS and Windows recognize the binary as signed/notarized — no OS security warnings,
