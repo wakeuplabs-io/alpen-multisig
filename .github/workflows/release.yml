@@ -179,6 +179,12 @@ jobs:
           $cfg = Join-Path $env:USERPROFILE '.gitconfig'
           git config --file $cfg core.protectNTFS false
           git config --file $cfg core.longpaths true
+          # Keep checkouts byte-identical to what cargo's libgit2 writes (no EOL
+          # conversion). git-for-windows defaults autocrlf on, which would turn
+          # LF into CRLF and break LF-only consumers (e.g. the asm SSZ codegen,
+          # which rejects '\r').
+          git config --file $cfg core.autocrlf false
+          git config --file $cfg core.eol lf
           "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
           Write-Host "Pinned HOME for later steps: $env:USERPROFILE"
           Write-Host "--- $cfg ---"
@@ -247,7 +253,7 @@ jobs:
 
           git clone --no-checkout -- "$($db.FullName)" "$dest"
           if ($LASTEXITCODE -ne 0) { throw "git clone failed ($LASTEXITCODE)" }
-          git -C "$dest" -c core.protectNTFS=false -c core.longpaths=true checkout --force $rev
+          git -C "$dest" -c core.protectNTFS=false -c core.longpaths=true -c core.autocrlf=false -c core.eol=lf checkout --force $rev
           if ($LASTEXITCODE -ne 0) { throw "git checkout failed ($LASTEXITCODE)" }
 
           # Confirm the worktree matches HEAD, i.e. every tracked file — including
