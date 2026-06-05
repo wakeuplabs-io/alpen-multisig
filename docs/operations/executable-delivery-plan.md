@@ -78,25 +78,27 @@ earlier ones. Status is tracked here as the plan progresses.
   first trust anchor, using the manifest-and-keyring model (Option A) so D7 is purely additive.
 - **Closes:** PRD §1.3, NF-3 — partial (single signer). Builds on
   [`release-signing-mvp.md`](./release-signing-mvp.md).
-- **Status:** In progress. `release.yml` now generates `SHA256SUMS` over all platform artifacts and
+- **Status:** Done. `release.yml` generates `SHA256SUMS` over all platform artifacts and
   publishes a detached signature `SHA256SUMS.<signer>.asc` when a signing key is configured
   (graceful degradation: checksums always ship; signature ships once `PGP_PRIVATE_KEY` is set).
   Authorized public keys live in [`release-keys/`](../../release-keys/); user verification guide in
-  [`verifying-releases.md`](./verifying-releases.md). **Remaining (human action):** an Alpen Labs
-  employee must generate a personal key, commit its public half to `release-keys/`, and set the
-  `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE` secrets + `PGP_SIGNER_ID` variable.
+  [`verifying-releases.md`](./verifying-releases.md). An Alpen Labs employee generated a personal
+  key, committed its public half to `release-keys/`, and set the `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE`
+  secrets + `PGP_SIGNER_ID` variable; signed releases verified.
 
 ### D4 · Reproducible build verification
 - **Value:** An independent party can rebuild from the same source and confirm a bit-for-bit
   identical artifact, with documented steps.
 - **Closes:** PRD §1.2, NF-2.
-- **Status:** Research done — see
-  [`reproducible-builds-research.md`](./reproducible-builds-research.md). Foundation already in
-  place (pinned toolchain, committed lockfiles, containerized CI). Honest finding: reproducibility
-  is achievable at the **binary + frontend** layer (Tier 1) and is the recommended D4 deliverable;
-  installer-wrapper reproducibility (`.deb`/`.rpm`/AppImage) is hard-but-partial (Tier 2); a
-  signed/notarized macOS `.dmg` is **infeasible** bit-for-bit by construction (reproduce the
-  unsigned `.app` payload instead). Implementation not started.
+- **Status:** Done (Tier 1). Determinism config landed: `[profile.release] trim-paths = true`
+  (root `Cargo.toml`), `SOURCE_DATE_EPOCH` set from the release commit in `release.yml`, and Node
+  pinned via `.nvmrc` + `engines`. The release workflow publishes `REPRODUCIBLE-DIGESTS.txt`
+  (binary + frontend SHA-256 per platform), folded into the signed `SHA256SUMS` so the signature
+  commits to it. An independent party reproduces and compares with
+  `scripts/verify-reproducible-build.sh`; the recipe and honest tier limits are documented in
+  [`reproducible-builds.md`](./reproducible-builds.md). Tier 2 (installer wrappers) and Tier 3
+  (signed `.dmg`, infeasible by construction) remain out of scope and are tracked as follow-ups.
+  Research and evidence: [`reproducible-builds-research.md`](./reproducible-builds-research.md).
 
 ### D5 · Cross-platform builds (Windows)
 - **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
@@ -143,6 +145,7 @@ earlier ones. Status is tracked here as the plan progresses.
 - [`release-signing-mvp.md`](./release-signing-mvp.md) — Linux PGP MVP detail (feeds D3).
 - [`verifying-releases.md`](./verifying-releases.md) — user-facing release verification guide (D3).
 - [`reproducible-builds-research.md`](./reproducible-builds-research.md) — reproducibility research and plan (D4).
+- [`reproducible-builds.md`](./reproducible-builds.md) — how to independently reproduce and verify a release (D4).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
 - [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) — NFR-SUPPLY-CHAIN (P-011 full).

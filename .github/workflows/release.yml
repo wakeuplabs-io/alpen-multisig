@@ -17,6 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set SOURCE_DATE_EPOCH for reproducible build
+        # Fix every embedded build timestamp to the release commit's author date
+        # so two independent builds of the same commit are bit-for-bit identical
+        # (D4 / NF-2). Combined with trim-paths and the pinned toolchain.
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
       - name: Free runner disk space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -40,7 +46,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Pin via .nvmrc so the frontend bundle is built with the same Node
+          # major used for reproducibility verification (D4 / NF-2).
+          node-version-file: .nvmrc
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -58,6 +66,20 @@ jobs:
         working-directory: desktop-app
         run: npm run tauri build
 
+      - name: Record reproducibility digests
+        # Tier 1 reproducibility (binary + frontend). These digests are published
+        # and folded into the signed SHA256SUMS so an independent rebuild can be
+        # compared without trusting the installer wrappers. See
+        # docs/operations/reproducible-builds.md.
+        run: |
+          dist_digest="$(cd desktop-app/dist && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+          {
+            echo "# Tier 1 reproducibility digests — linux (x86_64)"
+            echo "binary(desktop-app)  $(sha256sum target/release/desktop-app | cut -d' ' -f1)"
+            echo "frontend(dist)       ${dist_digest}"
+          } > repro-digests-linux.txt
+          cat repro-digests-linux.txt
+
       - name: Upload Linux bundles
         uses: actions/upload-artifact@v4
         with:
@@ -66,12 +88,16 @@ jobs:
             target/release/bundle/deb/*.deb
             target/release/bundle/rpm/*.rpm
             target/release/bundle/appimage/*.AppImage
+            repro-digests-linux.txt
 
   build-macos:
     name: Build macOS artifacts
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set SOURCE_DATE_EPOCH for reproducible build
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -83,7 +109,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -101,11 +127,26 @@ jobs:
         working-directory: desktop-app
         run: npm run tauri build
 
+      - name: Record reproducibility digests
+        # macOS ships `shasum`, not `sha256sum`. The signed/notarized .dmg is not
+        # reproducible by construction; we record the unsigned binary + frontend
+        # (Tier 1) only. See docs/operations/reproducible-builds.md.
+        run: |
+          dist_digest="$(cd desktop-app/dist && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)"
+          {
+            echo "# Tier 1 reproducibility digests — macos (unsigned .app payload)"
+            echo "binary(desktop-app)  $(shasum -a 256 target/release/desktop-app | cut -d' ' -f1)"
+            echo "frontend(dist)       ${dist_digest}"
+          } > repro-digests-macos.txt
+          cat repro-digests-macos.txt
+
       - name: Upload macOS bundles
         uses: actions/upload-artifact@v4
         with:
           name: macos-bundles
-          path: target/release/bundle/dmg/*.dmg
+          path: |
+            target/release/bundle/dmg/*.dmg
+            repro-digests-macos.txt
 
   release:
     name: Publish GitHub release
@@ -146,12 +187,32 @@ jobs:
           done
           ls -la
 
+      - name: Assemble reproducibility digest manifest
+        working-directory: artifacts
+        run: |
+          # Fold the per-platform Tier 1 digests (binary + frontend) into one
+          # published file. Including it in SHA256SUMS below means the PGP
+          # signature transitively commits to the reproducibility digests, so a
+          # verifier can rebuild and compare against a signed reference (D4 / NF-2).
+          {
+            echo "# Reproducibility digests for this release (Tier 1: binary + frontend)."
+            echo "# Independent rebuild + comparison recipe:"
+            echo "#   docs/operations/reproducible-builds.md"
+            echo
+            cat repro-digests-linux.txt
+            echo
+            cat repro-digests-macos.txt
+          } > REPRODUCIBLE-DIGESTS.txt
+          rm -f repro-digests-linux.txt repro-digests-macos.txt
+          cat REPRODUCIBLE-DIGESTS.txt
+
       - name: Generate SHA256SUMS manifest
         working-directory: artifacts
         run: |
-          # One manifest covers every platform artifact; integrity ships
-          # unconditionally even before a signing key is configured.
-          sha256sum *.deb *.rpm *.AppImage *.dmg > SHA256SUMS
+          # One manifest covers every platform artifact plus the reproducibility
+          # digests; integrity ships unconditionally even before a signing key is
+          # configured.
+          sha256sum *.deb *.rpm *.AppImage *.dmg REPRODUCIBLE-DIGESTS.txt > SHA256SUMS
           cat SHA256SUMS
 
       - name: Sign SHA256SUMS manifest
@@ -193,6 +254,7 @@ jobs:
             artifacts/*.AppImage
             artifacts/*.dmg
             artifacts/SHA256SUMS
+            artifacts/REPRODUCIBLE-DIGESTS.txt
           )
           if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
             files+=(artifacts/SHA256SUMS.*.asc)

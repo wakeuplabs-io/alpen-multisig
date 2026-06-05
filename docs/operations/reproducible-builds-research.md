@@ -31,9 +31,9 @@ Inspection of the repo shows several preconditions already met:
 
 Gaps that block bit-for-bit today are below.
 
-> Note: there is both a root `Cargo.lock` and a `desktop-app/src-tauri/Cargo.lock`. Since
-> `src-tauri` is a workspace member, the workspace lock at the root is authoritative; the nested
-> lock should be confirmed redundant and removed to avoid drift (track separately).
+> Note: there used to be both a root `Cargo.lock` and a `desktop-app/src-tauri/Cargo.lock`. Since
+> `src-tauri` is a workspace member, the root lock is authoritative; the redundant nested lock was
+> removed as part of D4 to avoid drift.
 
 ## Sources of non-determinism, by artifact layer
 
@@ -124,8 +124,13 @@ Target **Tier 1 as the D4 deliverable**, with Tier 2 documented as a follow-up:
 - Is `strip-nondeterminism` acceptable as a post-build step, or do we want bundler-native fixes?
 - Should the reproducibility check be a blocking CI gate or a periodic/independent audit?
 
-## Next step
+## Status
 
-Pick up D4 implementation from this research: start with Tier 1 (config + verification recipe),
-land it behind the D3 manifest, then spike Tier 2 on `.deb`/AppImage to measure how far the
-bundler gets us before deciding on post-processing.
+**Tier 1 implemented (D4).** The config (`trim-paths`, `SOURCE_DATE_EPOCH`, pinned Node) and the
+published `REPRODUCIBLE-DIGESTS.txt` (folded into the signed `SHA256SUMS`) are live in
+`release.yml`; the independent rebuild recipe is `scripts/verify-reproducible-build.sh`, documented
+in [`reproducible-builds.md`](./reproducible-builds.md).
+
+Follow-ups (not part of D4): spike Tier 2 on `.deb`/AppImage to measure how far the bundler gets us
+with `SOURCE_DATE_EPOCH` before deciding on `strip-nondeterminism` post-processing; Tier 3 (signed
+`.dmg`) remains infeasible by construction.
