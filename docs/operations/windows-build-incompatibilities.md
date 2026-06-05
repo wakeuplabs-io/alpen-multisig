@@ -129,16 +129,43 @@ or, preferably, build the hierarchy from `path.components()` / `Path::iter()`
 instead of a stringly-typed split, and avoid pushing `std::path::MAIN_SEPARATOR`
 into a value that is later compared against split results.
 
-## Decision
+## Decision and outcome
 
 Per maintainer direction (2026-06-05): **pivot to cross-compiling the Windows
-artifact on Linux.** If cross-compilation does not work (e.g. native USB/HID C
-dependencies — `trezor-client`, `ledger-transport-hid` — cannot cross-compile to
-the Windows target), **escalate blocker 3 (and 1) to Alpen** for an upstream fix
-and treat native Windows as blocked until then.
+artifact on Linux**, and if that does not work, escalate to Alpen.
 
-Cross-compiling trades away the `.msi` (WiX is Windows-only) for the NSIS `.exe`,
-and avoids all three blockers because the build runs in a Linux environment.
+**Outcome: cross-compilation works.** `build-windows` now runs on `ubuntu-latest`
+with `cargo-xwin` (clang-cl + lld-link) targeting `x86_64-pc-windows-msvc`. The
+full app — including the native USB/HID C dependencies that were the main risk
+(`libusb1-sys`, `hidapi`, `rusb`, via `trezor-client` / `ledger-transport-hid`) —
+compiles cleanly and produces a runnable `desktop-app.exe` (~7.6 MB). Building on
+Linux avoids all three blockers because the checkout uses a Linux filesystem and
+the codegen runs with `/` separators.
+
+### Remaining gap — no Windows installer (follow-up)
+
+Tauri's CLI validates `--bundles` against the **host** OS, so on Linux it only
+offers `deb`/`rpm`/`appimage` and refuses `nsis`/`msi`. It therefore cannot
+produce a Windows installer from Linux, and we build with `--no-bundle` and ship
+the **bare `.exe`** for now. Consequences:
+
+- The `.exe` launches by double-click but requires the **WebView2 runtime** to be
+  present (built into Windows 11; may need installing on older Windows 10). A
+  Tauri NSIS installer normally bootstraps WebView2.
+- No Start-menu shortcut / uninstaller.
+- No `.msi` (WiX is Windows-only regardless).
+
+**Follow-up (tracked in the delivery plan, D5):** produce a proper Windows
+installer. Options: (a) hand-write an NSIS script and run `makensis` on Linux
+around the cross-compiled `.exe` (+ WebView2 bootstrap), or (b) get the upstream
+blockers fixed by Alpen so a native Windows runner can build + bundle directly.
+
+### Escalate to Alpen regardless
+
+Independent of the installer decision, blockers **1** (reserved `aux` dir in
+`asm`) and **3** (path-separator bug in `ssz-gen`) are genuine upstream
+portability bugs and should be reported so a native Windows build becomes
+possible. See the "Suggested upstream fix" above for blocker 3.
 
 ## References
 

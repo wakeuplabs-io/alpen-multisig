@@ -101,12 +101,23 @@ earlier ones. Status is tracked here as the plan progresses.
 
 ### D5 · Cross-platform builds (Windows)
 - **Value:** Signers on Windows get a native, installable artifact equivalent to Linux and macOS.
-- **Closes:** PRD §1.1 (full), NF-1 (full), NF-4 (full).
-- **Status:** Done. `.github/workflows/release.yml` now runs a `build-windows` job on
-  `windows-latest` alongside `build-linux` and `build-macos`; it builds the Tauri bundle and
-  uploads `.msi` and `.exe` (NSIS) artifacts as workflow artifacts. The `release` job downloads
-  all three platforms' artifacts and attaches the Windows installers to the GitHub Release on
-  tag builds, alongside Linux and macOS artifacts.
+- **Closes:** PRD §1.1 (full), NF-1 (full), NF-4 (partial — runnable binary, no installer yet).
+- **Status:** Partial — runnable `.exe`, installer pending. A native `windows-latest` build is
+  **blocked** by three upstream Windows incompatibilities in the Alpen dependencies (reserved
+  `aux` directory in `asm`; CRLF breaking the SSZ parser; and a non-portable path-separator bug
+  in `ssz-gen`'s codegen). The first two were worked around (PR #242); the third has no local
+  workaround. Per maintainer direction, `build-windows` was **pivoted to cross-compiling on
+  `ubuntu-latest`** with `cargo-xwin` (target `x86_64-pc-windows-msvc`). This compiles the full
+  app — including the native USB/HID C deps — and publishes a runnable
+  `desktop-app-x86_64-windows.exe` (~7.6 MB). Building on Linux sidesteps all three blockers.
+  **Gap:** Tauri cannot bundle a Windows installer from Linux (`--bundles` is host-gated), so the
+  bare `.exe` ships with `--no-bundle`; it double-clicks to launch but needs the WebView2 runtime
+  present and has no Start-menu shortcut/uninstaller, and there is no `.msi`. Full analysis, the
+  suggested upstream fix for Alpen, and the installer follow-up options are in
+  [`windows-build-incompatibilities.md`](./windows-build-incompatibilities.md).
+- **Follow-ups:** (1) Produce a real Windows installer — hand-written NSIS via `makensis` on
+  Linux around the cross-compiled `.exe` (+ WebView2 bootstrap), or wait on the upstream fix.
+  (2) Escalate blockers 1 + 3 to Alpen so a native Windows build becomes possible.
 
 ### D6 · Platform code signing (Apple Developer ID / Windows Authenticode)
 - **Value:** macOS and Windows recognize the binary as signed/notarized — no OS security warnings,

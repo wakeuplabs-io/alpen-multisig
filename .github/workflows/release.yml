@@ -218,12 +218,21 @@ jobs:
         # docs/operations/windows-build-incompatibilities.md.
         run: npm run tauri -- build --runner cargo-xwin --target x86_64-pc-windows-msvc --no-bundle
 
+      - name: Stage Windows executable with a descriptive name
+        # Tauri emits a bare `desktop-app.exe`; give the published asset a name
+        # that identifies the platform/arch (no installer yet — see follow-up in
+        # docs/operations/windows-build-incompatibilities.md).
+        run: |
+          mkdir -p dist-windows
+          cp target/x86_64-pc-windows-msvc/release/desktop-app.exe \
+            dist-windows/desktop-app-x86_64-windows.exe
+
       - name: Upload Windows bundles
         uses: actions/upload-artifact@v4
         with:
           name: windows-bundles
           path: |
-            target/x86_64-pc-windows-msvc/release/*.exe
+            dist-windows/*.exe
 
   release:
     name: Publish GitHub release
