@@ -14,6 +14,8 @@ const proposalWithNullBroadcastFields = {
 	commitTxid: null,
 	revealTxid: null,
 	broadcastError: null,
+	createdAtMs: 1000000,
+	expiresAtMs: 2000000,
 }
 
 const parsed = proposalSchema.safeParse(proposalWithNullBroadcastFields)
