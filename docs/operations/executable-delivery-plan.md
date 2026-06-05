@@ -23,7 +23,6 @@ the story map and feature specs.
 | PRD §1.2 / NF-2 | Builds must be reproducible (reproducible-builds.org) | `0-prd/03-prd-update.md`; proposal §Deliverables |
 | PRD §1.3 / NF-3 | Binary cryptographically signed by **multiple** Alpen Labs employees; published verification instructions | `0-prd/03-prd-update.md`; proposal §Deliverables |
 | PRD §1.4 / NF-4 | Install/launch via single command or double-click; deps at most one extra step | `0-prd/03-prd-update.md` |
-| NFR-SUPPLY-CHAIN | Full release pipeline: reproducible, signed, supply-chain hardened; updater verifies signatures | `assessment/deferred-backlog.md` (P-011 full) |
 
 ## Current state
 
@@ -56,7 +55,7 @@ earlier ones. Status is tracked here as the plan progresses.
 ### D2 · CI produces the Tauri bundle
 - **Value:** Every release candidate is built automatically; the binary that ships is the one CI
   builds and tests. Closes the assessment CRITICAL "CI never runs `tauri build`".
-- **Closes:** NFR-SUPPLY-CHAIN — partial (build automation).
+- **Closes:** Build automation for release artifacts.
 - **Status:** Done. `.github/workflows/release.yml` triggers on `v*` tags and
   `workflow_dispatch`; builds the Tauri bundle on `ubuntu-latest`, uploads `.deb`, `.rpm`, and
   AppImage as workflow artifacts, and creates a GitHub Release with those files when triggered by
@@ -132,7 +131,9 @@ earlier ones. Status is tracked here as the plan progresses.
 ### D8 · Auto-update with signature verification
 - **Value:** The app can update itself, verifying signatures before applying any update.
 - **Closes:** NFR-SUPPLY-CHAIN (updater verification).
-- **Status:** Not started — lowest priority; deferred-backlog item.
+- **Status:** Out of scope — not required by PRD. The PRD specifies no requirement for the
+  application to update itself automatically. Manual download from GitHub Releases is the
+  supported distribution method. D8 is therefore removed from this plan.
 
 ## Sequencing notes
 
@@ -140,13 +141,14 @@ earlier ones. Status is tracked here as the plan progresses.
 - D4 (reproducibility) can proceed once D2 exists.
 - D5 → D6 → D7 extend trust to all platforms; D7 (multi-employee) is the gate for the first
   external release per NF-3.
-- D8 is optional/deferred and may be dropped from the first external release.
 
 ## Out of scope
 
 - **HWI subprocess bundling (NF-16 / NF-17)** — under evaluation; not yet confirmed whether the
   shipped binary will bundle HWI. Excluded from this plan until the decision is made; if confirmed,
   it returns as a deliverable (bundle HWI on all 3 platforms, Windows highest-risk per discovery).
+- **Auto-update (D8)** — not required by PRD; manual download from GitHub Releases is the supported
+  distribution method.
 - Application features (signing, wallet, update lifecycle) — see story map and feature specs.
 - Security audit — out of scope per proposal; recommended as a separate engagement before production.
 - Backend deployment/hosting — see `operations/runbook.md` and platform specs.
@@ -162,4 +164,3 @@ earlier ones. Status is tracked here as the plan progresses.
 - [`multi-employee-signing-requirements.md`](./multi-employee-signing-requirements.md) — employee PGP key generation and signing ceremony process (D7).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
 - [`../architecture/adrs/004-ci-pipeline-strategy.md`](../architecture/adrs/004-ci-pipeline-strategy.md) — why release builds are a separate workflow.
-- [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) — NFR-SUPPLY-CHAIN (P-011 full).
