@@ -149,58 +149,53 @@ jobs:
             repro-digests-macos.txt
 
   build-windows:
-    name: Build Windows artifacts
-    runs-on: windows-latest
+    # Cross-compiled on Linux instead of a native windows-latest runner: the
+    # native build is blocked by upstream Windows incompatibilities in the Alpen
+    # dependencies (reserved `aux` dir + a path-separator bug in ssz-gen's
+    # codegen). Building on Linux sidesteps all of them — the checkout uses a
+    # Linux filesystem and the codegen runs with `/` separators. The trade-off is
+    # NSIS `.exe` only (WiX `.msi` is Windows-only). Full analysis:
+    # docs/operations/windows-build-incompatibilities.md
+    name: Build Windows artifacts (cross-compiled on Linux)
+    runs-on: ubuntu-latest
     env:
-      # Fetch git dependencies via the git CLI (more robust on the Windows
-      # runner). Note: this only affects fetching into the bare db — cargo still
-      # checks out the worktree with libgit2, which is why the reserved-path fix
-      # below targets libgit2's config (core.protectNTFS).
-      CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      # cargo-xwin downloads the Windows SDK + CRT; accept Microsoft's license.
+      XWIN_ACCEPT_LICENSE: '1'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Allow Windows-reserved paths in git checkouts
-        # The Alpen `asm` git dependency contains `crates/common/src/aux/`, and
-        # `aux` is a reserved DOS device name. libgit2 (used by cargo to check
-        # out git dependencies) rejects such paths during validation, failing
-        # with "cannot checkout to invalid path ...; class=Checkout (20)".
-        # `core.protectNTFS=false` disables that validation; libgit2 already
-        # writes via the \\?\ extended-path namespace, so the OS accepts the
-        # `aux` directory once validation passes.
-        #
-        # libgit2 resolves the *global* config via $HOME (then %HOMEDRIVE%%HOMEPATH%,
-        # then %USERPROFILE%). A bare `git config --global` from the previous
-        # attempt was not picked up by cargo's libgit2, so we write the config
-        # explicitly to %USERPROFILE%\.gitconfig and pin HOME there for every
-        # later step (including the cargo build).
-        shell: pwsh
+      - name: Set SOURCE_DATE_EPOCH for reproducible build
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
+      - name: Install cross-compile toolchain and NSIS
+        # clang/lld/llvm back cargo-xwin's clang-cl + lld-link; nsis is what Tauri
+        # shells out to for the Windows installer.
         run: |
-          $cfg = Join-Path $env:USERPROFILE '.gitconfig'
-          git config --file $cfg core.protectNTFS false
-          git config --file $cfg core.longpaths true
-          # Keep checkouts byte-identical to what cargo's libgit2 writes (no EOL
-          # conversion). git-for-windows defaults autocrlf on, which would turn
-          # LF into CRLF and break LF-only consumers (e.g. the asm SSZ codegen,
-          # which rejects '\r').
-          git config --file $cfg core.autocrlf false
-          git config --file $cfg core.eol lf
-          "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
-          Write-Host "Pinned HOME for later steps: $env:USERPROFILE"
-          Write-Host "--- $cfg ---"
-          git config --file $cfg --list
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm nsis
 
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-01-01
+          targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          key: windows-xwin
+
+      - name: Cache xwin (Windows SDK/CRT)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/cargo-xwin
+          key: xwin-cache
+
+      - name: Install cargo-xwin
+        run: cargo install --locked cargo-xwin
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -214,75 +209,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Pre-checkout the `asm` git dependency with the git CLI
-        # cargo checks out git dependencies with libgit2, which *unconditionally*
-        # rejects the reserved `aux` directory in alpenlabs/asm on Windows
-        # (`cannot checkout to invalid path ...; class=Checkout (20)`) — even with
-        # core.protectNTFS=false. The git CLI (git-for-windows) CAN write such
-        # paths via the \\?\ namespace when protectNTFS=false + longpaths=true.
-        #
-        # Strategy: let cargo fetch the bare git db (expected to fail at its own
-        # libgit2 checkout), then materialise the worktree ourselves with the git
-        # CLI and drop cargo's `.cargo-ok` marker so the subsequent build reuses
-        # it instead of re-running the failing libgit2 checkout.
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # cargo fetch is expected to exit non-zero (asm checkout fails); don't abort.
-          $PSNativeCommandUseErrorActionPreference = $false
-
-          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
-          $rev = 'e0461f8f520e9be814541d1f76fb961fd847e4ae'
-          $short = $rev.Substring(0, 7)
-
-          Write-Host '== cargo fetch (expected to fail at the asm libgit2 checkout) =='
-          cargo fetch
-          Write-Host "cargo fetch exit: $LASTEXITCODE (non-zero is expected here)"
-
-          $dbRoot = Join-Path $cargoHome 'git\db'
-          $db = Get-ChildItem $dbRoot -Directory -ErrorAction Stop |
-            Where-Object { $_.Name -like 'asm-*' } | Select-Object -First 1
-          if (-not $db) { throw "asm bare db not found under $dbRoot" }
-          $hash = $db.Name -replace '^asm-', ''
-          $dest = Join-Path $cargoHome "git\checkouts\asm-$hash\$short"
-          Write-Host "db   = $($db.FullName)"
-          Write-Host "dest = $dest"
-
-          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
-          New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-
-          git clone --no-checkout -- "$($db.FullName)" "$dest"
-          if ($LASTEXITCODE -ne 0) { throw "git clone failed ($LASTEXITCODE)" }
-          git -C "$dest" -c core.protectNTFS=false -c core.longpaths=true -c core.autocrlf=false -c core.eol=lf checkout --force $rev
-          if ($LASTEXITCODE -ne 0) { throw "git checkout failed ($LASTEXITCODE)" }
-
-          # Confirm the worktree matches HEAD, i.e. every tracked file — including
-          # the reserved `aux` path — was actually written. `git diff` is used
-          # (not Win32 path APIs, which also choke on `aux`) and ignores untracked
-          # files, so this must run before we drop the .cargo-ok marker below.
-          git -C "$dest" diff --quiet HEAD
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host '--- unexpected worktree diff vs HEAD ---'
-            git -C "$dest" status --porcelain
-            throw 'asm worktree does not match HEAD — aux likely not checked out'
-          }
-
-          # cargo reuses an existing checkout when HEAD matches and this marker
-          # exists, skipping its own (failing) libgit2 checkout.
-          '{"v":1}' | Out-File -FilePath (Join-Path $dest '.cargo-ok') -Encoding ascii -NoNewline
-          Write-Host "OK: asm worktree materialised at $dest"
-
-      - name: Build Tauri bundle
+      - name: Build Tauri bundle (cross-compile to Windows)
         working-directory: desktop-app
-        run: npm run tauri build
+        run: npm run tauri -- build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
 
       - name: Upload Windows bundles
         uses: actions/upload-artifact@v4
         with:
           name: windows-bundles
           path: |
-            target/release/bundle/msi/*.msi
-            target/release/bundle/nsis/*.exe
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
 
   release:
     name: Publish GitHub release
@@ -354,7 +290,9 @@ jobs:
           # One manifest covers every platform artifact plus the reproducibility
           # digests; integrity ships unconditionally even before a signing key is
           # configured.
-          sha256sum *.deb *.rpm *.AppImage *.dmg *.msi *.exe REPRODUCIBLE-DIGESTS.txt > SHA256SUMS
+          # Windows ships the NSIS .exe only (no .msi: WiX is Windows-only and the
+          # artifact is cross-compiled on Linux). See windows-build-incompatibilities.md.
+          sha256sum *.deb *.rpm *.AppImage *.dmg *.exe REPRODUCIBLE-DIGESTS.txt > SHA256SUMS
           cat SHA256SUMS
 
       - name: Sign SHA256SUMS manifest
@@ -395,7 +333,6 @@ jobs:
             artifacts/*.rpm
             artifacts/*.AppImage
             artifacts/*.dmg
-            artifacts/*.msi
             artifacts/*.exe
             artifacts/SHA256SUMS
             artifacts/REPRODUCIBLE-DIGESTS.txt
