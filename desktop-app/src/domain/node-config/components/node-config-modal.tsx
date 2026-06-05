@@ -7,7 +7,7 @@ type Props = {
 	config: NodeConfig | null
 	localNodeStatus: LocalNodeStatus | null
 	isSaving: boolean
-	onSave: (draft: NodeConfig) => void
+	onSave: (draft: NodeConfig) => void | Promise<void>
 	onClose: () => void
 	onRecheck: () => void
 }

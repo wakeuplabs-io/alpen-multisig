@@ -3,6 +3,7 @@ use crate::application::wallet_service::WalletService;
 use crate::infrastructure::admin_wallet::wallet::load_watch_only_admin_wallet;
 use crate::infrastructure::admin_wallet::{load_admin_wallet, AdminWalletError};
 use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
+use crate::infrastructure::node_config_store::NodeConfig;
 use std::sync::{Arc, RwLock};
 
 /// Live session: Admin Wallet service (mnemonic not stored).
@@ -13,12 +14,21 @@ pub(crate) struct SessionState {
 #[derive(Clone)]
 pub struct WalletSession {
     pub(crate) inner: Arc<RwLock<Option<SessionState>>>,
+    node_config: Arc<RwLock<NodeConfig>>,
 }
 
 impl WalletSession {
     pub fn empty() -> Self {
         Self {
             inner: Arc::new(RwLock::new(None)),
+            node_config: Arc::new(RwLock::new(NodeConfig::default())),
+        }
+    }
+
+    pub fn with_node_config(node_config: Arc<RwLock<NodeConfig>>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(None)),
+            node_config,
         }
     }
 
@@ -52,21 +62,23 @@ impl WalletSession {
     fn build_session_from_mnemonic(
         mnemonic: &str,
         network: bdk_wallet::bitcoin::Network,
+        node_config: Arc<RwLock<NodeConfig>>,
     ) -> Result<SessionState, AdminWalletError> {
         let wallet = load_admin_wallet(mnemonic, network)?;
         let signer = Arc::new(MnemonicPsbtSigner::new());
-        let wallet = Arc::new(WalletService::with_signer(wallet, signer));
+        let wallet = Arc::new(WalletService::with_signer(wallet, signer, node_config));
         Ok(SessionState { wallet })
     }
 
     fn build_session_from_xpub(
         account_xpub: &str,
         network: bdk_wallet::bitcoin::Network,
+        node_config: Arc<RwLock<NodeConfig>>,
     ) -> Result<SessionState, AdminWalletError> {
         let wallet = load_watch_only_admin_wallet(account_xpub, network, None)?;
         // HW path: attach HwPsbtSigner when master_fingerprint is provided (slice b).
         // For now (slice a), this creates a watch-only session with no signer.
-        let wallet = Arc::new(WalletService::new_watch_only(wallet));
+        let wallet = Arc::new(WalletService::new_watch_only(wallet, node_config));
         Ok(SessionState { wallet })
     }
 
@@ -87,7 +99,11 @@ impl WalletSession {
             account_xpub.to_string(),
             net,
         ));
-        let wallet = Arc::new(WalletService::with_signer(wallet, signer));
+        let wallet = Arc::new(WalletService::with_signer(
+            wallet,
+            signer,
+            self.node_config.clone(),
+        ));
         let state = SessionState { wallet };
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
@@ -103,7 +119,7 @@ impl WalletSession {
         network: Option<&str>,
     ) -> Result<(), AdminWalletError> {
         let net = parse_network(network);
-        let state = Self::build_session_from_xpub(account_xpub, net)?;
+        let state = Self::build_session_from_xpub(account_xpub, net, self.node_config.clone())?;
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
             old.wallet.shutdown();
@@ -119,7 +135,7 @@ impl WalletSession {
         network: Option<&str>,
     ) -> Result<(), AdminWalletError> {
         let net = parse_network(network);
-        let state = Self::build_session_from_mnemonic(mnemonic, net)?;
+        let state = Self::build_session_from_mnemonic(mnemonic, net, self.node_config.clone())?;
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
             old.wallet.shutdown();
@@ -152,8 +168,12 @@ mod tests {
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     fn make_session_state() -> SessionState {
-        WalletSession::build_session_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
-            .expect("wallet ok")
+        WalletSession::build_session_from_mnemonic(
+            TEST_MNEMONIC,
+            Network::Regtest,
+            Arc::new(RwLock::new(NodeConfig::default())),
+        )
+        .expect("wallet ok")
     }
 
     #[test]

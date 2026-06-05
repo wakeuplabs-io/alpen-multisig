@@ -11,6 +11,8 @@ use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::infrastructure::admin_wallet::get_external_address;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use desktop_app::infrastructure::hw_wallet::ledger;
+use desktop_app::infrastructure::node_config_store::{ConnectionMode, NodeConfig};
+use std::sync::{Arc, RwLock};
 
 #[tokio::test]
 async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
@@ -18,19 +20,19 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
         eprintln!("skip: LEDGER_SPECULOS_URL not set");
         return;
     }
-    std::env::set_var(
-        "BITCOIN_RPC_URL",
-        std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into()),
-    );
-    std::env::set_var(
-        "BITCOIN_RPC_USER",
-        std::env::var("BITCOIN_RPC_USER").unwrap_or_else(|_| "user".into()),
-    );
-    std::env::set_var(
-        "BITCOIN_RPC_PASS",
-        std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into()),
-    );
+    let btc_url =
+        std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+    let btc_user = std::env::var("BITCOIN_RPC_USER").unwrap_or_else(|_| "user".into());
+    let btc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into());
     std::env::set_var("BITCOIN_NETWORK", "regtest");
+
+    let node_config = Arc::new(RwLock::new(NodeConfig {
+        mode: ConnectionMode::Custom,
+        custom_btc_rpc_url: Some(btc_url),
+        custom_btc_rpc_user: Some(btc_user),
+        custom_btc_rpc_pass: Some(btc_pass),
+        custom_strata_rpc_url: None,
+    }));
 
     let account_xpub = tokio::task::spawn_blocking(|| ledger::get_account_xpub("m/86'/1'/73'"))
         .await
@@ -41,7 +43,7 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
         .expect("join")
         .expect("ledger fingerprint");
 
-    let session = WalletSession::empty();
+    let session = WalletSession::with_node_config(node_config);
     session
         .init_from_xpub_with_hw(
             &account_xpub,
@@ -58,9 +60,9 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
         get_external_address(&wallet).to_string()
     };
 
-    let url = std::env::var("BITCOIN_RPC_URL").unwrap();
-    let user = std::env::var("BITCOIN_RPC_USER").unwrap();
-    let pass = std::env::var("BITCOIN_RPC_PASS").unwrap();
+    let url = std::env::var("BITCOIN_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+    let user = std::env::var("BITCOIN_RPC_USER").unwrap_or_else(|_| "user".into());
+    let pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into());
     let rpc = bdk_bitcoind_rpc::bitcoincore_rpc::Client::new(
         &url,
         bdk_bitcoind_rpc::bitcoincore_rpc::Auth::UserPass(user, pass),

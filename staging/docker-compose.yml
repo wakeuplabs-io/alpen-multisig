@@ -63,6 +63,8 @@ services:
       ALLOW_INSECURE_HTTP_URL: "1"
       ADMIN_WALLET_REGTEST_MNEMONIC: "multiply toss magic exclude crawl obey garden black apart room village neglect"
       COMMIT_FUNDING: "admin_wallet"
+      AUTH_SESSION_TTL_MS: "1800000"
+      PROPOSAL_EXPIRY_DAYS: "1"
     depends_on:
       bitcoin:
         condition: service_healthy

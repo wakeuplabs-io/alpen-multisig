@@ -9,15 +9,8 @@ use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::auth::AuthRole;
 
-const RPC_URL_ENV_VAR: &str = "STRATA_ADMIN_STATE_RPC_URL";
-const DEFAULT_RPC_URL: &str = "http://127.0.0.1:8080";
-
 pub fn default_rpc_url() -> String {
-    std::env::var(RPC_URL_ENV_VAR)
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| DEFAULT_RPC_URL.to_string())
+    "http://127.0.0.1:8080".to_string()
 }
 
 pub struct MultisigConfig {
@@ -160,7 +153,7 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
         let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");
         if method == "strata_asm_getStatus" && err.to_string().contains("\"code\":-32601") {
             return Err(format!(
-                "{base}. This usually means `STRATA_ADMIN_STATE_RPC_URL` points to a non-ASM endpoint (for example the public Alpen RPC). Set it to an ASM runner RPC URL."
+                "{base}. This usually means the Strata RPC URL in Node Configuration points to a non-ASM endpoint (for example the public Alpen RPC). Set it to an ASM runner RPC URL."
             ));
         }
         return Err(base);
