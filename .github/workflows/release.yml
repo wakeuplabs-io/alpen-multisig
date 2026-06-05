@@ -152,22 +152,37 @@ jobs:
     name: Build Windows artifacts
     runs-on: windows-latest
     env:
-      # Use the git CLI (configured below) for cargo fetches so the Windows
-      # reserved-name handling applies during dependency resolution.
+      # Fetch git dependencies via the git CLI (more robust on the Windows
+      # runner). Note: this only affects fetching into the bare db — cargo still
+      # checks out the worktree with libgit2, which is why the reserved-path fix
+      # below targets libgit2's config (core.protectNTFS).
       CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
     steps:
       - uses: actions/checkout@v4
 
       - name: Allow Windows-reserved paths in git checkouts
-        # The Alpen `asm` git dependency contains a path under a directory named
-        # `aux`, a reserved device name on Windows. git/libgit2 (used by cargo)
-        # refuse to check such paths out by default (NTFS protection), failing
-        # the fetch with "cannot checkout to invalid path ...; class=Checkout".
-        # Disabling protectNTFS and enabling longpaths makes git use the \\?\
-        # extended-path prefix, which bypasses Win32 reserved-name parsing.
+        # The Alpen `asm` git dependency contains `crates/common/src/aux/`, and
+        # `aux` is a reserved DOS device name. libgit2 (used by cargo to check
+        # out git dependencies) rejects such paths during validation, failing
+        # with "cannot checkout to invalid path ...; class=Checkout (20)".
+        # `core.protectNTFS=false` disables that validation; libgit2 already
+        # writes via the \\?\ extended-path namespace, so the OS accepts the
+        # `aux` directory once validation passes.
+        #
+        # libgit2 resolves the *global* config via $HOME (then %HOMEDRIVE%%HOMEPATH%,
+        # then %USERPROFILE%). A bare `git config --global` from the previous
+        # attempt was not picked up by cargo's libgit2, so we write the config
+        # explicitly to %USERPROFILE%\.gitconfig and pin HOME there for every
+        # later step (including the cargo build).
+        shell: pwsh
         run: |
-          git config --global core.protectNTFS false
-          git config --global core.longpaths true
+          $cfg = Join-Path $env:USERPROFILE '.gitconfig'
+          git config --file $cfg core.protectNTFS false
+          git config --file $cfg core.longpaths true
+          "HOME=$env:USERPROFILE" >> $env:GITHUB_ENV
+          Write-Host "Pinned HOME for later steps: $env:USERPROFILE"
+          Write-Host "--- $cfg ---"
+          git config --file $cfg --list
 
       - uses: dtolnay/rust-toolchain@master
         with:
