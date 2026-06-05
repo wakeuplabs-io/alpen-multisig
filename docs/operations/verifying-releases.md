@@ -56,3 +56,9 @@ artifact for your platform without downloading the others.
 On macOS, use `shasum -a 256 --ignore-missing -c SHA256SUMS`.
 
 If either step fails, **do not run the binary** — re-download or report it.
+
+## 5. (Optional) Reproduce the build yourself
+
+The signed manifest also covers `REPRODUCIBLE-DIGESTS.txt`, the SHA-256 of the release binary and
+frontend bundle. To independently rebuild from source and confirm those digests match bit-for-bit,
+see [`reproducible-builds.md`](./reproducible-builds.md).
