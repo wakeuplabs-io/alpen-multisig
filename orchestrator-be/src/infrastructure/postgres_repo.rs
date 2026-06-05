@@ -6,6 +6,7 @@ use crate::domain::proposal::{
     ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
 };
 use crate::error::AppError;
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
 #[derive(Clone)]
@@ -101,6 +102,7 @@ fn row_to_proposal_no_sigs(
     let target_action_id: Option<String> = row.get("target_action_id");
     let activation_height: Option<i64> = row.get("activation_height");
     let update_id_in_queue: Option<i32> = row.get("update_id_in_queue");
+    let created_at: DateTime<Utc> = row.get("created_at");
     Ok(Proposal {
         action_id: ActionId(action_id),
         seq_no: row.get::<i64, _>("seq_no") as u64,
@@ -116,13 +118,14 @@ fn row_to_proposal_no_sigs(
         target_action_id: target_action_id.map(ActionId),
         activation_height: activation_height.map(|h| h as u64),
         update_id_in_queue: update_id_in_queue.map(|id| id as u32),
+        created_at,
     })
 }
 
 const SELECT_PROPOSAL_COLS: &str = r#"
     action_id, seq_no, authority, status, action_hex, required_signatures,
     broadcast_status, commit_txid, reveal_txid, broadcast_error,
-    target_action_id, activation_height, update_id_in_queue
+    target_action_id, activation_height, update_id_in_queue, created_at
 "#;
 
 #[async_trait::async_trait]

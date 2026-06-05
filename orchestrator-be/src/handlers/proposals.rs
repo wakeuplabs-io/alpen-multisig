@@ -118,10 +118,17 @@ pub async fn list_proposals(
     )
     .await?;
 
-    let proposals =
-        proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
+    let raw = proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
 
-    Ok(Json(ProposalListResponse { proposals }))
+    let mut checked = Vec::with_capacity(raw.len());
+    for p in raw {
+        checked.push(
+            proposals::expire_if_overdue(state.repo.as_ref(), p, state.proposal_expiry_days)
+                .await?,
+        );
+    }
+
+    Ok(Json(ProposalListResponse { proposals: checked }))
 }
 
 #[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
@@ -143,6 +150,9 @@ pub async fn get_proposal(
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
+    let proposal =
+        proposals::expire_if_overdue(state.repo.as_ref(), proposal, state.proposal_expiry_days)
+            .await?;
 
     let cancel_proposal = state
         .repo

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -36,6 +37,7 @@ export function SignScreen() {
 	const [copyFeedbackVisible, setCopyFeedbackVisible] = useState(false)
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 	const [decodedAction, setDecodedAction] = useState<DecodedAction | null>(null)
+	const [showQuorumPrompt, setShowQuorumPrompt] = useState(false)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
@@ -187,7 +189,13 @@ export function SignScreen() {
 				throw new Error(approved.error)
 			}
 			setSignResult(signed)
-			navigate('/proposals')
+			const quorumReached =
+				approved.data.status === 'approved' || approved.data.signatures.length >= approved.data.requiredSignatures
+			if (quorumReached) {
+				setShowQuorumPrompt(true)
+			} else {
+				navigate('/proposals')
+			}
 		} catch (e) {
 			setSignError(String(e))
 		} finally {
@@ -238,7 +246,7 @@ export function SignScreen() {
 				</>
 			}
 		>
-			<div className="mx-auto w-full max-w-[760px]">
+			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
 					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
@@ -288,6 +296,50 @@ export function SignScreen() {
 						</p>
 					</div>
 				) : null}
+
+				{!isLoading && proposal !== null && proposal.status === 'pending' && (
+					<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5">
+						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+					</div>
+				)}
+
+				{showQuorumPrompt && actionId !== undefined && (
+					<div
+						className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+						onClick={(e) => {
+							if (e.target === e.currentTarget) {
+								setShowQuorumPrompt(false)
+								navigate('/proposals')
+							}
+						}}
+					>
+						<div className="w-full max-w-120 rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+							<h2 className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">Quorum reached</h2>
+							<p className="m-0 mt-2 text-[14px] text-[#6b7280]">
+								This proposal now has enough signatures. Do you want to broadcast the Bitcoin transaction now?
+							</p>
+							<div className="mt-5 flex gap-3">
+								<button
+									type="button"
+									className="flex-1 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+									onClick={() => navigate(`/proposals/${actionId}/broadcast`)}
+								>
+									Broadcast now
+								</button>
+								<button
+									type="button"
+									className="flex-1 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
+									onClick={() => {
+										setShowQuorumPrompt(false)
+										navigate('/proposals')
+									}}
+								>
+									Later
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
 
 				{!isLoading && proposal !== null && loadError === null ? (
 					<div className="mt-5">

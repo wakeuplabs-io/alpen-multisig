@@ -57,6 +57,8 @@ export function ManualSignCollect({
 		activationHeight: null,
 		updateIdInQueue: null,
 		cancelProposal: null,
+		createdAtMs: 0,
+		expiresAtMs: 0,
 	}
 
 	const bundle = {

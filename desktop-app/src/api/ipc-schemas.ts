@@ -59,6 +59,8 @@ export const proposalSchema = z
 		activationHeight: nullishToNull(z.number()),
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
+		createdAtMs: z.number(),
+		expiresAtMs: z.number(),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 

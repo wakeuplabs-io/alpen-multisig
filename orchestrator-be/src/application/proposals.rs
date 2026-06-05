@@ -14,6 +14,7 @@ use crate::infrastructure::asm_role_membership::{
     lock_period_for_authority, threshold_for_authority, update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
+use chrono::Utc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionContext<'a> {
@@ -64,6 +65,7 @@ pub(crate) async fn create_update_action(
         target_action_id: None,
         activation_height: None,
         update_id_in_queue: None,
+        created_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -200,6 +202,33 @@ pub(crate) async fn list_proposals(
     status: Option<ProposalStatus>,
 ) -> Result<Vec<Proposal>, AppError> {
     repo.list_by_status(authority, status).await
+}
+
+/// Lazily expire a pending proposal that has exceeded the 7-day TTL.
+///
+/// No-op for any non-pending status. Persists the `Expired` transition so subsequent
+/// reads also return the updated state.
+pub(crate) async fn expire_if_overdue(
+    repo: &dyn ProposalRepository,
+    proposal: Proposal,
+    expiry_days: u64,
+) -> Result<Proposal, AppError> {
+    if proposal.status != ProposalStatus::Pending {
+        return Ok(proposal);
+    }
+    if proposal.created_at + chrono::Duration::days(expiry_days as i64) > Utc::now() {
+        return Ok(proposal);
+    }
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        proposal.broadcast_status,
+        Some(ProposalStatus::Expired),
+        None,
+        None,
+        None,
+    )
+    .await?
+    .ok_or(AppError::NotFound)
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +482,7 @@ pub(crate) async fn create_cancel_proposal(
         target_action_id: Some(target_action_id),
         activation_height: None,
         update_id_in_queue: None,
+        created_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -847,6 +877,7 @@ mod tests {
             target_action_id: None,
             activation_height: None,
             update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1108,6 +1139,7 @@ mod tests {
             target_action_id: None,
             activation_height: None,
             update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -1166,6 +1198,7 @@ mod tests {
             target_action_id: None,
             activation_height: None,
             update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
@@ -1463,6 +1496,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: chrono::Utc::now(),
             };
             repo.save_proposal(target).await.unwrap();
 

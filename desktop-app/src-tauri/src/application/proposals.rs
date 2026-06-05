@@ -866,6 +866,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
@@ -902,6 +903,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -941,6 +943,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -975,6 +978,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1004,6 +1008,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             }])
         }
@@ -1041,6 +1046,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1075,6 +1081,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1413,6 +1420,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1455,6 +1463,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1478,6 +1487,7 @@ mod tests {
                 target_action_id: None,
                 activation_height: None,
                 update_id_in_queue: None,
+                created_at: 0,
                 cancel_proposal: None,
             })
         }

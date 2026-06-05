@@ -190,6 +190,7 @@ mod tests {
     use crate::domain::proposal::{
         ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
     };
+    use chrono::Utc;
 
     fn make_proposal(action_id: &str, signer_pubkey: &str) -> Proposal {
         Proposal {
@@ -210,6 +211,7 @@ mod tests {
             target_action_id: None,
             activation_height: None,
             update_id_in_queue: None,
+            created_at: Utc::now(),
         }
     }
 

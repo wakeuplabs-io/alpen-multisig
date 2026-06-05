@@ -120,6 +120,7 @@ export function ProposalsDashboardScreen() {
 				isLoading={isLoading}
 				error={error}
 				onRetry={() => void loadProposals()}
+				onRefresh={() => void loadProposals()}
 				onCreateProposal={() => {
 					navigate('/proposals/create')
 				}}

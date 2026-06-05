@@ -12,6 +12,8 @@ pub struct Config {
     pub bitcoin_rpc_url: String,
     pub bitcoin_rpc_user: String,
     pub bitcoin_rpc_pass: String,
+    /// How many days a pending proposal stays valid before it expires. Env: PROPOSAL_EXPIRY_DAYS.
+    pub proposal_expiry_days: u64,
 }
 
 impl Config {
@@ -50,6 +52,10 @@ impl Config {
                 .unwrap_or_else(|_| "rpcuser".to_string()),
             bitcoin_rpc_pass: std::env::var("BITCOIN_RPC_PASS")
                 .unwrap_or_else(|_| "rpcpass".to_string()),
+            proposal_expiry_days: std::env::var("PROPOSAL_EXPIRY_DAYS")
+                .unwrap_or_else(|_| "7".to_string())
+                .parse()
+                .context("PROPOSAL_EXPIRY_DAYS must be a valid u64")?,
         })
     }
 }
