@@ -8,6 +8,12 @@ It is intentionally **non-technical**: each deliverable describes the user-facin
 requirements it closes, not the implementation. Technical design is produced per deliverable when
 it is picked up.
 
+> **Status: Concluded — 2026-06-05.** Every deliverable is resolved (Done, Partial with handed-off
+> follow-ups, or Out of scope). The build → package → reproducibility → signing → cross-platform
+> pipeline is implemented in `.github/workflows/release.yml` and exercised end-to-end via CI on all
+> three platforms. See the [Closure summary](#closure-summary) for the final per-deliverable outcome
+> and the remaining items handed off (the Windows installer and the upstream escalation to Alpen).
+
 ## Purpose & scope
 
 Covers everything needed to put a trustworthy, installable binary in a signer's hands:
@@ -24,9 +30,10 @@ the story map and feature specs.
 | PRD §1.3 / NF-3 | Binary cryptographically signed by **multiple** Alpen Labs employees; published verification instructions | `0-prd/03-prd-update.md`; proposal §Deliverables |
 | PRD §1.4 / NF-4 | Install/launch via single command or double-click; deps at most one extra step | `0-prd/03-prd-update.md` |
 
-## Current state
+## Starting point (baseline, before this plan)
 
-Starting point for this plan — what exists today:
+Historical baseline that motivated this plan — what existed at the outset (now superseded by the
+[Closure summary](#closure-summary)):
 
 - CI (`.github/workflows/ci.yml`) runs lint/build/test for Rust and a **Vite** frontend build only.
 - CI does **not** run `tauri build`; no distributable binary is produced anywhere.
@@ -146,6 +153,40 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Status:** Out of scope — not required by PRD. The PRD specifies no requirement for the
   application to update itself automatically. Manual download from GitHub Releases is the
   supported distribution method. D8 is therefore removed from this plan.
+
+## Closure summary
+
+Final outcome of each deliverable. This plan is **concluded**: no further work is scheduled under
+it; the two open items below are explicitly handed off.
+
+| Deliverable | Outcome |
+|-------------|---------|
+| D1 · Runnable Linux artifact | **Done** — `.deb`/`.rpm`/AppImage from source. |
+| D2 · CI produces the Tauri bundle | **Done** — automated build on every tag/dispatch. |
+| D2.1 · CI produces the macOS bundle | **Done** — `.dmg` artifact. |
+| D3 · Signed release + verification | **Done** — `SHA256SUMS` + detached PGP signature; user guide published. |
+| D4 · Reproducible build | **Done (Tier 1)** — binary + frontend bit-for-bit; documented recipe. |
+| D5 · Cross-platform builds (Windows) | **Partial** — runnable cross-compiled `desktop-app-x86_64-windows.exe`; native build blocked by upstream; installer + escalation handed off (below). |
+| D6 · Platform code signing | **Done (documentation)** — requirements published; awaits Alpen-provided certificates. |
+| D7 · Multi-employee signing | **Done (documentation + infra)** — pipeline supports multiple signatures; awaits employee keys. |
+| D8 · Auto-update | **Out of scope** — not required by PRD; manual download from GitHub Releases. |
+
+### Handed-off / external items
+
+These are intentionally **not** part of this plan's active scope; they depend on follow-up work or
+on Alpen Labs:
+
+- **D5 — Windows installer:** ship a real installer (hand-written NSIS via `makensis` on Linux around
+  the cross-compiled `.exe`, plus WebView2 bootstrap), or wait on the upstream fix. Today's Windows
+  artifact is a runnable bare `.exe` (double-click launch; requires WebView2 present).
+- **D5 — Upstream escalation:** the two genuine upstream Windows portability bugs (reserved `aux`
+  directory in `asm`; path-separator bug in `ssz-gen`) are written up for Alpen in
+  [`windows-portability-upstream-issues.md`](./windows-portability-upstream-issues.md). A native
+  Windows build becomes possible once these are fixed.
+- **D6 — Certificates:** Apple Developer ID (macOS) and Authenticode (Windows) must be obtained by
+  Alpen Labs before platform code signing can be integrated.
+- **D7 — Employee keys:** the multi-employee signing ceremony requires each employee to provide a
+  PGP key before it can be exercised.
 
 ## Sequencing notes
 
