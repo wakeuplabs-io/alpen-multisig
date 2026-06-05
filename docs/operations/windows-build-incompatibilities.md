@@ -165,7 +165,8 @@ blockers fixed by Alpen so a native Windows runner can build + bundle directly.
 Independent of the installer decision, blockers **1** (reserved `aux` dir in
 `asm`) and **3** (path-separator bug in `ssz-gen`) are genuine upstream
 portability bugs and should be reported so a native Windows build becomes
-possible. See the "Suggested upstream fix" above for blocker 3.
+possible. These two are written up for Alpen in the standalone external report
+[`windows-portability-upstream-issues.md`](./windows-portability-upstream-issues.md).
 
 ## References
 

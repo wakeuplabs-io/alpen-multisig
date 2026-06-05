@@ -117,7 +117,8 @@ earlier ones. Status is tracked here as the plan progresses.
   [`windows-build-incompatibilities.md`](./windows-build-incompatibilities.md).
 - **Follow-ups:** (1) Produce a real Windows installer — hand-written NSIS via `makensis` on
   Linux around the cross-compiled `.exe` (+ WebView2 bootstrap), or wait on the upstream fix.
-  (2) Escalate blockers 1 + 3 to Alpen so a native Windows build becomes possible.
+  (2) Escalate blockers 1 + 3 to Alpen so a native Windows build becomes possible — written up
+  for them in [`windows-portability-upstream-issues.md`](./windows-portability-upstream-issues.md).
 
 ### D6 · Platform code signing (Apple Developer ID / Windows Authenticode)
 - **Value:** macOS and Windows recognize the binary as signed/notarized — no OS security warnings,
