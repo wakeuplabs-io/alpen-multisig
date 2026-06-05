@@ -27,6 +27,18 @@ describe('Alpen Multisig proposal — co-sign with second mnemonic', () => {
 		await signBtn.waitForClickable({ timeout: 60000 })
 		await signBtn.click()
 
+		// After signing, a "Quorum reached" modal may appear. Dismiss it to return to proposals.
+		const quorumModalHeading = await $('//h2[contains(.,"Quorum reached")]')
+		const isModalVisible = await quorumModalHeading.isDisplayed({ timeout: 10000 }).catch(() => false)
+
+		if (isModalVisible) {
+			// Click "Later" to dismiss the modal and return to /proposals
+			// (the broadcast-quorum test will handle the broadcast flow)
+			const laterBtn = await $('//button[contains(.,"Later")]')
+			await laterBtn.waitForClickable({ timeout: 10000 })
+			await laterBtn.click()
+		}
+
 		await browser.waitUntil(
 			async () => {
 				const u = await browser.getUrl()

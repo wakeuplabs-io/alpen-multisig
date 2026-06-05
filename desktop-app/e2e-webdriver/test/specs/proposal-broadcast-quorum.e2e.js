@@ -18,26 +18,14 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 
 		await $('//h1[contains(.,"Proposals")]').waitForDisplayed({ timeout: 60000 })
 
-		// Handle "Quorum reached" modal if it appears after co-sign
-		const quorumModalHeading = await $('//h2[contains(.,"Quorum reached")]')
-		const isModalVisible = await quorumModalHeading.isDisplayed({ timeout: 5000 }).catch(() => false)
-
-		if (isModalVisible) {
-			// Click "Broadcast now" in the modal to navigate directly to broadcast screen
-			const broadcastNowBtn = await $('//button[contains(.,"Broadcast now")]')
-			await broadcastNowBtn.waitForClickable({ timeout: 10000 })
-			await broadcastNowBtn.click()
-		} else {
-			// Fall back to proposals list broadcast button (for manual flows or "Later" dismissal)
-			const broadcastBtn = await $('button[data-testid="e2e-proposal-broadcast-button"]')
-			await broadcastBtn.waitForDisplayed({
-				timeout: 120000,
-				timeoutMsg:
-					'No Broadcast in Quorum reached — run add-signer then co-sign-mnemonic first, or pick the first quorum card manually.',
-			})
-			await broadcastBtn.waitForClickable({ timeout: 30000 })
-			await broadcastBtn.click()
-		}
+		const broadcastBtn = await $('button[data-testid="e2e-proposal-broadcast-button"]')
+		await broadcastBtn.waitForDisplayed({
+			timeout: 120000,
+			timeoutMsg:
+				'No Broadcast in Quorum reached — run add-signer then co-sign-mnemonic first, or pick the first quorum card manually.',
+		})
+		await broadcastBtn.waitForClickable({ timeout: 30000 })
+		await broadcastBtn.click()
 
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
