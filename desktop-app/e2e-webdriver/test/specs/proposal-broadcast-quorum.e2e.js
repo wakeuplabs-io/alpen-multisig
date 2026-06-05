@@ -62,10 +62,10 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 			timeoutMsg: 'Phase progress should render Reveal step',
 		})
 
-		const enactmentStep = await $('//p[contains(text(),"Enactment")]')
-		await enactmentStep.waitForDisplayed({
+		const broadcastedStep = await $('//p[contains(text(),"Broadcasted")]')
+		await broadcastedStep.waitForDisplayed({
 			timeout: 10000,
-			timeoutMsg: 'Phase progress should render Enactment step',
+			timeoutMsg: 'Phase progress should render Broadcasted step',
 		})
 
 		// Gate 2: No device prompt affordance appears (mnemonic signer returns instantly)
