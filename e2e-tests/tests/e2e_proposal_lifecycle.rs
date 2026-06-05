@@ -96,9 +96,11 @@ fn orchestrator_binary() -> String {
             let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .parent()
                 .unwrap();
+            // `dev-mocks` compiles the in-process ASM mock so the binary honors the
+            // `mock://asm-membership` RPC URL set below. Production builds omit it.
             let status = Command::new("cargo")
                 .current_dir(workspace_root)
-                .args(["build", "-p", "orchestrator-be"])
+                .args(["build", "-p", "orchestrator-be", "--features", "dev-mocks"])
                 .status()
                 .expect("cargo build failed");
             assert!(status.success(), "cargo build -p orchestrator-be failed");

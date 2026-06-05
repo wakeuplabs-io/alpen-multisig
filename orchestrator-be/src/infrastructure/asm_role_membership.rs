@@ -132,7 +132,7 @@ pub(crate) async fn update_id_in_queue_for_action(
     rpc_url: &str,
     action_hex: &str,
 ) -> Result<Option<u32>, AppError> {
-    if rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted" {
+    if is_mock_url(rpc_url) {
         return Ok(None);
     }
 
@@ -302,6 +302,24 @@ fn authority_keys_hex(
         .collect())
 }
 
+// ─── In-process ASM mock (dev / e2e only) ────────────────────────────────────
+//
+// Everything below is compiled ONLY under `cfg(test)` or the `dev-mocks` feature.
+// In production builds these become inert stubs (`None` / `false`), so a `mock://`
+// RPC URL can never satisfy an authorization check — it falls through to the real
+// RPC path (and is additionally rejected at startup by `Config::from_env`).
+
+#[cfg(any(test, feature = "dev-mocks"))]
+fn is_mock_url(rpc_url: &str) -> bool {
+    rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted"
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn is_mock_url(_rpc_url: &str) -> bool {
+    false
+}
+
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
     use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
     let mut sk_bytes = [0u8; 32];
@@ -314,6 +332,7 @@ fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
 }
 
 /// In-process mock for e2e and local dev when `STRATA_ADMIN_STATE_RPC_URL=mock://asm-membership`.
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -331,6 +350,12 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
     Some(is_member)
 }
 
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_membership(_rpc_url: &str, _authority: Authority, _signer_pubkey: &str) -> Option<bool> {
+    None
+}
+
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -342,6 +367,12 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
     }
 }
 
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_last_seqno(_rpc_url: &str, _authority: Authority) -> Option<u64> {
+    None
+}
+
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -354,6 +385,12 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     }
 }
 
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_threshold(_rpc_url: &str, _authority: Authority) -> Option<u16> {
+    None
+}
+
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -362,6 +399,11 @@ fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
         Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
         _ => None,
     }
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_lock_period(_rpc_url: &str, _authority: Authority) -> Option<u64> {
+    None
 }
 
 #[cfg(test)]

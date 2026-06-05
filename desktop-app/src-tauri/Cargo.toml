@@ -7,6 +7,13 @@ license = 'MIT OR Apache-2.0'
 edition = '2021'
 default-run = 'desktop-app'
 
+[features]
+# Compiles the in-process ASM mock (mock:// RPC URLs) used by local dev and tests.
+# MUST NOT be enabled for production/release builds — the mock bypasses on-chain
+# authorization (signer set membership, enactment post-conditions).
+# See src/infrastructure/asm_role_membership.rs and asm_enactment.rs.
+dev-mocks = []
+
 [build-dependencies]
 tauri-build = { version = '2', features = [] }
 

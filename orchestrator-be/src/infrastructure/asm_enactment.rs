@@ -18,7 +18,9 @@ use crate::domain::authority::Authority;
 use crate::error::AppError;
 use crate::infrastructure::{action_codec, rpc_timeout};
 
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
 
 /// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
@@ -165,12 +167,21 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
     }
 }
 
+// In-process ASM enactment mock — compiled only under `cfg(test)` or `dev-mocks`.
+// In production builds this is an inert stub returning `None`, so a `mock://` URL
+// never short-circuits the real enactment post-condition check.
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
         MOCK_ENACTED_URL => Some(true),
         MOCK_MEMBERSHIP_URL => Some(false),
         _ => None,
     }
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
+    None
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {

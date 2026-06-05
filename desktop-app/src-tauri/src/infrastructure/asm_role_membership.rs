@@ -17,6 +17,7 @@ pub async fn ordered_keys_for_authority(
     if let Some(keys) = mock_ordered_keys(rpc_url, authority) {
         return Ok(keys);
     }
+    super::reject_mock_asm_url_in_prod(rpc_url)?;
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)?;
@@ -135,6 +136,9 @@ fn authority_keys_hex(
         .collect())
 }
 
+// In-process ASM signer-set mock — compiled only under `cfg(test)` or `dev-mocks`.
+// In production builds this is an inert stub returning `None`.
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>> {
     if rpc_url != "mock://asm-membership" {
         return None;
@@ -150,4 +154,9 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
         ]),
         _ => None,
     }
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_ordered_keys(_rpc_url: &str, _authority: Authority) -> Option<Vec<String>> {
+    None
 }
