@@ -249,14 +249,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "git clone failed ($LASTEXITCODE)" }
           git -C "$dest" -c core.protectNTFS=false -c core.longpaths=true checkout --force $rev
           if ($LASTEXITCODE -ne 0) { throw "git checkout failed ($LASTEXITCODE)" }
-          '{"v":1}' | Out-File -FilePath (Join-Path $dest '.cargo-ok') -Encoding ascii -NoNewline
 
-          # Verify via git (not Win32 path APIs, which also choke on `aux`) that the
-          # reserved path made it onto disk and the worktree is clean.
-          $dirty = git -C "$dest" status --porcelain
-          if ($LASTEXITCODE -ne 0) { throw "git status failed ($LASTEXITCODE)" }
-          if ($dirty) { Write-Host $dirty; throw 'asm worktree not clean — aux likely not checked out' }
-          Write-Host "OK: asm worktree materialised and clean at $dest"
+          # Confirm the worktree matches HEAD, i.e. every tracked file — including
+          # the reserved `aux` path — was actually written. `git diff` is used
+          # (not Win32 path APIs, which also choke on `aux`) and ignores untracked
+          # files, so this must run before we drop the .cargo-ok marker below.
+          git -C "$dest" diff --quiet HEAD
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '--- unexpected worktree diff vs HEAD ---'
+            git -C "$dest" status --porcelain
+            throw 'asm worktree does not match HEAD — aux likely not checked out'
+          }
+
+          # cargo reuses an existing checkout when HEAD matches and this marker
+          # exists, skipping its own (failing) libgit2 checkout.
+          '{"v":1}' | Out-File -FilePath (Join-Path $dest '.cargo-ok') -Encoding ascii -NoNewline
+          Write-Host "OK: asm worktree materialised at $dest"
 
       - name: Build Tauri bundle
         working-directory: desktop-app
