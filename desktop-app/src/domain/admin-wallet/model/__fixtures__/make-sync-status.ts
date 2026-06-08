@@ -7,6 +7,7 @@ export function makeSyncStatus(overrides?: Partial<SyncStatusDto>): SyncStatusDt
 		lastSyncedAt: '2024-01-01T12:00:00Z',
 		isSyncing: false,
 		lastError: null,
+		syncProgress: null,
 		...overrides,
 	}
 }

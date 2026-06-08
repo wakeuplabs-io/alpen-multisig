@@ -4,7 +4,7 @@ use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigne
 use crate::infrastructure::hw_wallet::ledger;
 use crate::infrastructure::node_config_store::NodeConfig;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
@@ -12,6 +12,11 @@ use tokio::time::{sleep, Duration};
 
 const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 const SYNC_IDLE_WINDOW: Duration = Duration::from_secs(300);
+
+/// A sync must run longer than this before progress is surfaced to the UI. Below this threshold,
+/// fast (local-node) syncs complete without ever showing a progress indicator, avoiding a flicker
+/// on every refresh.
+const SYNC_PROGRESS_THRESHOLD_MS: u64 = 3_000;
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -62,12 +67,23 @@ pub struct TypedError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SyncProgressDto {
+    pub processed_blocks: u32,
+    pub total_blocks: u32,
+    pub percent: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncStatusDto {
     pub tip_height: Option<u32>,
     pub last_synced_block: Option<u32>,
     pub last_synced_at: Option<String>,
     pub is_syncing: bool,
     pub last_error: Option<TypedError>,
+    /// Present only while a sync is in flight AND has run longer than
+    /// [`SYNC_PROGRESS_THRESHOLD_MS`]; `None` otherwise.
+    pub sync_progress: Option<SyncProgressDto>,
 }
 
 impl SyncStatusDto {
@@ -82,6 +98,7 @@ impl SyncStatusDto {
                 code: "Disabled".to_string(),
                 message: AdminWalletError::Disabled.to_string(),
             }),
+            sync_progress: None,
         }
     }
 }
@@ -105,6 +122,12 @@ pub struct WalletService {
     pub last_read_at: Arc<RwLock<Option<Instant>>>,
     pub cancel: Arc<tokio::sync::Notify>,
     bg_task_started: Arc<AtomicBool>,
+    // Lock-free progress counters — read by `sync_status()` without taking any lock the sync
+    // loop already holds (the loop holds `Mutex<Wallet>` while applying blocks).
+    sync_blocks_processed: Arc<AtomicU32>,
+    sync_blocks_total: Arc<AtomicU32>,
+    /// UNIX-epoch millis when the current sync started; `0` when idle.
+    sync_started_at_ms: Arc<AtomicU64>,
     node_config: Arc<StdRwLock<NodeConfig>>,
     signer: Option<Arc<dyn PsbtSigner>>,
     network: bdk_wallet::bitcoin::Network,
@@ -160,6 +183,24 @@ fn secs_to_iso8601(secs: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
+/// Percent complete, clamped to `0..=100`. Returns 100 when `total == 0` (nothing to scan).
+fn percent_complete(processed: u32, total: u32) -> u8 {
+    if total == 0 {
+        return 100;
+    }
+    let pct = (u64::from(processed) * 100 / u64::from(total)).min(100);
+    pct as u8
+}
+
+/// Current wall-clock time as UNIX-epoch milliseconds. Used only for the elapsed-since-start
+/// check that gates the sync progress indicator; monotonicity is not required at this resolution.
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
 fn rpc_error_from_message(msg: String) -> AdminWalletError {
     if msg.contains("401") || msg.contains("Unauthorized") {
         AdminWalletError::RpcAuthFailed { message: msg }
@@ -194,6 +235,9 @@ impl WalletService {
             last_read_at: Arc::new(RwLock::new(None)),
             cancel: Arc::new(tokio::sync::Notify::new()),
             bg_task_started: Arc::new(AtomicBool::new(false)),
+            sync_blocks_processed: Arc::new(AtomicU32::new(0)),
+            sync_blocks_total: Arc::new(AtomicU32::new(0)),
+            sync_started_at_ms: Arc::new(AtomicU64::new(0)),
             node_config,
             signer: None,
             network,
@@ -240,6 +284,7 @@ impl WalletService {
     /// Returns a lock-free snapshot of the current sync state.
     pub fn sync_status(&self) -> SyncStatusDto {
         let is_syncing = self.sync_in_flight.load(Ordering::Relaxed);
+        let sync_progress = self.sync_progress_snapshot(is_syncing);
         let state = self.sync_state.try_read();
         match state {
             Ok(s) => SyncStatusDto {
@@ -248,6 +293,7 @@ impl WalletService {
                 last_synced_at: s.last_synced_at.clone(),
                 is_syncing,
                 last_error: s.last_error.clone(),
+                sync_progress,
             },
             Err(_) => SyncStatusDto {
                 tip_height: None,
@@ -255,8 +301,26 @@ impl WalletService {
                 last_synced_at: None,
                 is_syncing,
                 last_error: None,
+                sync_progress,
             },
         }
+    }
+
+    /// Builds the progress snapshot, surfaced only while a sync is in flight AND it has been
+    /// running longer than [`SYNC_PROGRESS_THRESHOLD_MS`]. Reads the lock-free counters.
+    fn sync_progress_snapshot(&self, is_syncing: bool) -> Option<SyncProgressDto> {
+        let started = self.sync_started_at_ms.load(Ordering::Relaxed);
+        let elapsed = now_unix_ms().saturating_sub(started);
+        if !is_syncing || started == 0 || elapsed <= SYNC_PROGRESS_THRESHOLD_MS {
+            return None;
+        }
+        let processed = self.sync_blocks_processed.load(Ordering::Relaxed);
+        let total = self.sync_blocks_total.load(Ordering::Relaxed);
+        Some(SyncProgressDto {
+            processed_blocks: processed,
+            total_blocks: total,
+            percent: percent_complete(processed, total),
+        })
     }
 
     /// Update the last_read_at timestamp (called by read methods to signal activity).
@@ -280,8 +344,16 @@ impl WalletService {
             return Ok(self.sync_status());
         }
 
+        // Reset progress counters and stamp the start time for the 3s threshold gate.
+        self.sync_blocks_processed.store(0, Ordering::SeqCst);
+        self.sync_blocks_total.store(0, Ordering::SeqCst);
+        self.sync_started_at_ms
+            .store(now_unix_ms(), Ordering::SeqCst);
+
         let result = self.do_sync().await;
 
+        // Clear the start time first so progress disappears the instant the sync ends.
+        self.sync_started_at_ms.store(0, Ordering::SeqCst);
         self.sync_in_flight.store(false, Ordering::SeqCst);
 
         match result {
@@ -298,7 +370,7 @@ impl WalletService {
     }
 
     async fn do_sync(&self) -> Result<(), AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
+        use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client, RpcApi};
         use bdk_bitcoind_rpc::Emitter;
 
         let (rpc_url, rpc_user, rpc_pass) = {
@@ -320,6 +392,16 @@ impl WalletService {
 
         let mut wallet = self.wallet.lock().await;
         let checkpoint = wallet.latest_checkpoint();
+
+        // Learn the target tip so the UI can show a meaningful "processed / total" ratio.
+        // The Emitter scans from the checkpoint height up to the current chain tip.
+        let target_height = rpc
+            .get_block_count()
+            .map_err(|e| rpc_error_from_message(e.to_string()))?;
+        let total = target_height.saturating_sub(u64::from(checkpoint.height()));
+        self.sync_blocks_total
+            .store(total.min(u64::from(u32::MAX)) as u32, Ordering::Relaxed);
+
         let mut emitter = Emitter::new(&rpc, checkpoint, 0);
 
         loop {
@@ -334,6 +416,7 @@ impl WalletService {
                         .map_err(|e| AdminWalletError::SyncIncomplete {
                             message: e.to_string(),
                         })?;
+                    self.sync_blocks_processed.fetch_add(1, Ordering::Relaxed);
                 }
                 Ok(None) => break,
                 Err(e) => return Err(rpc_error_from_message(e.to_string())),
@@ -672,6 +755,7 @@ mod tests {
             last_synced_at: Some("2026-01-01T00:00:00Z".to_string()),
             is_syncing: false,
             last_error: None,
+            sync_progress: None,
         };
         assert!(!status.is_syncing);
     }
@@ -1069,6 +1153,121 @@ mod tests {
             .expect("watch-only next_receive_address must succeed (pure derivation)");
 
         assert_eq!(addr.index, 0, "watch-only fresh wallet must return index 0");
+    }
+
+    // Step 02 (sync_status progress gate): progress reported only after >3s in-flight
+    #[test]
+    fn sync_status_reports_progress_after_threshold() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet, test_node_config());
+
+        svc.sync_in_flight.store(true, Ordering::SeqCst);
+        svc.sync_started_at_ms
+            .store(now_unix_ms() - 4_000, Ordering::SeqCst);
+        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
+        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+
+        let progress = svc
+            .sync_status()
+            .sync_progress
+            .expect("progress must be present after threshold");
+        assert_eq!(progress.processed_blocks, 234);
+        assert_eq!(progress.total_blocks, 1277);
+        assert_eq!(progress.percent, 18);
+    }
+
+    // Step 02 (sync_status progress gate): hidden under the 3s threshold
+    #[test]
+    fn sync_status_hides_progress_under_threshold() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet, test_node_config());
+
+        svc.sync_in_flight.store(true, Ordering::SeqCst);
+        svc.sync_started_at_ms
+            .store(now_unix_ms() - 1_000, Ordering::SeqCst);
+        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
+        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+
+        assert!(
+            svc.sync_status().sync_progress.is_none(),
+            "progress must be hidden under the 3s threshold"
+        );
+    }
+
+    // Step 02 (sync_status progress gate): hidden when not syncing regardless of counters
+    #[test]
+    fn sync_status_hides_progress_when_not_syncing() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet, test_node_config());
+
+        svc.sync_in_flight.store(false, Ordering::SeqCst);
+        svc.sync_started_at_ms
+            .store(now_unix_ms() - 4_000, Ordering::SeqCst);
+        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
+        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+
+        assert!(
+            svc.sync_status().sync_progress.is_none(),
+            "progress must be hidden when no sync is in flight"
+        );
+    }
+
+    // Step 02 (DTO shape): disabled_default carries no progress; SyncProgressDto is camelCase
+    #[test]
+    fn disabled_default_has_no_progress_and_dto_is_camel_case() {
+        assert!(SyncStatusDto::disabled_default().sync_progress.is_none());
+
+        let json = serde_json::to_string(&SyncProgressDto {
+            processed_blocks: 1,
+            total_blocks: 2,
+            percent: 50,
+        })
+        .expect("serialize");
+        assert!(json.contains("processedBlocks"), "got: {json}");
+        assert!(json.contains("totalBlocks"), "got: {json}");
+        assert!(json.contains("percent"), "got: {json}");
+    }
+
+    // Step 01 (percent_complete): truncating integer arithmetic
+    #[test]
+    fn percent_complete_partial_truncates() {
+        assert_eq!(percent_complete(234, 1277), 18);
+    }
+
+    // Step 01 (percent_complete): divide-by-zero guard returns 100 (nothing to scan)
+    #[test]
+    fn percent_complete_zero_total_returns_100() {
+        assert_eq!(percent_complete(0, 0), 100);
+    }
+
+    // Step 01 (percent_complete): full progress
+    #[test]
+    fn percent_complete_full_returns_100() {
+        assert_eq!(percent_complete(1277, 1277), 100);
+    }
+
+    // Step 01 (percent_complete): over-count clamps to 100
+    #[test]
+    fn percent_complete_over_count_clamps_to_100() {
+        assert_eq!(percent_complete(200, 100), 100);
+    }
+
+    // Step 01 (percent_complete): midpoint
+    #[test]
+    fn percent_complete_midpoint_returns_50() {
+        assert_eq!(percent_complete(50, 100), 50);
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
