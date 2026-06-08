@@ -34,12 +34,20 @@ export type AddressDto = {
 	isUsed: boolean
 }
 
+export type SyncProgressDto = {
+	processedBlocks: number
+	totalBlocks: number
+	percent: number
+}
+
 export type SyncStatusDto = {
 	tipHeight: number | null
 	lastSyncedBlock: number | null
 	lastSyncedAt: string | null
 	isSyncing: boolean
 	lastError: { code: string; message: string } | null
+	// Present only while a sync is in flight and has run past the backend's 3s threshold.
+	syncProgress: SyncProgressDto | null
 }
 
 export type AdminWalletError =

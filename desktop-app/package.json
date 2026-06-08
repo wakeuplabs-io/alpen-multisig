@@ -22,6 +22,7 @@
     "test:model-trunc-address": "tsx src/domain/admin-wallet/model/__tests__/trunc-address.test.ts",
     "test:model-trunc-txid": "tsx src/domain/admin-wallet/model/__tests__/trunc-txid.test.ts",
     "test:model-relative-time": "tsx src/domain/admin-wallet/model/__tests__/relative-time.test.ts",
+    "test:model-format-sync-progress-label": "tsx src/domain/admin-wallet/model/__tests__/format-sync-progress-label.test.ts",
     "test:model-group-utxos-by-derivation": "tsx src/domain/admin-wallet/model/__tests__/group-utxos-by-derivation.test.ts",
     "test:model-compose-addresses-with-balance": "tsx src/domain/admin-wallet/model/__tests__/compose-addresses-with-balance.test.ts",
     "test:model-group-utxo-balances-by-derivation": "tsx src/domain/admin-wallet/model/__tests__/group-utxo-balances-by-derivation.test.ts",
