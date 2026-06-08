@@ -60,11 +60,27 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	const isDone = phase === 'done'
 	const isEnacted = proposalStatus === 'enacted'
 	const isAwaitingDevice = phase === 'awaiting-device'
+	const isAwaitingConfirmation = phase === 'awaiting-confirmation'
+	const showTxids = (isDone || isAwaitingConfirmation) && (commitTxid != null || revealTxid != null)
 
 	function stepState(index: number): 'done' | 'active' | 'pending' {
 		if (isDone) return 'done'
+		// Submitted: Commit + Reveal are broadcast (✓); step 3 is the active "Awaiting block".
+		if (isAwaitingConfirmation) return index <= BROADCAST_GROUP_LAST_INDEX ? 'done' : 'active'
 		if ((phase === 'broadcasting' || isAwaitingDevice) && index <= BROADCAST_GROUP_LAST_INDEX) return 'active'
 		return 'pending'
+	}
+
+	function stepLabel(index: number, fallback: string): string {
+		if (index === STEPS.length - 1 && isAwaitingConfirmation) return 'Awaiting block'
+		return fallback
+	}
+
+	function stepDetail(index: number, fallback: string): string {
+		if (index === STEPS.length - 1 && isAwaitingConfirmation) {
+			return 'Reveal is in the mempool — confirming on Bitcoin. Safe to leave; it keeps confirming.'
+		}
+		return fallback
 	}
 
 	return (
@@ -79,7 +95,9 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 							? 'Broadcast failed'
 							: isAwaitingDevice
 								? 'Waiting for device…'
-								: 'Broadcasting…'}
+								: isAwaitingConfirmation
+									? 'Submitted — awaiting confirmation…'
+									: 'Broadcasting…'}
 				</h3>
 			</div>
 
@@ -117,10 +135,10 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 												done ? 'text-[#0f9d7a]' : active ? 'text-[#111827]' : 'text-[#9ca3af]',
 											].join(' ')}
 										>
-											{step.label}
+											{stepLabel(i, step.label)}
 											{active && <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#0f9d7a]" />}
 										</p>
-										<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">{step.detail}</p>
+										<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">{stepDetail(i, step.detail)}</p>
 									</div>
 								</div>
 							)
@@ -128,7 +146,7 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 					</div>
 				)}
 
-				{isDone && (commitTxid || revealTxid) && (
+				{showTxids && (
 					<div className="space-y-3">
 						{commitTxid && <TxidRow label="Commit TXID" txid={commitTxid} />}
 						{revealTxid && <TxidRow label="Reveal TXID" txid={revealTxid} />}

@@ -11,6 +11,7 @@
     "test:ipc-schemas": "tsx src/api/ipc-schemas.test.ts",
     "test:admin-wallet-capability-schema": "tsx src/api/__tests__/admin-wallet-capability-schema.test.ts",
     "test:derive-broadcast-error": "tsx src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts",
+    "test:phase-for-broadcast-status": "tsx src/domain/broadcast-proposal/model/__tests__/phase-for-broadcast-status.test.ts",
     "test:derive-proposal-actions": "tsx src/domain/proposal-detail/model/__tests__/derive-proposal-actions.test.ts",
     "test:api-admin-wallet-watch-only": "tsx src/api/admin-wallet-watch-only.test.ts",
     "test:api-admin-wallet-receive-rotation": "tsx src/api/admin-wallet-receive-rotation.test.ts",

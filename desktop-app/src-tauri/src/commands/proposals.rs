@@ -791,7 +791,7 @@ pub async fn proposals_broadcast(
     let wallet_service = wallet_session
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
-    let client = build_client(input.base_url)?;
+    let client = std::sync::Arc::new(build_client(input.base_url)?);
     let cfg = node_config
         .0
         .read()
@@ -811,15 +811,14 @@ pub async fn proposals_broadcast(
         .map_err(|e| e.to_string())?;
     let reveal_change_spk = reveal_change_address.script_pubkey();
 
-    let (commit_txid, reveal_txid) = proposals::broadcast_commit_then_reveal(
-        &client,
+    // Submit synchronously — returns within seconds once both txs are broadcast.
+    let (commit_txid, reveal_txid) = proposals::submit_commit_then_reveal(
+        client.as_ref(),
         btc_rpc.as_ref(),
         &env.asm_rpc_url,
         env.magic_bytes,
         env.network,
         &input.action_id,
-        env.confirm_poll_interval_ms,
-        env.confirm_timeout_ms,
         &commit_funding,
         reveal_change_spk,
         &pending,
@@ -827,18 +826,68 @@ pub async fn proposals_broadcast(
     .await
     .map_err(map_broadcast_error)?;
 
-    let proposal = client
-        .get_proposal(&input.action_id)
-        .await
-        .map_err(|e| map_broadcast_error(BroadcastError::ProposalFetch(e)))?;
+    // Await the reveal confirmation in the background so the UI unblocks immediately. A slow
+    // block leaves the proposal at `reveal_broadcasted` (PendingConfirmation) — never `failed`.
+    spawn_reveal_confirmation(
+        std::sync::Arc::clone(&client),
+        std::sync::Arc::clone(&btc_rpc),
+        pending.inner().clone(),
+        input.action_id.clone(),
+        commit_txid.clone(),
+        reveal_txid.clone(),
+        env.confirm_poll_interval_ms,
+        env.confirm_timeout_ms,
+    );
 
     Ok(BroadcastResultDto {
-        action_id: proposal.action_id,
-        proposal_status: proposal.status,
-        broadcast_status: proposal.broadcast_status,
-        commit_txid: proposal.commit_txid.unwrap_or(commit_txid),
-        reveal_txid: proposal.reveal_txid.unwrap_or(reveal_txid),
+        action_id: input.action_id,
+        proposal_status: "approved".to_string(),
+        broadcast_status: "reveal_broadcasted".to_string(),
+        commit_txid,
+        reveal_txid,
     })
+}
+
+/// Spawn the background reveal-confirmation poll. Owns `Arc` clones so it outlives the command;
+/// no `tauri::State` crosses the spawn boundary. Errors/outcomes are logged, never surfaced as
+/// a `failed` orchestrator state for a slow block.
+#[allow(clippy::too_many_arguments)]
+fn spawn_reveal_confirmation(
+    client: std::sync::Arc<HttpOrchestratorClient>,
+    btc_rpc: std::sync::Arc<HttpBitcoinRpcClient>,
+    pending: PendingReveals,
+    action_id: String,
+    commit_txid: String,
+    reveal_txid: String,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+) {
+    tauri::async_runtime::spawn(async move {
+        let outcome = proposals::await_reveal_confirmation(
+            client.as_ref(),
+            btc_rpc.as_ref(),
+            &action_id,
+            &commit_txid,
+            &reveal_txid,
+            confirm_poll_interval_ms,
+            confirm_timeout_ms,
+            &pending,
+        )
+        .await;
+        match outcome {
+            Ok(proposals::ConfirmOutcome::Confirmed) => {
+                eprintln!("[broadcast] {action_id}: reveal confirmed; orchestrator promoted");
+            }
+            Ok(proposals::ConfirmOutcome::PendingConfirmation) => {
+                eprintln!(
+                    "[broadcast] {action_id}: reveal still unconfirmed after timeout; staying reveal_broadcasted"
+                );
+            }
+            Err(e) => {
+                eprintln!("[broadcast] {action_id}: reveal confirmation poll errored: {e}");
+            }
+        }
+    });
 }
 
 #[derive(Debug, Deserialize)]

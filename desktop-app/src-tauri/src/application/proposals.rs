@@ -132,26 +132,41 @@ fn is_unknown_method(err: &str) -> bool {
     err.contains("-32601") || err.contains("Method not found") || err.contains("method not found")
 }
 
-/// Execute pre-sign commit+reveal, store in PendingReveals, then broadcast atomically.
+/// Outcome of awaiting the reveal confirmation.
 ///
-/// New flow: build_signed_commit → build_reveal_tx → drop keypair → insert pending →
-/// submit_package (or sequential fallback) → report → wait reveal confirm →
-/// remove from pending → return `(commit_txid, reveal_txid)`.
+/// `Confirmed` means the reveal reached at least one confirmation and the orchestrator was
+/// promoted to `reveal_confirmed`. `PendingConfirmation` means the confirmation wait timed out
+/// with zero confirmations — the reveal is still in the mempool and may confirm later. A
+/// `PendingConfirmation` is **not** a failure: no `failed` status is reported and the
+/// `PendingReveals` entry is retained so resubmit/reconcile remain possible.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConfirmOutcome {
+    /// Reveal reached >= 1 confirmation; orchestrator reported `reveal_confirmed`.
+    Confirmed,
+    /// Timed out with 0 confirmations; reveal remains in mempool (`reveal_broadcasted`).
+    PendingConfirmation,
+}
+
+/// Pre-sign commit+reveal, store in PendingReveals, broadcast, and report up to
+/// `reveal_broadcasted`. Returns `(commit_txid, reveal_txid)` **without** waiting for any
+/// confirmation — the caller awaits confirmation separately (see [`await_reveal_confirmation`]).
 ///
-/// The broadcast NEVER advances the chain: on regtest, confirmation is driven by the dev
-/// faucet/harness; on testnet/mainnet by real miners. No bitcoind Core-wallet RPC is used.
+/// Flow: claim → build_signed_commit → build_reveal_tx → drop keypair → insert pending →
+/// submit_package (or sequential fallback) → report commit_broadcasted → report
+/// reveal_broadcasted → return txids.
 ///
-/// `get_raw_transaction` is NEVER called.
+/// On any error during the broadcast stage (a genuine submission error), the proposal is
+/// reported as `failed`. The broadcast NEVER advances the chain: confirmation is driven by the
+/// dev faucet/harness on regtest and by real miners on testnet/mainnet. `get_raw_transaction`
+/// is NEVER called.
 #[allow(clippy::too_many_arguments)]
-pub async fn broadcast_commit_then_reveal(
+pub async fn submit_commit_then_reveal(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     magic_bytes: MagicBytes,
     network: Network,
     action_id: &str,
-    confirm_poll_interval_ms: u64,
-    confirm_timeout_ms: u64,
     commit_funding: &dyn CommitFunding,
     reveal_change_spk: ScriptBuf,
     pending: &PendingReveals,
@@ -296,37 +311,6 @@ pub async fn broadcast_commit_then_reveal(
         )
         .await?;
 
-        // Wait for reveal confirmation only (no commit confirmation wait).
-        // NOTE: the broadcast path must NEVER advance the chain. On regtest, confirmation
-        // is driven by the dev faucet/harness (see desktop-app/e2e-webdriver mine helpers
-        // and regtest-dev-api); on testnet/mainnet a real miner confirms. This keeps the
-        // production flow free of any bitcoind Core-wallet dependency (getnewaddress).
-        wait_for_confirmation(
-            btc_rpc,
-            &reveal_txid,
-            confirm_poll_interval_ms,
-            confirm_timeout_ms,
-        )
-        .await?;
-
-        // Report reveal_confirmed.
-        report_broadcast(
-            client,
-            action_id,
-            "reveal_confirmed",
-            None,
-            Some(&commit_txid),
-            Some(&reveal_txid),
-            None,
-        )
-        .await?;
-
-        // Remove from PendingReveals after reveal_confirmed.
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.remove(action_id);
-        }
-
         Ok((commit_txid, reveal_txid))
     }
     .await;
@@ -347,12 +331,113 @@ pub async fn broadcast_commit_then_reveal(
     broadcast_result
 }
 
+/// Await a single confirmation of the reveal tx, then promote the orchestrator.
+///
+/// Polls `get_transaction_confirmations(reveal_txid)`:
+/// - On `>= 1` confirmation → reports `reveal_confirmed`, removes the `PendingReveals` entry,
+///   and returns [`ConfirmOutcome::Confirmed`].
+/// - On timeout with `0` confirmations → returns [`ConfirmOutcome::PendingConfirmation`]: it
+///   does **not** report `failed`, keeps the last status at `reveal_broadcasted`, and retains
+///   the `PendingReveals` entry. A slow block is never a failure.
+/// - On a genuine RPC error while polling → returns `Err(BroadcastError::BitcoinRpc)` without
+///   reporting `failed` (the tx is already broadcast; an on-open reconcile can recover later).
+///
+/// Intended to run in the background after [`submit_commit_then_reveal`] returns.
+#[allow(clippy::too_many_arguments)]
+pub async fn await_reveal_confirmation(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    action_id: &str,
+    commit_txid: &str,
+    reveal_txid: &str,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    pending: &PendingReveals,
+) -> Result<ConfirmOutcome, BroadcastError> {
+    if !wait_for_confirmation(
+        btc_rpc,
+        reveal_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+    )
+    .await?
+    {
+        // Timed out with 0 confirmations: stay reveal_broadcasted (mempool-pending).
+        return Ok(ConfirmOutcome::PendingConfirmation);
+    }
+
+    report_broadcast(
+        client,
+        action_id,
+        "reveal_confirmed",
+        None,
+        Some(commit_txid),
+        Some(reveal_txid),
+        None,
+    )
+    .await?;
+
+    {
+        let mut guard = pending.lock().unwrap();
+        guard.remove(action_id);
+    }
+
+    Ok(ConfirmOutcome::Confirmed)
+}
+
+/// Synchronous submit + await-confirmation composition (retained for tests and any sequential
+/// caller). Unlike the previous implementation, a confirmation timeout is **not** reported as
+/// `failed` — it leaves the proposal at `reveal_broadcasted`.
+#[allow(clippy::too_many_arguments)]
+pub async fn broadcast_commit_then_reveal(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    magic_bytes: MagicBytes,
+    network: Network,
+    action_id: &str,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
+    pending: &PendingReveals,
+) -> Result<(String, String), BroadcastError> {
+    let (commit_txid, reveal_txid) = submit_commit_then_reveal(
+        client,
+        btc_rpc,
+        asm_rpc_url,
+        magic_bytes,
+        network,
+        action_id,
+        commit_funding,
+        reveal_change_spk,
+        pending,
+    )
+    .await?;
+
+    await_reveal_confirmation(
+        client,
+        btc_rpc,
+        action_id,
+        &commit_txid,
+        &reveal_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+        pending,
+    )
+    .await?;
+
+    Ok((commit_txid, reveal_txid))
+}
+
+/// Poll until the tx reaches >= 1 confirmation (`Ok(true)`) or the timeout elapses
+/// (`Ok(false)`). A genuine RPC error short-circuits to `Err(BitcoinRpc)`.
 async fn wait_for_confirmation(
     btc_rpc: &dyn BitcoinRpcClient,
     txid: &str,
     poll_interval_ms: u64,
     timeout_ms: u64,
-) -> Result<(), BroadcastError> {
+) -> Result<bool, BroadcastError> {
     let start = std::time::Instant::now();
     loop {
         let confs = btc_rpc
@@ -360,12 +445,10 @@ async fn wait_for_confirmation(
             .await
             .map_err(BroadcastError::BitcoinRpc)?;
         if confs >= 1 {
-            return Ok(());
+            return Ok(true);
         }
         if start.elapsed().as_millis() as u64 >= timeout_ms {
-            return Err(BroadcastError::Timeout {
-                txid: txid.to_string(),
-            });
+            return Ok(false);
         }
         tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
     }
@@ -1306,6 +1389,8 @@ mod tests {
         submit_package_result: Result<(), String>,
         send_raw_transaction_call_count: Mutex<u32>,
         get_raw_transaction_call_count: Mutex<u32>,
+        /// Confirmations returned by `get_transaction_confirmations` (default 1).
+        confirmations: u32,
     }
 
     impl MockBtcRpc {
@@ -1314,6 +1399,17 @@ mod tests {
                 submit_package_result: Ok(()),
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 1,
+            }
+        }
+
+        /// Submit succeeds but the reveal never confirms (0 confirmations).
+        fn with_zero_confirmations() -> Self {
+            Self {
+                submit_package_result: Ok(()),
+                send_raw_transaction_call_count: Mutex::new(0),
+                get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 0,
             }
         }
 
@@ -1322,6 +1418,7 @@ mod tests {
                 submit_package_result: Err(err.to_string()),
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 1,
             }
         }
 
@@ -1342,7 +1439,7 @@ mod tests {
         }
 
         async fn get_transaction_confirmations(&self, _txid: &str) -> Result<u32, String> {
-            Ok(1)
+            Ok(self.confirmations)
         }
 
         async fn estimate_fee_rate_sats_per_vb(&self, _: u16) -> Result<u64, String> {
@@ -1373,7 +1470,29 @@ mod tests {
     }
 
     /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.
-    struct MockOrchestratorClientLargeAction;
+    ///
+    /// Records every `report_broadcast_progress` request so tests can assert which broadcast
+    /// statuses were (or were not) reported.
+    #[derive(Default)]
+    struct MockOrchestratorClientLargeAction {
+        reports:
+            Mutex<Vec<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
+    }
+
+    impl MockOrchestratorClientLargeAction {
+        fn new() -> Self {
+            Self::default()
+        }
+
+        fn reported_statuses(&self) -> Vec<String> {
+            self.reports
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|r| r.broadcast_status.clone())
+                .collect()
+        }
+    }
 
     #[async_trait::async_trait]
     impl OrchestratorClient for MockOrchestratorClientLargeAction {
@@ -1472,6 +1591,7 @@ mod tests {
             action_id: &str,
             request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
         ) -> Result<OrcProposal, OrchestratorError> {
+            self.reports.lock().unwrap().push(request.clone());
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,
@@ -1508,7 +1628,7 @@ mod tests {
         let commit_txid = "spy-commit-txid-abc123";
         let spy = SpyCommitFunding::new(commit_txid);
         let mock_rpc = MockBtcRpc::new(commit_txid);
-        let mock_client = MockOrchestratorClientLargeAction;
+        let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let reveal_change_spk = ScriptBuf::new();
         let pending = crate::application::pending_reveals::new();
@@ -1546,7 +1666,7 @@ mod tests {
 
         let spy = SpyCommitFunding::new("ignored");
         let mock_rpc = MockBtcRpc::new("ignored"); // submit_package returns Ok(())
-        let mock_client = MockOrchestratorClientLargeAction;
+        let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
@@ -1580,7 +1700,7 @@ mod tests {
 
         let spy = SpyCommitFunding::new("ignored");
         let mock_rpc = MockBtcRpc::with_submit_package_error("Method not found");
-        let mock_client = MockOrchestratorClientLargeAction;
+        let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
@@ -1614,7 +1734,7 @@ mod tests {
 
         let spy = SpyCommitFunding::new("ignored");
         let mock_rpc = MockBtcRpc::new("ignored");
-        let mock_client = MockOrchestratorClientLargeAction;
+        let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
@@ -1660,7 +1780,7 @@ mod tests {
 
         let spy = SpyCommitFunding::new("ignored");
         let mock_rpc = MockBtcRpc::new("ignored");
-        let mock_client = MockOrchestratorClientLargeAction;
+        let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
@@ -1682,6 +1802,209 @@ mod tests {
         assert!(
             result.is_ok(),
             "broadcast on regtest must succeed without mining / wallet RPC: {result:?}"
+        );
+    }
+
+    // ─── submit / await split tests ──────────────────────────────────────────
+
+    /// `submit_commit_then_reveal` returns after reporting `reveal_broadcasted` and never
+    /// waits for or reports a confirmation. The PendingReveals entry must remain.
+    #[tokio::test]
+    async fn submit_returns_at_reveal_broadcasted_without_confirming() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = submit_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-submit-only",
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(result.is_ok(), "submit should succeed: {result:?}");
+        let statuses = mock_client.reported_statuses();
+        assert_eq!(statuses, vec!["commit_broadcasted", "reveal_broadcasted"]);
+        assert!(
+            !statuses
+                .iter()
+                .any(|s| s == "reveal_confirmed" || s == "failed"),
+            "submit must not report reveal_confirmed or failed: {statuses:?}"
+        );
+        assert!(
+            pending.lock().unwrap().get("action-submit-only").is_some(),
+            "PendingReveals entry must be present after submit (awaiting confirmation)"
+        );
+    }
+
+    /// A genuine submission error (`submit_package` hard error) reports `failed`.
+    #[tokio::test]
+    async fn submit_reports_failed_on_real_submission_error() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_submit_package_error("node rejected");
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = submit_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-submit-error",
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(matches!(result, Err(BroadcastError::BitcoinRpc(_))));
+        assert!(
+            mock_client
+                .reported_statuses()
+                .iter()
+                .any(|s| s == "failed"),
+            "real submission error must report failed"
+        );
+    }
+
+    /// `await_reveal_confirmation` with 1 confirmation reports `reveal_confirmed`, removes the
+    /// pending entry, and returns `Confirmed`.
+    #[tokio::test]
+    async fn await_confirmation_confirms_and_removes_pending() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+
+        let mock_rpc = MockBtcRpc::new("ignored"); // 1 confirmation
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-confirm".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-1".to_string(),
+                commit_txid: "commit-1".to_string(),
+            },
+        );
+
+        let outcome = await_reveal_confirmation(
+            &mock_client,
+            &mock_rpc,
+            "action-confirm",
+            "commit-1",
+            "reveal-1",
+            10,
+            5000,
+            &pending,
+        )
+        .await
+        .expect("await ok");
+
+        assert_eq!(outcome, ConfirmOutcome::Confirmed);
+        assert_eq!(mock_client.reported_statuses(), vec!["reveal_confirmed"]);
+        assert!(
+            pending.lock().unwrap().get("action-confirm").is_none(),
+            "pending entry must be removed after reveal_confirmed"
+        );
+    }
+
+    /// `await_reveal_confirmation` that times out with 0 confirmations returns
+    /// `PendingConfirmation`, reports NOTHING (no `failed`, no `reveal_confirmed`), and keeps
+    /// the pending entry. A slow block must never become a false failure.
+    #[tokio::test]
+    async fn await_confirmation_timeout_stays_pending_without_failed() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-pending".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-2".to_string(),
+                commit_txid: "commit-2".to_string(),
+            },
+        );
+
+        let outcome = await_reveal_confirmation(
+            &mock_client,
+            &mock_rpc,
+            "action-pending",
+            "commit-2",
+            "reveal-2",
+            1,
+            5, // tiny timeout → returns PendingConfirmation quickly
+            &pending,
+        )
+        .await
+        .expect("await ok");
+
+        assert_eq!(outcome, ConfirmOutcome::PendingConfirmation);
+        let statuses = mock_client.reported_statuses();
+        assert!(
+            !statuses
+                .iter()
+                .any(|s| s == "failed" || s == "reveal_confirmed"),
+            "timeout must not report failed or reveal_confirmed: {statuses:?}"
+        );
+        assert!(
+            pending.lock().unwrap().get("action-pending").is_some(),
+            "pending entry must be retained on PendingConfirmation"
+        );
+    }
+
+    /// The retained sequential wrapper must NOT report `failed` when confirmation times out.
+    #[tokio::test]
+    async fn broadcast_wrapper_timeout_does_not_report_failed() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-wrapper-timeout",
+            1,
+            5,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "wrapper should succeed (pending, not failed): {result:?}"
+        );
+        assert!(
+            !mock_client
+                .reported_statuses()
+                .iter()
+                .any(|s| s == "failed"),
+            "confirmation timeout must not report failed"
         );
     }
 

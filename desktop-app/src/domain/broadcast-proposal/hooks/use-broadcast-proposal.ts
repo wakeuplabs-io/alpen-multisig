@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
 	broadcastProposal,
 	getProposalByActionId,
@@ -15,11 +15,14 @@ import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-br
 import type { WalletAdapter } from '@/wallet/types'
 
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
-import { deriveBroadcastError } from '../model/broadcast-proposal'
+import { deriveBroadcastError, phaseForBroadcastStatus } from '../model/broadcast-proposal'
 
 export type SignerKind = 'hardware' | 'mnemonic'
 
 const inFlightActionIds = new Set<string>()
+
+/** Interval between confirmation polls while in `awaiting-confirmation`. */
+const CONFIRMATION_POLL_INTERVAL_MS = 8000
 
 type UseBroadcastProposalReturn = {
 	phase: BroadcastPhase
@@ -61,6 +64,49 @@ export function useBroadcastProposal(
 	const [proposal, setProposal] = useState<Proposal | null>(null)
 	const [error, setError] = useState<BroadcastError | null>(null)
 	const broadcastStarted = useRef(false)
+	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+	const clearConfirmationPoll = useCallback(() => {
+		if (pollRef.current !== null) {
+			clearInterval(pollRef.current)
+			pollRef.current = null
+		}
+	}, [])
+
+	/** Adopt a fresh orchestrator row into proposal/result state. */
+	const applyProposal = useCallback((p: Proposal) => {
+		setProposal(p)
+		setResult(
+			mergeBroadcastWithProposal(
+				{
+					actionId: p.actionId,
+					proposalStatus: p.status,
+					broadcastStatus: p.broadcastStatus,
+					commitTxid: p.commitTxid,
+					revealTxid: p.revealTxid,
+				},
+				p,
+			),
+		)
+	}, [])
+
+	/** Poll the orchestrator until the reveal confirms, then flip to `done`. */
+	const startConfirmationPoll = useCallback(() => {
+		clearConfirmationPoll()
+		pollRef.current = setInterval(() => {
+			void getProposalByActionId({ baseUrl, actionId }).then((res) => {
+				if (!res.ok) return
+				applyProposal(res.data)
+				if (phaseForBroadcastStatus(res.data.broadcastStatus, res.data.status) === 'done') {
+					clearConfirmationPoll()
+					setPhase('done')
+				}
+			})
+		}, CONFIRMATION_POLL_INTERVAL_MS)
+	}, [baseUrl, actionId, applyProposal, clearConfirmationPoll])
+
+	// Stop any active poll when the hook unmounts.
+	useEffect(() => clearConfirmationPoll, [clearConfirmationPoll])
 
 	useEffect(() => {
 		if (!actionId) return
@@ -80,21 +126,13 @@ export function useBroadcastProposal(
 			if (proposalRes.ok) {
 				const p = proposalRes.data
 				setProposal(p)
-				if (p.broadcastStatus !== 'idle' && p.broadcastStatus !== 'failed') {
-					setResult(
-						mergeBroadcastWithProposal(
-							{
-								actionId: p.actionId,
-								proposalStatus: p.status,
-								broadcastStatus: p.broadcastStatus,
-								commitTxid: p.commitTxid,
-								revealTxid: p.revealTxid,
-							},
-							p,
-						),
-					)
+				const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status)
+				if (resumePhase !== null) {
+					applyProposal(p)
 					setBundle(res.data)
-					setPhase('done')
+					setPhase(resumePhase)
+					// Reconcile: a still-unconfirmed reveal keeps polling until it confirms.
+					if (resumePhase === 'awaiting-confirmation') startConfirmationPoll()
 					return
 				}
 			}
@@ -104,7 +142,7 @@ export function useBroadcastProposal(
 		return () => {
 			active = false
 		}
-	}, [actionId, baseUrl])
+	}, [actionId, baseUrl, applyProposal, startConfirmationPoll])
 
 	async function prepare() {
 		setPhase('preparing')
@@ -170,14 +208,19 @@ export function useBroadcastProposal(
 				return
 			}
 
+			// Submit returned within seconds. Decide the phase from the authoritative row:
+			// reveal_confirmed → done; reveal_broadcasted → awaiting-confirmation (keep polling).
 			const refreshed = await getProposalByActionId({ baseUrl, actionId })
+			let nextPhase: BroadcastPhase = 'awaiting-confirmation'
 			if (refreshed.ok) {
-				setProposal(refreshed.data)
-				setResult(mergeBroadcastWithProposal(res.data, refreshed.data))
+				applyProposal(refreshed.data)
+				nextPhase = phaseForBroadcastStatus(refreshed.data.broadcastStatus, refreshed.data.status) ?? nextPhase
 			} else {
 				setResult(res.data)
+				nextPhase = phaseForBroadcastStatus(res.data.broadcastStatus, res.data.proposalStatus) ?? nextPhase
 			}
-			setPhase('done')
+			setPhase(nextPhase)
+			if (nextPhase === 'awaiting-confirmation') startConfirmationPoll()
 		} finally {
 			broadcastStarted.current = false
 			inFlightActionIds.delete(actionId)
