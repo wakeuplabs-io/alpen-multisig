@@ -21,11 +21,11 @@ export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
-	useEnsureAdminWalletSession(adapter)
+	const { sessionReady } = useEnsureAdminWalletSession(adapter)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	const { adminWalletInfo } = useAdminWalletInfo()
+	const { adminWalletInfo } = useAdminWalletInfo(sessionReady)
 	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
 	const signerKind: SignerKind = rawSignerKind === 'hardware' ? 'hardware' : 'mnemonic'
