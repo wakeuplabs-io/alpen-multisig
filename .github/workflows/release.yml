@@ -11,8 +11,38 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  pre-release-checks:
+    name: Pre-release security & license checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-01-01
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+
+      - name: Cargo audit (vulnerability scan)
+        run: cargo audit
+
+      - name: Cargo deny (license & source check)
+        run: cargo deny check
+
   build-linux:
     name: Build Linux artifacts
+    needs: [pre-release-checks]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +122,7 @@ jobs:
 
   build-macos:
     name: Build macOS artifacts
+    needs: [pre-release-checks]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -157,6 +188,7 @@ jobs:
     # NSIS `.exe` only (WiX `.msi` is Windows-only). Full analysis:
     # docs/operations/windows-build-incompatibilities.md
     name: Build Windows artifacts (cross-compiled on Linux)
+    needs: [pre-release-checks]
     runs-on: ubuntu-latest
     env:
       # cargo-xwin downloads the Windows SDK + CRT; accept Microsoft's license.
