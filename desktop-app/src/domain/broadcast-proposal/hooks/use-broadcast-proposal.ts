@@ -3,6 +3,8 @@ import {
 	broadcastProposal,
 	getProposalByActionId,
 	prepareBroadcast,
+	reportBroadcastProgress,
+	resolveBroadcastStatus,
 	type BroadcastInput,
 	type BroadcastResult,
 	type PrepareBroadcastResult,
@@ -90,19 +92,43 @@ export function useBroadcastProposal(
 		)
 	}, [])
 
-	/** Poll the orchestrator until the reveal confirms, then flip to `done`. */
+	/**
+	 * Poll until the reveal confirms, then flip to `done`.
+	 *
+	 * Each tick refreshes the orchestrator row (so a background-task promotion is picked up),
+	 * and — if still unconfirmed — reconciles directly against the chain via
+	 * `resolveBroadcastStatus`, promoting the orchestrator with `reportBroadcastProgress` when
+	 * the reveal has a confirmation. This keeps the UI converging even if the background
+	 * confirmation task never ran (e.g. the app was reopened later).
+	 */
 	const startConfirmationPoll = useCallback(() => {
 		clearConfirmationPoll()
-		pollRef.current = setInterval(() => {
-			void getProposalByActionId({ baseUrl, actionId }).then((res) => {
-				if (!res.ok) return
-				applyProposal(res.data)
-				if (phaseForBroadcastStatus(res.data.broadcastStatus, res.data.status) === 'done') {
-					clearConfirmationPoll()
-					setPhase('done')
-				}
-			})
-		}, CONFIRMATION_POLL_INTERVAL_MS)
+		const tick = async () => {
+			const res = await getProposalByActionId({ baseUrl, actionId })
+			if (!res.ok) return
+			const p = res.data
+			applyProposal(p)
+			if (phaseForBroadcastStatus(p.broadcastStatus, p.status) === 'done') {
+				clearConfirmationPoll()
+				setPhase('done')
+				return
+			}
+			// Not yet promoted by the background task — reconcile against the chain.
+			const resolved = await resolveBroadcastStatus({ commitTxid: p.commitTxid, revealTxid: p.revealTxid })
+			if (resolved.ok && resolved.data.broadcastStatus === 'reveal_confirmed') {
+				const promoted = await reportBroadcastProgress({
+					baseUrl,
+					actionId,
+					broadcastStatus: 'reveal_confirmed',
+					commitTxid: p.commitTxid,
+					revealTxid: p.revealTxid,
+				})
+				if (promoted.ok) applyProposal(promoted.data)
+				clearConfirmationPoll()
+				setPhase('done')
+			}
+		}
+		pollRef.current = setInterval(() => void tick(), CONFIRMATION_POLL_INTERVAL_MS)
 	}, [baseUrl, actionId, applyProposal, clearConfirmationPoll])
 
 	// Stop any active poll when the hook unmounts.
