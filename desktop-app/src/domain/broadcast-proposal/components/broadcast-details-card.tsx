@@ -185,7 +185,7 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={isBroadcasting || !canSign}
+					disabled={isBroadcasting || !canSign || adminWalletInfo == null}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>

@@ -116,10 +116,10 @@ pub struct AdminWalletInfo {
 
 /// Read admin wallet info from the shared `WalletService` — single source of truth.
 ///
-/// Triggers a sync, then returns the confirmed balance and external address index 0.
+/// Returns the cached balance and external address index 0 without triggering a sync.
+/// Sync is handled separately by `admin_wallet_sync`; calling it here blocks the UI on RPC.
 /// Returns `Err(Disabled)` if no wallet session is active.
 pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
-    svc.sync().await.map_err(serialize_wallet_error)?;
     let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
     let address = svc
         .list_addresses(KeychainKind::External, 0, 1)

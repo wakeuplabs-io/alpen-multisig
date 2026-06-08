@@ -36,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
     let state = if let Some(database_url) = &config.database_url {
         let pool = PgPoolOptions::new()
             .max_connections(10)
+            .idle_timeout(std::time::Duration::from_secs(300))
+            .max_lifetime(std::time::Duration::from_secs(1800))
             .connect(database_url)
             .await
             .context("failed to connect to postgres")?;
