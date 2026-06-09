@@ -209,10 +209,10 @@ export function BroadcastDetailsCard({
 					adminWalletInfo != null &&
 					adminWalletInfo.balanceSats === 0 &&
 					(utxoCount === undefined || utxoCount === 0) && (
-					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
-						Insufficient balance — fund the admin wallet to broadcast
-					</p>
-				)}
+						<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+							Insufficient balance — fund the admin wallet to broadcast
+						</p>
+					)}
 			</div>
 		</div>
 	)

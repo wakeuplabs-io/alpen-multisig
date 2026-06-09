@@ -67,7 +67,12 @@ assert.equal(
 	'disabled when balance=0 and utxoCount=0',
 )
 assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 }, utxoCount: undefined }),
+	isBroadcastDisabled({
+		isBroadcasting: false,
+		canSign: true,
+		adminWalletInfo: { balanceSats: 0 },
+		utxoCount: undefined,
+	}),
 	true,
 	'disabled when balance=0 and utxoCount unknown',
 )
