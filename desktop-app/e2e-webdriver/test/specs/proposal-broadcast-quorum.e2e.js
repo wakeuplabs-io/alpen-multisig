@@ -29,15 +29,25 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
+		// Wait for the admin wallet address to render so we can read it for funding.
+		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-external-address-0"]')
+		await addressEl.waitForDisplayed({ timeout: 30000 })
+
+		// Fund Admin Wallet before broadcasting — required from Phase 3.6 (sole commit funder).
+		// Must happen BEFORE waiting for the confirm button, since the button is disabled
+		// when balance is 0.
+		await fundAdminWallet()
+
+		// Refresh the page so useAdminWalletInfo re-fetches the updated balance.
+		await browser.refresh()
+		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
+
 		// Screen auto-runs prepare on mount; wait for the confirm step (prepare only shows as Retry on error).
 		const confirmBtn = await $('button[data-testid="e2e-broadcast-confirm"]')
 		await confirmBtn.waitForClickable({
 			timeout: 180000,
 			timeoutMsg: 'Prepare broadcast should finish and enable Confirm & Broadcast',
 		})
-
-		// Fund Admin Wallet before broadcasting — required from Phase 3.6 (sole commit funder).
-		await fundAdminWallet()
 
 		await confirmBtn.click()
 
