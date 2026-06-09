@@ -129,3 +129,103 @@ async fn admin_wallet_list_utxos_includes_fresh_utxo_with_one_confirmation_after
         "expected the freshly funded UTXO (1 confirmation) after mining 1 block"
     );
 }
+
+/// Regression (change-invisibility bug): spending from the Admin Wallet routes the change to the
+/// Internal keychain. After sync, `list_utxos` must report the Internal UTXO and
+/// `list_addresses(Internal)` must include the change address at that derivation index — the
+/// exact pair the panel joins to render "Addresses with balance". Before the fix the panel
+/// dropped Internal UTXOs, showing "No addresses with balance" while the header balance was
+/// non-zero.
+#[tokio::test]
+#[ignore = "requires running bitcoind + electrs (scripts/local-stack.sh) — set BITCOIN_RPC_* and ELECTRUM_URL"]
+async fn admin_wallet_change_utxo_lands_on_internal_keychain_after_spend() {
+    use bdk_bitcoind_rpc::bitcoincore_rpc::RpcApi;
+    use bdk_wallet::bitcoin::{Amount, FeeRate, Network};
+    use bdk_wallet::KeychainKind;
+    use desktop_app::application::wallet_service::KeychainDto;
+    use desktop_app::infrastructure::admin_wallet::{get_external_address, load_admin_wallet};
+
+    let wallet =
+        load_admin_wallet(REGTEST_MNEMONIC, Network::Regtest).expect("load_admin_wallet ok");
+    let address_str = get_external_address(&wallet).to_string();
+    fund_admin_wallet_address(&address_str);
+
+    // Node-wallet address used both as spend recipient and mining target. Round-trips through
+    // a string so no types cross between the bitcoincore-rpc and bdk bitcoin crates.
+    let rpc = rpc_client();
+    let node_addr = rpc
+        .get_new_address(None, None)
+        .expect("node address")
+        .assume_checked();
+    let recipient_str = node_addr.to_string();
+
+    let svc = WalletService::new(wallet, test_node_config());
+    let funded = sync_until(&svc, |svc| {
+        Box::pin(async move {
+            svc.get_balance()
+                .await
+                .is_ok_and(|b| b.confirmed_sats > 50_000)
+        })
+    })
+    .await;
+    assert!(funded, "wallet must hold confirmed funds before spending");
+
+    // Spend to a node-side address; BDK sends the change to the Internal keychain.
+    let recipient = recipient_str
+        .parse::<bdk_wallet::bitcoin::Address<bdk_wallet::bitcoin::address::NetworkUnchecked>>()
+        .expect("parse recipient")
+        .require_network(Network::Regtest)
+        .expect("regtest recipient");
+    let tx = {
+        let mut wallet = svc.wallet.lock().await;
+        let mut builder = wallet.build_tx();
+        builder.add_recipient(recipient.script_pubkey(), Amount::from_sat(10_000));
+        builder.fee_rate(FeeRate::from_sat_per_vb(2).expect("fee rate"));
+        let mut psbt = builder.finish().expect("build spend psbt");
+        let finalized = wallet
+            .sign(&mut psbt, bdk_wallet::SignOptions::default())
+            .expect("sign spend");
+        assert!(finalized, "spend PSBT must finalize with the mnemonic keys");
+        psbt.extract_tx().expect("extract tx")
+    };
+
+    let raw_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
+    rpc.send_raw_transaction(raw_hex.as_str())
+        .expect("broadcast spend");
+    rpc.generate_to_address(1, &node_addr)
+        .expect("mine spend confirmation");
+
+    let change_seen = sync_until(&svc, |svc| {
+        Box::pin(async move {
+            svc.list_utxos().await.is_ok_and(|utxos| {
+                utxos
+                    .iter()
+                    .any(|u| matches!(u.keychain, KeychainDto::Internal) && u.confirmations >= 1)
+            })
+        })
+    })
+    .await;
+    assert!(
+        change_seen,
+        "a confirmed Internal (change) UTXO must appear after spending and syncing"
+    );
+
+    // The change derivation index must fall inside the internal address window the panel
+    // lists — that join is what makes the change row visible in "Addresses with balance".
+    let utxos = svc.list_utxos().await.expect("list_utxos ok");
+    let change = utxos
+        .iter()
+        .find(|u| matches!(u.keychain, KeychainDto::Internal))
+        .expect("internal utxo present");
+    let internal_addrs = svc
+        .list_addresses(KeychainKind::Internal, 0, 20)
+        .await
+        .expect("list internal addresses ok");
+    assert!(
+        internal_addrs
+            .iter()
+            .any(|a| a.index == change.derivation_index),
+        "change derivation index {} must be within the internal address window",
+        change.derivation_index
+    );
+}
