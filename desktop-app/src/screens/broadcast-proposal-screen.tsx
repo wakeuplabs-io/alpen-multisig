@@ -64,7 +64,12 @@ export function BroadcastProposalScreen() {
 	const isLoading = phase === 'idle' || phase === 'preparing'
 	const showDetails =
 		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
-	const showProgress = phase === 'awaiting-device' || phase === 'broadcasting' || phase === 'done' || phase === 'error'
+	const showProgress =
+		phase === 'awaiting-device' ||
+		phase === 'broadcasting' ||
+		phase === 'awaiting-confirmation' ||
+		phase === 'done' ||
+		phase === 'error'
 
 	const utxoCount = isAdminWalletMode && utxos != null ? utxos.length : undefined
 	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined

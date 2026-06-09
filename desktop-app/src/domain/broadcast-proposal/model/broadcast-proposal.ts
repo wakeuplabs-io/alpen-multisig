@@ -1,6 +1,37 @@
 import type { BroadcastStatus } from '@/api/proposals'
 
-export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'awaiting-device' | 'broadcasting' | 'done' | 'error'
+export type BroadcastPhase =
+	| 'idle'
+	| 'preparing'
+	| 'confirming'
+	| 'awaiting-device'
+	| 'broadcasting'
+	| 'awaiting-confirmation'
+	| 'done'
+	| 'error'
+
+/**
+ * Resolve the post-submit phase from the authoritative broadcast/proposal status.
+ *
+ * - `reveal_confirmed` (or an already-`enacted` proposal) → `done`.
+ * - `reveal_broadcasted` / `commit_broadcasted` / `commit_confirmed` → `awaiting-confirmation`
+ *   (submitted, the reveal is in the mempool awaiting a block — the user may leave).
+ * - anything else (`idle`, `failed`) → `null`, leaving the caller's current phase unchanged.
+ */
+export function phaseForBroadcastStatus(
+	broadcastStatus: BroadcastStatus,
+	proposalStatus?: string,
+): Extract<BroadcastPhase, 'done' | 'awaiting-confirmation'> | null {
+	if (broadcastStatus === 'reveal_confirmed' || proposalStatus === 'enacted') return 'done'
+	if (
+		broadcastStatus === 'reveal_broadcasted' ||
+		broadcastStatus === 'commit_broadcasted' ||
+		broadcastStatus === 'commit_confirmed'
+	) {
+		return 'awaiting-confirmation'
+	}
+	return null
+}
 
 export type BroadcastErrorCode =
 	| 'insufficient_fee'
