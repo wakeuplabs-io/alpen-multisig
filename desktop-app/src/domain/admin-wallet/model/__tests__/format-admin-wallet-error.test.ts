@@ -12,6 +12,14 @@ assert.ok(disabled.body.length > 0)
 const rpcUnreachable = formatAdminWalletError({ type: 'RpcUnreachable', message: 'timeout' } satisfies AdminWalletError)
 assert.equal(rpcUnreachable.severity, 'warning')
 
+// ElectrumUnreachable → severity 'warning' (R2.2 Electrum sync)
+const electrumUnreachable = formatAdminWalletError({
+	type: 'ElectrumUnreachable',
+	message: 'tcp://127.0.0.1:60401: connection refused',
+} satisfies AdminWalletError)
+assert.equal(electrumUnreachable.severity, 'warning')
+assert.ok(electrumUnreachable.title.toLowerCase().includes('electrum'))
+
 // RpcAuthFailed → severity 'warning'
 const rpcAuthFailed = formatAdminWalletError({
 	type: 'RpcAuthFailed',
@@ -43,6 +51,7 @@ assert.equal(syncIncomplete.body, syncMsg)
 const variants: AdminWalletError[] = [
 	{ type: 'Disabled' },
 	{ type: 'RpcUnreachable', message: 'x' },
+	{ type: 'ElectrumUnreachable', message: 'x' },
 	{ type: 'RpcAuthFailed', message: 'x' },
 	{ type: 'DescriptorParseError', message: 'x' },
 	{ type: 'SyncIncomplete', message: 'x' },

@@ -35,7 +35,7 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 | `tauri-driver`              | `cargo install tauri-driver --locked`                                                               |
 | Node 18+                    | `npm` in this directory                                                                             |
 | Graphical session           | Run from your desktop session (not SSH-only without display)                                        |
-| **Real backend stack**      | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E                  |
+| **Real backend stack**      | bitcoind regtest, electrs (Admin Wallet Electrum sync), `strata-asm-runner`, orchestrator, Postgres — same as manual E2E |
 | **Env files**               | `orchestrator-be/.env`, `desktop-app/.env` must point RPC/asm/orchestrator at your running services |
 
 ### Secret custody (Wave 2 Decision #2)

@@ -20,6 +20,12 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: `Cannot reach Bitcoin node. Check BITCOIN_RPC_URL.${err.message ? ` (${err.message})` : ''}`,
 				severity: 'warning',
 			}
+		case 'ElectrumUnreachable':
+			return {
+				title: 'Electrum indexer unreachable',
+				body: `Cannot reach the Electrum indexer used for wallet sync. Check ELECTRUM_URL.${err.message ? ` (${err.message})` : ''}`,
+				severity: 'warning',
+			}
 		case 'RpcAuthFailed':
 			return {
 				title: 'RPC auth failed',
