@@ -35,14 +35,14 @@
           "threshold": 1
         },
         "confirmation_depths": {
-          "strata_admin_multisig_update": 3,
-          "strata_seq_manager_multisig_update": 3,
-          "alpen_admin_multisig_update": 3,
-          "operator_update": 3,
-          "sequencer_update": 3,
-          "ol_stf_vk_update": 3,
-          "asm_stf_vk_update": 3,
-          "ee_stf_vk_update": 3
+          "strata_admin_multisig_update": 30,
+          "strata_seq_manager_multisig_update": 30,
+          "alpen_admin_multisig_update": 30,
+          "operator_update": 30,
+          "sequencer_update": 30,
+          "ol_stf_vk_update": 30,
+          "asm_stf_vk_update": 30,
+          "ee_stf_vk_update": 30
         },
         "max_seqno_gap": 10
       }

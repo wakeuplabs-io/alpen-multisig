@@ -75,21 +75,6 @@ export function ProposalDetailScreen() {
 		reload()
 	}
 
-	async function handleCheckEnacted(): Promise<{ ok: true } | { ok: false; error: string }> {
-		if (!actionId) return { ok: false, error: 'No action ID' }
-		const res = await reportBroadcastProgress({
-			baseUrl: ORCHESTRATOR_BASE_URL,
-			actionId,
-			broadcastStatus: 'reveal_confirmed',
-			proposalStatus: 'enacted',
-		})
-		if (res.ok) {
-			reload()
-			return { ok: true }
-		}
-		return { ok: false, error: res.error }
-	}
-
 	if (wallet === null) {
 		return <Navigate to="/" replace />
 	}
@@ -169,7 +154,6 @@ export function ProposalDetailScreen() {
 								onSign={() => navigate(`/proposals/${actionId}/sign`)}
 								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
 								onPasteSignatures={(sigs, broadcastState) => void handlePasteSignatures(sigs, broadcastState)}
-								onCheckEnacted={handleCheckEnacted}
 								onManualExecute={() =>
 									navigate('/manual', {
 										state: {

@@ -12,7 +12,6 @@ import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
-type CheckEnactedResult = { ok: true } | { ok: false; error: string }
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 type Props = {
@@ -22,7 +21,6 @@ type Props = {
 	onSign: () => void
 	onBroadcast: () => void
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
-	onCheckEnacted?: () => Promise<CheckEnactedResult>
 	onManualExecute?: () => void
 }
 
@@ -52,16 +50,19 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =
+type DisplayStatus = ProposalStatus | 'awaiting_enactment'
+
+const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> =
 	{
 		pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
 		approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
+		awaiting_enactment: { bg: '#f0fdf9', text: '#0f766e', border: '#99f6e4', dot: '#0f9d7a', label: 'Awaiting enactment' },
 		enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
 		canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
 		expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
 	}
 
-function StatusBadge({ status }: { status: ProposalStatus }) {
+function StatusBadge({ status }: { status: DisplayStatus }) {
 	const s = STATUS_CONFIG[status]
 	return (
 		<span
@@ -105,7 +106,6 @@ export function ProposalDetail({
 	onSign,
 	onBroadcast,
 	onPasteSignatures,
-	onCheckEnacted,
 	onManualExecute: _onManualExecute,
 }: Props) {
 	const collectedSignatures = proposal.signatures.length
@@ -115,26 +115,14 @@ export function ProposalDetail({
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 
+	const displayStatus: DisplayStatus =
+		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+			? 'awaiting_enactment'
+			: proposal.status
+
 	const [bundleCopied, setBundleCopied] = useState(false)
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)
 	const [showImportModal, setShowImportModal] = useState(false)
-	const [isCheckingEnacted, setIsCheckingEnacted] = useState(false)
-	const [checkEnactedError, setCheckEnactedError] = useState<string | null>(null)
-
-	const canCheckEnacted =
-		onCheckEnacted !== undefined && proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
-
-	async function handleCheckEnacted() {
-		if (!onCheckEnacted) return
-		setIsCheckingEnacted(true)
-		setCheckEnactedError(null)
-		const result = await onCheckEnacted()
-		setIsCheckingEnacted(false)
-		if (!result.ok) {
-			setCheckEnactedError(result.error)
-		}
-	}
-
 	const title = deriveProposalTitle(proposal, decodedData)
 
 	const signaturesJson = JSON.stringify(
@@ -169,7 +157,7 @@ export function ProposalDetail({
 								#{proposal.seqNo} · Signer update · {proposal.authority}
 							</p>
 						</div>
-						<StatusBadge status={proposal.status} />
+						<StatusBadge status={displayStatus} />
 					</div>
 
 					{/* Signatures progress */}
@@ -394,7 +382,7 @@ export function ProposalDetail({
 						</button>
 					)}
 
-					{!isTerminal && !hasQuorum && alreadySigned && !canCheckEnacted && (
+					{!isTerminal && !hasQuorum && alreadySigned && (
 						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
 							<p className="m-0 text-[13px] font-medium text-[#065f46]">
 								You have signed this proposal. Waiting for other signers to reach quorum.
@@ -402,24 +390,6 @@ export function ProposalDetail({
 						</div>
 					)}
 
-					{canCheckEnacted && (
-						<div className="space-y-2">
-							<button
-								type="button"
-								disabled={isCheckingEnacted}
-								onClick={() => void handleCheckEnacted()}
-								className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								{isCheckingEnacted ? 'Checking on ASM…' : 'Check if enacted'}
-							</button>
-							{checkEnactedError !== null && (
-								<div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-									<p className="m-0 text-[12px] font-medium text-[#92400e]">Not yet enacted on ASM</p>
-									<p className="m-0 mt-0.5 text-[11px] text-[#92400e] opacity-70">{checkEnactedError}</p>
-								</div>
-							)}
-						</div>
-					)}
 				</div>
 
 				{/* Utility buttons */}

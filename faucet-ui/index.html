@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Regtest Faucet</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+      gap: 32px;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.2rem; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card h2 { font-size: 0.85rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+    input {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-family: monospace;
+      font-size: 0.9rem;
+      padding: 10px 12px;
+      width: 100%;
+      outline: none;
+    }
+    input:focus { border-color: #555; }
+    button {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 0.9rem;
+      padding: 10px;
+      transition: background 0.15s;
+    }
+    button:hover { background: #333; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .result {
+      font-size: 0.8rem;
+      padding: 8px 10px;
+      border-radius: 4px;
+      display: none;
+      word-break: break-all;
+    }
+    .result.ok  { background: #0d2a0d; color: #4caf50; border: 1px solid #1e4a1e; }
+    .result.err { background: #2a0d0d; color: #f44336; border: 1px solid #4a1e1e; }
+  </style>
+</head>
+<body>
+  <h1>Regtest Faucet</h1>
+
+  <div class="card">
+    <h2>Faucet</h2>
+    <input id="address" type="text" placeholder="bcrt1p…" />
+    <input id="amount" type="number" value="1.0" step="0.1" min="0.01" placeholder="Amount BTC" />
+    <button onclick="faucet()">Send BTC</button>
+    <div id="faucet-result" class="result"></div>
+  </div>
+
+  <div class="card">
+    <h2>Mine Blocks</h2>
+    <input id="count" type="number" value="5" min="1" placeholder="Block count" />
+    <button onclick="mine()">Mine</button>
+    <div id="mine-result" class="result"></div>
+  </div>
+
+  <script>
+    const BASE = 'http://localhost:3001';
+
+    function show(id, ok, text) {
+      const el = document.getElementById(id);
+      el.className = 'result ' + (ok ? 'ok' : 'err');
+      el.textContent = text;
+      el.style.display = 'block';
+    }
+
+    async function faucet() {
+      const address = document.getElementById('address').value.trim();
+      const amount_btc = parseFloat(document.getElementById('amount').value);
+      if (!address) return show('faucet-result', false, 'Address required');
+
+      try {
+        const r = await fetch(`${BASE}/faucet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, amount_btc }),
+        });
+        const text = await r.text();
+        show('faucet-result', r.ok, text || (r.ok ? 'OK' : `Error ${r.status}`));
+      } catch (e) {
+        show('faucet-result', false, e.message);
+      }
+    }
+
+    async function mine() {
+      const count = parseInt(document.getElementById('count').value, 10) || 1;
+      try {
+        const r = await fetch(`${BASE}/mine?count=${count}`, { method: 'POST' });
+        const text = await r.text();
+        show('mine-result', r.ok, text || (r.ok ? `Mined ${count} block(s)` : `Error ${r.status}`));
+      } catch (e) {
+        show('mine-result', false, e.message);
+      }
+    }
+  </script>
+</body>
+</html>
