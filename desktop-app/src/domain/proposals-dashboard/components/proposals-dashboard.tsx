@@ -446,7 +446,7 @@ function ProposalCard({
 						)}
 					</p>
 				</div>
-				<StatusBadge status={proposal.status} />
+				<StatusBadge status={awaitingEnactment ? 'awaiting_enactment' : proposal.status} />
 			</div>
 
 			<div className="mt-5">
@@ -557,16 +557,24 @@ function inferProposalType(proposal: Proposal): string {
 	return 'Unknown'
 }
 
-const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =
-	{
-		pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-		approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-		enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-		canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-		expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-	}
+type DisplayStatus = ProposalStatus | 'awaiting_enactment'
 
-function StatusBadge({ status }: { status: ProposalStatus }) {
+const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
+	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
+	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
+	awaiting_enactment: {
+		bg: '#f0fdf9',
+		text: '#0f766e',
+		border: '#99f6e4',
+		dot: '#0f9d7a',
+		label: 'Awaiting enactment',
+	},
+	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
+	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
+	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
+}
+
+function StatusBadge({ status }: { status: DisplayStatus }) {
 	const s = STATUS_CONFIG[status]
 	return (
 		<span

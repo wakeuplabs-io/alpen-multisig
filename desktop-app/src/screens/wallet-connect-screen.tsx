@@ -19,42 +19,6 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		availabilityLabel: 'Available',
 		enabled: true,
 	},
-	{
-		id: 'alpen-administrator',
-		role: AuthRole.AlpenAdministrator,
-		label: 'Alpen Administrator',
-		description: 'EE predicate key (update_vk) management.',
-		signerSetSource: 'Strata ASM state',
-		availabilityLabel: 'Available',
-		enabled: true,
-	},
-	{
-		id: 'strata-sequencer-manager',
-		role: AuthRole.StrataSequencerManager,
-		label: 'Strata Sequencer Manager',
-		description: 'Sequencer configuration (signers, sequencer pubkey).',
-		signerSetSource: 'Strata ASM state',
-		availabilityLabel: 'Not in v0.1',
-		enabled: false,
-	},
-	{
-		id: 'security-council',
-		role: null,
-		label: 'Security Council',
-		description: 'Emergency actions and recovery controls.',
-		signerSetSource: 'Strata ASM state',
-		availabilityLabel: 'Not in v0.1',
-		enabled: false,
-	},
-	{
-		id: 'payout-administrator',
-		role: AuthRole.PayoutAdministrator,
-		label: 'Payout Administrator',
-		description: 'Bridge payout spending rules and payout control.',
-		signerSetSource: 'Bridge multisig script',
-		availabilityLabel: 'Available',
-		enabled: true,
-	},
 ]
 
 export function WalletConnectScreen() {

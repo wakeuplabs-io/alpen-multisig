@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 
 #[derive(Clone)]
 struct Rpc {
@@ -207,6 +208,7 @@ async fn main() {
     let app = Router::new()
         .route("/mine", post(mine))
         .route("/faucet", post(faucet))
+        .layer(CorsLayer::permissive())
         .with_state(rpc);
 
     let addr = format!("0.0.0.0:{port}");
