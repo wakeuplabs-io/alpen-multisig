@@ -4,9 +4,9 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use tower_http::cors::CorsLayer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 
 #[derive(Clone)]
 struct Rpc {
