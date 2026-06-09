@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-09 (Release 1 complete; **Release 2 — Electrum sync** is urgent priority before Phase 4)
+**Last updated:** 2026-06-09 (Release 2 slicing: R2.1 → R2.2 → R2.3)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -45,11 +45,11 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
 | 2.1 | Trusted or custom RPC URL | **PASS** | `node_config_store.rs`, Node Config UI | Trusted + custom modes (chain RPC today) |
-| 2.1 (Electrum) | Trusted or custom Electrum URL | **FAIL** | — | **R2** — wallet sync endpoint |
+| 2.1 (Electrum) | Trusted or custom Electrum URL | **FAIL** | — | **R2.3** — wallet sync endpoint |
 | 2.2 | Default = local node; prompt if missing | **PASS** | `ConnectionMode::Local` default | Aligns with PRD today |
 | 2.3 | Strata node → BTC/Strata access without extra setup | **DEFER** | — | Broader than Admin Wallet slice |
-| 2.2 (end state) | No local node as product assumption | **DEFER** | R2 + Phase 10 | R2: remote Electrum sync; Phase 10: remote chain RPC + presets |
-| Wallet sync viable on remote/testnet | Production-viable wallet indexation | **FAIL** | Core RPC `Emitter` sync | Remote sync too slow; **R2** (Electrum) |
+| 2.2 (end state) | No local node as product assumption | **DEFER** | R2.3 + Phase 10 | R2.3: Electrum URL in Node Config; Phase 10: remote chain RPC presets |
+| Wallet sync viable on remote/testnet | Production-viable wallet indexation | **FAIL** | Core RPC `Emitter` sync | **R2.2** (Electrum); infra **R2.1** |
 
 ### PRD §3.2 — Connect HW, Admin ID, Admin Wallet
 
@@ -125,7 +125,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
 | US-H4 broadcast fee | Not in Release 1 | **FAIL** (Phase 4, after R2) |
 
-**Release 1:** R1.0–R1.7 are done. **Suggested order:** **R2** (Electrum sync) → Phase 4 (US-H4 broadcast fee).
+**Release 1:** R1.0–R1.7 are done. **Suggested order:** **R2.1 → R2.2 → R2.3** (Electrum sync) → Phase 4 (US-H4 broadcast fee).
 
 ---
 
@@ -133,7 +133,12 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Notes |
 |----|------------------------|--------|-------|
-| R2 | Electrum-backed wallet sync; production-viable indexation on testnet/mainnet | **PLANNED** | [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md); prerequisite for Phases 4–10 remotely |
+| R2 | Electrum-backed wallet sync; production-viable indexation | **PLANNED** | [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md); prerequisite for Phases 4–10 remotely |
+| R2.1 | electrs infra — Docker, dev/staging/CI, smoke vs local `bitcoind` | **PLANNED** | No app code; unblocks R2.2 |
+| R2.2 | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged | **PLANNED** | Single code slice |
+| R2.3 | Electrum URL in Node Config (Local / Trusted / Custom) | **PLANNED** | Same pattern as BTC RPC / Strata |
+
+**Suggested order:** R2.1 → R2.2 → R2.3 → Phase 4.
 
 ---
 

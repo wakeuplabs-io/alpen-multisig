@@ -47,7 +47,10 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.5 ✅ | Balance UX (§4.3.1 PASS) | PRD §4.3.1 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md); PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) |
 | R1.6 ✅ | Addresses UX (§4.3.2 PASS) | PRD §4.3.2 **PASS** in compliance matrix; [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md); PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) |
 | R1.7 ✅ | Wallet panel UI polish | Visual hierarchy + affordances; [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md); PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214) |
-| **R2** | **Electrum wallet sync (priority)** | PRD §2 production viability — replace Core RPC block-scan sync with Electrum indexation; [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md) |
+| **R2** | **Electrum wallet sync (priority)** | PRD §2 production viability — [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md); slices **R2.1 → R2.2 → R2.3** |
+| R2.1 | Electrum indexer infra | electrs in Docker + dev/staging/CI; synced to local regtest `bitcoind`; smoke verification |
+| R2.2 | Admin Wallet sync migration | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged |
+| R2.3 | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md); **after R2** |
 | 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
@@ -103,8 +106,10 @@ flowchart LR
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
   P38 --> R1[Release 1: R1.0–R1.7 done]
-  R1 --> R2[R2 Electrum sync priority]
-  R2 --> P4[Phase 4 Broadcast fee rate]
+  R1 --> R21[R2.1 Indexer infra]
+  R21 --> R22[R2.2 Wallet sync]
+  R22 --> R23[R2.3 Node Config URL]
+  R23 --> P4[Phase 4 Broadcast fee rate]
   P4 --> P5[Phase 5 Send happy path]
   P5 --> P6[Phase 6 Tx list + RBF]
   P6 --> P7[Phase 7 Admin ID UI]
@@ -522,34 +527,49 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 ### Release 2
 
-**Release 2 is the urgent priority** after Release 1. Remote Core RPC block-by-block wallet sync is not production-viable (unacceptable latency on testnet/mainnet). R2 replaces wallet **indexation** with **Electrum** while keeping Core-compatible RPC for broadcast and fees.
+**Release 2 is the urgent priority** after Release 1. Remote Core RPC block-by-block wallet sync is not production-viable. R2 replaces wallet **indexation** with **Electrum** (`bdk_electrum`) while keeping Core-compatible RPC for broadcast and fees.
 
-**Spec:** [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)
+**Spec:** [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md) — full slice breakdown (R2.1–R2.3).
 
-**Goal:** Wallet sync (balance, UTXOs, addresses, receive rotation) uses `bdk_electrum` against a configurable Electrum server. Broadcast, `submitpackage`, and fee estimation continue to use `BITCOIN_RPC_URL`.
+**Goal:** Wallet sync (balance, UTXOs, addresses, receive rotation) uses an Electrum-protocol indexer. Broadcast, `submitpackage`, and fee estimation continue to use `BITCOIN_RPC_URL`.
 
-**In scope**
+**Slices (in order)**
 
-- Electrum-backed sync for the Admin Wallet read path; Electrum URL in Node Config (trusted/custom presets).
-- Regtest, testnet, and mainnet; parity with Release 1 wallet panel behavior.
-- Retire Core RPC block-scan (`bdk_bitcoind_rpc::Emitter`) for wallet sync once R2 ships.
+| Slice | Goal |
+|-------|------|
+| **R2.1** | electrs in Docker + dev/staging/CI/scripts; synced to local regtest `bitcoind`; smoke verification — **no app code** |
+| **R2.2** | Migrate `WalletService` sync to `bdk_electrum` in one step; fixed Electrum URL; broadcast/fees unchanged |
+| **R2.3** | Electrum URL in `NodeConfig` (Local / Trusted / Custom), same pattern as BTC RPC and Strata |
 
-**Out of scope**
+**Out of scope (whole release)**
 
-- Any indexer backend other than Electrum.
+- Any indexer backend other than Electrum protocol.
 - Send (Phase 5), tx list / RBF (Phase 6), Admin ID UI (Phase 7), shared Send UX (Phase 9).
 - Changing commit/reveal protocol or `PsbtSigner` flows.
-- Delivery slicing — deferred to implementation kickoff.
 
-**Done when**
+**Done when:** R2.1–R2.3 complete — wallet panel read path syncs in production-viable time; Release 1 wallet UX parity; governance broadcast unchanged; CI green.
 
-- Wallet panel read path syncs in production-viable time on testnet/mainnet (or regtest with a local Electrum indexer).
-- Balance, receive rotation, and addresses-with-balance remain correct; governance broadcast unchanged from Release 1.
-- `cargo test --workspace` and frontend CI green.
+**Prerequisite for:** Phases 4–10 on testnet/mainnet. **Next after R2.3:** Phase 4 (US-H4 broadcast fee rate).
 
-**Prerequisite for:** Phases 4–10 on testnet/mainnet. **Next after R2:** Phase 4 (US-H4 broadcast fee rate).
+**Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.2.
 
-**Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.
+#### R2.1 — Electrum indexer infra
+
+**Goal:** Regtest Electrum indexer (electrs) available in Docker, local dev, staging, and CI, backed by the existing regtest `bitcoind`.
+
+**Done when:** Stack starts with healthy electrs; smoke verifies indexation after a funded address; documented URL for R2.2.
+
+#### R2.2 — Admin Wallet sync migration
+
+**Goal:** Replace Core RPC block-scan in `WalletService` with `bdk_electrum`; prove read path on regtest with a fixed Electrum URL.
+
+**Done when:** Wallet panel balance, receive rotation, and addresses-with-balance correct via Electrum sync; broadcast and fee paths unchanged; tests green.
+
+#### R2.3 — Electrum URL in Node Config
+
+**Goal:** Configurable Electrum URL in the app (Rust `NodeConfig`, IPC, connect-screen modal) — Local / Trusted / Custom, mirroring BTC RPC and Strata.
+
+**Done when:** User selects or enters Electrum URL via Node Config; R2.2 fixed URL removed; Local default points at R2.1 electrs.
 
 ---
 
@@ -681,7 +701,7 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 
 | Variable / config | Role | Direction |
 |---|---|---|
-| Electrum URL (`NodeConfig` / env — exact name TBD in R2 spec) | Wallet sync / indexation (`bdk_electrum`) | **Add in R2**; trusted + custom presets |
+| Electrum URL (`NodeConfig` / env) | Wallet sync / indexation (`bdk_electrum`) | **R2.3** — Local / Trusted / Custom; R2.2 uses fixed URL until then |
 | `BITCOIN_RPC_URL` | Chain RPC base URL — broadcast, fees, `submitpackage` | Keep; not used for wallet sync after R2 |
 | `BITCOIN_RPC_USER` / `BITCOIN_RPC_PASS` | RPC auth | Keep |
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |

@@ -1,6 +1,6 @@
 # Spec: Admin Wallet sync progress indicator
 
-> **Status: DEFERRED** — Primary mitigation for slow wallet sync is **Release 2 (Electrum)** ([`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)). This spec (block-scan progress UI for `bdk_bitcoind_rpc::Emitter`) remains deferred unless still needed after R2 ships.
+> **Status: DEFERRED** — Primary mitigation for slow wallet sync is **Release 2** ([`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md), slice **R2.2**). This spec (block-scan progress UI for `bdk_bitcoind_rpc::Emitter`) remains deferred unless still needed after R2.2 ships.
 
 ## Objective
 
