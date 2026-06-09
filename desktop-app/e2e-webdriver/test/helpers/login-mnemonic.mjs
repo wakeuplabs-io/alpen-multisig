@@ -2,8 +2,7 @@
 export const DEMO_MNEMONIC = 'multiply toss magic exclude crawl obey garden black apart room village neglect'
 
 /** Second Strata Administrator signer (canonical path) — asm-params keys[1]. */
-export const DEMO_MNEMONIC_COSIGN =
-	'multiply toss magic exclude crawl obey garden black apart room village absent'
+export const DEMO_MNEMONIC_COSIGN = 'multiply toss magic exclude crawl obey garden black apart room village absent'
 
 /**
  * Full wallet connect + session auth until URL is /proposals.

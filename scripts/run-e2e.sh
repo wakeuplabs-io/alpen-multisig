@@ -22,11 +22,12 @@
 #
 # Test execution order (dependencies respected):
 #   1. wallet-smoke              — independent
-#   2. wallet-panel-sync-on-open  — independent
-#   3. proposal-add-signer        — independent (creates a proposal)
-#   4. proposal-co-sign-mnemonic  — requires add-signer first
-#   5. proposal-broadcast-quorum  — requires co-sign first (quorum reached)
-#   6. broadcast-mnemonic-walking-skeleton — requires a quorum-ready proposal
+#   2. admin-wallet-panel         — independent (tests wallet panel lifecycle)
+#   3. wallet-panel-sync-on-open  — independent
+#   4. proposal-add-signer        — independent (creates a proposal)
+#   5. proposal-co-sign-mnemonic  — requires add-signer first
+#   6. proposal-broadcast-quorum  — requires co-sign first (quorum reached)
+#   7. broadcast-mnemonic-walking-skeleton — requires a quorum-ready proposal
 
 set -euo pipefail
 
@@ -267,11 +268,13 @@ run_test() {
 
 # Run tests in dependency order:
 # 1. wallet-smoke (independent)
-# 2. proposal-add-signer (creates a proposal)
-# 3. proposal-co-sign-mnemonic (requires add-signer)
-# 4. proposal-broadcast-quorum (requires co-sign → quorum reached)
+# 2. admin-wallet-panel (independent — tests wallet panel lifecycle)
+# 3. proposal-add-signer (creates a proposal)
+# 4. proposal-co-sign-mnemonic (requires add-signer)
+# 5. proposal-broadcast-quorum (requires co-sign → quorum reached)
 
 run_test "wallet-smoke" "test/specs/wallet-smoke.e2e.js"
+run_test "admin-wallet-panel" "test/specs/admin-wallet-panel.e2e.js"
 run_test "proposal-add-signer" "test/specs/proposal-add-signer.e2e.js"
 run_test "proposal-co-sign-mnemonic" "test/specs/proposal-co-sign-mnemonic.e2e.js"
 run_test "proposal-broadcast-quorum" "test/specs/proposal-broadcast-quorum.e2e.js"

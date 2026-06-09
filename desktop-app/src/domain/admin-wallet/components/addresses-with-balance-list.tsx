@@ -26,6 +26,7 @@ export function AddressesWithBalanceList({
 				type="button"
 				onClick={onToggle}
 				className="flex w-full items-center justify-between px-0 py-2.5 text-left hover:bg-transparent"
+				data-testid="e2e-wallet-addresses-toggle"
 			>
 				<span className="flex items-center font-sans text-[13px] font-medium text-[#374151]">
 					Addresses with balance
@@ -65,11 +66,13 @@ export function AddressesWithBalanceList({
 					)}
 
 					{rows !== null && rows.length === 0 && !isLoading && error === null && (
-						<div className="py-3 text-[12px] text-[#9ca3af]">No addresses with balance yet</div>
+						<div className="py-3 text-[12px] text-[#9ca3af]" data-testid="e2e-wallet-addresses-empty">
+							No addresses with balance yet
+						</div>
 					)}
 
 					{rows !== null && rows.length > 0 && (
-						<table className="w-full">
+						<table className="w-full" data-testid="e2e-wallet-addresses-list">
 							<thead>
 								<tr className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">
 									<th className="py-1 pr-3 text-left font-medium">Address</th>

@@ -15,8 +15,7 @@ describe('Alpen Multisig proposal — co-sign with second mnemonic', () => {
 		const signFromList = await $('button[data-testid="e2e-proposal-sign-button"]')
 		await signFromList.waitForDisplayed({
 			timeout: 120000,
-			timeoutMsg:
-				'No pending proposal with Sign — create one first: npm run test:e2e:proposal-add-signer',
+			timeoutMsg: 'No pending proposal with Sign — create one first: npm run test:e2e:proposal-add-signer',
 		})
 		await signFromList.waitForClickable({ timeout: 30000 })
 		await signFromList.click()
@@ -34,7 +33,10 @@ describe('Alpen Multisig proposal — co-sign with second mnemonic', () => {
 		// Strategy: Wait for modal with a reasonable timeout. If it appears, dismiss it.
 		// Then wait for navigation to /proposals.
 		const quorumModalHeading = await $('//h2[contains(.,"Quorum reached")]')
-		const modalAppeared = await quorumModalHeading.waitForDisplayed({ timeout: 30000 }).then(() => true).catch(() => false)
+		const modalAppeared = await quorumModalHeading
+			.waitForDisplayed({ timeout: 30000 })
+			.then(() => true)
+			.catch(() => false)
 
 		if (modalAppeared) {
 			// Click "Later" to dismiss the modal and trigger navigation to /proposals
