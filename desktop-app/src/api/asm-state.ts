@@ -28,6 +28,10 @@ export function getCurrentVk(): Promise<ApiResult<CurrentVk>> {
 	return tauriCall('get_current_vk', {}, currentVkSchema)
 }
 
+export function getCurrentOperators(): Promise<ApiResult<string[]>> {
+	return tauriCall('get_current_operators', {}, z.array(z.string()))
+}
+
 export function getBitcoinBlockHeight(): Promise<ApiResult<number>> {
 	return tauriCall('get_bitcoin_block_height', {}, z.number())
 }

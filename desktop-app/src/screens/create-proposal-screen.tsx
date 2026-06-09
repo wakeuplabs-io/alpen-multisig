@@ -61,6 +61,8 @@ export function CreateProposalScreen() {
 					isLoadingSeqNo={createProposal.isLoadingSeqNo}
 					currentVk={createProposal.currentVk}
 					isLoadingCurrentVk={createProposal.isLoadingCurrentVk}
+					currentOperators={createProposal.currentOperators}
+					isLoadingOperators={createProposal.isLoadingOperators}
 					isSubmitting={createProposal.isSubmitting}
 					error={createProposal.error}
 					createdProposal={createProposal.createdProposal}

@@ -13,6 +13,7 @@ import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '..
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
+import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
@@ -25,6 +26,8 @@ type Props = {
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
 	isLoadingCurrentVk: boolean
+	currentOperators: string[]
+	isLoadingOperators: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -43,6 +46,8 @@ const defaultFormValues: CreateProposalFormValues = {
 	threshold: '2',
 	vkTypeId: 'always_accept',
 	newVkHex: '',
+	operatorsToAdd: [{ value: '' }],
+	operatorIndicesToRemove: [{ value: '' }],
 }
 
 export function CreateProposalForm({
@@ -54,6 +59,8 @@ export function CreateProposalForm({
 	isLoadingSeqNo,
 	currentVk,
 	isLoadingCurrentVk,
+	currentOperators,
+	isLoadingOperators,
 	isSubmitting,
 	error,
 	createdProposal,
@@ -255,6 +262,10 @@ export function CreateProposalForm({
 							threshold={previewData.threshold}
 							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
+							operatorsToAdd={previewData.operatorsToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)}
+							operatorIndicesToRemove={previewData.operatorIndicesToRemove
+								.map((r) => r.value.trim())
+								.filter((v) => v.length > 0)}
 							sighashHex={previewSighashHex}
 							authorityLabel={authorityLabel}
 							currentSigners={multisigConfig?.signers ?? []}
@@ -280,6 +291,14 @@ export function CreateProposalForm({
 										selected={actionType === 'signer_update'}
 										onClick={() =>
 											form.setValue('actionType', 'signer_update', { shouldValidate: true, shouldDirty: true })
+										}
+									/>
+									<ActionTypeCard
+										title="Bridge Operator update"
+										description="Add operators by key or remove by index."
+										selected={actionType === 'operator_set_update'}
+										onClick={() =>
+											form.setValue('actionType', 'operator_set_update', { shouldValidate: true, shouldDirty: true })
 										}
 									/>
 								</div>
@@ -326,6 +345,12 @@ export function CreateProposalForm({
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}
 									currentThreshold={multisigConfig?.threshold ?? 0}
+								/>
+							) : actionType === 'operator_set_update' ? (
+								<OperatorSetUpdateFormFields
+									isLoadingConfig={isLoadingConfig}
+									currentOperators={currentOperators}
+									isLoadingOperators={isLoadingOperators}
 								/>
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />

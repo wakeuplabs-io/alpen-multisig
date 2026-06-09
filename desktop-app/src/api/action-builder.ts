@@ -29,6 +29,17 @@ export function buildVkUpdateHex(input: BuildVkUpdateHexInput): Promise<ApiResul
 	return tauriCall('build_vk_update_hex', { input }, buildActionHexResponseSchema)
 }
 
+export type BuildOperatorSetUpdateHexInput = {
+	addOperatorKeys: string[]
+	removeOperatorIndices: number[]
+}
+
+export function buildOperatorSetUpdateHex(
+	input: BuildOperatorSetUpdateHexInput,
+): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_operator_set_update_hex', { input }, buildActionHexResponseSchema)
+}
+
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_cancel_action_hex', { targetActionHex }, buildActionHexResponseSchema)
 }

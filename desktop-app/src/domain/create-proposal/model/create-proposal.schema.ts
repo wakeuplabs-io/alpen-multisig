@@ -38,7 +38,7 @@ const VK_CONDITION_HEX_LENGTH: Partial<Record<VkPredicateType, number>> = {
 }
 
 const createProposalFormObjectSchema = z.object({
-	actionType: z.enum(['vk_update', 'signer_update']),
+	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update']),
 	seqNo: z.string(),
 	title: z.string().max(512, 'Title must be at most 512 characters'),
 	keysToAdd: z.array(keyRowSchema),
@@ -46,6 +46,8 @@ const createProposalFormObjectSchema = z.object({
 	threshold: z.string(),
 	vkTypeId: z.enum(VK_PREDICATE_TYPES),
 	newVkHex: z.string(),
+	operatorsToAdd: z.array(keyRowSchema),
+	operatorIndicesToRemove: z.array(keyRowSchema),
 })
 
 export type CreateProposalFormValues = z.infer<typeof createProposalFormObjectSchema>
@@ -79,15 +81,11 @@ export type BuildCreateProposalFormSchemaArgs = {
 	currentMultisigSigners: string[] | null
 }
 
+const EVEN_PUBKEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/
+const U32_MAX = 4_294_967_295
+
 export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
-		if (data.keysToAdd.length < 1) {
-			ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for keys to add' })
-		}
-		if (data.keysToRemove.length < 1) {
-			ctx.addIssue({ code: 'custom', path: ['keysToRemove'], message: 'At least one row for keys to remove' })
-		}
-
 		const seqNoTrim = data.seqNo.trim()
 		if (seqNoTrim.length === 0) {
 			ctx.addIssue({ code: 'custom', path: ['seqNo'], message: 'Sequence number is required' })
@@ -105,6 +103,12 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 		}
 
 		if (data.actionType === 'signer_update') {
+			if (data.keysToAdd.length < 1) {
+				ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for keys to add' })
+			}
+			if (data.keysToRemove.length < 1) {
+				ctx.addIssue({ code: 'custom', path: ['keysToRemove'], message: 'At least one row for keys to remove' })
+			}
 			for (const [index, row] of data.keysToAdd.entries()) {
 				const key = row.value.trim()
 				if (key.length === 0) continue
@@ -249,6 +253,67 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 						message:
 							`Threshold cannot be greater than the number of signers after this update ` +
 							`(${resultingSignerCount}: ${remainingCurrentSigners} current + ${addedSignersNotRemoved} added not removed).`,
+					})
+				}
+			}
+		} else if (data.actionType === 'operator_set_update') {
+			const filledAdd = data.operatorsToAdd.filter((r) => r.value.trim().length > 0)
+			const filledRemove = data.operatorIndicesToRemove.filter((r) => r.value.trim().length > 0)
+			if (filledAdd.length === 0 && filledRemove.length === 0) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['operatorsToAdd'],
+					message: 'At least one operator must be added or removed',
+				})
+			}
+
+			const addKeyIndexes = new Map<string, number[]>()
+			for (const [index, row] of data.operatorsToAdd.entries()) {
+				const key = row.value.trim()
+				if (key.length === 0) continue
+				if (!EVEN_PUBKEY_HEX_PATTERN.test(key)) {
+					ctx.addIssue({
+						code: 'custom',
+						path: ['operatorsToAdd', index, 'value'],
+						message: 'Operator key must be an x-only pubkey hex (32 bytes, 64 hex chars, no 02/03 prefix)',
+					})
+				}
+				const normalized = key.toLowerCase()
+				const indexes = addKeyIndexes.get(normalized) ?? []
+				indexes.push(index)
+				addKeyIndexes.set(normalized, indexes)
+			}
+			for (const indexes of addKeyIndexes.values()) {
+				if (indexes.length < 2) continue
+				for (const index of indexes) {
+					ctx.addIssue({ code: 'custom', path: ['operatorsToAdd', index, 'value'], message: 'Duplicate operator key' })
+				}
+			}
+
+			const removeIndexTracker = new Map<number, number[]>()
+			for (const [index, row] of data.operatorIndicesToRemove.entries()) {
+				const raw = row.value.trim()
+				if (raw.length === 0) continue
+				const n = Number(raw)
+				if (!Number.isInteger(n) || n < 0 || n > U32_MAX) {
+					ctx.addIssue({
+						code: 'custom',
+						path: ['operatorIndicesToRemove', index, 'value'],
+						message: `Operator index must be a non-negative integer (0–${U32_MAX})`,
+					})
+					continue
+				}
+				const positions = removeIndexTracker.get(n) ?? []
+				positions.push(index)
+				removeIndexTracker.set(n, positions)
+			}
+			for (const positions of removeIndexTracker.values()) {
+				if (positions.length < 2) continue
+				for (const index of positions) {
+					ctx.addIssue({
+						code: 'custom',
+						path: ['operatorIndicesToRemove', index, 'value'],
+						message: 'Duplicate operator index',
 					})
 				}
 			}
