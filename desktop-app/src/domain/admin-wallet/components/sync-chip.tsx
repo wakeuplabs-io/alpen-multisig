@@ -13,6 +13,7 @@ type SyncChipProps = {
 
 function errorMessage(error: AdminWalletError): string {
 	if (error.type === 'RpcUnreachable') return 'Sync error: cannot reach Bitcoin node'
+	if (error.type === 'ElectrumUnreachable') return 'Sync error: cannot reach Electrum indexer'
 	if (error.type === 'RpcAuthFailed') return 'Sync error: RPC auth failed'
 	if (error.type === 'Disabled') return 'Sync error: wallet is disabled'
 	if (error.type === 'ReadOnly') return 'Sync error: wallet is watch-only'

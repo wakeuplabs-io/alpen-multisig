@@ -37,6 +37,7 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # BDK (Bitcoin Development Kit) — admin wallet infrastructure
 bdk_wallet = "1"
+bdk_electrum = "0.21"
 bdk_bitcoind_rpc = "0.18"
 
 # Shared across workspace members

@@ -55,6 +55,11 @@ ledger-transport-hid = "0.11"
 ledger-apdu = "0.11"
 bip39 = "2"
 bdk_wallet = { workspace = true }
+bdk_electrum = { workspace = true }
+
+[dev-dependencies]
+# Wallet sync uses Electrum (bdk_electrum); Core RPC stays only as the regtest
+# funding/mining harness in integration tests.
 bdk_bitcoind_rpc = { workspace = true }
 
 [lib]
