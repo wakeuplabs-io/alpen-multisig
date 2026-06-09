@@ -46,4 +46,51 @@ assert.equal(shouldRenderUtxoCount(3), true, 'utxoCount=3 → render UTXO line')
 assert.equal(shouldRenderUtxoCount(undefined), false, 'utxoCount=undefined → no UTXO line')
 console.log('BroadcastDetailsCard: utxoCount conditional rendering logic OK')
 
+// ── 4. Broadcast button disabled when wallet has no funds ────────────────────
+function isBroadcastDisabled(opts: {
+	isBroadcasting: boolean
+	canSign: boolean
+	adminWalletInfo: { balanceSats: number } | null | undefined
+	utxoCount?: number
+}): boolean {
+	return (
+		opts.isBroadcasting ||
+		!opts.canSign ||
+		opts.adminWalletInfo == null ||
+		(opts.adminWalletInfo.balanceSats === 0 && (opts.utxoCount === undefined || opts.utxoCount === 0))
+	)
+}
+
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 }, utxoCount: 0 }),
+	true,
+	'disabled when balance=0 and utxoCount=0',
+)
+assert.equal(
+	isBroadcastDisabled({
+		isBroadcasting: false,
+		canSign: true,
+		adminWalletInfo: { balanceSats: 0 },
+		utxoCount: undefined,
+	}),
+	true,
+	'disabled when balance=0 and utxoCount unknown',
+)
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 }, utxoCount: 1 }),
+	false,
+	'enabled when balance=0 but utxoCount=1 (sync lag)',
+)
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 700 }, utxoCount: 1 }),
+	false,
+	'enabled when balance > 0',
+)
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: null }),
+	true,
+	'disabled when adminWalletInfo is null (loading)',
+)
+console.log('BroadcastDetailsCard: broadcast disabled-when-no-funds logic OK')
+
 console.log('All BroadcastDetailsCard pure-logic contract tests passed.')

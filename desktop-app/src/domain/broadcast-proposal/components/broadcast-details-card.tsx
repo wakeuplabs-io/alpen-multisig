@@ -185,7 +185,12 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={isBroadcasting || !canSign || adminWalletInfo == null}
+					disabled={
+						isBroadcasting ||
+						!canSign ||
+						adminWalletInfo == null ||
+						(adminWalletInfo.balanceSats === 0 && (utxoCount === undefined || utxoCount === 0))
+					}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
@@ -200,6 +205,14 @@ export function BroadcastDetailsCard({
 						{canSignReason ?? 'Hardware wallet required to sign'}
 					</p>
 				)}
+				{canSign &&
+					adminWalletInfo != null &&
+					adminWalletInfo.balanceSats === 0 &&
+					(utxoCount === undefined || utxoCount === 0) && (
+						<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+							Insufficient balance — fund the admin wallet to broadcast
+						</p>
+					)}
 			</div>
 		</div>
 	)

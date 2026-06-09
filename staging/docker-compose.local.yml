@@ -37,10 +37,8 @@ services:
       - "8080:8080"
     volumes:
       - asm-data:/data
-    environment:
-      BITCOIN_RPC_URL: http://bitcoin:18443
-      BITCOIN_RPC_USER: user
-      BITCOIN_RPC_PASS: password
+    env_file:
+      - asm.env
     depends_on:
       bitcoin:
         condition: service_healthy
@@ -60,22 +58,8 @@ services:
       dockerfile: staging/Dockerfile.orchestrator
     ports:
       - "3000:3000"
-    environment:
-      SERVER_HOST: "0.0.0.0"
-      SERVER_PORT: "3000"
-      BITCOIN_RPC_URL: http://bitcoin:18443
-      BITCOIN_RPC_USER: user
-      BITCOIN_RPC_PASS: password
-      BITCOIN_WALLET_NAME: staging
-      STRATA_ADMIN_STATE_RPC_URL: http://asm:8080
-      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/postgres"
-      DEV_MINE_ENABLED: "1"
-      ALLOW_DEV_OPERATOR_KEY: "1"
-      BITCOIN_NETWORK: "regtest"
-      BITCOIN_MAGIC_BYTES_HEX: "414c504e"
-      ALLOW_INSECURE_HTTP_URL: "1"
-      ADMIN_WALLET_REGTEST_MNEMONIC: "multiply toss magic exclude crawl obey garden black apart room village neglect"
-      COMMIT_FUNDING: "admin_wallet"
+    env_file:
+      - orchestrator.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,12 +81,8 @@ services:
       dockerfile: staging/Dockerfile.regtest-dev-api
     ports:
       - "3001:3001"
-    environment:
-      BITCOIN_RPC_URL: http://bitcoin:18443
-      BITCOIN_RPC_USER: user
-      BITCOIN_RPC_PASS: password
-      BITCOIN_RPC_WALLET: staging
-      SERVER_PORT: "3001"
+    env_file:
+      - regtest-dev-api.env
     depends_on:
       bitcoin:
         condition: service_healthy
