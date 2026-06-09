@@ -13,15 +13,115 @@ use ledger_transport_hid::{hidapi::HidApi, LedgerHIDError, TransportNativeHID};
 use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use secp256k1::Secp256k1;
 
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
 use super::HwWalletInfo;
 use crate::infrastructure::signing::SignatureResult;
 
-const ADMIN_ID_PATH: &str = "m/84'/1'/73'/0/0";
-const ADMIN_ID_PATH_PREFIX: &str = "m/84'/1'/73'/0/";
+/// Ledger HID and Speculos HTTP only handle one APDU exchange at a time.
+static LEDGER_DEVICE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-// ---------------------------------------------------------------------------
-// HID transport wrapper
-// ---------------------------------------------------------------------------
+fn with_ledger_device<R>(f: impl FnOnce() -> Result<R, String>) -> Result<R, String> {
+    let lock = LEDGER_DEVICE_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = lock
+        .lock()
+        .map_err(|e| format!("Ledger device lock poisoned: {e}"))?;
+    f()
+}
+
+const ADMIN_ID_PATH: &str = "m/84'/1'/73'/0/0";
+
+/// Empty label for `sign_psbt` / `get_wallet_address` (matches ledger_bitcoin_client test vectors).
+const LEDGER_ADMIN_WALLET_POLICY_NAME: &str = "";
+/// Non-empty fallback name only when physical Ledger requires `register_wallet`.
+const LEDGER_REGISTER_FALLBACK_POLICY_NAME: &str = "A";
+
+/// Bitcoin app PSBT review/sign flow for headless Speculos (POST /automation — no emulator patch).
+const SPECULOS_SIGN_AUTOMATION: &str = r#"{
+  "version": 1,
+  "rules": [
+    {
+      "text": "Sign transaction",
+      "actions": [
+        ["button", 1, true], ["button", 2, true],
+        ["button", 1, false], ["button", 2, false]
+      ]
+    },
+    { "text": "Review transaction", "actions": [["button", 2, true], ["button", 2, false]] },
+    { "text": "Loading transaction", "actions": [["button", 2, true], ["button", 2, false]] },
+    { "regexp": "To \\(", "actions": [["button", 2, true], ["button", 2, false]] },
+    { "text": "Amount", "actions": [["button", 2, true], ["button", 2, false]] },
+    { "text": "Fees", "actions": [["button", 2, true], ["button", 2, false]] }
+  ]
+}"#;
+
+async fn upload_speculos_sign_automation(base_url: &str) -> bool {
+    let url = format!("{}/automation", base_url.trim_end_matches('/'));
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    match client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(SPECULOS_SIGN_AUTOMATION)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            eprintln!("[speculos] automation rules loaded via POST {url}");
+            true
+        }
+        Ok(resp) => {
+            eprintln!(
+                "[speculos] automation upload failed: HTTP {}",
+                resp.status()
+            );
+            false
+        }
+        Err(e) => {
+            eprintln!("[speculos] automation upload error: {e}");
+            false
+        }
+    }
+}
+
+/// Whether Speculos PSBT approval should be auto-clicked via `/automation` rules.
+///
+/// Default: enabled (keeps the integration test / CI non-interactive). Set
+/// `LEDGER_SPECULOS_AUTO_APPROVE=0` (or `false`/`no`) to **require manual approval**
+/// on the Speculos screen — useful to observe the real on-device interaction and the
+/// frontend "Confirm on your device" / timeout flow, mirroring a physical Ledger.
+fn speculos_auto_approve_enabled() -> bool {
+    match std::env::var("LEDGER_SPECULOS_AUTO_APPROVE") {
+        Ok(v) => !(v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("no")),
+        Err(_) => true,
+    }
+}
+
+/// Loads Speculos `/automation` rules for headless PSBT approval via REST API,
+/// unless manual approval was requested (`LEDGER_SPECULOS_AUTO_APPROVE=0`).
+async fn with_speculos_auto_approve<F, Fut, T>(f: F) -> T
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = T>,
+{
+    if let Ok(base) = std::env::var("LEDGER_SPECULOS_URL") {
+        if speculos_auto_approve_enabled() {
+            let _ = upload_speculos_sign_automation(&base).await;
+        } else {
+            eprintln!(
+                "[speculos] auto-approve disabled (LEDGER_SPECULOS_AUTO_APPROVE=0) — \
+                 approve the transaction manually on the Speculos screen"
+            );
+        }
+    }
+    f().await
+}
 
 struct HidTransport(TransportNativeHID);
 
@@ -55,24 +155,11 @@ impl async_client::Transport for HidTransport {
 }
 
 // ---------------------------------------------------------------------------
-// Speculos transport (HTTP REST — for emulator testing)
+// Speculos transport (TCP APDU preferred; HTTP REST fallback)
 // ---------------------------------------------------------------------------
-
-// Set LEDGER_SPECULOS_URL to http://localhost:5000 when running Speculos.
-
-struct SpeculosTransport {
-    base_url: String,
-    client: reqwest::Client,
-}
-
-impl SpeculosTransport {
-    fn new(base_url: String) -> Self {
-        Self {
-            base_url,
-            client: reqwest::Client::new(),
-        }
-    }
-}
+//
+// `sign_psbt` uses many APDU round-trips (InterruptedExecution).
+// Prefer native Speculos TCP APDU; HTTP `/apdu` remains as fallback.
 
 #[derive(Debug)]
 struct SpeculosError(String);
@@ -83,15 +170,91 @@ impl std::fmt::Display for SpeculosError {
     }
 }
 
+fn parse_speculos_apdu_response(raw: &[u8]) -> Result<(StatusWord, Vec<u8>), SpeculosError> {
+    if raw.len() < 2 {
+        return Err(SpeculosError("response too short".into()));
+    }
+    let retcode = u16::from_be_bytes([raw[raw.len() - 2], raw[raw.len() - 1]]);
+    let status = StatusWord::try_from(retcode)
+        .map_err(|_| SpeculosError(format!("unknown status word: {retcode:#06x}")))?;
+    Ok((status, raw[..raw.len() - 2].to_vec()))
+}
+
+/// Native Speculos APDU socket (length-prefixed framing, same as ledger-live-http-proxy).
+struct SpeculosTcpTransport {
+    stream: tokio::sync::Mutex<tokio::net::TcpStream>,
+}
+
+impl SpeculosTcpTransport {
+    async fn connect(addr: &str) -> Result<Self, SpeculosError> {
+        let stream = tokio::net::TcpStream::connect(addr)
+            .await
+            .map_err(|e| SpeculosError(format!("TCP connect to {addr} failed: {e}")))?;
+        Ok(Self {
+            stream: tokio::sync::Mutex::new(stream),
+        })
+    }
+}
+
 #[async_trait]
-impl async_client::Transport for SpeculosTransport {
+impl async_client::Transport for SpeculosTcpTransport {
+    type Error = SpeculosError;
+
+    async fn exchange(&self, cmd: &APDUCommand) -> Result<(StatusWord, Vec<u8>), SpeculosError> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let apdu = cmd.encode();
+
+        let mut stream = self.stream.lock().await;
+        let len = (apdu.len() as u32).to_be_bytes();
+        stream
+            .write_all(&len)
+            .await
+            .map_err(|e| SpeculosError(format!("TCP write failed: {e}")))?;
+        stream
+            .write_all(&apdu)
+            .await
+            .map_err(|e| SpeculosError(format!("TCP write failed: {e}")))?;
+
+        let mut size_buf = [0u8; 4];
+        stream
+            .read_exact(&mut size_buf)
+            .await
+            .map_err(|e| SpeculosError(format!("TCP read failed: {e}")))?;
+        let size = u32::from_be_bytes(size_buf) as usize;
+        let mut packet = vec![0u8; size.saturating_add(2)];
+        stream
+            .read_exact(&mut packet)
+            .await
+            .map_err(|e| SpeculosError(format!("TCP read failed: {e}")))?;
+
+        parse_speculos_apdu_response(&packet)
+    }
+}
+
+struct SpeculosHttpTransport {
+    base_url: String,
+    client: reqwest::Client,
+}
+
+impl SpeculosHttpTransport {
+    fn new(base_url: String) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { base_url, client }
+    }
+}
+
+#[async_trait]
+impl async_client::Transport for SpeculosHttpTransport {
     type Error = SpeculosError;
 
     async fn exchange(&self, cmd: &APDUCommand) -> Result<(StatusWord, Vec<u8>), SpeculosError> {
         let apdu_hex = hex::encode(cmd.encode());
         let body = serde_json::json!({ "data": apdu_hex });
 
-        eprintln!("[speculos] → {apdu_hex}");
         let raw_resp = self
             .client
             .post(format!("{}/apdu", self.base_url))
@@ -99,30 +262,66 @@ impl async_client::Transport for SpeculosTransport {
             .send()
             .await
             .map_err(|e| SpeculosError(e.to_string()))?;
-        let body_text = raw_resp
-            .text()
-            .await
-            .map_err(|e| SpeculosError(e.to_string()))?;
-        eprintln!("[speculos] ← {body_text}");
-        let resp: serde_json::Value = serde_json::from_str(&body_text)
-            .map_err(|e| SpeculosError(format!("JSON parse error: {e} — body: {body_text}")))?;
+        let status = raw_resp.status();
+        let bytes = raw_resp.bytes().await.map_err(|e| {
+            SpeculosError(format!(
+                "error reading Speculos HTTP body (approve on device if prompted): {e}"
+            ))
+        })?;
+        if !status.is_success() {
+            return Err(SpeculosError(format!(
+                "Speculos HTTP {}: {}",
+                status,
+                String::from_utf8_lossy(&bytes)
+            )));
+        }
+        let body_preview = String::from_utf8_lossy(&bytes);
+        let resp: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|e| SpeculosError(format!("JSON parse error: {e} — body: {body_preview}")))?;
+        if let Some(err) = resp.get("error").and_then(|v| v.as_str()) {
+            if !err.is_empty() {
+                return Err(SpeculosError(format!("Speculos APDU error: {err}")));
+            }
+        }
 
         let data_hex = resp["data"]
             .as_str()
             .ok_or_else(|| SpeculosError("missing 'data' field in response".into()))?;
         let raw = hex::decode(data_hex).map_err(|e| SpeculosError(e.to_string()))?;
-
-        if raw.len() < 2 {
-            return Err(SpeculosError("response too short".into()));
-        }
-
-        let retcode = u16::from_be_bytes([raw[raw.len() - 2], raw[raw.len() - 1]]);
-        let status = StatusWord::try_from(retcode)
-            .map_err(|_| SpeculosError(format!("unknown status word: {retcode:#06x}")))?;
-        let data = raw[..raw.len() - 2].to_vec();
-
-        Ok((status, data))
+        parse_speculos_apdu_response(&raw)
     }
+}
+
+enum SpeculosTransportEnum {
+    Tcp(SpeculosTcpTransport),
+    Http(SpeculosHttpTransport),
+}
+
+#[async_trait]
+impl async_client::Transport for SpeculosTransportEnum {
+    type Error = SpeculosError;
+
+    async fn exchange(&self, cmd: &APDUCommand) -> Result<(StatusWord, Vec<u8>), SpeculosError> {
+        match self {
+            Self::Tcp(t) => t.exchange(cmd).await,
+            Self::Http(h) => h.exchange(cmd).await,
+        }
+    }
+}
+
+async fn bitcoin_client_for_speculos(
+    http_base: &str,
+) -> Result<BitcoinClient<SpeculosTransportEnum>, SpeculosError> {
+    let tcp_addr =
+        std::env::var("LEDGER_SPECULOS_APDU_ADDR").unwrap_or_else(|_| "127.0.0.1:9999".to_string());
+    if let Ok(tcp) = SpeculosTcpTransport::connect(&tcp_addr).await {
+        eprintln!("[speculos] using TCP APDU at {tcp_addr}");
+        return Ok(BitcoinClient::new(SpeculosTransportEnum::Tcp(tcp)));
+    }
+    eprintln!("[speculos] TCP connect to {tcp_addr} failed; using HTTP {http_base}/apdu");
+    Ok(BitcoinClient::new(SpeculosTransportEnum::Http(
+        SpeculosHttpTransport::new(http_base.to_string()),
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +343,32 @@ fn map_ledger_error(op: &str, raw: &str) -> String {
         "Request rejected on device — confirm the operation on your Ledger".to_string()
     } else if raw.contains("BadState") {
         "Ledger is locked or busy — unlock your device and open the Bitcoin app".to_string()
+    } else if raw.contains("UnexpectedResult") {
+        format!(
+            "Ledger {op} returned an unexpected response (often caused by concurrent Speculos/Ledger requests). \
+             Retry once; if it persists, restart Speculos and use only one wallet action at a time. Detail: {raw}"
+        )
+    } else if raw.contains("decoding response body") || raw.contains("reading Speculos HTTP body") {
+        format!(
+            "Ledger {op} lost the Speculos connection while waiting for on-device approval. \
+             Restart Speculos with ./scripts/ledger-up.sh, then retry. Detail: {raw}"
+        )
+    } else if raw.contains("UnicodeDecodeError") || raw.contains("invalid start byte") {
+        format!(
+            "Ledger {op}: Speculos crashed while showing wallet registration on screen. \
+             Restart ./scripts/ledger-up.sh and retry."
+        )
+    } else if raw.contains("error sending request")
+        || raw.contains("Connection refused")
+        || raw.contains("connection refused")
+        || raw.contains("tcp connect")
+    {
+        let url = std::env::var("LEDGER_SPECULOS_URL")
+            .unwrap_or_else(|_| "http://localhost:5001".to_string());
+        format!(
+            "Cannot reach Ledger emulator at {url} — Speculos is not running. \
+             Start it: ./scripts/ledger-up.sh <path-to-bitcoin_testnet_*.elf>, then retry."
+        )
     } else {
         format!("Ledger {op} failed: {raw}")
     }
@@ -189,6 +414,7 @@ where
         device_label: "Ledger".to_string(),
         derivation_path: path_str.to_string(),
         address_sample: Some(address.to_string()),
+        public_key_hex: Some(pubkey_hex.clone()),
         xpub_or_fingerprint: Some(format!("{}…", &pubkey_hex[..16.min(pubkey_hex.len())])),
         key_label: Some("Public key".to_string()),
     })
@@ -241,51 +467,15 @@ fn recover_pubkey_from_message(message: &str, sig_bytes: &[u8; 65]) -> Result<St
     Ok(hex::encode(pubkey.serialize()))
 }
 
-async fn list_with<T>(
-    client: &BitcoinClient<T>,
-    count: usize,
-) -> Result<Vec<super::HwAddressEntry>, String>
-where
-    T: async_client::Transport,
-    T::Error: std::fmt::Debug,
-{
-    // Fetch the account xpub once (hardened prefix only) and software-derive each index.
-    let account_path = parse_path("m/84'/1'/73'")?;
-    let account_xpub = client
-        .get_extended_pubkey(&account_path, false)
-        .await
-        .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))?;
-
-    let secp = Secp256k1::verification_only();
-    let mut entries = Vec::with_capacity(count);
-
-    for n in 0..count {
-        let suffix =
-            DerivationPath::from(vec![ChildNumber::from(0u32), ChildNumber::from(n as u32)]);
-        let leaf_xpub = account_xpub
-            .derive_pub(&secp, &suffix)
-            .map_err(|e| format!("BIP32 derivation failed at index {n}: {e}"))?;
-
-        let public_key_hex = hex::encode(leaf_xpub.public_key.serialize());
-        let compressed = bitcoin::CompressedPublicKey(leaf_xpub.public_key);
-        let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
-
-        entries.push(super::HwAddressEntry {
-            index: n as u32,
-            derivation_path: format!("{ADMIN_ID_PATH_PREFIX}{n}"),
-            address: address.to_string(),
-            public_key_hex,
-        });
-    }
-
-    Ok(entries)
-}
-
 // ---------------------------------------------------------------------------
 // Public API — sync wrappers called from spawn_blocking in Tauri commands
 // ---------------------------------------------------------------------------
 
 pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
+    with_ledger_device(|| connect_unlocked(derivation_path))
+}
+
+fn connect_unlocked(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
     let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -293,38 +483,29 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
     if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
-        let transport = SpeculosTransport::new(url);
-        let client = BitcoinClient::new(transport);
-        rt.block_on(get_info_with(&client, &path_str))
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            get_info_with(&client, &path_str).await
+        })
     } else {
         let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
         let transport = TransportNativeHID::new(&hidapi)
             .map_err(|e| format!("Ledger not found or locked: {e}"))?;
         let client = BitcoinClient::new(HidTransport(transport));
         rt.block_on(get_info_with(&client, &path_str))
-    }
-}
-
-pub fn list_addresses(count: usize) -> Result<Vec<super::HwAddressEntry>, String> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| format!("tokio runtime: {e}"))?;
-
-    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
-        let transport = SpeculosTransport::new(url);
-        let client = BitcoinClient::new(transport);
-        rt.block_on(list_with(&client, count))
-    } else {
-        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
-        let transport = TransportNativeHID::new(&hidapi)
-            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
-        let client = BitcoinClient::new(HidTransport(transport));
-        rt.block_on(list_with(&client, count))
     }
 }
 
 pub fn sign_admin_sps65_binding(
+    message: &str,
+    derivation_path: &str,
+) -> Result<SignatureResult, String> {
+    with_ledger_device(|| sign_admin_sps65_binding_unlocked(message, derivation_path))
+}
+
+fn sign_admin_sps65_binding_unlocked(
     message: &str,
     derivation_path: &str,
 ) -> Result<SignatureResult, String> {
@@ -334,14 +515,308 @@ pub fn sign_admin_sps65_binding(
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
     if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
-        let transport = SpeculosTransport::new(url);
-        let client = BitcoinClient::new(transport);
-        rt.block_on(sign_with(&client, message, derivation_path))
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            sign_with(&client, message, derivation_path).await
+        })
     } else {
         let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
         let transport = TransportNativeHID::new(&hidapi)
             .map_err(|e| format!("Ledger not found or locked: {e}"))?;
         let client = BitcoinClient::new(HidTransport(transport));
         rt.block_on(sign_with(&client, message, derivation_path))
+    }
+}
+
+/// Returns the BIP-86 (Taproot) account xpub for the given derivation path.
+///
+/// Uses `get_extended_pubkey` on the hardened account path directly.
+/// Supports Speculos emulator via `LEDGER_SPECULOS_URL` environment variable.
+pub fn get_account_xpub(path: &str) -> Result<String, String> {
+    with_ledger_device(|| get_account_xpub_unlocked(path))
+}
+
+fn get_account_xpub_unlocked(path: &str) -> Result<String, String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+
+    let derivation_path =
+        DerivationPath::from_str(path).map_err(|e| format!("Invalid path: {e}"))?;
+
+    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            client
+                .get_extended_pubkey(&derivation_path, false)
+                .await
+                .map(|xpub| xpub.to_string())
+                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))
+        })
+    } else {
+        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
+        let transport = TransportNativeHID::new(&hidapi)
+            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
+        let client = BitcoinClient::new(HidTransport(transport));
+        rt.block_on(async {
+            client
+                .get_extended_pubkey(&derivation_path, false)
+                .await
+                .map(|xpub| xpub.to_string())
+                .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))
+        })
+    }
+}
+
+/// Returns the master fingerprint from the Ledger device.
+/// Uses the BitcoinClient's native get_master_fingerprint method.
+fn admin_wallet_account_origin_path(network: bitcoin::Network) -> &'static str {
+    match network {
+        bitcoin::Network::Bitcoin => "86'/0'/73'",
+        _ => "86'/1'/73'",
+    }
+}
+
+fn build_admin_wallet_policy(
+    account_xpub: &str,
+    master_fingerprint: u32,
+    network: bitcoin::Network,
+) -> Result<ledger_bitcoin_client::wallet::WalletPolicy, String> {
+    build_admin_wallet_policy_named(
+        account_xpub,
+        master_fingerprint,
+        network,
+        LEDGER_ADMIN_WALLET_POLICY_NAME,
+    )
+}
+
+fn build_admin_wallet_policy_named(
+    account_xpub: &str,
+    master_fingerprint: u32,
+    network: bitcoin::Network,
+    policy_name: &str,
+) -> Result<ledger_bitcoin_client::wallet::WalletPolicy, String> {
+    use ledger_bitcoin_client::wallet::{Version, WalletPolicy, WalletPubKey};
+    use std::str::FromStr;
+
+    let fingerprint = bitcoin::bip32::Fingerprint::from(master_fingerprint.to_le_bytes());
+    let key_str = format!(
+        "[{}/{}]{}",
+        fingerprint,
+        admin_wallet_account_origin_path(network),
+        account_xpub
+    );
+    let key = WalletPubKey::from_str(&key_str)
+        .map_err(|e| format!("invalid wallet pubkey for Ledger policy: {e}"))?;
+    Ok(WalletPolicy::new(
+        policy_name.to_string(),
+        Version::V2,
+        "tr(@0/**)".to_string(),
+        vec![key],
+    ))
+}
+
+fn apply_ledger_signatures(
+    psbt: &mut bitcoin::psbt::Psbt,
+    yielded: Vec<(usize, ledger_bitcoin_client::SignPsbtYieldedObject)>,
+) -> Result<(), String> {
+    use ledger_bitcoin_client::psbt::PartialSignature;
+    use ledger_bitcoin_client::SignPsbtYieldedObject;
+
+    for (input_index, obj) in yielded {
+        let SignPsbtYieldedObject::Partial(partial) = obj else {
+            continue;
+        };
+        let input = psbt
+            .inputs
+            .get_mut(input_index)
+            .ok_or_else(|| format!("Ledger returned signature for unknown input {input_index}"))?;
+        match partial {
+            PartialSignature::TapScriptSig(_pk, None, sig) => {
+                input.tap_key_sig = Some(sig);
+            }
+            PartialSignature::TapScriptSig(pk, Some(leaf), sig) => {
+                input.tap_script_sigs.insert((pk, leaf), sig);
+            }
+            PartialSignature::Sig(pk, sig) => {
+                input.partial_sigs.insert(pk, sig);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ledger PSBT commit funding — **not** the same protocol as login/proposal `sign_message`.
+///
+/// | Flow | Ledger API | Emulator screens | APDU round-trips |
+/// |------|------------|------------------|------------------|
+/// | Session auth / approve proposal | `sign_message` (BIP-137 text) | “Sign message” | Few |
+/// | Broadcast commit (this fn) | `sign_psbt` (zero HMAC; no `register_wallet` on Speculos) | “Review transaction” | Many (`InterruptedExecution`) |
+async fn sign_psbt_with_client<T>(
+    client: &BitcoinClient<T>,
+    psbt: &mut bitcoin::psbt::Psbt,
+    account_xpub: &str,
+    master_fingerprint: u32,
+    network: bitcoin::Network,
+) -> Result<(), String>
+where
+    T: async_client::Transport + Sync,
+    T::Error: std::fmt::Debug,
+{
+    let wallet_policy = build_admin_wallet_policy(account_xpub, master_fingerprint, network)?;
+
+    eprintln!("[ledger] broadcast commit: verify master fingerprint");
+    let actual_fp = client
+        .get_master_fingerprint()
+        .await
+        .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+    let actual = u32::from_le_bytes(actual_fp.to_bytes());
+    if actual != master_fingerprint {
+        return Err(format!(
+            "wrong Ledger device: expected fingerprint 0x{master_fingerprint:08X}, got 0x{actual:08X}"
+        ));
+    }
+
+    let is_speculos = std::env::var("LEDGER_SPECULOS_URL").is_ok();
+
+    eprintln!(
+        "[ledger] broadcast commit: sign_psbt (zero HMAC — standard tr(@0/**) policy, no register_wallet)"
+    );
+    match client.sign_psbt(psbt, &wallet_policy, None).await {
+        Ok(yielded) => {
+            eprintln!("[ledger] broadcast commit: sign_psbt OK");
+            apply_ledger_signatures(psbt, yielded)
+        }
+        Err(first) if !is_speculos => {
+            let raw = format!("{first:?}");
+            eprintln!(
+                "[ledger] broadcast commit: sign_psbt failed ({raw}); trying register_wallet"
+            );
+            let register_policy = build_admin_wallet_policy_named(
+                account_xpub,
+                master_fingerprint,
+                network,
+                LEDGER_REGISTER_FALLBACK_POLICY_NAME,
+            )?;
+            let (_id, hmac) = client
+                .register_wallet(&register_policy)
+                .await
+                .map_err(|e| map_ledger_error("register_wallet", &format!("{e:?}")))?;
+            let yielded = client
+                .sign_psbt(psbt, &register_policy, Some(&hmac))
+                .await
+                .map_err(|e| map_ledger_error("sign_psbt", &format!("{e:?}")))?;
+            eprintln!("[ledger] broadcast commit: sign_psbt OK (after register_wallet)");
+            apply_ledger_signatures(psbt, yielded)
+        }
+        Err(e) => Err(map_ledger_error("sign_psbt", &format!("{e:?}"))),
+    }
+}
+
+/// Taproot key-path PSBT signing for Admin Wallet commit funding (Ledger / Speculos).
+///
+/// Must run on a **blocking thread** (`tokio::task::spawn_blocking`). Do not call from an async
+/// Tokio worker — that deadlocks when this function creates its own runtime.
+pub fn sign_admin_wallet_psbt(
+    psbt: &mut bitcoin::psbt::Psbt,
+    account_xpub: &str,
+    master_fingerprint: u32,
+    network: bitcoin::Network,
+) -> Result<(), String> {
+    with_ledger_device(|| {
+        sign_admin_wallet_psbt_unlocked(psbt, account_xpub, master_fingerprint, network)
+    })
+}
+
+fn sign_admin_wallet_psbt_unlocked(
+    psbt: &mut bitcoin::psbt::Psbt,
+    account_xpub: &str,
+    master_fingerprint: u32,
+    network: bitcoin::Network,
+) -> Result<(), String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+
+    eprintln!("[ledger] sign_admin_wallet_psbt: sign on device (zero HMAC policy)");
+
+    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
+        eprintln!("[ledger] using Speculos at {url}");
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            with_speculos_auto_approve(|| async {
+                sign_psbt_with_client(&client, psbt, account_xpub, master_fingerprint, network)
+                    .await
+            })
+            .await
+        })
+    } else {
+        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
+        let transport = TransportNativeHID::new(&hidapi)
+            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
+        let client = BitcoinClient::new(HidTransport(transport));
+        rt.block_on(sign_psbt_with_client(
+            &client,
+            psbt,
+            account_xpub,
+            master_fingerprint,
+            network,
+        ))
+    }
+}
+
+pub fn get_master_fingerprint() -> Result<u32, String> {
+    with_ledger_device(get_master_fingerprint_unlocked)
+}
+
+fn get_master_fingerprint_unlocked() -> Result<u32, String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+
+    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            let fp = client
+                .get_master_fingerprint()
+                .await
+                .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+            Ok(u32::from_le_bytes(fp.to_bytes()))
+        })
+    } else {
+        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
+        let transport = TransportNativeHID::new(&hidapi)
+            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
+        let client = BitcoinClient::new(HidTransport(transport));
+        rt.block_on(async {
+            let fp = client
+                .get_master_fingerprint()
+                .await
+                .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+            Ok(u32::from_le_bytes(fp.to_bytes()))
+        })
+    }
+}
+
+#[cfg(test)]
+mod policy_name_tests {
+    use super::{LEDGER_ADMIN_WALLET_POLICY_NAME, LEDGER_REGISTER_FALLBACK_POLICY_NAME};
+
+    #[test]
+    fn admin_wallet_policy_name_is_empty_for_sign_psbt() {
+        assert!(LEDGER_ADMIN_WALLET_POLICY_NAME.is_empty());
+        assert!(LEDGER_REGISTER_FALLBACK_POLICY_NAME.is_ascii());
+        assert!(!LEDGER_REGISTER_FALLBACK_POLICY_NAME.is_empty());
     }
 }

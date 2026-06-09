@@ -10,6 +10,7 @@ type Props = {
 	connectViewState: ConnectViewState
 	error: string | null
 	onConnect: () => void
+	onConnectMnemonic?: (mnemonic: string) => void
 	walletVendor: WalletVendor
 	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 }
@@ -19,6 +20,7 @@ export function ConnectPhase({
 	connectViewState,
 	error,
 	onConnect,
+	onConnectMnemonic,
 	walletVendor,
 	onSelectWalletMethod,
 }: Props) {
@@ -70,13 +72,17 @@ export function ConnectPhase({
 
 			{/* Heading */}
 			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[32px] font-normal leading-[1.2] tracking-[-0.01em] text-[#0a0a0a]">
-				{isSuccess ? 'Device connected' : 'Connect your hardware wallet'}
+				{isSuccess
+					? 'Device connected'
+					: walletVendor === 'mnemonic'
+						? 'Connect with your seed words'
+						: 'Connect your hardware wallet'}
 			</h1>
 
 			{/* Subtitle */}
 			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
 				{isSuccess
-					? 'Device detected. Loading available addresses…'
+					? 'Device detected. Loading canonical signer…'
 					: walletVendor === 'mnemonic'
 						? 'Mnemonic mode selected. Connect to continue with the words provided below.'
 						: walletVendor === 'ledger'
@@ -158,7 +164,7 @@ export function ConnectPhase({
 						<div className="font-medium text-[#059669]">
 							{walletVendor === 'ledger' ? 'Ledger detected' : 'Trezor detected'}
 						</div>
-						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to address selection…</div>
+						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to authority selection…</div>
 					</div>
 				</div>
 			)}
@@ -171,7 +177,11 @@ export function ConnectPhase({
 						? 'cursor-not-allowed border border-[#a3a3a3] bg-[#a3a3a3] text-white opacity-70'
 						: 'border border-[#0a0a0a] bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
 				}`}
-				onClick={onConnect}
+				onClick={
+					walletVendor === 'mnemonic' && onConnectMnemonic
+						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
+						: onConnect
+				}
 				disabled={loading || isSuccess}
 			>
 				{isSuccess ? (
@@ -192,7 +202,9 @@ export function ConnectPhase({
 			{/* Security note */}
 			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-[12px] text-[#9ca3af]">
 				<ShieldCheckMutedIcon width={16} height={16} className="block shrink-0" />
-				Your keys never leave the device. Alpen only receives signatures.
+				{walletVendor === 'mnemonic'
+					? 'Your seed words are used locally to derive keys. Alpen only receives signatures.'
+					: 'Your keys never leave the device. Alpen only receives signatures.'}
 			</p>
 
 			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}

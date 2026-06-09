@@ -80,7 +80,8 @@ cmd_start() {
     -rpcuser="$RPC_USER" \
     -rpcpassword="$RPC_PASSWORD" \
     -rpcport="$RPC_PORT" \
-    -zmqpubrawblock="$ZMQ_RAWBLOCK"
+    -zmqpubrawblock="$ZMQ_RAWBLOCK" \
+    -fallbackfee=0.00001
   echo "bitcoind started (datadir=$DATADIR, rpc=$RPC_HOST:$RPC_PORT, zmq=$ZMQ_RAWBLOCK)"
 }
 

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
 import { useEffect, useMemo, useState } from 'react'
@@ -22,6 +23,8 @@ type Props = {
 	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
+	currentVk: CurrentVk | null
+	isLoadingCurrentVk: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -38,6 +41,7 @@ const defaultFormValues: CreateProposalFormValues = {
 	keysToAdd: [{ value: '' }],
 	keysToRemove: [{ value: '' }],
 	threshold: '2',
+	vkTypeId: 'always_accept',
 	newVkHex: '',
 }
 
@@ -48,6 +52,8 @@ export function CreateProposalForm({
 	isLoadingConfig,
 	nextSeqNo,
 	isLoadingSeqNo,
+	currentVk,
+	isLoadingCurrentVk,
 	isSubmitting,
 	error,
 	createdProposal,
@@ -247,6 +253,7 @@ export function CreateProposalForm({
 							keysToAdd={previewAddingKeys}
 							keysToRemove={previewRemovingKeys}
 							threshold={previewData.threshold}
+							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
 							sighashHex={previewSighashHex}
 							authorityLabel={authorityLabel}
@@ -321,7 +328,7 @@ export function CreateProposalForm({
 									currentThreshold={multisigConfig?.threshold ?? 0}
 								/>
 							) : (
-								<VkUpdateFormFields />
+								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
 						</div>
 					)}

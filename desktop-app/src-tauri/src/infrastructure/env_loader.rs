@@ -25,9 +25,9 @@ fn try_load_dotenv(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+    // Use the shared env lock from broadcast_env to prevent concurrent env-var races.
+    use crate::infrastructure::broadcast_env::ENV_TEST_LOCK;
 
     fn restore_var(key: &str, previous: Option<String>) {
         match previous {
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn dotenvy_does_not_overwrite_existing_vars() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let dir =
             std::env::temp_dir().join(format!("alpen-env-loader-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("tempdir");
@@ -80,26 +80,31 @@ mod tests {
     /// Verifies `desktop-app/.env` (when present) supplies broadcast configuration.
     #[test]
     fn project_dotenv_supports_broadcast_env_load() {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let path = match dotenv_path() {
             Some(p) if p.is_file() => p,
             _ => return,
         };
 
-        let keys = [
-            "BITCOIN_RPC_URL",
-            "BITCOIN_RPC_USER",
-            "BITCOIN_RPC_PASS",
-            "STRATA_ADMIN_STATE_RPC_URL",
-            "OPERATOR_SECRET_KEY_HEX",
-        ];
+        const TEST_MNEMONIC: &str =
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+        let keys = ["BITCOIN_NETWORK", "BITCOIN_MAGIC_BYTES_HEX"];
         let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for key in keys {
             std::env::remove_var(key);
         }
 
         try_load_dotenv(&path);
-        let result = crate::infrastructure::broadcast_env::load_broadcast_env();
+
+        let session = crate::application::wallet_session::WalletSession::empty();
+        tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(session.init_from_mnemonic(TEST_MNEMONIC, None, None))
+            .expect("session init for broadcast env smoke test");
+        let node_config = crate::infrastructure::node_config_store::NodeConfig::default();
+        let result =
+            crate::infrastructure::broadcast_env::load_broadcast_env(&session, &node_config);
 
         for (key, prev) in saved {
             restore_var(key, prev);
@@ -109,7 +114,7 @@ mod tests {
             result.is_ok(),
             "load_broadcast_env failed after loading {}: {}",
             path.display(),
-            result.err().unwrap_or_default()
+            result.err().map(|e| e.to_string()).unwrap_or_default()
         );
     }
 }

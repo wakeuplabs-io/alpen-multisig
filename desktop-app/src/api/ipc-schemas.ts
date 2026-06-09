@@ -2,6 +2,16 @@ import { z } from 'zod'
 
 import { AuthRole } from '@/types/auth-role'
 
+/** Reusable schema combinator: accepts null or undefined, transforms to undefined. */
+function nullishToUndefined<T extends z.ZodType>(schema: T) {
+	return schema.nullish().transform((v) => v ?? undefined)
+}
+
+/** Reusable schema combinator: accepts null or undefined, transforms to null. */
+function nullishToNull<T extends z.ZodType>(schema: T) {
+	return schema.nullish().transform((v) => v ?? null)
+}
+
 export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
 
 export const broadcastStatusSchema = z.enum([
@@ -13,34 +23,46 @@ export const broadcastStatusSchema = z.enum([
 	'failed',
 ])
 
-export const proposalSchema = z.object({
+const cancelProposalSummarySchema = z.object({
 	actionId: z.string(),
-	seqNo: z.number(),
-	authority: z.string(),
 	status: proposalStatusSchema,
-	requiredSignatures: z.number(),
-	actionHex: z.string(),
 	signatures: z.array(
 		z.object({
 			signerPubkey: z.string(),
 			signatureHex: z.string(),
 		}),
 	),
-	broadcastStatus: broadcastStatusSchema,
-	// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
-	commitTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	revealTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	broadcastError: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
+	requiredSignatures: z.number(),
 })
+
+export const proposalSchema = z
+	.object({
+		actionId: z.string(),
+		seqNo: z.number(),
+		authority: z.string(),
+		status: proposalStatusSchema,
+		requiredSignatures: z.number(),
+		actionHex: z.string(),
+		actionType: z.enum(['multisig_update', 'vk_update', 'cancel', 'unknown']),
+		signatures: z.array(
+			z.object({
+				signerPubkey: z.string(),
+				signatureHex: z.string(),
+			}),
+		),
+		broadcastStatus: broadcastStatusSchema,
+		// Tauri/serde emits null for Option::None — .optional() alone rejects null (P-008).
+		commitTxid: nullishToUndefined(z.string()),
+		revealTxid: nullishToUndefined(z.string()),
+		broadcastError: nullishToUndefined(z.string()),
+		targetActionId: nullishToNull(z.string()),
+		activationHeight: nullishToNull(z.number()),
+		updateIdInQueue: nullishToNull(z.number()),
+		cancelProposal: nullishToNull(cancelProposalSummarySchema),
+		createdAtMs: z.number(),
+		expiresAtMs: z.number(),
+	})
+	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 
 export const authRoleSchema = z.nativeEnum(AuthRole)
 
@@ -65,21 +87,15 @@ export const authSessionSchema = z.object({
 
 export const authSessionResultSchema = z.object({
 	authenticated: z.boolean(),
-	session: authSessionSchema.nullish().transform((v) => v ?? null),
+	session: nullishToNull(authSessionSchema),
 })
 
 export const broadcastResultSchema = z.object({
 	actionId: z.string(),
 	proposalStatus: proposalStatusSchema,
 	broadcastStatus: broadcastStatusSchema,
-	commitTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
-	revealTxid: z
-		.string()
-		.nullish()
-		.transform((v) => v ?? undefined),
+	commitTxid: nullishToUndefined(z.string()),
+	revealTxid: nullishToUndefined(z.string()),
 })
 
 // signing.ts schemas
@@ -129,9 +145,76 @@ export const multisigConfigSchema = z.object({
 	threshold: z.number(),
 })
 
+export const currentVkSchema = z.object({
+	typeId: z.number(),
+	typeName: z.string(),
+	conditionHex: z.string(),
+})
+
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
 
 // action-builder.ts schema
 export const buildActionHexResponseSchema = z.object({
 	actionHex: z.string(),
+})
+
+// admin-wallet capability DTO — evolved from bare-bool to {canSign, signerKind, reason?}
+export const signerKindSchema = z.enum(['hardware', 'mnemonic', 'none'])
+
+/** Normalizes backend device labels and legacy values to the FE capability union. */
+export function normalizeCapabilitySignerKind(raw: string): z.infer<typeof signerKindSchema> {
+	if (raw === 'trezor' || raw === 'ledger' || raw === 'hardware') {
+		return 'hardware'
+	}
+	if (raw === 'mnemonic') {
+		return 'mnemonic'
+	}
+	return 'none'
+}
+
+export const adminWalletCapabilitySchema = z.union([
+	z
+		.object({
+			canSign: z.boolean(),
+			signerKind: z.string(),
+			reason: z.string().nullish(),
+		})
+		.transform((d) => ({
+			canSign: d.canSign,
+			signerKind: normalizeCapabilitySignerKind(d.signerKind),
+			reason: d.reason ?? undefined,
+		})),
+	z.boolean().transform((b) => ({
+		canSign: b,
+		signerKind: 'none' as const,
+		reason: undefined,
+	})),
+])
+
+// node-config.ts schemas
+export const connectionModeSchema = z.enum(['local', 'trusted', 'custom'])
+
+export const nodeConfigSchema = z.object({
+	mode: connectionModeSchema,
+	customStrataRpcUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcUser: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+	customBtcRpcPass: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
+})
+
+export const localNodeStatusSchema = z.object({
+	strataReachable: z.boolean(),
+	btcReachable: z.boolean(),
 })

@@ -29,7 +29,8 @@ use std::process::Command;
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
     decode_administration_subproto, parse_admin_section, strata_admin_confirmation_depth,
-    strata_admin_keys_hex, SignerUpdateEnactedFixture, DEFAULT_REPO_ASM, FAST_ENACTMENT,
+    strata_admin_keys_hex, SignerUpdateEnactedFixture, DEFAULT_REPO_ASM, DEMO_COSIGN_MNEMONIC,
+    FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
@@ -84,8 +85,13 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
     let seq_no = fixture.seq_no;
 
     let addrs = anyhow_string(signing::list_mnemonic_addresses(mnemonic, passphrase, 3))?;
+    let cosign_addrs = anyhow_string(signing::list_mnemonic_addresses(
+        DEMO_COSIGN_MNEMONIC,
+        passphrase,
+        1,
+    ))?;
     let a_hex = addrs[0].public_key_hex.clone();
-    let b_hex = addrs[1].public_key_hex.clone();
+    let b_hex = cosign_addrs[0].public_key_hex.clone();
     let d_hex = addrs[2].public_key_hex.clone();
 
     let admin_section = parse_admin_section(fixture.admin_section_json);
@@ -114,7 +120,7 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
 
     let sighash = anyhow_string(signing::compute_sighash(seq_no, &action_hex))?;
     let path_a = format!("{path_prefix}/0");
-    let path_b = format!("{path_prefix}/1");
+    let path_b = format!("{path_prefix}/0");
     let sig_a = anyhow_string(signing::sign_with_mnemonic_path(
         mnemonic,
         passphrase,
@@ -122,7 +128,7 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
         &sighash.sighash_hex,
     ))?;
     let sig_b = anyhow_string(signing::sign_with_mnemonic_path(
-        mnemonic,
+        DEMO_COSIGN_MNEMONIC,
         passphrase,
         &path_b,
         &sighash.sighash_hex,
@@ -184,6 +190,14 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
     let _ = harness.mine_block(None).await?;
 
     let action_strata = MultisigAction::from_ssz_bytes(&hex::decode(&action_hex)?)?;
+    let change_keypair = UntweakedKeypair::new(&secp, &mut OsRng);
+    let change_pubkey = bitcoin::CompressedPublicKey::from_private_key(
+        &secp,
+        &bitcoin::PrivateKey::new(change_keypair.secret_key(), bitcoin::Network::Regtest),
+    )
+    .expect("valid compressed public key");
+    let change_spk =
+        bitcoin::Address::p2wpkh(&change_pubkey, bitcoin::Network::Regtest).script_pubkey();
     let reveal_tx = anyhow_string(broadcast_tx::build_reveal_tx(
         &envelope_keypair,
         &reveal_script,
@@ -192,7 +206,7 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
         &commit_address.script_pubkey(),
         &action_strata,
         harness.asm_params.magic,
-        bitcoin::Network::Regtest,
+        change_spk,
         1_000,
     ))?;
 

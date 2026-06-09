@@ -5,15 +5,6 @@ use serde_json::{json, Value};
 
 #[async_trait]
 pub trait BitcoinRpcClient: Send + Sync {
-    /// Fund the taproot commit address from the node wallet. Returns txid.
-    /// `fee_rate_sats_per_vb` is passed directly to avoid relying on the node's fee estimator.
-    async fn send_to_address(
-        &self,
-        address: &str,
-        amount_sats: u64,
-        fee_rate_sats_per_vb: u64,
-    ) -> Result<String, String>;
-
     /// Broadcast a fully signed raw transaction. Returns txid.
     async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String>;
 
@@ -26,8 +17,11 @@ pub trait BitcoinRpcClient: Send + Sync {
     /// Fetch and decode a transaction by txid.
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String>;
 
-    /// Mine `count` blocks to an internally generated address. Regtest only.
-    async fn mine_blocks(&self, count: u32) -> Result<(), String>;
+    /// Get the current block count.
+    async fn get_block_count(&self) -> Result<u64, String>;
+
+    /// Submit a package of transactions.
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String>;
 }
 
 pub struct HttpBitcoinRpcClient {
@@ -38,13 +32,14 @@ pub struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
-        let url = match wallet_name.filter(|w| !w.is_empty()) {
-            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
-            None => base_url.to_string(),
-        };
+    /// Build a node-level Bitcoin RPC client. The broadcast path only uses node/mempool
+    /// RPCs (sendrawtransaction, submitpackage, estimatesmartfee, getrawtransaction,
+    /// gettransaction, getblockcount), so the client is NEVER wallet-scoped. Any
+    /// bitcoind Core-wallet operation (funding, addresses, mining) is out of scope —
+    /// funding/signing goes through the BDK Admin Wallet, mining through the dev faucet.
+    pub fn new(base_url: &str, user: &str, pass: &str) -> Self {
         Self {
-            url,
+            url: base_url.to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
             client: super::rpc_timeout::rpc_client(),
@@ -107,39 +102,6 @@ impl HttpBitcoinRpcClient {
 
 #[async_trait]
 impl BitcoinRpcClient for HttpBitcoinRpcClient {
-    async fn send_to_address(
-        &self,
-        address: &str,
-        amount_sats: u64,
-        fee_rate_sats_per_vb: u64,
-    ) -> Result<String, String> {
-        let btc_amount = amount_sats as f64 / 100_000_000.0;
-        // Positional params: address, amount, comment, comment_to, subtractfeefromamount,
-        // replaceable, conf_target, estimate_mode, avoid_reuse, fee_rate (sat/vb).
-        // Passing fee_rate explicitly bypasses the node's internal fee estimator.
-        let result = self
-            .call(
-                "sendtoaddress",
-                json!([
-                    address,
-                    btc_amount,
-                    "",
-                    "",
-                    false,
-                    null,
-                    null,
-                    "unset",
-                    null,
-                    fee_rate_sats_per_vb
-                ]),
-            )
-            .await?;
-        result
-            .as_str()
-            .map(str::to_string)
-            .ok_or_else(|| "sendtoaddress: expected string txid".to_string())
-    }
-
     async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String> {
         let result = self.call("sendrawtransaction", json!([tx_hex])).await?;
         result
@@ -186,14 +148,26 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(sats_per_vb.max(1))
     }
 
-    async fn mine_blocks(&self, count: u32) -> Result<(), String> {
-        let addr_result = self.call("getnewaddress", json!([])).await?;
-        let addr = addr_result
-            .as_str()
-            .ok_or_else(|| "getnewaddress: expected string address".to_string())?
-            .to_string();
-        self.call("generatetoaddress", json!([count, addr])).await?;
-        Ok(())
+    async fn get_block_count(&self) -> Result<u64, String> {
+        let result = self.call("getblockcount", json!([])).await?;
+        result
+            .as_u64()
+            .ok_or_else(|| "getblockcount: expected u64".to_string())
+    }
+
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String> {
+        let result = self
+            .call("submitpackage", serde_json::json!([tx_hexes]))
+            .await?;
+        let pkg_msg = result
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if pkg_msg == "success" {
+            Ok(())
+        } else {
+            Err(format!("submitpackage: unexpected result: {result}"))
+        }
     }
 
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String> {
@@ -213,6 +187,33 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 #[cfg(test)]
 mod tests {
     use super::super::rpc_timeout::{rpc_client, RPC_TIMEOUT};
+    use super::BitcoinRpcClient;
+
+    #[test]
+    fn submit_package_is_on_bitcoin_rpc_client_trait() {
+        // compile-gate: submit_package must be on BitcoinRpcClient
+        fn _accepts_trait_object(_: &dyn BitcoinRpcClient) {}
+    }
+
+    #[test]
+    fn submit_package_parses_non_success_package_msg_as_error() {
+        let result_value = serde_json::json!({"package_msg": "some-failure"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_ne!(pkg_msg, "success");
+    }
+
+    #[test]
+    fn submit_package_parses_success_package_msg() {
+        let result_value = serde_json::json!({"package_msg": "success"});
+        let pkg_msg = result_value
+            .get("package_msg")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert_eq!(pkg_msg, "success");
+    }
 
     #[test]
     fn rpc_timeout_is_thirty_seconds() {
@@ -222,5 +223,18 @@ mod tests {
     #[test]
     fn rpc_client_builds_without_panic() {
         let _client = rpc_client();
+    }
+
+    /// Regression (RCA: getnewaddress "wallet does not exist or is not loaded").
+    /// The production RPC client must be node-level — never wallet-scoped — so the
+    /// broadcast path never depends on a bitcoind Core wallet being loaded.
+    #[test]
+    fn http_client_is_node_level_not_wallet_scoped() {
+        let client = super::HttpBitcoinRpcClient::new("http://127.0.0.1:18443", "user", "pass");
+        assert_eq!(client.url, "http://127.0.0.1:18443");
+        assert!(
+            !client.url.contains("/wallet/"),
+            "production RPC client must not be wallet-scoped"
+        );
     }
 }

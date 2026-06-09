@@ -29,7 +29,6 @@ async fn main() -> anyhow::Result<()> {
 
     let btc_client = Arc::new(infrastructure::bitcoin_rpc::HttpBitcoinRpcClient::new(
         &config.bitcoin_rpc_url,
-        config.bitcoin_wallet_name.as_deref(),
         &config.bitcoin_rpc_user,
         &config.bitcoin_rpc_pass,
     ));
@@ -37,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
     let state = if let Some(database_url) = &config.database_url {
         let pool = PgPoolOptions::new()
             .max_connections(10)
+            .idle_timeout(std::time::Duration::from_secs(300))
+            .max_lifetime(std::time::Duration::from_secs(1800))
             .connect(database_url)
             .await
             .context("failed to connect to postgres")?;
@@ -51,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_challenge_ttl_ms,
             config.auth_session_ttl_ms,
             btc_client,
+            config.proposal_expiry_days,
         )
     } else {
         tracing::warn!("DATABASE_URL not set — using in-memory storage (data will not persist)");
@@ -61,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_challenge_ttl_ms,
             config.auth_session_ttl_ms,
             btc_client,
+            config.proposal_expiry_days,
         )
     };
 

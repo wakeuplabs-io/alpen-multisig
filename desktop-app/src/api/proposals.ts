@@ -13,6 +13,17 @@ export type BroadcastStatus =
 	| 'reveal_confirmed'
 	| 'failed'
 
+export type ProposalKind = 'update' | 'cancel'
+
+export type ActionType = 'multisig_update' | 'vk_update' | 'cancel' | 'unknown'
+
+export type CancelProposalSummary = {
+	actionId: string
+	status: ProposalStatus
+	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+	requiredSignatures: number
+}
+
 export type Proposal = {
 	actionId: string
 	seqNo: number
@@ -20,6 +31,7 @@ export type Proposal = {
 	status: ProposalStatus
 	requiredSignatures: number
 	actionHex: string
+	actionType: ActionType
 	signatures: Array<{
 		signerPubkey: string
 		signatureHex: string
@@ -28,6 +40,13 @@ export type Proposal = {
 	commitTxid?: string
 	revealTxid?: string
 	broadcastError?: string
+	kind: ProposalKind
+	targetActionId: string | null
+	activationHeight: number | null
+	updateIdInQueue: number | null
+	cancelProposal: CancelProposalSummary | null
+	createdAtMs: number
+	expiresAtMs: number
 }
 
 export type PrepareBroadcastResult = {
@@ -105,4 +124,68 @@ export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<Prepa
 
 export function broadcastProposal(input: BroadcastInput): Promise<ApiResult<BroadcastResult>> {
 	return tauriCall('proposals_broadcast', { input }, broadcastResultSchema)
+}
+
+export type CreateCancelProposalInput = {
+	baseUrl: string
+	targetActionId: string
+	seqNo: number
+	actionHex: string
+	signerPubkey: string
+	signatureHex: string
+}
+
+export function createCancelProposal(input: CreateCancelProposalInput): Promise<ApiResult<Proposal>> {
+	return tauriCall('proposals_create_cancel', { input }, proposalSchema)
+}
+
+export type BroadcastManualInput = {
+	actionHex: string
+	seqNo: number
+	authority: string
+	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+}
+
+export function prepareBroadcastManual(input: BroadcastManualInput): Promise<ApiResult<PrepareBroadcastResult>> {
+	return tauriCall<PrepareBroadcastResult>('proposals_prepare_broadcast_manual', { input })
+}
+
+export function broadcastManualProposal(input: BroadcastManualInput): Promise<ApiResult<BroadcastResult>> {
+	return tauriCall('proposals_broadcast_manual', { input }, broadcastResultSchema)
+}
+
+export type ReportBroadcastInput = {
+	baseUrl: string
+	actionId: string
+	broadcastStatus: BroadcastStatus
+	commitTxid?: string
+	revealTxid?: string
+	proposalStatus?: ProposalStatus
+}
+
+export function reportBroadcastProgress(input: ReportBroadcastInput): Promise<ApiResult<Proposal>> {
+	return tauriCall('proposals_report_broadcast', { input }, proposalSchema)
+}
+
+export type ResolveBroadcastStatusInput = {
+	commitTxid?: string
+	revealTxid?: string
+}
+
+export type ResolveBroadcastStatusResult = {
+	broadcastStatus: string
+	commitConfirmations: number | null
+	revealConfirmations: number | null
+}
+
+const resolveBroadcastStatusResultSchema = z.object({
+	broadcastStatus: z.string(),
+	commitConfirmations: z.number().nullable(),
+	revealConfirmations: z.number().nullable(),
+})
+
+export function resolveBroadcastStatus(
+	input: ResolveBroadcastStatusInput,
+): Promise<ApiResult<ResolveBroadcastStatusResult>> {
+	return tauriCall('proposals_resolve_broadcast_status', { input }, resolveBroadcastStatusResultSchema)
 }

@@ -5,7 +5,6 @@ type Props = {
 	isVerifyingAddress: boolean
 	verifyMessage: string | null
 	onVerifyOnDevice: () => void
-	onChangeAddress: () => void
 }
 
 export function SelectedPhase({
@@ -14,7 +13,6 @@ export function SelectedPhase({
 	isVerifyingAddress,
 	verifyMessage,
 	onVerifyOnDevice,
-	onChangeAddress,
 }: Props) {
 	return (
 		<>
@@ -25,12 +23,6 @@ export function SelectedPhase({
 					disabled={isVerifyingAddress}
 				>
 					{isVerifyingAddress ? 'Check device…' : 'Verify key/path on device'}
-				</button>
-				<button
-					className="mt-4 w-full rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-[0.7rem] text-[0.92rem] font-medium text-white"
-					onClick={onChangeAddress}
-				>
-					Change address
 				</button>
 			</div>
 			{isVerifyingAddress && (

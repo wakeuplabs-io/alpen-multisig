@@ -2,19 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
-import {
-	ClockSessionDefaultIcon,
-	ClockSessionWarningIcon,
-	LogOutMutedIcon,
-	LogOutRedIcon,
-	ShieldPurpleIcon,
-	UsbSessionDefaultIcon,
-	UsbSessionWarningIcon,
-} from '@/assets/icons'
+import { LogOutMutedIcon, LogOutRedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
 export function ProposalsDashboardScreen() {
 	const navigate = useNavigate()
@@ -24,6 +18,8 @@ export function ProposalsDashboardScreen() {
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
+
+	const panel = useWalletPanelData()
 
 	const authorityLabel =
 		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
@@ -75,9 +71,6 @@ export function ProposalsDashboardScreen() {
 	if (wallet === null) {
 		return <Navigate to="/" replace />
 	}
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: 'Unknown'
 
 	return (
 		<ScreenShell
@@ -88,7 +81,12 @@ export function ProposalsDashboardScreen() {
 						{authorityLabel}
 					</span>
 
-					<SessionChip timeLabel={sessionTimeLabel} signerLabel={signerLabel} warning={sessionWarning} />
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
+					/>
 
 					<button
 						type="button"
@@ -122,17 +120,26 @@ export function ProposalsDashboardScreen() {
 				isLoading={isLoading}
 				error={error}
 				onRetry={() => void loadProposals()}
+				onRefresh={() => void loadProposals()}
 				onCreateProposal={() => {
 					navigate('/proposals/create')
 				}}
 				onViewProposal={(actionId) => {
-					navigate(`/proposals/${actionId}`, { state: { signerPubkey } })
+					const p = proposals.find((pr) => pr.actionId === actionId)
+					if (p?.kind === 'cancel' && p.targetActionId !== null) {
+						navigate(`/proposals/${p.targetActionId}/cancel`, { state: { signerPubkey } })
+					} else {
+						navigate(`/proposals/${actionId}`, { state: { signerPubkey } })
+					}
 				}}
 				onSignProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/sign`)
 				}}
 				onBroadcastProposal={(actionId) => {
 					navigate(`/proposals/${actionId}/broadcast`)
+				}}
+				onCancelProposal={(actionId) => {
+					navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })
 				}}
 			/>
 		</ScreenShell>
@@ -141,49 +148,4 @@ export function ProposalsDashboardScreen() {
 
 function hasReachedQuorum(proposal: Proposal): boolean {
 	return proposal.status === 'pending' && proposal.signatures.length >= proposal.requiredSignatures
-}
-
-function SessionChip({
-	timeLabel,
-	signerLabel,
-	warning,
-}: {
-	timeLabel: string
-	signerLabel: string
-	warning: boolean
-}) {
-	return (
-		<span
-			className="inline-flex items-center gap-2 rounded-full border px-3 py-1.25 text-[12px] whitespace-nowrap flex-none transition"
-			style={
-				warning
-					? {
-							background: '#fffbeb',
-							borderColor: '#fde68a',
-							color: '#d97706',
-						}
-					: {
-							background: '#f8f8fb',
-							borderColor: '#e5e7eb',
-							color: '#111827',
-						}
-			}
-		>
-			{warning ? (
-				<ClockSessionWarningIcon width={12} height={12} className="block shrink-0" />
-			) : (
-				<ClockSessionDefaultIcon width={12} height={12} className="block shrink-0" />
-			)}
-			<span className="font-mono text-[11px] font-medium">Session · {timeLabel}</span>
-			<span className="h-3 w-px" style={{ background: warning ? '#fde68a' : '#e5e7eb' }} aria-hidden="true" />
-			{warning ? (
-				<UsbSessionWarningIcon width={12} height={12} className="block shrink-0" />
-			) : (
-				<UsbSessionDefaultIcon width={12} height={12} className="block shrink-0" />
-			)}
-			<span className="font-mono text-[11px]" style={{ color: warning ? '#d97706' : '#6b7280' }}>
-				{signerLabel}
-			</span>
-		</span>
-	)
 }

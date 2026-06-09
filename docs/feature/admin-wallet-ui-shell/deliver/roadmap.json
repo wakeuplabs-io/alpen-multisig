@@ -1,0 +1,313 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-ui-shell",
+    "created_at": "2026-05-28T00:39:47Z",
+    "total_steps": 14,
+    "phases": 4
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "Model layer \u2014 pure functions and promoted primitives",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "Promote CopyButton and SectionLabel from broadcast-details-card.tsx",
+          "description": "Extract CopyButton (lines 23\u201343) and SectionLabel (lines 45\u201347) from broadcast-details-card.tsx into desktop-app/src/components/copy-button.tsx and section-label.tsx respectively. Update broadcast-details-card.tsx imports so its rendered output is byte-identical.",
+          "estimated_hours": 2,
+          "dependencies": [],
+          "criteria": [
+            "desktop-app/src/components/copy-button.tsx exists and exports a CopyButton component with a string prop and a clipboard write + brief check-icon toggle behavior",
+            "desktop-app/src/components/section-label.tsx exists and exports a SectionLabel component for uppercase section-label typography",
+            "broadcast-details-card.tsx imports CopyButton and SectionLabel from their new locations and no longer defines them inline",
+            "npm run build completes without errors after the import changes",
+            "npm run lint and npm run format:check pass"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "01-02",
+          "name": "Create model pure functions: format-btc-from-sats, format-signed-sats, trunc-address, trunc-txid, relative-time",
+          "description": "Add five pure TypeScript functions under desktop-app/src/domain/admin-wallet/model/. Each file has a single named export. relative-time.ts mirrors the existing relativeTime in broadcast-details-card.tsx but accepts an explicit now: Date parameter for testability.",
+          "estimated_hours": 2,
+          "dependencies": [
+            "01-01"
+          ],
+          "criteria": [
+            "formatBtcFromSats(0) returns '0.00000000'; formatBtcFromSats(100_000_000) returns '1.000000'; formatBtcFromSats(10_000_000_000) returns '100.0000'; formatBtcFromSats(NaN) returns '\u2014'",
+            "formatSignedSats(1_234) returns '+1,234 sats'; formatSignedSats(-48_250_000) returns '\u221248,250,000 sats' with unicode minus; formatSignedSats(NaN) returns '\u2014'",
+            "truncAddress('bc1pwxlpge5x8n3z7c0hcusmt2jy5fgq9kly6w0s2rflmakrgjtp0w0qxh66u2') returns a string of the form 'bc1pw\u202666u2'; addresses of length \u2264 14 pass through unchanged",
+            "truncTxid of a 64-char hex string returns a string of the form 'xxxxxxxx\u2026xxxxxx'; strings of length \u2264 16 pass through unchanged",
+            "relativeTime given a date 30 seconds before now returns '30s ago'; 5 minutes before now returns '5m ago'; 2 hours before now returns '2h ago'; a future date returns 'just now'; an invalid ISO string returns '\u2014'",
+            "No model file imports React or any component"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "01-03",
+          "name": "Create model aggregation functions: group-utxos-by-derivation, compose-addresses-with-balance, format-admin-wallet-error, view-models.ts",
+          "description": "Add four remaining model files under desktop-app/src/domain/admin-wallet/model/. view-models.ts re-exports the AddressWithBalanceView type and selected mappers as the module's public surface.",
+          "estimated_hours": 2,
+          "dependencies": [
+            "01-02"
+          ],
+          "criteria": [
+            "groupUtxosByDerivation([]) returns an empty Map; groupUtxosByDerivation with two UTXOs at the same derivationIndex returns a Map entry with their valueSats summed; by default UTXOs with keychain === 'Internal' are excluded; passing opts { includeInternal: true } includes them",
+            "composeAddressesWithBalance given addresses with no matching UTXOs returns entries all with balanceSats === 0; an address at index 0 with a UTXO of 125_000_000 sats returns balanceSats: 125_000_000 for that entry",
+            "formatAdminWalletError returns severity 'info' for AdminWalletError.Disabled; severity 'warning' for RpcUnreachable and RpcAuthFailed and SyncIncomplete; severity 'fatal' for DescriptorParseError; severity 'info' for RegtestGuardViolation; every variant produces a non-empty title and body",
+            "view-models.ts exports the AddressWithBalanceView type and can be imported without importing React",
+            "No model file imports from domain/admin-wallet/components/ or domain/admin-wallet/hooks/"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "01-04",
+          "name": "Write test files for all 8 model functions and register as npm run test:model-* in package.json",
+          "description": "Create 8 test files under desktop-app/src/domain/admin-wallet/model/__tests__/ following the existing tsx script pattern with node:assert/strict. Add model/__fixtures__/ with make-utxo, make-address, and make-sync-status typed builders. Register each as npm run test:model-<name> in desktop-app/package.json.",
+          "estimated_hours": 3,
+          "dependencies": [
+            "01-03"
+          ],
+          "criteria": [
+            "desktop-app/src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts exists and all assertions pass via npm run test:model-format-btc-from-sats",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts exists and all assertions pass via npm run test:model-format-signed-sats",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/trunc-address.test.ts exists and all assertions pass via npm run test:model-trunc-address",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/trunc-txid.test.ts exists and all assertions pass via npm run test:model-trunc-txid",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/relative-time.test.ts exists and all assertions pass via npm run test:model-relative-time",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/group-utxos-by-derivation.test.ts exists and all assertions pass via npm run test:model-group-utxos-by-derivation",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/compose-addresses-with-balance.test.ts exists and all assertions pass via npm run test:model-compose-addresses-with-balance",
+            "desktop-app/src/domain/admin-wallet/model/__tests__/format-admin-wallet-error.test.ts exists and all assertions pass via npm run test:model-format-admin-wallet-error",
+            "Fixture builders in model/__fixtures__/ are never imported by any production file under domain/admin-wallet/"
+          ],
+          "test_file": "desktop-app/src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
+          "scenario_name": "formatBtcFromSats \u2014 Alta-literal magnitude-based decimal formatting"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Hooks layer \u2014 URL state and composed view-model hook",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "Create useWalletPanelState hook (URL search params via React Router 6)",
+          "description": "Add desktop-app/src/domain/admin-wallet/hooks/use-wallet-panel-state.ts. The hook reads and writes ?wallet=open and ?walletSection=<section> via useSearchParams. Exports isOpen, expandedSection, open(), close(), and setExpandedSection().",
+          "estimated_hours": 2,
+          "dependencies": [
+            "01-04"
+          ],
+          "criteria": [
+            "useWalletPanelState with URL ?wallet=open&walletSection=addresses returns { isOpen: true, expandedSection: 'addresses' }",
+            "Calling open('receive') causes the URL to become ?wallet=open&walletSection=receive",
+            "Calling close() strips both wallet and walletSection params from the URL",
+            "An unknown walletSection value in the URL results in expandedSection: null without throwing",
+            "The hook has no direct imports from @tauri-apps/api/core or @/api/admin-wallet"
+          ],
+          "test_file": "desktop-app/src/domain/admin-wallet/hooks/__tests__/use-wallet-panel-state.test.ts",
+          "scenario_name": "useWalletPanelState \u2014 URL search-param contract"
+        },
+        {
+          "id": "02-02",
+          "name": "Create useAddressesWithBalance hook and write contract tests for both hooks",
+          "description": "Add desktop-app/src/domain/admin-wallet/hooks/use-addresses-with-balance.ts. Compose useAdminWalletAddresses and useAdminWalletUtxos, then apply composeAddressesWithBalance. Add test files for both hooks under hooks/__tests__/ following the tsx script pattern and register as npm run test:hooks-* in package.json.",
+          "estimated_hours": 3,
+          "dependencies": [
+            "02-01"
+          ],
+          "criteria": [
+            "useAddressesWithBalance given mocked synchronous outputs from the two underlying hooks produces data equal to composeAddressesWithBalance(addresses, utxos)",
+            "useAddressesWithBalance isLoading is true when either underlying hook reports loading",
+            "useAddressesWithBalance error is the first non-null AdminWalletError from either underlying hook",
+            "npm run test:hooks-use-wallet-panel-state passes",
+            "npm run test:hooks-use-addresses-with-balance passes",
+            "Neither hook file imports @tauri-apps/api/core directly"
+          ],
+          "test_file": "desktop-app/src/domain/admin-wallet/hooks/__tests__/use-addresses-with-balance.test.ts",
+          "scenario_name": "useAddressesWithBalance \u2014 composed view-model contract"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "UI components \u2014 slide-over panel and wallet sections",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "Create wallet-panel.tsx \u2014 slide-over container with focus trap, ESC, backdrop, and ARIA",
+          "description": "Port the Alta WalletPanel.jsx slide-over container to desktop-app/src/domain/admin-wallet/components/wallet-panel.tsx. Implement 240 ms transition via double-RAF, focus trap cycling on Tab/Shift+Tab, document-level Escape listener, backdrop click to close, and focus restore on close. ARIA: role=dialog, aria-modal=true, aria-labelledby=wallet-panel-title.",
+          "estimated_hours": 3,
+          "dependencies": [
+            "02-02"
+          ],
+          "criteria": [
+            "When isOpen becomes true the panel element has aria-modal='true' and role='dialog'",
+            "When isOpen is true pressing Escape calls onClose",
+            "When isOpen is true clicking the backdrop calls onClose",
+            "Tab key press while the panel is open cycles focus within the panel and does not reach elements behind the backdrop",
+            "When isOpen becomes false after being true focus is restored to the previously focused element",
+            "The component does not import from @tauri-apps/api/core or @/api/admin-wallet"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-02",
+          "name": "Create wallet-panel-header.tsx, wallet-panel-trigger.tsx, and disabled-wallet-card.tsx",
+          "description": "Add three supporting components. wallet-panel-header.tsx renders the panel title and close button with id=wallet-panel-title. wallet-panel-trigger.tsx renders the header toggle button. disabled-wallet-card.tsx renders the body-collapse info card for AdminWalletError.Disabled and RegtestGuardViolation.",
+          "estimated_hours": 2,
+          "dependencies": [
+            "03-01"
+          ],
+          "criteria": [
+            "wallet-panel-header.tsx renders an element with id='wallet-panel-title' containing the panel title text",
+            "wallet-panel-trigger.tsx renders a button; when isOpen is true the button reflects an open/active state; clicking calls onToggle",
+            "disabled-wallet-card.tsx renders the environment configuration message when given an AdminWalletError.Disabled error",
+            "disabled-wallet-card.tsx renders the typed message for AdminWalletError.RegtestGuardViolation",
+            "None of these components import from @tauri-apps/api/core"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-03",
+          "name": "Create wallet-balance.tsx, receive-address-row.tsx, and receive-section.tsx",
+          "description": "Add three content-section components. wallet-balance.tsx renders total balance with a BTC\u2194sats unit toggle. receive-address-row.tsx renders the first-unused external address with CopyButton. receive-section.tsx renders a toggle-expander leading to the address-copy block and a Phase 6 placeholder notice.",
+          "estimated_hours": 2,
+          "dependencies": [
+            "03-02"
+          ],
+          "criteria": [
+            "wallet-balance.tsx renders balanceSats formatted as BTC by default; clicking the unit toggle re-renders the value in sats using formatBtcFromSats and formatSignedSats from the model layer",
+            "wallet-balance.tsx shows a loading skeleton when isLoading is true",
+            "receive-address-row.tsx renders the given address string and includes a CopyButton that copies it to the clipboard",
+            "receive-section.tsx when collapsed shows only a toggle button; when expanded shows the address and the Phase 6 placeholder text",
+            "None of these components import from @tauri-apps/api/core or invoke IPC directly"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-04",
+          "name": "Create addresses-with-balance-list.tsx and address-row.tsx",
+          "description": "Add the collapsible addresses table. address-row.tsx renders a single row of (index, address, balanceSats, isUsed). addresses-with-balance-list.tsx renders a collapsible section header and a table of address-row entries driven by AddressWithBalanceView[].",
+          "estimated_hours": 2,
+          "dependencies": [
+            "03-03"
+          ],
+          "criteria": [
+            "addresses-with-balance-list.tsx is collapsed by default (the table is not visible until onToggle is called with isExpanded false \u2192 true)",
+            "When isExpanded is true each AddressWithBalanceView row is rendered via address-row.tsx showing index, truncated address, and formatted balanceSats",
+            "address-row.tsx renders isUsed state visually distinguishable from unused",
+            "addresses-with-balance-list.tsx shows a loading skeleton when isLoading is true and rows is null",
+            "When error is non-null and rows is null an error message is shown instead of the table"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "03-05",
+          "name": "Create tx-history-list.tsx, tx-history-item.tsx, send-placeholder.tsx, and sync-chip.tsx",
+          "description": "Add the remaining four panel section components. tx-history-list.tsx and tx-history-item.tsx are ported from Alta but render in empty state with Phase 5 copy. send-placeholder.tsx renders a disabled CTA with Phase 4 copy. sync-chip.tsx renders the last-sync relative-time label, a Refresh button, and typed error surfacing.",
+          "estimated_hours": 3,
+          "dependencies": [
+            "03-04"
+          ],
+          "criteria": [
+            "tx-history-list.tsx renders the Phase 5 placeholder message 'Transaction history arrives in Phase 5 (transactions + fee-bump).' and no data rows",
+            "send-placeholder.tsx renders a disabled CTA button and the Phase 4 message 'Send arrives in Phase 4 (regtest Send happy path).'",
+            "sync-chip.tsx given a syncStatus with a lastSyncedAt timestamp renders a relative-time string (e.g. '12s ago') using relativeTime from the model",
+            "sync-chip.tsx clicking the Refresh button calls onRefresh",
+            "sync-chip.tsx given an AdminWalletError.RpcUnreachable error renders 'Sync error: cannot reach Bitcoin node' instead of the relative time",
+            "sync-chip.tsx given an AdminWalletError.RpcAuthFailed error renders 'Sync error: RPC auth failed'",
+            "None of these components import from @tauri-apps/api/core"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Screen integration and architecture compliance test",
+      "steps": [
+        {
+          "id": "04-01",
+          "name": "Wire WalletPanel into proposals-dashboard-screen.tsx",
+          "description": "Modify proposals-dashboard-screen.tsx to import useWalletPanelState and add WalletPanelTrigger to the ScreenShell headerContent slot and WalletPanel with its section children to the screen body. All Phase 2 hooks are consumed inside panel children.",
+          "estimated_hours": 2,
+          "dependencies": [
+            "03-05"
+          ],
+          "criteria": [
+            "The proposals dashboard screen renders a Wallet trigger button in the header",
+            "Clicking the Wallet trigger button causes the WalletPanel to become visible (isOpen state transitions to true)",
+            "The URL becomes ?wallet=open when the panel is opened from the dashboard",
+            "Loading the dashboard with ?wallet=open&walletSection=addresses in the URL renders the panel open with the addresses section expanded",
+            "npm run build passes with no TypeScript errors after the modification"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "04-02",
+          "name": "Wire WalletPanel into broadcast-proposal-screen.tsx",
+          "description": "Apply identical WalletPanel wiring to broadcast-proposal-screen.tsx. The panel children composition is the same as the dashboard; no WalletPanelBody abstraction is introduced (out of scope until a third call site appears).",
+          "estimated_hours": 1,
+          "dependencies": [
+            "04-01"
+          ],
+          "criteria": [
+            "The broadcast proposal screen renders a Wallet trigger button in the header",
+            "The WalletPanel behaves identically on the broadcast screen as on the dashboard: opens, closes, restores focus, and respects URL state",
+            "Existing broadcast screen functionality (proposal display, broadcast action) is unaffected by the addition",
+            "npm run build passes with no TypeScript errors after the modification"
+          ],
+          "test_file": "",
+          "scenario_name": ""
+        },
+        {
+          "id": "04-03",
+          "name": "Write architecture compliance test (grep-based) and register as npm run test:architecture",
+          "description": "Create desktop-app/src/domain/admin-wallet/architecture.test.ts using the existing tsx script pattern. The test greps source files to assert dependency-direction rules. Register as npm run test:architecture in desktop-app/package.json.",
+          "estimated_hours": 1,
+          "dependencies": [
+            "04-02"
+          ],
+          "criteria": [
+            "npm run test:architecture passes and reports no violations",
+            "The test asserts that no file under domain/admin-wallet/components/ contains an import from @tauri-apps/api/core or @/api/admin-wallet",
+            "The test asserts that no file under domain/admin-wallet/model/ contains an import of 'react'",
+            "The test asserts that no production file under domain/admin-wallet/ (outside __tests__ and __fixtures__) contains an import from __fixtures__/",
+            "npm run lint, npm run format:check, and npm run build all pass on the final codebase"
+          ],
+          "test_file": "desktop-app/src/domain/admin-wallet/architecture.test.ts",
+          "scenario_name": "Architecture compliance \u2014 dependency-direction rules for admin-wallet domain"
+        }
+      ]
+    }
+  ],
+  "implementation_scope": {
+    "source_directories": [
+      "desktop-app/src/domain/admin-wallet/",
+      "desktop-app/src/components/",
+      "desktop-app/src/screens/"
+    ],
+    "test_directories": [
+      "desktop-app/src/domain/admin-wallet/model/__tests__/",
+      "desktop-app/src/domain/admin-wallet/hooks/__tests__/"
+    ],
+    "excluded_patterns": [
+      "**/__fixtures__/**",
+      "**/*.d.ts",
+      "**/node_modules/**"
+    ]
+  },
+  "validation": {
+    "status": "approved",
+    "reviewer": "nw-acceptance-designer-reviewer",
+    "approved_at": "2026-05-28T00:43:25Z"
+  }
+}

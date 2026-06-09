@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import {
 	AuthoritySelectionPhase,
 	type AuthorityOption,
@@ -6,7 +6,6 @@ import {
 import { AuthenticateSessionPhase } from '@/domain/connect-wallet/components/authenticate-session-phase'
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
-import { PickingPhase } from '@/domain/connect-wallet/components/picking-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
@@ -34,6 +33,7 @@ type Props = {
 		onContinueToAuthenticate: () => void
 		onBackToAuthority: () => void
 		onAuthenticate: () => void
+		onManualProposal: () => void
 	} | null
 }
 
@@ -47,7 +47,23 @@ export function HwWalletConnect({
 	authoritySelection,
 }: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
-	const isWidePhase = state.phase === 'picking' || (state.phase === 'selected' && authoritySelection !== null)
+	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
+
+	const [shouldAutoConnect, setShouldAutoConnect] = useState(false)
+	const connectRef = useRef(actions.connect)
+	useEffect(() => {
+		connectRef.current = actions.connect
+	})
+	useEffect(() => {
+		if (!shouldAutoConnect) return
+		setShouldAutoConnect(false)
+		void connectRef.current()
+	}, [shouldAutoConnect])
+
+	function handleConnectMnemonic(mnemonic: string) {
+		onSelectWalletMethod('mnemonic', mnemonic)
+		setShouldAutoConnect(true)
+	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
 	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
@@ -81,17 +97,9 @@ export function HwWalletConnect({
 					connectViewState={state.connectViewState}
 					error={state.error}
 					onConnect={() => void actions.connect()}
+					onConnectMnemonic={handleConnectMnemonic}
 					walletVendor={walletVendor}
 					onSelectWalletMethod={onSelectWalletMethod}
-				/>
-			)}
-			{state.phase === 'picking' && (
-				<PickingPhase
-					addresses={state.addresses}
-					selectedIndex={state.selectedIndex}
-					onSelectIndex={actions.selectAddressIndex}
-					onBack={actions.goBackToConnect}
-					onUseAddress={actions.useAddress}
 				/>
 			)}
 			{state.phase === 'selected' &&
@@ -105,7 +113,7 @@ export function HwWalletConnect({
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
-						onBackToAddresses={actions.changeAddress}
+						onBack={actions.goBackToConnect}
 					/>
 				)}
 			{state.phase === 'selected' &&
@@ -115,6 +123,7 @@ export function HwWalletConnect({
 				authoritySelection.step === 'authenticate-session' && (
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
+						adapterLabel={walletVendor.charAt(0).toUpperCase() + walletVendor.slice(1)}
 						signerAddress={state.selectedEntry.address}
 						compressedPublicKey={state.selectedEntry.publicKeyHex}
 						isAuthenticating={authoritySelection.isAuthenticating}
@@ -123,6 +132,7 @@ export function HwWalletConnect({
 						signingStep={authoritySelection.signingStep}
 						onBackToAuthority={authoritySelection.onBackToAuthority}
 						onAuthenticate={authoritySelection.onAuthenticate}
+						onManualProposal={authoritySelection.onManualProposal}
 					/>
 				)}
 			{state.phase === 'selected' && state.selectedEntry && state.account && authoritySelection === null && (
@@ -132,7 +142,6 @@ export function HwWalletConnect({
 					isVerifyingAddress={state.isVerifyingAddress}
 					verifyMessage={state.verifyMessage}
 					onVerifyOnDevice={() => void actions.verifyOnDevice()}
-					onChangeAddress={actions.changeAddress}
 				/>
 			)}
 		</section>

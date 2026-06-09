@@ -1,0 +1,15 @@
+[rpc]
+# Bind to all interfaces — Render routes HTTPS → port 8080 publicly.
+host = "0.0.0.0"
+port = 8080
+
+[database]
+path = "/data/asm-db"
+
+[bitcoin]
+# Render private-network hostname for the bitcoin service.
+# Override with BITCOIN_RPC_URL env var if needed.
+rpc_url = "http://bitcoin:18443"
+rpc_user = "user"
+rpc_password = "password"
+rawblock_connection_string = "tcp://bitcoin:28332"

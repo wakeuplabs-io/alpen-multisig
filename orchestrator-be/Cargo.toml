@@ -8,6 +8,13 @@ license = "MIT OR Apache-2.0"
 name = "server"
 path = "src/main.rs"
 
+[features]
+# Compiles the in-process ASM mock (mock:// RPC URLs) used by local dev and the
+# Rust e2e suite. MUST NOT be enabled for production builds — the mock bypasses
+# all on-chain authorization checks (membership, threshold, seqno, enactment).
+# See orchestrator-be/src/infrastructure/asm_role_membership.rs.
+dev-mocks = []
+
 [dependencies]
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
@@ -15,6 +22,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = "1"
 anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tower-http = { version = "0.5", features = ["trace", "cors", "request-id"] }
@@ -30,7 +38,9 @@ ssz = { workspace = true }
 strata-asm-common = { workspace = true }
 strata-asm-params = { workspace = true }
 strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-checkpoint = { workspace = true }
 strata-asm-txs-admin = { workspace = true }
+strata-predicate = { workspace = true }
 strata-crypto = { workspace = true }
 strata-l1-txfmt = { workspace = true }
 strata-l1-envelope-fmt = { workspace = true }

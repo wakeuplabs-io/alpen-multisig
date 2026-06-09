@@ -16,7 +16,9 @@
 | `STRATA_ADMIN_STATE_RPC_URL` | Yes | ASM runner JSON-RPC |
 | `BITCOIN_RPC_*` | Yes | Used by `/ready` only |
 
-Broadcast operator key and Bitcoin wallet live in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). Decision #2: operator key is process env only; use `ALLOW_DEV_OPERATOR_KEY=1` with the well-known regtest test key. Mnemonic signing IPC is dev/E2E-only (`ALLOW_DEV_MNEMONIC_SIGNING` or debug builds — see `docs/specs/secret-custody-wave2.md` on Track A).
+Broadcast configuration lives in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). As of R1.1, **no env flag gates broadcast** — signing capability is decided per-signer by network (`allowed_on`: mnemonic on regtest/testnet only, hardware on any network). The mnemonic-signing IPC remains dev/E2E-only, exposed in release builds via `ALLOW_DEV_MNEMONIC_SIGNING` and automatically in debug builds (P-040 — see `docs/specs/secret-custody-wave2.md`).
+
+**Phase 3.7 (3.7c):** when logged in (Palabras), the wallet panel, commit **funding**, and the SPS-50 commit/reveal **internal key** (`m/86'/0'/73'/2/0`) all follow the login session. `ADMIN_WALLET_REGTEST_MNEMONIC` is **removed** — do not set it in `.env`. Broadcast and wallet IPC require a mnemonic login (`wallet_session_init`).
 
 ## Incidents
 

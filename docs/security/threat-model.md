@@ -27,7 +27,7 @@ flowchart LR
 | Risk | Mitigation |
 |------|------------|
 | Malicious backend returns wrong proposal | P-005 hash verify (Track F) |
-| Operator test key in production | P-001 desktop + `ALLOW_DEV_OPERATOR_KEY` |
+| Well-known test mnemonic in production | R1.1 per-signer capability: the software mnemonic signer is rejected on mainnet (`allowed_on` = regtest/testnet only), only a hardware signer is allowed on mainnet; the mnemonic-signing IPC is off in release builds (`ALLOW_DEV_MNEMONIC_SIGNING` / `dev_secrets.rs`, P-040). Reveal key is a per-broadcast ephemeral key (R1.0) |
 | Mnemonic / raw key exfil via XSS | P-003 + P-040: dev signing IPC off in release (Decision #2; Track A) |
 | Supply-chain compromise | P-011 audit/deny/lockfile |
 | Cross-authority data leak | P-002 session + proposal scope |

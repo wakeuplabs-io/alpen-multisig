@@ -201,7 +201,7 @@ desktop-app/src-tauri/src/
 ├── lib.rs               # Library crate: exposes domain + application + infrastructure + signing
 ├── main.rs              # Tauri binary: registers commands, manages AppState
 ├── commands/
-│   ├── hw_wallet.rs         # get_trezor_info/list_hw_addresses/verify_address_on_device/sign_with_trezor
+│   ├── hw_wallet.rs         # get_trezor_info/verify_address_on_device/sign_with_trezor
 │   └── signing.rs           # compute_sighash/verify_threshold
 ├── domain/
 │   ├── authority.rs         # Authority enum (wire (de)serialization), AuthorityParseError
@@ -223,7 +223,6 @@ desktop-app/src-tauri/src/
 
 **Implemented Tauri commands:**
 - `get_trezor_info`
-- `list_hw_addresses`
 - `verify_address_on_device`
 - `sign_with_trezor`
 - `compute_sighash`
@@ -353,7 +352,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Backend: Axum router, working handlers (create/get/list/approve proposals), domain models, error mapping, in-memory repository (24 tests)
 - Desktop application layer: `proposals.rs` with `create_update_action`, `approve_action`, `get_update_action` via `OrchestratorClient` trait (7 tests)
 - Desktop `lib.rs` exposing `application` and `signing` modules publicly for e2e test consumption
-- Tauri IPC layer: hardware-wallet and signing commands wired (`get_trezor_info`, `list_hw_addresses`, `verify_address_on_device`, `sign_with_trezor`, `compute_sighash`, `verify_threshold`)
+- Tauri IPC layer: hardware-wallet and signing commands wired (`get_trezor_info`, `verify_address_on_device`, `sign_with_trezor`, `compute_sighash`, `verify_threshold`)
 - Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 10 tests
 - Frontend wallet-connect and sign-screen PoC flow with session context + wallet adapter abstraction
 - E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)

@@ -1,7 +1,18 @@
 import { useState } from 'react'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
-import { CheckCircleEmeraldIcon, CopyClipboardIcon, SignaturePenMutedIcon } from '@/assets/icons'
+import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
+import {
+	CheckCircleEmeraldIcon,
+	CopyClipboardIcon,
+	DownloadIcon,
+	ImportJsonIcon,
+	SignaturePenMutedIcon,
+} from '@/assets/icons'
+import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
+
+import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 
 type Props = {
 	proposal: Proposal
@@ -9,6 +20,8 @@ type Props = {
 	decodedData: DecodedProposalData
 	onSign: () => void
 	onBroadcast: () => void
+	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
+	onManualExecute?: () => void
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -37,16 +50,24 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-const STATUS_CONFIG: Record<ProposalStatus, { bg: string; text: string; border: string; dot: string; label: string }> =
-	{
-		pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-		approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-		enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-		canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-		expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-	}
+type DisplayStatus = ProposalStatus | 'awaiting_enactment'
 
-function StatusBadge({ status }: { status: ProposalStatus }) {
+const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
+	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
+	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
+	awaiting_enactment: {
+		bg: '#f0fdf9',
+		text: '#0f766e',
+		border: '#99f6e4',
+		dot: '#0f9d7a',
+		label: 'Awaiting enactment',
+	},
+	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
+	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
+	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
+}
+
+function StatusBadge({ status }: { status: DisplayStatus }) {
 	const s = STATUS_CONFIG[status]
 	return (
 		<span
@@ -83,18 +104,30 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 	return parts.length > 0 ? parts.join(' & ') : `Proposal #${proposal.seqNo}`
 }
 
-export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, onBroadcast }: Props) {
+export function ProposalDetail({
+	proposal,
+	signerPubkey,
+	decodedData,
+	onSign,
+	onBroadcast,
+	onPasteSignatures,
+	onManualExecute: _onManualExecute,
+}: Props) {
 	const collectedSignatures = proposal.signatures.length
 	const requiredSignatures = proposal.requiredSignatures
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum = !isTerminal && (proposal.status === 'approved' || collectedSignatures >= requiredSignatures)
-	const alreadySigned =
-		signerPubkey !== null &&
-		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
+	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 
+	const displayStatus: DisplayStatus =
+		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+			? 'awaiting_enactment'
+			: proposal.status
+
+	const [bundleCopied, setBundleCopied] = useState(false)
+	const [bundleDownloaded, setBundleDownloaded] = useState(false)
+	const [showImportModal, setShowImportModal] = useState(false)
 	const title = deriveProposalTitle(proposal, decodedData)
 
 	const signaturesJson = JSON.stringify(
@@ -102,6 +135,20 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 		null,
 		2,
 	)
+
+	function handleCopyBundle() {
+		void writeClipboard(JSON.stringify(proposal, null, 2)).then(() => {
+			setBundleCopied(true)
+			setTimeout(() => setBundleCopied(false), 2000)
+		})
+	}
+
+	function handleDownloadBundle() {
+		void saveJsonFile(JSON.stringify(proposal, null, 2), `proposal-${proposal.seqNo}.json`).then(() => {
+			setBundleDownloaded(true)
+			setTimeout(() => setBundleDownloaded(false), 2000)
+		})
+	}
 
 	return (
 		<div className="space-y-4">
@@ -115,7 +162,7 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 								#{proposal.seqNo} · Signer update · {proposal.authority}
 							</p>
 						</div>
-						<StatusBadge status={proposal.status} />
+						<StatusBadge status={displayStatus} />
 					</div>
 
 					{/* Signatures progress */}
@@ -316,34 +363,103 @@ export function ProposalDetail({ proposal, signerPubkey, decodedData, onSign, on
 			)}
 
 			{/* ── Action buttons ── */}
-			{hasQuorum && (
-				<button
-					type="button"
-					data-testid="e2e-detail-broadcast-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onBroadcast}
-				>
-					Broadcast
-				</button>
-			)}
+			<div className="flex items-center justify-between gap-3">
+				<div className="flex-1">
+					{hasQuorum && (
+						<button
+							type="button"
+							data-testid="e2e-detail-broadcast-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onBroadcast}
+						>
+							Broadcast
+						</button>
+					)}
 
-			{!isTerminal && !hasQuorum && !alreadySigned && (
-				<button
-					type="button"
-					data-testid="e2e-detail-sign-button"
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
-					onClick={onSign}
-				>
-					Sign
-				</button>
-			)}
+					{canSign && (
+						<button
+							type="button"
+							data-testid="e2e-detail-sign-button"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							onClick={onSign}
+						>
+							Sign
+						</button>
+					)}
 
-			{!isTerminal && !hasQuorum && alreadySigned && (
-				<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-					<p className="m-0 text-[13px] font-medium text-[#065f46]">
-						You have signed this proposal. Waiting for other signers to reach quorum.
-					</p>
+					{!isTerminal && !hasQuorum && alreadySigned && (
+						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+							<p className="m-0 text-[13px] font-medium text-[#065f46]">
+								You have signed this proposal. Waiting for other signers to reach quorum.
+							</p>
+						</div>
+					)}
 				</div>
+
+				{/* Utility buttons */}
+				<div className="flex shrink-0 items-center gap-1.5">
+					{!isTerminal && onPasteSignatures && (
+						<div className="group relative">
+							<button
+								type="button"
+								onClick={() => setShowImportModal(true)}
+								className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+							>
+								<ImportJsonIcon width={12} height={12} className="text-current" />
+							</button>
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Import signatures
+							</span>
+						</div>
+					)}
+					<div className="group relative">
+						<button
+							type="button"
+							onClick={handleCopyBundle}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							{bundleCopied ? (
+								<span className="text-[#0f9d7a]">Copied!</span>
+							) : (
+								<CopyClipboardIcon width={12} height={12} className="text-current" />
+							)}
+						</button>
+						{!bundleCopied && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Copy bundle
+							</span>
+						)}
+					</div>
+					<div className="group relative">
+						<button
+							type="button"
+							onClick={handleDownloadBundle}
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+						>
+							{bundleDownloaded ? (
+								<span className="text-[#0f9d7a]">Saved!</span>
+							) : (
+								<DownloadIcon width={12} height={12} className="text-current" />
+							)}
+						</button>
+						{!bundleDownloaded && (
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+								Download bundle
+							</span>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{showImportModal && onPasteSignatures && (
+				<ImportBundleModal
+					existingSignatures={proposal.signatures}
+					existingBroadcastStatus={proposal.broadcastStatus}
+					existingCommitTxid={proposal.commitTxid ?? null}
+					existingRevealTxid={proposal.revealTxid ?? null}
+					onImport={onPasteSignatures}
+					onClose={() => setShowImportModal(false)}
+				/>
 			)}
 		</div>
 	)

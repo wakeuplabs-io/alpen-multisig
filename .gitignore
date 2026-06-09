@@ -5,6 +5,10 @@
 # Rust build artifacts
 target/
 
+# cargo-mutants output (mutation testing artifacts)
+mutants.out/
+mutants.out.old/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -14,6 +18,7 @@ dist/
 # Environment variables
 /desktop-app/src-tauri/.env
 /desktop-app/.env
+/desktop-app/.env.**
 
 # Claude settings
 /.claude/settings.local.json

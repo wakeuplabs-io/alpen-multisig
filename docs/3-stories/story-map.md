@@ -34,6 +34,7 @@ The backbone is the user's journey, left to right. One signer traverses roughly 
 | Slice | Intent | Scope |
 |---|---|---|
 | **0 — Walking Skeleton** | Prove one E2E path end-to-end with the authority+action combo fully covered today (Strata Admin signer update). Software signer or basic HW. No in-app broadcast — raw tx export only. | US-A1, B1, C1, C2, D1, E1, F1, H1 |
+| **1a — Admin Wallet regtest commit funding** | Walking skeleton: BDK + chain RPC pays governance commit on regtest; legacy bitcoind wallet funding remains default for CI. | US-H7 (extends US-H6) |
 | **1 — Real HW + in-app broadcast** | Full HW wallet flow (list 20 addresses, on-device verify), in-app Bitcoin broadcast, manual fee control. | C3, C4, D5, H4, H6, I1, I4 |
 | **2 — All authorities & update types** | Expand to remaining 4 authorities and all 12 update types. Depends on upstream Alpen crate support (8 types still missing — see risks). | F2, F3, F4, F6, F7, F8, F9, F10, F11, F12, F13 |
 | **3 — Approved state, cancellation, past view** | Post-quorum lifecycle: approved/past views, cancellation flow, optional auto-broadcast on quorum. | D3, D4, F14, G1 (cancel variant), H2, I2, I3 |
@@ -41,6 +42,8 @@ The backbone is the user's journey, left to right. One signer traverses roughly 
 | **5 — Manual fallback & access control** | Full offline fallback (compose tx without backend), denied-access paths, session/wallet disconnect. | C5, C6, C7, G1, H3, H5 |
 
 > Slices are iteration boundaries, not strict phases — details may shift when confronted with implementation reality. Walking skeleton is the non-negotiable first step.
+>
+> Full phased Admin Wallet program: [`docs/specs/admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md).
 
 ---
 
@@ -284,8 +287,27 @@ Shared acceptance signals for all US-E*:
 - **Acceptance signals:**
   - Broadcast is triggered from the app; raw transaction is assembled from backend-collected signatures (same as US-H1).
   - Fee rate configurable per US-H4.
-- **Source:** UI PRD §1.13.2.2.
+- **Source:** UI PRD §1.13.2.2; implemented as commit/reveal per [`docs/specs/proposal-broadcast-commit-reveal.md`](../specs/proposal-broadcast-commit-reveal.md).
 - **Slice:** 1.
+
+#### US-H7 · Fund an approved proposal commit from the Admin Wallet (regtest walking skeleton)
+- **Story:** As a Strata Administrator or Alpen Administrator Signer on regtest, I want the desktop app to pay the Bitcoin commit transaction for an approved governance proposal from an Admin Wallet Taproot address derived at `m/86'/0'/73'/n/n`, so that we validate Admin Wallet derivation, UTXO selection, and on-chain spend before building the full wallet UI.
+- **Classification:** Functional
+- **Acceptance signals:**
+  - Only for `approved` proposals in the existing in-app commit/reveal broadcast flow (US-H6 / `proposal-broadcast-commit-reveal.md`).
+  - Commit funding uses BDK with a Bitcoin Core–compatible RPC endpoint; descriptors use BIP-86 account `73'` (regtest coin `0'`).
+  - Minimum paths: external `m/86'/0'/73'/0/0` for funding; change to first unused `m/86'/0'/73'/1/*`.
+  - Commit **destination** remains the operator-derived Taproot commit address (protocol unchanged).
+  - Reveal: operator key in Tauri process; orchestrator claim + PATCH unchanged.
+  - Regtest-only enablement via `BITCOIN_NETWORK=regtest` + `ALLOW_DEV_MNEMONIC_SIGNING=1`. (Phase 3.6 made the Admin Wallet the sole commit funder; the legacy `COMMIT_FUNDING`/`sendtoaddress` path was removed.)
+  - Phase 1 commit signing: regtest dev mnemonic in Tauri (dev flags); no HWI; no Ledger/Trezor required for US-H7.
+  - UI: funding mode, Admin Wallet address and available balance before confirm; existing broadcast phase progress and txids on success.
+  - Clear errors: insufficient Admin Wallet funds, RPC failure, misconfiguration.
+- **Source:** `docs/0-prd/03-prd-update.md` §3.2, §5.3.2.2–5.3.2.3; [`docs/specs/proposal-broadcast-commit-reveal.md`](../specs/proposal-broadcast-commit-reveal.md); walking skeleton for PRD §4.
+- **Slice:** **1a — Admin Wallet regtest commit funding**
+- **Depends on:** US-C1, US-C2, US-H6, regtest stack (`bitcoind` in dev only).
+- **Out of scope:** Payout; P2TR Admin ID; US-H4 fee UI; full WalletPanel; PRD §4.3.5 Send; US-H2 cancel; HWI; HW-signed commit; mainnet/testnet enablement in US-H7 (regtest only).
+- **Discovery note:** US-H7 adds the first Admin Wallet spend via BDK + chain RPC, layered on the in-app commit/reveal (US-H6). See §6 *Addendum (broadcast drift)* for the Slice 0 reconciliation. Technical spec: [`docs/specs/admin-wallet-regtest-commit-funding.md`](../specs/admin-wallet-regtest-commit-funding.md).
 
 ### Activity I — Payout operations (Payout Admin swimlane)
 
@@ -381,6 +403,8 @@ Slice 0 is complete when a Strata Admin Signer can:
 7. Once quorum is reached, export the raw approval transaction from the app and broadcast it externally (US-H1).
 
 No in-app broadcast, no fee control, no other authorities, no cancellation, no payout — all deferred to later slices.
+
+**Addendum (broadcast drift):** In-app commit/reveal broadcast (US-H6, [`proposal-broadcast-commit-reveal.md`](../specs/proposal-broadcast-commit-reveal.md)) is implemented on desktop. Slice 0 step 7 (export-only US-H1) remains valid as manual fallback but is not the only path. Admin Wallet commit funding (US-H7) extends US-H6 on regtest via Slice 1a.
 
 ---
 

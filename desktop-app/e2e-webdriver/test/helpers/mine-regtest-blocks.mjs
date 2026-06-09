@@ -4,38 +4,16 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
-function runtestsDir() {
-	if (process.env.ALPEN_RUNTESTS_DIR) {
-		return process.env.ALPEN_RUNTESTS_DIR
-	}
-	return path.resolve(__dirname, '../../../../../runtests')
-}
+const MINE_URL = process.env.REGTEST_DEV_API_URL ?? 'http://127.0.0.1:3001'
 
-function autotestEnvDefaults() {
-	if (process.env.ALPEN_AUTOTEST_DIR) {
-		return path.join(process.env.ALPEN_AUTOTEST_DIR, 'env.defaults.sh')
-	}
-	return path.resolve(__dirname, '../../../../../autotest/env.defaults.sh')
-}
-
-/** Mine regtest blocks (orchestrator commit/reveal need ≥1 conf each). */
+/** Mine regtest blocks via regtest-dev-api HTTP endpoint. */
 export function mineRegtestBlocks(count = 3) {
-	const script = path.join(runtestsDir(), 'mine-blocks.sh')
-	const envDefaults = autotestEnvDefaults()
-	const runtests = runtestsDir()
-	const result = spawnSync(
-		'bash',
-		[
-			'-lc',
-			`set -euo pipefail
-[ -f "${envDefaults}" ] && source "${envDefaults}"
-source "${runtests}/env.sh"
-exec "${script}" ${String(count)}`,
-		],
-		{ encoding: 'utf8', env: process.env },
-	)
+	const result = spawnSync('curl', ['-sf', '-X', 'POST', `${MINE_URL}/mine?count=${count}`], {
+		encoding: 'utf8',
+		env: process.env,
+	})
 	if (result.status !== 0) {
-		throw new Error(result.stderr || result.stdout || `mine-blocks.sh failed (${result.status})`)
+		throw new Error(result.stderr || result.stdout || `mine call failed (${result.status})`)
 	}
 	return result.stdout.trim()
 }

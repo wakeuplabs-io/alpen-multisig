@@ -8,14 +8,14 @@
 
 In production, the React webview must never pass a full mnemonic or operator hex to Tauri. The operator key loads from process env at startup (`broadcast_env`). Mnemonic-over-IPC is allowed only for dev/E2E behind an explicit flag and/or debug builds.
 
-## Operator / broadcast (commit–reveal)
+## Commit/reveal internal key (broadcast)
 
 | Item | Behavior |
 |------|----------|
-| Source | `OPERATOR_SECRET_KEY_HEX` and related vars in Tauri process env at startup |
-| Webview | Must not supply operator material over IPC |
-| Orchestrator | Does not load operator key |
-| P-001 | Rejects well-known test operator key unless `ALLOW_DEV_OPERATOR_KEY=1` |
+| Source | **Phase 3.7 (3.7c):** wallet panel, commit funding, **and** commit/reveal internal key at `m/86'/0'/73'/2/0` from login session only (keypair cached in `WalletSession` at `wallet_session_init`; mnemonic not stored). `ADMIN_WALLET_REGTEST_MNEMONIC` removed. `broadcast_env.rs` loads RPC/asm from env; keypair from `WalletSession::commit_reveal_keypair()` or `WalletSessionRequired`. No separate operator key env var. |
+| Webview | Must not supply signing material over IPC |
+| Orchestrator | Does not derive or hold the commit/reveal key |
+| Guard | `ALLOW_DEV_MNEMONIC_SIGNING=1` required in regtest; replaces `ALLOW_DEV_OPERATOR_KEY` (retired in Phase 3.5) |
 
 Implementation: `desktop-app/src-tauri/src/infrastructure/broadcast_env.rs`.
 

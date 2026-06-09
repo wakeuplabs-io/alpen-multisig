@@ -8,17 +8,22 @@ use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_checkpoint::state::CheckpointState;
+use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+use strata_predicate::PredicateKey;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
 use crate::infrastructure::{action_codec, rpc_timeout};
 
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
 
-/// Returns true when live ASM admin state satisfies the post-conditions of `action_hex`.
+/// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
 pub(crate) async fn is_proposal_enacted_on_asm(
     rpc_url: &str,
     authority: Authority,
@@ -31,55 +36,87 @@ pub(crate) async fn is_proposal_enacted_on_asm(
 
     let action =
         action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
-    let config_update = extract_multisig_config_update(&action, authority)?;
-    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
 
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
         .await
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-    let authority_config = admin.authority(role).ok_or_else(|| {
-        AppError::BadRequest(format!(
-            "admin state missing authority for role `{:?}`",
-            role
-        ))
-    })?;
 
-    let canonical_keys: Vec<String> = authority_config
-        .config()
-        .keys()
-        .iter()
-        .map(|k| hex::encode(k.serialize()))
-        .collect();
-    let threshold = authority_config.config().threshold();
-    let last_seqno = authority_config.last_seqno();
+    match &action {
+        MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
+            let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
+            Ok(predicate_keys_match(
+                update.key(),
+                checkpoint.checkpoint_predicate(),
+            ))
+        }
+        MultisigAction::Update(UpdateAction::EeStfVk(_)) => Ok(false),
+        MultisigAction::Update(_) => {
+            let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
+                return Ok(false);
+            };
+            let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let authority_config = admin.authority(role).ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "admin state missing authority for role `{:?}`",
+                    role
+                ))
+            })?;
 
-    Ok(multisig_update_post_conditions_met(
-        &canonical_keys,
-        threshold,
-        last_seqno,
-        seq_no,
-        config_update,
-    ))
+            let canonical_keys: Vec<String> = authority_config
+                .config()
+                .keys()
+                .iter()
+                .map(|k| hex::encode(k.serialize()))
+                .collect();
+            let threshold = authority_config.config().threshold();
+            let last_seqno = authority_config.last_seqno();
+
+            Ok(multisig_update_post_conditions_met(
+                &canonical_keys,
+                threshold,
+                last_seqno,
+                seq_no,
+                config_update,
+            ))
+        }
+        MultisigAction::Cancel(_) => Err(AppError::BadRequest(
+            "cancel actions are not supported for enactment post-condition checks".to_string(),
+        )),
+    }
 }
 
+fn predicate_keys_match(proposed: &PredicateKey, current: &PredicateKey) -> bool {
+    proposed.id() == current.id() && proposed.condition() == current.condition()
+}
+
+/// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
+/// non-multisig-update action variants, and an error for genuine authority/variant mismatches.
 fn extract_multisig_config_update(
     action: &MultisigAction,
     authority: Authority,
-) -> Result<&ThresholdConfigUpdate, AppError> {
+) -> Result<Option<&ThresholdConfigUpdate>, AppError> {
     match (authority, action) {
         (
             Authority::StrataAdmin,
             MultisigAction::Update(UpdateAction::StrataAdminMultisig(update)),
-        ) => Ok(update.config()),
+        ) => Ok(Some(update.config())),
         (
             Authority::SequencerManager,
             MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)),
-        ) => Ok(update.config()),
-        (_, MultisigAction::Update(_)) => Err(AppError::BadRequest(
+        ) => Ok(Some(update.config())),
+        // MultisigUpdate variant present but wrong authority — data integrity issue.
+        (
+            _,
+            MultisigAction::Update(
+                UpdateAction::StrataAdminMultisig(_) | UpdateAction::StrataSeqManagerMultisig(_),
+            ),
+        ) => Err(AppError::BadRequest(
             "action variant does not match proposal authority for enactment check".to_string(),
         )),
+        // Non-multisig-update variants — not handled here; caller routes them.
+        (_, MultisigAction::Update(_)) => Ok(None),
         (_, MultisigAction::Cancel(_)) => Err(AppError::BadRequest(
             "cancel actions are not supported for enactment post-condition checks".to_string(),
         )),
@@ -130,12 +167,21 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
     }
 }
 
+// In-process ASM enactment mock — compiled only under `cfg(test)` or `dev-mocks`.
+// In production builds this is an inert stub returning `None`, so a `mock://` URL
+// never short-circuits the real enactment post-condition check.
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
         MOCK_ENACTED_URL => Some(true),
         MOCK_MEMBERSHIP_URL => Some(false),
         _ => None,
     }
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
+    None
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
@@ -211,6 +257,16 @@ fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoStat
         .map_err(|e| {
             format!("Administration section (id {id}) does not decode with this app ({e:?}).")
         })
+}
+
+fn decode_checkpoint_state(anchor: &AnchorState) -> Result<CheckpointState, String> {
+    let id = CheckpointSubprotocol::ID;
+    let section = anchor.find_section(id).ok_or_else(|| {
+        format!("AnchorState has no checkpoint subprotocol section (expected id {id}).")
+    })?;
+    section
+        .try_to_state::<CheckpointSubprotocol>()
+        .map_err(|e| format!("Checkpoint section (id {id}) does not decode with this app ({e:?})."))
 }
 
 #[cfg(test)]

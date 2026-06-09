@@ -34,14 +34,12 @@ fn dev_mnemonic_signing_env_flag() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::*;
 
-    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
-
     fn with_env_var(key: &str, value: Option<&str>, f: impl FnOnce()) {
-        let _guard = ENV_TEST_LOCK.lock().unwrap();
+        let _guard = crate::infrastructure::broadcast_env::ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let previous = std::env::var(key).ok();
         match value {
             Some(v) => std::env::set_var(key, v),

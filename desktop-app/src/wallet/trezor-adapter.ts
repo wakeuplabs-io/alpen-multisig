@@ -1,5 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
+import type { SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
 
 /** BIP-84 Admin ID path (P2WPKH) for message signing — non-Payout-Admin multisigs. */
 const ADMIN_ID_PATH = "m/84'/0'/73'/0/0"
@@ -8,6 +8,7 @@ type HwWalletInfo = {
 	deviceLabel: string
 	derivationPath: string
 	addressSample?: string
+	publicKeyHex?: string
 	xpubOrFingerprint?: string
 	keyLabel?: string
 }
@@ -29,12 +30,13 @@ export function createTrezorAdapter(): WalletAdapter {
 			const result = await tauriCall<HwWalletInfo>('get_trezor_info', { derivationPath: ADMIN_ID_PATH })
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
-			publicKeyHex = info.xpubOrFingerprint ?? null
+			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
 			currentDerivationPath = ADMIN_ID_PATH
 			return {
 				deviceLabel: info.deviceLabel,
 				derivationPath: info.derivationPath,
 				addressSample: info.addressSample,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: info.xpubOrFingerprint,
 				keyLabel: info.keyLabel,
 			}
@@ -43,10 +45,6 @@ export function createTrezorAdapter(): WalletAdapter {
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 			currentDerivationPath = ADMIN_ID_PATH
-		},
-
-		setDerivationPath(nextPath: string): void {
-			currentDerivationPath = nextPath
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
@@ -76,9 +74,20 @@ export function createTrezorAdapter(): WalletAdapter {
 			}
 		},
 
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_hw_addresses', { count })
+		async getAccountXpub(): Promise<string> {
+			const result = await tauriCall<string>('get_trezor_admin_wallet_xpub', {})
 			if (!result.ok) throw new Error(result.error)
+			return result.data
+		},
+
+		async getMasterFingerprint(): Promise<number> {
+			const result = await tauriCall<number>('get_trezor_master_fingerprint', {})
+			if (!result.ok) {
+				throw new Error(result.error)
+			}
+			if (result.data === 0) {
+				throw new Error('Trezor returned an invalid master fingerprint')
+			}
 			return result.data
 		},
 	}

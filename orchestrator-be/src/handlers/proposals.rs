@@ -7,6 +7,23 @@ use crate::{
     state::AppState,
 };
 
+// ─── Extended response types ─────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct CancelProposalSummary {
+    pub action_id: ActionId,
+    pub status: ProposalStatus,
+    pub signatures: Vec<ProposalSignature>,
+    pub required_signatures: u16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProposalDetailResponse {
+    #[serde(flatten)]
+    pub proposal: Proposal,
+    pub cancel_proposal: Option<CancelProposalSummary>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
@@ -101,10 +118,17 @@ pub async fn list_proposals(
     )
     .await?;
 
-    let proposals =
-        proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
+    let raw = proposals::list_proposals(state.repo.as_ref(), auth.authority, query.status).await?;
 
-    Ok(Json(ProposalListResponse { proposals }))
+    let mut checked = Vec::with_capacity(raw.len());
+    for p in raw {
+        checked.push(
+            proposals::expire_if_overdue(state.repo.as_ref(), p, state.proposal_expiry_days)
+                .await?,
+        );
+    }
+
+    Ok(Json(ProposalListResponse { proposals: checked }))
 }
 
 #[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
@@ -112,7 +136,7 @@ pub async fn get_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalDetailResponse>> {
     let action_id = ActionId(action_id);
     proposals::reconcile_enacted_for_action(
         state.repo.as_ref(),
@@ -121,9 +145,60 @@ pub async fn get_proposal(
         &action_id,
     )
     .await?;
+    proposals::reconcile_update_id_in_queue(state.repo.as_ref(), &state.asm_rpc_url, &action_id)
+        .await?;
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
+    let proposal =
+        proposals::expire_if_overdue(state.repo.as_ref(), proposal, state.proposal_expiry_days)
+            .await?;
+
+    let cancel_proposal = state
+        .repo
+        .find_cancel_for_target(&action_id)
+        .await?
+        .map(|c| CancelProposalSummary {
+            action_id: c.action_id,
+            status: c.status,
+            signatures: c.signatures,
+            required_signatures: c.required_signatures,
+        });
+
+    Ok(Json(ProposalDetailResponse {
+        proposal,
+        cancel_proposal,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCancelProposalRequest {
+    pub seq_no: u64,
+    pub action_hex: String,
+    pub signer_pubkey: String,
+    pub signature_hex: String,
+}
+
+pub async fn create_cancel_proposal(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+    Json(body): Json<CreateCancelProposalRequest>,
+) -> Result<Json<Proposal>> {
+    if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
+        return Err(AppError::Unauthorized);
+    }
+
+    let proposal = proposals::create_cancel_proposal(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        ActionId(action_id),
+        body.seq_no,
+        &body.action_hex,
+        &auth.signer_pubkey,
+        &body.signature_hex,
+    )
+    .await?;
 
     Ok(Json(proposal))
 }
@@ -135,9 +210,6 @@ pub async fn approve_action(
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
 ) -> Result<Json<Proposal>> {
-    if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
-        return Err(AppError::Unauthorized);
-    }
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -147,7 +219,7 @@ pub async fn approve_action(
         state.repo.as_ref(),
         proposals::SessionContext {
             authority: auth.authority,
-            signer_pubkey: &auth.signer_pubkey,
+            signer_pubkey: &sig.signer_pubkey,
         },
         &ActionId(action_id),
         &sig,
@@ -232,6 +304,7 @@ pub async fn report_broadcast_progress(
         &state.asm_rpc_url,
         auth.authority,
         &action_id,
+        state.btc_client.as_ref(),
         proposals::ReportBroadcastProgressRequest {
             broadcast_status: body.broadcast_status,
             proposal_status: body.proposal_status,

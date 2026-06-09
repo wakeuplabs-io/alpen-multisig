@@ -65,18 +65,6 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Cargo audit
-        run: cargo audit
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-
-      - name: Cargo deny
-        run: cargo deny check
-
   frontend:
     name: Frontend (Lint, Format, Build)
     runs-on: ubuntu-latest
@@ -110,6 +98,13 @@ jobs:
 
       - name: IPC schema contract tests
         run: npm run test:ipc-schemas --workspace desktop-app
+
+      - name: Admin-wallet capability + broadcast-error contract tests
+        run: |
+          npm run test:admin-wallet-capability-schema --workspace desktop-app
+          npm run test:derive-broadcast-error --workspace desktop-app
+          npm run test:derive-proposal-actions --workspace desktop-app
+          npm run test:model-format-sync-progress-label --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app

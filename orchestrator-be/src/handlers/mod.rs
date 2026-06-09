@@ -25,7 +25,7 @@ async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode>
 }
 
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let r = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
         // Auth
@@ -50,7 +50,12 @@ pub fn router(state: AppState) -> Router {
             "/proposals/:action_id/broadcast",
             patch(proposals::report_broadcast_progress),
         )
-        .with_state(state)
+        .route(
+            "/proposals/:action_id/cancel",
+            post(proposals::create_cancel_proposal),
+        );
+
+    r.with_state(state)
 }
 
 #[cfg(test)]
@@ -85,7 +90,6 @@ mod tests {
         let repo = Arc::new(InMemoryProposalRepository::new());
         let btc_client = Arc::new(HttpBitcoinRpcClient::new(
             "http://127.0.0.1:18443",
-            None,
             "user",
             "pass",
         ));
@@ -95,6 +99,7 @@ mod tests {
             120_000,
             240_000,
             btc_client,
+            7,
         ))
     }
 
@@ -348,6 +353,10 @@ mod tests {
             commit_txid: None,
             reveal_txid: None,
             broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
         })
         .await
         .unwrap();
@@ -357,7 +366,6 @@ mod tests {
 
             let btc_client = Arc::new(HttpBitcoinRpcClient::new(
                 "http://127.0.0.1:18443",
-                None,
                 "user",
                 "pass",
             ));
@@ -367,6 +375,7 @@ mod tests {
                 120_000,
                 240_000,
                 btc_client,
+                7,
             ))
         };
 

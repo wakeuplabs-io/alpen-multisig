@@ -1,0 +1,18 @@
+[package]
+name = "regtest-dev-api"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "regtest-dev-api"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+anyhow = "1"
+tower-http = { version = "0.5", features = ["cors"] }

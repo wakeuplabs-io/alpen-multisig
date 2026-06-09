@@ -1,5 +1,5 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
+import type { SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
 
 /** BIP-84 Admin ID path (P2WPKH) for message signing — testnet coin type. */
 const ADMIN_ID_PATH = "m/84'/1'/73'/0/0"
@@ -8,6 +8,7 @@ type HwWalletInfo = {
 	deviceLabel: string
 	derivationPath: string
 	addressSample?: string
+	publicKeyHex?: string
 	xpubOrFingerprint?: string
 	keyLabel?: string
 }
@@ -31,21 +32,16 @@ export function createLedgerAdapter(): WalletAdapter {
 			})
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
-			publicKeyHex = info.xpubOrFingerprint ?? null
+			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
 			currentDerivationPath = ADMIN_ID_PATH
 			return {
 				deviceLabel: info.deviceLabel,
 				derivationPath: info.derivationPath,
 				addressSample: info.addressSample,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: info.xpubOrFingerprint,
 				keyLabel: info.keyLabel,
 			}
-		},
-
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_ledger_addresses', { count })
-			if (!result.ok) throw new Error(result.error)
-			return result.data
 		},
 
 		async disconnect(): Promise<void> {
@@ -53,8 +49,21 @@ export function createLedgerAdapter(): WalletAdapter {
 			currentDerivationPath = ADMIN_ID_PATH
 		},
 
-		setDerivationPath(nextPath: string): void {
-			currentDerivationPath = nextPath
+		async getAccountXpub(): Promise<string> {
+			const result = await tauriCall<string>('get_ledger_admin_wallet_xpub', {})
+			if (!result.ok) throw new Error(result.error)
+			return result.data
+		},
+
+		async getMasterFingerprint(): Promise<number> {
+			const result = await tauriCall<number>('get_ledger_master_fingerprint', {})
+			if (!result.ok) {
+				throw new Error(result.error)
+			}
+			if (result.data === 0) {
+				throw new Error('Ledger returned an invalid master fingerprint')
+			}
+			return result.data
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {

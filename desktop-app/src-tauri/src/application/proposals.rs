@@ -8,15 +8,17 @@
 //! Authority is implicit — bound to the authenticated session, not passed per call.
 //! Signing and action encoding happen before reaching this layer.
 
-use bitcoin::{key::UntweakedKeypair, Network};
+use bitcoin::{Network, ScriptBuf};
 use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_l1_txfmt::MagicBytes;
 
+use crate::application::commit_funding::CommitFunding;
 use crate::application::orchestrator_client::{
     ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
     ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
+use crate::application::pending_reveals::PendingReveals;
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -40,9 +42,12 @@ pub enum BroadcastError {
     BitcoinRpc(String),
     #[error("confirmation timeout for txid {txid}")]
     Timeout { txid: String },
+    #[error("no pending reveal found for action_id: {action_id}")]
+    NoPendingReveal { action_id: String },
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
+use crate::infrastructure::admin_wallet::ephemeral_envelope_key::generate_ephemeral_envelope_keypair;
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
 ///
@@ -51,7 +56,6 @@ pub async fn prepare_broadcast_bundle(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     network: Network,
     action_id: &str,
 ) -> Result<(String, u64, u64), BroadcastError> {
@@ -81,8 +85,9 @@ pub async fn prepare_broadcast_bundle(
     )
     .map_err(BroadcastError::Setup)?;
 
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
     let (commit_address, _, _) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
     let fee_rate = btc_rpc
@@ -123,20 +128,48 @@ async fn report_broadcast(
     Ok(())
 }
 
-/// Execute commit → confirm → reveal on the desktop; orchestrator records coordination state only.
+fn is_unknown_method(err: &str) -> bool {
+    err.contains("-32601") || err.contains("Method not found") || err.contains("method not found")
+}
+
+/// Outcome of awaiting the reveal confirmation.
 ///
-/// Returns `(commit_txid, reveal_txid)` on success.
+/// `Confirmed` means the reveal reached at least one confirmation and the orchestrator was
+/// promoted to `reveal_confirmed`. `PendingConfirmation` means the confirmation wait timed out
+/// with zero confirmations — the reveal is still in the mempool and may confirm later. A
+/// `PendingConfirmation` is **not** a failure: no `failed` status is reported and the
+/// `PendingReveals` entry is retained so resubmit/reconcile remain possible.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConfirmOutcome {
+    /// Reveal reached >= 1 confirmation; orchestrator reported `reveal_confirmed`.
+    Confirmed,
+    /// Timed out with 0 confirmations; reveal remains in mempool (`reveal_broadcasted`).
+    PendingConfirmation,
+}
+
+/// Pre-sign commit+reveal, store in PendingReveals, broadcast, and report up to
+/// `reveal_broadcasted`. Returns `(commit_txid, reveal_txid)` **without** waiting for any
+/// confirmation — the caller awaits confirmation separately (see [`await_reveal_confirmation`]).
+///
+/// Flow: claim → build_signed_commit → build_reveal_tx → drop keypair → insert pending →
+/// submit_package (or sequential fallback) → report commit_broadcasted → report
+/// reveal_broadcasted → return txids.
+///
+/// On any error during the broadcast stage (a genuine submission error), the proposal is
+/// reported as `failed`. The broadcast NEVER advances the chain: confirmation is driven by the
+/// dev faucet/harness on regtest and by real miners on testnet/mainnet. `get_raw_transaction`
+/// is NEVER called.
 #[allow(clippy::too_many_arguments)]
-pub async fn broadcast_commit_then_reveal(
+pub async fn submit_commit_then_reveal(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     magic_bytes: MagicBytes,
     network: Network,
     action_id: &str,
-    confirm_poll_interval_ms: u64,
-    confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
+    pending: &PendingReveals,
 ) -> Result<(String, String), BroadcastError> {
     let proposal = client.claim_broadcast(action_id).await.map_err(|e| {
         if let OrchestratorError::Backend {
@@ -174,8 +207,9 @@ pub async fn broadcast_commit_then_reveal(
     )
     .map_err(BroadcastError::Setup)?;
 
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
     let (commit_address, reveal_script, taproot_spend_info) =
-        broadcast_tx::derive_commit_address(operator_keypair, &payload, network)
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
     let fee_rate = btc_rpc
@@ -186,12 +220,75 @@ pub async fn broadcast_commit_then_reveal(
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
-        // Step 1: Broadcast commit.
-        let commit_txid = btc_rpc
-            .send_to_address(&commit_address.to_string(), commit_amount_sats, fee_rate)
+        // Step 1: Pre-sign commit tx.
+        let commit_tx = commit_funding
+            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
             .await
-            .map_err(BroadcastError::BitcoinRpc)?;
+            .map_err(|e| BroadcastError::Setup(e.to_string()))?;
 
+        // Step 2: Pre-sign reveal tx using the local commit tx (no get_raw_transaction).
+        let commit_address_script = commit_address.script_pubkey();
+
+        let action_bytes = hex::decode(&proposal.action_hex)
+            .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+
+        let reveal_tx = broadcast_tx::build_reveal_tx(
+            &envelope_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            reveal_change_spk.clone(),
+            reveal_fee_sats,
+        )
+        .map_err(BroadcastError::Setup)?;
+
+        // Step 3: DROP ephemeral keypair — both txs are signed, key no longer needed.
+        let _ = envelope_keypair;
+
+        // Step 4: Serialize both transactions.
+        let commit_txid = commit_tx.compute_txid().to_string();
+        let reveal_txid = reveal_tx.compute_txid().to_string();
+        let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
+        let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
+
+        // Step 5: Insert into PendingReveals BEFORE any broadcast.
+        {
+            let mut guard = pending.lock().unwrap();
+            guard.insert(
+                action_id.to_string(),
+                crate::application::pending_reveals::PendingReveal {
+                    reveal_tx_hex: reveal_hex.clone(),
+                    reveal_txid: reveal_txid.clone(),
+                    commit_txid: commit_txid.clone(),
+                },
+            );
+        }
+
+        // Step 6: Broadcast — try submit_package first, fall back to sequential.
+        match btc_rpc
+            .submit_package(&[commit_hex.clone(), reveal_hex.clone()])
+            .await
+        {
+            Ok(()) => {}
+            Err(ref e) if is_unknown_method(e) => {
+                btc_rpc
+                    .send_raw_transaction(&commit_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+                btc_rpc
+                    .send_raw_transaction(&reveal_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+            }
+            Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
+        }
+
+        // Step 7: Report commit_broadcasted then reveal_broadcasted (no commit_confirmed).
         report_broadcast(
             client,
             action_id,
@@ -203,94 +300,10 @@ pub async fn broadcast_commit_then_reveal(
         )
         .await?;
 
-        if network == Network::Regtest {
-            btc_rpc
-                .mine_blocks(1)
-                .await
-                .map_err(BroadcastError::BitcoinRpc)?;
-        }
-
-        wait_for_confirmation(
-            btc_rpc,
-            &commit_txid,
-            confirm_poll_interval_ms,
-            confirm_timeout_ms,
-        )
-        .await?;
-
-        report_broadcast(
-            client,
-            action_id,
-            "commit_confirmed",
-            None,
-            Some(&commit_txid),
-            None,
-            None,
-        )
-        .await?;
-
-        // Step 3: Build and broadcast reveal.
-        let commit_tx = btc_rpc
-            .get_raw_transaction(&commit_txid)
-            .await
-            .map_err(BroadcastError::BitcoinRpc)?;
-
-        let commit_address_script = commit_address.script_pubkey();
-
-        let action_bytes = hex::decode(&proposal.action_hex)
-            .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
-        let action = MultisigAction::from_ssz_bytes(&action_bytes)
-            .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
-
-        let reveal_tx = broadcast_tx::build_reveal_tx(
-            operator_keypair,
-            &reveal_script,
-            &taproot_spend_info,
-            &commit_tx,
-            &commit_address_script,
-            &action,
-            magic_bytes,
-            network,
-            reveal_fee_sats,
-        )
-        .map_err(BroadcastError::Setup)?;
-
-        let reveal_tx_hex = broadcast_tx::tx_to_hex(&reveal_tx);
-        let reveal_txid = btc_rpc
-            .send_raw_transaction(&reveal_tx_hex)
-            .await
-            .map_err(BroadcastError::BitcoinRpc)?;
-
         report_broadcast(
             client,
             action_id,
             "reveal_broadcasted",
-            None,
-            Some(&commit_txid),
-            Some(&reveal_txid),
-            None,
-        )
-        .await?;
-
-        if network == Network::Regtest {
-            btc_rpc
-                .mine_blocks(1)
-                .await
-                .map_err(BroadcastError::BitcoinRpc)?;
-        }
-
-        wait_for_confirmation(
-            btc_rpc,
-            &reveal_txid,
-            confirm_poll_interval_ms,
-            confirm_timeout_ms,
-        )
-        .await?;
-
-        report_broadcast(
-            client,
-            action_id,
-            "reveal_confirmed",
             None,
             Some(&commit_txid),
             Some(&reveal_txid),
@@ -318,12 +331,113 @@ pub async fn broadcast_commit_then_reveal(
     broadcast_result
 }
 
+/// Await a single confirmation of the reveal tx, then promote the orchestrator.
+///
+/// Polls `get_transaction_confirmations(reveal_txid)`:
+/// - On `>= 1` confirmation → reports `reveal_confirmed`, removes the `PendingReveals` entry,
+///   and returns [`ConfirmOutcome::Confirmed`].
+/// - On timeout with `0` confirmations → returns [`ConfirmOutcome::PendingConfirmation`]: it
+///   does **not** report `failed`, keeps the last status at `reveal_broadcasted`, and retains
+///   the `PendingReveals` entry. A slow block is never a failure.
+/// - On a genuine RPC error while polling → returns `Err(BroadcastError::BitcoinRpc)` without
+///   reporting `failed` (the tx is already broadcast; an on-open reconcile can recover later).
+///
+/// Intended to run in the background after [`submit_commit_then_reveal`] returns.
+#[allow(clippy::too_many_arguments)]
+pub async fn await_reveal_confirmation(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    action_id: &str,
+    commit_txid: &str,
+    reveal_txid: &str,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    pending: &PendingReveals,
+) -> Result<ConfirmOutcome, BroadcastError> {
+    if !wait_for_confirmation(
+        btc_rpc,
+        reveal_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+    )
+    .await?
+    {
+        // Timed out with 0 confirmations: stay reveal_broadcasted (mempool-pending).
+        return Ok(ConfirmOutcome::PendingConfirmation);
+    }
+
+    report_broadcast(
+        client,
+        action_id,
+        "reveal_confirmed",
+        None,
+        Some(commit_txid),
+        Some(reveal_txid),
+        None,
+    )
+    .await?;
+
+    {
+        let mut guard = pending.lock().unwrap();
+        guard.remove(action_id);
+    }
+
+    Ok(ConfirmOutcome::Confirmed)
+}
+
+/// Synchronous submit + await-confirmation composition (retained for tests and any sequential
+/// caller). Unlike the previous implementation, a confirmation timeout is **not** reported as
+/// `failed` — it leaves the proposal at `reveal_broadcasted`.
+#[allow(clippy::too_many_arguments)]
+pub async fn broadcast_commit_then_reveal(
+    client: &dyn OrchestratorClient,
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    magic_bytes: MagicBytes,
+    network: Network,
+    action_id: &str,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
+    pending: &PendingReveals,
+) -> Result<(String, String), BroadcastError> {
+    let (commit_txid, reveal_txid) = submit_commit_then_reveal(
+        client,
+        btc_rpc,
+        asm_rpc_url,
+        magic_bytes,
+        network,
+        action_id,
+        commit_funding,
+        reveal_change_spk,
+        pending,
+    )
+    .await?;
+
+    await_reveal_confirmation(
+        client,
+        btc_rpc,
+        action_id,
+        &commit_txid,
+        &reveal_txid,
+        confirm_poll_interval_ms,
+        confirm_timeout_ms,
+        pending,
+    )
+    .await?;
+
+    Ok((commit_txid, reveal_txid))
+}
+
+/// Poll until the tx reaches >= 1 confirmation (`Ok(true)`) or the timeout elapses
+/// (`Ok(false)`). A genuine RPC error short-circuits to `Err(BitcoinRpc)`.
 async fn wait_for_confirmation(
     btc_rpc: &dyn BitcoinRpcClient,
     txid: &str,
     poll_interval_ms: u64,
     timeout_ms: u64,
-) -> Result<(), BroadcastError> {
+) -> Result<bool, BroadcastError> {
     let start = std::time::Instant::now();
     loop {
         let confs = btc_rpc
@@ -331,15 +445,214 @@ async fn wait_for_confirmation(
             .await
             .map_err(BroadcastError::BitcoinRpc)?;
         if confs >= 1 {
-            return Ok(());
+            return Ok(true);
         }
         if start.elapsed().as_millis() as u64 >= timeout_ms {
-            return Err(BroadcastError::Timeout {
-                txid: txid.to_string(),
-            });
+            return Ok(false);
         }
         tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
     }
+}
+
+/// Assemble commit/reveal fee estimate for a manual proposal (no orchestrator fetch).
+///
+/// `authority` is the wire-format string (e.g. `"strata_admin"`).
+pub async fn prepare_broadcast_manual(
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    network: Network,
+    action_hex: &str,
+    seq_no: u64,
+    authority: &str,
+    signatures: &[Signature],
+) -> Result<(String, u64, u64), BroadcastError> {
+    let auth = crate::domain::authority::Authority::from_wire(authority)
+        .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+    let canonical_keys = asm_role_membership::ordered_keys_for_authority(asm_rpc_url, auth)
+        .await
+        .map_err(BroadcastError::Setup)?;
+
+    let proxy_sigs: Vec<crate::domain::proposal::ProposalSignature> = signatures
+        .iter()
+        .map(|s| crate::domain::proposal::ProposalSignature {
+            signer_pubkey: s.signer_pubkey.clone(),
+            signature_hex: s.signature_hex.clone(),
+        })
+        .collect();
+
+    let sighash =
+        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        seq_no,
+        action_hex,
+        &proxy_sigs,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let (commit_address, _, _) =
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
+
+    Ok((
+        commit_address.to_string(),
+        commit_amount_sats,
+        estimated_fee_sats,
+    ))
+}
+
+/// Execute commit+reveal broadcast for a manual proposal (no orchestrator — no claim, no reporting).
+///
+/// Uses a derived key `"manual-<first-16-chars-of-sighash>"` as the PendingReveals key.
+#[allow(clippy::too_many_arguments)]
+pub async fn broadcast_manual(
+    btc_rpc: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+    magic_bytes: MagicBytes,
+    network: Network,
+    action_hex: &str,
+    seq_no: u64,
+    authority: &str,
+    signatures: &[Signature],
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+    commit_funding: &dyn CommitFunding,
+    reveal_change_spk: ScriptBuf,
+    pending: &PendingReveals,
+) -> Result<(String, String), BroadcastError> {
+    let auth = crate::domain::authority::Authority::from_wire(authority)
+        .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+    let canonical_keys = asm_role_membership::ordered_keys_for_authority(asm_rpc_url, auth)
+        .await
+        .map_err(BroadcastError::Setup)?;
+
+    let proxy_sigs: Vec<crate::domain::proposal::ProposalSignature> = signatures
+        .iter()
+        .map(|s| crate::domain::proposal::ProposalSignature {
+            signer_pubkey: s.signer_pubkey.clone(),
+            signature_hex: s.signature_hex.clone(),
+        })
+        .collect();
+
+    let sighash =
+        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+
+    let payload = broadcast_tx::build_signed_payload_bytes(
+        seq_no,
+        action_hex,
+        &proxy_sigs,
+        &canonical_keys,
+        &sighash,
+    )
+    .map_err(BroadcastError::Setup)?;
+
+    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let (commit_address, reveal_script, taproot_spend_info) =
+        broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
+            .map_err(BroadcastError::Setup)?;
+
+    let fee_rate = btc_rpc
+        .estimate_fee_rate_sats_per_vb(6)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
+
+    // Use sighash hex prefix as the PendingReveals key (no orchestrator action_id).
+    let sighash_hex = hex::encode(sighash);
+    let pending_key = format!("manual-{}", &sighash_hex[..sighash_hex.len().min(16)]);
+
+    let broadcast_result: Result<(String, String), BroadcastError> = async {
+        let commit_tx = commit_funding
+            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
+            .await
+            .map_err(|e| BroadcastError::Setup(e.to_string()))?;
+
+        let commit_address_script = commit_address.script_pubkey();
+
+        let action_bytes = hex::decode(action_hex)
+            .map_err(|e| BroadcastError::Setup(format!("invalid action hex: {e}")))?;
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .map_err(|e| BroadcastError::Setup(format!("invalid SSZ action: {e:?}")))?;
+
+        let reveal_tx = broadcast_tx::build_reveal_tx(
+            &envelope_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            reveal_change_spk.clone(),
+            reveal_fee_sats,
+        )
+        .map_err(BroadcastError::Setup)?;
+
+        let _ = envelope_keypair;
+
+        let commit_txid = commit_tx.compute_txid().to_string();
+        let reveal_txid = reveal_tx.compute_txid().to_string();
+        let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
+        let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
+
+        {
+            let mut guard = pending.lock().unwrap();
+            guard.insert(
+                pending_key.clone(),
+                crate::application::pending_reveals::PendingReveal {
+                    reveal_tx_hex: reveal_hex.clone(),
+                    reveal_txid: reveal_txid.clone(),
+                    commit_txid: commit_txid.clone(),
+                },
+            );
+        }
+
+        match btc_rpc
+            .submit_package(&[commit_hex.clone(), reveal_hex.clone()])
+            .await
+        {
+            Ok(()) => {}
+            Err(ref e) if is_unknown_method(e) => {
+                btc_rpc
+                    .send_raw_transaction(&commit_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+                btc_rpc
+                    .send_raw_transaction(&reveal_hex)
+                    .await
+                    .map_err(BroadcastError::BitcoinRpc)?;
+            }
+            Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
+        }
+
+        wait_for_confirmation(
+            btc_rpc,
+            &reveal_txid,
+            confirm_poll_interval_ms,
+            confirm_timeout_ms,
+        )
+        .await?;
+
+        {
+            let mut guard = pending.lock().unwrap();
+            guard.remove(&pending_key);
+        }
+
+        Ok((commit_txid, reveal_txid))
+    }
+    .await;
+
+    broadcast_result
 }
 
 /// Create a new action and store the creator's signature.
@@ -428,19 +741,37 @@ pub async fn prepare_broadcast_local(
     client: &dyn OrchestratorClient,
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
-    operator_keypair: &UntweakedKeypair,
     network: Network,
     action_id: &str,
 ) -> Result<(String, u64, u64), BroadcastError> {
-    prepare_broadcast_bundle(
-        client,
-        btc_rpc,
-        asm_rpc_url,
-        operator_keypair,
-        network,
-        action_id,
-    )
-    .await
+    prepare_broadcast_bundle(client, btc_rpc, asm_rpc_url, network, action_id).await
+}
+
+/// Re-broadcast a stored reveal transaction for a given action_id.
+///
+/// Looks up the reveal_tx_hex in PendingReveals and calls send_raw_transaction.
+/// Does NOT remove the entry — removal happens on reveal_confirmed.
+pub async fn resubmit_reveal(
+    pending: &PendingReveals,
+    btc_rpc: &dyn BitcoinRpcClient,
+    _client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<String, BroadcastError> {
+    let reveal_tx_hex = {
+        let guard = pending.lock().unwrap();
+        guard
+            .get(action_id)
+            .ok_or_else(|| BroadcastError::NoPendingReveal {
+                action_id: action_id.to_string(),
+            })?
+            .reveal_tx_hex
+            .clone()
+    };
+    let txid = btc_rpc
+        .send_raw_transaction(&reveal_tx_hex)
+        .await
+        .map_err(BroadcastError::BitcoinRpc)?;
+    Ok(txid)
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -487,6 +818,26 @@ mod tests {
 
     fn demo_action_hex() -> String {
         action_codec::encode_hex(&demo_action()).expect("encode ok")
+    }
+
+    /// Action with 4 keys — produces a payload large enough for taproot envelope (>= 126 bytes).
+    fn large_demo_action_hex() -> String {
+        let keys: Vec<CompressedPubKey> = (1u8..=4)
+            .map(|i| {
+                let mut seed = [0x42u8; 32];
+                seed[0] = i;
+                let sk = SecretKey::from_slice(&seed).expect("valid key");
+                let pk = PublicKey::from_secret_key(SECP256K1, &sk);
+                CompressedPubKey::new(pk.serialize())
+            })
+            .collect();
+        let action = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: keys,
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).expect("non-zero"),
+        });
+        action_codec::encode_hex(&action).expect("encode ok")
     }
 
     fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
@@ -595,9 +946,22 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
+        }
+
+        async fn create_cancel_proposal(
+            &self,
+            _target_action_id: &str,
+            _request: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            Err(OrchestratorError::Request("not used in tests".to_string()))
         }
 
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
@@ -619,6 +983,11 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             })
         }
 
@@ -654,6 +1023,11 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             })
         }
 
@@ -684,6 +1058,11 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             })
         }
 
@@ -709,6 +1088,11 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             }])
         }
 
@@ -742,6 +1126,11 @@ mod tests {
                 commit_txid: None,
                 reveal_txid: None,
                 broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             })
         }
 
@@ -772,6 +1161,11 @@ mod tests {
                 commit_txid: request.commit_txid,
                 reveal_txid: request.reveal_txid,
                 broadcast_error: request.broadcast_error,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
             })
         }
     }
@@ -940,6 +1334,711 @@ mod tests {
         assert!(mock.claim_broadcast_called());
         assert_eq!(proposal.action_id, "action_42");
         assert_eq!(proposal.status, "approved");
+    }
+
+    // ─── Acceptance test: CommitFunding abstraction is used ─────────────────
+
+    struct SpyCommitFunding {
+        build_signed_commit_called: Mutex<bool>,
+    }
+
+    impl SpyCommitFunding {
+        fn new(_txid: &str) -> Self {
+            Self {
+                build_signed_commit_called: Mutex::new(false),
+            }
+        }
+
+        fn was_called(&self) -> bool {
+            *self.build_signed_commit_called.lock().unwrap()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::application::commit_funding::CommitFunding for SpyCommitFunding {
+        async fn build_signed_commit(
+            &self,
+            commit_address: &str,
+            _amount_sats: u64,
+            _fee_rate: u64,
+        ) -> Result<bitcoin::Transaction, crate::application::commit_funding::CommitFundingError>
+        {
+            *self.build_signed_commit_called.lock().unwrap() = true;
+            use bitcoin::{
+                absolute::LockTime, transaction::Version, Address, Transaction, TxIn, TxOut,
+            };
+            use std::str::FromStr;
+            // Parse the commit address to get the correct script_pubkey so build_reveal_tx can find the vout.
+            let addr = Address::from_str(commit_address)
+                .expect("valid commit address")
+                .assume_checked();
+            Ok(Transaction {
+                version: Version::TWO,
+                lock_time: LockTime::ZERO,
+                input: vec![TxIn::default()],
+                output: vec![TxOut {
+                    value: bitcoin::Amount::from_sat(10_000),
+                    script_pubkey: addr.script_pubkey(),
+                }],
+            })
+        }
+    }
+
+    /// MockBitcoinRpcClient: configurable submit_package result and call counters.
+    struct MockBtcRpc {
+        submit_package_result: Result<(), String>,
+        send_raw_transaction_call_count: Mutex<u32>,
+        get_raw_transaction_call_count: Mutex<u32>,
+        /// Confirmations returned by `get_transaction_confirmations` (default 1).
+        confirmations: u32,
+    }
+
+    impl MockBtcRpc {
+        fn new(_commit_txid: &str) -> Self {
+            Self {
+                submit_package_result: Ok(()),
+                send_raw_transaction_call_count: Mutex::new(0),
+                get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 1,
+            }
+        }
+
+        /// Submit succeeds but the reveal never confirms (0 confirmations).
+        fn with_zero_confirmations() -> Self {
+            Self {
+                submit_package_result: Ok(()),
+                send_raw_transaction_call_count: Mutex::new(0),
+                get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 0,
+            }
+        }
+
+        fn with_submit_package_error(err: &str) -> Self {
+            Self {
+                submit_package_result: Err(err.to_string()),
+                send_raw_transaction_call_count: Mutex::new(0),
+                get_raw_transaction_call_count: Mutex::new(0),
+                confirmations: 1,
+            }
+        }
+
+        fn send_raw_transaction_call_count(&self) -> u32 {
+            *self.send_raw_transaction_call_count.lock().unwrap()
+        }
+
+        fn get_raw_transaction_call_count(&self) -> u32 {
+            *self.get_raw_transaction_call_count.lock().unwrap()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::infrastructure::bitcoin_rpc::BitcoinRpcClient for MockBtcRpc {
+        async fn send_raw_transaction(&self, _: &str) -> Result<String, String> {
+            *self.send_raw_transaction_call_count.lock().unwrap() += 1;
+            Ok("reveal-txid-mock".to_string())
+        }
+
+        async fn get_transaction_confirmations(&self, _txid: &str) -> Result<u32, String> {
+            Ok(self.confirmations)
+        }
+
+        async fn estimate_fee_rate_sats_per_vb(&self, _: u16) -> Result<u64, String> {
+            Ok(2)
+        }
+
+        async fn get_raw_transaction(&self, _txid: &str) -> Result<bitcoin::Transaction, String> {
+            *self.get_raw_transaction_call_count.lock().unwrap() += 1;
+            use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxIn, TxOut};
+            Ok(Transaction {
+                version: Version::TWO,
+                lock_time: LockTime::ZERO,
+                input: vec![TxIn::default()],
+                output: vec![TxOut {
+                    value: bitcoin::Amount::from_sat(10_000),
+                    script_pubkey: bitcoin::ScriptBuf::new(),
+                }],
+            })
+        }
+
+        async fn submit_package(&self, _: &[String]) -> Result<(), String> {
+            self.submit_package_result.clone()
+        }
+
+        async fn get_block_count(&self) -> Result<u64, String> {
+            Ok(0)
+        }
+    }
+
+    /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.
+    ///
+    /// Records every `report_broadcast_progress` request so tests can assert which broadcast
+    /// statuses were (or were not) reported.
+    #[derive(Default)]
+    struct MockOrchestratorClientLargeAction {
+        reports:
+            Mutex<Vec<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
+    }
+
+    impl MockOrchestratorClientLargeAction {
+        fn new() -> Self {
+            Self::default()
+        }
+
+        fn reported_statuses(&self) -> Vec<String> {
+            self.reports
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|r| r.broadcast_status.clone())
+                .collect()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl OrchestratorClient for MockOrchestratorClientLargeAction {
+        async fn auth_challenge(
+            &self,
+            _: crate::application::orchestrator_client::StartOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthChallenge,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_verify(
+            &self,
+            _: crate::application::orchestrator_client::CompleteOrchestratorAuthRequest,
+        ) -> Result<
+            crate::application::orchestrator_client::OrchestratorAuthSession,
+            OrchestratorError,
+        > {
+            unimplemented!()
+        }
+        async fn auth_logout(&self) -> Result<(), OrchestratorError> {
+            unimplemented!()
+        }
+        async fn create_proposal(
+            &self,
+            _: CreateProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
+            })
+        }
+        async fn approve_action(
+            &self,
+            _: &str,
+            _: ApproveActionRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn transition_to_approved(
+            &self,
+            _: &str,
+            _: TransitionProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn list_proposals(
+            &self,
+            _: Option<&str>,
+        ) -> Result<Vec<OrcProposal>, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn get_next_seq_no(&self) -> Result<u64, OrchestratorError> {
+            unimplemented!()
+        }
+        async fn claim_broadcast(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
+            })
+        }
+        async fn report_broadcast_progress(
+            &self,
+            action_id: &str,
+            request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            self.reports.lock().unwrap().push(request.clone());
+            Ok(OrcProposal {
+                action_id: action_id.to_string(),
+                authority: Authority::StrataAdmin,
+                seq_no: 1,
+                action_hex: large_demo_action_hex(),
+                status: "approved".to_string(),
+                required_signatures: 2,
+                signatures: vec![],
+                broadcast_status: request.broadcast_status,
+                commit_txid: request.commit_txid,
+                reveal_txid: request.reveal_txid,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
+            })
+        }
+        async fn create_cancel_proposal(
+            &self,
+            _: &str,
+            _: crate::application::orchestrator_client::CreateCancelProposalRequest,
+        ) -> Result<OrcProposal, OrchestratorError> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn broadcast_commit_uses_commit_funding_abstraction() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let commit_txid = "spy-commit-txid-abc123";
+        let spy = SpyCommitFunding::new(commit_txid);
+        let mock_rpc = MockBtcRpc::new(commit_txid);
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let reveal_change_spk = ScriptBuf::new();
+        let pending = crate::application::pending_reveals::new();
+
+        let _result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-1",
+            10,
+            5000,
+            &spy,
+            reveal_change_spk,
+            &pending,
+        )
+        .await;
+
+        assert!(
+            spy.was_called(),
+            "CommitFunding::build_signed_commit must be called to fund the commit (Admin Wallet path)"
+        );
+        assert_eq!(
+            mock_rpc.get_raw_transaction_call_count(),
+            0,
+            "get_raw_transaction must never be called in the new pre-sign flow"
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_package_path_never_calls_send_raw_transaction() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::new("ignored"); // submit_package returns Ok(())
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-submit-package",
+            10,
+            5000,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(result.is_ok(), "broadcast should succeed: {result:?}");
+        assert_eq!(
+            mock_rpc.send_raw_transaction_call_count(),
+            0,
+            "send_raw_transaction must not be called when submit_package succeeds"
+        );
+    }
+
+    #[tokio::test]
+    async fn sequential_fallback_when_submit_package_returns_unknown_method() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_submit_package_error("Method not found");
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-fallback",
+            10,
+            5000,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(result.is_ok(), "fallback should succeed: {result:?}");
+        assert_eq!(
+            mock_rpc.send_raw_transaction_call_count(),
+            2,
+            "send_raw_transaction must be called exactly twice (commit then reveal) in sequential fallback"
+        );
+    }
+
+    #[tokio::test]
+    async fn pending_reveal_inserted_before_broadcast_and_removed_after_confirm() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-pending-lifecycle",
+            10,
+            5000,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(result.is_ok(), "broadcast should succeed: {result:?}");
+        // After reveal_confirmed, the entry must be removed.
+        assert!(
+            pending
+                .lock()
+                .unwrap()
+                .get("action-pending-lifecycle")
+                .is_none(),
+            "PendingReveals entry must be removed after reveal_confirmed"
+        );
+    }
+
+    /// Regression (RCA: getnewaddress "wallet does not exist or is not loaded").
+    ///
+    /// The production broadcast path must NOT advance the chain and must NOT depend on a
+    /// bitcoind Core wallet. Previously Step 8 called `mine_blocks(1)` → `getnewaddress`
+    /// on `/wallet/asm-runner`, which fails whenever that wallet is not loaded. Mining is
+    /// now delegated to the dev faucet/harness. This test proves the broadcast on regtest
+    /// succeeds using ONLY node-level RPCs (the `mine_blocks`/`get_new_address` methods no
+    /// longer exist on `BitcoinRpcClient`, so the regression is also compiler-enforced).
+    #[tokio::test]
+    async fn broadcast_on_regtest_does_not_mine_blocks() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-reporting",
+            10,
+            5000,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "broadcast on regtest must succeed without mining / wallet RPC: {result:?}"
+        );
+    }
+
+    // ─── submit / await split tests ──────────────────────────────────────────
+
+    /// `submit_commit_then_reveal` returns after reporting `reveal_broadcasted` and never
+    /// waits for or reports a confirmation. The PendingReveals entry must remain.
+    #[tokio::test]
+    async fn submit_returns_at_reveal_broadcasted_without_confirming() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = submit_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-submit-only",
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(result.is_ok(), "submit should succeed: {result:?}");
+        let statuses = mock_client.reported_statuses();
+        assert_eq!(statuses, vec!["commit_broadcasted", "reveal_broadcasted"]);
+        assert!(
+            !statuses
+                .iter()
+                .any(|s| s == "reveal_confirmed" || s == "failed"),
+            "submit must not report reveal_confirmed or failed: {statuses:?}"
+        );
+        assert!(
+            pending.lock().unwrap().get("action-submit-only").is_some(),
+            "PendingReveals entry must be present after submit (awaiting confirmation)"
+        );
+    }
+
+    /// A genuine submission error (`submit_package` hard error) reports `failed`.
+    #[tokio::test]
+    async fn submit_reports_failed_on_real_submission_error() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_submit_package_error("node rejected");
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = submit_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-submit-error",
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(matches!(result, Err(BroadcastError::BitcoinRpc(_))));
+        assert!(
+            mock_client
+                .reported_statuses()
+                .iter()
+                .any(|s| s == "failed"),
+            "real submission error must report failed"
+        );
+    }
+
+    /// `await_reveal_confirmation` with 1 confirmation reports `reveal_confirmed`, removes the
+    /// pending entry, and returns `Confirmed`.
+    #[tokio::test]
+    async fn await_confirmation_confirms_and_removes_pending() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+
+        let mock_rpc = MockBtcRpc::new("ignored"); // 1 confirmation
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-confirm".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-1".to_string(),
+                commit_txid: "commit-1".to_string(),
+            },
+        );
+
+        let outcome = await_reveal_confirmation(
+            &mock_client,
+            &mock_rpc,
+            "action-confirm",
+            "commit-1",
+            "reveal-1",
+            10,
+            5000,
+            &pending,
+        )
+        .await
+        .expect("await ok");
+
+        assert_eq!(outcome, ConfirmOutcome::Confirmed);
+        assert_eq!(mock_client.reported_statuses(), vec!["reveal_confirmed"]);
+        assert!(
+            pending.lock().unwrap().get("action-confirm").is_none(),
+            "pending entry must be removed after reveal_confirmed"
+        );
+    }
+
+    /// `await_reveal_confirmation` that times out with 0 confirmations returns
+    /// `PendingConfirmation`, reports NOTHING (no `failed`, no `reveal_confirmed`), and keeps
+    /// the pending entry. A slow block must never become a false failure.
+    #[tokio::test]
+    async fn await_confirmation_timeout_stays_pending_without_failed() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-pending".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-2".to_string(),
+                commit_txid: "commit-2".to_string(),
+            },
+        );
+
+        let outcome = await_reveal_confirmation(
+            &mock_client,
+            &mock_rpc,
+            "action-pending",
+            "commit-2",
+            "reveal-2",
+            1,
+            5, // tiny timeout → returns PendingConfirmation quickly
+            &pending,
+        )
+        .await
+        .expect("await ok");
+
+        assert_eq!(outcome, ConfirmOutcome::PendingConfirmation);
+        let statuses = mock_client.reported_statuses();
+        assert!(
+            !statuses
+                .iter()
+                .any(|s| s == "failed" || s == "reveal_confirmed"),
+            "timeout must not report failed or reveal_confirmed: {statuses:?}"
+        );
+        assert!(
+            pending.lock().unwrap().get("action-pending").is_some(),
+            "pending entry must be retained on PendingConfirmation"
+        );
+    }
+
+    /// The retained sequential wrapper must NOT report `failed` when confirmation times out.
+    #[tokio::test]
+    async fn broadcast_wrapper_timeout_does_not_report_failed() {
+        use bitcoin::{Network, ScriptBuf};
+        use strata_l1_txfmt::MagicBytes;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
+        let pending = crate::application::pending_reveals::new();
+
+        let result = broadcast_commit_then_reveal(
+            &mock_client,
+            &mock_rpc,
+            "mock://asm-membership",
+            magic_bytes,
+            Network::Regtest,
+            "action-wrapper-timeout",
+            1,
+            5,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "wrapper should succeed (pending, not failed): {result:?}"
+        );
+        assert!(
+            !mock_client
+                .reported_statuses()
+                .iter()
+                .any(|s| s == "failed"),
+            "confirmation timeout must not report failed"
+        );
+    }
+
+    // ─── resubmit_reveal tests ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn resubmit_reveal_returns_no_pending_reveal_when_absent() {
+        let pending = crate::application::pending_reveals::new();
+        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_client = MockOrchestratorClient::new();
+        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-missing").await;
+        assert!(matches!(
+            result,
+            Err(BroadcastError::NoPendingReveal { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn resubmit_reveal_broadcasts_stored_reveal_hex() {
+        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+        let pending = new_pending();
+        pending.lock().unwrap().insert(
+            "action-1".to_string(),
+            PendingReveal {
+                reveal_tx_hex: "deadbeef".to_string(),
+                reveal_txid: "reveal-txid-123".to_string(),
+                commit_txid: "commit-txid-456".to_string(),
+            },
+        );
+        let mock_rpc = MockBtcRpc::new("action-1");
+        let mock_client = MockOrchestratorClient::new();
+        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-1").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "reveal-txid-mock");
     }
 
     #[tokio::test]

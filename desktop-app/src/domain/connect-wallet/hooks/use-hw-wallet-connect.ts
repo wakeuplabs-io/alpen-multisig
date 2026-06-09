@@ -12,10 +12,7 @@ type HookResult = {
 	state: HwWalletConnectState
 	actions: {
 		connect: () => Promise<void>
-		selectAddressIndex: (index: number) => void
 		goBackToConnect: () => void
-		useAddress: () => void
-		changeAddress: () => void
 		verifyOnDevice: () => Promise<void>
 		disconnect: () => void
 	}
@@ -25,8 +22,6 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 	const [phase, setPhase] = useState<HwWalletConnectState['phase']>('connect')
 	const [loading, setLoading] = useState(false)
 	const [account, setAccount] = useState<WalletAccountInfo | null>(null)
-	const [addresses, setAddresses] = useState<HwWalletConnectState['addresses']>([])
-	const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 	const [selectedEntry, setSelectedEntry] = useState<HwWalletConnectState['selectedEntry']>(null)
 	const [connectViewState, setConnectViewState] = useState<HwWalletConnectState['connectViewState']>('idle')
 	const [isVerifyingAddress, setIsVerifyingAddress] = useState(false)
@@ -49,43 +44,26 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 		try {
 			const info = await adapter.connect()
-			if (!adapter.listAddresses) {
-				const fallbackEntry = {
-					index: 0,
-					derivationPath: info.derivationPath,
-					address: info.addressSample ?? 'Mnemonic signer',
-					publicKeyHex: info.xpubOrFingerprint ?? '',
-				}
-
-				setAccount(info)
-				setAddresses([fallbackEntry])
-				setSelectedIndex(0)
-				setSelectedEntry(fallbackEntry)
-				setVerifyMessage(null)
-				onConnected({
-					...info,
-					addressSample: fallbackEntry.address,
-					xpubOrFingerprint: fallbackEntry.publicKeyHex,
-				})
-				setConnectViewState('success')
-				successTransitionTimeoutRef.current = window.setTimeout(() => {
-					setPhase('selected')
-				}, 400)
-				return
+			const publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? ''
+			const canonicalEntry = {
+				index: 0,
+				derivationPath: info.derivationPath,
+				address: info.addressSample ?? 'Mnemonic signer',
+				publicKeyHex,
 			}
-			const entries = await adapter.listAddresses(20)
 
 			setAccount(info)
-			setAddresses(entries)
-			setSelectedIndex(null)
-			setSelectedEntry(null)
+			setSelectedEntry(canonicalEntry)
 			setVerifyMessage(null)
-			onConnected(null)
+			onConnected({
+				...info,
+				addressSample: canonicalEntry.address,
+				xpubOrFingerprint: canonicalEntry.publicKeyHex,
+			})
 			setConnectViewState('success')
-
 			successTransitionTimeoutRef.current = window.setTimeout(() => {
-				setPhase('picking')
-			}, 900)
+				setPhase('selected')
+			}, 400)
 		} catch (e) {
 			setError(String(e))
 			setConnectViewState('idle')
@@ -94,35 +72,12 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		}
 	}
 
-	function useAddress() {
-		if (selectedIndex === null || !account) return
-		const entry = addresses.find((addressEntry) => addressEntry.index === selectedIndex)
-		if (!entry) return
-
-		adapter.setDerivationPath?.(entry.derivationPath)
-		setSelectedEntry(entry)
-		setVerifyMessage(null)
-		setPhase('selected')
-		onConnected({
-			...account,
-			derivationPath: entry.derivationPath,
-			addressSample: entry.address,
-			xpubOrFingerprint: entry.publicKeyHex,
-		})
-	}
-
 	function goBackToConnect() {
 		setPhase('connect')
 		setConnectViewState('idle')
-		setSelectedIndex(null)
 		setSelectedEntry(null)
 		setVerifyMessage(null)
 		setError(null)
-	}
-
-	function changeAddress() {
-		setVerifyMessage(null)
-		setPhase('picking')
 	}
 
 	async function verifyOnDevice() {
@@ -149,8 +104,6 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		adapter.disconnect()
 		setPhase('connect')
 		setAccount(null)
-		setAddresses([])
-		setSelectedIndex(null)
 		setSelectedEntry(null)
 		setConnectViewState('idle')
 		setVerifyMessage(null)
@@ -163,8 +116,6 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 			phase,
 			loading,
 			account,
-			addresses,
-			selectedIndex,
 			selectedEntry,
 			connectViewState,
 			isVerifyingAddress,
@@ -173,10 +124,7 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		},
 		actions: {
 			connect,
-			selectAddressIndex: setSelectedIndex,
 			goBackToConnect,
-			useAddress,
-			changeAddress,
 			verifyOnDevice,
 			disconnect,
 		},

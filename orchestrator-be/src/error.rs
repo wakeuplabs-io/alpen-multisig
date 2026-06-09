@@ -6,6 +6,39 @@ use axum::{
 use serde_json::json;
 use thiserror::Error;
 
+/// Response metadata for each error variant.
+struct ErrorMeta {
+    status: StatusCode,
+    error_code: &'static str,
+}
+
+impl AppError {
+    fn meta(&self) -> ErrorMeta {
+        match self {
+            AppError::Unauthorized => ErrorMeta {
+                status: StatusCode::UNAUTHORIZED,
+                error_code: "unauthorized",
+            },
+            AppError::NotFound => ErrorMeta {
+                status: StatusCode::NOT_FOUND,
+                error_code: "not_found",
+            },
+            AppError::BadRequest(_) => ErrorMeta {
+                status: StatusCode::BAD_REQUEST,
+                error_code: "bad_request",
+            },
+            AppError::Conflict(_) => ErrorMeta {
+                status: StatusCode::CONFLICT,
+                error_code: "conflict",
+            },
+            AppError::Internal(_) => ErrorMeta {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                error_code: "internal_error",
+            },
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("unauthorized")]
@@ -26,28 +59,18 @@ pub enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message, error_code) = match &self {
-            AppError::Unauthorized => (
-                StatusCode::UNAUTHORIZED,
-                "unauthorized".to_string(),
-                "unauthorized",
-            ),
-            AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string(), "not_found"),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone(), "bad_request"),
-            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone(), "conflict"),
+        let meta = self.meta();
+        let message = match &self {
             AppError::Internal(e) => {
                 tracing::error!("internal error: {e}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal error".to_string(),
-                    "internal_error",
-                )
+                "internal error".to_string()
             }
+            other => other.to_string(),
         };
 
         (
-            status,
-            Json(json!({ "error": message, "errorCode": error_code })),
+            meta.status,
+            Json(json!({ "error": message, "errorCode": meta.error_code })),
         )
             .into_response()
     }

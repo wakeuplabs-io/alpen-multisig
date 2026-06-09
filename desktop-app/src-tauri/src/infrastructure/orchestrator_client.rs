@@ -1,9 +1,9 @@
 //! HTTP implementation of the `OrchestratorClient` trait.
 
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateProposalRequest,
-    NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession, OrchestratorClient,
-    OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
+    ApproveActionRequest, CompleteOrchestratorAuthRequest, CreateCancelProposalRequest,
+    CreateProposalRequest, NextSeqNoResponse, OrchestratorAuthChallenge, OrchestratorAuthSession,
+    OrchestratorClient, OrchestratorError, ProposalListResponse, StartOrchestratorAuthRequest,
     TransitionProposalRequest,
 };
 use crate::domain::proposal::Proposal;
@@ -187,6 +187,22 @@ impl OrchestratorClient for HttpOrchestratorClient {
         let req = self.with_auth_headers(
             self.client
                 .patch(format!("{}/proposals/{action_id}/broadcast", self.base_url))
+                .json(&request),
+        )?;
+        self.send_and_parse(req).await
+    }
+
+    async fn create_cancel_proposal(
+        &self,
+        target_action_id: &str,
+        request: CreateCancelProposalRequest,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .post(format!(
+                    "{}/proposals/{target_action_id}/cancel",
+                    self.base_url
+                ))
                 .json(&request),
         )?;
         self.send_and_parse(req).await

@@ -1,0 +1,238 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-presign-commit-reveal",
+    "created_at": "2026-05-30T00:00:00Z",
+    "total_steps": 8,
+    "goal": "Pre-sign both commit and reveal transactions before any broadcast; drop the ephemeral key immediately after signing; store the signed reveal in PendingReveals; broadcast via submit_package (fallback: sequential send_raw_transaction); eliminate the commit-confirm round-trip and get_raw_transaction call; expose proposals_resubmit_reveal IPC command."
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "Infrastructure: submit_package + PendingReveals store",
+      "description": "Add the two new infrastructure primitives that all later steps depend on: the submit_package RPC method on BitcoinRpcClient, and the PendingReveals in-memory store.",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "Add submit_package to BitcoinRpcClient trait and HttpBitcoinRpcClient",
+          "description": "Extend the BitcoinRpcClient trait with submit_package(&self, tx_hexes: &[String]) -> Result<(), String>. Implement it on HttpBitcoinRpcClient using the submitpackage JSON-RPC call. The implementation must detect the unknown-method error string and surface it verbatim so callers can branch on it for the sequential fallback. Update MockBtcRpc in proposals.rs tests to implement the new method (returning Ok(()) by default).",
+          "criteria": [
+            "BitcoinRpcClient trait compiles with the new submit_package method signature.",
+            "HttpBitcoinRpcClient::submit_package calls submitpackage JSON-RPC with the provided hex array and returns Ok(()) on success.",
+            "When the node returns an 'unknown method' or 'method not found' error, submit_package propagates the error string unchanged.",
+            "All existing BitcoinRpcClient mock implementations in the test suite (MockBtcRpc, any other) implement submit_package and cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/bitcoin_rpc.rs",
+            "desktop-app/src-tauri/src/application/proposals.rs"
+          ],
+          "estimated_hours": 2,
+          "dependencies": [],
+          "deliverables": [
+            "submit_package method on BitcoinRpcClient trait",
+            "submit_package implementation on HttpBitcoinRpcClient",
+            "Updated mock implementations compile and all tests pass"
+          ]
+        },
+        {
+          "id": "01-02",
+          "name": "Create PendingReveals module",
+          "description": "Create desktop-app/src-tauri/src/application/pending_reveals.rs. Define PendingReveal { reveal_tx_hex: String, reveal_txid: String, commit_txid: String } and PendingReveals = Arc<Mutex<HashMap<String, PendingReveal>>>. Expose a constructor new() -> PendingReveals. Add the module to application/mod.rs.",
+          "criteria": [
+            "pending_reveals.rs exists and is declared in application/mod.rs.",
+            "PendingReveal struct has fields reveal_tx_hex, reveal_txid, and commit_txid (all String).",
+            "PendingReveals type alias resolves to Arc<Mutex<HashMap<String, PendingReveal>>>.",
+            "PendingReveals::new() returns a default empty store.",
+            "cargo build succeeds with no warnings."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/pending_reveals.rs",
+            "desktop-app/src-tauri/src/application/mod.rs"
+          ],
+          "estimated_hours": 1,
+          "dependencies": [],
+          "deliverables": [
+            "New file: desktop-app/src-tauri/src/application/pending_reveals.rs",
+            "Module declaration in application/mod.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Refactor CommitFunding and WalletService: build+sign only, no broadcast",
+      "description": "Rename fund_commit to build_signed_commit in both the CommitFunding trait and WalletService. Change the return type from String (txid) to bitcoin::Transaction. Remove the broadcast step (send_raw_transaction) from WalletService. Update all callsites and tests.",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "Rename CommitFunding::fund_commit to build_signed_commit returning Transaction",
+          "description": "In commit_funding.rs: rename the trait method fund_commit to build_signed_commit and change its return type from Result<String, CommitFundingError> to Result<bitcoin::Transaction, CommitFundingError>. Update BdkAdminWalletMnemonic::build_signed_commit to delegate to WalletService::build_signed_commit (which will be updated in step 02-02). Update the SpyCommitFunding mock in proposals.rs tests accordingly (rename method, return a dummy Transaction).",
+          "criteria": [
+            "CommitFunding trait has build_signed_commit method returning Result<bitcoin::Transaction, CommitFundingError>.",
+            "fund_commit method no longer exists on the trait.",
+            "BdkAdminWalletMnemonic implements build_signed_commit and delegates to wallet_service.build_signed_commit().",
+            "SpyCommitFunding in proposals.rs tests implements build_signed_commit returning a dummy Transaction.",
+            "cargo build succeeds; cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/commit_funding.rs",
+            "desktop-app/src-tauri/src/application/proposals.rs"
+          ],
+          "estimated_hours": 2,
+          "dependencies": [],
+          "deliverables": [
+            "Updated CommitFunding trait with build_signed_commit",
+            "Updated BdkAdminWalletMnemonic implementation",
+            "Updated SpyCommitFunding test mock"
+          ]
+        },
+        {
+          "id": "02-02",
+          "name": "Rename WalletService::fund_commit to build_signed_commit returning Transaction (no broadcast)",
+          "description": "In wallet_service.rs: rename fund_commit to build_signed_commit. Remove steps 4 (RPC client creation) and the send_raw_transaction call. Return the signed bitcoin::Transaction directly instead of a txid String. Update all tests that referenced fund_commit to use build_signed_commit and assert on the Transaction return type. The watch-only guard and check_enabled guard must remain and fire before any work.",
+          "criteria": [
+            "WalletService::build_signed_commit exists and returns Result<bitcoin::Transaction, AdminWalletError>.",
+            "WalletService::fund_commit no longer exists.",
+            "build_signed_commit does not call send_raw_transaction or any RPC broadcast method.",
+            "build_signed_commit on a watch-only WalletService returns Err(AdminWalletError::ReadOnly) before contacting RPC.",
+            "build_signed_commit without regtest+ALLOW_DEV_MNEMONIC_SIGNING env returns Err(AdminWalletError::Disabled).",
+            "All wallet_service tests renamed from fund_commit to build_signed_commit pass.",
+            "cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ],
+          "estimated_hours": 2,
+          "dependencies": [
+            "02-01"
+          ],
+          "deliverables": [
+            "Updated WalletService::build_signed_commit (build+sign, no broadcast)",
+            "Updated wallet_service tests"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Proposals application logic: resubmit_reveal + reordered broadcast_commit_then_reveal",
+      "description": "Add resubmit_reveal function and BroadcastError::NoPendingReveal variant. Rewrite broadcast_commit_then_reveal to pre-sign both transactions, drop the ephemeral key after signing, insert the reveal into PendingReveals before any broadcast, use submit_package with sequential fallback, emit a single mine_blocks call, and report in the order commit_broadcasted -> reveal_broadcasted -> reveal_confirmed (no commit_confirmed).",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "Add resubmit_reveal function and BroadcastError::NoPendingReveal",
+          "description": "In proposals.rs: add BroadcastError::NoPendingReveal { action_id: String } variant. Add async fn resubmit_reveal(pending: &PendingReveals, btc_rpc: &dyn BitcoinRpcClient, client: &dyn OrchestratorClient, action_id: &str) -> Result<String, BroadcastError>. It must: look up the action_id in PendingReveals (returning NoPendingReveal if absent), call btc_rpc.send_raw_transaction with the stored reveal_tx_hex, return the reveal txid on success, and not remove the entry from the store (removal happens on reveal_confirmed in broadcast_commit_then_reveal).",
+          "criteria": [
+            "BroadcastError::NoPendingReveal { action_id: String } variant exists.",
+            "resubmit_reveal returns Err(BroadcastError::NoPendingReveal) when the action_id is absent from PendingReveals.",
+            "resubmit_reveal calls send_raw_transaction with the stored reveal_tx_hex when the entry exists.",
+            "resubmit_reveal returns the txid string on success.",
+            "Unit tests cover: absent action_id returns NoPendingReveal; present entry broadcasts and returns txid.",
+            "cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/proposals.rs"
+          ],
+          "estimated_hours": 2,
+          "dependencies": [
+            "01-02"
+          ],
+          "deliverables": [
+            "BroadcastError::NoPendingReveal variant",
+            "resubmit_reveal function with unit tests"
+          ]
+        },
+        {
+          "id": "03-02",
+          "name": "Rewrite broadcast_commit_then_reveal: pre-sign both txs, drop key, PendingReveals, submit_package",
+          "description": "Rewrite broadcast_commit_then_reveal in proposals.rs. New flow: (1) call commit_funding.build_signed_commit to get commit Transaction; (2) build reveal Transaction using the commit tx outputs directly (no get_raw_transaction round-trip); (3) zeroize / drop the ephemeral key immediately after both transactions are signed; (4) serialize reveal_tx to hex; (5) insert PendingReveal { reveal_tx_hex, reveal_txid, commit_txid } into PendingReveals store BEFORE any broadcast; (6) attempt submit_package([commit_hex, reveal_hex]); if RPC returns unknown-method error, fall back to sequential send_raw_transaction(commit_hex) then send_raw_transaction(reveal_hex); (7) report commit_broadcasted; (8) mine one block on regtest; (9) poll for reveal confirmation; (10) report reveal_broadcasted then reveal_confirmed; (11) remove entry from PendingReveals after reveal_confirmed. Function signature gains a pending: &PendingReveals parameter. Reporting sequence must be: commit_broadcasted -> reveal_broadcasted -> reveal_confirmed. commit_confirmed must not be reported. Update broadcast_commit_uses_commit_funding_abstraction test to use new build_signed_commit API.",
+          "criteria": [
+            "broadcast_commit_then_reveal never calls get_raw_transaction.",
+            "broadcast_commit_then_reveal never calls send_raw_transaction for commit or reveal when submit_package succeeds.",
+            "When submit_package returns an unknown-method error, exactly two send_raw_transaction calls are made: commit then reveal.",
+            "The signed reveal is inserted into PendingReveals BEFORE any broadcast call.",
+            "The PendingReveals entry is removed after reveal_confirmed is reported.",
+            "Orchestrator receives reports in order: commit_broadcasted, reveal_broadcasted, reveal_confirmed. commit_confirmed is never sent.",
+            "Exactly one mine_blocks(1) call is made on regtest (was two).",
+            "The ephemeral envelope key is dropped before any broadcast (no reference held across network calls).",
+            "broadcast_commit_uses_commit_funding_abstraction test is updated and passes.",
+            "cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/proposals.rs"
+          ],
+          "estimated_hours": 4,
+          "dependencies": [
+            "01-01",
+            "01-02",
+            "02-01",
+            "02-02",
+            "03-01"
+          ],
+          "deliverables": [
+            "Rewritten broadcast_commit_then_reveal with pre-sign, PendingReveals, submit_package + fallback",
+            "Updated test suite in proposals.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "IPC wiring and Tauri managed state",
+      "description": "Wire PendingReveals as Tauri managed state, update proposals_broadcast to pass it through, add the proposals_resubmit_reveal IPC command, and clear PendingReveals on auth_logout.",
+      "steps": [
+        {
+          "id": "04-01",
+          "name": "Update proposals_broadcast IPC command and add proposals_resubmit_reveal command",
+          "description": "In commands/proposals.rs: update proposals_broadcast to accept tauri::State<'_, PendingReveals> and pass it to proposals::broadcast_commit_then_reveal. Add new Tauri command proposals_resubmit_reveal(input: ResubmitRevealInput, wallet_session: tauri::State<'_, WalletSession>, pending: tauri::State<'_, PendingReveals>) -> Result<String, String> that delegates to proposals::resubmit_reveal. ResubmitRevealInput contains base_url: String and action_id: String. Map BroadcastError::NoPendingReveal to a user-readable typed error string. Register proposals_resubmit_reveal in commands/invoke.rs (or whichever file registers Tauri commands).",
+          "criteria": [
+            "proposals_broadcast compiles with the added PendingReveals state parameter.",
+            "proposals_resubmit_reveal command exists and is registered in the Tauri command handler.",
+            "proposals_resubmit_reveal returns the reveal txid string on success.",
+            "proposals_resubmit_reveal returns a descriptive error string when BroadcastError::NoPendingReveal is returned.",
+            "The existing wallet_session_state_tests compile test for proposals_broadcast still passes.",
+            "cargo build succeeds with no warnings."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/proposals.rs",
+            "desktop-app/src-tauri/src/commands/invoke.rs"
+          ],
+          "estimated_hours": 2,
+          "dependencies": [
+            "03-01",
+            "03-02"
+          ],
+          "deliverables": [
+            "Updated proposals_broadcast IPC command accepting PendingReveals state",
+            "New proposals_resubmit_reveal IPC command",
+            "Command registered in invoke.rs"
+          ]
+        },
+        {
+          "id": "04-02",
+          "name": "Register PendingReveals managed state in main.rs and clear on auth_logout",
+          "description": "In main.rs: construct a PendingReveals instance via PendingReveals::new() and register it with .manage(pending_reveals) in the Tauri builder chain. In commands/authentication.rs: locate the auth_logout command handler and add logic to clear the PendingReveals store (lock the mutex and call .clear()). The clear must happen before the logout response is returned so the state is clean for the next session.",
+          "criteria": [
+            "main.rs manages a PendingReveals instance alongside WalletSession.",
+            "auth_logout clears all entries from PendingReveals before returning.",
+            "A unit-level compile test (analogous to proposals_broadcast_uses_wallet_session_state) confirms auth_logout accepts PendingReveals state.",
+            "cargo build succeeds with no warnings.",
+            "cargo test --workspace passes."
+          ],
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/main.rs",
+            "desktop-app/src-tauri/src/commands/authentication.rs"
+          ],
+          "estimated_hours": 1,
+          "dependencies": [
+            "01-02",
+            "04-01"
+          ],
+          "deliverables": [
+            "PendingReveals registered as Tauri managed state in main.rs",
+            "auth_logout clears PendingReveals store"
+          ]
+        }
+      ]
+    }
+  ]
+}

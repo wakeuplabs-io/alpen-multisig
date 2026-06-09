@@ -8,11 +8,14 @@ const proposalWithNullBroadcastFields = {
 	status: 'pending',
 	requiredSignatures: 2,
 	actionHex: '0x01',
+	actionType: 'multisig_update',
 	signatures: [],
 	broadcastStatus: 'idle',
 	commitTxid: null,
 	revealTxid: null,
 	broadcastError: null,
+	createdAtMs: 1000000,
+	expiresAtMs: 2000000,
 }
 
 const parsed = proposalSchema.safeParse(proposalWithNullBroadcastFields)

@@ -10,7 +10,10 @@
 use strata_asm_common::Subprotocol;
 use strata_asm_params::AdministrationInitConfig;
 use strata_asm_proto_admin::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_checkpoint::state::CheckpointState;
+use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
 use strata_asm_worker::AsmState;
+use strata_predicate::PredicateTypeId;
 
 /// Named configuration for [`crate::test_harness::AsmTestHarnessBuilder::with_admin_config`]
 /// plus mnemonic metadata used by enacted signer-update tests.
@@ -28,6 +31,10 @@ pub struct SignerUpdateEnactedFixture {
 
 /// Admin JSON aligned with `repo/asm/asm-params.json` intent: production-like
 /// confirmation depth (144) for Strata admin updates.
+/// Second Strata Administrator seed at the same canonical path as [`DEFAULT_REPO_ASM::mnemonic`].
+pub const DEMO_COSIGN_MNEMONIC: &str =
+    "multiply toss magic exclude crawl obey garden black apart room village absent";
+
 pub const DEFAULT_REPO_ASM: SignerUpdateEnactedFixture = SignerUpdateEnactedFixture {
     name: "default_repo_asm",
     mnemonic: "multiply toss magic exclude crawl obey garden black apart room village neglect",
@@ -52,7 +59,7 @@ const DEFAULT_ADMIN_SECTION_JSON: &str = r#"{
   "strata_administrator": {
     "keys": [
       "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
-      "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
+      "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
     ],
     "threshold": 2
   },
@@ -85,7 +92,7 @@ const FAST_ADMIN_SECTION_JSON: &str = r#"{
   "strata_administrator": {
     "keys": [
       "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
-      "037f67048bec090ecf441024f5928ac9bd15c45401a92ee8afdf6f653c7fdcd4d7"
+      "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
     ],
     "threshold": 2
   },
@@ -142,7 +149,14 @@ pub fn strata_admin_confirmation_depth(admin: &serde_json::Value) -> u16 {
         .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16
 }
 
-/// Assert mnemonic-derived signers A (index 0) and B (index 1) match the fixture JSON.
+/// Confirmation depth (in blocks) for OL STF verifying-key updates.
+pub fn ol_stf_vk_confirmation_depth(admin: &serde_json::Value) -> u16 {
+    admin["confirmation_depths"]["ol_stf_vk_update"]
+        .as_u64()
+        .expect("confirmation_depths.ol_stf_vk_update is u64") as u16
+}
+
+/// Assert demo mnemonic (canonical index 0) and cosign mnemonic (same path) match fixture keys.
 pub fn assert_mnemonic_matches_strata_admin_keys(
     a_hex: &str,
     b_hex: &str,
@@ -152,11 +166,11 @@ pub fn assert_mnemonic_matches_strata_admin_keys(
     let json_keys = strata_admin_keys_hex(admin);
     assert_eq!(
         a_hex, json_keys[0],
-        "mnemonic {derivation_path_prefix}/0 must match asm-params strata_administrator.keys[0]"
+        "demo mnemonic {derivation_path_prefix}/0 must match asm-params strata_administrator.keys[0]"
     );
     assert_eq!(
         b_hex, json_keys[1],
-        "mnemonic {derivation_path_prefix}/1 must match asm-params strata_administrator.keys[1]"
+        "cosign mnemonic {derivation_path_prefix}/0 must match asm-params strata_administrator.keys[1]"
     );
 }
 
@@ -166,4 +180,18 @@ pub fn decode_administration_subproto(asm_state: &AsmState) -> Option<Administra
         .state()
         .find_section(AdministrationSubprotocol::ID)
         .and_then(|section| section.try_to_state::<AdministrationSubprotocol>().ok())
+}
+
+/// Decode the checkpoint subprotocol state from an [`AsmState`].
+pub fn decode_checkpoint_subproto(asm_state: &AsmState) -> Option<CheckpointState> {
+    asm_state
+        .state()
+        .find_section(CheckpointSubprotocol::ID)
+        .and_then(|section| section.try_to_state::<CheckpointSubprotocol>().ok())
+}
+
+/// Extract the `PredicateTypeId` from the checkpoint predicate stored in [`AsmState`].
+pub fn checkpoint_ol_stf_vk_type(asm_state: &AsmState) -> Option<PredicateTypeId> {
+    let state = decode_checkpoint_subproto(asm_state)?;
+    PredicateTypeId::try_from(state.checkpoint_predicate().id()).ok()
 }

@@ -7,7 +7,11 @@ export type MnemonicAdapterOptions = {
 	derivationPath?: string
 }
 
-export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapter {
+export type MnemonicAdapter = WalletAdapter & {
+	getMnemonic(): string
+}
+
+export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAdapter {
 	let publicKeyHex: string | null = null
 	let derivationPath = opts.derivationPath ?? "m/84'/0'/73'/0/0"
 	let selectedAddress: string | null = null
@@ -20,7 +24,7 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapt
 			const addressesResult = await tauriCall<HwAddressEntry[]>('list_mnemonic_addresses', {
 				mnemonic: opts.mnemonic,
 				passphrase: opts.passphrase,
-				count: 20,
+				count: 1,
 			})
 			if (!addressesResult.ok) {
 				throw new Error(addressesResult.error)
@@ -39,6 +43,7 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapt
 				deviceLabel: 'Mnemonic Wallet (BIP39)',
 				derivationPath,
 				addressSample: selectedAddress,
+				publicKeyHex: publicKeyHex ?? undefined,
 				xpubOrFingerprint: publicKeyHex,
 				keyLabel: 'Public key',
 			}
@@ -47,10 +52,6 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapt
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 			selectedAddress = null
-		},
-
-		setDerivationPath(nextPath: string): void {
-			derivationPath = nextPath
 		},
 
 		async signSighash(sighashHex: string): Promise<SignSighashResult> {
@@ -73,16 +74,8 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): WalletAdapt
 			}
 		},
 
-		async listAddresses(count = 20): Promise<HwAddressEntry[]> {
-			const result = await tauriCall<HwAddressEntry[]>('list_mnemonic_addresses', {
-				mnemonic: opts.mnemonic,
-				passphrase: opts.passphrase,
-				count,
-			})
-			if (!result.ok) {
-				throw new Error(result.error)
-			}
-			return result.data
+		getMnemonic(): string {
+			return opts.mnemonic
 		},
 	}
 }

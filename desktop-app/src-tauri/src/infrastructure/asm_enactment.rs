@@ -9,7 +9,9 @@ use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
 use crate::domain::authority::Authority;
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
+#[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
 
 /// Returns true when admin state satisfies the post-conditions of `action_hex`.
@@ -23,7 +25,9 @@ pub fn is_multisig_update_enacted_in_admin_state(
         hex::decode(action_hex.trim()).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ MultisigAction: {e:?}"))?;
-    let config_update = extract_multisig_config_update(&action, authority)?;
+    let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
+        return Ok(false);
+    };
     let role = authority_to_role(authority)?;
     let authority_config = admin
         .authority(role)
@@ -57,6 +61,7 @@ pub async fn is_proposal_enacted_on_asm(
     if let Some(enacted) = mock_is_enacted(rpc_url) {
         return Ok(enacted);
     }
+    super::reject_mock_asm_url_in_prod(rpc_url)?;
 
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
@@ -64,22 +69,33 @@ pub async fn is_proposal_enacted_on_asm(
     is_multisig_update_enacted_in_admin_state(&admin, authority, seq_no, action_hex)
 }
 
+/// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
+/// non-multisig-update action variants (VkUpdate, etc.), and an error for genuine
+/// authority/variant mismatches.
 fn extract_multisig_config_update(
     action: &MultisigAction,
     authority: Authority,
-) -> Result<&ThresholdConfigUpdate, String> {
+) -> Result<Option<&ThresholdConfigUpdate>, String> {
     match (authority, action) {
         (
             Authority::StrataAdmin,
             MultisigAction::Update(UpdateAction::StrataAdminMultisig(update)),
-        ) => Ok(update.config()),
+        ) => Ok(Some(update.config())),
         (
             Authority::SequencerManager,
             MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)),
-        ) => Ok(update.config()),
-        (_, MultisigAction::Update(_)) => {
+        ) => Ok(Some(update.config())),
+        // MultisigUpdate variant present but wrong authority — data integrity issue.
+        (
+            _,
+            MultisigAction::Update(
+                UpdateAction::StrataAdminMultisig(_) | UpdateAction::StrataSeqManagerMultisig(_),
+            ),
+        ) => {
             Err("action variant does not match proposal authority for enactment check".to_string())
         }
+        // Non-multisig-update variants (VkUpdate, etc.) — enactment check not applicable.
+        (_, MultisigAction::Update(_)) => Ok(None),
         (_, MultisigAction::Cancel(_)) => {
             Err("cancel actions are not supported for enactment post-condition checks".to_string())
         }
@@ -130,12 +146,20 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
     }
 }
 
+// In-process ASM enactment mock — compiled only under `cfg(test)` or `dev-mocks`.
+// In production builds this is an inert stub returning `None`.
+#[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
         MOCK_ENACTED_URL => Some(true),
         MOCK_MEMBERSHIP_URL => Some(false),
         _ => None,
     }
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
+    None
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {

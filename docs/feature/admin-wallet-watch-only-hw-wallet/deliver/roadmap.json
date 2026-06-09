@@ -1,0 +1,210 @@
+{
+  "roadmap": {
+    "project_id": "admin-wallet-watch-only-hw-wallet",
+    "created_at": "2026-05-29T14:18:49Z",
+    "total_steps": 15,
+    "phases": 3
+  },
+  "phases": [
+    {
+      "id": "01",
+      "name": "Backend Core: Watch-only Wallet Infrastructure, WalletService Capability, SessionState Option Change",
+      "steps": [
+        {
+          "id": "01-01",
+          "name": "Add AdminWalletError::ReadOnly and load_watch_only_admin_wallet",
+          "criteria": "Given a valid BIP-86 account xpub and Regtest network, load_watch_only_admin_wallet returns Ok with a BDK wallet whose external address[0] matches the corresponding mnemonic wallet external address[0]. Given a malformed xpub, the function returns an Err. AdminWalletError::ReadOnly variant exists and is returned by no signing path at this step.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/admin_wallet/wallet.rs"
+          ]
+        },
+        {
+          "id": "01-02",
+          "name": "Add can_sign field and new_watch_only constructor to WalletService",
+          "criteria": "WalletService::new_watch_only(...).can_sign() returns false. WalletService::new(...).can_sign() returns true. The can_sign field is private and only readable via the can_sign() accessor.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ]
+        },
+        {
+          "id": "01-03",
+          "name": "Guard fund_commit in WalletService with ReadOnly check and update error_code mapping",
+          "criteria": "Calling fund_commit on a watch-only WalletService returns Err(AdminWalletError::ReadOnly) without contacting the Bitcoin RPC. The error_code mapping for ReadOnly is present. Calling fund_commit on a signing-capable WalletService proceeds normally (existing tests remain green).",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_service.rs"
+          ]
+        },
+        {
+          "id": "01-04",
+          "name": "Make SessionState.commit_reveal_keypair an Option and add build_session_from_xpub",
+          "criteria": "commit_reveal_keypair field on SessionState is Option<UntweakedKeypair>. All existing mnemonic session tests remain green after the Option change. New build_session_from_xpub function returns a SessionState with commit_reveal_keypair set to None and a valid watch-only BDK wallet. init_from_xpub with a malformed xpub returns an error and leaves the session slot as None. can_sign on the session returns false after xpub init and true after mnemonic init.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/application/wallet_session.rs"
+          ]
+        },
+        {
+          "id": "01-05",
+          "name": "Add D7 anchor test: watch-only and mnemonic wallets produce identical addresses",
+          "criteria": "A TEST_ACCOUNT_XPUB constant derived from the 'abandon...about' mnemonic at m/86'/0'/73' is defined in test scope. A test verifies: load_watch_only_admin_wallet(TEST_ACCOUNT_XPUB, Regtest).external_address(0) equals load_admin_wallet(TEST_MNEMONIC, Regtest).external_address(0). All existing Phase 3.7 mnemonic session tests remain green.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/admin_wallet/wallet.rs"
+          ]
+        },
+        {
+          "id": "01-06",
+          "name": "Add BroadcastEnvError::ReadOnly and update resolve_commit_reveal_keypair",
+          "criteria": "resolve_commit_reveal_keypair with a watch-only session returns BroadcastEnvError::ReadOnly. resolve_commit_reveal_keypair with no session returns BroadcastEnvError::WalletSessionRequired. resolve_commit_reveal_keypair with a mnemonic session returns the keypair (regression: existing tests remain green).",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Backend IPC: New Commands and Registration",
+      "steps": [
+        {
+          "id": "02-01",
+          "name": "Add get_account_xpub to Trezor and Ledger infrastructure",
+          "criteria": "get_account_xpub is defined on the Trezor hardware wallet struct and on the Ledger hardware wallet struct. The function signature accepts a network parameter and returns the BIP-86 account xpub as a string. No unit tests are required (WebDriver smoke coverage only); compilation is sufficient.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/infrastructure/hw_wallet/trezor.rs",
+            "desktop-app/src-tauri/src/infrastructure/hw_wallet/ledger.rs"
+          ]
+        },
+        {
+          "id": "02-02",
+          "name": "Add get_trezor_admin_wallet_xpub and get_ledger_admin_wallet_xpub IPC commands",
+          "criteria": "get_trezor_admin_wallet_xpub and get_ledger_admin_wallet_xpub Tauri commands are defined, compile without warnings, and delegate to the respective infrastructure get_account_xpub functions. Return type is Result<String, ...>.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/hw_wallet.rs"
+          ]
+        },
+        {
+          "id": "02-03",
+          "name": "Add WatchOnlyInitInput, wallet_session_init_watch_only, and admin_wallet_can_sign IPC commands",
+          "criteria": "wallet_session_init_watch_only accepts WatchOnlyInitInput (containing account_xpub and network), calls init_from_xpub, and returns Ok(()) without contacting Bitcoin RPC. admin_wallet_can_sign returns false after a watch-only init, true after a mnemonic init, and false when no session is active. Both commands compile without warnings.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/admin_wallet.rs"
+          ]
+        },
+        {
+          "id": "02-04",
+          "name": "Register all new commands in invoke.rs handler sets",
+          "criteria": "get_trezor_admin_wallet_xpub, get_ledger_admin_wallet_xpub, wallet_session_init_watch_only, and admin_wallet_can_sign are registered in both Tauri handler sets in invoke.rs. The application compiles and cargo test --workspace passes.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src-tauri/src/commands/invoke.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Frontend: API Bridges, Adapters, Hook, Session-Provider Wiring, and UI Gating",
+      "steps": [
+        {
+          "id": "03-01",
+          "name": "Extend AdminWalletError with ReadOnly and add walletSessionInitWatchOnly and getAdminWalletCanSign API functions",
+          "criteria": "AdminWalletError.ReadOnly variant is present in the TypeScript enum/union. walletSessionInitWatchOnly(accountXpub, network) invokes the wallet_session_init_watch_only Tauri command and returns Promise<void>. getAdminWalletCanSign() invokes admin_wallet_can_sign and returns Promise<boolean>. npm run build passes.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src/api/admin-wallet.ts"
+          ]
+        },
+        {
+          "id": "03-02",
+          "name": "Add optional getAccountXpub to WalletAdapter and implement on Trezor and Ledger adapters",
+          "criteria": "WalletAdapter type has an optional getAccountXpub?(): Promise<string> field. TrezorAdapter implements getAccountXpub by invoking get_trezor_admin_wallet_xpub. LedgerAdapter implements getAccountXpub by invoking get_ledger_admin_wallet_xpub. MnemonicAdapter does not implement getAccountXpub (field absent or undefined). npm run build passes.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src/wallet/types.ts",
+            "desktop-app/src/wallet/trezor-adapter.ts",
+            "desktop-app/src/wallet/ledger-adapter.ts"
+          ]
+        },
+        {
+          "id": "03-03",
+          "name": "Implement useAdminWalletCapability hook",
+          "criteria": "useAdminWalletCapability() returns { canSign: boolean }. canSign is false when getAdminWalletCanSign resolves to false and true when it resolves to true. The hook re-fetches when the session changes. npm run build and npm run lint pass.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-capability.ts"
+          ]
+        },
+        {
+          "id": "03-04",
+          "name": "Branch session-provider on vendor: HW path calls walletSessionInitWatchOnly, mnemonic path unchanged",
+          "criteria": "When the active wallet adapter is Trezor or Ledger, session-provider calls adapter.getAccountXpub() then walletSessionInitWatchOnly with the result. When the adapter is mnemonic, session-provider follows the Phase 3.7 path unchanged. If getAccountXpub is absent on the adapter, session-provider logs an error and does not proceed. npm run build passes.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src/contexts/session-provider.tsx"
+          ]
+        },
+        {
+          "id": "03-05",
+          "name": "Disable broadcast and commit affordances when canSign is false",
+          "criteria": "Broadcast and commit UI controls are visually disabled (disabled attribute or equivalent) when useAdminWalletCapability().canSign === false. A tooltip or adjacent label reads 'Hardware wallet required to sign' when the controls are in the disabled state. When canSign is true, controls behave as before. npm run build and npm run lint pass.",
+          "test_file": "",
+          "scenario_name": "",
+          "files_to_modify": [
+            "desktop-app/src/screens/admin-wallet/components/broadcast-button.tsx",
+            "desktop-app/src/screens/admin-wallet/components/commit-button.tsx"
+          ]
+        }
+      ]
+    }
+  ],
+  "implementation_scope": {
+    "source_directories": [
+      "desktop-app/src-tauri/src/infrastructure/admin_wallet/",
+      "desktop-app/src-tauri/src/application/",
+      "desktop-app/src-tauri/src/infrastructure/hw_wallet/",
+      "desktop-app/src-tauri/src/infrastructure/",
+      "desktop-app/src-tauri/src/commands/",
+      "desktop-app/src/api/",
+      "desktop-app/src/wallet/",
+      "desktop-app/src/domain/admin-wallet/hooks/",
+      "desktop-app/src/contexts/",
+      "desktop-app/src/screens/admin-wallet/components/"
+    ],
+    "test_directories": [
+      "desktop-app/src-tauri/src/application/",
+      "desktop-app/src-tauri/src/infrastructure/admin_wallet/",
+      "desktop-app/src-tauri/src/infrastructure/broadcast_env.rs"
+    ],
+    "excluded_patterns": [
+      "desktop-app/src-tauri/src/infrastructure/hw_wallet/trezor.rs#get_account_xpub",
+      "desktop-app/src-tauri/src/infrastructure/hw_wallet/ledger.rs#get_account_xpub"
+    ]
+  },
+  "validation": {
+    "status": "approved",
+    "reviewer": "nw-acceptance-designer-reviewer",
+    "approved_at": "2026-05-29T14:30:00Z"
+  }
+}

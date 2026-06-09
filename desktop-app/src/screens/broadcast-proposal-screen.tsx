@@ -1,9 +1,18 @@
+import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
+import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
+import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
+import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -11,13 +20,33 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	const { sessionReady } = useEnsureAdminWalletSession(adapter)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
+
+	const { adminWalletInfo } = useAdminWalletInfo(sessionReady)
+	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
+	const isAdminWalletMode = adminWalletInfo != null
+	const signerKind: SignerKind = rawSignerKind === 'hardware' ? 'hardware' : 'mnemonic'
+
+	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
+	const { syncStatus, triggerSync } = useAdminWalletSync()
+
+	const panel = useWalletPanelData(isAdminWalletMode)
+
+	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
+	useEffect(() => {
+		if (isAdminWalletMode) {
+			void triggerSync().then(() => refreshUtxos())
+		}
+	}, [isAdminWalletMode, triggerSync, refreshUtxos])
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
+		signerKind,
+		adapter,
 	)
 
 	async function handleBack() {
@@ -33,8 +62,22 @@ export function BroadcastProposalScreen() {
 	}
 
 	const isLoading = phase === 'idle' || phase === 'preparing'
-	const showDetails = bundle !== null && (phase === 'confirming' || phase === 'broadcasting')
-	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
+	const showDetails =
+		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
+	const showProgress =
+		phase === 'awaiting-device' ||
+		phase === 'broadcasting' ||
+		phase === 'awaiting-confirmation' ||
+		phase === 'done' ||
+		phase === 'error'
+
+	const utxoCount = isAdminWalletMode && utxos != null ? utxos.length : undefined
+	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined
+	const syncError = isAdminWalletMode
+		? syncStatus?.lastError != null
+			? { type: 'SyncIncomplete' as const, message: syncStatus.lastError.message }
+			: null
+		: undefined
 
 	return (
 		<ScreenShell
@@ -44,9 +87,12 @@ export function BroadcastProposalScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
-					</span>
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
@@ -75,6 +121,8 @@ export function BroadcastProposalScreen() {
 				</p>
 
 				<div className="mt-6 space-y-4">
+					<BroadcastFundingSignerBanner backendSignerKind={rawSignerKind} connectVendor={adapter.vendor} />
+
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<div className="h-7 w-48 rounded-lg bg-[#f3f4f6]" />
@@ -89,7 +137,14 @@ export function BroadcastProposalScreen() {
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting'}
+							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
+							canSign={canSign}
+							canSignReason={canSignReason}
+							phase={phase}
+							adminWalletInfo={adminWalletInfo}
+							utxoCount={utxoCount}
+							lastSyncedAt={lastSyncedAt}
+							syncError={syncError}
 						/>
 					)}
 
@@ -125,14 +180,20 @@ export function BroadcastProposalScreen() {
 					)}
 
 					{phase === 'error' && (
-						<button
-							type="button"
-							data-testid="e2e-broadcast-prepare"
-							onClick={() => void prepare()}
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-						>
-							Retry
-						</button>
+						<div>
+							<button
+								type="button"
+								data-testid="e2e-broadcast-prepare"
+								disabled={!canSign}
+								onClick={() => void prepare()}
+								className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								Retry
+							</button>
+							{!canSign && (
+								<p className="mt-2 text-[12px] text-[#6b7280]">{canSignReason ?? 'Hardware wallet required to sign'}</p>
+							)}
+						</div>
 					)}
 				</div>
 			</div>

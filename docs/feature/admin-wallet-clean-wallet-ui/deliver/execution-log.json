@@ -1,0 +1,41 @@
+{
+  "schema_version": "3.0",
+  "feature_id": "admin-wallet-clean-wallet-ui",
+  "events": [
+    {
+      "sid": "r1.2",
+      "p": "SPEC",
+      "s": "EXECUTED",
+      "d": "PASS: docs/specs/admin-wallet-clean-wallet-ui.md",
+      "t": "2026-06-02T10:39:00Z"
+    },
+    {
+      "sid": "r1.2",
+      "p": "GREEN",
+      "s": "EXECUTED",
+      "d": "PASS: panel cleanup, empty states, neutral copy, architecture Rule 4",
+      "t": "2026-06-02T10:55:00Z"
+    },
+    {
+      "sid": "r1.2",
+      "p": "VERIFY",
+      "s": "EXECUTED",
+      "d": "PASS: format:check, lint, build, wallet frontend tests",
+      "t": "2026-06-02T10:58:00Z"
+    },
+    {
+      "sid": "r1.2",
+      "p": "COMMIT",
+      "s": "EXECUTED",
+      "d": "PASS: 138412d feat(admin-wallet): R1.2 clean wallet UI",
+      "t": "2026-06-02T11:00:00Z"
+    },
+    {
+      "sid": "r1.2",
+      "p": "DOCS",
+      "s": "EXECUTED",
+      "d": "PASS: implementation plan, evolution, feature-delta, ui-shell supersession note",
+      "t": "2026-06-02T11:05:00Z"
+    }
+  ]
+}

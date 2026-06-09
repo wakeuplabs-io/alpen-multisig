@@ -233,6 +233,82 @@ export function UndoIcon({ width = 16, height = 16, ...rest }: IconProps) {
 	)
 }
 
+export function SettingsGearIcon({ width = 16, height = 16, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
+			<path
+				d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}
+
+/** Clipboard with paste arrow. */
+export function ClipboardPasteIcon({ width = 18, height = 18, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<rect x="8" y="4" width="10" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+			<path d="M11 4V3a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path
+				d="M6 8H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-2"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<path d="M14 12l-3 3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+			<path d="M11 15h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Downward arrow into a tray. */
+export function DownloadIcon({ width = 18, height = 18, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path
+				d="M12 3v13M7 11l5 5 5-5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path d="M4 20h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Folder with up arrow — load proposal from JSON file. */
+export function ImportJsonIcon({ width = 18, height = 18, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path
+				d="M3 7a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M12 11v5M9.5 13.5 12 11l2.5 2.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}
+
 /** Trash can; pair with parent `text-*` for stroke color. */
 export function TrashIcon({ width = 16, height = 16, ...rest }: IconProps) {
 	return (
@@ -244,6 +320,17 @@ export function TrashIcon({ width = 16, height = 16, ...rest }: IconProps) {
 				strokeLinecap="round"
 				strokeLinejoin="round"
 			/>
+		</svg>
+	)
+}
+
+/** Wallet glyph (body + top seam + clasp); pair with parent `text-*` for color. */
+export function WalletIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<rect x="3" y="6" width="18" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+			<path d="M3 9.5h18" stroke="currentColor" strokeWidth="1.6" />
+			<circle cx="16.5" cy="13.5" r="1.25" fill="currentColor" />
 		</svg>
 	)
 }

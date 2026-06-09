@@ -1,3 +1,4 @@
+pub mod hw_psbt_signer;
 pub mod ledger;
 pub mod trezor;
 
@@ -11,6 +12,8 @@ pub struct HwWalletInfo {
     pub device_label: String,
     pub derivation_path: String,
     pub address_sample: Option<String>,
+    /// Full compressed secp256k1 public key (hex). Used for ASM membership checks.
+    pub public_key_hex: Option<String>,
     pub xpub_or_fingerprint: Option<String>,
     pub key_label: Option<String>,
 }

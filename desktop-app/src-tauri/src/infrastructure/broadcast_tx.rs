@@ -128,14 +128,14 @@ pub fn compute_sighash(seq_no: u64, action_hex: &str) -> Result<[u8; 32], String
         .0)
 }
 
-/// Derive the P2TR commit address for the given operator keypair and envelope payload.
+/// Derive the P2TR commit address for the given envelope keypair and envelope payload.
 pub fn derive_commit_address(
-    operator_keypair: &UntweakedKeypair,
+    envelope_keypair: &UntweakedKeypair,
     payload: &[u8],
     network: Network,
 ) -> Result<(Address, ScriptBuf, TaprootSpendInfo), String> {
     let secp = Secp256k1::new();
-    let (internal_key, _) = XOnlyPublicKey::from_keypair(operator_keypair);
+    let (internal_key, _) = XOnlyPublicKey::from_keypair(envelope_keypair);
 
     let reveal_script = EnvelopeScriptBuilder::with_pubkey(&internal_key.serialize())
         .map_err(|e| format!("envelope builder error: {e:?}"))?
@@ -163,14 +163,14 @@ pub fn derive_commit_address(
 /// Build the fully-signed reveal transaction spending the commit UTXO.
 #[allow(clippy::too_many_arguments)]
 pub fn build_reveal_tx(
-    operator_keypair: &UntweakedKeypair,
+    envelope_keypair: &UntweakedKeypair,
     reveal_script: &ScriptBuf,
     taproot_spend_info: &TaprootSpendInfo,
     commit_tx: &Transaction,
     commit_address_script: &ScriptBuf,
     action: &MultisigAction,
     magic_bytes: MagicBytes,
-    network: Network,
+    change_spk: ScriptBuf,
     fee_sats: u64,
 ) -> Result<Transaction, String> {
     let (commit_vout, commit_output) = commit_tx
@@ -192,9 +192,6 @@ pub fn build_reveal_tx(
         .map_err(|e| format!("encode_script_buf: {e:?}"))?;
 
     let fee = Amount::from_sat(fee_sats);
-    let secp = Secp256k1::new();
-    let (internal_key, _) = XOnlyPublicKey::from_keypair(operator_keypair);
-    let change_address = Address::p2tr(&secp, internal_key, None, network);
 
     let commit_amount = commit_output.value;
     let change_amount = commit_amount.checked_sub(fee).unwrap_or(Amount::ZERO);
@@ -215,7 +212,7 @@ pub fn build_reveal_tx(
             },
             TxOut {
                 value: change_amount,
-                script_pubkey: change_address.script_pubkey(),
+                script_pubkey: change_spk,
             },
         ],
     };
@@ -238,7 +235,7 @@ pub fn build_reveal_tx(
     let msg = Message::from_digest_slice(&sighash.to_byte_array())
         .map_err(|e| format!("sighash to message: {e}"))?;
 
-    let signature = SECP256K1.sign_schnorr(&msg, operator_keypair);
+    let signature = SECP256K1.sign_schnorr(&msg, envelope_keypair);
 
     let mut witness = Witness::new();
     witness.push(signature.as_ref());
@@ -256,6 +253,111 @@ pub fn tx_to_hex(tx: &Transaction) -> String {
     tx.consensus_encode(&mut buf)
         .expect("tx encode is infallible");
     hex::encode(buf)
+}
+
+#[cfg(test)]
+mod build_reveal_tx_tests {
+    use super::*;
+    use bitcoin::{
+        key::{rand::thread_rng, UntweakedKeypair},
+        secp256k1::Secp256k1,
+        Address, Network,
+    };
+
+    fn make_test_envelope_keypair() -> UntweakedKeypair {
+        let secp = Secp256k1::new();
+        UntweakedKeypair::new(&secp, &mut thread_rng())
+    }
+
+    fn make_test_change_spk(network: Network) -> ScriptBuf {
+        // Use a different keypair to produce a P2WPKH script — clearly distinct from P2TR
+        let secp = Secp256k1::new();
+        let kp = UntweakedKeypair::new(&secp, &mut thread_rng());
+        let (xonly, _) = XOnlyPublicKey::from_keypair(&kp);
+        // Use P2TR with a merkle root to make it clearly different from a bare P2TR(envelope_key, None)
+        let addr = Address::p2tr(&secp, xonly, None, network);
+        addr.script_pubkey()
+    }
+
+    fn build_minimal_commit_tx(commit_address_script: ScriptBuf) -> Transaction {
+        Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: Amount::from_sat(10_000),
+                script_pubkey: commit_address_script,
+            }],
+        }
+    }
+
+    #[test]
+    fn change_output_uses_change_spk_not_envelope_keypair() {
+        use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+        use crate::domain::authority::Authority;
+        use crate::infrastructure::action_codec;
+        use ssz::Decode;
+        use std::num::NonZeroU8;
+        use strata_asm_txs_admin::actions::MultisigAction;
+        use strata_l1_txfmt::MagicBytes;
+
+        let network = Network::Regtest;
+        let envelope_keypair = make_test_envelope_keypair();
+        let change_spk = make_test_change_spk(network);
+
+        // Build a valid MultisigAction via the project's action codec.
+        const SIGNER_HEX: &str =
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+        let pk = CompressedPubKey::from_hex(SIGNER_HEX).unwrap();
+        let action_domain = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        });
+        let action_hex = action_codec::encode_hex(&action_domain).unwrap();
+        let action_bytes = hex::decode(&action_hex).unwrap();
+        let action = MultisigAction::from_ssz_bytes(&action_bytes)
+            .expect("valid MultisigAction from action_codec");
+
+        // Payload must be >= 126 bytes (EnvelopeScriptBuilder minimum).
+        const PAYLOAD: &[u8] = &[0x61u8; 128];
+
+        let (commit_address, reveal_script, taproot_spend_info) =
+            derive_commit_address(&envelope_keypair, PAYLOAD, network).unwrap();
+        let commit_address_script = commit_address.script_pubkey();
+        let commit_tx = build_minimal_commit_tx(commit_address_script.clone());
+
+        let magic_bytes = MagicBytes::new([b'A', b'L', b'P', b'N']);
+        let fee_sats = 500;
+
+        let reveal_tx = build_reveal_tx(
+            &envelope_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            change_spk.clone(),
+            fee_sats,
+        )
+        .expect("build_reveal_tx must succeed");
+
+        assert_eq!(
+            reveal_tx.output[1].script_pubkey, change_spk,
+            "change output must use the provided change_spk"
+        );
+
+        let secp = Secp256k1::new();
+        let (envelope_xonly, _) = XOnlyPublicKey::from_keypair(&envelope_keypair);
+        let envelope_self_change = Address::p2tr(&secp, envelope_xonly, None, network);
+        assert_ne!(
+            reveal_tx.output[1].script_pubkey,
+            envelope_self_change.script_pubkey(),
+            "change output must NOT be the P2TR self-change from envelope keypair"
+        );
+    }
 }
 
 #[cfg(test)]

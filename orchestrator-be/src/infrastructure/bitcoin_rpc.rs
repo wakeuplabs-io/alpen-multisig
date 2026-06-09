@@ -11,6 +11,11 @@ use crate::infrastructure::rpc_timeout;
 #[async_trait]
 pub(crate) trait BitcoinRpcClient: Send + Sync {
     async fn estimate_fee_rate_sats_per_vb(&self, target_blocks: u16) -> Result<u64, AppError>;
+
+    /// Return the block height at which `txid` was confirmed.
+    ///
+    /// Fails if the transaction is not yet in a block.
+    async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError>;
 }
 
 pub(crate) struct HttpBitcoinRpcClient {
@@ -21,13 +26,9 @@ pub(crate) struct HttpBitcoinRpcClient {
 }
 
 impl HttpBitcoinRpcClient {
-    pub(crate) fn new(base_url: &str, wallet_name: Option<&str>, user: &str, pass: &str) -> Self {
-        let url = match wallet_name.filter(|w| !w.is_empty()) {
-            Some(wallet) => format!("{}/wallet/{}", base_url.trim_end_matches('/'), wallet),
-            None => base_url.to_string(),
-        };
+    pub(crate) fn new(base_url: &str, user: &str, pass: &str) -> Self {
         Self {
-            url,
+            url: base_url.trim_end_matches('/').to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
             client: reqwest::Client::new(),
@@ -51,7 +52,7 @@ impl HttpBitcoinRpcClient {
                 .send(),
         )
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("{e}")))?;
+        .map_err(|e| AppError::BadRequest(format!("bitcoin rpc `{method}` request failed: {e}")))?;
 
         let status = resp.status();
 
@@ -65,13 +66,13 @@ impl HttpBitcoinRpcClient {
                         .map(str::to_string)
                 })
                 .unwrap_or(body_text);
-            return Err(AppError::Internal(anyhow::anyhow!(
+            return Err(AppError::BadRequest(format!(
                 "bitcoin rpc `{method}` failed (HTTP {status}): {msg}"
             )));
         }
 
         let body: Value = resp.json().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("bitcoin rpc `{method}` invalid json: {e}"))
+            AppError::BadRequest(format!("bitcoin rpc `{method}` invalid json: {e}"))
         })?;
 
         if let Some(err) = body.get("error").filter(|v| !v.is_null()) {
@@ -80,14 +81,14 @@ impl HttpBitcoinRpcClient {
                 .and_then(|v| v.as_str())
                 .unwrap_or(&err.to_string())
                 .to_string();
-            return Err(AppError::Internal(anyhow::anyhow!(
+            return Err(AppError::BadRequest(format!(
                 "bitcoin rpc `{method}` error: {msg}"
             )));
         }
 
-        body.get("result").cloned().ok_or_else(|| {
-            AppError::Internal(anyhow::anyhow!("bitcoin rpc `{method}` missing result"))
-        })
+        body.get("result")
+            .cloned()
+            .ok_or_else(|| AppError::BadRequest(format!("bitcoin rpc `{method}` missing result")))
     }
 }
 
@@ -105,5 +106,38 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 
         let sats_per_vb = (feerate_btc_per_kb * 100_000_000.0 / 1000.0).ceil() as u64;
         Ok(sats_per_vb.max(1))
+    }
+
+    async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
+        // getrawtransaction works for any tx via txindex, unlike gettransaction which
+        // requires the tx to be in the node's wallet.
+        let result = self.call("getrawtransaction", json!([txid, true])).await?;
+
+        // Bitcoin Core 23+ includes blockheight directly; fall back to getblockheader.
+        if let Some(h) = result.get("blockheight").and_then(|v| v.as_u64()) {
+            return Ok(h);
+        }
+
+        let blockhash = result
+            .get("blockhash")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "getrawtransaction: tx {txid} has no blockhash — not yet confirmed"
+                ))
+            })?;
+
+        let header = self
+            .call("getblockheader", json!([blockhash, true]))
+            .await?;
+
+        header
+            .get("height")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| {
+                AppError::BadRequest(format!(
+                    "getblockheader: missing `height` for blockhash {blockhash}"
+                ))
+            })
     }
 }

@@ -1,5 +1,10 @@
+# Opt into the `trim-paths` profile option (D4 / NF-2 reproducible builds). The
+# workspace is pinned to nightly via rust-toolchain.toml, which still gates this
+# behind cargo-features; see [profile.release] below.
+cargo-features = ["trim-paths"]
+
 [workspace]
-members = ['orchestrator-be', 'desktop-app/src-tauri', 'e2e-tests']
+members = ['orchestrator-be', 'desktop-app/src-tauri', 'e2e-tests', 'regtest-dev-api']
 resolver = '2'
 
 # Vendored `trezor-client` 0.1.5: SLIP-0132 xpub normalization (see vendor README if present) and
@@ -10,10 +15,12 @@ resolver = '2'
 strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 
 # From alpenlabs/strata-common (rc19 — matches alpenlabs/asm @ e0461f8 workspace)
 strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
 
@@ -28,6 +35,18 @@ hex = "0.4"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 
+# BDK (Bitcoin Development Kit) — admin wallet infrastructure
+bdk_wallet = "1"
+bdk_bitcoind_rpc = "0.18"
+
 # Shared across workspace members
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Reproducible builds (D4 / NF-2) — see docs/operations/reproducible-builds.md.
+# `trim-paths` strips absolute build paths ($HOME, $CARGO_HOME, git/registry deps)
+# from the release binary so two machines produce byte-identical output. Combined
+# with the pinned toolchain, committed lockfile, and SOURCE_DATE_EPOCH set in the
+# release workflow, this makes `target/release/desktop-app` bit-for-bit reproducible.
+[profile.release]
+trim-paths = true

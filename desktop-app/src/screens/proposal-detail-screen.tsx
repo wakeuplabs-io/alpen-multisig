@@ -1,12 +1,22 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
+import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
+import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
+import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
+import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+
+const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -14,16 +24,55 @@ export function ProposalDetailScreen() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, disconnectSession } = useSession()
+	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const signerPubkey: string | null = (location.state as LocationState)?.signerPubkey ?? null
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
+	const panel = useWalletPanelData()
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
+	const currentBlockHeight = useBlockHeight()
 
 	async function handleBack() {
 		await disconnectSession()
+	}
+
+	async function handlePasteSignatures(sigs: PastedSignature[], broadcastState: ImportBroadcastState) {
+		if (!actionId || !proposal) return
+		for (const sig of sigs) {
+			const res = await approveProposal({ baseUrl: ORCHESTRATOR_BASE_URL, actionId, ...sig })
+			if (!res.ok) {
+				console.warn(`Failed to import signature for ${sig.signerPubkey}: ${res.error}`)
+			}
+		}
+		const hasNewBroadcastData =
+			broadcastState.broadcastStatus !== null ||
+			broadcastState.commitTxid !== null ||
+			broadcastState.revealTxid !== null
+		if (hasNewBroadcastData) {
+			const effectiveBroadcastStatus = broadcastState.broadcastStatus ?? proposal.broadcastStatus
+			// Sync broadcast state without proposalStatus so this call always succeeds.
+			await reportBroadcastProgress({
+				baseUrl: ORCHESTRATOR_BASE_URL,
+				actionId,
+				broadcastStatus: effectiveBroadcastStatus,
+				commitTxid: broadcastState.commitTxid ?? undefined,
+				revealTxid: broadcastState.revealTxid ?? undefined,
+			})
+			// If reveal is confirmed, attempt enacted transition in a separate call.
+			// Backend validates against ASM — 409 means not yet confirmed; non-fatal,
+			// reload reconcile will transition when ASM confirms.
+			if (effectiveBroadcastStatus === 'reveal_confirmed') {
+				await reportBroadcastProgress({
+					baseUrl: ORCHESTRATOR_BASE_URL,
+					actionId,
+					broadcastStatus: 'reveal_confirmed',
+					proposalStatus: 'enacted',
+				})
+			}
+		}
+		reload()
 	}
 
 	if (wallet === null) {
@@ -42,9 +91,12 @@ export function ProposalDetailScreen() {
 						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
 						{authorityLabel}
 					</span>
-					<span className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-[#f8f8fb] px-3 py-1.25 text-[12px]">
-						<span className="font-mono text-[11px] font-medium text-[#111827]">Session · {sessionTimeLabel}</span>
-					</span>
+					<WalletSessionControl
+						panel={panel}
+						sessionTimeLabel={sessionTimeLabel}
+						sessionWarning={sessionWarning}
+						addressSample={wallet.addressSample}
+					/>
 					<button
 						type="button"
 						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
@@ -94,13 +146,79 @@ export function ProposalDetailScreen() {
 					)}
 
 					{proposal && (
-						<ProposalDetail
-							proposal={proposal}
-							signerPubkey={signerPubkey}
-							decodedData={decodedData}
-							onSign={() => navigate(`/proposals/${actionId}/sign`)}
-							onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
-						/>
+						<>
+							<ProposalDetail
+								proposal={proposal}
+								signerPubkey={signerPubkey}
+								decodedData={decodedData}
+								onSign={() => navigate(`/proposals/${actionId}/sign`)}
+								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+								onPasteSignatures={(sigs, broadcastState) => void handlePasteSignatures(sigs, broadcastState)}
+								onManualExecute={() =>
+									navigate('/manual', {
+										state: {
+											prefill: {
+												actionHex: proposal.actionHex,
+												seqNo: proposal.seqNo,
+												authority: proposal.authority,
+												signatures: proposal.signatures.map((s) => ({
+													signerPubkey: s.signerPubkey,
+													signatureHex: s.signatureHex,
+												})),
+											},
+										},
+									})
+								}
+							/>
+
+							{/* Expiry countdown for pending proposals */}
+							{proposal.status === 'pending' && (
+								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+								</div>
+							)}
+
+							{/* Activation countdown */}
+							{proposal.activationHeight !== null && proposal.status === 'approved' && (
+								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<ActivationCountdown
+										activationHeight={proposal.activationHeight}
+										currentHeight={currentBlockHeight}
+									/>
+								</div>
+							)}
+
+							{/* In-progress cancel banner */}
+							{proposal.cancelProposal !== null && (
+								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+									<p className="m-0 text-[13px] text-[#d97706]">
+										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
+										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
+									</p>
+									<button
+										type="button"
+										className="shrink-0 text-[13px] font-medium text-[#d97706] transition hover:text-[#b45309]"
+										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
+									>
+										View cancel →
+									</button>
+								</div>
+							)}
+
+							{/* Cancel CTA */}
+							{proposal.status === 'approved' &&
+								proposal.kind !== 'cancel' &&
+								CANCELABLE_AUTHORITIES.includes(proposal.authority) &&
+								proposal.cancelProposal === null && (
+									<button
+										type="button"
+										className="mt-4 w-full rounded-xl border border-[#dc2626] bg-white px-4 py-2.5 text-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
+									>
+										Cancel this proposal
+									</button>
+								)}
+						</>
 					)}
 				</div>
 			</div>

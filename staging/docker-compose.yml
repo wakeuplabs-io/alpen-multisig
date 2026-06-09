@@ -1,0 +1,106 @@
+services:
+  bitcoin:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.bitcoin
+    ports:
+      - "18443:18443"
+    volumes:
+      - bitcoin-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bitcoin-cli",
+          "-regtest",
+          "-datadir=/data/bitcoin",
+          "-rpcconnect=127.0.0.1",
+          "-rpcport=18443",
+          "-rpcuser=user",
+          "-rpcpassword=password",
+          "getblockchaininfo",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  asm:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.asm
+    ports:
+      - "8080:8080"
+    volumes:
+      - asm-data:/data
+    environment:
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-sf",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-d",
+          '{"jsonrpc":"2.0","method":"strata_asm_getStatus","id":1}',
+          "http://localhost:8080/",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.orchestrator
+    ports:
+      - "3000:3000"
+    environment:
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "3000"
+      BITCOIN_RPC_URL: http://18.209.229.98:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+      STRATA_ADMIN_STATE_RPC_URL: http://18.209.229.98:8080
+      DATABASE_URL: "postgresql://neondb_owner:npg_HuMb6SVQxW7s@ep-proud-star-aqpu1w7v-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+      AUTH_SESSION_TTL_MS: "1800000"
+      PROPOSAL_EXPIRY_DAYS: "1"
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+      asm:
+        condition: service_healthy
+    restart: unless-stopped
+
+  regtest-dev-api:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.regtest-dev-api
+    ports:
+      - "3001:3001"
+    environment:
+      BITCOIN_RPC_URL: http://bitcoin:18443
+      BITCOIN_RPC_USER: user
+      BITCOIN_RPC_PASS: password
+      BITCOIN_RPC_WALLET: staging
+      SERVER_PORT: "3001"
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  bitcoin-data:
+  asm-data:

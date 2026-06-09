@@ -14,6 +14,29 @@ export function normalizeSignerKey(value: string): string {
 	return withoutPrefix.toLowerCase()
 }
 
+export const VK_PREDICATE_TYPES = ['always_accept', 'never_accept', 'bip340_schnorr', 'sp1_groth16'] as const
+export type VkPredicateType = (typeof VK_PREDICATE_TYPES)[number]
+
+export const VK_PREDICATE_TYPE_IDS: Record<VkPredicateType, number> = {
+	always_accept: 1,
+	never_accept: 0,
+	bip340_schnorr: 10,
+	sp1_groth16: 20,
+}
+
+export const VK_PREDICATE_TYPE_LABELS: Record<VkPredicateType, string> = {
+	always_accept: 'AlwaysAccept',
+	never_accept: 'NeverAccept',
+	bip340_schnorr: 'Bip340Schnorr',
+	sp1_groth16: 'Sp1Groth16',
+}
+
+/** condition hex length in chars (2 chars per byte) */
+const VK_CONDITION_HEX_LENGTH: Partial<Record<VkPredicateType, number>> = {
+	bip340_schnorr: 64, // 32 bytes — x-only pubkey
+	sp1_groth16: 712, // 356 bytes — gnark VK compressed
+}
+
 const createProposalFormObjectSchema = z.object({
 	actionType: z.enum(['vk_update', 'signer_update']),
 	seqNo: z.string(),
@@ -21,6 +44,7 @@ const createProposalFormObjectSchema = z.object({
 	keysToAdd: z.array(keyRowSchema),
 	keysToRemove: z.array(keyRowSchema),
 	threshold: z.string(),
+	vkTypeId: z.enum(VK_PREDICATE_TYPES),
 	newVkHex: z.string(),
 })
 
@@ -81,17 +105,6 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 		}
 
 		if (data.actionType === 'signer_update') {
-			const normalizedAdds = data.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
-			const normalizedRemoves = data.keysToRemove.map((row) => row.value.trim()).filter((value) => value.length > 0)
-
-			if (normalizedAdds.length === 0 && normalizedRemoves.length === 0) {
-				ctx.addIssue({
-					code: 'custom',
-					path: ['keysToAdd'],
-					message: 'Provide at least one signer key to add or remove',
-				})
-			}
-
 			for (const [index, row] of data.keysToAdd.entries()) {
 				const key = row.value.trim()
 				if (key.length === 0) continue
@@ -239,8 +252,26 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 					})
 				}
 			}
-		} else if (data.newVkHex.trim().length === 0) {
-			ctx.addIssue({ code: 'custom', path: ['newVkHex'], message: 'New verification key is required' })
+		} else {
+			const expectedLen = VK_CONDITION_HEX_LENGTH[data.vkTypeId]
+			if (expectedLen !== undefined) {
+				const hex = data.newVkHex.trim()
+				if (hex.length === 0) {
+					ctx.addIssue({
+						code: 'custom',
+						path: ['newVkHex'],
+						message: `Condition hex is required for ${VK_PREDICATE_TYPE_LABELS[data.vkTypeId]}`,
+					})
+				} else if (!/^[0-9a-fA-F]+$/.test(hex)) {
+					ctx.addIssue({ code: 'custom', path: ['newVkHex'], message: 'Must be a valid hex string' })
+				} else if (hex.length !== expectedLen) {
+					ctx.addIssue({
+						code: 'custom',
+						path: ['newVkHex'],
+						message: `${VK_PREDICATE_TYPE_LABELS[data.vkTypeId]} requires exactly ${expectedLen / 2} bytes (${expectedLen} hex chars), got ${hex.length / 2}`,
+					})
+				}
+			}
 		}
 	})
 }

@@ -2,6 +2,7 @@
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -100,6 +101,22 @@ pub struct Proposal {
     pub commit_txid: Option<String>,
     pub reveal_txid: Option<String>,
     pub broadcast_error: Option<String>,
+    /// Set when this row is a cancel proposal; points to the target proposal's action_id.
+    pub target_action_id: Option<ActionId>,
+    /// Bitcoin block height at which the target update activates. Set after RevealConfirmed.
+    pub activation_height: Option<u64>,
+    /// ASM queue UpdateId assigned to this update when its reveal tx confirmed. Set after RevealConfirmed.
+    /// Required to build a valid CancelAction (target_id field). Distinct from seq_no.
+    pub update_id_in_queue: Option<u32>,
+    /// When the proposal was created. Used to enforce the 7-day expiry TTL.
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub created_at: DateTime<Utc>,
+}
+
+impl Proposal {
+    pub fn is_cancel(&self) -> bool {
+        self.target_action_id.is_some()
+    }
 }
 
 /// A signature submitted for a proposal by a signer.
