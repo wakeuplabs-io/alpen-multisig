@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::config::{
-    LOCAL_BTC_RPC_PASS, LOCAL_BTC_RPC_URL, LOCAL_BTC_RPC_USER, LOCAL_STRATA_RPC_URL,
-    TRUSTED_BTC_RPC_URL, TRUSTED_STRATA_RPC_URL,
+    LOCAL_BTC_RPC_PASS, LOCAL_BTC_RPC_URL, LOCAL_BTC_RPC_USER, LOCAL_ELECTRUM_URL,
+    LOCAL_STRATA_RPC_URL, TRUSTED_BTC_RPC_URL, TRUSTED_ELECTRUM_URL, TRUSTED_STRATA_RPC_URL,
 };
 
 const CONFIG_FILE: &str = "node-config.json";
@@ -28,6 +28,10 @@ pub struct NodeConfig {
     pub custom_btc_rpc_url: Option<String>,
     pub custom_btc_rpc_user: Option<String>,
     pub custom_btc_rpc_pass: Option<String>,
+    /// Electrum indexer URL for wallet sync (R2.3). `#[serde(default)]` keeps
+    /// pre-R2.3 `node-config.json` files loading without error.
+    #[serde(default)]
+    pub custom_electrum_url: Option<String>,
 }
 
 impl NodeConfig {
@@ -52,6 +56,20 @@ impl NodeConfig {
                 .as_deref()
                 .filter(|s| !s.is_empty())
                 .unwrap_or(LOCAL_BTC_RPC_URL),
+        }
+    }
+
+    /// Electrum indexer URL for the Admin Wallet sync read path (R2.3) — same
+    /// Local / Trusted / Custom resolution as `btc_rpc_url`.
+    pub fn electrum_url(&self) -> &str {
+        match &self.mode {
+            ConnectionMode::Local => LOCAL_ELECTRUM_URL,
+            ConnectionMode::Trusted => TRUSTED_ELECTRUM_URL,
+            ConnectionMode::Custom => self
+                .custom_electrum_url
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(LOCAL_ELECTRUM_URL),
         }
     }
 
@@ -111,6 +129,7 @@ mod tests {
         assert_eq!(cfg.btc_rpc_url(), LOCAL_BTC_RPC_URL);
         assert_eq!(cfg.btc_rpc_user(), LOCAL_BTC_RPC_USER);
         assert_eq!(cfg.btc_rpc_pass(), LOCAL_BTC_RPC_PASS);
+        assert_eq!(cfg.electrum_url(), LOCAL_ELECTRUM_URL);
     }
 
     #[test]
@@ -121,6 +140,7 @@ mod tests {
         };
         assert_eq!(cfg.strata_rpc_url(), TRUSTED_STRATA_RPC_URL);
         assert_eq!(cfg.btc_rpc_url(), TRUSTED_BTC_RPC_URL);
+        assert_eq!(cfg.electrum_url(), TRUSTED_ELECTRUM_URL);
     }
 
     #[test]
@@ -129,10 +149,12 @@ mod tests {
             mode: ConnectionMode::Custom,
             custom_strata_rpc_url: Some("http://my-strata:9090".to_string()),
             custom_btc_rpc_url: Some("http://my-btc:8080".to_string()),
+            custom_electrum_url: Some("tcp://my-electrs:50001".to_string()),
             ..Default::default()
         };
         assert_eq!(cfg.strata_rpc_url(), "http://my-strata:9090");
         assert_eq!(cfg.btc_rpc_url(), "http://my-btc:8080");
+        assert_eq!(cfg.electrum_url(), "tcp://my-electrs:50001");
     }
 
     #[test]
@@ -143,5 +165,25 @@ mod tests {
         };
         assert_eq!(cfg.strata_rpc_url(), LOCAL_STRATA_RPC_URL);
         assert_eq!(cfg.btc_rpc_url(), LOCAL_BTC_RPC_URL);
+        assert_eq!(cfg.electrum_url(), LOCAL_ELECTRUM_URL);
+    }
+
+    #[test]
+    fn pre_r2_3_node_config_json_loads_without_electrum_field() {
+        // Persisted node-config.json written before R2.3 has no customElectrumUrl key.
+        let legacy_json = r#"{
+            "mode": "custom",
+            "customStrataRpcUrl": "http://my-strata:9090",
+            "customBtcRpcUrl": "http://my-btc:8080",
+            "customBtcRpcUser": "u",
+            "customBtcRpcPass": "p"
+        }"#;
+        let cfg: NodeConfig = serde_json::from_str(legacy_json).expect("legacy config must load");
+        assert_eq!(cfg.custom_electrum_url, None);
+        assert_eq!(
+            cfg.electrum_url(),
+            LOCAL_ELECTRUM_URL,
+            "custom mode without an Electrum URL must fall back to the local electrs"
+        );
     }
 }

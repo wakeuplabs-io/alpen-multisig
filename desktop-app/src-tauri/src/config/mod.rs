@@ -12,8 +12,7 @@ pub const TRUSTED_BTC_RPC_URL: &str = "https://btc-rpc.stratabtc.org";
 /// Local electrs endpoint from `scripts/local-stack.sh` (R2.1 indexer infra).
 pub const LOCAL_ELECTRUM_URL: &str = "tcp://127.0.0.1:60401";
 
-/// R2.2 fixed Electrum endpoint for wallet sync: `ELECTRUM_URL` env override, local electrs
-/// default. R2.3 moves this into `NodeConfig` (Local / Trusted / Custom) like the BTC RPC URL.
-pub fn electrum_url() -> String {
-    std::env::var("ELECTRUM_URL").unwrap_or_else(|_| LOCAL_ELECTRUM_URL.to_string())
-}
+/// Trusted Electrum preset following the stratabtc.org endpoint naming pattern. The official
+/// public indexer endpoint is published/hardened in Phase 10; until then, Trusted-mode wallet
+/// sync surfaces `ElectrumUnreachable` if this host is not live.
+pub const TRUSTED_ELECTRUM_URL: &str = "ssl://electrum.stratabtc.org:50002";
