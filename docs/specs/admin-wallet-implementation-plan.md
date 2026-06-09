@@ -11,7 +11,8 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 **In scope for this program**
 
 - Authorities: **Strata Administrator** and **Alpen Administrator** only.
-- Stack: `bdk_wallet` + **Bitcoin Core–compatible JSON-RPC** (`BITCOIN_RPC_URL`) — referred to below as **chain RPC** (protocol/transport), not “users must run Bitcoin Core.”
+- Stack: `bdk_wallet` + **`bdk_electrum` for wallet sync/indexation** + **Bitcoin Core–compatible JSON-RPC** (`BITCOIN_RPC_URL`) for broadcast, fee estimates, and `submitpackage` — referred to below as **chain RPC** (protocol/transport), not “users must run Bitcoin Core.”
+- **Release 2 (R2):** Electrum replaces block-by-block Core RPC sync — see [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md). Urgent prerequisite for testnet/mainnet viability.
 - Governance commit/reveal: funding moves to Admin Wallet + BDK; protocol in [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) unchanged.
 - Later: PRD §4 wallet UI (Alta handoff), Send validations, fee-bump, receive rotation, Admin ID display, shared Send UX, direct Trezor/Ledger (no HWI).
 
@@ -19,8 +20,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 
 - Payout Administrator (`block_payout`, P2TR Admin ID for payout, US-I*, PRD §6).
 - HWI (`hwi` CLI, POC-miniwallet HWI integration).
-- BDK Electrum (`bdk_electrum`) and standalone Electrum servers.
-- Esplora or other indexers in this program.
+- Any indexer backend other than **Electrum** (R2).
 
 **External references (visual / POC only — not workspace deps)**
 
@@ -47,7 +47,8 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R1.5 ✅ | Balance UX (§4.3.1 PASS) | PRD §4.3.1 **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md); [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md); PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211) |
 | R1.6 ✅ | Addresses UX (§4.3.2 PASS) | PRD §4.3.2 **PASS** in compliance matrix; [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md); PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) |
 | R1.7 ✅ | Wallet panel UI polish | Visual hierarchy + affordances; [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md); PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214) |
-| **4** | **Governance broadcast fee rate (priority)** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
+| **R2** | **Electrum wallet sync (priority)** | PRD §2 production viability — replace Core RPC block-scan sync with Electrum indexation; [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md) |
+| **4** | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md); **after R2** |
 | 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
@@ -63,25 +64,33 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 React (desktop-app/src)
   └─ IPC invoke (no secrets)
        └─ Tauri admin_wallet module
-            ├─ bdk_wallet (descriptors, sync, build, sign)
-            ├─ bdk_bitcoind_rpc → chain RPC (BITCOIN_RPC_URL)
+            ├─ bdk_wallet (descriptors, build, sign)
+            ├─ bdk_electrum → Electrum server (wallet sync — R2)
+            ├─ bdk_bitcoind_rpc / HttpBitcoinRpcClient → chain RPC (BITCOIN_RPC_URL)
             └─ WalletService (commit funding, Send, fee inputs)
 ```
 
 - **Secrets and signing** stay in Rust (Tauri). React shows addresses, balances, and confirmation UX only.
 - **WalletService** is the single Rust service for commit funding, Send, and governance fee inputs. (Phase 1's pluggable `CommitFunding` abstraction was removed in Phase 3.6; the Admin Wallet/BDK is now the sole funder.)
+- **Wallet sync (R2):** balance, UTXOs, addresses, and receive rotation sync via **Electrum** (`bdk_electrum`). Core RPC block-by-block sync (`bdk_bitcoind_rpc::Emitter`) is retired for the read path once R2 ships.
+- **Chain RPC (unchanged for broadcast):** transaction broadcast, `submitpackage`, and fee estimates remain on Bitcoin Core–compatible JSON-RPC.
 - **Reveal** uses a per-broadcast **ephemeral** internal key (R1.0; SPS-50 script-path spend — not HW-signable). Phase 3.5/3.7b briefly used `m/86'/0'/73'/2/0`; that path is **retired**. Reveal change goes to Admin Wallet; **commit funding** is session-driven and HW-signable via `PsbtSigner` (R1.1).
 
-### Chain RPC end state
+### Chain access end state
 
-| Environment | Chain RPC | Local `bitcoind` |
+| Role | Backend (after R2) | Config |
 |---|---|---|
-| Dev / CI (today → Phase 1) | `http://127.0.0.1:18443` via `scripts/bitcoind-asm-runner.sh` | Yes, scripts/CI only |
-| Production end state (Phase 10) | Remote testnet/mainnet RPC (trusted preset or custom URL per PRD §2) | No product assumption |
+| Wallet sync / indexation | **Electrum** (`bdk_electrum`) | Electrum URL (trusted preset or custom) |
+| Broadcast, fees, `submitpackage` | **Core-compatible JSON-RPC** | `BITCOIN_RPC_URL` (+ auth) |
 
-**What goes away:** Local full node as a product requirement; server-side `sendtoaddress` on `BITCOIN_WALLET_NAME` for product flows.
+| Environment | Electrum | Chain RPC | Local `bitcoind` |
+|---|---|---|---|
+| Dev / CI (today) | Local indexer (e.g. electrs) against regtest `bitcoind` — R2 delivery | `http://127.0.0.1:18443` via `scripts/bitcoind-asm-runner.sh` | Yes, scripts/CI only |
+| Production end state (Phase 10) | Remote testnet/mainnet Electrum (trusted preset or custom) | Remote testnet/mainnet RPC (trusted preset or custom URL per PRD §2) | No product assumption |
 
-**What stays:** A Bitcoin Core–compatible RPC **client** in the app for sync, fee estimates, and broadcast.
+**What goes away:** Local full node as a product requirement; Core RPC block-scan for wallet sync; server-side `sendtoaddress` on `BITCOIN_WALLET_NAME` for product flows.
+
+**What stays:** Electrum for wallet indexation; a Bitcoin Core–compatible RPC **client** for broadcast, fee estimates, and `submitpackage`.
 
 ### Phase dependency diagram
 
@@ -93,9 +102,9 @@ flowchart LR
   P35 --> P36[Phase 3.6 Admin Wallet-only commit funding]
   P36 --> P37[Phase 3.7 Session-bound wallet mnemonic]
   P37 --> P38[Phase 3.8 Watch-only wallet HW]
-  P38 --> R1[Release 1: R1.0–R1.6 done]
-  R1 --> R17[R1.7 Wallet UI polish]
-  R17 --> P4[Phase 4 Broadcast fee rate]
+  P38 --> R1[Release 1: R1.0–R1.7 done]
+  R1 --> R2[R2 Electrum sync priority]
+  R2 --> P4[Phase 4 Broadcast fee rate]
   P4 --> P5[Phase 5 Send happy path]
   P5 --> P6[Phase 6 Tx list + RBF]
   P6 --> P7[Phase 7 Admin ID UI]
@@ -106,7 +115,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has three parts: the completed **Foundation** (Phases 1–3.8), **Release 1** (R1.0–R1.6 shipped; **R1.7** wallet UI polish planned), and **Remaining phases (4–10)** — **Phase 4 (broadcast fee rate) is the priority functional increment** after R1.7. PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
+The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), **Release 2 (R2 — Electrum wallet sync, urgent priority)**, and **Remaining phases (4–10)**. **R2 is the hard prerequisite** for Phases 4–10 on testnet/mainnet; **Phase 4 (broadcast fee rate)** follows R2. PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -128,7 +137,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Out of scope**
 
-- Full wallet tabs, Send form, HW commit sign, mainnet/testnet, Electrum/Esplora, Payout.
+- Full wallet tabs, Send form, HW commit sign, mainnet/testnet wallet features beyond R2 scope, Payout.
 
 **Done when**
 
@@ -360,7 +369,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 ### Release 1
 
-**Release 1 is complete.** Steps **R1.0–R1.7** are done (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); R1.7: PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214)). PRD §4.3.1, §4.3.2, and **§4.3.4 rotation** are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3 (tx list/RBF), §4.3.4 (QR/HW verify), §4.3.5 (Send), §4.1–4.2 (Admin ID), and **US-H4 broadcast fee** remain open (Phases 4–10). **Next:** Phase 4 (broadcast fee rate control).
+**Release 1 is complete.** Steps **R1.0–R1.7** are done (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); R1.7: PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214)). PRD §4.3.1, §4.3.2, and **§4.3.4 rotation** are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3 (tx list/RBF), §4.3.4 (QR/HW verify), §4.3.5 (Send), §4.1–4.2 (Admin ID), and **US-H4 broadcast fee** remain open (Phases 4–10). **Next:** **Release 2** (Electrum wallet sync).
 
 **R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
@@ -370,7 +379,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **R1.7 closure:** Branch `feature/admin-wallet-r17-ui-polish`, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Two passes: (a) visual hierarchy + layout refinement, (b) affordances & polish (icon-only copy, wallet avatar, count badge, session chevron, drawer easing/shadow). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
 
-**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Phase 4** (broadcast fee rate control).
+**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Release 2** (Electrum wallet sync).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -501,23 +510,54 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **R1.6 closure:** PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212). **Next in Release 1:** R1.7 (wallet panel UI polish).
 
-#### R1.7 — Wallet panel UI polish (planned)
+#### R1.7 — Wallet panel UI polish ✅
+
+**Status:** Complete — PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
 
 **Goal:** Visual and interaction quality pass on the **Admin Wallet slide-over** only — closer to Alta `WalletPanel` handoff (balance, receive, addresses-with-balance, sync footer).
 
-**In scope (kickoff TBD):** typography/spacing parity, section hierarchy, loading/empty/error consistency, copy review; optional tab layout vs current single-scroll panel (design decision at spec time).
+**Done when:** Met — Release 1 fully closed.
 
-**Out of scope:** Governance/broadcast screens (Phase 9 shared UX); new IPC; Send (Phase 5); fee-bump (Phase 6); QR (Phase 7).
+---
 
-**Done when:** TBD at R1.7 spec time; Release 1 then **fully closed**.
+### Release 2
+
+**Release 2 is the urgent priority** after Release 1. Remote Core RPC block-by-block wallet sync is not production-viable (unacceptable latency on testnet/mainnet). R2 replaces wallet **indexation** with **Electrum** while keeping Core-compatible RPC for broadcast and fees.
+
+**Spec:** [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)
+
+**Goal:** Wallet sync (balance, UTXOs, addresses, receive rotation) uses `bdk_electrum` against a configurable Electrum server. Broadcast, `submitpackage`, and fee estimation continue to use `BITCOIN_RPC_URL`.
+
+**In scope**
+
+- Electrum-backed sync for the Admin Wallet read path; Electrum URL in Node Config (trusted/custom presets).
+- Regtest, testnet, and mainnet; parity with Release 1 wallet panel behavior.
+- Retire Core RPC block-scan (`bdk_bitcoind_rpc::Emitter`) for wallet sync once R2 ships.
+
+**Out of scope**
+
+- Any indexer backend other than Electrum.
+- Send (Phase 5), tx list / RBF (Phase 6), Admin ID UI (Phase 7), shared Send UX (Phase 9).
+- Changing commit/reveal protocol or `PsbtSigner` flows.
+- Delivery slicing — deferred to implementation kickoff.
+
+**Done when**
+
+- Wallet panel read path syncs in production-viable time on testnet/mainnet (or regtest with a local Electrum indexer).
+- Balance, receive rotation, and addresses-with-balance remain correct; governance broadcast unchanged from Release 1.
+- `cargo test --workspace` and frontend CI green.
+
+**Prerequisite for:** Phases 4–10 on testnet/mainnet. **Next after R2:** Phase 4 (US-H4 broadcast fee rate).
+
+**Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.
 
 ---
 
 ### Remaining phases (4–10)
 
-Phases 4–10 continue after Release 1 (**R1.7** first). **Phase 4** is the priority **functional** increment after R1.7. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
+Phases 4–10 continue after **Release 2**. **Phase 4** is the priority **functional** increment after R2. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
 
-#### Phase 4 — Governance broadcast fee rate (priority)
+#### Phase 4 — Governance broadcast fee rate
 
 **Goal:** [**US-H4**](../3-stories/story-map.md) — on governance **broadcast** (commit funding), let the signer set fee rate in **sat/vB** (0.1 increments, max 10 000); default **next-block** estimate from the connected chain RPC. Per [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md): proposal/PRD expect **fee-rate controls on broadcast** before the full wallet Send surface; new PRD delegates pending-update Send fee UX to the wallet-send pattern (§4.3.5.3), but commit/reveal broadcast still needs an explicit control now.
 
@@ -583,7 +623,7 @@ Phases 4–10 continue after Release 1 (**R1.7** first). **Phase 4** is the prio
 
 **In scope:** PSBT preview + signing on device for Send; receive-address verify-on-device; reuse of the adapters established in Release 1.
 
-**Out of scope:** HWI CLI, POC Electrum path; governance broadcast signing (Release 1, R1.0/R1.1).
+**Out of scope:** HWI CLI, POC-miniwallet integration paths; governance broadcast signing (Release 1, R1.0/R1.1).
 
 **Done when:** Regtest/testnet Admin Wallet send is HW-signed without a mnemonic; dev-mnemonic guard becomes unreachable on release builds (full removal in Phase 10).
 
@@ -605,17 +645,17 @@ Phases 4–10 continue after Release 1 (**R1.7** first). **Phase 4** is the prio
 
 ---
 
-#### Phase 10 — Hardening + remote testnet/mainnet RPC
+#### Phase 10 — Hardening + remote testnet/mainnet
 
-**Goal:** No local node assumption; trusted/custom RPC URLs; production capability flags.
+**Goal:** No local node assumption for end users; trusted/custom presets for **both** Electrum (R2) and chain RPC; production capability flags.
 
-**In scope:** Network presets, TLS/auth for remote RPC, remove dev mnemonics from release builds, deprecate `BITCOIN_WALLET_NAME` for product flows.
+**In scope:** Network presets, TLS/auth for remote chain RPC and Electrum, remove dev mnemonics from release builds, deprecate `BITCOIN_WALLET_NAME` for product flows, runbooks for remote testnet/mainnet without bundled `bitcoind`.
 
-**Out of scope:** Electrum/Esplora implementation.
+**Out of scope:** Wallet sync backend changes (delivered in R2).
 
-**Done when:** Testnet/mainnet operate against remote chain RPC only; documentation and runbooks updated.
+**Done when:** Testnet/mainnet operate against remote Electrum + chain RPC only; documentation and runbooks updated.
 
-**Primary code areas:** `broadcast_env.rs`, config UI, release CI matrix without bundled bitcoind for app users.
+**Primary code areas:** `broadcast_env.rs`, `node_config_store.rs`, config UI, release CI matrix without bundled bitcoind for app users.
 
 ## 5. Baseline and current state
 
@@ -624,23 +664,25 @@ Phases 4–10 continue after Release 1 (**R1.7** first). **Phase 4** is the prio
 | Area | Pre-Foundation | Now (after Release 1) |
 |---|---|---|
 | Governance broadcast | Commit via `sendtoaddress`; reveal via `OPERATOR_SECRET_KEY_HEX` + `send_raw_transaction` | Commit funded/signed via Admin Wallet + `PsbtSigner` (R1.1); reveal via **ephemeral** key pre-signed before broadcast (R1.0, R1.0.1) |
-| Chain access | `HttpBitcoinRpcClient` in `infrastructure/bitcoin_rpc.rs` | Unchanged; wallet sync uses mempool emitter (R1.5) |
+| Chain access | `HttpBitcoinRpcClient` in `infrastructure/bitcoin_rpc.rs` | Single endpoint: Core RPC for sync (Emitter) + broadcast + fees |
+| Wallet sync | — | Core RPC block-scan (`bdk_bitcoind_rpc::Emitter`) + mempool (R1.5); **not production-viable remotely** → **R2** (Electrum) |
 | Operator / reveal | `OPERATOR_SECRET_KEY_HEX`, `ALLOW_DEV_OPERATOR_KEY` | Retired Phase 3.5; seed path `m/86'/0'/73'/2/0` retired **R1.0** (ephemeral reveal) |
 | Admin Wallet session | Fixed env mnemonic (`ADMIN_WALLET_REGTEST_MNEMONIC`) | Session-bound at login (3.7); env mnemonic removed (3.7c); HW watch-only (3.8) + HW broadcast sign (R1.1) |
 | Admin ID HW | BIP-84 paths in adapters | Canonical connect (R1.4); **PRD §4.1–4.2 UI still FAIL** (Phase 7) |
 | Wallet panel UI | None | Slide-over: balance (R1.5), receive+rotation (R1.3), addresses (R1.6); no Send/tx/QR tabs |
 | Broadcast UI | `/proposals/:actionId/broadcast`, orchestrator claim + PATCH | + `submitpackage` / resubmit reveal (R1.0.1) |
-| BDK | Not in workspace | `bdk_wallet`, `bdk_bitcoind_rpc` |
-| Broadcast fee (US-H4) | Not exposed in UI | **Phase 4** (priority) |
-| Product RPC assumption | Local regtest `bitcoind`; `BITCOIN_WALLET_NAME` for legacy commit | Local `bitcoind` for dev/CI; `BITCOIN_WALLET_NAME` / `COMMIT_FUNDING` removed (3.6); Node Config default local (PRD §2.2) until Phase 10 |
+| BDK | Not in workspace | `bdk_wallet`, `bdk_bitcoind_rpc`; **`bdk_electrum` planned (R2)** |
+| Broadcast fee (US-H4) | Not exposed in UI | **Phase 4** (after R2) |
+| Product chain assumption | Local regtest `bitcoind`; `BITCOIN_WALLET_NAME` for legacy commit | Local `bitcoind` for dev/CI broadcast; wallet sync → **Electrum (R2)**; Node Config default local (PRD §2.2) until Phase 10 |
 
 Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md).
 
 ## 6. Configuration
 
-| Variable | Role | Direction |
+| Variable / config | Role | Direction |
 |---|---|---|
-| `BITCOIN_RPC_URL` | Chain RPC base URL | Keep; document as chain RPC, not “Core-only” |
+| Electrum URL (`NodeConfig` / env — exact name TBD in R2 spec) | Wallet sync / indexation (`bdk_electrum`) | **Add in R2**; trusted + custom presets |
+| `BITCOIN_RPC_URL` | Chain RPC base URL — broadcast, fees, `submitpackage` | Keep; not used for wallet sync after R2 |
 | `BITCOIN_RPC_USER` / `BITCOIN_RPC_PASS` | RPC auth | Keep |
 | `BITCOIN_NETWORK` | `regtest` / `testnet` / `mainnet` | Keep |
 | `BITCOIN_WALLET_NAME` | Legacy bitcoind wallet for `sendtoaddress` | **Removed in Phase 3.6** (broadcast path); verify non-broadcast usages before full removal |
@@ -650,20 +692,24 @@ Spec: [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal
 | `OPERATOR_SECRET_KEY_HEX` | **Removed in Phase 3.5.** Was dev hot key for envelope; briefly superseded by `m/86'/0'/73'/2/0` (3.5–3.7b), then **R1.0 ephemeral reveal** | Retired |
 | `ALLOW_DEV_OPERATOR_KEY` | **Removed in Phase 3.5.** Was a guard against the well-known POC test operator key; no longer applicable once operator key derives from the Admin Wallet | Retired |
 
-Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI as the chain RPC source until Phase 10; end users target remote RPC. The node's **wallet** (`BITCOIN_WALLET_NAME`) is no longer used for commit funding from Phase 3.6 onward.
+Local `bitcoind` remains in `scripts/bitcoind-asm-runner.sh` and CI as the **chain RPC** source for broadcast and fees until Phase 10; a local **Electrum indexer** (e.g. electrs) is added for wallet sync in R2 dev/CI. End users target remote Electrum + remote chain RPC. The node's **wallet** (`BITCOIN_WALLET_NAME`) is no longer used for commit funding from Phase 3.6 onward.
 
-## 7. Risks and future backends
+## 7. Risks and backends
 
-**Remote RPC limits:** Public or shared Bitcoin Core RPC endpoints may rate-limit, lag on descriptor rescans, or lack wallet-related RPCs BDK expects. Phase 10 hardening must validate sync latency and failure modes on testnet before mainnet.
+**Core RPC wallet sync (resolved by R2):** Block-by-block `Emitter` sync against remote Core RPC is not production-viable. R2 replaces it with Electrum. [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) (block-scan progress UI) is **deferred** — not the primary fix.
+
+**Electrum (R2):** Public or shared Electrum servers may rate-limit or lag; trusted presets and failure surfaces must be validated on testnet before mainnet (Phase 10 hardening). Regtest requires a local Electrum indexer in dev/CI. Electrum is the sole wallet indexation backend for this program.
+
+**Dual endpoints:** Wallet sync (Electrum) and broadcast/fees (chain RPC) are separate configuration surfaces — misconfiguration (wrong network, mismatched presets) must surface high-signal errors.
+
+**Chain RPC (broadcast):** Public Core RPC endpoints may rate-limit or lack `submitpackage`; Phase 10 hardening covers broadcast path resilience. `submitpackage` remains Core-specific.
 
 **Payout path collision (future Payout program):** PRD §3.2.1.1 defines the **Payout Admin ID** at `m/86'/0'/73'/0/0` — the **same path** this program uses for the Admin Wallet external address index 0. When Payout is later in scope, decide explicitly between (a) shifting the Admin Wallet external start index for Payout, or (b) treating the Payout Admin ID as a dual-use key (auth + funding). Out of scope here; documented so the assumption is not lost.
-
-**Future (out of program):** If remote chain RPC cannot support descriptor sync and transaction history at scale, re-evaluate **Esplora** or **Electrum** as a BDK backend in a separate program. Do not implement those backends in the phases above.
 
 ## 8. Explicitly not in this program
 
 - Payout Administrator flows (PRD §6, US-I*, Slice 4 payout stories in the story map).
-- HWI and POC-miniwallet Electrum integration.
-- `bdk_electrum` / standalone Electrum servers.
+- HWI and POC-miniwallet integration paths.
+- Any indexer backend other than **Electrum** (R2).
 - Requiring signers to run a local full node in production.
 - Changing commit/reveal protocol semantics in [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) beyond commit **funding source**.

@@ -38,7 +38,7 @@ This spec is Phase 1 of the Admin Wallet program. It validates BIP-86 Taproot de
 - US-H4 manual fee-rate UI for commit (use chain RPC fee estimate as today).
 - US-H2 cancellation broadcast.
 - HWI, hardware-signed commit, or mainnet/testnet enablement in US-H7.
-- BDK Electrum (`bdk_electrum`) or Esplora backends.
+- Electrum wallet sync (delivered in **Release 2** — [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)).
 - Changing SPS-50/SPS-51/SPS-65 validation or reveal construction rules.
 
 ## Requirements Alignment
