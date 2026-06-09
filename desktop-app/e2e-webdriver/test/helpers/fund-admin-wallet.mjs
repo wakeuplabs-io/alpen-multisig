@@ -23,9 +23,9 @@ const FUND_AMOUNT_BTC = '0.01'
  * @returns {Promise<string>} Admin Wallet external address at index 0
  */
 async function readAdminWalletAddressFromUI() {
-  const addressEl = await $('[data-testid="e2e-admin-wallet-external-address-0"]')
-  await addressEl.waitForDisplayed({ timeout: 30000 })
-  return (await addressEl.getText()).trim()
+	const addressEl = await $('[data-testid="e2e-admin-wallet-external-address-0"]')
+	await addressEl.waitForDisplayed({ timeout: 30000 })
+	return (await addressEl.getText()).trim()
 }
 
 /**
@@ -35,23 +35,24 @@ async function readAdminWalletAddressFromUI() {
  * @param {string} address - Admin Wallet external address to fund
  */
 function fundAddressViaFaucet(address) {
-  const result = spawnSync(
-    'curl',
-    [
-      '-sf',
-      '-X', 'POST',
-      `${FAUCET_URL}/faucet`,
-      '-H', 'Content-Type: application/json',
-      '-d', `{"address":"${address}","amount_btc":${FUND_AMOUNT_BTC}}`,
-    ],
-    { encoding: 'utf8', env: process.env },
-  )
-  if (result.status !== 0) {
-    throw new Error(
-      result.stderr || result.stdout || `faucet call failed (${result.status})`,
-    )
-  }
-  return result.stdout.trim()
+	const result = spawnSync(
+		'curl',
+		[
+			'-sf',
+			'-X',
+			'POST',
+			`${FAUCET_URL}/faucet`,
+			'-H',
+			'Content-Type: application/json',
+			'-d',
+			`{"address":"${address}","amount_btc":${FUND_AMOUNT_BTC}}`,
+		],
+		{ encoding: 'utf8', env: process.env },
+	)
+	if (result.status !== 0) {
+		throw new Error(result.stderr || result.stdout || `faucet call failed (${result.status})`)
+	}
+	return result.stdout.trim()
 }
 
 /**
@@ -61,7 +62,7 @@ function fundAddressViaFaucet(address) {
  * @param {string} [address] - Admin Wallet external address. If omitted, reads it from the UI.
  */
 export async function fundAdminWallet(address) {
-  const adminAddr = address ?? (await readAdminWalletAddressFromUI())
-  fundAddressViaFaucet(adminAddr)
-  return adminAddr
+	const adminAddr = address ?? (await readAdminWalletAddressFromUI())
+	fundAddressViaFaucet(adminAddr)
+	return adminAddr
 }

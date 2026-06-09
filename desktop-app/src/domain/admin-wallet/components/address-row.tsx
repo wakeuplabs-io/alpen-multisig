@@ -15,7 +15,10 @@ export function AddressRow({ index: _index, address, confirmedSats, unconfirmedS
 	const unconfirmedLine = formatUnconfirmedBalanceLine(unconfirmedSats)
 
 	return (
-		<tr className={`group transition-colors hover:bg-[#fafafa] ${isUsed ? 'text-[#111827]' : 'text-[#9ca3af]'}`}>
+		<tr
+			className={`group transition-colors hover:bg-[#fafafa] ${isUsed ? 'text-[#111827]' : 'text-[#9ca3af]'}`}
+			data-testid={`e2e-wallet-address-row-${address}`}
+		>
 			<td className="px-3 py-2 font-mono text-[12px]" title={address}>
 				<div className="flex items-center gap-1.5">
 					<span className="min-w-0 truncate">{truncAddress(address)}</span>

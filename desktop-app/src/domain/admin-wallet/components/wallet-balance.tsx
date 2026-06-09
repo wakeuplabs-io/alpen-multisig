@@ -30,14 +30,24 @@ export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: Wal
 	return (
 		<div className="rounded-2xl bg-[#f4f2ff] px-5 py-6">
 			<div className="flex items-baseline gap-0">
-				<span className="font-['BIZ_UDPMincho'] text-[34px] font-normal leading-none text-[#111827]">
+				<span
+					className="font-['BIZ_UDPMincho'] text-[34px] font-normal leading-none text-[#111827]"
+					data-testid="e2e-wallet-balance-primary"
+				>
 					{showSats ? confirmedSats.toLocaleString() : formatBtcFromSats(confirmedSats)}
 				</span>
-				<span className="ml-2 font-sans text-[13px] font-medium text-[#9480f5]">{showSats ? 'sats' : 'BTC'}</span>
+				<span className="ml-2 font-sans text-[13px] font-medium text-[#9480f5]" data-testid="e2e-wallet-balance-unit">
+					{showSats ? 'sats' : 'BTC'}
+				</span>
 			</div>
-			<div className="mt-2 font-mono text-[12px] text-[#9ca3af]">{secondary}</div>
+			<div className="mt-2 font-mono text-[12px] text-[#9ca3af]" data-testid="e2e-wallet-balance-secondary">
+				{secondary}
+			</div>
 			{unconfirmedLine !== null && (
-				<div className="mt-1.5 flex items-center gap-1.5 font-mono text-[12px] text-[#6b7280]">
+				<div
+					className="mt-1.5 flex items-center gap-1.5 font-mono text-[12px] text-[#6b7280]"
+					data-testid="e2e-wallet-balance-unconfirmed"
+				>
 					<span className="h-1.5 w-1.5 flex-none rounded-full bg-[#d97706]" aria-hidden="true" />
 					{unconfirmedLine}
 				</div>
