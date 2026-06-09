@@ -1,84 +1,84 @@
 # Block Payouts — Domain Overview
 
-## Qué es esta sección
+## What this section covers
 
-La sección **Payout Administrator** gestiona `block_payout` transactions: transacciones Bitcoin que bloquean reclamos de reembolso fraudulentos de operadores del bridge.
+The **Payout Administrator** section manages `block_payout` transactions: Bitcoin transactions that block fraudulent refund claims from bridge operators.
 
-### Contexto: cómo funciona el bridge
+### Context: how the bridge works
 
-Cuando un usuario quiere retirar BTC de Alpen a Bitcoin L1, un **operador** del bridge le adelanta el dinero de su propio bolsillo. Luego, el operador crea una "claim transaction" para recuperar ese dinero de los fondos bloqueados del bridge — de forma optimista: si nadie la desafía en el período de challenge, el operador cobra.
+When a user wants to withdraw BTC from Alpen to Bitcoin L1, a bridge **operator** advances the funds from their own pocket. Then, the operator creates a "claim transaction" to recover that money from the bridge's locked funds — optimistically: if no one challenges it during the challenge period, the operator gets paid.
 
-Un operador fraudulento podría intentar cobrar sin haber adelantado realmente los fondos. Si un **challenger** detecta esto, genera un **false claim report** con prueba criptográfica de que la claim es inválida.
+A fraudulent operator could try to collect without having actually advanced the funds. If a **challenger** detects this, they generate a **false claim report** with cryptographic proof that the claim is invalid.
 
-### Rol del Payout Administrator
+### Role of the Payout Administrator
 
-El Payout Administrator usa esos reports para crear una `block_payout` transaction que **gasta los UTXOs reclamados antes de que el operador fraudulento pueda hacerlo**, bloqueando el reembolso indebido.
+The Payout Administrator uses those reports to create a `block_payout` transaction that **spends the claimed UTXOs before the fraudulent operator can**, blocking the undue reimbursement.
 
-**Flujo completo:**
+**Full flow:**
 
-1. Un challenger detecta una claim fraudulenta y genera un **false claim report**
-2. Un signer del Payout Admin crea una `block_payout` tx usando los outpoints del report como inputs
-3. Los demás signers la **firman** hasta alcanzar quorum
-4. Una vez alcanzado el quorum, la tx se **broadcast a Bitcoin** — el operador fraudulento pierde su claim
+1. A challenger detects a fraudulent claim and generates a **false claim report**
+2. A Payout Admin signer creates a `block_payout` tx using the report's outpoints as inputs
+3. The other signers **sign** it until quorum is reached
+4. Once quorum is reached, the tx is **broadcast to Bitcoin** — the fraudulent operator loses their claim
 
 ---
 
-## Estado actual del código
+## Current state of the code
 
-Lo que existe hoy es un **mock 100% frontend** — sin llamadas reales a backend ni Tauri IPC.
+What exists today is a **100% frontend mock** — no real backend or Tauri IPC calls.
 
 ```
 domain/block-payouts/
-├── components/                  ← UI completa (dashboard, modales, cards)
-├── hooks/use-block-payouts.ts   ← estado React, acciones mock
+├── components/                  ← Full UI (dashboard, modals, cards)
+├── hooks/use-block-payouts.ts   ← React state, mock actions
 └── model/
-    ├── block-payouts.types.ts   ← tipos definidos
-    └── block-payouts.mock.ts    ← datos hardcodeados
+    ├── block-payouts.types.ts   ← Defined types
+    └── block-payouts.mock.ts    ← Hardcoded data
 ```
 
-Todo el estado vive en React, inicializado con datos falsos. Ninguna acción (firmar, crear tx, rebroadcast) llama a ningún servicio real. El objetivo es validar el flujo visual antes de conectarlo al backend real.
+All state lives in React, initialized with fake data. No action (sign, create tx, rebroadcast) calls any real service. The goal is to validate the visual flow before connecting it to the real backend.
 
-### Ejemplo de un false claim report
+### Example of a false claim report
 
-El usuario pega (o sube) uno o más reportes en formato JSON. Cada reporte representa un intento de retiro fraudulento detectado off-chain:
+The user pastes (or uploads) one or more reports in JSON format. Each report represents an off-chain detected fraudulent withdrawal attempt:
 
 ```json
 {"claimId":"claim-test-001","outpoint":"aabb1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab:2","amount":500000,"proof":"a1b2c3d4e5f6a1b2c3d4e5f6"}
 ```
 
-| Campo | Descripción |
+| Field | Description |
 |---|---|
-| `claimId` | Identificador único del reclamo del operador que se está disputando |
-| `outpoint` | UTXO a gastar (`txid:vout`) — el output del bridge que el operador quiere cobrar fraudulentamente |
-| `amount` | Monto en satoshis de ese output |
-| `proof` | Prueba criptográfica de que el reclamo del operador es falso (validación real pendiente) |
+| `claimId` | Unique identifier of the operator's claim being disputed |
+| `outpoint` | UTXO to spend (`txid:vout`) — the bridge output the operator fraudulently wants to collect |
+| `amount` | Amount in satoshis of that output |
+| `proof` | Cryptographic proof that the operator's claim is false (real validation pending) |
 
-El modal parsea estos reportes, filtra outpoints ya gastados, y arma la lista de inputs de la `block_payout` transaction. En el mock, cualquier JSON con `proof` no vacío se considera válido.
+The modal parses these reports, filters already-spent outpoints, and builds the input list for the `block_payout` transaction. In the mock, any JSON with a non-empty `proof` is considered valid.
 
 ---
 
-## ¿Se necesita integrar ASM?
+## Is ASM integration needed?
 
-**No directamente.** El Payout Administrator es distinto al resto de los roles:
+**Not directly.** The Payout Administrator is different from the other roles:
 
-| Aspecto | Strata / Alpen Admin | Payout Admin |
+| Aspect | Strata / Alpen Admin | Payout Admin |
 |---|---|---|
-| Signer set | Definido en **ASM state** (Strata chain) | Definido en el **Bridge multisig script** (Bitcoin L1) |
-| Autenticación | Firma nonce; backend verifica contra ASM | **No usa ASM** — usa derivación BIP-86 `m/86'/0'/73'/0/0` |
-| Transacciones | `MultisigAction` con envelope OP_RETURN (SSZ) | `block_payout` tx — Bitcoin puro, sin envelope ASM |
+| Signer set | Defined in **ASM state** (Strata chain) | Defined in the **Bridge multisig script** (Bitcoin L1) |
+| Authentication | Nonce signature; backend verifies against ASM | **Does not use ASM** — uses BIP-86 derivation `m/86'/0'/73'/0/0` |
+| Transactions | `MultisigAction` with OP_RETURN envelope (SSZ) | `block_payout` tx — pure Bitcoin, no ASM envelope |
 
 ---
 
-## Qué viene después (fuera del alcance del mock)
+## What comes next (out of scope for the mock)
 
-Cuando se integre el backend real, los puntos a conectar son:
+When the real backend is integrated, the connection points are:
 
-1. **Tauri IPC** — derivar la P2TR address del hardware wallet (BIP-86) para autenticar al signer
-2. **Orchestrator backend** — persistir txs pendientes, recopilar firmas entre signers, hacer broadcast
-3. **Validación real de firmas** — Schnorr/Taproot en Rust (actualmente cualquier string ≥ 64 chars pasa)
-4. **False claim proof validation** — validación criptográfica real (actualmente: cualquier JSON con campo `proof` no vacío pasa)
+1. **Tauri IPC** — derive the P2TR address from the hardware wallet (BIP-86) to authenticate the signer
+2. **Orchestrator backend** — persist pending txs, collect signatures between signers, broadcast
+3. **Real signature validation** — Schnorr/Taproot in Rust (currently any string ≥ 64 chars passes)
+4. **False claim proof validation** — real cryptographic validation (currently: any JSON with a non-empty `proof` field passes)
 
-Referencias:
+References:
 - PRD source: [docs/0-prd/03-prd-update.md](../0-prd/03-prd-update.md) §6
-- Spec del mock UI: [docs/specs/block-payouts-ui-mock.md](../specs/block-payouts-ui-mock.md)
-- Diferencia ASM vs Bitcoin L1: [docs/2-discovery/10-asm-bitcoin-state-model.md](./10-asm-bitcoin-state-model.md)
+- Mock UI spec: [docs/specs/block-payouts-ui-mock.md](../specs/block-payouts-ui-mock.md)
+- ASM vs Bitcoin L1 difference: [docs/2-discovery/10-asm-bitcoin-state-model.md](./10-asm-bitcoin-state-model.md)
