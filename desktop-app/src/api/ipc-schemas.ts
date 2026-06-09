@@ -212,9 +212,14 @@ export const nodeConfigSchema = z.object({
 		.string()
 		.nullish()
 		.transform((v) => v ?? undefined),
+	customElectrumUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
 })
 
 export const localNodeStatusSchema = z.object({
 	strataReachable: z.boolean(),
 	btcReachable: z.boolean(),
+	electrumReachable: z.boolean(),
 })

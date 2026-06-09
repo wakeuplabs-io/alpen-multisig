@@ -43,14 +43,26 @@ export async function closeWalletPanel() {
  * @returns {Promise<string>} The current receive address
  */
 export async function readReceiveAddress() {
-	const addrEl = await $('[data-testid="e2e-wallet-receive-address-value"]')
-	await addrEl.waitForDisplayed({ timeout: 15000 })
-	const title = await addrEl.getAttribute('title')
-	if (title && title.trim()) {
-		return title.trim()
+	// The row swaps between a loading skeleton and the address, so the node can be replaced
+	// between resolving the element and reading it — re-resolve on stale element references.
+	let lastError
+	for (let attempt = 0; attempt < 3; attempt++) {
+		try {
+			const addrEl = await $('[data-testid="e2e-wallet-receive-address-value"]')
+			await addrEl.waitForDisplayed({ timeout: 15000 })
+			const title = await addrEl.getAttribute('title')
+			if (title && title.trim()) {
+				return title.trim()
+			}
+			// Fallback: try getText
+			return (await addrEl.getText()).trim()
+		} catch (err) {
+			lastError = err
+			if (!String(err?.message ?? err).toLowerCase().includes('stale')) throw err
+			await browser.pause(500)
+		}
 	}
-	// Fallback: try getText
-	return (await addrEl.getText()).trim()
+	throw lastError
 }
 
 /**

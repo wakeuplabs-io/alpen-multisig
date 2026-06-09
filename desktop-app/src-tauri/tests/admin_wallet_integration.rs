@@ -8,14 +8,18 @@
 ///   ELECTRUM_URL=tcp://127.0.0.1:60401 \
 ///   cargo test -p desktop-app --test admin_wallet_integration -- --ignored
 use desktop_app::application::wallet_service::WalletService;
-use desktop_app::infrastructure::node_config_store::NodeConfig;
+use desktop_app::infrastructure::node_config_store::{ConnectionMode, NodeConfig};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 fn test_node_config() -> Arc<RwLock<NodeConfig>> {
-    // Wallet sync no longer reads BTC RPC settings (Electrum handles the read path);
-    // the default config is enough for WalletService construction.
-    Arc::new(RwLock::new(NodeConfig::default()))
+    // R2.3: wallet sync reads the Electrum URL from NodeConfig. The harness override comes in
+    // through Custom mode; without ELECTRUM_URL the Custom fallback is the local electrs.
+    Arc::new(RwLock::new(NodeConfig {
+        mode: ConnectionMode::Custom,
+        custom_electrum_url: std::env::var("ELECTRUM_URL").ok(),
+        ..Default::default()
+    }))
 }
 
 // ─ Regtest tests (require running bitcoind + electrs) ───────────────────────

@@ -26,12 +26,14 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
     let btc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into());
     std::env::set_var("BITCOIN_NETWORK", "regtest");
 
+    // custom_electrum_url None → wallet sync falls back to the local electrs (R2.3).
     let node_config = Arc::new(RwLock::new(NodeConfig {
         mode: ConnectionMode::Custom,
         custom_btc_rpc_url: Some(btc_url),
         custom_btc_rpc_user: Some(btc_user),
         custom_btc_rpc_pass: Some(btc_pass),
         custom_strata_rpc_url: None,
+        custom_electrum_url: std::env::var("ELECTRUM_URL").ok(),
     }));
 
     let account_xpub = tokio::task::spawn_blocking(|| ledger::get_account_xpub("m/86'/1'/73'"))

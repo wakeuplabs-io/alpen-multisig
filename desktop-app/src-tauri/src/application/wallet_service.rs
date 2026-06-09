@@ -143,9 +143,6 @@ pub struct WalletService {
     sync_items_total: Arc<AtomicU32>,
     /// UNIX-epoch millis when the current sync started; `0` when idle.
     sync_started_at_ms: Arc<AtomicU64>,
-    /// Unused since the R2.2 Electrum sync migration (sync no longer reads BTC RPC settings).
-    /// Kept because R2.3 reads the Electrum URL from `NodeConfig` through this handle.
-    #[allow(dead_code)]
     node_config: Arc<StdRwLock<NodeConfig>>,
     signer: Option<Arc<dyn PsbtSigner>>,
     network: bdk_wallet::bitcoin::Network,
@@ -407,7 +404,16 @@ impl WalletService {
             Sync(Box<SyncRequest<(Keychain, u32)>>),
         }
 
-        let electrum_url = crate::config::electrum_url();
+        // R2.3: the Electrum URL comes from Node Config (Local / Trusted / Custom),
+        // resolved per sync so a config change applies without restarting the session.
+        let electrum_url = self
+            .node_config
+            .read()
+            .map_err(|_| AdminWalletError::ElectrumUnreachable {
+                message: "node config lock poisoned".to_string(),
+            })?
+            .electrum_url()
+            .to_string();
         let processed = Arc::clone(&self.sync_items_processed);
         let total = Arc::clone(&self.sync_items_total);
 
