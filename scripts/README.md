@@ -58,10 +58,24 @@ Manages a complete local development stack via Docker Compose: Bitcoin, ASM, Pos
 | Service | Port | Description |
 |---|---|---|
 | `bitcoin` | 18443 | Bitcoin Core regtest RPC |
+| `electrs` | 60401 | Electrum indexer (wallet sync — R2) |
 | `asm` | 8080 | Strata ASM runner admin RPC |
 | `postgres` | 5432 | PostgreSQL database |
 | `orchestrator` | 3000 | Backend API (skipped with `--no-orchestrator`) |
 | `regtest-dev-api` | 3001 | Mining/faucet helper |
+
+### Electrum indexer
+
+electrs runs alongside bitcoind and exposes the Electrum protocol on port **60401**.
+
+**Local URL:** `tcp://127.0.0.1:60401`
+
+**Smoke test (after `./scripts/local-stack.sh`):**
+
+```bash
+./scripts/smoke-electrs.sh
+# Expected: OK: electrs is up and indexing.
+```
 
 ### Development Workflows
 

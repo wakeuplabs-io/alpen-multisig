@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+#
+# Staging electrs image: Electrum protocol indexer for regtest.
+# Exposes Electrum RPC on port 60401.
+#
+# NOT for production use.
+
+FROM rust:slim-bookworm AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang cmake build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG ELECTRS_VERSION=0.10.7
+RUN cargo install electrs --version ${ELECTRS_VERSION} --locked
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /usr/local/cargo/bin/electrs /usr/local/bin/electrs
+
+COPY staging/entrypoint-electrs.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 60401
+
+ENTRYPOINT ["/entrypoint.sh"]
