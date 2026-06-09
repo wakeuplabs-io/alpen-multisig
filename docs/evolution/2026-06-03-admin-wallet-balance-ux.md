@@ -59,7 +59,7 @@ PRD §4.3.1 requires the signer to see total balance net of unconfirmed movement
 **Documentation:**
 
 - `docs/specs/admin-wallet-balance-ux.md`
-- `docs/specs/admin-wallet-implementation-plan.md` (R1.5 ✅; next → R1.6)
+- `docs/specs/admin-wallet-implementation-plan.md` (R1.5 ✅; next → R1.6; post-R1: **R2** Electrum sync)
 - `docs/specs/admin-wallet-core-read-path.md` (sync amendment note)
 - `docs/evolution/2026-06-03-admin-wallet-balance-ux.md` (this file)
 
@@ -70,7 +70,7 @@ PRD §4.3.1 requires the signer to see total balance net of unconfirmed movement
 
 ## Links
 
-- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (Release 1 closed; next: Phase 4)
+- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (Release 1 closed; next: **Release 2** Electrum sync)
 - Spec: [`admin-wallet-balance-ux.md`](../specs/admin-wallet-balance-ux.md)
 - Successor: [`admin-wallet-addresses-ux.md`](../specs/admin-wallet-addresses-ux.md) (R1.6)
 - PR: https://github.com/wakeuplabs-io/alpen-multisig/pull/211

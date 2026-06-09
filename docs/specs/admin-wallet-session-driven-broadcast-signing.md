@@ -63,7 +63,8 @@ DDD-8 and DDD-9 are **added**.
 
 - **Send-on-HW** (sending a value transaction on hardware) — Phase 7.
 - **Verify-on-device** (address/amount confirmation UX beyond the device's native prompt) — Phase 7.
-- **Mainnet/testnet remote-RPC hardening** (Esplora/electrum endpoints, auth, retries) — Phase 9.
+- **Electrum wallet sync** — Release 2 ([`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)).
+- **Mainnet/testnet remote chain-RPC hardening** (broadcast RPC presets, auth, retries) — Phase 10.
 - Any change to **SPS-50/51/65 envelope or reveal semantics**.
 - **Clean wallet UI** (R1.2) and **receive rotation** (R1.3).
 - Persistent storage of pre-signed reveals (still in-memory, inherited from R1.0.1).
@@ -337,7 +338,7 @@ sequenceDiagram
   participant WS as WalletService.build_signed_commit
   participant Sig as PsbtSigner.sign_psbt
   participant Dev as Hardware device (spawn_blocking)
-  participant RPC as Bitcoin Core / Esplora
+  participant RPC as Bitcoin Core RPC
   participant Orch as Orchestrator
 
   User->>Card: Open broadcast screen
@@ -443,7 +444,7 @@ shape over IPC:
 | `HwUserRefused` | device reported user rejection (if distinguishable from a generic failure) | BEFORE | "You declined the transaction on your device." | retry-from-scratch |
 | `HwSigningFailed` | `WalletError::HwSigningFailed` — device present but signing failed (wrong app, locked, firmware, fingerprint mismatch) | BEFORE | "The device could not sign this transaction. Check it is unlocked and on the Bitcoin app, then try again." | reconnect-device → retry |
 | `ReadOnly` | `AdminWalletError::ReadOnly` — no signer attached (watch-only, or HW session in the (a)→(b) window) | BEFORE | "This wallet cannot sign. Connect a hardware wallet to broadcast." | retry-from-scratch (after attaching signer) |
-| `BitcoinRpc` | `BroadcastError::BitcoinRpc` — node/Esplora RPC error | BEFORE or AFTER | "The Bitcoin node rejected or could not process the broadcast." | resubmit-reveal **iff** the broadcast was reached/attempted (AFTER boundary) **and** a live `PendingReveal` exists (NIT-3); else retry-from-scratch |
+| `BitcoinRpc` | `BroadcastError::BitcoinRpc` — chain RPC error | BEFORE or AFTER | "The Bitcoin node rejected or could not process the broadcast." | resubmit-reveal **iff** the broadcast was reached/attempted (AFTER boundary) **and** a live `PendingReveal` exists (NIT-3); else retry-from-scratch |
 | `Timeout` | confirmation poll exceeded `confirm_timeout_ms` after broadcast | AFTER | "Broadcast sent but confirmation timed out. You can resubmit the reveal." | resubmit-reveal |
 | `OrchestratorUnauthorized` | orchestrator returns 401 (`BroadcastError::ProposalFetch(Backend{401})`) | BEFORE (pre-broadcast fetch) | "Your orchestrator session expired (401). Re-authenticate and retry." | re-auth → retry |
 | `NoPendingReveal` | `proposals_resubmit_reveal` called but the store has no entry for `action_id` | n/a (resubmit only) | "No pending reveal to resubmit — re-run the broadcast." | retry-from-scratch |

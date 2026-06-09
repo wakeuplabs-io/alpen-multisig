@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-03 (Release 1 complete: R1.0–R1.7 done, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214))
+**Last updated:** 2026-06-09 (Release 2 slicing: R2.1 → R2.2 → R2.3)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -14,7 +14,7 @@ This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirem
 | **FAIL** | Not implemented; no accepted product interpretation. |
 | **PARTIAL** | Some bullets met; others open (listed in Notes). |
 | **N/A** | Out of Admin Wallet program scope (see plan §1 / §8) or different product line (e.g. Payout §6). |
-| **DEFER** | Planned in a numbered phase (4–9) or outside this program. |
+| **DEFER** | Planned in a numbered phase (4–10), Release 2, or outside this program. |
 
 ## Program scope vs full PRD
 
@@ -25,6 +25,7 @@ This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirem
 | HWI | Excluded; direct Trezor/Ledger adapters | HWI device list (§3.2) |
 | Connect UX | Canonical paths (R1.4), no address picker | List of addresses to choose (§3.2.1) — **documented deviation** |
 | Dev mnemonic login | Regtest/testnet only (`MnemonicPsbtSigner`) | Production: HW for custody (§3.2, §4.3.5) |
+| Wallet sync backend | **Electrum** (R2) | PRD §2 implies viable remote access |
 
 ## Wallet balance UX convention (§4.3.1 / §4.3.2)
 
@@ -43,16 +44,18 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 2.1 | Trusted or custom RPC URL | **PASS** | `node_config_store.rs`, Node Config UI | Trusted + custom modes |
+| 2.1 | Trusted or custom RPC URL | **PASS** | `node_config_store.rs`, Node Config UI | Trusted + custom modes (chain RPC today) |
+| 2.1 (Electrum) | Trusted or custom Electrum URL | **FAIL** | — | **R2.3** — wallet sync endpoint |
 | 2.2 | Default = local node; prompt if missing | **PASS** | `ConnectionMode::Local` default | Aligns with PRD today |
 | 2.3 | Strata node → BTC/Strata access without extra setup | **DEFER** | — | Broader than Admin Wallet slice |
-| 2.2 (end state) | No local node as product assumption | **DEFER** | Phase 9 | Plan end state ≠ current default |
+| 2.2 (end state) | No local node as product assumption | **DEFER** | R2.3 + Phase 10 | R2.3: Electrum URL in Node Config; Phase 10: remote chain RPC presets |
+| Wallet sync viable on remote/testnet | Production-viable wallet indexation | **FAIL** | Core RPC `Emitter` sync | **R2.2** (Electrum); infra **R2.1** |
 
 ### PRD §3.2 — Connect HW, Admin ID, Admin Wallet
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 3.2.1 | HW via HWI feature set | **FAIL** | Plan §8 excludes HWI | Direct adapters Phase 7; not HWI parity |
+| 3.2.1 | HW via HWI feature set | **FAIL** | Plan §8 excludes HWI | Direct adapters Phase 8; not HWI parity |
 | 3.2.1 | User picks from address list | **FAIL** | R1.4 canonical paths | Intentional UX change; see [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | 3.2.1.2 | Admin ID `m/84'/0'/73'/0/0` (non-Payout) | **PASS** | `trezor-adapter.ts`, `ledger-adapter.ts` | Ledger testnet uses `m/84'/1'/73'/0/0` (documented app convention) |
 | 3.2.1.3 | Admin Wallet `m/86'/0'/73'/n/n` | **PASS** | BDK descriptors, session init | External `0/*`, change `1/*` |
@@ -71,7 +74,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above |
+| 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above; sync backend → R2 |
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
 | 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 6 |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
@@ -87,8 +90,8 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 8 shared UX |
-| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **FAIL** | — | **Phase 4** (priority); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
+| 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 9 shared UX |
+| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **FAIL** | — | **Phase 4** (after R2); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 5 / Phase 9 shared Send | — |
 | Broadcast commit | Funded from Admin Wallet | **PASS** | Phase 3.6+, `WalletService` | — |
 | Broadcast commit sign | HW or regtest mnemonic PSBT | **PASS** | R1.1 `PsbtSigner` | Reveal: ephemeral in-app (SPS-50), not HW — protocol constraint |
@@ -118,11 +121,24 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.1 | R1.5 | **PASS** |
 | §4.3.2 | R1.6 | **PASS** |
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
-| Wallet panel UI | R1.7 (planned) | **PLANNED** |
+| Wallet panel UI | R1.7 | **PASS** |
 | §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
-| US-H4 broadcast fee | Not in Release 1 | **FAIL** (**Phase 4** priority) |
+| US-H4 broadcast fee | Not in Release 1 | **FAIL** (Phase 4, after R2) |
 
-**Release 1:** R1.0–R1.6 are done; **R1.7** (wallet panel UI polish) is the remaining Release 1 slice. It does **not** mean PRD §4.3 or §4 as a whole is PASS. **Suggested order:** R1.7 → Phase 4 (US-H4 broadcast fee).
+**Release 1:** R1.0–R1.7 are done. **Suggested order:** **R2.1 → R2.2 → R2.3** (Electrum sync) → Phase 4 (US-H4 broadcast fee).
+
+---
+
+## Release 2 — Electrum wallet sync (planned)
+
+| ID | Requirement (summary) | Status | Notes |
+|----|------------------------|--------|-------|
+| R2 | Electrum-backed wallet sync; production-viable indexation | **PLANNED** | [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md); prerequisite for Phases 4–10 remotely |
+| R2.1 | electrs infra — Docker, dev/staging/CI, smoke vs local `bitcoind` | **PLANNED** | No app code; unblocks R2.2 |
+| R2.2 | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged | **PLANNED** | Single code slice |
+| R2.3 | Electrum URL in Node Config (Local / Trusted / Custom) | **PLANNED** | Same pattern as BTC RPC / Strata |
+
+**Suggested order:** R2.1 → R2.2 → R2.3 → Phase 4.
 
 ---
 
@@ -130,15 +146,9 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 The implementation plan previously stated post-Foundation reveal key at `m/86'/0'/73'/2/0`. **Current behavior:** per-broadcast ephemeral reveal key (R1.0). See §5 baseline table in the updated plan.
 
+The plan previously excluded Electrum and deferred indexer backends to a separate program. **Current plan:** Electrum is **in scope** as Release 2.
+
 Legacy feature roadmaps under `docs/feature/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
-
----
-
-## Release 1 — R1.7 (planned — wallet UI only)
-
-| ID | Requirement (summary) | Status | Notes |
-|----|------------------------|--------|-------|
-| R1.7 | Wallet slide-over UI polish (Alta parity: balance, receive, addresses, sync) | **PLANNED** | Extends R1.2–R1.6; no new PRD MUST until spec; see implementation plan |
 
 ---
 

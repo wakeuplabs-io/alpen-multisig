@@ -91,6 +91,6 @@ Single increment delivered via the SDD workflow (spec → branch → red/green T
 
 ## Links
 
-- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (Release 1 complete; next: Phase 4)
+- Implementation plan: [`admin-wallet-implementation-plan.md`](../specs/admin-wallet-implementation-plan.md) (Release 1 complete; next: **Release 2** Electrum sync)
 - Spec: [`admin-wallet-canonical-connect-paths.md`](../specs/admin-wallet-canonical-connect-paths.md)
 - R1.3 predecessor: [`2026-06-02-admin-wallet-receive-rotation.md`](2026-06-02-admin-wallet-receive-rotation.md)

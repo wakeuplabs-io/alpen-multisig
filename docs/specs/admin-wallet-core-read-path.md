@@ -327,6 +327,10 @@ above.
 
 See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) and [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
 
+## Planned change (Release 2 — Electrum sync)
+
+**Release 2** replaces Core RPC block-scan sync (`bdk_bitcoind_rpc::Emitter` in `WalletService::do_sync`) with **Electrum** (`bdk_electrum`) for wallet indexation. Delivered in slices **R2.1** (electrs infra) → **R2.2** (sync migration) → **R2.3** (Node Config URL). IPC contracts and wallet panel UX (R1.2–R1.7) remain; broadcast and fees stay on chain RPC. See [`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md).
+
 ## Links
 
 - Program phases: [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)
