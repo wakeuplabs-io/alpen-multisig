@@ -38,8 +38,16 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		// when balance is 0.
 		await fundAdminWallet()
 
-		// Refresh the page so useAdminWalletInfo re-fetches the updated balance.
-		await browser.refresh()
+		// Navigate back to proposals and re-enter broadcast so useAdminWalletInfo re-fetches
+		// the updated balance (the hook runs once on mount).
+		const backBtn = await $('//button[contains(.,"Back to proposals")]')
+		await backBtn.waitForClickable({ timeout: 10000 })
+		await backBtn.click()
+		await $('//h1[contains(.,"Proposals")]').waitForDisplayed({ timeout: 30000 })
+
+		const broadcastBtn2 = await $('button[data-testid="e2e-proposal-broadcast-button"]')
+		await broadcastBtn2.waitForClickable({ timeout: 30000 })
+		await broadcastBtn2.click()
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
 		// Screen auto-runs prepare on mount; wait for the confirm step (prepare only shows as Retry on error).
