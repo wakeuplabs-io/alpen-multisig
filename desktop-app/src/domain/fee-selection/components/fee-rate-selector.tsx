@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import type { FeeRates } from '@/api/fee-rates'
-import { FEE_RATE_STEP_SAT_PER_KVB, feeSats, formatSatPerVb, parseSatPerVb, totalFeeSats } from '../model/fee-rate'
+import {
+	FEE_RATE_STEP_SAT_PER_KVB,
+	SAT_PER_VB_TO_KVB,
+	clampCustomRate,
+	feeSats,
+	formatSatPerVb,
+	parseSatPerVb,
+	totalFeeSats,
+} from '../model/fee-rate'
 import type { FeePresetKey, FeeSelection } from '../model/fee-rate'
 
 type Props = {
@@ -32,8 +40,14 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 	function handleCustomBlur() {
 		const parsed = parseSatPerVb(customInput)
 		if (parsed !== null) {
-			setCustomInput(formatSatPerVb(Math.max(presets.minRelaySatPerKvb, Math.min(presets.maxSatPerKvb, parsed))))
+			setCustomInput(formatSatPerVb(clampCustomRate(parsed, presets)))
 		}
+	}
+
+	function handleSelectCustom() {
+		const val = parseSatPerVb(customInput) ?? activeSatPerKvb
+		setCustomInput(formatSatPerVb(val))
+		onSetCustomRate(val)
 	}
 
 	return (
@@ -66,11 +80,7 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 			<div className="flex items-center gap-2">
 				<button
 					type="button"
-					onClick={() => {
-						const val = parseSatPerVb(customInput) ?? activeSatPerKvb
-						setCustomInput(formatSatPerVb(val))
-						onSetCustomRate(val)
-					}}
+					onClick={handleSelectCustom}
 					className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
 						selection.kind === 'custom'
 							? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -81,9 +91,9 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 				</button>
 				<input
 					type="number"
-					min={presets.minRelaySatPerKvb / 1000}
-					max={presets.maxSatPerKvb / 1000}
-					step={FEE_RATE_STEP_SAT_PER_KVB / 1000}
+					min={presets.minRelaySatPerKvb / SAT_PER_VB_TO_KVB}
+					max={presets.maxSatPerKvb / SAT_PER_VB_TO_KVB}
+					step={FEE_RATE_STEP_SAT_PER_KVB / SAT_PER_VB_TO_KVB}
 					placeholder={formatSatPerVb(activeSatPerKvb)}
 					value={customInput}
 					onChange={(e) => handleCustomChange(e.target.value)}
@@ -93,6 +103,13 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 				/>
 				<span className="text-sm text-gray-500">sat/vB</span>
 			</div>
+
+			{presets.source === 'fallback' && (
+				<p className="m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+					Live fee estimates are unavailable — these rates are a static fallback from the minimum relay fee. Review
+					before broadcasting.
+				</p>
+			)}
 
 			<div className="text-xs text-gray-500">
 				<span>

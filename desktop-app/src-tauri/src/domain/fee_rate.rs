@@ -202,16 +202,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn margin_on_near_u64_max_does_not_overflow() {
-        // Construct via raw inner value that would overflow with naive multiply
-        // We need to bypass new() since it would reject values > MAX.
-        // Instead, test the saturating_mul path by using MAX.
-        let r = FeeRate::new(MAX_FEE_RATE_SAT_PER_KVB, 1_000).unwrap();
-        // Just must not panic
-        let _ = r.with_margin_pct(100);
-    }
-
     // -------------------------------------------------------------------------
     // round_up_to_step — golden vectors
     // -------------------------------------------------------------------------

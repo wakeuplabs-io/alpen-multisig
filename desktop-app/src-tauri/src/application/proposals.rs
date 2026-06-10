@@ -1439,10 +1439,6 @@ mod tests {
             Ok(self.confirmations)
         }
 
-        async fn estimate_fee_rate_sats_per_vb(&self, _: u16) -> Result<u64, String> {
-            Ok(2)
-        }
-
         async fn get_raw_transaction(&self, _txid: &str) -> Result<bitcoin::Transaction, String> {
             *self.get_raw_transaction_call_count.lock().unwrap() += 1;
             use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxIn, TxOut};

@@ -5,6 +5,8 @@ import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-si
 import { useManualProposal } from '@/domain/manual-proposal/hooks/use-manual-proposal'
 import type { ManualBundleJson } from '@/domain/manual-proposal/model/manual-proposal.types'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
+import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
+import { feeSats } from '@/domain/fee-selection/model/fee-rate'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
@@ -27,9 +29,21 @@ export function ManualProposalScreen() {
 	const location = useLocation()
 	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const prefill = (location.state as LocationState | null)?.prefill ?? null
+	// `null` until presets load: the broadcast step stays blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
-	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
 	const manual = useManualProposal(prefill, feeRateSatPerKvb)
+
+	// The prepared bundle snapshots the fee at prepare time; recompute from the live
+	// selection so the user always reviews the amounts that will actually be paid.
+	const liveRevealFeeSats =
+		feeState.status === 'ready' && feeRateSatPerKvb !== null
+			? feeSats(feeRateSatPerKvb, feeState.presets.revealVbytes)
+			: null
+	const liveCommitAmountSats =
+		feeState.status === 'ready' && liveRevealFeeSats !== null
+			? feeState.presets.commitDustSats + liveRevealFeeSats
+			: null
 
 	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
 	const balanceHook = useAdminWalletBalance()
@@ -161,6 +175,16 @@ export function ManualProposalScreen() {
 								{manual.broadcastPhase === 'confirming' && manual.broadcastBundle && (
 									<div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 										<h2 className="m-0 mb-4 text-[15px] font-semibold text-[#111827]">Confirm broadcast</h2>
+										{feeState.status === 'ready' && (
+											<div className="mb-4">
+												<FeeRateSelector
+													presets={feeState.presets}
+													selection={feeState.selection}
+													onSelectPreset={feeState.setPreset}
+													onSetCustomRate={feeState.setCustomRate}
+												/>
+											</div>
+										)}
 										<div className="space-y-3 text-[13px]">
 											<div className="flex justify-between">
 												<span className="text-[#6b7280]">Commit address</span>
@@ -171,13 +195,13 @@ export function ManualProposalScreen() {
 											<div className="flex justify-between">
 												<span className="text-[#6b7280]">Commit amount</span>
 												<span className="font-medium text-[#111827]">
-													{manual.broadcastBundle.commitAmountSats.toLocaleString()} sats
+													{(liveCommitAmountSats ?? manual.broadcastBundle.commitAmountSats).toLocaleString()} sats
 												</span>
 											</div>
 											<div className="flex justify-between">
 												<span className="text-[#6b7280]">Estimated fee</span>
 												<span className="font-medium text-[#111827]">
-													{manual.broadcastBundle.estimatedFeeSats.toLocaleString()} sats
+													{(liveRevealFeeSats ?? manual.broadcastBundle.estimatedFeeSats).toLocaleString()} sats
 												</span>
 											</div>
 										</div>

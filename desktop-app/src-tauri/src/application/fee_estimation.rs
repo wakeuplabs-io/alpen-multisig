@@ -62,6 +62,9 @@ pub enum FeeEstimateError {
 /// One fee source (node RPC or Electrum). Returns **raw** rates without margin.
 #[async_trait]
 pub trait FeeEstimator: Send + Sync {
+    /// Which source this estimator represents — surfaced to the UI verbatim.
+    fn source(&self) -> FeeSource;
+
     /// Raw estimate in sat/kvB for the given confirmation target (blocks).
     async fn estimate_sat_per_kvb(&self, target: u16) -> Result<u64, FeeEstimateError>;
 
@@ -134,18 +137,15 @@ pub(crate) fn derive_preset(raw_sat_per_kvb: u64, target: ConfirmationTarget) ->
     }
 }
 
-/// Enforce monotonicity: slow ≤ medium ≤ fast.
+/// Enforce monotonicity: slow ≤ medium ≤ fast. Returns `(slow, medium, fast)`.
 ///
 /// `estimatesmartfee` can return inverted rates during a congestion plateau
 /// (all three targets report the same high rate). Rather than producing a
 /// nonsensical ladder, raise the lower preset to match.
-pub(crate) fn enforce_monotonicity(slow: &mut u64, medium: &mut u64, fast: &mut u64) {
-    if *medium < *slow {
-        *medium = *slow;
-    }
-    if *fast < *medium {
-        *fast = *medium;
-    }
+pub(crate) fn enforce_monotonicity(slow: u64, medium: u64, fast: u64) -> (u64, u64, u64) {
+    let medium = medium.max(slow);
+    let fast = fast.max(medium);
+    (slow, medium, fast)
 }
 
 /// Clamp a raw rate to [min_relay, MAX], then derive a preset.
@@ -154,7 +154,7 @@ pub(crate) fn derive_preset_clamped(
     min_relay: u64,
     target: ConfirmationTarget,
 ) -> FeePreset {
-    let clamped = raw_sat_per_kvb.max(min_relay).min(MAX_FEE_RATE_SAT_PER_KVB);
+    let clamped = raw_sat_per_kvb.clamp(min_relay, MAX_FEE_RATE_SAT_PER_KVB);
     derive_preset(clamped, target)
 }
 
@@ -208,19 +208,14 @@ impl FeeEstimationService {
             .await
             .unwrap_or(FALLBACK_MIN_RELAY_SAT_PER_KVB);
 
-        let mut fast = fast_raw;
-        let mut medium = medium_raw;
-        let mut slow = slow_raw;
-        enforce_monotonicity(&mut slow, &mut medium, &mut fast);
-
-        let source = FeeSource::Node; // overridden by named implementations in M2
+        let (slow, medium, fast) = enforce_monotonicity(slow_raw, medium_raw, fast_raw);
 
         Some(FeePresets {
             fast: derive_preset_clamped(fast, min_relay, ConfirmationTarget::Fast),
             medium: derive_preset_clamped(medium, min_relay, ConfirmationTarget::Medium),
             slow: derive_preset_clamped(slow, min_relay, ConfirmationTarget::Slow),
             min_relay_sat_per_kvb: min_relay,
-            source,
+            source: estimator.source(),
             estimated_at_ms: now,
         })
     }
@@ -245,7 +240,6 @@ impl FeeEstimationService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     // -----------------------------------------------------------------------
     // Mock estimator builder
@@ -255,8 +249,6 @@ mod tests {
         /// Responses per target block count (1, 6, 12). `None` = error.
         responses: std::collections::HashMap<u16, Option<u64>>,
         min_relay: Option<u64>,
-        /// Track call counts for assertions.
-        calls: Mutex<Vec<u16>>,
     }
 
     impl MockEstimator {
@@ -268,7 +260,6 @@ mod tests {
             Self {
                 responses,
                 min_relay: Some(FALLBACK_MIN_RELAY_SAT_PER_KVB),
-                calls: Mutex::new(vec![]),
             }
         }
 
@@ -280,8 +271,11 @@ mod tests {
 
     #[async_trait]
     impl FeeEstimator for MockEstimator {
+        fn source(&self) -> FeeSource {
+            FeeSource::Node
+        }
+
         async fn estimate_sat_per_kvb(&self, target: u16) -> Result<u64, FeeEstimateError> {
-            self.calls.lock().unwrap().push(target);
             match self.responses.get(&target).copied().flatten() {
                 Some(v) => Ok(v),
                 None => Err(FeeEstimateError::NoEstimate {
@@ -331,30 +325,28 @@ mod tests {
 
     #[test]
     fn enforce_monotonicity_raises_medium_when_below_slow() {
-        let mut slow = 2_000u64;
-        let mut medium = 1_500u64; // inverted: medium < slow
-        let mut fast = 3_000u64;
-        enforce_monotonicity(&mut slow, &mut medium, &mut fast);
-        assert_eq!(medium, 2_000); // raised to slow
-        assert_eq!(fast, 3_000); // unchanged
+        // inverted: medium < slow
+        assert_eq!(
+            enforce_monotonicity(2_000, 1_500, 3_000),
+            (2_000, 2_000, 3_000)
+        );
     }
 
     #[test]
     fn enforce_monotonicity_raises_fast_when_below_medium() {
-        let mut slow = 1_000u64;
-        let mut medium = 2_000u64;
-        let mut fast = 1_500u64; // inverted
-        enforce_monotonicity(&mut slow, &mut medium, &mut fast);
-        assert_eq!(fast, 2_000); // raised to medium
+        // inverted: fast < medium
+        assert_eq!(
+            enforce_monotonicity(1_000, 2_000, 1_500),
+            (1_000, 2_000, 2_000)
+        );
     }
 
     #[test]
     fn enforce_monotonicity_all_equal_unchanged() {
-        let mut slow = 1_500u64;
-        let mut medium = 1_500u64;
-        let mut fast = 1_500u64;
-        enforce_monotonicity(&mut slow, &mut medium, &mut fast);
-        assert_eq!((slow, medium, fast), (1_500, 1_500, 1_500));
+        assert_eq!(
+            enforce_monotonicity(1_500, 1_500, 1_500),
+            (1_500, 1_500, 1_500)
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -453,12 +445,10 @@ mod tests {
             presets.min_relay_sat_per_kvb,
             FALLBACK_MIN_RELAY_SAT_PER_KVB
         );
-    }
 
-    #[tokio::test]
-    async fn fallback_with_no_estimators_completes_without_panic() {
-        let presets = svc(vec![]).presets().await;
-        assert_eq!(presets.source, FeeSource::Fallback);
+        // No estimators configured at all behaves identically.
+        let empty = svc(vec![]).presets().await;
+        assert_eq!(empty.source, FeeSource::Fallback);
     }
 
     // -----------------------------------------------------------------------
@@ -478,16 +468,5 @@ mod tests {
             presets.min_relay_sat_per_kvb,
             FALLBACK_MIN_RELAY_SAT_PER_KVB
         );
-    }
-
-    // -----------------------------------------------------------------------
-    // presets() never returns Err (type-level: it returns FeePresets directly)
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn presets_always_returns_a_value_even_on_total_failure() {
-        let mock = Arc::new(MockEstimator::new(None, None, None));
-        // If this compiles and doesn't panic, we're good — the return type is FeePresets.
-        let _presets: FeePresets = svc(vec![mock]).presets().await;
     }
 }

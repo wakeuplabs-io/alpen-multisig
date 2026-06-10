@@ -8,6 +8,7 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
+import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
@@ -44,8 +45,9 @@ export function BroadcastProposalScreen() {
 		}
 	}, [isAdminWalletMode, triggerSync, refreshAdminWalletInfo])
 
+	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
-	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
@@ -149,6 +151,16 @@ export function BroadcastProposalScreen() {
 							adminWalletInfo={adminWalletInfo}
 							lastSyncedAt={lastSyncedAt}
 							syncError={syncError}
+							feeSelector={
+								feeState.status === 'ready' ? (
+									<FeeRateSelector
+										presets={feeState.presets}
+										selection={feeState.selection}
+										onSelectPreset={feeState.setPreset}
+										onSetCustomRate={feeState.setCustomRate}
+									/>
+								) : undefined
+							}
 						/>
 					)}
 

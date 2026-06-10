@@ -54,10 +54,16 @@ function buildBroadcastInput(baseUrl: string, actionId: string, feeRateSatPerKvb
 	return { baseUrl, actionId, feeRateSatPerKvb }
 }
 
+/**
+ * `feeRateSatPerKvb === null` means fee presets are still loading: prepare is
+ * deferred and broadcast is a no-op until a real rate is available. This both
+ * prevents broadcasting at an unintended default rate and avoids a double
+ * prepare when the loaded rate replaces a placeholder.
+ */
 export function useBroadcastProposal(
 	baseUrl: string,
 	actionId: string,
-	feeRateSatPerKvb: number,
+	feeRateSatPerKvb: number | null,
 	signerKind: SignerKind = 'mnemonic',
 	adapter?: WalletAdapter,
 ): UseBroadcastProposalReturn {
@@ -136,7 +142,7 @@ export function useBroadcastProposal(
 	useEffect(() => clearConfirmationPoll, [clearConfirmationPoll])
 
 	useEffect(() => {
-		if (!actionId) return
+		if (!actionId || feeRateSatPerKvb === null) return
 		let active = true
 		setPhase('preparing')
 		setError(null)
@@ -172,6 +178,7 @@ export function useBroadcastProposal(
 	}, [actionId, baseUrl, feeRateSatPerKvb, applyProposal, startConfirmationPoll])
 
 	async function prepare() {
+		if (feeRateSatPerKvb === null) return
 		setPhase('preparing')
 		setError(null)
 		const [res, proposalRes] = await Promise.all([
@@ -191,7 +198,7 @@ export function useBroadcastProposal(
 	}
 
 	async function broadcast() {
-		if (broadcastStarted.current || inFlightActionIds.has(actionId)) {
+		if (feeRateSatPerKvb === null || broadcastStarted.current || inFlightActionIds.has(actionId)) {
 			return
 		}
 		if (adapter !== undefined) {

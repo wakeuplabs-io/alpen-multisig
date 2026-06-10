@@ -2,16 +2,14 @@
 
 use std::sync::Arc;
 
-use desktop_app::application::fee_estimation::{FeeEstimationService, FeePresets};
-use desktop_app::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
+use desktop_app::application::fee_estimation::{FeeEstimationService, FeePresets, FeeSource};
+use desktop_app::domain::fee_constants::{
+    COMMIT_DUST_SATS, COMMIT_TX_VBYTES_ESTIMATE, REVEAL_TX_VBYTES,
+};
 use desktop_app::domain::fee_rate::MAX_FEE_RATE_SAT_PER_KVB;
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::node_fee_estimator::NodeFeeEstimator;
-
-/// Conservative vsize estimate for the BDK commit tx (P2TR input + commit P2TR output
-/// + P2TR change). Display-only — BDK computes the real fee when building.
-const COMMIT_TX_VBYTES_ESTIMATE: u64 = 160;
 
 /// Response DTO for a single preset.
 #[derive(Debug, serde::Serialize)]
@@ -32,8 +30,8 @@ pub struct FeeRatesDto {
     pub min_relay_sat_per_kvb: u64,
     /// Hard upper bound for custom fee input. Frontend must not hardcode this.
     pub max_sat_per_kvb: u64,
-    /// "node" | "electrum" | "cached" | "fallback"
-    pub source: String,
+    /// Serialized as "node" | "electrum" | "cached" | "fallback".
+    pub source: FeeSource,
     /// Unix ms when the underlying estimate was taken.
     pub estimated_at_ms: u64,
     /// Reveal transaction vsize (from `REVEAL_TX_VBYTES`). Used for local fee recompute in UI.
@@ -45,10 +43,6 @@ pub struct FeeRatesDto {
 }
 
 fn to_dto(presets: FeePresets) -> FeeRatesDto {
-    let source = serde_json::to_string(&presets.source)
-        .unwrap_or_else(|_| "fallback".to_string())
-        .trim_matches('"')
-        .to_string();
     FeeRatesDto {
         fast: FeePresetDto {
             sat_per_kvb: presets.fast.rate.sat_per_kvb(),
@@ -67,7 +61,7 @@ fn to_dto(presets: FeePresets) -> FeeRatesDto {
         },
         min_relay_sat_per_kvb: presets.min_relay_sat_per_kvb,
         max_sat_per_kvb: MAX_FEE_RATE_SAT_PER_KVB,
-        source,
+        source: presets.source,
         estimated_at_ms: presets.estimated_at_ms,
         reveal_vbytes: REVEAL_TX_VBYTES,
         commit_vbytes_estimate: COMMIT_TX_VBYTES_ESTIMATE,
@@ -102,12 +96,10 @@ pub async fn fee_rates_estimate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use desktop_app::application::fee_estimation::{
-        ConfirmationTarget, FeePreset, FeePresets, FeeSource,
-    };
+    use desktop_app::application::fee_estimation::{ConfirmationTarget, FeePreset, FeePresets};
     use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 
-    fn make_presets() -> FeePresets {
+    fn make_presets(source: FeeSource) -> FeePresets {
         let fast_rate = FeeRate::new(1_200, 1_000).unwrap();
         let medium_rate = FeeRate::new(1_100, 1_000).unwrap();
         let slow_rate = FeeRate::new(1_100, 1_000).unwrap();
@@ -128,48 +120,39 @@ mod tests {
                 margin_pct: ConfirmationTarget::Slow.margin_pct(),
             },
             min_relay_sat_per_kvb: FALLBACK_MIN_RELAY_SAT_PER_KVB,
-            source: FeeSource::Node,
+            source,
             estimated_at_ms: 1_700_000_000_000,
         }
     }
 
+    /// IPC contract: the serialized JSON must use camelCase keys and snake_case
+    /// source values — exactly what `feeRatesSchema` on the frontend expects.
     #[test]
-    fn dto_shape_camel_case_and_constants_correct() {
-        let dto = to_dto(make_presets());
+    fn dto_serializes_to_camel_case_json_matching_frontend_schema() {
+        let json =
+            serde_json::to_value(to_dto(make_presets(FeeSource::Node))).expect("serializable");
 
-        // Presets
-        assert_eq!(dto.fast.sat_per_kvb, 1_200);
-        assert_eq!(dto.fast.target_blocks, 1);
-        assert_eq!(dto.fast.margin_pct, 20);
-        assert_eq!(dto.medium.sat_per_kvb, 1_100);
-        assert_eq!(dto.medium.target_blocks, 6);
-        assert_eq!(dto.slow.sat_per_kvb, 1_100);
-        assert_eq!(dto.slow.target_blocks, 12);
+        assert_eq!(json["fast"]["satPerKvb"], 1_200);
+        assert_eq!(json["fast"]["targetBlocks"], 1);
+        assert_eq!(json["fast"]["marginPct"], 20);
+        assert_eq!(json["medium"]["satPerKvb"], 1_100);
+        assert_eq!(json["medium"]["targetBlocks"], 6);
+        assert_eq!(json["slow"]["satPerKvb"], 1_100);
+        assert_eq!(json["slow"]["targetBlocks"], 12);
 
-        // Bounds
-        assert_eq!(dto.max_sat_per_kvb, MAX_FEE_RATE_SAT_PER_KVB);
-        assert_eq!(dto.min_relay_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB);
-
-        // Vsize/dust facts for UI local recompute
-        assert_eq!(dto.reveal_vbytes, REVEAL_TX_VBYTES);
-        assert_eq!(dto.commit_vbytes_estimate, COMMIT_TX_VBYTES_ESTIMATE);
-        assert_eq!(dto.commit_dust_sats, COMMIT_DUST_SATS);
-
-        // Source serialized as snake_case string
-        assert_eq!(dto.source, "node");
+        assert_eq!(json["minRelaySatPerKvb"], FALLBACK_MIN_RELAY_SAT_PER_KVB);
+        assert_eq!(json["maxSatPerKvb"], MAX_FEE_RATE_SAT_PER_KVB);
+        assert_eq!(json["source"], "node");
+        assert_eq!(json["estimatedAtMs"], 1_700_000_000_000u64);
+        assert_eq!(json["revealVbytes"], REVEAL_TX_VBYTES);
+        assert_eq!(json["commitVbytesEstimate"], COMMIT_TX_VBYTES_ESTIMATE);
+        assert_eq!(json["commitDustSats"], COMMIT_DUST_SATS);
     }
 
     #[test]
-    fn dto_source_fallback_serializes_correctly() {
-        let mut presets = make_presets();
-        presets.source = FeeSource::Fallback;
-        let dto = to_dto(presets);
-        assert_eq!(dto.source, "fallback");
-    }
-
-    #[test]
-    fn dto_estimated_at_ms_preserved() {
-        let dto = to_dto(make_presets());
-        assert_eq!(dto.estimated_at_ms, 1_700_000_000_000);
+    fn dto_source_fallback_serializes_as_snake_case_string() {
+        let json =
+            serde_json::to_value(to_dto(make_presets(FeeSource::Fallback))).expect("serializable");
+        assert_eq!(json["source"], "fallback");
     }
 }

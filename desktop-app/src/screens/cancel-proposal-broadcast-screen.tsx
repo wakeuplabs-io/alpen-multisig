@@ -5,6 +5,7 @@ import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/bro
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
+import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -19,8 +20,9 @@ export function CancelProposalBroadcastScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
+	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
-	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
 
 	const { isResolvingCancel, cancelResolveError, phase, bundle, result, proposal, error, prepare, broadcast } =
 		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
@@ -100,6 +102,16 @@ export function CancelProposalBroadcastScreen() {
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
+							feeSelector={
+								feeState.status === 'ready' ? (
+									<FeeRateSelector
+										presets={feeState.presets}
+										selection={feeState.selection}
+										onSelectPreset={feeState.setPreset}
+										onSetCustomRate={feeState.setCustomRate}
+									/>
+								) : undefined
+							}
 						/>
 					)}
 

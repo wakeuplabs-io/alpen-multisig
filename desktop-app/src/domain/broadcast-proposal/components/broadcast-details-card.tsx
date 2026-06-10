@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
 import type { AdminWalletError } from '@/api/admin-wallet'
 import { CopyButton } from '@/components/copy-button'
@@ -23,6 +24,8 @@ type Props = {
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
 	phase?: BroadcastPhase
+	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
+	feeSelector?: ReactNode
 }
 
 const TIME_UNITS = [
@@ -66,6 +69,7 @@ export function BroadcastDetailsCard({
 	lastSyncedAt,
 	syncError,
 	phase,
+	feeSelector,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -132,6 +136,13 @@ export function BroadcastDetailsCard({
 						Signed locally and broadcast in the same package as the commit — no separate confirmation wait.
 					</p>
 				</div>
+
+				{feeSelector !== undefined && (
+					<div>
+						<SectionLabel>Network fee</SectionLabel>
+						{feeSelector}
+					</div>
+				)}
 
 				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
 					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>

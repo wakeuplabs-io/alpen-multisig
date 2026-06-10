@@ -21,7 +21,8 @@ type UseCancelBroadcastReturn = {
 export function useCancelBroadcast(
 	baseUrl: string,
 	targetActionId: string,
-	feeRateSatPerKvb: number,
+	/** `null` while fee presets load — broadcast stays blocked until ready. */
+	feeRateSatPerKvb: number | null,
 ): UseCancelBroadcastReturn {
 	const { proposal: targetProposal, isLoading, error: targetError } = useProposalDetail(baseUrl, targetActionId)
 
