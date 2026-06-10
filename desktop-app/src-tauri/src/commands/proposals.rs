@@ -9,6 +9,7 @@ use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
+use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
 };
@@ -138,6 +139,7 @@ pub async fn proposals_create_cancel(
 pub struct BroadcastInput {
     pub base_url: String,
     pub action_id: String,
+    pub fee_rate_sat_per_kvb: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -763,15 +765,17 @@ pub async fn proposals_prepare_broadcast(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+
+    let fee_rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| e.to_string())?;
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
         proposals::prepare_broadcast_local(
             &client,
-            &btc_rpc,
             &env.asm_rpc_url,
             env.network,
             &input.action_id,
+            fee_rate,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -814,6 +818,9 @@ pub async fn proposals_broadcast(
         .map_err(|e| e.to_string())?;
     let reveal_change_spk = reveal_change_address.script_pubkey();
 
+    let fee_rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| e.to_string())?;
+
     // Submit synchronously — returns within seconds once both txs are broadcast.
     let (commit_txid, reveal_txid) = proposals::submit_commit_then_reveal(
         client.as_ref(),
@@ -822,6 +829,7 @@ pub async fn proposals_broadcast(
         env.magic_bytes,
         env.network,
         &input.action_id,
+        fee_rate,
         &commit_funding,
         reveal_change_spk,
         &pending,
@@ -900,6 +908,7 @@ pub struct BroadcastManualInput {
     pub seq_no: u64,
     pub authority: String,
     pub signatures: Vec<BroadcastManualSignature>,
+    pub fee_rate_sat_per_kvb: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -922,7 +931,9 @@ pub async fn proposals_prepare_broadcast_manual(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
+
+    let fee_rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| e.to_string())?;
 
     let signatures: Vec<Signature> = input
         .signatures
@@ -935,13 +946,13 @@ pub async fn proposals_prepare_broadcast_manual(
 
     let (commit_address, commit_amount_sats, estimated_fee_sats) =
         proposals::prepare_broadcast_manual(
-            &btc_rpc,
             &env.asm_rpc_url,
             env.network,
             &input.action_hex,
             input.seq_no,
             &input.authority,
             &signatures,
+            fee_rate,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -986,6 +997,9 @@ pub async fn proposals_broadcast_manual(
         .map_err(|e| e.to_string())?;
     let reveal_change_spk = reveal_change_address.script_pubkey();
 
+    let fee_rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| e.to_string())?;
+
     let signatures: Vec<Signature> = input
         .signatures
         .into_iter()
@@ -1004,6 +1018,7 @@ pub async fn proposals_broadcast_manual(
         input.seq_no,
         &input.authority,
         &signatures,
+        fee_rate,
         env.confirm_poll_interval_ms,
         env.confirm_timeout_ms,
         &commit_funding,

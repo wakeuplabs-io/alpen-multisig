@@ -47,6 +47,7 @@ pub enum BroadcastError {
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
+use crate::domain::fee_rate::FeeRate;
 use crate::infrastructure::admin_wallet::ephemeral_envelope_key::generate_ephemeral_envelope_keypair;
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
@@ -54,10 +55,10 @@ use crate::infrastructure::admin_wallet::ephemeral_envelope_key::generate_epheme
 /// Returns `(commit_address, commit_amount_sats, estimated_fee_sats)`.
 pub async fn prepare_broadcast_bundle(
     client: &dyn OrchestratorClient,
-    btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     network: Network,
     action_id: &str,
+    fee_rate: FeeRate,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let proposal = client.get_proposal(action_id).await?;
 
@@ -90,11 +91,7 @@ pub async fn prepare_broadcast_bundle(
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
-    let fee_rate = btc_rpc
-        .estimate_fee_rate_sats_per_vb(6)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let estimated_fee_sats = fee_rate.fee_sats(REVEAL_TX_VBYTES);
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
@@ -167,6 +164,7 @@ pub async fn submit_commit_then_reveal(
     magic_bytes: MagicBytes,
     network: Network,
     action_id: &str,
+    fee_rate: FeeRate,
     commit_funding: &dyn CommitFunding,
     reveal_change_spk: ScriptBuf,
     pending: &PendingReveals,
@@ -212,17 +210,17 @@ pub async fn submit_commit_then_reveal(
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
-    let fee_rate = btc_rpc
-        .estimate_fee_rate_sats_per_vb(6)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-    let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let reveal_fee_sats = fee_rate.fee_sats(REVEAL_TX_VBYTES);
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
         // Step 1: Pre-sign commit tx.
         let commit_tx = commit_funding
-            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
+            .build_signed_commit(
+                &commit_address.to_string(),
+                commit_amount_sats,
+                fee_rate.to_bdk(),
+            )
             .await
             .map_err(|e| BroadcastError::Setup(e.to_string()))?;
 
@@ -396,6 +394,7 @@ pub async fn broadcast_commit_then_reveal(
     magic_bytes: MagicBytes,
     network: Network,
     action_id: &str,
+    fee_rate: FeeRate,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
     commit_funding: &dyn CommitFunding,
@@ -409,6 +408,7 @@ pub async fn broadcast_commit_then_reveal(
         magic_bytes,
         network,
         action_id,
+        fee_rate,
         commit_funding,
         reveal_change_spk,
         pending,
@@ -458,13 +458,13 @@ async fn wait_for_confirmation(
 ///
 /// `authority` is the wire-format string (e.g. `"strata_admin"`).
 pub async fn prepare_broadcast_manual(
-    btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     network: Network,
     action_hex: &str,
     seq_no: u64,
     authority: &str,
     signatures: &[Signature],
+    fee_rate: FeeRate,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let auth = crate::domain::authority::Authority::from_wire(authority)
         .map_err(|e| BroadcastError::Setup(e.to_string()))?;
@@ -497,11 +497,7 @@ pub async fn prepare_broadcast_manual(
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
-    let fee_rate = btc_rpc
-        .estimate_fee_rate_sats_per_vb(6)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-    let estimated_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let estimated_fee_sats = fee_rate.fee_sats(REVEAL_TX_VBYTES);
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
@@ -524,6 +520,7 @@ pub async fn broadcast_manual(
     seq_no: u64,
     authority: &str,
     signatures: &[Signature],
+    fee_rate: FeeRate,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
     commit_funding: &dyn CommitFunding,
@@ -561,11 +558,7 @@ pub async fn broadcast_manual(
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
 
-    let fee_rate = btc_rpc
-        .estimate_fee_rate_sats_per_vb(6)
-        .await
-        .map_err(BroadcastError::BitcoinRpc)?;
-    let reveal_fee_sats = fee_rate * REVEAL_TX_VBYTES;
+    let reveal_fee_sats = fee_rate.fee_sats(REVEAL_TX_VBYTES);
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
     // Use sighash hex prefix as the PendingReveals key (no orchestrator action_id).
@@ -574,7 +567,11 @@ pub async fn broadcast_manual(
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
         let commit_tx = commit_funding
-            .build_signed_commit(&commit_address.to_string(), commit_amount_sats, fee_rate)
+            .build_signed_commit(
+                &commit_address.to_string(),
+                commit_amount_sats,
+                fee_rate.to_bdk(),
+            )
             .await
             .map_err(|e| BroadcastError::Setup(e.to_string()))?;
 
@@ -739,12 +736,12 @@ pub async fn list_proposals(
 /// Prepare commit/reveal fee estimate locally (desktop-owned Bitcoin RPC).
 pub async fn prepare_broadcast_local(
     client: &dyn OrchestratorClient,
-    btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     network: Network,
     action_id: &str,
+    fee_rate: FeeRate,
 ) -> Result<(String, u64, u64), BroadcastError> {
-    prepare_broadcast_bundle(client, btc_rpc, asm_rpc_url, network, action_id).await
+    prepare_broadcast_bundle(client, asm_rpc_url, network, action_id, fee_rate).await
 }
 
 /// Re-broadcast a stored reveal transaction for a given action_id.
@@ -1360,7 +1357,7 @@ mod tests {
             &self,
             commit_address: &str,
             _amount_sats: u64,
-            _fee_rate: u64,
+            _fee_rate: bdk_wallet::bitcoin::FeeRate,
         ) -> Result<bitcoin::Transaction, crate::application::commit_funding::CommitFundingError>
         {
             *self.build_signed_commit_called.lock().unwrap() = true;
@@ -1442,10 +1439,6 @@ mod tests {
             Ok(self.confirmations)
         }
 
-        async fn estimate_fee_rate_sats_per_vb(&self, _: u16) -> Result<u64, String> {
-            Ok(2)
-        }
-
         async fn get_raw_transaction(&self, _txid: &str) -> Result<bitcoin::Transaction, String> {
             *self.get_raw_transaction_call_count.lock().unwrap() += 1;
             use bitcoin::{absolute::LockTime, transaction::Version, Transaction, TxIn, TxOut};
@@ -1466,6 +1459,14 @@ mod tests {
 
         async fn get_block_count(&self) -> Result<u64, String> {
             Ok(0)
+        }
+
+        async fn estimate_smart_fee_sat_per_kvb(&self, _: u16) -> Result<u64, String> {
+            Ok(1_000)
+        }
+
+        async fn min_relay_sat_per_kvb(&self) -> Result<u64, String> {
+            Ok(1_000)
         }
     }
 
@@ -1640,6 +1641,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-1",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             10,
             5000,
             &spy,
@@ -1677,6 +1679,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-submit-package",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             10,
             5000,
             &spy,
@@ -1711,6 +1714,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-fallback",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             10,
             5000,
             &spy,
@@ -1745,6 +1749,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-pending-lifecycle",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             10,
             5000,
             &spy,
@@ -1791,6 +1796,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-reporting",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             10,
             5000,
             &spy,
@@ -1827,6 +1833,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-submit-only",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             &spy,
             ScriptBuf::new(),
             &pending,
@@ -1867,6 +1874,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-submit-error",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             &spy,
             ScriptBuf::new(),
             &pending,
@@ -1987,6 +1995,7 @@ mod tests {
             magic_bytes,
             Network::Regtest,
             "action-wrapper-timeout",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
             1,
             5,
             &spy,

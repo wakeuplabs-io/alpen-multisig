@@ -24,7 +24,7 @@ pub trait CommitFunding: Send + Sync {
         &self,
         commit_address: &str,
         amount_sats: u64,
-        fee_rate: u64,
+        fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bitcoin::Transaction, CommitFundingError>;
 }
 
@@ -51,7 +51,7 @@ impl CommitFunding for AdminWalletCommitFunding {
         &self,
         commit_address: &str,
         amount_sats: u64,
-        fee_rate: u64,
+        fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bitcoin::Transaction, CommitFundingError> {
         self.wallet_service
             .build_signed_commit(commit_address, amount_sats, fee_rate)
