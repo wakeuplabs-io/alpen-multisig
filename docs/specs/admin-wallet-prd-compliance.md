@@ -91,7 +91,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
 | 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 9 shared UX |
-| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **FAIL** | — | **Phase 4** (after R2); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
+| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **FAIL** | — | **Phase 4** (after R2); [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 5 / Phase 9 shared Send | — |
 | Broadcast commit | Funded from Admin Wallet | **PASS** | Phase 3.6+, `WalletService` | — |
 | Broadcast commit sign | HW or regtest mnemonic PSBT | **PASS** | R1.1 `PsbtSigner` | Reveal: ephemeral in-app (SPS-50), not HW — protocol constraint |
