@@ -23,6 +23,8 @@ pub enum EvenPubKeyError {
     Hex(String),
     #[error("expected 32 bytes, got {0}")]
     WrongLength(usize),
+    #[error("invalid secp256k1 x-only public key: {0}")]
+    InvalidPoint(String),
 }
 
 impl EvenPubKey {
@@ -36,6 +38,12 @@ impl EvenPubKey {
         let arr: [u8; 32] = bytes
             .try_into()
             .map_err(|_| EvenPubKeyError::WrongLength(len))?;
+        // Validate the bytes are a valid secp256k1 x-only public key (on the curve).
+        // Without this, any 32-byte hex passes — including all-zeros or random bytes
+        // that are not valid curve points — and the error only surfaces deep in the
+        // codec at SSZ encode time.
+        bitcoin::secp256k1::XOnlyPublicKey::from_slice(&arr)
+            .map_err(|e| EvenPubKeyError::InvalidPoint(e.to_string()))?;
         Ok(Self(arr))
     }
 
@@ -193,6 +201,28 @@ mod tests {
     fn test_even_pubkey_rejects_invalid_hex() {
         let err = EvenPubKey::from_hex("zz").unwrap_err();
         assert!(matches!(err, EvenPubKeyError::Hex(_)));
+    }
+
+    #[test]
+    fn test_even_pubkey_rejects_invalid_curve_point() {
+        // 32 bytes of zeros — not a valid secp256k1 point (the identity/at-infinity
+        // is not representable as a 32-byte x-coordinate).
+        let err = EvenPubKey::from_hex(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap_err();
+        assert!(matches!(err, EvenPubKeyError::InvalidPoint(_)));
+    }
+
+    #[test]
+    fn test_even_pubkey_rejects_value_exceeding_field_prime() {
+        // 0xFFFF...FFFF (2^256 - 1) exceeds the secp256k1 field prime and cannot be
+        // a valid x-coordinate.
+        let err = EvenPubKey::from_hex(
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        )
+        .unwrap_err();
+        assert!(matches!(err, EvenPubKeyError::InvalidPoint(_)));
     }
 
     #[test]
