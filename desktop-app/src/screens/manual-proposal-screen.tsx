@@ -198,12 +198,14 @@ export function ManualProposalScreen() {
 													{(liveCommitAmountSats ?? manual.broadcastBundle.commitAmountSats).toLocaleString()} sats
 												</span>
 											</div>
-											<div className="flex justify-between">
-												<span className="text-[#6b7280]">Estimated fee</span>
-												<span className="font-medium text-[#111827]">
-													{(liveRevealFeeSats ?? manual.broadcastBundle.estimatedFeeSats).toLocaleString()} sats
-												</span>
-											</div>
+											{feeState.status !== 'ready' && (
+												<div className="flex justify-between">
+													<span className="text-[#6b7280]">Estimated fee</span>
+													<span className="font-medium text-[#111827]">
+														{(liveRevealFeeSats ?? manual.broadcastBundle.estimatedFeeSats).toLocaleString()} sats
+													</span>
+												</div>
+											)}
 										</div>
 										<div className="mt-5 flex gap-3">
 											<button

@@ -144,12 +144,14 @@ export function BroadcastDetailsCard({
 					</div>
 				)}
 
-				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
-					<span className="text-[13px] font-medium text-[#111827]">
-						{bundle.estimatedFeeSats.toLocaleString()} sats
-					</span>
-				</div>
+				{feeSelector === undefined && (
+					<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
+						<span className="text-[13px] font-medium text-[#111827]">
+							{bundle.estimatedFeeSats.toLocaleString()} sats
+						</span>
+					</div>
+				)}
 
 				{adminWalletInfo !== undefined && (
 					<div>
