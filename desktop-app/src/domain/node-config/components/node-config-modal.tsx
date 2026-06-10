@@ -213,8 +213,8 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 									<path d="M12 10v4M12 16.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 								</svg>
 								<span>
-									Trusted Electrum indexer is not yet available. Admin Wallet sync will fail until the public endpoint is
-									published. Use Local or Custom mode with your own electrs instance.
+									Trusted Electrum indexer is not yet available. Admin Wallet sync will fail until the public endpoint
+									is published. Use Local or Custom mode with your own electrs instance.
 								</span>
 							</div>
 						)}
