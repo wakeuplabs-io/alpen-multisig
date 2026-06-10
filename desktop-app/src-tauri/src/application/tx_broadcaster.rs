@@ -5,48 +5,27 @@
 
 use async_trait::async_trait;
 
-// ---------------------------------------------------------------------------
-// Error type
-// ---------------------------------------------------------------------------
-
+/// Failure from one broadcaster. `message` carries the underlying cause verbatim
+/// (connection refused, mempool rejection, ...).
 #[derive(Debug, thiserror::Error)]
-pub enum TxBroadcastError {
-    #[error("{source_name} rejected the transaction: {message}")]
-    Rejected {
-        source_name: &'static str,
-        message: String,
-    },
-    #[error("{source_name} unavailable: {message}")]
-    Unavailable {
-        source_name: &'static str,
-        message: String,
-    },
+#[error("{source_name}: {message}")]
+pub struct TxBroadcastError {
+    pub source_name: &'static str,
+    pub message: String,
 }
 
-impl TxBroadcastError {
-    pub fn source_name(&self) -> &'static str {
-        match self {
-            Self::Rejected { source_name, .. } => source_name,
-            Self::Unavailable { source_name, .. } => source_name,
-        }
-    }
-
-    pub fn message(&self) -> &str {
-        match self {
-            Self::Rejected { message, .. } => message,
-            Self::Unavailable { message, .. } => message,
-        }
-    }
+/// Returns `true` if the error message indicates the transaction is already known
+/// to the node/server — idempotency rule from spec §8.1: re-submission after a
+/// partial earlier attempt must be treated as success.
+pub fn is_already_known(msg: &str) -> bool {
+    let lower = msg.to_lowercase();
+    lower.contains("already") || lower.contains("duplicate")
 }
-
-// ---------------------------------------------------------------------------
-// TxBroadcaster trait
-// ---------------------------------------------------------------------------
 
 /// Submit a signed commit+reveal pair to the Bitcoin network.
 ///
 /// Implementations MUST treat "already in mempool / known" responses as
-/// success — idempotent re-submission after a partial earlier attempt.
+/// success — see [`is_already_known`].
 #[async_trait]
 pub trait TxBroadcaster: Send + Sync {
     fn name(&self) -> &'static str;
@@ -61,41 +40,25 @@ pub trait TxBroadcaster: Send + Sync {
     ) -> Result<(), TxBroadcastError>;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::sync::Mutex;
 
-    /// Test double that records calls and returns scripted results.
+    /// Test double: succeeds, or fails with a fixed message.
     pub struct MockBroadcaster {
-        pub name: &'static str,
-        /// If `Some(Err(...))`, returns that error; otherwise returns `Ok(())`.
-        pub result: Mutex<Option<TxBroadcastError>>,
-        pub calls: Mutex<Vec<(String, String)>>,
+        name: &'static str,
+        error: Option<String>,
     }
 
     impl MockBroadcaster {
         pub fn ok(name: &'static str) -> Self {
-            Self {
-                name,
-                result: Mutex::new(None),
-                calls: Mutex::new(vec![]),
-            }
+            Self { name, error: None }
         }
 
-        pub fn unavailable(name: &'static str, msg: &str) -> Self {
-            let msg = msg.to_string();
+        pub fn failing(name: &'static str, msg: &str) -> Self {
             Self {
                 name,
-                result: Mutex::new(Some(TxBroadcastError::Unavailable {
-                    source_name: name,
-                    message: msg,
-                })),
-                calls: Mutex::new(vec![]),
+                error: Some(msg.to_string()),
             }
         }
     }
@@ -106,48 +69,24 @@ pub mod tests {
             self.name
         }
 
-        async fn broadcast_pair(
-            &self,
-            commit_hex: &str,
-            reveal_hex: &str,
-        ) -> Result<(), TxBroadcastError> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push((commit_hex.to_string(), reveal_hex.to_string()));
-            match &*self.result.lock().unwrap() {
+        async fn broadcast_pair(&self, _: &str, _: &str) -> Result<(), TxBroadcastError> {
+            match &self.error {
                 None => Ok(()),
-                Some(TxBroadcastError::Unavailable {
-                    source_name,
-                    message,
-                }) => Err(TxBroadcastError::Unavailable {
-                    source_name,
-                    message: message.clone(),
-                }),
-                Some(TxBroadcastError::Rejected {
-                    source_name,
-                    message,
-                }) => Err(TxBroadcastError::Rejected {
-                    source_name,
-                    message: message.clone(),
+                Some(msg) => Err(TxBroadcastError {
+                    source_name: self.name,
+                    message: msg.clone(),
                 }),
             }
         }
     }
 
-    #[tokio::test]
-    async fn mock_ok_broadcaster_records_call() {
-        let b = MockBroadcaster::ok("test");
-        b.broadcast_pair("commit", "reveal").await.unwrap();
-        let calls = b.calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0], ("commit".to_string(), "reveal".to_string()));
-    }
-
-    #[tokio::test]
-    async fn mock_unavailable_broadcaster_returns_error() {
-        let b = MockBroadcaster::unavailable("test", "down");
-        let err = b.broadcast_pair("c", "r").await.unwrap_err();
-        assert!(matches!(err, TxBroadcastError::Unavailable { .. }));
+    #[test]
+    fn is_already_known_matches_expected_phrases() {
+        assert!(is_already_known("Transaction already in block chain"));
+        assert!(is_already_known("txn-already-in-mempool"));
+        assert!(is_already_known("txn-already-known"));
+        assert!(is_already_known("duplicate transaction"));
+        assert!(!is_already_known("insufficient fee"));
+        assert!(!is_already_known("connection refused"));
     }
 }

@@ -83,8 +83,8 @@ export function deriveBroadcastError(raw: string): BroadcastError {
 			code,
 			message: parsed.message ?? raw,
 			recovery: CODE_RECOVERY_MAP[code],
-			...(parsed.commitTxHex != null && { commitTxHex: parsed.commitTxHex }),
-			...(parsed.revealTxHex != null && { revealTxHex: parsed.revealTxHex }),
+			commitTxHex: parsed.commitTxHex,
+			revealTxHex: parsed.revealTxHex,
 		}
 	} catch {
 		return makeBroadcastError('unknown_error', raw, 'retry')

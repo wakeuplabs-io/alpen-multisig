@@ -496,6 +496,29 @@ mod broadcast_error_code_tests {
         );
     }
 
+    /// M3 IPC contract: `AllBroadcastersFailed` serializes to the structured JSON the
+    /// frontend parses in `deriveBroadcastError` — code `broadcast_unavailable` plus
+    /// both raw tx hexes for the manual copy-paste escape hatch.
+    #[test]
+    fn all_broadcasters_failed_maps_to_broadcast_unavailable_with_hexes() {
+        let error = BroadcastError::AllBroadcastersFailed {
+            commit_tx_hex: "aa01".to_string(),
+            reveal_tx_hex: "bb02".to_string(),
+            errors: vec![
+                ("Electrum".to_string(), "connection refused".to_string()),
+                ("Bitcoin node".to_string(), "timeout".to_string()),
+            ],
+        };
+        let parsed: serde_json::Value = serde_json::from_str(&map_broadcast_error(error)).unwrap();
+        assert_eq!(parsed["code"], "broadcast_unavailable");
+        assert_eq!(parsed["commitTxHex"], "aa01");
+        assert_eq!(parsed["revealTxHex"], "bb02");
+        assert_eq!(parsed["canResubmit"], false);
+        let msg = parsed["message"].as_str().unwrap();
+        assert!(msg.contains("Electrum: connection refused"), "{msg}");
+        assert!(msg.contains("Bitcoin node: timeout"), "{msg}");
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
@@ -556,6 +579,29 @@ fn map_broadcast_error_with_boundary(
     broadcast_reached: bool,
     has_pending: bool,
 ) -> String {
+    // Manual escape hatch (M3): this is the only error that carries extra payload —
+    // the raw tx hexes the frontend needs for copy-paste manual broadcast.
+    if let BroadcastError::AllBroadcastersFailed {
+        commit_tx_hex,
+        reveal_tx_hex,
+        errors,
+    } = &error
+    {
+        let errs = errors
+            .iter()
+            .map(|(name, msg)| format!("{name}: {msg}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return serde_json::json!({
+            "code": "broadcast_unavailable",
+            "message": format!("All broadcast channels failed ({errs}). Copy and broadcast the transactions manually."),
+            "commitTxHex": commit_tx_hex,
+            "revealTxHex": reveal_tx_hex,
+            "canResubmit": false,
+        })
+        .to_string();
+    }
+
     let code = broadcast_error_code(&error, broadcast_reached, has_pending);
     let can_resubmit = broadcast_reached && has_pending;
     let message = match &error {
@@ -576,26 +622,8 @@ fn map_broadcast_error_with_boundary(
         BroadcastError::Timeout { txid } => {
             format!("Broadcast sent but confirmation timed out for tx {txid}. You can resubmit the reveal.")
         }
-        BroadcastError::AllBroadcastersFailed {
-            commit_tx_hex,
-            reveal_tx_hex,
-            errors,
-        } => {
-            let errs = errors
-                .iter()
-                .map(|(name, msg)| format!("{name}: {msg}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-            // Embed the raw tx hexes so the frontend can offer copy-paste manual broadcast.
-            return serde_json::json!({
-                "code": "broadcast_unavailable",
-                "message": format!("All broadcast channels failed ({errs}). Copy and broadcast the transactions manually."),
-                "commitTxHex": commit_tx_hex,
-                "revealTxHex": reveal_tx_hex,
-                "canResubmit": false,
-            })
-            .to_string();
-        }
+        // Handled by the early return above; kept non-panicking per backend standards.
+        BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::ProposalFetch(e) => e.to_string(),
     };

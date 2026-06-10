@@ -134,6 +134,31 @@ async fn report_broadcast(
     Ok(())
 }
 
+/// Try each broadcaster in order; the first success wins (spec §8: Electrum first,
+/// node fallback). When every broadcaster fails, returns [`BroadcastError::AllBroadcastersFailed`]
+/// carrying both raw tx hexes so the UI can offer manual copy-and-broadcast.
+async fn broadcast_via(
+    broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
+    commit_hex: &str,
+    reveal_hex: &str,
+) -> Result<(), BroadcastError> {
+    let mut errors: Vec<(String, String)> = Vec::new();
+    for b in broadcasters {
+        match b.broadcast_pair(commit_hex, reveal_hex).await {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
+                errors.push((b.name().to_string(), e.message));
+            }
+        }
+    }
+    Err(BroadcastError::AllBroadcastersFailed {
+        commit_tx_hex: commit_hex.to_string(),
+        reveal_tx_hex: reveal_hex.to_string(),
+        errors,
+    })
+}
+
 /// Outcome of awaiting the reveal confirmation.
 ///
 /// `Confirmed` means the reveal reached at least one confirmation and the orchestrator was
@@ -272,28 +297,8 @@ pub async fn submit_commit_then_reveal(
             );
         }
 
-        // Step 6: Broadcast — try each broadcaster in order (Electrum first, node fallback).
-        let mut broadcast_errors: Vec<(String, String)> = Vec::new();
-        let mut broadcast_ok = false;
-        for b in broadcasters {
-            match b.broadcast_pair(&commit_hex, &reveal_hex).await {
-                Ok(()) => {
-                    broadcast_ok = true;
-                    break;
-                }
-                Err(e) => {
-                    tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
-                    broadcast_errors.push((b.name().to_string(), e.message().to_string()));
-                }
-            }
-        }
-        if !broadcast_ok {
-            return Err(BroadcastError::AllBroadcastersFailed {
-                commit_tx_hex: commit_hex.clone(),
-                reveal_tx_hex: reveal_hex.clone(),
-                errors: broadcast_errors,
-            });
-        }
+        // Step 6: Broadcast — Electrum first, node fallback.
+        broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
 
         // Step 7: Report commit_broadcasted then reveal_broadcasted (no commit_confirmed).
         report_broadcast(
@@ -625,27 +630,7 @@ pub async fn broadcast_manual(
             );
         }
 
-        let mut broadcast_errors: Vec<(String, String)> = Vec::new();
-        let mut broadcast_ok = false;
-        for b in broadcasters {
-            match b.broadcast_pair(&commit_hex, &reveal_hex).await {
-                Ok(()) => {
-                    broadcast_ok = true;
-                    break;
-                }
-                Err(e) => {
-                    tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
-                    broadcast_errors.push((b.name().to_string(), e.message().to_string()));
-                }
-            }
-        }
-        if !broadcast_ok {
-            return Err(BroadcastError::AllBroadcastersFailed {
-                commit_tx_hex: commit_hex.clone(),
-                reveal_tx_hex: reveal_hex.clone(),
-                errors: broadcast_errors,
-            });
-        }
+        broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
 
         wait_for_confirmation(
             btc_rpc,
@@ -1906,7 +1891,7 @@ mod tests {
         let pending = crate::application::pending_reveals::new();
         // Failing broadcaster simulates all broadcasters down
         let failing: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
-            vec![std::sync::Arc::new(MockBroadcaster::unavailable(
+            vec![std::sync::Arc::new(MockBroadcaster::failing(
                 "mock",
                 "node rejected",
             ))];

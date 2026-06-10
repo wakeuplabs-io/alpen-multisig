@@ -165,11 +165,14 @@ pub(crate) fn derive_preset_clamped(
 // FeeEstimationService + Tauri managed state
 // ---------------------------------------------------------------------------
 
-/// Tauri managed state wrapping the shared fee estimation service.
+/// Tauri managed state holding the shared in-memory fee cache (M2).
 ///
-/// Registered once at app startup so the in-memory cache survives across
-/// multiple `fee_rates_estimate` IPC calls within the same session.
-pub struct FeeEstimationServiceState(pub Arc<FeeEstimationService>);
+/// Only the cache is managed (registered once at startup so it survives across
+/// `fee_rates_estimate` IPC calls); the estimators themselves are rebuilt per
+/// call from the **current** node config, so runtime config changes take effect
+/// immediately — same as the broadcast path.
+#[derive(Default)]
+pub struct FeeCacheState(pub Arc<Mutex<Option<FeePresets>>>);
 
 // FeeEstimationService -------------------------------------------------------
 
@@ -181,17 +184,20 @@ pub struct FeeEstimationServiceState(pub Arc<FeeEstimationService>);
 /// minimum relay fee. The UI surfaces Cached / Fallback with a warning banner.
 pub struct FeeEstimationService {
     estimators: Vec<Arc<dyn FeeEstimator>>,
-    /// Last successful estimate. Protected by a `Mutex` so `presets()` can update
-    /// it via `&self` (the service is shared via `Arc` across async tasks).
-    cache: Mutex<Option<FeePresets>>,
+    /// Last successful estimate, shared via [`FeeCacheState`] across calls.
+    cache: Arc<Mutex<Option<FeePresets>>>,
 }
 
 impl FeeEstimationService {
     pub fn new(estimators: Vec<Arc<dyn FeeEstimator>>) -> Self {
-        Self {
-            estimators,
-            cache: Mutex::new(None),
-        }
+        Self::with_cache(estimators, Arc::default())
+    }
+
+    pub fn with_cache(
+        estimators: Vec<Arc<dyn FeeEstimator>>,
+        cache: Arc<Mutex<Option<FeePresets>>>,
+    ) -> Self {
+        Self { estimators, cache }
     }
 
     pub async fn presets(&self) -> FeePresets {
@@ -550,24 +556,62 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Cache (M2): fresh cache → Cached; stale cache → Fallback
+    // Cache (M2): last success served as Cached while fresh; Fallback when stale
     // -----------------------------------------------------------------------
 
-    fn svc_with_cache(
-        estimators: Vec<Arc<dyn FeeEstimator>>,
-        cached_entry: FeePresets,
-    ) -> FeeEstimationService {
-        let svc = FeeEstimationService::new(estimators);
-        *svc.cache.lock().unwrap() = Some(cached_entry);
-        svc
+    /// Estimator whose availability can be flipped between calls.
+    struct SwitchableEstimator {
+        ok: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl FeeEstimator for SwitchableEstimator {
+        fn source(&self) -> FeeSource {
+            FeeSource::Node
+        }
+
+        async fn estimate_sat_per_kvb(&self, target: u16) -> Result<u64, FeeEstimateError> {
+            if self.ok.load(std::sync::atomic::Ordering::Relaxed) {
+                Ok(1_000)
+            } else {
+                Err(FeeEstimateError::NoEstimate {
+                    target,
+                    reason: "down".to_string(),
+                })
+            }
+        }
+
+        async fn min_relay_sat_per_kvb(&self) -> Result<u64, FeeEstimateError> {
+            Ok(FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        }
+    }
+
+    /// End-to-end cache behavior: a successful estimate populates the cache, and
+    /// once all sources go down the same rates are served with source=Cached.
+    #[tokio::test]
+    async fn cache_serves_last_success_when_sources_go_down() {
+        let est = Arc::new(SwitchableEstimator {
+            ok: std::sync::atomic::AtomicBool::new(true),
+        });
+        let svc = FeeEstimationService::new(vec![Arc::clone(&est) as Arc<dyn FeeEstimator>]);
+
+        let live = svc.presets().await;
+        assert_eq!(live.source, FeeSource::Node);
+
+        est.ok.store(false, std::sync::atomic::Ordering::Relaxed);
+        let cached = svc.presets().await;
+        assert_eq!(cached.source, FeeSource::Cached);
+        assert_eq!(
+            cached.fast.rate.sat_per_kvb(),
+            live.fast.rate.sat_per_kvb(),
+            "cached presets must carry the rates of the last successful estimate"
+        );
     }
 
     fn make_cached_presets(age_ms: u64) -> FeePresets {
-        let now = now_ms();
-        let ts = now.saturating_sub(age_ms);
-        let r = FeeRate::from_raw_clamped(1_000);
+        let ts = now_ms().saturating_sub(age_ms);
         let preset = FeePreset {
-            rate: r,
+            rate: FeeRate::from_raw_clamped(1_000),
             target_blocks: 6,
             margin_pct: 10,
         };
@@ -582,44 +626,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn both_fail_fresh_cache_returns_cached_source() {
-        let node = Arc::new(MockEstimator::new(None, None, None));
-        let electrum = electrum_mock(None, None, None);
-        let node: Arc<dyn FeeEstimator> = node;
-        let electrum: Arc<dyn FeeEstimator> = electrum;
-        // Cache entry 5 minutes old (fresh)
-        let cached = make_cached_presets(5 * 60 * 1_000);
-        let svc = svc_with_cache(vec![node, electrum], cached);
-        let presets = svc.presets().await;
-        assert_eq!(presets.source, FeeSource::Cached);
-    }
-
-    #[tokio::test]
-    async fn both_fail_stale_cache_returns_fallback() {
-        let node = Arc::new(MockEstimator::new(None, None, None));
-        let electrum = electrum_mock(None, None, None);
-        let node: Arc<dyn FeeEstimator> = node;
-        let electrum: Arc<dyn FeeEstimator> = electrum;
+    async fn all_fail_stale_cache_returns_fallback() {
+        let failing: Arc<dyn FeeEstimator> = Arc::new(MockEstimator::new(None, None, None));
         // Cache entry 11 minutes old (stale — beyond CACHE_MAX_AGE_MS)
-        let cached = make_cached_presets(11 * 60 * 1_000);
-        let svc = svc_with_cache(vec![node, electrum], cached);
+        let cache = Arc::new(Mutex::new(Some(make_cached_presets(11 * 60 * 1_000))));
+        let svc = FeeEstimationService::with_cache(vec![failing], cache);
         let presets = svc.presets().await;
         assert_eq!(presets.source, FeeSource::Fallback);
         assert_eq!(presets.fast.rate.sat_per_kvb(), 1_200);
-    }
-
-    #[tokio::test]
-    async fn successful_estimate_populates_cache() {
-        let node = Arc::new(MockEstimator::new(Some(1_000), Some(1_000), Some(1_000)));
-        let svc = FeeEstimationService::new(vec![node]);
-        // Call once to warm cache
-        let _ = svc.presets().await;
-        // Verify cache is now populated
-        let guard = svc.cache.lock().unwrap();
-        assert!(
-            guard.is_some(),
-            "cache should be populated after a successful estimate"
-        );
-        assert_eq!(guard.unwrap().source, FeeSource::Node);
     }
 }
