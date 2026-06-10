@@ -30,7 +30,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
 		// Wait for the admin wallet address to render so we can read it for funding.
-		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-external-address-0"]')
+		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-funding-address"]')
 		await addressEl.waitForDisplayed({ timeout: 30000 })
 
 		// Fund Admin Wallet before broadcasting — required from Phase 3.6 (sole commit funder).

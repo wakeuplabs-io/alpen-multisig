@@ -8,7 +8,7 @@ import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/b
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
-import { useAdminWalletUtxos, useAdminWalletSync } from '@/domain/admin-wallet/hooks'
+import { useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
@@ -25,22 +25,23 @@ export function BroadcastProposalScreen() {
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	const { adminWalletInfo } = useAdminWalletInfo(sessionReady)
+	const { adminWalletInfo, refresh: refreshAdminWalletInfo } = useAdminWalletInfo(sessionReady)
 	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
 	const isAdminWalletMode = adminWalletInfo != null
 	const signerKind: SignerKind = rawSignerKind === 'hardware' ? 'hardware' : 'mnemonic'
 
-	const { data: utxos, refresh: refreshUtxos } = useAdminWalletUtxos()
 	const { syncStatus, triggerSync } = useAdminWalletSync()
 
 	const panel = useWalletPanelData(isAdminWalletMode)
 
-	// Trigger sync on mount when in admin_wallet mode; refresh UTXOs once sync resolves
+	// Trigger an Electrum sync on mount when in admin_wallet mode; re-read the funding info once
+	// the sync resolves so the card shows the post-sync balance and receive address (the initial
+	// fetch races the sync and would otherwise pin a stale 0-sats snapshot).
 	useEffect(() => {
 		if (isAdminWalletMode) {
-			void triggerSync().then(() => refreshUtxos())
+			void triggerSync().then(() => refreshAdminWalletInfo())
 		}
-	}, [isAdminWalletMode, triggerSync, refreshUtxos])
+	}, [isAdminWalletMode, triggerSync, refreshAdminWalletInfo])
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
@@ -71,7 +72,6 @@ export function BroadcastProposalScreen() {
 		phase === 'done' ||
 		phase === 'error'
 
-	const utxoCount = isAdminWalletMode && utxos != null ? utxos.length : undefined
 	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined
 	const syncError = isAdminWalletMode
 		? syncStatus?.lastError != null
@@ -142,7 +142,6 @@ export function BroadcastProposalScreen() {
 							canSignReason={canSignReason}
 							phase={phase}
 							adminWalletInfo={adminWalletInfo}
-							utxoCount={utxoCount}
 							lastSyncedAt={lastSyncedAt}
 							syncError={syncError}
 						/>

@@ -116,22 +116,26 @@ pub struct AdminWalletInfo {
 
 /// Read admin wallet info from the shared `WalletService` — single source of truth.
 ///
-/// Returns the cached balance and external address index 0 without triggering a sync.
-/// Sync is handled separately by `admin_wallet_sync`; calling it here blocks the UI on RPC.
-/// Returns `Err(Disabled)` if no wallet session is active.
+/// Returns the cached state without triggering a sync (sync is handled separately by
+/// `admin_wallet_sync`; calling it here blocks the UI on the indexer). Returns
+/// `Err(Disabled)` if no wallet session is active.
+///
+/// - `address` is the current receive address (gap-aware `next_receive_address`, the same
+///   rotating address the wallet panel shows) — not a fixed external index 0, which goes
+///   stale once funds move to later indices or change.
+/// - `balance_sats` is the TOTAL spendable balance (confirmed + unconfirmed): after a
+///   spend the funds sit in change, which BDK can spend again, so the broadcast funding
+///   gate must count it.
 pub async fn admin_wallet_info(svc: &WalletService) -> Result<AdminWalletInfo, String> {
     let balance = svc.get_balance().await.map_err(serialize_wallet_error)?;
     let address = svc
-        .list_addresses(KeychainKind::External, 0, 1)
+        .next_receive_address()
         .await
         .map_err(serialize_wallet_error)?
-        .into_iter()
-        .next()
-        .ok_or_else(|| "no external address derivable".to_string())?
         .address;
     Ok(AdminWalletInfo {
         address,
-        balance_sats: balance.confirmed_sats,
+        balance_sats: balance.total_sats,
     })
 }
 

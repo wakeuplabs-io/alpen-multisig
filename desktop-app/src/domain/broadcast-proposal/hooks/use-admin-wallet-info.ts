@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getAdminWalletInfo } from '@/api/admin-wallet'
 
 type AdminWalletInfoView = {
@@ -9,10 +9,13 @@ type AdminWalletInfoView = {
 type UseAdminWalletInfoReturn = {
 	/** null = loading, undefined = unavailable/error, AdminWalletInfoView = loaded */
 	adminWalletInfo: AdminWalletInfoView | null | undefined
+	/** Re-reads the wallet info — call after a sync so balance/address reflect the chain. */
+	refresh: () => void
 }
 
 export function useAdminWalletInfo(sessionReady: boolean): UseAdminWalletInfoReturn {
 	const [adminWalletInfo, setAdminWalletInfo] = useState<AdminWalletInfoView | null | undefined>(null)
+	const [tick, setTick] = useState(0)
 
 	useEffect(() => {
 		if (!sessionReady) return
@@ -24,7 +27,9 @@ export function useAdminWalletInfo(sessionReady: boolean): UseAdminWalletInfoRet
 				setAdminWalletInfo(undefined)
 			}
 		})
-	}, [sessionReady])
+	}, [sessionReady, tick])
 
-	return { adminWalletInfo }
+	const refresh = useCallback(() => setTick((t) => t + 1), [])
+
+	return { adminWalletInfo, refresh }
 }

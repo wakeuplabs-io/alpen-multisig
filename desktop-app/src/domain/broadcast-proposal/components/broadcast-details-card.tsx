@@ -20,7 +20,6 @@ type Props = {
 	canSign?: boolean
 	canSignReason?: string
 	adminWalletInfo?: AdminWalletInfoView | null
-	utxoCount?: number
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
 	phase?: BroadcastPhase
@@ -64,7 +63,6 @@ export function BroadcastDetailsCard({
 	canSign = true,
 	canSignReason,
 	adminWalletInfo,
-	utxoCount,
 	lastSyncedAt,
 	syncError,
 	phase,
@@ -154,7 +152,7 @@ export function BroadcastDetailsCard({
 							<>
 								<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
 									<span
-										data-testid="e2e-admin-wallet-external-address-0"
+										data-testid="e2e-admin-wallet-funding-address"
 										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
 									>
 										{adminWalletInfo.address}
@@ -167,7 +165,6 @@ export function BroadcastDetailsCard({
 										({adminWalletInfo.balanceSats.toLocaleString()} sats)
 									</span>
 								</p>
-								{utxoCount !== undefined && <p className="mt-1 text-[12px] text-[#9ca3af]">UTXOs: {utxoCount}</p>}
 								{syncError != null ? (
 									<p className="mt-1 text-[12px] text-[#ef4444]">
 										Sync error: {'message' in syncError ? syncError.message : syncError.type}
@@ -185,12 +182,7 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={
-						isBroadcasting ||
-						!canSign ||
-						adminWalletInfo == null ||
-						(adminWalletInfo.balanceSats === 0 && (utxoCount === undefined || utxoCount === 0))
-					}
+					disabled={isBroadcasting || !canSign || adminWalletInfo == null || adminWalletInfo.balanceSats === 0}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
@@ -205,14 +197,11 @@ export function BroadcastDetailsCard({
 						{canSignReason ?? 'Hardware wallet required to sign'}
 					</p>
 				)}
-				{canSign &&
-					adminWalletInfo != null &&
-					adminWalletInfo.balanceSats === 0 &&
-					(utxoCount === undefined || utxoCount === 0) && (
-						<p className="mt-2 text-center text-[12px] text-[#6b7280]">
-							Insufficient balance — fund the admin wallet to broadcast
-						</p>
-					)}
+				{canSign && adminWalletInfo != null && adminWalletInfo.balanceSats === 0 && (
+					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+						Insufficient balance — fund the admin wallet to broadcast
+					</p>
+				)}
 			</div>
 		</div>
 	)
