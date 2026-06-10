@@ -638,6 +638,15 @@ pub async fn proposals_get(input: GetProposalInput) -> Result<ProposalDto, Strin
     Ok(map_proposal(proposal))
 }
 
+/// Pre-broadcast guard for a Cancel proposal: is its target action still queued on the ASM?
+#[tauri::command]
+pub async fn proposals_check_cancel_target_queued(input: GetProposalInput) -> Result<bool, String> {
+    let client = build_client(input.base_url)?;
+    proposals::get_cancel_target_status(&client, &input.action_id)
+        .await
+        .map_err(map_proposal_error)
+}
+
 #[tauri::command]
 pub async fn proposals_approve(input: ApproveProposalInput) -> Result<ProposalDto, String> {
     let client = build_client(input.base_url)?;

@@ -438,11 +438,30 @@ impl ProposalRepository for PostgresProposalRepository {
         &self,
         cancel_action_id: &ActionId,
         target_action_id: &ActionId,
-    ) -> Result<(), AppError> {
+    ) -> Result<bool, AppError> {
         let mut tx =
             self.pool.begin().await.map_err(|e| {
                 AppError::Internal(anyhow::anyhow!("failed to begin transaction: {e}"))
             })?;
+
+        let result = sqlx::query(
+            "UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2 AND status = $3",
+        )
+        .bind(status_to_db(ProposalStatus::Canceled))
+        .bind(&target_action_id.0)
+        .bind(status_to_db(ProposalStatus::Approved))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("failed to mark target as canceled: {e}"))
+        })?;
+
+        if result.rows_affected() == 0 {
+            tx.commit().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to commit transaction: {e}"))
+            })?;
+            return Ok(false);
+        }
 
         sqlx::query("UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2")
             .bind(status_to_db(ProposalStatus::Enacted))
@@ -453,19 +472,10 @@ impl ProposalRepository for PostgresProposalRepository {
                 AppError::Internal(anyhow::anyhow!("failed to mark cancel as enacted: {e}"))
             })?;
 
-        sqlx::query("UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2")
-            .bind(status_to_db(ProposalStatus::Canceled))
-            .bind(&target_action_id.0)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                AppError::Internal(anyhow::anyhow!("failed to mark target as canceled: {e}"))
-            })?;
-
         tx.commit().await.map_err(|e| {
             AppError::Internal(anyhow::anyhow!("failed to commit transaction: {e}"))
         })?;
 
-        Ok(())
+        Ok(true)
     }
 }

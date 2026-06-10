@@ -28,6 +28,11 @@ pub struct ProposalDetailResponse {
 pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
 }
+
+#[derive(Debug, Serialize)]
+pub struct CancelTargetStatusResponse {
+    pub target_queued: bool,
+}
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -169,6 +174,34 @@ pub async fn get_proposal(
         proposal,
         cancel_proposal,
     }))
+}
+
+/// Pre-broadcast guard for Cancel proposals: reports whether the target action is still
+/// queued (pending) on the live ASM. If it is no longer queued, the ASM would reject the
+/// Cancel tx and the UI should not allow broadcasting it.
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
+pub async fn get_cancel_target_status(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+) -> Result<Json<CancelTargetStatusResponse>> {
+    let action_id = ActionId(action_id);
+    let proposal =
+        proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
+
+    if !proposal.is_cancel() {
+        return Err(AppError::BadRequest(
+            "proposal is not a cancel proposal".to_string(),
+        ));
+    }
+
+    let target_queued = crate::infrastructure::asm_enactment::is_cancel_target_queued(
+        &state.asm_rpc_url,
+        &proposal.action_hex,
+    )
+    .await?;
+
+    Ok(Json(CancelTargetStatusResponse { target_queued }))
 }
 
 #[derive(Debug, Deserialize)]

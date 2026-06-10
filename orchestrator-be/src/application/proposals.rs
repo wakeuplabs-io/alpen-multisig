@@ -314,8 +314,20 @@ pub(crate) async fn reconcile_enacted_for_authority(
             continue;
         }
         if let Some(target_action_id) = &proposal.target_action_id {
-            repo.enact_cancel(&proposal.action_id, target_action_id)
+            let applied = repo
+                .enact_cancel(&proposal.action_id, target_action_id)
                 .await?;
+            if !applied {
+                repo.update_broadcast_status(
+                    &proposal.action_id,
+                    BroadcastStatus::RevealConfirmed,
+                    Some(ProposalStatus::Expired),
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            }
             continue;
         }
         repo.update_broadcast_status(
@@ -412,7 +424,18 @@ pub(crate) async fn reconcile_enacted_for_action(
     }
 
     if let Some(target_action_id) = &proposal.target_action_id {
-        repo.enact_cancel(action_id, target_action_id).await?;
+        let applied = repo.enact_cancel(action_id, target_action_id).await?;
+        if !applied {
+            repo.update_broadcast_status(
+                action_id,
+                BroadcastStatus::RevealConfirmed,
+                Some(ProposalStatus::Expired),
+                None,
+                None,
+                None,
+            )
+            .await?;
+        }
         return Ok(());
     }
 
@@ -1403,6 +1426,93 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(target.status, ProposalStatus::Canceled);
+    }
+
+    #[tokio::test]
+    async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(
+            &repo,
+            session_b.clone(),
+            "mock://asm-membership",
+            &cancel.action_id,
+        )
+        .await
+        .unwrap();
+
+        // Target reaches RevealConfirmed and gets enacted normally before the cancel does.
+        repo.update_broadcast_status(
+            &target.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Enacted);
+
+        // The cancel reaches RevealConfirmed afterwards, but its target is no longer Approved —
+        // the ASM would have rejected the cancel tx, so it should be marked Expired without
+        // touching the already-enacted target.
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let cancel = repo
+            .find_by_action_id(&cancel.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancel.status, ProposalStatus::Expired);
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Enacted);
     }
 
     // ---------------------------------------------------------------------------
