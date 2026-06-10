@@ -7,6 +7,7 @@ import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/compon
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
 import { useAdminWalletSync } from '@/domain/admin-wallet/hooks'
 import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
@@ -43,9 +44,13 @@ export function BroadcastProposalScreen() {
 		}
 	}, [isAdminWalletMode, triggerSync, refreshAdminWalletInfo])
 
+	const feeState = useFeePresets()
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
 		ORCHESTRATOR_BASE_URL,
 		actionId ?? '',
+		feeRateSatPerKvb,
 		signerKind,
 		adapter,
 	)

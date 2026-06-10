@@ -4,6 +4,7 @@ import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
+import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -18,8 +19,11 @@ export function CancelProposalBroadcastScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
+	const feeState = useFeePresets()
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+
 	const { isResolvingCancel, cancelResolveError, phase, bundle, result, proposal, error, prepare, broadcast } =
-		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '')
+		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
 
 	async function handleBack() {
 		await disconnectSession()

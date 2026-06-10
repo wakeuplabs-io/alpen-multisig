@@ -18,12 +18,16 @@ type UseCancelBroadcastReturn = {
 	broadcast: () => Promise<void>
 }
 
-export function useCancelBroadcast(baseUrl: string, targetActionId: string): UseCancelBroadcastReturn {
+export function useCancelBroadcast(
+	baseUrl: string,
+	targetActionId: string,
+	feeRateSatPerKvb: number,
+): UseCancelBroadcastReturn {
 	const { proposal: targetProposal, isLoading, error: targetError } = useProposalDetail(baseUrl, targetActionId)
 
 	const cancelActionId = targetProposal?.cancelProposal?.actionId ?? null
 
-	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '')
+	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '', feeRateSatPerKvb)
 
 	return {
 		isResolvingCancel: isLoading,

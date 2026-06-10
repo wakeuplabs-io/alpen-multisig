@@ -358,6 +358,67 @@ mod build_reveal_tx_tests {
             "change output must NOT be the P2TR self-change from envelope keypair"
         );
     }
+
+    /// Regression: reveal transaction input MUST signal RBF (BIP-125).
+    ///
+    /// `Sequence::ENABLE_RBF_NO_LOCKTIME` (0xFFFFFFFD) satisfies the BIP-125
+    /// condition (`sequence < 0xFFFFFFFE`). If this test ever fails, a future
+    /// BDK/bitcoin-crate change silently disabled RBF in the reveal path.
+    #[test]
+    fn reveal_tx_input_signals_rbf_bip125() {
+        use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+        use crate::domain::authority::Authority;
+        use crate::infrastructure::action_codec;
+        use ssz::Decode;
+        use std::num::NonZeroU8;
+        use strata_asm_txs_admin::actions::MultisigAction;
+        use strata_l1_txfmt::MagicBytes;
+
+        let network = Network::Regtest;
+        let envelope_keypair = make_test_envelope_keypair();
+        let change_spk = make_test_change_spk(network);
+
+        const SIGNER_HEX: &str =
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+        let pk = CompressedPubKey::from_hex(SIGNER_HEX).unwrap();
+        let action_domain = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        });
+        let action_hex = action_codec::encode_hex(&action_domain).unwrap();
+        let action_bytes = hex::decode(&action_hex).unwrap();
+        let action = MultisigAction::from_ssz_bytes(&action_bytes).unwrap();
+
+        const PAYLOAD: &[u8] = &[0x61u8; 128];
+        let (commit_address, reveal_script, taproot_spend_info) =
+            derive_commit_address(&envelope_keypair, PAYLOAD, network).unwrap();
+        let commit_address_script = commit_address.script_pubkey();
+        let commit_tx = build_minimal_commit_tx(commit_address_script.clone());
+        let magic_bytes = MagicBytes::new([b'A', b'L', b'P', b'N']);
+
+        let reveal_tx = build_reveal_tx(
+            &envelope_keypair,
+            &reveal_script,
+            &taproot_spend_info,
+            &commit_tx,
+            &commit_address_script,
+            &action,
+            magic_bytes,
+            change_spk,
+            500,
+        )
+        .unwrap();
+
+        for (i, input) in reveal_tx.input.iter().enumerate() {
+            assert!(
+                input.sequence.is_rbf(),
+                "reveal tx input[{i}] sequence 0x{:08X} does not signal RBF (BIP-125)",
+                input.sequence.to_consensus_u32()
+            );
+        }
+    }
 }
 
 #[cfg(test)]

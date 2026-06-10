@@ -4,6 +4,7 @@ import { ManualImportForm } from '@/domain/manual-proposal/components/manual-imp
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
 import { useManualProposal } from '@/domain/manual-proposal/hooks/use-manual-proposal'
 import type { ManualBundleJson } from '@/domain/manual-proposal/model/manual-proposal.types'
+import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
@@ -26,7 +27,9 @@ export function ManualProposalScreen() {
 	const location = useLocation()
 	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const prefill = (location.state as LocationState | null)?.prefill ?? null
-	const manual = useManualProposal(prefill)
+	const feeState = useFeePresets()
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : 1_000
+	const manual = useManualProposal(prefill, feeRateSatPerKvb)
 
 	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
 	const balanceHook = useAdminWalletBalance()

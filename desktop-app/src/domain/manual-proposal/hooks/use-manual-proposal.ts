@@ -32,7 +32,7 @@ function normalizeHex(s: string): string {
 
 export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting' | 'done' | 'error'
 
-export function useManualProposal(initialBundle?: ManualBundleJson | null) {
+export function useManualProposal(initialBundle?: ManualBundleJson | null, feeRateSatPerKvb = 1_000) {
 	const { adapter, wallet } = useSession()
 
 	const [step, setStep] = useState<ManualStep>('import')
@@ -341,6 +341,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			seqNo: importData.seqNo,
 			authority: importData.authority,
 			signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
+			feeRateSatPerKvb,
 		}
 
 		const res = await prepareBroadcastManual(prepInput)
@@ -363,6 +364,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			seqNo: importData.seqNo,
 			authority: importData.authority,
 			signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
+			feeRateSatPerKvb,
 		}
 
 		const res = await broadcastManualProposal(input)

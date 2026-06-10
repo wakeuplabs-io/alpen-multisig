@@ -689,7 +689,7 @@ impl WalletService {
         &self,
         commit_address: &str,
         amount_sats: u64,
-        fee_rate: u64,
+        fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
         // 0. ReadOnly guard — must run before any RPC contact
         let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
@@ -714,10 +714,7 @@ impl WalletService {
             .require_network(self.network)
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
 
-        let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
-            .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
-
-        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
+        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate)
             .await
     }
 
@@ -1065,7 +1062,12 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
-            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit(
+                "bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa",
+                1000,
+                bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(1)
+                    .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN),
+            )
             .await;
 
         assert!(
@@ -1086,7 +1088,12 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
-            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit(
+                "bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa",
+                1000,
+                bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(1)
+                    .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN),
+            )
             .await;
 
         assert!(

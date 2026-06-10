@@ -116,6 +116,7 @@ export function approveProposal(input: ApproveProposalInput): Promise<ApiResult<
 export type BroadcastInput = {
 	baseUrl: string
 	actionId: string
+	feeRateSatPerKvb: number
 }
 
 export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<PrepareBroadcastResult>> {
@@ -144,6 +145,7 @@ export type BroadcastManualInput = {
 	seqNo: number
 	authority: string
 	signatures: Array<{ signerPubkey: string; signatureHex: string }>
+	feeRateSatPerKvb: number
 }
 
 export function prepareBroadcastManual(input: BroadcastManualInput): Promise<ApiResult<PrepareBroadcastResult>> {
