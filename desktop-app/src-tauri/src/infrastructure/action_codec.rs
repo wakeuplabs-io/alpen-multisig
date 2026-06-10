@@ -8,14 +8,18 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
-    EeStfVkUpdate, OlStfVkUpdate, StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    EeStfVkUpdate, OlStfVkUpdate, OperatorSetUpdate as StrataOperatorSetUpdate,
+    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+use strata_crypto::EvenPublicKey;
 use strata_predicate::{PredicateKey, PredicateTypeId};
 
-use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate, PubKeyError, VkUpdate};
+use crate::domain::action::{
+    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError, VkUpdate,
+};
 use crate::domain::authority::Authority;
 
 /// Errors produced when encoding/decoding an `Action`.
@@ -127,6 +131,16 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                 ))),
             }
         }
+        Action::OperatorSetUpdate(update) => {
+            let add = update
+                .add_members
+                .iter()
+                .map(to_strata_even_pubkey)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(MultisigAction::Update(UpdateAction::OperatorSet(
+                StrataOperatorSetUpdate::new(add, update.remove_members.clone()),
+            )))
+        }
     }
 }
 
@@ -173,8 +187,13 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::AlpenAdminMultisig(_)) => {
             Err(CodecError::UnsupportedVariant("AlpenAdminMultisig"))
         }
-        MultisigAction::Update(UpdateAction::OperatorSet(_)) => {
-            Err(CodecError::UnsupportedVariant("OperatorSet"))
+        MultisigAction::Update(UpdateAction::OperatorSet(u)) => {
+            let (add_strata, remove) = u.into_inner();
+            let add = add_strata.iter().map(from_strata_even_pubkey).collect();
+            Ok(Action::OperatorSetUpdate(OperatorSetUpdate {
+                add_members: add,
+                remove_members: remove,
+            }))
         }
         MultisigAction::Update(UpdateAction::Sequencer(_)) => {
             Err(CodecError::UnsupportedVariant("Sequencer"))
@@ -229,6 +248,19 @@ fn multisig_update_from_strata_admin(
 
 fn from_strata_pubkey(pk: &CompressedPublicKey) -> Result<CompressedPubKey, CodecError> {
     Ok(CompressedPubKey::new(pk.serialize()))
+}
+
+fn to_strata_even_pubkey(pk: &EvenPubKey) -> Result<EvenPublicKey, CodecError> {
+    // EvenPublicKey::from(XOnlyPublicKey) normalises parity to even — safe for x-only keys.
+    use bitcoin::secp256k1::XOnlyPublicKey;
+    let x_only = XOnlyPublicKey::from_slice(pk.as_bytes())
+        .map_err(|e| CodecError::Encode(format!("invalid x-only pubkey: {e}")))?;
+    Ok(EvenPublicKey::from(x_only))
+}
+
+fn from_strata_even_pubkey(pk: &EvenPublicKey) -> EvenPubKey {
+    // EvenPublicKey derefs to secp256k1 PublicKey; x_only_public_key().0 gives XOnlyPublicKey.
+    EvenPubKey::new(pk.x_only_public_key().0.serialize())
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -293,5 +325,50 @@ mod tests {
     fn test_decode_rejects_truncated_bytes() {
         let err = decode(&[0x00, 0x01, 0x02]).unwrap_err();
         assert!(matches!(err, CodecError::Decode(_)));
+    }
+
+    fn sample_operator_set_action() -> Action {
+        // secp256k1 generator G x-coordinate — a canonical, even-parity x-only key.
+        let even_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let pk = EvenPubKey::from_hex(even_key_hex).unwrap();
+        Action::OperatorSetUpdate(OperatorSetUpdate {
+            add_members: vec![pk],
+            remove_members: vec![5],
+        })
+    }
+
+    #[test]
+    fn test_operator_set_roundtrip_bytes() {
+        let action = sample_operator_set_action();
+        let bytes = encode(&action).expect("encode ok");
+        let decoded = decode(&bytes).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_operator_set_roundtrip_hex() {
+        let action = sample_operator_set_action();
+        let hex = encode_hex(&action).expect("encode ok");
+        let decoded = decode_hex(&hex).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_operator_set_encode_matches_direct_strata_ssz() {
+        use bitcoin::secp256k1::XOnlyPublicKey;
+        use strata_asm_txs_admin::actions::updates::OperatorSetUpdate as StrataOsu;
+        use strata_crypto::EvenPublicKey;
+
+        let even_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let bytes = hex::decode(even_key_hex).unwrap();
+        let x_only = XOnlyPublicKey::from_slice(&bytes).unwrap();
+        let strata_pk = EvenPublicKey::from(x_only);
+
+        let strata_update = StrataOsu::new(vec![strata_pk], vec![5]);
+        let strata_action = MultisigAction::Update(UpdateAction::OperatorSet(strata_update));
+        let direct_bytes = strata_action.as_ssz_bytes();
+
+        let domain_bytes = encode(&sample_operator_set_action()).unwrap();
+        assert_eq!(domain_bytes, direct_bytes);
     }
 }

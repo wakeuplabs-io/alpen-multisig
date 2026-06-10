@@ -8,6 +8,7 @@ use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
 use strata_asm_proto_checkpoint::state::CheckpointState;
 use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
@@ -51,6 +52,27 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             ))
         }
         MultisigAction::Update(UpdateAction::EeStfVk(_)) => Ok(false),
+        MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
+            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let current_keys: Vec<String> = bridge
+                .operators()
+                .operators()
+                .iter()
+                .map(|e| hex::encode(e.musig2_pk().x_only_public_key().0.serialize()))
+                .collect();
+            let (add_members, _) = update.clone().into_inner();
+            // A remove-only update has no added keys to check presence against —
+            // vacuous `all()` would give a false positive before enactment.
+            if add_members.is_empty() {
+                return Ok(false);
+            }
+            Ok(add_members.iter().all(|pk| {
+                let key_hex = hex::encode(pk.x_only_public_key().0.serialize());
+                current_keys
+                    .iter()
+                    .any(|k| k.eq_ignore_ascii_case(&key_hex))
+            }))
+        }
         MultisigAction::Update(_) => {
             let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
                 return Ok(false);
@@ -257,6 +279,16 @@ fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoStat
         .map_err(|e| {
             format!("Administration section (id {id}) does not decode with this app ({e:?}).")
         })
+}
+
+fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeV1State, String> {
+    let id = BridgeV1Subproto::ID;
+    let section = anchor.find_section(id).ok_or_else(|| {
+        format!("AnchorState has no bridge-v1 subprotocol section (expected id {id})")
+    })?;
+    section
+        .try_to_state::<BridgeV1Subproto>()
+        .map_err(|e| format!("BridgeV1 section SSZ decode failed: {e:?}"))
 }
 
 fn decode_checkpoint_state(anchor: &AnchorState) -> Result<CheckpointState, String> {

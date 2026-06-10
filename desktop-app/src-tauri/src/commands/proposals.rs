@@ -167,6 +167,9 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
     match desktop_app::infrastructure::action_codec::decode_hex(hex) {
         Ok(desktop_app::domain::action::Action::MultisigUpdate(_)) => "multisig_update".to_string(),
         Ok(desktop_app::domain::action::Action::VkUpdate(_)) => "vk_update".to_string(),
+        Ok(desktop_app::domain::action::Action::OperatorSetUpdate(_)) => {
+            "operator_set_update".to_string()
+        }
         Err(_) => "unknown".to_string(),
     }
 }

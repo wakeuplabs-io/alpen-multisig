@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
 use strata_asm_proto_checkpoint::{state::CheckpointState, subprotocol::CheckpointSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 
@@ -89,6 +90,18 @@ pub async fn fetch_current_vk(rpc_url: &str) -> Result<CurrentVk, String> {
         type_name,
         condition_hex: hex::encode(predicate.condition()),
     })
+}
+
+pub async fn fetch_current_operators(rpc_url: &str) -> Result<Vec<String>, String> {
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    let bridge = decode_bridge_state(&anchor)?;
+    Ok(bridge
+        .operators()
+        .operators()
+        .iter()
+        .map(|entry| hex::encode(entry.musig2_pk().x_only_public_key().0.serialize()))
+        .collect())
 }
 
 /// Search the live ASM queue for the `UpdateId` matching `action_hex`.
@@ -217,6 +230,16 @@ fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoStat
              (see `[database].path` in asm-config.toml, e.g. /tmp/asm-runner-db) so genesis is recreated."
         )
     })
+}
+
+fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeV1State, String> {
+    let id = BridgeV1Subproto::ID;
+    let section = anchor.find_section(id).ok_or_else(|| {
+        format!("AnchorState has no bridge-v1 subprotocol section (expected id {id})")
+    })?;
+    section
+        .try_to_state::<BridgeV1Subproto>()
+        .map_err(|e| format!("BridgeV1 section SSZ decode failed: {e:?}"))
 }
 
 fn authority_keys_hex(

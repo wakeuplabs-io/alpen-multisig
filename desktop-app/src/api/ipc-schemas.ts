@@ -43,7 +43,7 @@ export const proposalSchema = z
 		status: proposalStatusSchema,
 		requiredSignatures: z.number(),
 		actionHex: z.string(),
-		actionType: z.enum(['multisig_update', 'vk_update', 'cancel', 'unknown']),
+		actionType: z.enum(['multisig_update', 'vk_update', 'operator_set_update', 'cancel', 'unknown']),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),
