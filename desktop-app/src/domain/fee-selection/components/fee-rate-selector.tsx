@@ -1,11 +1,20 @@
 import { useState } from 'react'
 import type { ComponentType } from 'react'
 import type { FeeRates } from '@/api/fee-rates'
-import { AlertTriangleIcon, BoltIcon, CheckWhiteIcon, GaugeIcon, HourglassIcon, SlidersIcon } from '@/assets/icons'
+import {
+	AlertTriangleIcon,
+	BoltIcon,
+	CheckWhiteIcon,
+	ChevronDownIcon,
+	GaugeIcon,
+	HourglassIcon,
+	MinusIcon,
+	PlusIcon,
+	SlidersIcon,
+} from '@/assets/icons'
 import type { IconProps } from '@/assets/icons'
 import {
 	FEE_RATE_STEP_SAT_PER_KVB,
-	SAT_PER_VB_TO_KVB,
 	clampCustomRate,
 	feeSats,
 	formatSatPerVb,
@@ -49,6 +58,7 @@ function FeeBreakdownRow({ label, sats }: { label: string; sats: number }) {
 
 export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCustomRate }: Props) {
 	const [customInput, setCustomInput] = useState('')
+	const [isBreakdownOpen, setIsBreakdownOpen] = useState(false)
 
 	const isCustom = selection.kind === 'custom'
 	const activeSatPerKvb = isCustom ? selection.satPerKvb : presets[selection.preset].satPerKvb
@@ -75,6 +85,13 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 		const val = parseSatPerVb(customInput) ?? activeSatPerKvb
 		setCustomInput(formatSatPerVb(val))
 		onSetCustomRate(val)
+	}
+
+	function handleStepCustom(direction: 1 | -1) {
+		const current = parseSatPerVb(customInput) ?? activeSatPerKvb
+		const next = clampCustomRate(current + direction * FEE_RATE_STEP_SAT_PER_KVB, presets)
+		setCustomInput(formatSatPerVb(next))
+		onSetCustomRate(next)
 	}
 
 	return (
@@ -137,24 +154,40 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 					<label htmlFor="custom-fee-rate" className="text-[12px] font-medium text-[#374151]">
 						Custom rate
 					</label>
-					<div className="flex items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition focus-within:border-[#111827]">
-						<input
-							id="custom-fee-rate"
-							type="number"
-							autoFocus
-							min={presets.minRelaySatPerKvb / SAT_PER_VB_TO_KVB}
-							max={presets.maxSatPerKvb / SAT_PER_VB_TO_KVB}
-							step={FEE_RATE_STEP_SAT_PER_KVB / SAT_PER_VB_TO_KVB}
-							placeholder={formatSatPerVb(activeSatPerKvb)}
-							value={customInput}
-							onChange={(e) => handleCustomChange(e.target.value)}
-							onBlur={handleCustomBlur}
-							className="w-24 border-0 bg-transparent px-3 py-1.5 text-[13px] text-[#111827] focus:outline-none"
-						/>
-						<span className="pr-3 text-[12px] text-[#9ca3af]">sat/vB</span>
+					<div className="flex items-center gap-1.5">
+						<button
+							type="button"
+							aria-label="Decrease fee rate"
+							onClick={() => handleStepCustom(-1)}
+							className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] active:bg-[#f3f4f6]"
+						>
+							<MinusIcon width={12} height={12} />
+						</button>
+						<div className="flex items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition focus-within:border-[#111827]">
+							<input
+								id="custom-fee-rate"
+								type="text"
+								inputMode="decimal"
+								autoFocus
+								placeholder={formatSatPerVb(activeSatPerKvb)}
+								value={customInput}
+								onChange={(e) => handleCustomChange(e.target.value)}
+								onBlur={handleCustomBlur}
+								className="w-16 border-0 bg-transparent px-2.5 py-1.5 text-center text-[13px] font-medium text-[#111827] focus:outline-none"
+							/>
+							<span className="pr-2.5 text-[12px] text-[#9ca3af]">sat/vB</span>
+						</div>
+						<button
+							type="button"
+							aria-label="Increase fee rate"
+							onClick={() => handleStepCustom(1)}
+							className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] active:bg-[#f3f4f6]"
+						>
+							<PlusIcon width={12} height={12} />
+						</button>
 					</div>
 					<span className="ml-auto text-[11px] text-[#9ca3af]">
-						min {formatSatPerVb(presets.minRelaySatPerKvb)} · max {formatSatPerVb(presets.maxSatPerKvb)} sat/vB
+						step 0.1 · min {formatSatPerVb(presets.minRelaySatPerKvb)} · max {formatSatPerVb(presets.maxSatPerKvb)}
 					</span>
 				</div>
 			)}
@@ -170,15 +203,31 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 			)}
 
 			<div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
-				<dl className="m-0 divide-y divide-[#f3f4f6] bg-white text-[12px]">
-					<FeeBreakdownRow label="Commit fee (est.)" sats={commitFee} />
-					<FeeBreakdownRow label="Reveal fee" sats={revealFee} />
-					<FeeBreakdownRow label="Dust output (commit)" sats={presets.commitDustSats} />
-				</dl>
-				<div className="flex items-center justify-between border-t border-[#e5e7eb] bg-[#f9fafb] px-3 py-2">
-					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated total fee</span>
+				<button
+					type="button"
+					aria-expanded={isBreakdownOpen}
+					onClick={() => setIsBreakdownOpen((open) => !open)}
+					className="flex w-full items-center justify-between bg-[#f9fafb] px-3 py-2.5 transition hover:bg-[#f3f4f6]"
+				>
+					<span className="flex items-center gap-1.5">
+						<ChevronDownIcon
+							width={12}
+							height={12}
+							className={`text-[#9ca3af] transition-transform ${isBreakdownOpen ? '' : '-rotate-90'}`}
+						/>
+						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
+							Estimated total fee
+						</span>
+					</span>
 					<span className="text-[13px] font-semibold text-[#111827]">{totalFee.toLocaleString()} sats</span>
-				</div>
+				</button>
+				{isBreakdownOpen && (
+					<dl className="m-0 divide-y divide-[#f3f4f6] border-t border-[#e5e7eb] bg-white text-[12px]">
+						<FeeBreakdownRow label="Commit fee (est.)" sats={commitFee} />
+						<FeeBreakdownRow label="Reveal fee" sats={revealFee} />
+						<FeeBreakdownRow label="Dust output (commit)" sats={presets.commitDustSats} />
+					</dl>
+				)}
 			</div>
 		</div>
 	)

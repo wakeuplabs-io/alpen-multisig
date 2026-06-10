@@ -387,6 +387,33 @@ export function SlidersIcon({ width = 24, height = 24, className, ...rest }: Ico
 	)
 }
 
+/** Plus sign for stepper buttons; pair with parent `text-*` for color. */
+export function PlusIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Minus sign for stepper buttons; pair with parent `text-*` for color. */
+export function MinusIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Chevron pointing down; pair with parent `text-*` for color. */
+export function ChevronDownIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M6 10l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
 /** Warning triangle with exclamation mark; pair with parent `text-*` for color. */
 export function AlertTriangleIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
 	return (
