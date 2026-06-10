@@ -433,4 +433,39 @@ impl ProposalRepository for PostgresProposalRepository {
 
         Ok(())
     }
+
+    async fn enact_cancel(
+        &self,
+        cancel_action_id: &ActionId,
+        target_action_id: &ActionId,
+    ) -> Result<(), AppError> {
+        let mut tx =
+            self.pool.begin().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to begin transaction: {e}"))
+            })?;
+
+        sqlx::query("UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2")
+            .bind(status_to_db(ProposalStatus::Enacted))
+            .bind(&cancel_action_id.0)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to mark cancel as enacted: {e}"))
+            })?;
+
+        sqlx::query("UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2")
+            .bind(status_to_db(ProposalStatus::Canceled))
+            .bind(&target_action_id.0)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to mark target as canceled: {e}"))
+            })?;
+
+        tx.commit().await.map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("failed to commit transaction: {e}"))
+        })?;
+
+        Ok(())
+    }
 }

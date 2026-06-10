@@ -66,4 +66,11 @@ pub(crate) trait ProposalRepository: Send + Sync {
         action_id: &ActionId,
         update_id: u32,
     ) -> Result<(), AppError>;
+
+    /// Atomically mark a cancel proposal as `Enacted` and its target as `Canceled`.
+    async fn enact_cancel(
+        &self,
+        cancel_action_id: &ActionId,
+        target_action_id: &ActionId,
+    ) -> Result<(), AppError>;
 }

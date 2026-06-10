@@ -287,9 +287,6 @@ pub(crate) async fn reconcile_enacted_for_authority(
         .await?;
 
     for proposal in approved {
-        if proposal.is_cancel() {
-            continue;
-        }
         if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
             continue;
         }
@@ -314,6 +311,11 @@ pub(crate) async fn reconcile_enacted_for_authority(
             }
         };
         if !enacted {
+            continue;
+        }
+        if let Some(target_action_id) = &proposal.target_action_id {
+            repo.enact_cancel(&proposal.action_id, target_action_id)
+                .await?;
             continue;
         }
         repo.update_broadcast_status(
@@ -381,8 +383,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     };
     require_proposal_authority(&proposal, authority)?;
 
-    if proposal.is_cancel()
-        || proposal.status != ProposalStatus::Approved
+    if proposal.status != ProposalStatus::Approved
         || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
         || proposal.reveal_txid.is_none()
     {
@@ -407,6 +408,11 @@ pub(crate) async fn reconcile_enacted_for_action(
         }
     };
     if !enacted {
+        return Ok(());
+    }
+
+    if let Some(target_action_id) = &proposal.target_action_id {
+        repo.enact_cancel(action_id, target_action_id).await?;
         return Ok(());
     }
 
@@ -1340,6 +1346,63 @@ mod tests {
 
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Enacted);
+    }
+
+    #[tokio::test]
+    async fn reconcile_marks_target_canceled_when_cancel_enacted() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(&repo, session_b, "mock://asm-membership", &cancel.action_id)
+            .await
+            .unwrap();
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let cancel = repo
+            .find_by_action_id(&cancel.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancel.status, ProposalStatus::Enacted);
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Canceled);
     }
 
     // ---------------------------------------------------------------------------
