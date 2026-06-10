@@ -1,15 +1,10 @@
 //! IPC boundary for fee rate estimation — DTO mapping only, no policy.
 
-use std::sync::Arc;
-
-use desktop_app::application::fee_estimation::{FeeEstimationService, FeePresets, FeeSource};
+use desktop_app::application::fee_estimation::{FeeEstimationServiceState, FeePresets, FeeSource};
 use desktop_app::domain::fee_constants::{
     COMMIT_DUST_SATS, COMMIT_TX_VBYTES_ESTIMATE, REVEAL_TX_VBYTES,
 };
 use desktop_app::domain::fee_rate::MAX_FEE_RATE_SAT_PER_KVB;
-use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
-use desktop_app::infrastructure::node_config_store::NodeConfigState;
-use desktop_app::infrastructure::node_fee_estimator::NodeFeeEstimator;
 
 /// Response DTO for a single preset.
 #[derive(Debug, serde::Serialize)]
@@ -72,24 +67,13 @@ fn to_dto(presets: FeePresets) -> FeeRatesDto {
 /// Estimate fee presets for governance broadcast (and wallet Send in later phases).
 ///
 /// Read-only: requires neither an active wallet session nor signing capability.
+/// The shared service holds an in-memory cache (M2) so repeated calls return
+/// `Cached` presets when live sources are temporarily unavailable.
 #[tauri::command]
 pub async fn fee_rates_estimate(
-    node_config: tauri::State<'_, NodeConfigState>,
+    fee_service: tauri::State<'_, FeeEstimationServiceState>,
 ) -> Result<FeeRatesDto, String> {
-    let cfg = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .clone();
-
-    let rpc = Arc::new(HttpBitcoinRpcClient::new(
-        cfg.btc_rpc_url(),
-        cfg.btc_rpc_user(),
-        cfg.btc_rpc_pass(),
-    ));
-    let node_estimator = Arc::new(NodeFeeEstimator::new(rpc));
-    let service = FeeEstimationService::new(vec![node_estimator]);
-    let presets = service.presets().await;
+    let presets = fee_service.0.presets().await;
     Ok(to_dto(presets))
 }
 

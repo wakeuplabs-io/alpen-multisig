@@ -43,14 +43,17 @@ export type BroadcastErrorCode =
 	| 'device_disconnected'
 	| 'hw_signing_failed'
 	| 'session_expired'
+	| 'broadcast_unavailable'
 	| 'unknown_error'
 
-export type BroadcastRecovery = 'retry' | 'resubmit-reveal' | 'reconnect-device' | 're-auth'
+export type BroadcastRecovery = 'retry' | 'resubmit-reveal' | 'reconnect-device' | 're-auth' | 'manual-broadcast'
 
 export type BroadcastError = {
 	code: BroadcastErrorCode
 	message: string
 	recovery: BroadcastRecovery
+	commitTxHex?: string
+	revealTxHex?: string
 }
 
 const CODE_RECOVERY_MAP: Record<string, BroadcastRecovery> = {
@@ -63,17 +66,25 @@ const CODE_RECOVERY_MAP: Record<string, BroadcastRecovery> = {
 	device_disconnected: 'reconnect-device',
 	hw_signing_failed: 'reconnect-device',
 	session_expired: 're-auth',
+	broadcast_unavailable: 'manual-broadcast',
 	unknown_error: 'retry',
 }
 
 export function deriveBroadcastError(raw: string): BroadcastError {
 	try {
-		const parsed = JSON.parse(raw) as { code?: string; message?: string }
+		const parsed = JSON.parse(raw) as {
+			code?: string
+			message?: string
+			commitTxHex?: string
+			revealTxHex?: string
+		}
 		const code = (parsed.code && CODE_RECOVERY_MAP[parsed.code] ? parsed.code : 'unknown_error') as BroadcastErrorCode
 		return {
 			code,
 			message: parsed.message ?? raw,
 			recovery: CODE_RECOVERY_MAP[code],
+			...(parsed.commitTxHex != null && { commitTxHex: parsed.commitTxHex }),
+			...(parsed.revealTxHex != null && { revealTxHex: parsed.revealTxHex }),
 		}
 	} catch {
 		return makeBroadcastError('unknown_error', raw, 'retry')

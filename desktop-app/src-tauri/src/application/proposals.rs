@@ -19,6 +19,7 @@ use crate::application::orchestrator_client::{
     ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
 use crate::application::pending_reveals::PendingReveals;
+use crate::application::tx_broadcaster::TxBroadcaster;
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -44,6 +45,14 @@ pub enum BroadcastError {
     Timeout { txid: String },
     #[error("no pending reveal found for action_id: {action_id}")]
     NoPendingReveal { action_id: String },
+    /// All broadcasters (Electrum + node) failed. Carries the raw tx hexes for manual
+    /// copy-and-broadcast as an escape hatch (spec §8.3 M3).
+    #[error("all broadcasters failed: {errors:?}")]
+    AllBroadcastersFailed {
+        commit_tx_hex: String,
+        reveal_tx_hex: String,
+        errors: Vec<(String, String)>,
+    },
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
@@ -125,10 +134,6 @@ async fn report_broadcast(
     Ok(())
 }
 
-fn is_unknown_method(err: &str) -> bool {
-    err.contains("-32601") || err.contains("Method not found") || err.contains("method not found")
-}
-
 /// Outcome of awaiting the reveal confirmation.
 ///
 /// `Confirmed` means the reveal reached at least one confirmation and the orchestrator was
@@ -149,7 +154,7 @@ pub enum ConfirmOutcome {
 /// confirmation — the caller awaits confirmation separately (see [`await_reveal_confirmation`]).
 ///
 /// Flow: claim → build_signed_commit → build_reveal_tx → drop keypair → insert pending →
-/// submit_package (or sequential fallback) → report commit_broadcasted → report
+/// broadcasters (Electrum first, node fallback) → report commit_broadcasted → report
 /// reveal_broadcasted → return txids.
 ///
 /// On any error during the broadcast stage (a genuine submission error), the proposal is
@@ -159,7 +164,7 @@ pub enum ConfirmOutcome {
 #[allow(clippy::too_many_arguments)]
 pub async fn submit_commit_then_reveal(
     client: &dyn OrchestratorClient,
-    btc_rpc: &dyn BitcoinRpcClient,
+    broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
     asm_rpc_url: &str,
     magic_bytes: MagicBytes,
     network: Network,
@@ -267,23 +272,27 @@ pub async fn submit_commit_then_reveal(
             );
         }
 
-        // Step 6: Broadcast — try submit_package first, fall back to sequential.
-        match btc_rpc
-            .submit_package(&[commit_hex.clone(), reveal_hex.clone()])
-            .await
-        {
-            Ok(()) => {}
-            Err(ref e) if is_unknown_method(e) => {
-                btc_rpc
-                    .send_raw_transaction(&commit_hex)
-                    .await
-                    .map_err(BroadcastError::BitcoinRpc)?;
-                btc_rpc
-                    .send_raw_transaction(&reveal_hex)
-                    .await
-                    .map_err(BroadcastError::BitcoinRpc)?;
+        // Step 6: Broadcast — try each broadcaster in order (Electrum first, node fallback).
+        let mut broadcast_errors: Vec<(String, String)> = Vec::new();
+        let mut broadcast_ok = false;
+        for b in broadcasters {
+            match b.broadcast_pair(&commit_hex, &reveal_hex).await {
+                Ok(()) => {
+                    broadcast_ok = true;
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
+                    broadcast_errors.push((b.name().to_string(), e.message().to_string()));
+                }
             }
-            Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
+        }
+        if !broadcast_ok {
+            return Err(BroadcastError::AllBroadcastersFailed {
+                commit_tx_hex: commit_hex.clone(),
+                reveal_tx_hex: reveal_hex.clone(),
+                errors: broadcast_errors,
+            });
         }
 
         // Step 7: Report commit_broadcasted then reveal_broadcasted (no commit_confirmed).
@@ -389,6 +398,7 @@ pub async fn await_reveal_confirmation(
 #[allow(clippy::too_many_arguments)]
 pub async fn broadcast_commit_then_reveal(
     client: &dyn OrchestratorClient,
+    broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     magic_bytes: MagicBytes,
@@ -403,7 +413,7 @@ pub async fn broadcast_commit_then_reveal(
 ) -> Result<(String, String), BroadcastError> {
     let (commit_txid, reveal_txid) = submit_commit_then_reveal(
         client,
-        btc_rpc,
+        broadcasters,
         asm_rpc_url,
         magic_bytes,
         network,
@@ -512,6 +522,7 @@ pub async fn prepare_broadcast_manual(
 /// Uses a derived key `"manual-<first-16-chars-of-sighash>"` as the PendingReveals key.
 #[allow(clippy::too_many_arguments)]
 pub async fn broadcast_manual(
+    broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
     btc_rpc: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
     magic_bytes: MagicBytes,
@@ -614,22 +625,26 @@ pub async fn broadcast_manual(
             );
         }
 
-        match btc_rpc
-            .submit_package(&[commit_hex.clone(), reveal_hex.clone()])
-            .await
-        {
-            Ok(()) => {}
-            Err(ref e) if is_unknown_method(e) => {
-                btc_rpc
-                    .send_raw_transaction(&commit_hex)
-                    .await
-                    .map_err(BroadcastError::BitcoinRpc)?;
-                btc_rpc
-                    .send_raw_transaction(&reveal_hex)
-                    .await
-                    .map_err(BroadcastError::BitcoinRpc)?;
+        let mut broadcast_errors: Vec<(String, String)> = Vec::new();
+        let mut broadcast_ok = false;
+        for b in broadcasters {
+            match b.broadcast_pair(&commit_hex, &reveal_hex).await {
+                Ok(()) => {
+                    broadcast_ok = true;
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
+                    broadcast_errors.push((b.name().to_string(), e.message().to_string()));
+                }
             }
-            Err(e) => return Err(BroadcastError::BitcoinRpc(e)),
+        }
+        if !broadcast_ok {
+            return Err(BroadcastError::AllBroadcastersFailed {
+                commit_tx_hex: commit_hex.clone(),
+                reveal_tx_hex: reveal_hex.clone(),
+                errors: broadcast_errors,
+            });
         }
 
         wait_for_confirmation(
@@ -781,15 +796,32 @@ mod tests {
         CompleteOrchestratorAuthRequest, OrchestratorAuthChallenge, OrchestratorAuthSession,
         StartOrchestratorAuthRequest,
     };
+    use crate::application::tx_broadcaster::tests::MockBroadcaster;
     use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
     use crate::domain::authority::Authority;
     use crate::domain::proposal::{Proposal as OrcProposal, ProposalSignature};
     use crate::infrastructure::action_codec;
+    use crate::infrastructure::node_broadcaster::NodeBroadcaster;
     use crate::infrastructure::signing;
     use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
     use rand::rngs::OsRng;
     use std::num::NonZeroU8;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
+
+    // Helper: create broadcaster vec from a MockBtcRpc (wraps it in NodeBroadcaster).
+    fn node_broadcasters(
+        rpc: Arc<MockBtcRpc>,
+    ) -> Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> {
+        vec![std::sync::Arc::new(NodeBroadcaster::new(
+            rpc as Arc<dyn crate::infrastructure::bitcoin_rpc::BitcoinRpcClient>,
+        ))]
+    }
+
+    // Helper: single always-ok mock broadcaster for tests that don't need RPC-level assertions.
+    fn ok_broadcasters(
+    ) -> Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> {
+        vec![std::sync::Arc::new(MockBroadcaster::ok("mock"))]
+    }
 
     // ─── Test helpers ───────────────────────────────────────────────────────
 
@@ -1628,7 +1660,7 @@ mod tests {
 
         let commit_txid = "spy-commit-txid-abc123";
         let spy = SpyCommitFunding::new(commit_txid);
-        let mock_rpc = MockBtcRpc::new(commit_txid);
+        let mock_rpc = Arc::new(MockBtcRpc::new(commit_txid));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let reveal_change_spk = ScriptBuf::new();
@@ -1636,7 +1668,8 @@ mod tests {
 
         let _result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &ok_broadcasters(),
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1667,14 +1700,16 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::new("ignored"); // submit_package returns Ok(())
+        let mock_rpc = Arc::new(MockBtcRpc::new("ignored")); // submit_package returns Ok(())
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
+        let broadcasters = node_broadcasters(Arc::clone(&mock_rpc));
 
         let result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &broadcasters,
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1702,14 +1737,17 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::with_submit_package_error("Method not found");
+        let mock_rpc = Arc::new(MockBtcRpc::with_submit_package_error("Method not found"));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
+        // NodeBroadcaster will use the MockBtcRpc — submit_package fails → sequential fallback
+        let broadcasters = node_broadcasters(Arc::clone(&mock_rpc));
 
         let result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &broadcasters,
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1737,14 +1775,15 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_rpc = Arc::new(MockBtcRpc::new("ignored"));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
         let result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &ok_broadcasters(),
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1784,14 +1823,15 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::new("ignored");
+        let mock_rpc = Arc::new(MockBtcRpc::new("ignored"));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
         let result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &ok_broadcasters(),
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1821,14 +1861,13 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::with_zero_confirmations();
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
         let result = submit_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &ok_broadcasters(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1855,21 +1894,26 @@ mod tests {
         );
     }
 
-    /// A genuine submission error (`submit_package` hard error) reports `failed`.
+    /// A genuine submission error (all broadcasters fail) reports `failed`.
     #[tokio::test]
     async fn submit_reports_failed_on_real_submission_error() {
         use bitcoin::{Network, ScriptBuf};
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::with_submit_package_error("node rejected");
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
+        // Failing broadcaster simulates all broadcasters down
+        let failing: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
+            vec![std::sync::Arc::new(MockBroadcaster::unavailable(
+                "mock",
+                "node rejected",
+            ))];
 
         let result = submit_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &failing,
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -1881,7 +1925,10 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, Err(BroadcastError::BitcoinRpc(_))));
+        assert!(matches!(
+            result,
+            Err(BroadcastError::AllBroadcastersFailed { .. })
+        ));
         assert!(
             mock_client
                 .reported_statuses()
@@ -1983,14 +2030,15 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = MockBtcRpc::with_zero_confirmations();
+        let mock_rpc = Arc::new(MockBtcRpc::with_zero_confirmations());
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
 
         let result = broadcast_commit_then_reveal(
             &mock_client,
-            &mock_rpc,
+            &ok_broadcasters(),
+            mock_rpc.as_ref(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
