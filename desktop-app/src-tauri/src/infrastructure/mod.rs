@@ -49,6 +49,7 @@ pub mod dev_secrets;
 pub mod env_loader;
 pub mod hw_wallet;
 pub mod node_config_store;
+pub mod node_fee_estimator;
 pub mod orchestrator_client;
 pub mod rpc_timeout;
 pub mod signing;

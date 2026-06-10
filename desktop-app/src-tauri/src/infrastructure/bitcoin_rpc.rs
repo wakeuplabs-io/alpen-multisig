@@ -14,6 +14,15 @@ pub trait BitcoinRpcClient: Send + Sync {
     /// Estimate fee rate in satoshis per vbyte for the given target block count.
     async fn estimate_fee_rate_sats_per_vb(&self, target_blocks: u16) -> Result<u64, String>;
 
+    /// Strict fee estimate in sat/kvB via `estimatesmartfee`.
+    ///
+    /// Returns `Err` if the node reports `errors`, if the `feerate` field is missing,
+    /// or if the RPC call itself fails. Never swallows errors into a default value.
+    async fn estimate_smart_fee_sat_per_kvb(&self, target_blocks: u16) -> Result<u64, String>;
+
+    /// Minimum relay fee in sat/kvB: `max(getnetworkinfo.relayfee, getmempoolinfo.mempoolminfee)`.
+    async fn min_relay_sat_per_kvb(&self) -> Result<u64, String>;
+
     /// Fetch and decode a transaction by txid.
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String>;
 
@@ -146,6 +155,59 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
 
         let sats_per_vb = (feerate_btc_per_kb * 100_000_000.0 / 1000.0).ceil() as u64;
         Ok(sats_per_vb.max(1))
+    }
+
+    async fn estimate_smart_fee_sat_per_kvb(&self, target_blocks: u16) -> Result<u64, String> {
+        let result = self
+            .call("estimatesmartfee", json!([target_blocks]))
+            .await?;
+
+        // Fail explicitly if the node reports estimation errors (e.g. insufficient data on regtest).
+        if let Some(errors) = result.get("errors") {
+            if !errors.is_null() {
+                if let Some(arr) = errors.as_array() {
+                    if !arr.is_empty() {
+                        let msg = arr
+                            .first()
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("estimation error");
+                        return Err(format!("estimatesmartfee target={target_blocks}: {msg}"));
+                    }
+                }
+            }
+        }
+
+        let feerate_btc_per_kb =
+            result
+                .get("feerate")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    format!("estimatesmartfee target={target_blocks}: missing feerate field")
+                })?;
+
+        // sat/kvB = BTC/kvB × 1e8 (ceiling)
+        let sat_per_kvb = (feerate_btc_per_kb * 100_000_000.0).ceil() as u64;
+        Ok(sat_per_kvb.max(1))
+    }
+
+    async fn min_relay_sat_per_kvb(&self) -> Result<u64, String> {
+        // getnetworkinfo returns relayfee in BTC/kvB; getmempoolinfo returns mempoolminfee.
+        let network_info = self.call("getnetworkinfo", json!([])).await?;
+        let mempool_info = self.call("getmempoolinfo", json!([])).await?;
+
+        let relay_btc_per_kb = network_info
+            .get("relayfee")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.00001);
+        let mempool_btc_per_kb = mempool_info
+            .get("mempoolminfee")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.00001);
+
+        let relay_sat_per_kvb = (relay_btc_per_kb * 100_000_000.0).ceil() as u64;
+        let mempool_sat_per_kvb = (mempool_btc_per_kb * 100_000_000.0).ceil() as u64;
+
+        Ok(relay_sat_per_kvb.max(mempool_sat_per_kvb).max(1))
     }
 
     async fn get_block_count(&self) -> Result<u64, String> {

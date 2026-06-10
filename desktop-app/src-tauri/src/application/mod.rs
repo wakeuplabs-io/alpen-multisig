@@ -6,6 +6,7 @@
 
 pub mod authentication;
 pub mod commit_funding;
+pub mod fee_estimation;
 pub mod orchestrator_auth;
 pub mod orchestrator_client;
 pub mod pending_reveals;

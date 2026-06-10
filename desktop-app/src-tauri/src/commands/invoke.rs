@@ -69,6 +69,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::admin_wallet::admin_wallet_sync_status,
         super::admin_wallet::wallet_session_init_watch_only,
         super::admin_wallet::admin_wallet_can_sign,
+        super::fee_rates::fee_rates_estimate,
         super::system::write_clipboard,
         super::system::save_json_file,
     ])
@@ -136,6 +137,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::admin_wallet::wallet_session_init,
         super::admin_wallet::wallet_session_init_watch_only,
         super::admin_wallet::admin_wallet_can_sign,
+        super::fee_rates::fee_rates_estimate,
         super::system::write_clipboard,
         super::system::save_json_file,
     ])

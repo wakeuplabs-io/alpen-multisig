@@ -1467,6 +1467,14 @@ mod tests {
         async fn get_block_count(&self) -> Result<u64, String> {
             Ok(0)
         }
+
+        async fn estimate_smart_fee_sat_per_kvb(&self, _: u16) -> Result<u64, String> {
+            Ok(1_000)
+        }
+
+        async fn min_relay_sat_per_kvb(&self) -> Result<u64, String> {
+            Ok(1_000)
+        }
     }
 
     /// Minimal orchestrator mock that returns an action large enough for the taproot envelope.
