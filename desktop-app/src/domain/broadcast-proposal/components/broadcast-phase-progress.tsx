@@ -154,8 +154,21 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 				)}
 
 				{isError && error && (
-					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-[13px] text-[#b91c1c]">{error.message}</p>
+					<div className="space-y-3">
+						<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+							<p className="m-0 text-[13px] text-[#b91c1c]">{error.message}</p>
+						</div>
+						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
+							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
+								<p className="m-0 text-[13px] font-medium text-[#111827]">Broadcast manually</p>
+								<p className="m-0 text-[12px] text-[#6b7280]">
+									Broadcast the commit first, then the reveal, via any Bitcoin node (
+									<code className="font-mono text-[11px]">sendrawtransaction</code>).
+								</p>
+								<TxidRow label="Commit TX (broadcast first)" txid={error.commitTxHex} />
+								<TxidRow label="Reveal TX (broadcast second)" txid={error.revealTxHex} />
+							</div>
+						)}
 					</div>
 				)}
 			</div>

@@ -4,12 +4,15 @@
 //! `FeeEstimationService` orchestrates sources in priority order and derives the
 //! three presets (Slow / Medium / Fast) with security margins and step rounding.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 
 use crate::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB, MAX_FEE_RATE_SAT_PER_KVB};
+
+/// Maximum age of a cached estimate before it is discarded (10 minutes).
+const CACHE_MAX_AGE_MS: u64 = 10 * 60 * 1_000;
 
 // ---------------------------------------------------------------------------
 // Confirmation targets
@@ -159,21 +162,42 @@ pub(crate) fn derive_preset_clamped(
 }
 
 // ---------------------------------------------------------------------------
-// FeeEstimationService
+// FeeEstimationService + Tauri managed state
 // ---------------------------------------------------------------------------
+
+/// Tauri managed state holding the shared in-memory fee cache (M2).
+///
+/// Only the cache is managed (registered once at startup so it survives across
+/// `fee_rates_estimate` IPC calls); the estimators themselves are rebuilt per
+/// call from the **current** node config, so runtime config changes take effect
+/// immediately — same as the broadcast path.
+#[derive(Default)]
+pub struct FeeCacheState(pub Arc<Mutex<Option<FeePresets>>>);
+
+// FeeEstimationService -------------------------------------------------------
 
 /// Orchestrates fee sources in priority order and produces presets.
 ///
 /// The service is **infallible** (returns `FeePresets` not `Result`): when all
-/// live sources fail it falls back to static presets derived from the minimum
-/// relay fee, with `source == Fallback`. The UI surfaces this with a warning.
+/// live sources fail it first tries the in-memory cache (younger than
+/// `CACHE_MAX_AGE_MS`), then falls back to static presets derived from the
+/// minimum relay fee. The UI surfaces Cached / Fallback with a warning banner.
 pub struct FeeEstimationService {
     estimators: Vec<Arc<dyn FeeEstimator>>,
+    /// Last successful estimate, shared via [`FeeCacheState`] across calls.
+    cache: Arc<Mutex<Option<FeePresets>>>,
 }
 
 impl FeeEstimationService {
     pub fn new(estimators: Vec<Arc<dyn FeeEstimator>>) -> Self {
-        Self { estimators }
+        Self::with_cache(estimators, Arc::default())
+    }
+
+    pub fn with_cache(
+        estimators: Vec<Arc<dyn FeeEstimator>>,
+        cache: Arc<Mutex<Option<FeePresets>>>,
+    ) -> Self {
+        Self { estimators, cache }
     }
 
     pub async fn presets(&self) -> FeePresets {
@@ -181,8 +205,17 @@ impl FeeEstimationService {
 
         for estimator in &self.estimators {
             if let Some(presets) = self.try_estimator(estimator.as_ref(), now).await {
+                // Store a fresh copy in the cache for subsequent fallback.
+                if let Ok(mut guard) = self.cache.lock() {
+                    *guard = Some(presets);
+                }
                 return presets;
             }
+        }
+
+        // All live sources failed — try the in-memory cache.
+        if let Some(cached) = self.cached_presets(now) {
+            return cached;
         }
 
         self.fallback_presets(now)
@@ -217,6 +250,19 @@ impl FeeEstimationService {
             min_relay_sat_per_kvb: min_relay,
             source: estimator.source(),
             estimated_at_ms: now,
+        })
+    }
+
+    fn cached_presets(&self, now: u64) -> Option<FeePresets> {
+        let guard = self.cache.lock().ok()?;
+        let entry = (*guard)?;
+        let age_ms = now.saturating_sub(entry.estimated_at_ms);
+        if age_ms > CACHE_MAX_AGE_MS {
+            return None;
+        }
+        Some(FeePresets {
+            source: FeeSource::Cached,
+            ..entry
         })
     }
 
@@ -468,5 +514,125 @@ mod tests {
             presets.min_relay_sat_per_kvb,
             FALLBACK_MIN_RELAY_SAT_PER_KVB
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Electrum fallback (M2): source ordering
+    // -----------------------------------------------------------------------
+
+    struct ElectrumMock(MockEstimator);
+
+    #[async_trait]
+    impl FeeEstimator for ElectrumMock {
+        fn source(&self) -> FeeSource {
+            FeeSource::Electrum
+        }
+
+        async fn estimate_sat_per_kvb(&self, target: u16) -> Result<u64, FeeEstimateError> {
+            self.0.estimate_sat_per_kvb(target).await
+        }
+
+        async fn min_relay_sat_per_kvb(&self) -> Result<u64, FeeEstimateError> {
+            self.0.min_relay_sat_per_kvb().await
+        }
+    }
+
+    fn electrum_mock(
+        fast: Option<u64>,
+        medium: Option<u64>,
+        slow: Option<u64>,
+    ) -> Arc<ElectrumMock> {
+        Arc::new(ElectrumMock(MockEstimator::new(fast, medium, slow)))
+    }
+
+    #[tokio::test]
+    async fn node_fails_electrum_succeeds_source_is_electrum() {
+        let node = Arc::new(MockEstimator::new(None, None, None));
+        let electrum = electrum_mock(Some(1_000), Some(1_000), Some(1_000));
+        let node: Arc<dyn FeeEstimator> = node;
+        let electrum: Arc<dyn FeeEstimator> = electrum;
+        let presets = svc(vec![node, electrum]).presets().await;
+        assert_eq!(presets.source, FeeSource::Electrum);
+    }
+
+    // -----------------------------------------------------------------------
+    // Cache (M2): last success served as Cached while fresh; Fallback when stale
+    // -----------------------------------------------------------------------
+
+    /// Estimator whose availability can be flipped between calls.
+    struct SwitchableEstimator {
+        ok: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl FeeEstimator for SwitchableEstimator {
+        fn source(&self) -> FeeSource {
+            FeeSource::Node
+        }
+
+        async fn estimate_sat_per_kvb(&self, target: u16) -> Result<u64, FeeEstimateError> {
+            if self.ok.load(std::sync::atomic::Ordering::Relaxed) {
+                Ok(1_000)
+            } else {
+                Err(FeeEstimateError::NoEstimate {
+                    target,
+                    reason: "down".to_string(),
+                })
+            }
+        }
+
+        async fn min_relay_sat_per_kvb(&self) -> Result<u64, FeeEstimateError> {
+            Ok(FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        }
+    }
+
+    /// End-to-end cache behavior: a successful estimate populates the cache, and
+    /// once all sources go down the same rates are served with source=Cached.
+    #[tokio::test]
+    async fn cache_serves_last_success_when_sources_go_down() {
+        let est = Arc::new(SwitchableEstimator {
+            ok: std::sync::atomic::AtomicBool::new(true),
+        });
+        let svc = FeeEstimationService::new(vec![Arc::clone(&est) as Arc<dyn FeeEstimator>]);
+
+        let live = svc.presets().await;
+        assert_eq!(live.source, FeeSource::Node);
+
+        est.ok.store(false, std::sync::atomic::Ordering::Relaxed);
+        let cached = svc.presets().await;
+        assert_eq!(cached.source, FeeSource::Cached);
+        assert_eq!(
+            cached.fast.rate.sat_per_kvb(),
+            live.fast.rate.sat_per_kvb(),
+            "cached presets must carry the rates of the last successful estimate"
+        );
+    }
+
+    fn make_cached_presets(age_ms: u64) -> FeePresets {
+        let ts = now_ms().saturating_sub(age_ms);
+        let preset = FeePreset {
+            rate: FeeRate::from_raw_clamped(1_000),
+            target_blocks: 6,
+            margin_pct: 10,
+        };
+        FeePresets {
+            fast: preset,
+            medium: preset,
+            slow: preset,
+            min_relay_sat_per_kvb: FALLBACK_MIN_RELAY_SAT_PER_KVB,
+            source: FeeSource::Node,
+            estimated_at_ms: ts,
+        }
+    }
+
+    #[tokio::test]
+    async fn all_fail_stale_cache_returns_fallback() {
+        let failing: Arc<dyn FeeEstimator> = Arc::new(MockEstimator::new(None, None, None));
+        // Cache entry 11 minutes old (stale — beyond CACHE_MAX_AGE_MS)
+        let cache = Arc::new(Mutex::new(Some(make_cached_presets(11 * 60 * 1_000))));
+        let svc = FeeEstimationService::with_cache(vec![failing], cache);
+        let presets = svc.presets().await;
+        assert_eq!(presets.source, FeeSource::Fallback);
+        assert_eq!(presets.fast.rate.sat_per_kvb(), 1_200);
     }
 }

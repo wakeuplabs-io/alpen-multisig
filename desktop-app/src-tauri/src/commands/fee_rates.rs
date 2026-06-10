@@ -2,12 +2,15 @@
 
 use std::sync::Arc;
 
-use desktop_app::application::fee_estimation::{FeeEstimationService, FeePresets, FeeSource};
+use desktop_app::application::fee_estimation::{
+    FeeCacheState, FeeEstimationService, FeeEstimator, FeePresets, FeeSource,
+};
 use desktop_app::domain::fee_constants::{
     COMMIT_DUST_SATS, COMMIT_TX_VBYTES_ESTIMATE, REVEAL_TX_VBYTES,
 };
 use desktop_app::domain::fee_rate::MAX_FEE_RATE_SAT_PER_KVB;
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+use desktop_app::infrastructure::electrum_fee_estimator::ElectrumFeeEstimator;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::node_fee_estimator::NodeFeeEstimator;
 
@@ -72,9 +75,14 @@ fn to_dto(presets: FeePresets) -> FeeRatesDto {
 /// Estimate fee presets for governance broadcast (and wallet Send in later phases).
 ///
 /// Read-only: requires neither an active wallet session nor signing capability.
+/// Estimators are built from the **current** node config so runtime config changes
+/// take effect immediately; the managed `FeeCacheState` carries the last successful
+/// estimate across calls (M2) so `Cached` presets are returned when live sources
+/// are temporarily unavailable.
 #[tauri::command]
 pub async fn fee_rates_estimate(
     node_config: tauri::State<'_, NodeConfigState>,
+    fee_cache: tauri::State<'_, FeeCacheState>,
 ) -> Result<FeeRatesDto, String> {
     let cfg = node_config
         .0
@@ -87,10 +95,12 @@ pub async fn fee_rates_estimate(
         cfg.btc_rpc_user(),
         cfg.btc_rpc_pass(),
     ));
-    let node_estimator = Arc::new(NodeFeeEstimator::new(rpc));
-    let service = FeeEstimationService::new(vec![node_estimator]);
-    let presets = service.presets().await;
-    Ok(to_dto(presets))
+    let estimators: Vec<Arc<dyn FeeEstimator>> = vec![
+        Arc::new(NodeFeeEstimator::new(rpc)),
+        Arc::new(ElectrumFeeEstimator::new(cfg.electrum_url())),
+    ];
+    let service = FeeEstimationService::with_cache(estimators, Arc::clone(&fee_cache.0));
+    Ok(to_dto(service.presets().await))
 }
 
 #[cfg(test)]

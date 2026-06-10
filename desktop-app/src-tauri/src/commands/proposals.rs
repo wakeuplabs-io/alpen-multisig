@@ -7,6 +7,7 @@ use desktop_app::application::orchestrator_client::{
 use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
+use desktop_app::application::tx_broadcaster::TxBroadcaster;
 use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
@@ -15,6 +16,8 @@ use desktop_app::domain::proposal::{
 };
 use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
 use desktop_app::infrastructure::broadcast_env;
+use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
+use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use serde::{Deserialize, Serialize};
@@ -493,6 +496,29 @@ mod broadcast_error_code_tests {
         );
     }
 
+    /// M3 IPC contract: `AllBroadcastersFailed` serializes to the structured JSON the
+    /// frontend parses in `deriveBroadcastError` — code `broadcast_unavailable` plus
+    /// both raw tx hexes for the manual copy-paste escape hatch.
+    #[test]
+    fn all_broadcasters_failed_maps_to_broadcast_unavailable_with_hexes() {
+        let error = BroadcastError::AllBroadcastersFailed {
+            commit_tx_hex: "aa01".to_string(),
+            reveal_tx_hex: "bb02".to_string(),
+            errors: vec![
+                ("Electrum".to_string(), "connection refused".to_string()),
+                ("Bitcoin node".to_string(), "timeout".to_string()),
+            ],
+        };
+        let parsed: serde_json::Value = serde_json::from_str(&map_broadcast_error(error)).unwrap();
+        assert_eq!(parsed["code"], "broadcast_unavailable");
+        assert_eq!(parsed["commitTxHex"], "aa01");
+        assert_eq!(parsed["revealTxHex"], "bb02");
+        assert_eq!(parsed["canResubmit"], false);
+        let msg = parsed["message"].as_str().unwrap();
+        assert!(msg.contains("Electrum: connection refused"), "{msg}");
+        assert!(msg.contains("Bitcoin node: timeout"), "{msg}");
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
@@ -536,6 +562,7 @@ fn broadcast_error_code(
         BroadcastError::NoPendingReveal { .. } => "NoPendingReveal",
         BroadcastError::BitcoinRpc(_) => "BitcoinRpc",
         BroadcastError::Timeout { .. } => "Timeout",
+        BroadcastError::AllBroadcastersFailed { .. } => "broadcast_unavailable",
         BroadcastError::Setup(_) => "Unknown",
         BroadcastError::ProposalFetch(_) => "Unknown",
     }
@@ -552,6 +579,29 @@ fn map_broadcast_error_with_boundary(
     broadcast_reached: bool,
     has_pending: bool,
 ) -> String {
+    // Manual escape hatch (M3): this is the only error that carries extra payload —
+    // the raw tx hexes the frontend needs for copy-paste manual broadcast.
+    if let BroadcastError::AllBroadcastersFailed {
+        commit_tx_hex,
+        reveal_tx_hex,
+        errors,
+    } = &error
+    {
+        let errs = errors
+            .iter()
+            .map(|(name, msg)| format!("{name}: {msg}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return serde_json::json!({
+            "code": "broadcast_unavailable",
+            "message": format!("All broadcast channels failed ({errs}). Copy and broadcast the transactions manually."),
+            "commitTxHex": commit_tx_hex,
+            "revealTxHex": reveal_tx_hex,
+            "canResubmit": false,
+        })
+        .to_string();
+    }
+
     let code = broadcast_error_code(&error, broadcast_reached, has_pending);
     let can_resubmit = broadcast_reached && has_pending;
     let message = match &error {
@@ -572,6 +622,8 @@ fn map_broadcast_error_with_boundary(
         BroadcastError::Timeout { txid } => {
             format!("Broadcast sent but confirmation timed out for tx {txid}. You can resubmit the reveal.")
         }
+        // Handled by the early return above; kept non-panicking per backend standards.
+        BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::ProposalFetch(e) => e.to_string(),
     };
@@ -806,11 +858,14 @@ pub async fn proposals_broadcast(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
-        &env.btc_rpc_url,
-        &env.btc_rpc_user,
-        &env.btc_rpc_pass,
-    ));
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
+    );
+    // Broadcaster chain: Electrum first (M3), then node fallback.
+    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
+        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
+    ];
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
@@ -824,7 +879,7 @@ pub async fn proposals_broadcast(
     // Submit synchronously — returns within seconds once both txs are broadcast.
     let (commit_txid, reveal_txid) = proposals::submit_commit_then_reveal(
         client.as_ref(),
-        btc_rpc.as_ref(),
+        &broadcasters,
         &env.asm_rpc_url,
         env.magic_bytes,
         env.network,
@@ -865,7 +920,7 @@ pub async fn proposals_broadcast(
 #[allow(clippy::too_many_arguments)]
 fn spawn_reveal_confirmation(
     client: std::sync::Arc<HttpOrchestratorClient>,
-    btc_rpc: std::sync::Arc<HttpBitcoinRpcClient>,
+    btc_rpc: std::sync::Arc<dyn BitcoinRpcClient>,
     pending: PendingReveals,
     action_id: String,
     commit_txid: String,
@@ -985,11 +1040,14 @@ pub async fn proposals_broadcast_manual(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = std::sync::Arc::new(HttpBitcoinRpcClient::new(
-        &env.btc_rpc_url,
-        &env.btc_rpc_user,
-        &env.btc_rpc_pass,
-    ));
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
+    );
+    // Broadcaster chain: Electrum first (M3), then node fallback.
+    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
+        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
+    ];
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
@@ -1010,6 +1068,7 @@ pub async fn proposals_broadcast_manual(
         .collect();
 
     let (commit_txid, reveal_txid) = proposals::broadcast_manual(
+        &broadcasters,
         btc_rpc.as_ref(),
         &env.asm_rpc_url,
         env.magic_bytes,
