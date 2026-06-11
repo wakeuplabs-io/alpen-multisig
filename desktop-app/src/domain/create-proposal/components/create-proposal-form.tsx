@@ -19,6 +19,7 @@ import { VkUpdateFormFields } from './vk-update-form-fields'
 
 type Props = {
 	authorityLabel: string
+	authority: string
 	multisigConfig: MultisigConfigSnapshot | null
 	multisigConfigVersion: number
 	isLoadingConfig: boolean
@@ -52,6 +53,7 @@ const defaultFormValues: CreateProposalFormValues = {
 
 export function CreateProposalForm({
 	authorityLabel,
+	authority,
 	multisigConfig,
 	multisigConfigVersion,
 	isLoadingConfig,
@@ -293,14 +295,16 @@ export function CreateProposalForm({
 											form.setValue('actionType', 'signer_update', { shouldValidate: true, shouldDirty: true })
 										}
 									/>
-									<ActionTypeCard
-										title="Bridge Operator update"
-										description="Add operators by key or remove by index."
-										selected={actionType === 'operator_set_update'}
-										onClick={() =>
-											form.setValue('actionType', 'operator_set_update', { shouldValidate: true, shouldDirty: true })
-										}
-									/>
+									{authority !== 'alpen_admin' && (
+										<ActionTypeCard
+											title="Bridge Operator update"
+											description="Add operators by key or remove by index."
+											selected={actionType === 'operator_set_update'}
+											onClick={() =>
+												form.setValue('actionType', 'operator_set_update', { shouldValidate: true, shouldDirty: true })
+											}
+										/>
+									)}
 								</div>
 							</div>
 

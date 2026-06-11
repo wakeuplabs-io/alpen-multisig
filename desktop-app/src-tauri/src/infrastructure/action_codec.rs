@@ -8,8 +8,9 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
-    EeStfVkUpdate, OlStfVkUpdate, OperatorSetUpdate as StrataOperatorSetUpdate,
-    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    AlpenAdminMultisigUpdate, EeStfVkUpdate, OlStfVkUpdate,
+    OperatorSetUpdate as StrataOperatorSetUpdate, StrataAdminMultisigUpdate,
+    StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -112,6 +113,9 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                         config_update,
                     )),
                 )),
+                Authority::AlpenAdmin => Ok(MultisigAction::Update(
+                    UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(config_update)),
+                )),
                 other => Err(CodecError::UnsupportedAuthority(format!(
                     "encoding not implemented for authority `{other:?}`"
                 ))),
@@ -178,14 +182,17 @@ fn to_strata_pubkey(pk: &CompressedPubKey) -> Result<CompressedPublicKey, CodecE
 fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
     match action {
         MultisigAction::Update(UpdateAction::StrataAdminMultisig(update)) => {
-            let domain_update = multisig_update_from_strata_admin(update)?;
+            let domain_update =
+                multisig_update_from_threshold_config(Authority::StrataAdmin, update.config())?;
             Ok(Action::MultisigUpdate(domain_update))
         }
         MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(_)) => {
             Err(CodecError::UnsupportedVariant("StrataSeqManagerMultisig"))
         }
-        MultisigAction::Update(UpdateAction::AlpenAdminMultisig(_)) => {
-            Err(CodecError::UnsupportedVariant("AlpenAdminMultisig"))
+        MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)) => {
+            let domain_update =
+                multisig_update_from_threshold_config(Authority::AlpenAdmin, update.config())?;
+            Ok(Action::MultisigUpdate(domain_update))
         }
         MultisigAction::Update(UpdateAction::OperatorSet(u)) => {
             let (add_strata, remove) = u.into_inner();
@@ -221,11 +228,10 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
     }
 }
 
-fn multisig_update_from_strata_admin(
-    update: StrataAdminMultisigUpdate,
+fn multisig_update_from_threshold_config(
+    role: Authority,
+    config: &ThresholdConfigUpdate,
 ) -> Result<MultisigUpdate, CodecError> {
-    let role = Authority::StrataAdmin;
-    let config = update.config();
     let add_keys = config
         .add_members()
         .iter()
@@ -312,6 +318,47 @@ mod tests {
         let direct_bytes = strata_action.as_ssz_bytes();
 
         let domain_bytes = encode(&sample_action()).unwrap();
+        assert_eq!(domain_bytes, direct_bytes);
+    }
+
+    fn sample_alpen_admin_action() -> Action {
+        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::AlpenAdmin,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        })
+    }
+
+    #[test]
+    fn test_alpen_admin_multisig_roundtrip_hex() {
+        let action = sample_alpen_admin_action();
+        let encoded = encode_hex(&action).expect("encode ok");
+        let decoded = decode_hex(&encoded).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_alpen_admin_multisig_roundtrip_bytes() {
+        let action = sample_alpen_admin_action();
+        let bytes = encode(&action).expect("encode ok");
+        let decoded = decode(&bytes).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_alpen_admin_multisig_encode_matches_direct_strata_ssz() {
+        let pk_bytes = hex::decode(VALID_HEX).unwrap();
+        let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
+        let strata_pk = CompressedPublicKey::from(secp_pk);
+        let config_update =
+            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_update = AlpenAdminMultisigUpdate::new(config_update);
+        let strata_action = MultisigAction::Update(UpdateAction::AlpenAdminMultisig(strata_update));
+        let direct_bytes = strata_action.as_ssz_bytes();
+
+        let domain_bytes = encode(&sample_alpen_admin_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);
     }
 

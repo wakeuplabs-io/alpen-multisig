@@ -3,7 +3,7 @@ import { tauriCall } from '@/api/tauri-bridge'
 import { buildActionHexResponseSchema } from '@/api/ipc-schemas'
 
 export type BuildAdminMultisigUpdateHexInput = {
-	role: 'strata_admin' | 'sequencer_manager'
+	role: 'strata_admin' | 'sequencer_manager' | 'alpen_admin'
 	addKeys: string[]
 	removeKeys: string[]
 	newThreshold: number

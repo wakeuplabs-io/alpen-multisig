@@ -2,7 +2,8 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { CreateProposalForm } from '@/domain/create-proposal/components/create-proposal-form'
 import { useCreateProposal } from '@/domain/create-proposal/hooks/use-create-proposal'
 import { useSession } from '@/hooks/use-session'
-import { AuthRole } from '@/types/auth-role'
+import { authorityFromRole } from '@/api/orchestrator-auth'
+import { authorityLabelForRole } from '@/lib/authority-label'
 import { ScreenShell } from '@/screens/screen-shell'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -19,8 +20,8 @@ export function CreateProposalScreen() {
 		return <Navigate to="/" replace />
 	}
 
-	const authorityLabel =
-		selectedRole === AuthRole.StrataAdministrator ? 'Alpen Administrator' : 'Alpen Sequencer Manager'
+	const authorityLabel = authorityLabelForRole(selectedRole)
+	const authority = authorityFromRole(selectedRole)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -54,6 +55,7 @@ export function CreateProposalScreen() {
 			<div className="mx-auto flex w-full max-w-[760px] flex-col gap-5">
 				<CreateProposalForm
 					authorityLabel={authorityLabel}
+					authority={authority}
 					multisigConfig={createProposal.multisigConfig}
 					multisigConfigVersion={createProposal.multisigConfigVersion}
 					isLoadingConfig={createProposal.isLoadingConfig}
