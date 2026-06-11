@@ -3,7 +3,7 @@
 **PRD:** [`03-prd-update.md`](../0-prd/03-prd-update.md) §4.3.3 — *"Transactions: The user MUST be able to see each unconfirmed transaction sent from the Admin Wallet and have the ability to bump the fee."*
 **Plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md) Phase 5 (Transactions + fee-bump, RBF-first).
 **Compliance:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) §4.3.3 — **PASS** (this phase).
-**Status:** Implemented — branch `feature/admin-wallet-transactions-fee-bump`.
+**Status:** Implemented — PR [#276](https://github.com/wakeuplabs-io/alpen-multisig/pull/276).
 
 ## Objective
 

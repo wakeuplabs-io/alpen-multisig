@@ -606,7 +606,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 #### Phase 5 — Transactions + fee-bump (RBF-first) ✅
 
-**Status:** Complete — branch `feature/admin-wallet-transactions-fee-bump`.
+**Status:** Complete — PR [#276](https://github.com/wakeuplabs-io/alpen-multisig/pull/276).
 
 **Spec:** [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) — full technical design, decisions, and test plan.
 
