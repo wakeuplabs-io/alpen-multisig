@@ -8,6 +8,8 @@ import { useAddressesWithBalance } from './use-addresses-with-balance'
 import type { AddressWithBalanceView } from './use-addresses-with-balance'
 import type { WalletPanelSection } from './use-wallet-panel-state'
 import { useAdminWalletCapability } from './use-admin-wallet-capability'
+import { useUnconfirmedTxs } from './use-unconfirmed-txs'
+import type { UnconfirmedTxView } from '../model/compose-unconfirmed-tx-rows'
 
 export type WalletPanelData = {
 	isOpen: boolean
@@ -24,11 +26,15 @@ export type WalletPanelData = {
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
 	addressRowsError: ReturnType<typeof useAddressesWithBalance>['error']
+	unconfirmedTxRows: UnconfirmedTxView[] | null
+	unconfirmedTxsLoading: boolean
+	unconfirmedTxsError: AdminWalletError | null
 	expandedSection: WalletPanelSection | null
 	syncStatus: ReturnType<typeof useAdminWalletSync>['syncStatus']
 	isSyncRefreshing: boolean
 	syncError: ReturnType<typeof useAdminWalletSync>['error'] | null
 	onToggleAddresses: () => void
+	onToggleTransactions: () => void
 	onRefreshSync: () => Promise<void>
 	disabledError: AdminWalletError | null
 }
@@ -39,6 +45,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const receiveAddressHook = useAdminWalletReceiveAddress()
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
+	const unconfirmedTxsHook = useUnconfirmedTxs()
 	const { canSign } = useAdminWalletCapability()
 
 	// All refresh callbacks below are referentially stable (each is a `useCallback(…, [])`
@@ -48,6 +55,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const { refresh: refreshBalance } = balanceHook
 	const { refresh: refreshReceiveAddress } = receiveAddressHook
 	const { refresh: refreshAddresses } = addressesWithBalanceHook
+	const { refresh: refreshUnconfirmedTxs } = unconfirmedTxsHook
 	const { triggerSync } = syncHook
 
 	// Sync the BDK wallet against the chain, then re-read the derived views. Without the
@@ -58,7 +66,8 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		refreshBalance()
 		refreshReceiveAddress()
 		refreshAddresses()
-	}, [triggerSync, refreshBalance, refreshReceiveAddress, refreshAddresses])
+		refreshUnconfirmedTxs()
+	}, [triggerSync, refreshBalance, refreshReceiveAddress, refreshAddresses, refreshUnconfirmedTxs])
 
 	// Initial refresh: when the panel opens, sync + re-read once so the signer sees a
 	// fresh, chain-synced balance without having to press Refresh manually.
@@ -88,11 +97,15 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		addressRows: addressesWithBalanceHook.data,
 		addressRowsLoading: addressesWithBalanceHook.isLoading,
 		addressRowsError: addressesWithBalanceHook.error,
+		unconfirmedTxRows: unconfirmedTxsHook.data,
+		unconfirmedTxsLoading: unconfirmedTxsHook.isLoading,
+		unconfirmedTxsError: unconfirmedTxsHook.error,
 		expandedSection,
 		syncStatus: syncHook.syncStatus,
 		isSyncRefreshing: syncHook.isLoading,
 		syncError: syncHook.error,
 		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
+		onToggleTransactions: () => setExpandedSection(expandedSection === 'transactions' ? null : 'transactions'),
 		onRefreshSync: syncAndRefresh,
 		disabledError: showDisabledError ? walletDisabledError : null,
 	}

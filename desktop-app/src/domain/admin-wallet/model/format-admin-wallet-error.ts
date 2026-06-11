@@ -69,5 +69,79 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: `Failed to construct the Admin Wallet from the account key.${err.message ? ` (${err.message})` : ''}`,
 				severity: 'fatal',
 			}
+		// Phase 5 — fee bump (PRD §4.3.3)
+		case 'SignerNotAllowedOnNetwork':
+			return {
+				title: 'Signer not allowed on this network',
+				body: 'The session signer cannot sign on the active network. Connect a hardware wallet to sign.',
+				severity: 'warning',
+			}
+		case 'InvalidTxid':
+			return {
+				title: 'Invalid transaction id',
+				body: err.message,
+				severity: 'warning',
+			}
+		case 'TxNotFound':
+			return {
+				title: 'Transaction not found',
+				body: 'This transaction is not in the wallet. Refresh and try again.',
+				severity: 'warning',
+			}
+		case 'TxAlreadyConfirmed':
+			return {
+				title: 'Already confirmed',
+				body: 'This transaction has confirmed — its fee can no longer be bumped.',
+				severity: 'info',
+			}
+		case 'TxNotReplaceable':
+			return {
+				title: 'Not replaceable',
+				body: 'This transaction does not signal RBF, so it cannot be replaced with a higher-fee version.',
+				severity: 'info',
+			}
+		case 'CpfpOutputUnavailable':
+			return {
+				title: 'Cannot accelerate this commit',
+				body: `The reveal change output needed for the acceleration is not spendable. ${err.message}`,
+				severity: 'warning',
+			}
+		case 'FeeTooLow':
+		case 'FeeRateTooLow':
+			return {
+				title: 'Fee too low to bump',
+				body: `The new rate must exceed what the transaction already pays. ${err.message}`,
+				severity: 'warning',
+			}
+		case 'InvalidFeeRate':
+			return {
+				title: 'Invalid fee rate',
+				body: err.message,
+				severity: 'warning',
+			}
+		case 'InsufficientFunds':
+			return {
+				title: 'Insufficient funds',
+				body: 'The wallet balance cannot cover the increased fee.',
+				severity: 'warning',
+			}
+		case 'BuildFailed':
+			return {
+				title: 'Could not build replacement',
+				body: err.message,
+				severity: 'warning',
+			}
+		case 'SignFailed':
+			return {
+				title: 'Signing failed',
+				body: err.message,
+				severity: 'warning',
+			}
+		case 'BroadcastFailed':
+			return {
+				title: 'Broadcast failed',
+				body: `The replacement was signed but could not be broadcast. ${err.message}`,
+				severity: 'warning',
+			}
 	}
 }

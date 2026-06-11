@@ -1,5 +1,5 @@
 import { CopyButton } from '@/components/copy-button'
-import type { KeychainDto } from '@/api/admin-wallet'
+import type { KeychainDto } from '@/domain/admin-wallet/model/types'
 import { truncAddress } from '@/domain/admin-wallet/model/trunc-address'
 import { formatBtcFromSats } from '@/domain/admin-wallet/model/format-btc-from-sats'
 import { formatUnconfirmedBalanceLine } from '@/domain/admin-wallet/model/format-unconfirmed-balance-line'
