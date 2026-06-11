@@ -483,8 +483,8 @@ pub(crate) async fn reconcile_enacted_for_action(
 }
 
 /// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
-/// proposal (if any, and not already terminal) is now moot — mark it `Enacted` too so it
-/// stops appearing as actionable.
+/// proposal (if any, and still pending/approved) is now moot — the ASM would reject its
+/// broadcast, so mark it `Expired` so it stops appearing as actionable.
 async fn cascade_enact_associated_cancel(
     repo: &dyn ProposalRepository,
     target_action_id: &ActionId,
@@ -492,13 +492,16 @@ async fn cascade_enact_associated_cancel(
     let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
         return Ok(());
     };
-    if cancel.status == ProposalStatus::Enacted {
+    if matches!(
+        cancel.status,
+        ProposalStatus::Enacted | ProposalStatus::Canceled | ProposalStatus::Expired
+    ) {
         return Ok(());
     }
     repo.update_broadcast_status(
         &cancel.action_id,
         cancel.broadcast_status,
-        Some(ProposalStatus::Enacted),
+        Some(ProposalStatus::Expired),
         None,
         None,
         None,
