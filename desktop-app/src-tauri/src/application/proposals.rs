@@ -724,6 +724,15 @@ pub async fn get_update_action(
     Ok(proposal)
 }
 
+/// Pre-broadcast guard for a Cancel proposal: is its target action still queued on the ASM?
+pub async fn get_cancel_target_status(
+    client: &dyn OrchestratorClient,
+    action_id: &str,
+) -> Result<bool, ProposalError> {
+    let status = client.get_cancel_target_status(action_id).await?;
+    Ok(status.target_queued)
+}
+
 /// List proposals, optionally filtered by status.
 pub async fn list_proposals(
     client: &dyn OrchestratorClient,
@@ -1003,6 +1012,20 @@ mod tests {
                 created_at: 0,
                 cancel_proposal: None,
             })
+        }
+
+        async fn get_cancel_target_status(
+            &self,
+            _action_id: &str,
+        ) -> Result<
+            crate::application::orchestrator_client::CancelTargetStatusResponse,
+            OrchestratorError,
+        > {
+            Ok(
+                crate::application::orchestrator_client::CancelTargetStatusResponse {
+                    target_queued: true,
+                },
+            )
         }
 
         async fn approve_action(
@@ -1560,6 +1583,19 @@ mod tests {
                 created_at: 0,
                 cancel_proposal: None,
             })
+        }
+        async fn get_cancel_target_status(
+            &self,
+            _action_id: &str,
+        ) -> Result<
+            crate::application::orchestrator_client::CancelTargetStatusResponse,
+            OrchestratorError,
+        > {
+            Ok(
+                crate::application::orchestrator_client::CancelTargetStatusResponse {
+                    target_queued: true,
+                },
+            )
         }
         async fn approve_action(
             &self,

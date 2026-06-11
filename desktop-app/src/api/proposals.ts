@@ -109,6 +109,11 @@ export function getProposalByActionId(input: GetProposalInput): Promise<ApiResul
 	return tauriCall('proposals_get', { input }, proposalSchema)
 }
 
+// Pre-broadcast guard for a Cancel proposal: is its target action still queued on the ASM?
+export function checkCancelTargetQueued(input: GetProposalInput): Promise<ApiResult<boolean>> {
+	return tauriCall<boolean>('proposals_check_cancel_target_queued', { input })
+}
+
 export function approveProposal(input: ApproveProposalInput): Promise<ApiResult<Proposal>> {
 	return tauriCall('proposals_approve', { input }, proposalSchema)
 }

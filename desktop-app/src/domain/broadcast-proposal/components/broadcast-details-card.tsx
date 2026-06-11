@@ -21,6 +21,7 @@ type Props = {
 	isBroadcasting: boolean
 	canSign?: boolean
 	canSignReason?: string
+	targetQueued?: boolean | null
 	adminWalletInfo?: AdminWalletInfoView | null
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
@@ -66,6 +67,7 @@ export function BroadcastDetailsCard({
 	isBroadcasting,
 	canSign = true,
 	canSignReason,
+	targetQueued,
 	adminWalletInfo,
 	lastSyncedAt,
 	syncError,
@@ -215,7 +217,13 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={isBroadcasting || !canSign || adminWalletInfo == null || adminWalletInfo.balanceSats === 0}
+					disabled={
+						isBroadcasting ||
+						!canSign ||
+						targetQueued === false ||
+						adminWalletInfo == null ||
+						adminWalletInfo.balanceSats === 0
+					}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
@@ -225,6 +233,12 @@ export function BroadcastDetailsCard({
 							? 'Broadcasting…'
 							: 'Confirm & Broadcast'}
 				</button>
+				{targetQueued === false && (
+					<p className="mt-2 text-center text-[12px] text-[#b91c1c]">
+						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
+						cancel can no longer be broadcast.
+					</p>
+				)}
 				{!canSign && (
 					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
 						{canSignReason ?? 'Hardware wallet required to sign'}

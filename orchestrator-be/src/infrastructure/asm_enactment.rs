@@ -97,9 +97,10 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 config_update,
             ))
         }
-        MultisigAction::Cancel(_) => Err(AppError::BadRequest(
-            "cancel actions are not supported for enactment post-condition checks".to_string(),
-        )),
+        MultisigAction::Cancel(cancel) => {
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            Ok(admin.find_queued(cancel.target_id()).is_none())
+        }
     }
 }
 
