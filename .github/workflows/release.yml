@@ -158,6 +158,32 @@ jobs:
         working-directory: desktop-app
         run: npm run tauri build
 
+      - name: Ad-hoc re-sign app bundle (no Apple Developer ID configured)
+        # On Apple Silicon, rustc/ld embeds a linker ad-hoc signature
+        # (flags=adhoc,linker-signed) into the executable before Tauri ever
+        # assembles the .app. Tauri skips signing the bundle entirely when no
+        # signingIdentity is configured (see tauri-bundler macos/app.rs
+        # `keychain()` returning None), so Contents/_CodeSignature is never
+        # created. The result fails `codesign --verify --deep --strict` with
+        # "code has no resources but signature indicates they must be present"
+        # and Gatekeeper reports the app as damaged. Re-signing ad-hoc after
+        # the build seals Contents/Resources properly, then the .dmg is
+        # rebuilt from the corrected .app. Once Alpen provisions an Apple
+        # Developer ID (see docs/operations/platform-code-signing-requirements.md),
+        # this step should be replaced with proper signing/notarization.
+        run: |
+          APP_PATH="target/release/bundle/macos/Alpen Multisig.app"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+
+          rm -f target/release/bundle/dmg/*.dmg
+          bash target/release/bundle/dmg/bundle_dmg.sh \
+            --volname "Alpen Multisig" \
+            --icon-size 80 \
+            --app-drop-link 180 170 \
+            "target/release/bundle/dmg/Alpen Multisig_0.1.0_aarch64.dmg" \
+            "target/release/bundle/macos/"
+
       - name: Record reproducibility digests
         # macOS ships `shasum`, not `sha256sum`. The signed/notarized .dmg is not
         # reproducible by construction; we record the unsigned binary + frontend
