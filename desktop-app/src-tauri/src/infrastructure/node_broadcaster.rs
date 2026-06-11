@@ -71,6 +71,14 @@ impl TxBroadcaster for NodeBroadcaster {
         }
         Ok(())
     }
+
+    async fn broadcast_one(&self, tx_hex: &str) -> Result<(), TxBroadcastError> {
+        match self.rpc.send_raw_transaction(tx_hex).await {
+            Ok(_) => Ok(()),
+            Err(e) if is_already_known(&e) => Ok(()),
+            Err(e) => Err(err(e)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -126,6 +134,32 @@ mod tests {
         }));
         let e = b.broadcast_pair("aa", "bb").await.unwrap_err();
         assert!(e.message.contains("bad-txns"));
+    }
+
+    #[tokio::test]
+    async fn broadcast_one_sends_single_raw_transaction() {
+        let b = NodeBroadcaster::new(Arc::new(StubRpc {
+            send_raw_result: Ok(()),
+        }));
+        b.broadcast_one("aa").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn broadcast_one_treats_already_known_as_success() {
+        let b = NodeBroadcaster::new(Arc::new(StubRpc {
+            send_raw_result: Err("txn-already-in-mempool"),
+        }));
+        b.broadcast_one("aa").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn broadcast_one_propagates_rejection() {
+        let b = NodeBroadcaster::new(Arc::new(StubRpc {
+            send_raw_result: Err("insufficient fee, rejecting replacement"),
+        }));
+        let e = b.broadcast_one("aa").await.unwrap_err();
+        assert_eq!(e.source_name, "Bitcoin node");
+        assert!(e.message.contains("insufficient fee"));
     }
 
     #[test]

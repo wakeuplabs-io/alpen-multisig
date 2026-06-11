@@ -63,6 +63,20 @@ export type AdminWalletError =
 	| { type: 'WalletCreation'; message: string }
 	| { type: 'Disabled' }
 	| { type: 'ReadOnly' }
+	// Phase 5 — fee bump (PRD §4.3.3)
+	| { type: 'SignerNotAllowedOnNetwork'; message?: string }
+	| { type: 'InvalidTxid'; message: string }
+	| { type: 'TxNotFound'; message: string }
+	| { type: 'TxAlreadyConfirmed'; message: string }
+	| { type: 'TxNotReplaceable'; message: string }
+	| { type: 'GovernanceCommitNotReplaceable'; message: string }
+	| { type: 'FeeTooLow'; message: string }
+	| { type: 'FeeRateTooLow'; message: string }
+	| { type: 'InvalidFeeRate'; message: string }
+	| { type: 'InsufficientFunds'; message: string }
+	| { type: 'BuildFailed'; message: string }
+	| { type: 'SignFailed'; message: string }
+	| { type: 'BroadcastFailed'; message: string }
 
 export function getAdminWalletInfo(): Promise<ApiResult<AdminWalletInfo>> {
 	return tauriCall<AdminWalletInfo>('get_admin_wallet_info', {})
@@ -103,6 +117,40 @@ export function triggerAdminWalletSync(): Promise<ApiResult<void>> {
 
 export function getAdminWalletSyncStatus(): Promise<ApiResult<SyncStatusDto>> {
 	return tauriCall<SyncStatusDto>('admin_wallet_sync_status', {})
+}
+
+// Phase 5 (PRD §4.3.3): one unconfirmed transaction sent from the Admin Wallet.
+export type UnconfirmedTxDto = {
+	txid: string
+	sentSats: number
+	receivedSats: number
+	netSats: number
+	feeSats: number | null
+	feeRateSatPerKvb: number | null
+	vsizeVbytes: number
+	isRbfSignaling: boolean
+	isGovernanceCommit: boolean
+	lastSeenSecs: number | null
+}
+
+export type BumpFeeInput = {
+	txid: string
+	feeRateSatPerKvb: number
+}
+
+export type BumpFeeResultDto = {
+	newTxid: string
+	replacedTxid: string
+	feeSats: number
+	feeRateSatPerKvb: number
+}
+
+export function listAdminWalletUnconfirmedTxs(): Promise<ApiResult<UnconfirmedTxDto[]>> {
+	return tauriCall<UnconfirmedTxDto[]>('admin_wallet_list_unconfirmed_txs', {})
+}
+
+export function bumpAdminWalletFee(input: BumpFeeInput): Promise<ApiResult<BumpFeeResultDto>> {
+	return tauriCall<BumpFeeResultDto>('admin_wallet_bump_fee', { input })
 }
 
 export type WalletSessionInitInput = {

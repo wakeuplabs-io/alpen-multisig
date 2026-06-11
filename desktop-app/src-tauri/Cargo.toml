@@ -63,6 +63,9 @@ bdk_electrum = { workspace = true }
 # Wallet sync uses Electrum (bdk_electrum); Core RPC stays only as the regtest
 # funding/mining harness in integration tests.
 bdk_bitcoind_rpc = { workspace = true }
+# Wallet fixtures (funded wallet, insert_tx/anchor/seen_at) for the Phase 5
+# unconfirmed-tx list and fee-bump unit tests.
+bdk_wallet = { workspace = true, features = ["test-utils"] }
 
 [lib]
 name = "desktop_app"

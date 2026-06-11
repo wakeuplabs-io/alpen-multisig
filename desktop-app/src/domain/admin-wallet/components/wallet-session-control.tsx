@@ -60,8 +60,13 @@ export function WalletSessionControl({
 					addressRows={panel.addressRows}
 					addressRowsLoading={panel.addressRowsLoading}
 					addressRowsError={panel.addressRowsError}
+					unconfirmedTxRows={panel.unconfirmedTxRows}
+					unconfirmedTxsLoading={panel.unconfirmedTxsLoading}
+					unconfirmedTxsError={panel.unconfirmedTxsError}
+					isWatchOnly={panel.isWatchOnly}
 					expandedSection={panel.expandedSection}
 					onToggleAddresses={panel.onToggleAddresses}
+					onToggleTransactions={panel.onToggleTransactions}
 					syncStatus={panel.syncStatus}
 					isSyncRefreshing={panel.isSyncRefreshing}
 					syncError={panel.syncError}

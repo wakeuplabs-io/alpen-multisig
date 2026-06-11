@@ -1,11 +1,12 @@
 import type { WalletPanelSection } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
 import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
-import type { AddressWithBalanceView } from '@/domain/admin-wallet/model/view-models'
+import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
 import { DisabledWalletCard } from './disabled-wallet-card'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
 import { AddressesWithBalanceList } from './addresses-with-balance-list'
+import { UnconfirmedTxsList } from './unconfirmed-txs-list'
 import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
@@ -18,8 +19,13 @@ export type WalletPanelContentProps = {
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
 	addressRowsError: AdminWalletError | null
+	unconfirmedTxRows: UnconfirmedTxView[] | null
+	unconfirmedTxsLoading: boolean
+	unconfirmedTxsError: AdminWalletError | null
+	isWatchOnly: boolean
 	expandedSection: WalletPanelSection | null
 	onToggleAddresses(): void
+	onToggleTransactions(): void
 	syncStatus: SyncStatusDto | null
 	isSyncRefreshing: boolean
 	syncError: AdminWalletError | null
@@ -36,8 +42,13 @@ export function WalletPanelContent({
 	addressRows,
 	addressRowsLoading,
 	addressRowsError,
+	unconfirmedTxRows,
+	unconfirmedTxsLoading,
+	unconfirmedTxsError,
+	isWatchOnly,
 	expandedSection,
 	onToggleAddresses,
+	onToggleTransactions,
 	syncStatus,
 	isSyncRefreshing,
 	syncError,
@@ -70,6 +81,18 @@ export function WalletPanelContent({
 					error={addressRowsError}
 					isExpanded={expandedSection === 'addresses'}
 					onToggle={onToggleAddresses}
+				/>
+			</div>
+
+			<div className="mt-2 border-t border-[#f3f4f6] pt-2">
+				<UnconfirmedTxsList
+					rows={unconfirmedTxRows}
+					isLoading={unconfirmedTxsLoading}
+					error={unconfirmedTxsError}
+					isExpanded={expandedSection === 'transactions'}
+					onToggle={onToggleTransactions}
+					isWatchOnly={isWatchOnly}
+					onAfterBump={onRefreshSync}
 				/>
 			</div>
 

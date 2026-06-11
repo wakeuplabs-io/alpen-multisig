@@ -15,3 +15,4 @@ pub mod psbt_signer;
 pub mod tx_broadcaster;
 pub mod wallet_service;
 pub mod wallet_session;
+pub mod wallet_transactions;

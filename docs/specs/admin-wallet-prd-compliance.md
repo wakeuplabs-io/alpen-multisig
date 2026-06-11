@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-11 (Release 2 complete ✅; Phase 4 complete ✅)
+**Last updated:** 2026-06-11 (Release 2 complete ✅; Phase 4 complete ✅; Phase 5 complete ✅)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -76,7 +76,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----|------------------------|--------|------------------|-------|
 | 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above; sync backend → R2 |
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
-| 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 5 |
+| 4.3.3 | Unconfirmed tx list + fee bump | **PASS** | Phase 5 — `wallet_transactions.rs`, `admin_wallet_list_unconfirmed_txs` / `admin_wallet_bump_fee` IPC, `UnconfirmedTxsList` panel section; [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) | RBF-first (no CPFP). Unconfirmed **sent** txs listed with fee/rate; bump via BDK `build_fee_bump` + session `PsbtSigner`, Electrum-first broadcast. Governance commits with a pending pre-signed reveal are not bumpable (would invalidate the reveal, R1.0.1). Watch-only sessions see the list; Bump disabled |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
 | 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 7 |
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
@@ -122,10 +122,11 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.2 | R1.6 | **PASS** |
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
 | Wallet panel UI | R1.7 | **PASS** |
-| §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
+| §4.3.3 | Phase 5 | **PASS** ✅ |
+| §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 8) |
 | US-H4 broadcast fee | Phase 4 | **PASS** ✅ |
 
-**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Next:** Phase 5 (Transactions + fee-bump).
+**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Phase 5:** done ✅. **Next:** Phase 6 (Send BTC happy path).
 
 ---
 
