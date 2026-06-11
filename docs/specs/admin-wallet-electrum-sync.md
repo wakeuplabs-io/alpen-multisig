@@ -1,6 +1,7 @@
 # Admin Wallet — Electrum sync (Release 2)
 
 > **Release 2** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
+> **Status: ✅ Complete** — R2.1 (PR [#261](https://github.com/wakeuplabs-io/alpen-multisig/pull/261)), R2.2 (PR [#262](https://github.com/wakeuplabs-io/alpen-multisig/pull/262)), R2.3 (PR [#263](https://github.com/wakeuplabs-io/alpen-multisig/pull/263)).
 
 ## Objective
 

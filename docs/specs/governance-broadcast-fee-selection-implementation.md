@@ -1,5 +1,7 @@
 # Spec: Governance Broadcast — Fee Rate Selection (Technical Implementation)
 
+> **Status: ✅ Complete** — M1 (PR [#267](https://github.com/wakeuplabs-io/alpen-multisig/pull/267)), M2+M3 (PR [#273](https://github.com/wakeuplabs-io/alpen-multisig/pull/273)).
+
 > Implements the functional contract in
 > [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md).
 > That document defines *what* the signer experiences; this one defines *how* it is built.
