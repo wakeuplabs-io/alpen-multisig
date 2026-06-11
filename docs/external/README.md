@@ -1,0 +1,74 @@
+# Alpen Multisig — External Documentation
+
+This directory contains the complete set of client-facing deliverables for the Alpen Multisig application. These documents are intended for delivery to Alpen Labs and provide comprehensive coverage of the system architecture, API, setup procedures, and operational guidance.
+
+## Document Index
+
+### Getting Started
+
+| Document | Description | PRD Reference |
+|----------|-------------|---------------|
+| [Setup Guide](./setup-guide.md) | Installation, first-run setup, and configuration | PRD §1.4 |
+| [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md) | Supported devices and requirements | PRD §3.2 |
+
+### Architecture and Design
+
+| Document | Description | PRD Reference |
+|----------|-------------|---------------|
+| [Architecture Overview](./architecture-overview.md) | System design, components, and data flow | Proposal §Technical Approach |
+| [API Reference](./api-reference.md) | Backend API endpoints and authentication | Backend PRD §3-§4 |
+| [Protocol Research and Integration Assessment](./research-assessment.md) | Protocol integration, update types, and technical assessment | Proposal §Deliverables |
+
+### Build and Release
+
+| Document | Description | PRD Reference |
+|----------|-------------|---------------|
+| [Build and Release Process](./build-and-release-process.md) | Build pipeline, packaging, and distribution | PRD §1.1, §1.2, §1.3, §1.4 |
+| [Release Signing](./release-signing.md) | Cryptographic signing approach and multi-signer support | PRD §1.3 |
+| [Verifying Releases](./verifying-releases.md) | Step-by-step verification instructions | PRD §1.3 |
+| [Reproducible Builds](./reproducible-builds.md) | Independent build verification | PRD §1.2 |
+
+### Quality and Security
+
+| Document | Description | PRD Reference |
+|----------|-------------|---------------|
+| [Integration Test Report](./integration-test-report.md) | Test coverage and results | Proposal §Deliverables |
+| [Security Review Summary](./security-review-summary.md) | Security analysis and recommendations | Proposal §Deliverables |
+
+## Document Standards
+
+All external documents follow these principles:
+
+1. **PRD Traceability** — Each document references the specific PRD requirement or proposal deliverable it satisfies
+2. **Client-Focused** — Written for a technical audience at Alpen Labs
+3. **Self-Contained** — Each document can be read independently without requiring access to internal development documentation
+4. **Production-Ready** — Presented as complete, final documentation for the delivered system
+5. **No Internal References** — No references to internal development phases, tracking codes, or working documents
+
+## Quick Start
+
+For new users or evaluators:
+
+1. Start with the [Setup Guide](./setup-guide.md) to install and configure the application
+2. Review the [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md) to ensure your device is supported
+3. Read the [Architecture Overview](./architecture-overview.md) to understand the system design
+4. Consult the [API Reference](./api-reference.md) for backend integration details
+
+## Verification
+
+Before using any release:
+
+1. Download the release artifacts and signature files from GitHub Releases
+2. Follow the [Verifying Releases](./verifying-releases.md) guide to verify authenticity
+3. Optionally, follow the [Reproducible Builds](./reproducible-builds.md) guide to independently verify the build
+
+## Support
+
+For issues, questions, or feedback:
+
+- **GitHub Issues:** [https://github.com/wakeuplabs-io/alpen-multisig/issues](https://github.com/wakeuplabs-io/alpen-multisig/issues)
+- **Documentation:** This directory provides comprehensive documentation for all aspects of the system
+
+## Document Maintenance
+
+These documents are maintained alongside the codebase and updated with each release. All changes go through review to ensure accuracy and completeness.
