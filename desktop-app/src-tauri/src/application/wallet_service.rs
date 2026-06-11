@@ -288,6 +288,16 @@ impl WalletService {
         }
     }
 
+    /// The session signer, if any (None for watch-only sessions).
+    pub(crate) fn signer(&self) -> Option<&Arc<dyn PsbtSigner>> {
+        self.signer.as_ref()
+    }
+
+    /// The network this wallet was created for.
+    pub(crate) fn network(&self) -> bdk_wallet::bitcoin::Network {
+        self.network
+    }
+
     /// Returns the kind of signer attached to this wallet service.
     /// Returns "mnemonic", "trezor", "ledger", or "none".
     pub fn signer_kind(&self) -> String {
@@ -493,9 +503,7 @@ impl WalletService {
         amount_sats: u64,
         fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
-        let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
-
-        let mut psbt = {
+        let psbt = {
             let mut wallet = self.wallet.lock().await;
             let mut tx_builder = wallet.build_tx();
             tx_builder.add_recipient(
@@ -507,6 +515,18 @@ impl WalletService {
                 .finish()
                 .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
         };
+
+        self.sign_and_finalize_psbt(psbt).await
+    }
+
+    /// Signs a wallet-built PSBT through the session [`PsbtSigner`] port, finalizes it,
+    /// and extracts the transaction. Shared by commit funding and the Phase 5 fee-bump
+    /// path — the PSBT source differs, the signing flow is identical (R1.1).
+    pub(crate) async fn sign_and_finalize_psbt(
+        &self,
+        mut psbt: bdk_wallet::bitcoin::Psbt,
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
+        let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
 
         if matches!(signer.kind(), "ledger" | "trezor") {
             let hw = signer

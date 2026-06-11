@@ -1,9 +1,19 @@
 use bdk_wallet::KeychainKind;
+use desktop_app::application::pending_reveals::{pending_commit_to_reveal, PendingReveals};
+use desktop_app::application::tx_broadcaster::TxBroadcaster;
 use desktop_app::application::wallet_service::{
     error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
 use desktop_app::application::wallet_session::WalletSession;
+use desktop_app::application::wallet_transactions::{
+    bump_error_code, BumpFeeError, BumpFeeResultDto, UnconfirmedTxDto,
+};
+use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::infrastructure::admin_wallet::AdminWalletError;
+use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
+use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
+use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
+use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -231,6 +241,92 @@ pub fn admin_wallet_sync_status(wallet_session: tauri::State<'_, WalletSession>)
     }
 }
 
+/// Serialize a [`BumpFeeError`] into the tagged `{ "type", "message" }` shape the
+/// frontend `AdminWalletError` union expects (same convention as `serialize_wallet_error`).
+fn serialize_bump_error(e: &BumpFeeError) -> String {
+    serde_json::json!({ "type": bump_error_code(e), "message": e.to_string() }).to_string()
+}
+
+/// Lists unconfirmed transactions sent from the Admin Wallet (PRD §4.3.3).
+///
+/// Reads the last-synced wallet state (no chain round trip — the panel's
+/// sync-then-read flow keeps it fresh). Governance commits with a pending
+/// pre-signed reveal are flagged, offered CPFP as the bump method, and carry
+/// the commit+reveal package fee/rate.
+#[tauri::command]
+pub async fn admin_wallet_list_unconfirmed_txs(
+    wallet_session: tauri::State<'_, WalletSession>,
+    pending: tauri::State<'_, PendingReveals>,
+) -> Result<Vec<UnconfirmedTxDto>, String> {
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    let commit_to_reveal = pending_commit_to_reveal(&pending);
+    svc.list_unconfirmed_sent_txs(&commit_to_reveal)
+        .await
+        .map_err(serialize_wallet_error)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BumpFeeInput {
+    pub txid: String,
+    pub fee_rate_sat_per_kvb: u64,
+}
+
+/// Bumps the fee of an unconfirmed wallet transaction (PRD §4.3.3): RBF for plain
+/// sends, CPFP (child on the reveal's change) for pending governance commits.
+/// Validates the rate, syncs best-effort so the wallet view is fresh, then
+/// builds/signs/broadcasts through `WalletService::bump_fee` (Electrum first,
+/// node RPC fallback) and re-syncs so the panel converges.
+#[tauri::command]
+pub async fn admin_wallet_bump_fee(
+    input: BumpFeeInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
+    pending: tauri::State<'_, PendingReveals>,
+) -> Result<BumpFeeResultDto, String> {
+    // Validate the rate before any wallet or network work.
+    let rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| serialize_bump_error(&BumpFeeError::from(e)))?;
+
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass()),
+    );
+    // Broadcaster chain: Electrum first, node fallback — same order as governance broadcast.
+    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
+        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
+    ];
+
+    // Best-effort pre-sync: a stale view is ultimately caught by the node, which
+    // rejects replacements of confirmed or already-replaced transactions.
+    if let Err(e) = svc.sync().await {
+        tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
+    }
+
+    let commit_to_reveal = pending_commit_to_reveal(&pending);
+    let result = svc
+        .bump_fee(&input.txid, rate, &commit_to_reveal, &broadcasters)
+        .await
+        .map_err(|e| serialize_bump_error(&e))?;
+
+    // Best-effort post-sync so the panel reflects the replacement immediately.
+    if let Err(e) = svc.sync().await {
+        tracing::warn!(error = %e, "post-bump sync failed; panel will converge on next sync");
+    }
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,6 +507,61 @@ mod tests {
             value["type"], "Disabled",
             "no-session next_receive_address must surface the tagged Disabled error"
         );
+    }
+
+    // ---- Phase 5: unconfirmed tx list + fee bump (PRD §4.3.3) ----
+
+    /// Both Phase 5 commands must be registered in BOTH handler sets — capability is
+    /// enforced per-signer at runtime (`allowed_on(network)`), same as broadcast.
+    #[test]
+    fn phase5_commands_registered_in_both_handler_sets() {
+        let invoke_src = include_str!("invoke.rs");
+        for command in ["admin_wallet_list_unconfirmed_txs", "admin_wallet_bump_fee"] {
+            let occurrences = invoke_src
+                .split_whitespace()
+                .filter(|tok| tok.trim_matches(',') == format!("super::admin_wallet::{command}"))
+                .count();
+            assert_eq!(
+                occurrences, 2,
+                "{command} must appear in attach_production AND attach_with_dev_signing"
+            );
+        }
+    }
+
+    /// IPC contract: bump errors serialize as the tagged `{ type, message }` shape.
+    #[test]
+    fn serialize_bump_error_emits_tagged_type_and_message() {
+        let json = serialize_bump_error(&BumpFeeError::TxNotReplaceable {
+            txid: "ab".to_string(),
+        });
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "TxNotReplaceable");
+        assert!(value["message"]
+            .as_str()
+            .expect("message string")
+            .contains("does not signal RBF"));
+    }
+
+    /// An out-of-range rate must serialize as the tagged InvalidFeeRate error
+    /// (the command validates before touching the wallet).
+    #[test]
+    fn invalid_fee_rate_serializes_as_tagged_invalid_fee_rate() {
+        let err = FeeRate::new(0, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+            .map(|_| ())
+            .expect_err("zero rate must be rejected");
+        let json = serialize_bump_error(&BumpFeeError::from(err));
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "InvalidFeeRate");
+    }
+
+    /// BumpFeeInput deserializes from the camelCase IPC payload.
+    #[test]
+    fn bump_fee_input_deserializes_camel_case() {
+        let input: BumpFeeInput =
+            serde_json::from_value(serde_json::json!({ "txid": "ab", "feeRateSatPerKvb": 5000 }))
+                .expect("deserialize");
+        assert_eq!(input.txid, "ab");
+        assert_eq!(input.fee_rate_sat_per_kvb, 5_000);
     }
 
     #[test]

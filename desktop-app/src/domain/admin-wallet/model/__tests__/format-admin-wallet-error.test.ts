@@ -70,4 +70,42 @@ for (const variant of variants) {
 	}
 }
 
+// ── Phase 5 — fee bump variants (PRD §4.3.3) ─────────────────────────────────
+
+// Every bump variant must produce a non-empty title and body.
+const bumpVariants: AdminWalletError[] = [
+	{ type: 'SignerNotAllowedOnNetwork' },
+	{ type: 'InvalidTxid', message: 'x' },
+	{ type: 'TxNotFound', message: 'x' },
+	{ type: 'TxAlreadyConfirmed', message: 'x' },
+	{ type: 'TxNotReplaceable', message: 'x' },
+	{ type: 'CpfpOutputUnavailable', message: 'x' },
+	{ type: 'FeeTooLow', message: 'x' },
+	{ type: 'FeeRateTooLow', message: 'x' },
+	{ type: 'InvalidFeeRate', message: 'x' },
+	{ type: 'InsufficientFunds', message: 'x' },
+	{ type: 'BuildFailed', message: 'x' },
+	{ type: 'SignFailed', message: 'x' },
+	{ type: 'BroadcastFailed', message: 'x' },
+]
+for (const variant of bumpVariants) {
+	const view = formatAdminWalletError(variant)
+	assert.ok(view.title.length > 0, `${variant.type} must have a title`)
+	assert.ok(view.body.length > 0, `${variant.type} must have a body`)
+}
+
+// Spot-check the high-signal copy for the dedicated guards.
+const cpfpUnavailable = formatAdminWalletError({
+	type: 'CpfpOutputUnavailable',
+	message: 'the reveal change is already spent',
+})
+assert.ok(/reveal/i.test(cpfpUnavailable.body), 'CPFP copy must explain the reveal-change dependency')
+assert.ok(cpfpUnavailable.body.includes('already spent'), 'CPFP copy must carry the backend detail')
+
+const notReplaceable = formatAdminWalletError({ type: 'TxNotReplaceable', message: 'x' })
+assert.ok(/RBF/.test(notReplaceable.body), 'not-replaceable copy must mention RBF')
+
+const feeTooLow = formatAdminWalletError({ type: 'FeeRateTooLow', message: 'at least 1100 sat/kvB required' })
+assert.ok(feeTooLow.body.includes('at least 1100'), 'fee-too-low copy must carry the required rate')
+
 console.log('format-admin-wallet-error: all assertions passed.')

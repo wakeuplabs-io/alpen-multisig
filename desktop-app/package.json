@@ -33,6 +33,9 @@
     "test:hooks-use-addresses-with-balance": "tsx src/domain/admin-wallet/hooks/__tests__/use-addresses-with-balance.test.ts",
     "test:hooks-use-admin-wallet-capability": "tsx src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-capability.test.ts",
     "test:model-address-row-contract": "tsx src/domain/admin-wallet/model/__tests__/address-row-contract.test.ts",
+    "test:model-compose-unconfirmed-tx-rows": "tsx src/domain/admin-wallet/model/__tests__/compose-unconfirmed-tx-rows.test.ts",
+    "test:model-bump-fee-rate": "tsx src/domain/admin-wallet/model/__tests__/bump-fee-rate.test.ts",
+    "test:hooks-use-unconfirmed-txs": "tsx src/domain/admin-wallet/hooks/__tests__/use-unconfirmed-txs.test.ts",
     "test:architecture": "tsx src/domain/admin-wallet/architecture.test.ts",
     "preview": "vite preview",
     "tauri": "tauri"

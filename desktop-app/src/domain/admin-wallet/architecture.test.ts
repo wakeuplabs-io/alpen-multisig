@@ -190,4 +190,34 @@ assert.equal(
 )
 console.log('Rule 6 PASS: address row wiring (confirmed + unconfirmed per address)')
 
+// ── Rule 7: Phase 5 transactions wiring — panel renders the unconfirmed tx list ──
+
+const panelDataPath = path.join(domainRoot, 'hooks', 'use-wallet-panel-data.ts')
+const panelData = fs.readFileSync(panelDataPath, 'utf8')
+const panelContentForTxs = fs.readFileSync(walletPanelContentPath, 'utf8')
+
+const rule7Violations: string[] = []
+if (!panelData.includes('useUnconfirmedTxs')) {
+	rule7Violations.push('use-wallet-panel-data.ts: must compose useUnconfirmedTxs')
+}
+if (!panelData.includes('refreshUnconfirmedTxs()')) {
+	rule7Violations.push('use-wallet-panel-data.ts: syncAndRefresh must refresh the unconfirmed tx list')
+}
+if (!panelContentForTxs.includes('UnconfirmedTxsList')) {
+	rule7Violations.push('wallet-panel-content.tsx: must render UnconfirmedTxsList')
+}
+if (!panelContentForTxs.includes('isWatchOnly={isWatchOnly}')) {
+	rule7Violations.push('wallet-panel-content.tsx: must forward isWatchOnly so Bump is disabled for watch-only')
+}
+if (!panelContentForTxs.includes('onAfterBump={onRefreshSync}')) {
+	rule7Violations.push('wallet-panel-content.tsx: a successful bump must trigger the panel sync+refresh')
+}
+
+assert.equal(
+	rule7Violations.length,
+	0,
+	`Rule 7 violations — Phase 5 transactions wiring:\n  ${rule7Violations.join('\n  ')}`,
+)
+console.log('Rule 7 PASS: unconfirmed transactions + fee-bump wiring')
+
 console.log('All architecture compliance checks passed.')

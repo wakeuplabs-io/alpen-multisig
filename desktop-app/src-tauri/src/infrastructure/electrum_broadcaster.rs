@@ -71,4 +71,17 @@ impl TxBroadcaster for ElectrumBroadcaster {
         .await
         .map_err(|e| err(format!("spawn_blocking panic: {e}")))?
     }
+
+    async fn broadcast_one(&self, tx_hex: &str) -> Result<(), TxBroadcastError> {
+        let url = self.electrum_url.clone();
+        let hex = tx_hex.to_string();
+
+        tokio::task::spawn_blocking(move || {
+            let client =
+                bdk_electrum::electrum_client::Client::new(&url).map_err(|e| err(e.to_string()))?;
+            broadcast_one(&client, &hex)
+        })
+        .await
+        .map_err(|e| err(format!("spawn_blocking panic: {e}")))?
+    }
 }

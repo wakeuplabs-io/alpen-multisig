@@ -52,8 +52,8 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.2 ✅ | Admin Wallet sync migration | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged |
 | R2.3 ✅ | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** ✅ | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`governance-broadcast-fee-selection-implementation.md`](./governance-broadcast-fee-selection-implementation.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
-| 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
-| 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
+| 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF for sends, CPFP for governance commits); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
+| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 9 | Shared Send + governance broadcast UX | Alta S9/S11, PRD §5.3.2 (shared Send chrome; fee entry → Phase 4/5) |
@@ -112,7 +112,7 @@ flowchart LR
   R21 --> R22[R2.2 Wallet sync ✅]
   R22 --> R23[R2.3 Node Config URL ✅]
   R23 --> P4[Phase 4 Broadcast fee rate ✅]
-  P4 --> P5[Phase 5 Tx list + RBF]
+  P4 --> P5[Phase 5 Tx list + fee-bump]
   P5 --> P6[Phase 6 Send happy path]
   P6 --> P7[Phase 7 Admin ID UI]
   P7 --> P8[Phase 8 HW Send-on-HW]
@@ -122,7 +122,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) is also complete. **Next:** Phase 5 (Transactions + fee-bump). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
+The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) and **Phase 5** (Transactions + fee-bump, PRD §4.3.3) are also complete. **Next:** Phase 6 (Send BTC happy path). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -386,7 +386,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **R1.7 closure:** Branch `feature/admin-wallet-r17-ui-polish`, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Two passes: (a) visual hierarchy + layout refinement, (b) affordances & polish (icon-only copy, wallet avatar, count badge, session chevron, drawer easing/shadow). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
 
-**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Release 2** (Electrum wallet sync) — also now complete, followed by Phase 4 (also complete). Next: **Phase 5** (Transactions + fee-bump).
+**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Release 2** (Electrum wallet sync) — also now complete, followed by Phase 4 (also complete). Next: **Phase 5** (Transactions + fee-bump) — also now complete ✅.
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -408,7 +408,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Done when:** On regtest, an approved proposal broadcasts with the reveal already signed before the commit hits the network; `submitpackage` atomicity means a crash before the broadcast leaves nothing on-chain (clean retry), and a transient broadcast failure within the session is recoverable via the `proposals_resubmit_reveal` IPC command (re-sends the in-memory signed reveal, no ephemeral key needed); commit→reveal still confirm; `cargo test --workspace` and frontend CI green.
 
-**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit (Phase 5) would still need the key re-derived — out of scope here.
+**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit is impossible without re-deriving the key — Phase 5 bumps pending commits via CPFP on the reveal's change output instead.
 
 #### R1.1 — Session-driven broadcast signing (adds HW path) ✅
 
@@ -553,7 +553,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Done when:** R2.1–R2.3 complete — wallet panel read path syncs in production-viable time; Release 1 wallet UX parity; governance broadcast unchanged; CI green.
 
-**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Next:** Phase 5 (Transactions + fee-bump).
+**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Phase 5** (Transactions + fee-bump) is complete ✅. **Next:** Phase 6 (Send BTC happy path).
 
 **Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.2.
 
@@ -585,7 +585,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 ### Remaining phases (5–10)
 
-Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Transactions + fee-bump) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
+Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Transactions + fee-bump) is complete ✅; **Phase 6** (Send BTC happy path) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
 
 #### Phase 4 — Governance broadcast fee rate ✅
 
@@ -604,15 +604,26 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 ---
 
-#### Phase 5 — Transactions + fee-bump (RBF-first)
+#### Phase 5 — Transactions + fee-bump (RBF / CPFP) ✅
+
+**Status:** Complete — PR [#276](https://github.com/wakeuplabs-io/alpen-multisig/pull/276).
+
+**Spec:** [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) — full technical design, decisions, and test plan.
 
 **Goal:** Unconfirmed tx list and fee bump per PRD §4.3.3.
 
-**In scope:** RBF bump via BDK + chain RPC; error surfaces for non-RBF txs.
+**In scope:** RBF bump for plain sends via BDK `build_fee_bump`; **CPFP** bump for pending governance commits (child spending the reveal's wallet-owned change, sized to lift the package rate); both signed via session `PsbtSigner` (R1.1) + Electrum-first broadcast with node fallback; error surfaces for non-RBF txs and unavailable CPFP anchors.
 
-**Out of scope:** CPFP policy, payout txs.
+**Out of scope:** CPFP for non-governance txs (RBF covers them), payout txs.
 
-**Done when:** User can bump an unconfirmed Admin Wallet send on regtest.
+**Delivered:**
+- `application/wallet_transactions.rs`: `list_unconfirmed_sent_txs` (unconfirmed txs with wallet-owned inputs, fee/rate/RBF flag, package stats for governance commits) and `bump_fee` (RBF/CPFP dispatch → sign via `PsbtSigner` port → broadcast → result), typed `BumpFeeError`.
+- `TxBroadcaster::broadcast_one` + `broadcast_single_with_fallback` (Electrum → node, already-known idempotency).
+- **Governance acceleration (CPFP):** commits with a pending pre-signed reveal (`PendingReveals`) cannot be RBF-replaced — that would invalidate the reveal (R1.0.1, ephemeral key dropped after signing) — so the bump builds a child on the reveal's change output; the requested rate applies to the whole commit+reveal+child package.
+- IPC: `admin_wallet_list_unconfirmed_txs`, `admin_wallet_bump_fee` (both handler sets; capability per-signer).
+- UI: `Pending transactions` accordion in the wallet slide-over; per-row Bump with inline 0.1 sat/vB stepper (suggested default from Fast preset), success/new-txid and tagged error surfaces; governance rows show package fee/rate and bump via CPFP; Bump disabled for watch-only / non-RBF rows.
+
+**Done when:** User can bump an unconfirmed Admin Wallet send (RBF) and a pending governance commit (CPFP) on regtest — met (Rust unit + IPC contract suites; manual path: broadcast a proposal without mining, then Bump fee in the wallet panel).
 
 **Primary code areas:** tx list IPC, bump command, UI actions.
 
