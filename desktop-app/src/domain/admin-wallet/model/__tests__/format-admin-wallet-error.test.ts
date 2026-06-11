@@ -79,7 +79,7 @@ const bumpVariants: AdminWalletError[] = [
 	{ type: 'TxNotFound', message: 'x' },
 	{ type: 'TxAlreadyConfirmed', message: 'x' },
 	{ type: 'TxNotReplaceable', message: 'x' },
-	{ type: 'GovernanceCommitNotReplaceable', message: 'x' },
+	{ type: 'CpfpOutputUnavailable', message: 'x' },
 	{ type: 'FeeTooLow', message: 'x' },
 	{ type: 'FeeRateTooLow', message: 'x' },
 	{ type: 'InvalidFeeRate', message: 'x' },
@@ -95,8 +95,12 @@ for (const variant of bumpVariants) {
 }
 
 // Spot-check the high-signal copy for the dedicated guards.
-const governance = formatAdminWalletError({ type: 'GovernanceCommitNotReplaceable', message: 'x' })
-assert.ok(/reveal/i.test(governance.body), 'governance copy must explain the reveal dependency')
+const cpfpUnavailable = formatAdminWalletError({
+	type: 'CpfpOutputUnavailable',
+	message: 'the reveal change is already spent',
+})
+assert.ok(/reveal/i.test(cpfpUnavailable.body), 'CPFP copy must explain the reveal-change dependency')
+assert.ok(cpfpUnavailable.body.includes('already spent'), 'CPFP copy must carry the backend detail')
 
 const notReplaceable = formatAdminWalletError({ type: 'TxNotReplaceable', message: 'x' })
 assert.ok(/RBF/.test(notReplaceable.body), 'not-replaceable copy must mention RBF')

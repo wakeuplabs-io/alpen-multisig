@@ -9,10 +9,10 @@ export type UnconfirmedTxRowProps = {
 	onToggleBump(): void
 }
 
-function bumpDisabledTitle(row: UnconfirmedTxView, isWatchOnly: boolean): string | undefined {
+function bumpTitle(row: UnconfirmedTxView, isWatchOnly: boolean): string | undefined {
 	if (isWatchOnly) return 'Hardware wallet required to sign'
-	if (row.bumpDisabledReason === 'governance-commit') return 'A pending reveal depends on this commit'
 	if (row.bumpDisabledReason === 'not-rbf') return 'This transaction does not signal RBF'
+	if (row.bumpMethod === 'cpfp') return 'Accelerates the commit+reveal package via a child transaction (CPFP)'
 	return undefined
 }
 
@@ -41,6 +41,7 @@ function StatusBadge({ row }: { row: UnconfirmedTxView }) {
 export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }: UnconfirmedTxRowProps) {
 	const isBumpDisabled = isWatchOnly || !row.canBump
 	const lastSeenLabel = row.lastSeenIso !== null ? relativeTime(row.lastSeenIso, new Date()) : null
+	const feeNoun = row.usesPackageStats ? 'Package fee' : 'Fee'
 
 	return (
 		<div className="py-2.5" data-testid={`e2e-wallet-tx-row-${row.txid}`}>
@@ -55,7 +56,7 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 				<span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#6b7280]">
 					<StatusBadge row={row} />
 					<span className="truncate">
-						Fee {row.feeLabel} · {row.feeRateLabel}
+						{feeNoun} {row.feeLabel} · {row.feeRateLabel}
 						{lastSeenLabel !== null ? ` · ${lastSeenLabel}` : ''}
 					</span>
 				</span>
@@ -63,7 +64,7 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 					type="button"
 					onClick={onToggleBump}
 					disabled={isBumpDisabled}
-					title={bumpDisabledTitle(row, isWatchOnly)}
+					title={bumpTitle(row, isWatchOnly)}
 					aria-expanded={isBumpOpen}
 					data-testid={`e2e-wallet-tx-bump-${row.txid}`}
 					className={`flex-none rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${

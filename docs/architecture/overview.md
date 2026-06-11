@@ -211,7 +211,7 @@ desktop-app/src-tauri/src/
 │   ├── orchestrator_client.rs  # OrchestratorClient trait + request DTOs + OrchestratorError
 │   ├── proposals.rs         # create/approve/get proposals via the trait
 │   ├── tx_broadcaster.rs    # TxBroadcaster port (commit+reveal pair and single tx) + fallback walk
-│   └── wallet_transactions.rs  # Phase 5: unconfirmed sent-tx list + RBF fee-bump over WalletService
+│   └── wallet_transactions.rs  # Phase 5: unconfirmed sent-tx list + fee-bump (RBF / governance CPFP) over WalletService
 └── infrastructure/
     ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction SSZ codec
     ├── signing.rs           # compute_sighash/sign_sighash/verify_threshold

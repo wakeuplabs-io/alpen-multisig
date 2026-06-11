@@ -25,7 +25,7 @@ const _idle: BumpFeeState = { status: 'idle' }
 const _submitting: BumpFeeState = { status: 'submitting' }
 const _success: BumpFeeState = {
 	status: 'success',
-	result: { newTxid: 'a', replacedTxid: 'b', feeSats: 705, feeRateSatPerKvb: 5_000 },
+	result: { newTxid: 'a', targetTxid: 'b', feeSats: 705, feeRateSatPerKvb: 5_000, method: 'cpfp' },
 }
 const _error: BumpFeeState = { status: 'error', error: { type: 'TxNotReplaceable', message: 'x' } }
 void [_idle, _submitting, _success, _error]

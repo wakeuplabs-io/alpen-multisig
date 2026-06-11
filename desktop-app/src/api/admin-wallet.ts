@@ -69,7 +69,7 @@ export type AdminWalletError =
 	| { type: 'TxNotFound'; message: string }
 	| { type: 'TxAlreadyConfirmed'; message: string }
 	| { type: 'TxNotReplaceable'; message: string }
-	| { type: 'GovernanceCommitNotReplaceable'; message: string }
+	| { type: 'CpfpOutputUnavailable'; message: string }
 	| { type: 'FeeTooLow'; message: string }
 	| { type: 'FeeRateTooLow'; message: string }
 	| { type: 'InvalidFeeRate'; message: string }
@@ -119,6 +119,10 @@ export function getAdminWalletSyncStatus(): Promise<ApiResult<SyncStatusDto>> {
 	return tauriCall<SyncStatusDto>('admin_wallet_sync_status', {})
 }
 
+// Phase 5 (PRD §4.3.3): how an unconfirmed transaction's fee can be bumped.
+// Governance commits use CPFP (a child on the reveal's change); plain sends use RBF.
+export type BumpMethodDto = 'rbf' | 'cpfp'
+
 // Phase 5 (PRD §4.3.3): one unconfirmed transaction sent from the Admin Wallet.
 export type UnconfirmedTxDto = {
 	txid: string
@@ -130,6 +134,12 @@ export type UnconfirmedTxDto = {
 	vsizeVbytes: number
 	isRbfSignaling: boolean
 	isGovernanceCommit: boolean
+	bumpMethod: BumpMethodDto | null
+	// commit + reveal package stats — present only for governance commits whose
+	// reveal is known to the wallet graph.
+	packageFeeSats: number | null
+	packageVsizeVbytes: number | null
+	packageFeeRateSatPerKvb: number | null
 	lastSeenSecs: number | null
 }
 
@@ -139,10 +149,14 @@ export type BumpFeeInput = {
 }
 
 export type BumpFeeResultDto = {
+	// RBF: replacement txid. CPFP: child txid.
 	newTxid: string
-	replacedTxid: string
+	targetTxid: string
+	// RBF: replacement fee. CPFP: child fee.
 	feeSats: number
+	// RBF: replacement rate. CPFP: resulting package rate.
 	feeRateSatPerKvb: number
+	method: BumpMethodDto
 }
 
 export function listAdminWalletUnconfirmedTxs(): Promise<ApiResult<UnconfirmedTxDto[]>> {

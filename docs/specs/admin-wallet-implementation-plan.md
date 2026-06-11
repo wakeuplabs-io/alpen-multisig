@@ -52,7 +52,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.2 ✅ | Admin Wallet sync migration | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged |
 | R2.3 ✅ | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** ✅ | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`governance-broadcast-fee-selection-implementation.md`](./governance-broadcast-fee-selection-implementation.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
-| 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF-first); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
+| 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF for sends, CPFP for governance commits); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
 | 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
@@ -112,7 +112,7 @@ flowchart LR
   R21 --> R22[R2.2 Wallet sync ✅]
   R22 --> R23[R2.3 Node Config URL ✅]
   R23 --> P4[Phase 4 Broadcast fee rate ✅]
-  P4 --> P5[Phase 5 Tx list + RBF]
+  P4 --> P5[Phase 5 Tx list + fee-bump]
   P5 --> P6[Phase 6 Send happy path]
   P6 --> P7[Phase 7 Admin ID UI]
   P7 --> P8[Phase 8 HW Send-on-HW]
@@ -408,7 +408,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Done when:** On regtest, an approved proposal broadcasts with the reveal already signed before the commit hits the network; `submitpackage` atomicity means a crash before the broadcast leaves nothing on-chain (clean retry), and a transient broadcast failure within the session is recoverable via the `proposals_resubmit_reveal` IPC command (re-sends the in-memory signed reveal, no ephemeral key needed); commit→reveal still confirm; `cargo test --workspace` and frontend CI green.
 
-**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit (Phase 5) would still need the key re-derived — out of scope here.
+**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit is impossible without re-deriving the key — Phase 5 bumps pending commits via CPFP on the reveal's change output instead.
 
 #### R1.1 — Session-driven broadcast signing (adds HW path) ✅
 
@@ -604,7 +604,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 ---
 
-#### Phase 5 — Transactions + fee-bump (RBF-first) ✅
+#### Phase 5 — Transactions + fee-bump (RBF / CPFP) ✅
 
 **Status:** Complete — PR [#276](https://github.com/wakeuplabs-io/alpen-multisig/pull/276).
 
@@ -612,18 +612,18 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 **Goal:** Unconfirmed tx list and fee bump per PRD §4.3.3.
 
-**In scope:** RBF bump via BDK `build_fee_bump` + session `PsbtSigner` (R1.1) + Electrum-first broadcast with node fallback; error surfaces for non-RBF txs.
+**In scope:** RBF bump for plain sends via BDK `build_fee_bump`; **CPFP** bump for pending governance commits (child spending the reveal's wallet-owned change, sized to lift the package rate); both signed via session `PsbtSigner` (R1.1) + Electrum-first broadcast with node fallback; error surfaces for non-RBF txs and unavailable CPFP anchors.
 
-**Out of scope:** CPFP policy, payout txs.
+**Out of scope:** CPFP for non-governance txs (RBF covers them), payout txs.
 
 **Delivered:**
-- `application/wallet_transactions.rs`: `list_unconfirmed_sent_txs` (unconfirmed txs with wallet-owned inputs, fee/rate/RBF flag) and `bump_fee` (build → sign via `PsbtSigner` port → broadcast → result), typed `BumpFeeError`.
+- `application/wallet_transactions.rs`: `list_unconfirmed_sent_txs` (unconfirmed txs with wallet-owned inputs, fee/rate/RBF flag, package stats for governance commits) and `bump_fee` (RBF/CPFP dispatch → sign via `PsbtSigner` port → broadcast → result), typed `BumpFeeError`.
 - `TxBroadcaster::broadcast_one` + `broadcast_single_with_fallback` (Electrum → node, already-known idempotency).
-- **Governance guard:** commits with a pending pre-signed reveal (`PendingReveals`) are flagged and not bumpable — replacing them would invalidate the reveal (R1.0.1).
+- **Governance acceleration (CPFP):** commits with a pending pre-signed reveal (`PendingReveals`) cannot be RBF-replaced — that would invalidate the reveal (R1.0.1, ephemeral key dropped after signing) — so the bump builds a child on the reveal's change output; the requested rate applies to the whole commit+reveal+child package.
 - IPC: `admin_wallet_list_unconfirmed_txs`, `admin_wallet_bump_fee` (both handler sets; capability per-signer).
-- UI: `Pending transactions` accordion in the wallet slide-over; per-row Bump with inline 0.1 sat/vB stepper (suggested default from Fast preset), success/new-txid and tagged error surfaces; Bump disabled for watch-only / non-RBF / governance rows.
+- UI: `Pending transactions` accordion in the wallet slide-over; per-row Bump with inline 0.1 sat/vB stepper (suggested default from Fast preset), success/new-txid and tagged error surfaces; governance rows show package fee/rate and bump via CPFP; Bump disabled for watch-only / non-RBF rows.
 
-**Done when:** User can bump an unconfirmed Admin Wallet send on regtest — met (Rust unit + IPC contract suites; manual regtest path documented in the PR test plan).
+**Done when:** User can bump an unconfirmed Admin Wallet send (RBF) and a pending governance commit (CPFP) on regtest — met (Rust unit + IPC contract suites; manual path: broadcast a proposal without mining, then Bump fee in the wallet panel).
 
 **Primary code areas:** tx list IPC, bump command, UI actions.
 

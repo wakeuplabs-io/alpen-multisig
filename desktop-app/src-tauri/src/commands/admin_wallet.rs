@@ -1,5 +1,5 @@
 use bdk_wallet::KeychainKind;
-use desktop_app::application::pending_reveals::{pending_commit_txids, PendingReveals};
+use desktop_app::application::pending_reveals::{pending_commit_to_reveal, PendingReveals};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
 use desktop_app::application::wallet_service::{
     error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
@@ -251,7 +251,8 @@ fn serialize_bump_error(e: &BumpFeeError) -> String {
 ///
 /// Reads the last-synced wallet state (no chain round trip — the panel's
 /// sync-then-read flow keeps it fresh). Governance commits with a pending
-/// pre-signed reveal are flagged so the UI disables Bump for them.
+/// pre-signed reveal are flagged, offered CPFP as the bump method, and carry
+/// the commit+reveal package fee/rate.
 #[tauri::command]
 pub async fn admin_wallet_list_unconfirmed_txs(
     wallet_session: tauri::State<'_, WalletSession>,
@@ -260,8 +261,8 @@ pub async fn admin_wallet_list_unconfirmed_txs(
     let svc = wallet_session
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
-    let pending_txids = pending_commit_txids(&pending);
-    svc.list_unconfirmed_sent_txs(&pending_txids)
+    let commit_to_reveal = pending_commit_to_reveal(&pending);
+    svc.list_unconfirmed_sent_txs(&commit_to_reveal)
         .await
         .map_err(serialize_wallet_error)
 }
@@ -273,10 +274,11 @@ pub struct BumpFeeInput {
     pub fee_rate_sat_per_kvb: u64,
 }
 
-/// Replaces an unconfirmed RBF-signaling wallet transaction with a higher-fee
-/// version (PRD §4.3.3). Validates the rate, syncs best-effort so the wallet view
-/// is fresh, then builds/signs/broadcasts through `WalletService::bump_fee`
-/// (Electrum first, node RPC fallback) and re-syncs so the panel converges.
+/// Bumps the fee of an unconfirmed wallet transaction (PRD §4.3.3): RBF for plain
+/// sends, CPFP (child on the reveal's change) for pending governance commits.
+/// Validates the rate, syncs best-effort so the wallet view is fresh, then
+/// builds/signs/broadcasts through `WalletService::bump_fee` (Electrum first,
+/// node RPC fallback) and re-syncs so the panel converges.
 #[tauri::command]
 pub async fn admin_wallet_bump_fee(
     input: BumpFeeInput,
@@ -311,9 +313,9 @@ pub async fn admin_wallet_bump_fee(
         tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
     }
 
-    let pending_txids = pending_commit_txids(&pending);
+    let commit_to_reveal = pending_commit_to_reveal(&pending);
     let result = svc
-        .bump_fee(&input.txid, rate, &pending_txids, &broadcasters)
+        .bump_fee(&input.txid, rate, &commit_to_reveal, &broadcasters)
         .await
         .map_err(|e| serialize_bump_error(&e))?;
 

@@ -100,17 +100,17 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: 'This transaction does not signal RBF, so it cannot be replaced with a higher-fee version.',
 				severity: 'info',
 			}
-		case 'GovernanceCommitNotReplaceable':
+		case 'CpfpOutputUnavailable':
 			return {
-				title: 'Governance commit cannot be bumped',
-				body: 'A pre-signed reveal depends on this commit. Replacing it would invalidate the reveal — wait for confirmation instead.',
-				severity: 'info',
+				title: 'Cannot accelerate this commit',
+				body: `The reveal change output needed for the acceleration is not spendable. ${err.message}`,
+				severity: 'warning',
 			}
 		case 'FeeTooLow':
 		case 'FeeRateTooLow':
 			return {
-				title: 'Fee too low to replace',
-				body: `The replacement must pay more than the original transaction. ${err.message}`,
+				title: 'Fee too low to bump',
+				body: `The new rate must exceed what the transaction already pays. ${err.message}`,
 				severity: 'warning',
 			}
 		case 'InvalidFeeRate':

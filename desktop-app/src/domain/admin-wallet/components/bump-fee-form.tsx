@@ -4,6 +4,7 @@ import type { BumpFeeState } from '@/domain/admin-wallet/hooks/use-bump-fee'
 import { isValidBumpRate } from '@/domain/admin-wallet/model/bump-fee-rate'
 import { formatAdminWalletError } from '@/domain/admin-wallet/model/format-admin-wallet-error'
 import { truncTxid } from '@/domain/admin-wallet/model/trunc-txid'
+import type { BumpMethodDto } from '@/domain/admin-wallet/model/types'
 import {
 	FEE_RATE_STEP_SAT_PER_KVB,
 	feeSats,
@@ -11,9 +12,16 @@ import {
 	parseSatPerVb,
 } from '@/domain/fee-selection/model/fee-rate'
 
+/** Backend estimate for the CPFP child: 1 P2TR input + 1 P2TR output. */
+const CPFP_CHILD_VSIZE_EST_VBYTES = 111
+
 export type BumpFeeFormProps = {
-	/** Display label of the rate being replaced, e.g. "1.0 sat/vB". */
+	/** 'rbf' replaces the tx; 'cpfp' broadcasts a child that accelerates the package. */
+	method: BumpMethodDto
+	/** Display label of the rate being bumped (package rate for CPFP), e.g. "1.0 sat/vB". */
 	currentFeeRateLabel: string
+	/** Fee already paid (package fee for CPFP) — drives the CPFP child-fee estimate. */
+	currentFeeSats: number | null
 	minBumpSatPerKvb: number
 	suggestedSatPerKvb: number
 	maxSatPerKvb: number
@@ -23,8 +31,21 @@ export type BumpFeeFormProps = {
 	onClose(): void
 }
 
+function estimatedCostSats(
+	method: BumpMethodDto,
+	satPerKvb: number,
+	vsizeVbytes: number,
+	currentFeeSats: number | null,
+): number | null {
+	if (method === 'rbf') return feeSats(satPerKvb, vsizeVbytes)
+	if (currentFeeSats === null) return null
+	return Math.max(0, feeSats(satPerKvb, vsizeVbytes + CPFP_CHILD_VSIZE_EST_VBYTES) - currentFeeSats)
+}
+
 export function BumpFeeForm({
+	method,
 	currentFeeRateLabel,
+	currentFeeSats,
 	minBumpSatPerKvb,
 	suggestedSatPerKvb,
 	maxSatPerKvb,
@@ -41,7 +62,14 @@ export function BumpFeeForm({
 				className="mb-2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-3 py-2.5"
 				data-testid="e2e-wallet-bump-success"
 			>
-				<p className="m-0 text-[12px] font-medium text-[#047857]">Replacement broadcast</p>
+				<p className="m-0 text-[12px] font-medium text-[#047857]">
+					{state.result.method === 'cpfp' ? 'Acceleration broadcast (CPFP child)' : 'Replacement broadcast'}
+				</p>
+				{state.result.method === 'cpfp' && (
+					<p className="m-0 mt-0.5 text-[11px] text-[#065f46]">
+						A child transaction now pays for the whole package — the commit and reveal stay untouched.
+					</p>
+				)}
 				<p
 					className="m-0 mt-1 flex items-center gap-1.5 font-mono text-[12px] text-[#065f46]"
 					title={state.result.newTxid}
@@ -63,7 +91,8 @@ export function BumpFeeForm({
 	const parsed = parseSatPerVb(rateInput)
 	const isSubmitting = state.status === 'submitting'
 	const canConfirm = !isSubmitting && isValidBumpRate(parsed, minBumpSatPerKvb, maxSatPerKvb)
-	const estimatedFee = parsed !== null ? feeSats(parsed, vsizeVbytes) : null
+	const estimatedFee = parsed !== null ? estimatedCostSats(method, parsed, vsizeVbytes, currentFeeSats) : null
+	const estimateNoun = method === 'cpfp' ? 'child fee' : 'new fee'
 
 	function handleStep(direction: 1 | -1) {
 		const current = parsed ?? suggestedSatPerKvb
@@ -116,9 +145,15 @@ export function BumpFeeForm({
 				</div>
 			</div>
 
+			{method === 'cpfp' && (
+				<p className="m-0 mt-1.5 text-[11px] text-[#6b7280]">
+					Accelerates via a child transaction (CPFP) — the new rate applies to the whole commit+reveal package.
+				</p>
+			)}
+
 			<p className="m-0 mt-1.5 text-[11px] text-[#9ca3af]">
 				Current {currentFeeRateLabel} · min {formatSatPerVb(minBumpSatPerKvb)} · max {formatSatPerVb(maxSatPerKvb)}
-				{estimatedFee !== null ? ` · new fee ~${estimatedFee.toLocaleString()} sats` : ''}
+				{estimatedFee !== null ? ` · ${estimateNoun} ~${estimatedFee.toLocaleString()} sats` : ''}
 			</p>
 
 			{state.status === 'error' && (

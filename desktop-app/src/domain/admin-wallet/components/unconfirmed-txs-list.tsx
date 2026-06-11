@@ -122,9 +122,11 @@ export function UnconfirmedTxsList({
 											isBumpOpen={openBumpTxid === row.txid}
 											onToggleBump={() => handleToggleBump(row.txid)}
 										/>
-										{openBumpTxid === row.txid && (
+										{openBumpTxid === row.txid && row.bumpMethod !== null && (
 											<BumpFeeForm
+												method={row.bumpMethod}
 												currentFeeRateLabel={row.feeRateLabel}
+												currentFeeSats={row.currentFeeSats}
 												minBumpSatPerKvb={minBump}
 												suggestedSatPerKvb={suggestedBumpRateSatPerKvb(fastPresetSatPerKvb, minBump)}
 												maxSatPerKvb={maxSatPerKvb}
