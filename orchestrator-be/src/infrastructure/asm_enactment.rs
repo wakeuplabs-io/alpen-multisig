@@ -60,18 +60,12 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 .iter()
                 .map(|e| hex::encode(e.musig2_pk().x_only_public_key().0.serialize()))
                 .collect();
-            let (add_members, _) = update.clone().into_inner();
-            // A remove-only update has no added keys to check presence against —
-            // vacuous `all()` would give a false positive before enactment.
-            if add_members.is_empty() {
-                return Ok(false);
-            }
-            Ok(add_members.iter().all(|pk| {
-                let key_hex = hex::encode(pk.x_only_public_key().0.serialize());
-                current_keys
-                    .iter()
-                    .any(|k| k.eq_ignore_ascii_case(&key_hex))
-            }))
+            let (add_members, remove_members) = update.clone().into_inner();
+            Ok(operator_set_post_conditions_met(
+                &current_keys,
+                &add_members,
+                &remove_members,
+            ))
         }
         MultisigAction::Update(_) => {
             let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
@@ -178,6 +172,38 @@ fn multisig_update_post_conditions_met(
         }
     }
     true
+}
+
+/// Checks whether the current operator set satisfies the post-conditions of an operator set
+/// update action.
+///
+/// - Add-only or mixed add+remove: all added keys must be present in the current set.
+/// - Remove-only: heuristic — if removing index N, the original set had at least N+1 operators.
+///   After removal, if the current count is <= N, at least one removal happened. This works
+///   when removing from the end but may miss enactments that remove from the middle.
+///   TODO: store the original operator set (or hash) in proposal metadata for reliable detection.
+/// - No-op (neither add nor remove): treated as already enacted (vacuous).
+fn operator_set_post_conditions_met(
+    current_keys: &[String],
+    add_members: &[strata_crypto::EvenPublicKey],
+    remove_members: &[u32],
+) -> bool {
+    match (add_members.is_empty(), remove_members.is_empty()) {
+        // Add-only or mixed add+remove: check all added keys are present in the current set.
+        (false, _) => add_members.iter().all(|pk| {
+            let key_hex = hex::encode(pk.x_only_public_key().0.serialize());
+            current_keys
+                .iter()
+                .any(|k| k.eq_ignore_ascii_case(&key_hex))
+        }),
+        // Remove-only: heuristic based on the max removed index.
+        (true, false) => {
+            let max_remove_index = remove_members.iter().max().copied().unwrap_or(0);
+            current_keys.len() as u32 <= max_remove_index
+        }
+        // No-op (neither add nor remove): treat as already enacted (vacuous).
+        (true, true) => true,
+    }
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
@@ -315,6 +341,23 @@ mod tests {
         hex::encode(bytes)
     }
 
+    /// Generate a valid x-only public key for testing by using small scalar multiples of G.
+    /// These are known valid points on secp256k1.
+    fn even_pubkey_from_scalar(n: u64) -> strata_crypto::EvenPublicKey {
+        use bitcoin::secp256k1::{Secp256k1, SecretKey};
+        let secp = Secp256k1::new();
+        let mut scalar_bytes = [0u8; 32];
+        scalar_bytes[24..32].copy_from_slice(&n.to_be_bytes());
+        let secret = SecretKey::from_slice(&scalar_bytes).unwrap();
+        let pubkey = secret.public_key(&secp);
+        let (x_only, _parity) = pubkey.x_only_public_key();
+        strata_crypto::EvenPublicKey::from(x_only)
+    }
+
+    fn even_key_hex_from_scalar(n: u64) -> String {
+        hex::encode(even_pubkey_from_scalar(n).x_only_public_key().0.serialize())
+    }
+
     #[test]
     fn post_conditions_require_last_seqno_at_least_proposal_seq() {
         let config = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
@@ -341,5 +384,45 @@ mod tests {
         assert!(multisig_update_post_conditions_met(
             &after, 2, 1, 1, &config
         ));
+    }
+
+    #[test]
+    fn operator_set_add_only_enacted_when_keys_present() {
+        let pk = even_pubkey_from_scalar(1);
+        let current = vec![even_key_hex_from_scalar(1), even_key_hex_from_scalar(2)];
+        assert!(operator_set_post_conditions_met(&current, &[pk], &[]));
+    }
+
+    #[test]
+    fn operator_set_add_only_not_enacted_when_keys_missing() {
+        let pk = even_pubkey_from_scalar(3);
+        let current = vec![even_key_hex_from_scalar(1), even_key_hex_from_scalar(2)];
+        assert!(!operator_set_post_conditions_met(&current, &[pk], &[]));
+    }
+
+    #[test]
+    fn operator_set_remove_only_enacted_when_count_shrunk() {
+        // Removing index 2 means original had at least 3 operators.
+        // After removal, if current count is <= 2, enactment is detected.
+        let current = vec![even_key_hex_from_scalar(1), even_key_hex_from_scalar(2)];
+        assert!(operator_set_post_conditions_met(&current, &[], &[2]));
+    }
+
+    #[test]
+    fn operator_set_remove_only_not_enacted_when_count_unchanged() {
+        // Removing index 2 means original had at least 3 operators.
+        // If current count is still 3, removal hasn't happened yet.
+        let current = vec![
+            even_key_hex_from_scalar(1),
+            even_key_hex_from_scalar(2),
+            even_key_hex_from_scalar(3),
+        ];
+        assert!(!operator_set_post_conditions_met(&current, &[], &[2]));
+    }
+
+    #[test]
+    fn operator_set_no_op_is_vacuously_enacted() {
+        let current = vec![even_key_hex_from_scalar(1)];
+        assert!(operator_set_post_conditions_met(&current, &[], &[]));
     }
 }

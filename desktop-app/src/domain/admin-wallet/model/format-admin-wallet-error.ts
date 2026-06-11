@@ -23,7 +23,7 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'ElectrumUnreachable':
 			return {
 				title: 'Electrum indexer unreachable',
-				body: `Cannot reach the Electrum indexer used for wallet sync. Check ELECTRUM_URL.${err.message ? ` (${err.message})` : ''}`,
+				body: `Cannot reach the Electrum indexer used for wallet sync. Check Settings > Node > Electrum URL.${err.message ? ` (${err.message})` : ''}`,
 				severity: 'warning',
 			}
 		case 'RpcAuthFailed':

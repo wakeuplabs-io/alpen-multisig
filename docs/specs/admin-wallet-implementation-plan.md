@@ -51,7 +51,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.1 | Electrum indexer infra | electrs in Docker + dev/staging/CI; synced to local regtest `bitcoind`; smoke verification |
 | R2.2 | Admin Wallet sync migration | `WalletService` sync via `bdk_electrum`; fixed URL; broadcast/fees unchanged |
 | R2.3 | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
-| **4** | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md); **after R2** |
+| **4** | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md); **after R2** |
 | 5 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
 | 6 | Transactions + fee-bump | PRD §4.3.3 (RBF-first) |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
@@ -579,7 +579,9 @@ Phases 4–10 continue after **Release 2**. **Phase 4** is the priority **functi
 
 #### Phase 4 — Governance broadcast fee rate
 
-**Goal:** [**US-H4**](../3-stories/story-map.md) — on governance **broadcast** (commit funding), let the signer set fee rate in **sat/vB** (0.1 increments, max 10 000); default **next-block** estimate from the connected chain RPC. Per [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md): proposal/PRD expect **fee-rate controls on broadcast** before the full wallet Send surface; new PRD delegates pending-update Send fee UX to the wallet-send pattern (§4.3.5.3), but commit/reveal broadcast still needs an explicit control now.
+**Spec:** [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md) — functional specification for fee rate selection (presets, custom entry, broadcast path).
+
+**Goal:** [**US-H4**](../3-stories/story-map.md) — on governance **broadcast** (commit funding), let the signer set fee rate in **sat/vB** (0.1 increments, max 10 000); default **Medium** preset from the connected chain RPC. Per [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md): proposal/PRD expect **fee-rate controls on broadcast** before the full wallet Send surface; new PRD delegates pending-update Send fee UX to the wallet-send pattern (§4.3.5.3), but commit/reveal broadcast still needs an explicit control now.
 
 **In scope:** Fee field on broadcast confirm UI; plumb rate into BDK commit-funding build; regtest (mnemonic + HW paths).
 

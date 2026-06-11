@@ -105,6 +105,7 @@ jobs:
           npm run test:derive-broadcast-error --workspace desktop-app
           npm run test:derive-proposal-actions --workspace desktop-app
           npm run test:model-format-sync-progress-label --workspace desktop-app
+          npm run test:model-fee-rate --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app

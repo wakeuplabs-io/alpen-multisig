@@ -50,13 +50,20 @@ export function mergeBroadcastWithProposal(broadcast: BroadcastResult, proposal:
 	}
 }
 
-function buildBroadcastInput(baseUrl: string, actionId: string): BroadcastInput {
-	return { baseUrl, actionId }
+function buildBroadcastInput(baseUrl: string, actionId: string, feeRateSatPerKvb: number): BroadcastInput {
+	return { baseUrl, actionId, feeRateSatPerKvb }
 }
 
+/**
+ * `feeRateSatPerKvb === null` means fee presets are still loading: prepare is
+ * deferred and broadcast is a no-op until a real rate is available. This both
+ * prevents broadcasting at an unintended default rate and avoids a double
+ * prepare when the loaded rate replaces a placeholder.
+ */
 export function useBroadcastProposal(
 	baseUrl: string,
 	actionId: string,
+	feeRateSatPerKvb: number | null,
 	signerKind: SignerKind = 'mnemonic',
 	adapter?: WalletAdapter,
 ): UseBroadcastProposalReturn {
@@ -135,12 +142,12 @@ export function useBroadcastProposal(
 	useEffect(() => clearConfirmationPoll, [clearConfirmationPoll])
 
 	useEffect(() => {
-		if (!actionId) return
+		if (!actionId || feeRateSatPerKvb === null) return
 		let active = true
 		setPhase('preparing')
 		setError(null)
 		Promise.all([
-			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
+			prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
 			getProposalByActionId({ baseUrl, actionId }),
 		]).then(([res, proposalRes]) => {
 			if (!active) return
@@ -168,13 +175,14 @@ export function useBroadcastProposal(
 		return () => {
 			active = false
 		}
-	}, [actionId, baseUrl, applyProposal, startConfirmationPoll])
+	}, [actionId, baseUrl, feeRateSatPerKvb, applyProposal, startConfirmationPoll])
 
 	async function prepare() {
+		if (feeRateSatPerKvb === null) return
 		setPhase('preparing')
 		setError(null)
 		const [res, proposalRes] = await Promise.all([
-			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
+			prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
 			getProposalByActionId({ baseUrl, actionId }),
 		])
 		if (!res.ok) {
@@ -190,7 +198,7 @@ export function useBroadcastProposal(
 	}
 
 	async function broadcast() {
-		if (broadcastStarted.current || inFlightActionIds.has(actionId)) {
+		if (feeRateSatPerKvb === null || broadcastStarted.current || inFlightActionIds.has(actionId)) {
 			return
 		}
 		if (adapter !== undefined) {
@@ -227,7 +235,7 @@ export function useBroadcastProposal(
 			setPhase('broadcasting')
 		}
 		try {
-			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
+			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb))
 			if (!res.ok) {
 				setError(deriveBroadcastError(res.error))
 				setPhase('error')

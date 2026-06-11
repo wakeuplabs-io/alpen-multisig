@@ -27,12 +27,17 @@ type UseCancelBroadcastReturn = {
 	broadcast: () => Promise<void>
 }
 
-export function useCancelBroadcast(baseUrl: string, targetActionId: string): UseCancelBroadcastReturn {
+export function useCancelBroadcast(
+	baseUrl: string,
+	targetActionId: string,
+	/** `null` while fee presets load — broadcast stays blocked until ready. */
+	feeRateSatPerKvb: number | null,
+): UseCancelBroadcastReturn {
 	const { proposal: targetProposal, isLoading, error: targetError } = useProposalDetail(baseUrl, targetActionId)
 
 	const cancelActionId = targetProposal?.cancelProposal?.actionId ?? null
 
-	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '')
+	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '', feeRateSatPerKvb)
 
 	const [isCheckingTargetQueued, setIsCheckingTargetQueued] = useState(false)
 	const [targetQueued, setTargetQueued] = useState<boolean | null>(null)

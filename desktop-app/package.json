@@ -28,6 +28,7 @@
     "test:model-compose-addresses-with-balance": "tsx src/domain/admin-wallet/model/__tests__/compose-addresses-with-balance.test.ts",
     "test:model-group-utxo-balances-by-derivation": "tsx src/domain/admin-wallet/model/__tests__/group-utxo-balances-by-derivation.test.ts",
     "test:model-format-admin-wallet-error": "tsx src/domain/admin-wallet/model/__tests__/format-admin-wallet-error.test.ts",
+    "test:model-fee-rate": "tsx src/domain/fee-selection/model/__tests__/fee-rate.test.ts",
     "test:hooks-use-wallet-panel-state": "tsx src/domain/admin-wallet/hooks/__tests__/use-wallet-panel-state.test.ts",
     "test:hooks-use-addresses-with-balance": "tsx src/domain/admin-wallet/hooks/__tests__/use-addresses-with-balance.test.ts",
     "test:hooks-use-admin-wallet-capability": "tsx src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-capability.test.ts",

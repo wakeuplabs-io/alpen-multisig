@@ -30,6 +30,7 @@ const mappings: Array<{ code: string; expected: string }> = [
 	{ code: 'orphan_commit', expected: 'resubmit-reveal' },
 	{ code: 'device_disconnected', expected: 'reconnect-device' },
 	{ code: 'session_expired', expected: 're-auth' },
+	{ code: 'broadcast_unavailable', expected: 'manual-broadcast' },
 	{ code: 'unknown_error', expected: 'retry' },
 ]
 for (const { code, expected } of mappings) {
@@ -53,5 +54,21 @@ assert.equal(legacy.code, 'unknown_error')
 assert.equal(legacy.message, 'Fee rate too low')
 assert.equal(legacy.recovery, 'retry')
 console.log('deriveBroadcastError: legacy string fallback OK')
+
+// ── 5. broadcast_unavailable carries tx hexes ────────────────────────────────
+
+const unavailable = deriveBroadcastError(
+	JSON.stringify({
+		code: 'broadcast_unavailable',
+		message: 'All broadcast channels failed.',
+		commitTxHex: 'deadbeef01',
+		revealTxHex: 'deadbeef02',
+	}),
+)
+assert.equal(unavailable.code, 'broadcast_unavailable')
+assert.equal(unavailable.recovery, 'manual-broadcast')
+assert.equal(unavailable.commitTxHex, 'deadbeef01')
+assert.equal(unavailable.revealTxHex, 'deadbeef02')
+console.log('deriveBroadcastError: broadcast_unavailable carries tx hexes OK')
 
 console.log('All deriveBroadcastError tests passed.')

@@ -4,6 +4,8 @@ import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
+import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
+import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -18,11 +20,15 @@ export function CancelProposalBroadcastScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
+	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
+	const feeState = useFeePresets()
+	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
+
 	const {
 		isResolvingCancel,
-		cancelResolveError,
 		targetQueued,
 		targetQueuedError,
+		cancelResolveError,
 		phase,
 		bundle,
 		result,
@@ -30,7 +36,7 @@ export function CancelProposalBroadcastScreen() {
 		error,
 		prepare,
 		broadcast,
-	} = useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	} = useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -116,6 +122,16 @@ export function CancelProposalBroadcastScreen() {
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 							targetQueued={targetQueued}
+							feeSelector={
+								feeState.status === 'ready' ? (
+									<FeeRateSelector
+										presets={feeState.presets}
+										selection={feeState.selection}
+										onSelectPreset={feeState.setPreset}
+										onSetCustomRate={feeState.setCustomRate}
+									/>
+								) : undefined
+							}
 						/>
 					)}
 
