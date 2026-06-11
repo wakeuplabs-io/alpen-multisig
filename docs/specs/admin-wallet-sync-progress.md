@@ -1,6 +1,6 @@
 # Spec: Admin Wallet sync progress indicator
 
-> **Status: DEFERRED** — Primary mitigation for slow wallet sync is **Release 2** ([`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md), slice **R2.2**). This spec (block-scan progress UI for `bdk_bitcoind_rpc::Emitter`) remains deferred unless still needed after R2.2 ships.
+> **Status: OBSOLETE** — **Release 2** ([`admin-wallet-electrum-sync.md`](./admin-wallet-electrum-sync.md)) shipped (R2.2, PR [#262](https://github.com/wakeuplabs-io/alpen-multisig/pull/262)). Wallet sync now uses `bdk_electrum` instead of `bdk_bitcoind_rpc::Emitter`. This spec (block-scan progress UI) is no longer applicable.
 
 ## Objective
 
