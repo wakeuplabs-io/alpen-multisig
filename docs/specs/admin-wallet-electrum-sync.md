@@ -1,6 +1,7 @@
 # Admin Wallet — Electrum sync (Release 2)
 
 > **Release 2** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
+> **Status: ✅ Complete** — R2.1 (PR [#261](https://github.com/wakeuplabs-io/alpen-multisig/pull/261)), R2.2 (PR [#262](https://github.com/wakeuplabs-io/alpen-multisig/pull/262)), R2.3 (PR [#263](https://github.com/wakeuplabs-io/alpen-multisig/pull/263)).
 
 ## Objective
 
@@ -104,7 +105,7 @@ All of R2.1–R2.3 are complete:
 
 - Any indexer backend other than Electrum protocol (electrs in dev/CI).
 - Changing commit/reveal protocol, `PsbtSigner`, or broadcast signing flows.
-- Send (Phase 5), transaction list / RBF (Phase 6), Admin ID UI (Phase 7), shared Send UX (Phase 9).
+- Send (Phase 6), transaction list / RBF (Phase 5), Admin ID UI (Phase 7), shared Send UX (Phase 9).
 - [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) block-scan progress UI — **deferred** unless still needed after R2.2.
 
 ## Related

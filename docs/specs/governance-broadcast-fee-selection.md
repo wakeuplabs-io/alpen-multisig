@@ -10,7 +10,7 @@ Define the user-facing behavior for fee rate selection when broadcasting governa
 - **Who:** Strata Administrator and Alpen Administrator signers.
 - **What:** The signer selects a fee rate before broadcasting the commit transaction.
 
-Later phases will reuse this pattern for wallet Send (Phase 5) and shared Send UX (Phase 9).
+Later phases will reuse this pattern for wallet Send (Phase 6) and shared Send UX (Phase 9).
 
 ## 3. Fee Rate Presets
 
