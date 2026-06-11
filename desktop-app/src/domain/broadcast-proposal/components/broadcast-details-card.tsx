@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
 import type { AdminWalletError } from '@/api/admin-wallet'
+import { WalletIcon } from '@/assets/icons'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
@@ -146,48 +147,69 @@ export function BroadcastDetailsCard({
 					</div>
 				)}
 
-				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
-					<span className="text-[13px] font-medium text-[#111827]">
-						{bundle.estimatedFeeSats.toLocaleString()} sats
-					</span>
-				</div>
+				{feeSelector === undefined && (
+					<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
+						<span className="text-[13px] font-medium text-[#111827]">
+							{bundle.estimatedFeeSats.toLocaleString()} sats
+						</span>
+					</div>
+				)}
 
 				{adminWalletInfo !== undefined && (
 					<div>
 						<SectionLabel>Funding Source</SectionLabel>
 						{adminWalletInfo == null ? (
-							<div className="animate-pulse space-y-2">
-								<div className="h-10 rounded-lg bg-[#f3f4f6]" />
-								<div className="h-4 w-48 rounded-md bg-[#f3f4f6]" />
+							<div className="animate-pulse space-y-px overflow-hidden rounded-lg border border-[#f3f4f6]">
+								<div className="h-13 bg-[#f3f4f6]" />
+								<div className="h-10 bg-[#f9fafb]" />
 							</div>
 						) : (
-							<>
-								<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+							<div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
+								<div className="flex items-center justify-between gap-3 bg-[#f9fafb] px-3 py-2.5">
+									<span className="flex min-w-0 items-center gap-2.5">
+										<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e4dfff] bg-[#f5f3ff]">
+											<WalletIcon width={16} height={16} className="text-[#7c6fcd]" />
+										</span>
+										<span className="flex min-w-0 flex-col">
+											<span className="text-[13px] font-medium text-[#111827]">Admin wallet</span>
+											<span className="text-[11px] text-[#9ca3af]">Pays the network fee and commit dust</span>
+										</span>
+									</span>
+									<span className="flex shrink-0 flex-col items-end">
+										<span
+											className={`text-[13px] font-semibold ${
+												adminWalletInfo.balanceSats === 0 ? 'text-[#dc2626]' : 'text-[#111827]'
+											}`}
+										>
+											{adminWalletInfo.balanceSats.toLocaleString()} sats
+										</span>
+										<span className="text-[11px] text-[#9ca3af]">
+											{satsToBtc(adminWalletInfo.balanceSats)} BTC available
+										</span>
+									</span>
+								</div>
+								<div className="flex items-start gap-2 border-t border-[#eef0f2] bg-white px-3 py-2.5">
 									<span
 										data-testid="e2e-admin-wallet-funding-address"
-										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
+										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#6b7280]"
 									>
 										{adminWalletInfo.address}
 									</span>
 									<CopyButton text={adminWalletInfo.address} />
 								</div>
-								<p className="mt-2 text-[13px] text-[#6b7280]">
-									Admin Wallet (BDK){' '}
-									<span className="text-[12px] text-[#9ca3af]">
-										({adminWalletInfo.balanceSats.toLocaleString()} sats)
-									</span>
-								</p>
 								{syncError != null ? (
-									<p className="mt-1 text-[12px] text-[#ef4444]">
-										Sync error: {'message' in syncError ? syncError.message : syncError.type}
-									</p>
+									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
+										<span className="text-[12px] text-[#ef4444]">
+											Sync error: {'message' in syncError ? syncError.message : syncError.type}
+										</span>
+									</div>
 								) : lastSyncedAt != null ? (
-									<p className="mt-1">
+									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
 										<LastSyncLabel lastSyncedAt={lastSyncedAt} />
-									</p>
+									</div>
 								) : null}
-							</>
+							</div>
 						)}
 					</div>
 				)}
