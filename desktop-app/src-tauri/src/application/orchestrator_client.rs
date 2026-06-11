@@ -77,6 +77,12 @@ pub struct NextSeqNoResponse {
     pub next_seq_no: u64,
 }
 
+/// Pre-broadcast guard response for Cancel proposals.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelTargetStatusResponse {
+    pub target_queued: bool,
+}
+
 /// Request to create a cancel proposal for an approved target.
 #[derive(Debug, Serialize)]
 pub struct CreateCancelProposalRequest {
@@ -119,6 +125,12 @@ pub trait OrchestratorClient: Send + Sync {
 
     /// Get full details of a specific proposal.
     async fn get_proposal(&self, action_id: &str) -> Result<Proposal, OrchestratorError>;
+
+    /// Pre-broadcast guard for a Cancel proposal: is its target action still queued on the ASM?
+    async fn get_cancel_target_status(
+        &self,
+        action_id: &str,
+    ) -> Result<CancelTargetStatusResponse, OrchestratorError>;
 
     /// Submit an approval signature for an existing proposal.
     async fn approve_action(

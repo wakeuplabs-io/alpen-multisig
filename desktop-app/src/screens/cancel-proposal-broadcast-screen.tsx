@@ -24,8 +24,19 @@ export function CancelProposalBroadcastScreen() {
 	const feeState = useFeePresets()
 	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
 
-	const { isResolvingCancel, cancelResolveError, phase, bundle, result, proposal, error, prepare, broadcast } =
-		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
+	const {
+		isResolvingCancel,
+		targetQueued,
+		targetQueuedError,
+		cancelResolveError,
+		phase,
+		bundle,
+		result,
+		proposal,
+		error,
+		prepare,
+		broadcast,
+	} = useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -96,12 +107,21 @@ export function CancelProposalBroadcastScreen() {
 						</div>
 					)}
 
+					{targetQueuedError !== null && (
+						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+							<p className="m-0 text-sm text-[#991b1b]">
+								Could not verify the target action's queue status: {targetQueuedError}
+							</p>
+						</div>
+					)}
+
 					{showDetails && (
 						<BroadcastDetailsCard
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
+							targetQueued={targetQueued}
 							feeSelector={
 								feeState.status === 'ready' ? (
 									<FeeRateSelector
