@@ -112,8 +112,8 @@ flowchart LR
   R21 --> R22[R2.2 Wallet sync ✅]
   R22 --> R23[R2.3 Node Config URL ✅]
   R23 --> P4[Phase 4 Broadcast fee rate ✅]
-  P4 --> P5[Phase 5 Send happy path]
-  P5 --> P6[Phase 6 Tx list + RBF]
+  P4 --> P5[Phase 5 Tx list + RBF]
+  P5 --> P6[Phase 6 Send happy path]
   P6 --> P7[Phase 7 Admin ID UI]
   P7 --> P8[Phase 8 HW Send-on-HW]
   P8 --> P9[Phase 9 Shared Gov + Send UX]
@@ -122,7 +122,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) is also complete. **Next:** Phase 5 (Send BTC happy path). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
+The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) is also complete. **Next:** Phase 5 (Transactions + fee-bump). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -195,7 +195,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Goal:** Eliminate `OPERATOR_SECRET_KEY_HEX` as a separate hot key in environment. Derive the SPS-50 commit/reveal internal key from the Admin Wallet seed at a dedicated path so that — per PRD §3.2 — no signing material lives outside the Admin Wallet's secret zone. HW-mediated signing is deferred to Release 1 (R1.1); this phase keeps the dev mnemonic as the secret source, but consolidates it into a single key custody surface.
 
-**Rationale:** The PRD never specifies a separate operator key. All signing flows are HW-wallet mediated (§3.2.2.5, §4.3.5.5.1, §5.3.3.2.2). `OPERATOR_SECRET_KEY_HEX` is dev scaffolding from POC days; carrying it as a parallel hot key through Phase 8 unnecessarily widens the secret-management surface. Retiring it before Phase 5 Send means the Send pipeline and the reveal pipeline share one signer infrastructure, which Release 1 (R1.1) then swaps to HW in a single coherent change.
+**Rationale:** The PRD never specifies a separate operator key. All signing flows are HW-wallet mediated (§3.2.2.5, §4.3.5.5.1, §5.3.3.2.2). `OPERATOR_SECRET_KEY_HEX` is dev scaffolding from POC days; carrying it as a parallel hot key through Phase 8 unnecessarily widens the secret-management surface. Retiring it before Phase 6 Send means the Send pipeline and the reveal pipeline share one signer infrastructure, which Release 1 (R1.1) then swaps to HW in a single coherent change.
 
 **In scope**
 
@@ -243,7 +243,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Goal:** Remove the `BitcoindSendToAddress` variant and the `COMMIT_FUNDING` environment variable toggle. From this phase onward, the commit transaction is always funded by the Admin Wallet (BDK), with no fallback to node-wallet `sendtoaddress`. This eliminates the dual-path bifurcation introduced in Phase 1 and ensures all development and testing work against the real Admin Wallet funding path.
 
-**Rationale:** Phase 1 introduced `CommitFunding` as a pluggable trait to allow a gradual migration — CI/E2E could keep the legacy `sendtoaddress` path while the Admin Wallet path was validated. With Phase 3.5 complete (internal key consolidated) and Phase 3.7 (session-bound wallet) next in line, continuing to maintain two funding paths means all subsequent development — including Phase 5 Send and Phase 8 HW signing — would be built and tested against the wrong (legacy) path. Removing the bifurcation now ensures the Admin Wallet is the single source of truth for commit funding from this point forward.
+**Rationale:** Phase 1 introduced `CommitFunding` as a pluggable trait to allow a gradual migration — CI/E2E could keep the legacy `sendtoaddress` path while the Admin Wallet path was validated. With Phase 3.5 complete (internal key consolidated) and Phase 3.7 (session-bound wallet) next in line, continuing to maintain two funding paths means all subsequent development — including Phase 6 Send and Phase 8 HW signing — would be built and tested against the wrong (legacy) path. Removing the bifurcation now ensures the Admin Wallet is the single source of truth for commit funding from this point forward.
 
 **In scope**
 
@@ -308,7 +308,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 **Out of scope**
 
 - HW login (Phase 3.8).
-- Send/signing from the session wallet (Phase 5+).
+- Send/signing from the session wallet (Phase 6+).
 - **Historical note:** early drafts kept `ADMIN_WALLET_REGTEST_MNEMONIC` for CI; **3.7c removed it** — mnemonic only via login session.
 
 **Done when**
@@ -386,7 +386,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **R1.7 closure:** Branch `feature/admin-wallet-r17-ui-polish`, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Two passes: (a) visual hierarchy + layout refinement, (b) affordances & polish (icon-only copy, wallet avatar, count badge, session chevron, drawer easing/shadow). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
 
-**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Release 2** (Electrum wallet sync) — also now complete, followed by Phase 4 (also complete). Next: **Phase 5** (Send BTC happy path).
+**Release 1 fully closed.** All R1.0–R1.7 slices shipped. Balance (§4.3.1), addresses (§4.3.2), receive rotation (§4.3.4 rotation), and panel UI polish complete. Next: **Release 2** (Electrum wallet sync) — also now complete, followed by Phase 4 (also complete). Next: **Phase 5** (Transactions + fee-bump).
 
 #### R1.0 — Ephemeral reveal key (decouple the envelope key from the seed) ✅
 
@@ -408,7 +408,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Done when:** On regtest, an approved proposal broadcasts with the reveal already signed before the commit hits the network; `submitpackage` atomicity means a crash before the broadcast leaves nothing on-chain (clean retry), and a transient broadcast failure within the session is recoverable via the `proposals_resubmit_reveal` IPC command (re-sends the in-memory signed reveal, no ephemeral key needed); commit→reveal still confirm; `cargo test --workspace` and frontend CI green.
 
-**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit (Phase 6) would still need the key re-derived — out of scope here.
+**Why / notes:** Today `broadcast_commit_then_reveal` broadcasts the commit first (Step 1) and only builds/signs the reveal afterward (Step 3, via `get_raw_transaction`). R1.0.1 splits commit funding into build-and-sign (returning the full signed `Transaction`) from broadcast, so the reveal is built locally without the round-trip. `submitpackage` is best-effort (Core 24+); sequential commit→reveal is the fallback. **Persistence scope (decided):** the signed reveal is **not** durably persisted — the window is closed by `submitpackage` atomicity, and a session-scoped in-memory store backs the resubmit IPC; a hard process crash on the sequential-fallback path (pre-24 node) is an accepted, documented limitation (durable orchestrator-stored persistence is a possible future hardening). RBF of the commit (Phase 5) would still need the key re-derived — out of scope here.
 
 #### R1.1 — Session-driven broadcast signing (adds HW path) ✅
 
@@ -457,7 +457,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Done when:** Connecting a HW wallet derives Admin ID (`m/84'/0'/73'/0/0`; Ledger regtest/testnet follows its existing `m/84'/1'/73'/0/0` app convention) and Admin Wallet (`m/86'/0'/73'/n/n`; Ledger regtest/testnet uses `m/86'/1'/73'`) with no manual path-selection UI.
 
-**Later (optional, not in Release 1):** Admin ID display/copy (Phase 7), Send-on-HW + verify-on-device (Phase 8), QR for receive, fee-bump (Phase 6), broadcast fee (Phase 4) — pull forward only if a Release 1 step needs them.
+**Later (optional, not in Release 1):** Admin ID display/copy (Phase 7), Send-on-HW + verify-on-device (Phase 8), QR for receive, fee-bump (Phase 5), broadcast fee (Phase 4) — pull forward only if a Release 1 step needs them.
 
 #### R1.5 — Balance UX (PRD §4.3.1 complete) ✅
 
@@ -548,12 +548,12 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 **Out of scope (whole release)**
 
 - Any indexer backend other than Electrum protocol.
-- Send (Phase 5), tx list / RBF (Phase 6), Admin ID UI (Phase 7), shared Send UX (Phase 9).
+- Send (Phase 6), tx list / RBF (Phase 5), Admin ID UI (Phase 7), shared Send UX (Phase 9).
 - Changing commit/reveal protocol or `PsbtSigner` flows.
 
 **Done when:** R2.1–R2.3 complete — wallet panel read path syncs in production-viable time; Release 1 wallet UX parity; governance broadcast unchanged; CI green.
 
-**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Next:** Phase 5 (Send BTC happy path).
+**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Next:** Phase 5 (Transactions + fee-bump).
 
 **Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.2.
 
@@ -585,7 +585,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 ### Remaining phases (5–10)
 
-Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Send BTC happy path) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
+Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Transactions + fee-bump) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
 
 #### Phase 4 — Governance broadcast fee rate ✅
 
@@ -604,21 +604,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 ---
 
-#### Phase 5 — Send BTC happy path (regtest, dev mnemonic)
-
-**Goal:** PRD §4.3.5 Send with validations (address network, amount, fee control aligned with Phase 4, change to `…/1/*`).
-
-**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate.
-
-**Out of scope:** Hardware confirm, mainnet, full governance Send chrome (Phase 9).
-
-**Done when:** Regtest send succeeds with change to first unused internal index.
-
-**Primary code areas:** `WalletService` send path, Send screen, validation helpers.
-
----
-
-#### Phase 6 — Transactions + fee-bump (RBF-first)
+#### Phase 5 — Transactions + fee-bump (RBF-first)
 
 **Goal:** Unconfirmed tx list and fee bump per PRD §4.3.3.
 
@@ -629,6 +615,20 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 **Done when:** User can bump an unconfirmed Admin Wallet send on regtest.
 
 **Primary code areas:** tx list IPC, bump command, UI actions.
+
+---
+
+#### Phase 6 — Send BTC happy path (regtest, dev mnemonic)
+
+**Goal:** PRD §4.3.5 Send with validations (address network, amount, fee control aligned with Phase 4, change to `…/1/*`).
+
+**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate.
+
+**Out of scope:** Hardware confirm, mainnet, full governance Send chrome (Phase 9).
+
+**Done when:** Regtest send succeeds with change to first unused internal index.
+
+**Primary code areas:** `WalletService` send path, Send screen, validation helpers.
 
 ---
 
@@ -652,7 +652,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 > HW signing for the governance **broadcast** is delivered in Release 1 (commit-funding HW signing in R1.1; reveal by an ephemeral key in R1.0). This phase covers only the remainder: HW signing of the Admin Wallet **Send** path and verify-on-device.
 
-**Goal:** Trezor/Ledger PSBT sign for the Admin Wallet Send path (Phase 5) per PRD §3.2; reuse existing device adapters; verify-address-on-device.
+**Goal:** Trezor/Ledger PSBT sign for the Admin Wallet Send path (Phase 6) per PRD §3.2; reuse existing device adapters; verify-address-on-device.
 
 **In scope:** PSBT preview + signing on device for Send; receive-address verify-on-device; reuse of the adapters established in Release 1.
 
@@ -666,7 +666,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 #### Phase 9 — Shared Send + governance broadcast UX
 
-**Goal:** Alta S9/S11-style **shared Send** component; pending-quorum “Send” flow per PRD §5.3.2.3 (fee entry reuses Phase 4/5 controls).
+**Goal:** Alta S9/S11-style **shared Send** component; pending-quorum “Send” flow per PRD §5.3.2.3 (fee entry reuses Phase 4/6 controls).
 
 **In scope:** Unified send form/validation chrome across wallet Send, governance broadcast confirm, and (later) payout Send.
 

@@ -76,14 +76,14 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----|------------------------|--------|------------------|-------|
 | 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above; sync backend → R2 |
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
-| 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 6 |
+| 4.3.3 | Unconfirmed tx list + fee bump | **FAIL** | — | Phase 5 |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
 | 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 7 |
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
 | 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 7 / 8 |
 | 4.3.4.3 | Rotate after credit (one-time use) | **PASS** | R1.3, `next_receive_address` | BDK “used” on observe-in-tx |
-| 4.3.5 | Send BTC form + validations | **FAIL** | — | Phase 5 (mnemonic regtest), Phase 8 (HW) |
-| 4.3.5.3 | Manual fee rate (0.1 s/vB, default next-block) | **FAIL** | — | Phase 5 Send (reuse Phase 4 control) |
+| 4.3.5 | Send BTC form + validations | **FAIL** | — | Phase 6 (mnemonic regtest), Phase 8 (HW) |
+| 4.3.5.3 | Manual fee rate (0.1 s/vB, default next-block) | **FAIL** | — | Phase 6 Send (reuse Phase 4 control) |
 | 4.3.5.5.1 | Confirm → HW signs spend | **FAIL** | — | Phase 8 for product path |
 
 ### PRD §5.3 — Governance broadcast (Alpen / Strata admins)
@@ -92,7 +92,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----|------------------------|--------|------------------|-------|
 | 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 9 shared UX |
 | US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **PASS** | Phase 4, `FeeRateSelector`, `fee_rates_estimate` IPC | M1+M2+M3 complete; presets (Slow/Medium/Fast) + Custom; Electrum-first broadcast with node fallback |
-| 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 5 / Phase 9 shared Send | — |
+| 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 6 / Phase 9 shared Send | — |
 | Broadcast commit | Funded from Admin Wallet | **PASS** | Phase 3.6+, `WalletService` | — |
 | Broadcast commit sign | HW or regtest mnemonic PSBT | **PASS** | R1.1 `PsbtSigner` | Reveal: ephemeral in-app (SPS-50), not HW — protocol constraint |
 | Broadcast reveal | Signed and broadcast | **PASS** | R1.0, R1.0.1 | Ephemeral key; change → Admin Wallet |
@@ -125,7 +125,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.3, §4.3.5 | Not in Release 1 | **FAIL** (Phases 6, 5, 8) |
 | US-H4 broadcast fee | Phase 4 | **PASS** ✅ |
 
-**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Next:** Phase 5 (Send BTC happy path).
+**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Next:** Phase 5 (Transactions + fee-bump).
 
 ---
 

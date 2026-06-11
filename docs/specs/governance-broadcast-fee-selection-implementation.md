@@ -21,7 +21,7 @@ proposal, with:
 - an Electrum-first broadcast path with node-RPC fallback and a manual copy-hex escape hatch.
 
 The fee-selection building blocks (domain types, estimation service, UI component) are designed
-for reuse by wallet Send (Phase 5) and shared Send UX (Phase 9).
+for reuse by wallet Send (Phase 6) and shared Send UX (Phase 9).
 
 ## Scope
 
@@ -46,8 +46,8 @@ for reuse by wallet Send (Phase 5) and shared Send UX (Phase 9).
 
 ### NOT included
 
-- Fee bumping of already-broadcast transactions (Phase 6 — Transactions + fee-bump).
-- Wallet Send UI (Phase 5) and shared Send UX (Phase 9) — they will consume the modules built
+- Fee bumping of already-broadcast transactions (Phase 5 — Transactions + fee-bump).
+- Wallet Send UI (Phase 6) and shared Send UX (Phase 9) — they will consume the modules built
   here but are specced separately.
 - UTXO selection / coin control (BDK's default coin selection stays as is).
 - Making RBF user-configurable (explicitly non-negotiable in the functional spec).
