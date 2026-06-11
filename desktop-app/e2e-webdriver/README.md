@@ -35,7 +35,7 @@ export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 | `tauri-driver`              | `cargo install tauri-driver --locked`                                                               |
 | Node 18+                    | `npm` in this directory                                                                             |
 | Graphical session           | Run from your desktop session (not SSH-only without display)                                        |
-| **Real backend stack**      | bitcoind regtest, `strata-asm-runner`, orchestrator, Postgres — same as manual E2E                  |
+| **Real backend stack**      | bitcoind regtest, electrs (Admin Wallet Electrum sync), `strata-asm-runner`, orchestrator, Postgres — same as manual E2E |
 | **Env files**               | `orchestrator-be/.env`, `desktop-app/.env` must point RPC/asm/orchestrator at your running services |
 
 ### Secret custody (Wave 2 Decision #2)
@@ -51,7 +51,7 @@ See `docs/specs/secret-custody-wave2.md` (Track A) for full policy.
 
 From Phase 3.6, the commit transaction is always funded from the Admin Wallet (BDK) — there is no fallback to node-wallet `sendtoaddress`. Before "Confirm & Broadcast", the Admin Wallet external address (`m/86'/0'/73'/0/0`) must hold spendable regtest UTXOs.
 
-The `proposal-broadcast-quorum` spec handles this automatically: it calls `fundAdminWallet()` (`test/helpers/fund-admin-wallet.mjs`) after prepare-broadcast, which reads the Admin Wallet address from the broadcast screen's **Funding Source** card (`data-testid="e2e-admin-wallet-external-address-0"`) and funds it from the `asm-runner` wallet via `bitcoin-cli -rpcwallet=asm-runner sendtoaddress` + `generatetoaddress` — the same wallet-scoped path used by `mine-regtest-blocks.mjs` and `runtests/mine-blocks.sh`.
+The `proposal-broadcast-quorum` spec handles this automatically: it calls `fundAdminWallet()` (`test/helpers/fund-admin-wallet.mjs`) after prepare-broadcast, which reads the Admin Wallet address from the broadcast screen's **Funding Source** card (`data-testid="e2e-admin-wallet-funding-address"`) and funds it from the `asm-runner` wallet via `bitcoin-cli -rpcwallet=asm-runner sendtoaddress` + `generatetoaddress` — the same wallet-scoped path used by `mine-regtest-blocks.mjs` and `runtests/mine-blocks.sh`.
 
 No manual funding step is required as long as the regtest stack (`runtests/env.sh` + `asm-runner` wallet) is running.
 

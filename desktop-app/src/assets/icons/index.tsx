@@ -334,3 +334,94 @@ export function WalletIcon({ width = 24, height = 24, className, ...rest }: Icon
 		</svg>
 	)
 }
+
+/** Hourglass (slow fee preset); pair with parent `text-*` for color. */
+export function HourglassIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<g stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M5 2h14M5 22h14" />
+				<path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+				<path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+			</g>
+		</svg>
+	)
+}
+
+/** Speed gauge with needle (medium fee preset); pair with parent `text-*` for color. */
+export function GaugeIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<g stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+				<path d="m12 14 4-4" />
+				<path d="M3.34 19a10 10 0 1 1 17.32 0" />
+			</g>
+		</svg>
+	)
+}
+
+/** Lightning bolt (fast fee preset); pair with parent `text-*` for color. */
+export function BoltIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path
+				d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"
+				stroke="currentColor"
+				strokeWidth="1.75"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}
+
+/** Horizontal sliders (custom fee rate); pair with parent `text-*` for color. */
+export function SlidersIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<g stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
+				<path d="M14 2v4M8 10v4M16 18v4" />
+			</g>
+		</svg>
+	)
+}
+
+/** Plus sign for stepper buttons; pair with parent `text-*` for color. */
+export function PlusIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Minus sign for stepper buttons; pair with parent `text-*` for color. */
+export function MinusIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Chevron pointing down; pair with parent `text-*` for color. */
+export function ChevronDownIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<path d="M6 10l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+/** Warning triangle with exclamation mark; pair with parent `text-*` for color. */
+export function AlertTriangleIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<g stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+				<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+				<path d="M12 9v4M12 17h.01" />
+			</g>
+		</svg>
+	)
+}

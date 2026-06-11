@@ -7,6 +7,7 @@
 //!   cargo test -p desktop-app --test ledger_speculos_sign_integration -- --nocapture
 
 use bdk_bitcoind_rpc::bitcoincore_rpc::RpcApi;
+use bdk_wallet::bitcoin::FeeRate as BdkFeeRate;
 use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::infrastructure::admin_wallet::get_external_address;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
@@ -26,12 +27,14 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
     let btc_pass = std::env::var("BITCOIN_RPC_PASS").unwrap_or_else(|_| "password".into());
     std::env::set_var("BITCOIN_NETWORK", "regtest");
 
+    // custom_electrum_url None → wallet sync falls back to the local electrs (R2.3).
     let node_config = Arc::new(RwLock::new(NodeConfig {
         mode: ConnectionMode::Custom,
         custom_btc_rpc_url: Some(btc_url),
         custom_btc_rpc_user: Some(btc_user),
         custom_btc_rpc_pass: Some(btc_pass),
         custom_strata_rpc_url: None,
+        custom_electrum_url: std::env::var("ELECTRUM_URL").ok(),
     }));
 
     let account_xpub = tokio::task::spawn_blocking(|| ledger::get_account_xpub("m/86'/1'/73'"))
@@ -89,8 +92,9 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
     let _ = svc.sync().await.expect("sync");
 
     let commit_dest = fund_addr.clone();
+    let fee_rate = BdkFeeRate::from_sat_per_vb(2).unwrap_or(BdkFeeRate::BROADCAST_MIN);
     let tx = svc
-        .build_signed_commit(&commit_dest, 50_000, 2)
+        .build_signed_commit(&commit_dest, 50_000, fee_rate)
         .await
         .expect("build_signed_commit with Ledger PSBT sign");
 

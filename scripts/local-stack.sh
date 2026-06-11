@@ -10,7 +10,7 @@
 #   ./local-stack.sh -h
 #
 # Options:
-#   --clean                 Clean volumes (bitcoin-data, asm-data) and residual state
+#   --clean                 Clean volumes (bitcoin-data, asm-data, electrs-data) and residual state
 #   --orchestrator          With --clean: also prune orchestrator build cache
 #   --regtest-dev-api       With --clean: also prune regtest-dev-api build cache
 #   --no-build              Skip docker build (use existing images)
@@ -24,6 +24,7 @@
 #
 # Port map:
 #   localhost:18443  → bitcoin (RPC)
+#   localhost:60401  → electrs (Electrum indexer)
 #   localhost:8080   → asm (strata-asm-runner admin RPC)
 #   localhost:3000   → orchestrator (backend API)
 #   localhost:3001   → regtest-dev-api (mine/faucet)
@@ -130,7 +131,7 @@ Usage:
   ./local-stack.sh -h
 
 Options:
-  --clean                 Clean volumes (bitcoin-data, asm-data) and residual state
+  --clean                 Clean volumes (bitcoin-data, asm-data, electrs-data) and residual state
   --orchestrator          With --clean: also prune orchestrator build cache
   --regtest-dev-api       With --clean: also prune regtest-dev-api build cache
   --no-build              Skip docker build (use existing images)
@@ -145,6 +146,7 @@ Prerequisites:
 
 Ports:
   18443  bitcoin      (RPC)
+  60401  electrs      (Electrum indexer)
   8080   asm          (strata-asm-runner admin RPC)
   3000   orchestrator (backend API) — skipped with --no-orchestrator
   3001   regtest-dev-api (mine/faucet)
@@ -152,6 +154,7 @@ Ports:
 Volumes (clean with --clean):
   bitcoin-data  — bitcoin chain data
   asm-data      — ASM sled DB + asm-params.json
+  electrs-data  — Electrum index data
   postgres-data — NOT cleaned (intentional)
 
 First run: bitcoin entrypoint creates 'staging' wallet + mines 101 blocks.
@@ -206,6 +209,7 @@ show_status() {
   }
 
   check_service "bitcoin" "18443"
+  check_service "electrs" "60401"
   check_service "asm" "8080" "/"
   check_service "postgres" "5432"
   if [[ "$NO_ORCHESTRATOR" == "1" ]]; then

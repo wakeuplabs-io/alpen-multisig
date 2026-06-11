@@ -130,6 +130,7 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 											<div className="mt-2 flex flex-col gap-0.5">
 												<StatusLine label="Strata RPC" reachable={localNodeStatus.strataReachable} />
 												<StatusLine label="Bitcoin RPC" reachable={localNodeStatus.btcReachable} />
+												<StatusLine label="Electrum indexer" reachable={localNodeStatus.electrumReachable} />
 												<button
 													type="button"
 													onClick={onRecheck}
@@ -166,6 +167,20 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 										className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
 									/>
 								</div>
+								<div>
+									<label className="mb-1 block text-[12px] font-medium text-[#374151]">Electrum URL</label>
+									<input
+										type="text"
+										placeholder="tcp://127.0.0.1:60401"
+										value={draft.customElectrumUrl ?? ''}
+										onChange={(e) => setDraft((prev) => ({ ...prev, customElectrumUrl: e.target.value }))}
+										data-testid="e2e-node-config-electrum-url"
+										className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+									/>
+									<p className="mt-1 text-[11px] text-[#9ca3af]">
+										Indexer used for Admin Wallet sync (tcp:// or ssl://). Leave empty for the local default.
+									</p>
+								</div>
 								<div className="grid grid-cols-2 gap-3">
 									<div>
 										<label className="mb-1 block text-[12px] font-medium text-[#374151]">RPC User</label>
@@ -188,6 +203,19 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 										/>
 									</div>
 								</div>
+							</div>
+						)}
+
+						{draft.mode === 'trusted' && (
+							<div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+								<svg viewBox="0 0 24 24" fill="none" width={14} height={14} className="mt-0.5 shrink-0" aria-hidden>
+									<path d="M12 4L3 19h18L12 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+									<path d="M12 10v4M12 16.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+								</svg>
+								<span>
+									Trusted Electrum indexer is not yet available. Admin Wallet sync will fail until the public endpoint
+									is published. Use Local or Custom mode with your own electrs instance.
+								</span>
 							</div>
 						)}
 

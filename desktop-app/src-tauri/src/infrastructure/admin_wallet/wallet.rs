@@ -17,6 +17,8 @@ pub enum AdminWalletError {
     // Phase 2 variants
     #[error("RPC unreachable: {message}")]
     RpcUnreachable { message: String },
+    #[error("Electrum unreachable: {message}")]
+    ElectrumUnreachable { message: String },
     #[error("RPC auth failed: {message}")]
     RpcAuthFailed { message: String },
     #[error("descriptor parse error: {message}")]

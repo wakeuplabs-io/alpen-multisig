@@ -195,6 +195,35 @@ pub(crate) async fn get_update_action(
     Ok(proposal)
 }
 
+/// Pre-broadcast guard for a Cancel proposal: is its target proposal still `Approved`?
+///
+/// If the target has already left `Approved` (e.g. it was `Enacted` via the normal flow,
+/// or `Canceled`/`Expired`), broadcasting the cancel tx would be rejected by the ASM.
+pub(crate) async fn get_cancel_target_status(
+    repo: &dyn ProposalRepository,
+    authority: Authority,
+    action_id: &ActionId,
+) -> Result<bool, AppError> {
+    let proposal = get_update_action(repo, authority, action_id).await?;
+
+    if !proposal.is_cancel() {
+        return Err(AppError::BadRequest(
+            "proposal is not a cancel proposal".to_string(),
+        ));
+    }
+
+    let target_action_id = proposal.target_action_id.as_ref().ok_or_else(|| {
+        AppError::Internal(anyhow::anyhow!("cancel proposal missing target_action_id"))
+    })?;
+
+    let target = repo
+        .find_by_action_id(target_action_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(target.status == ProposalStatus::Approved)
+}
+
 /// List proposals for one authority, optionally filtered by status.
 pub(crate) async fn list_proposals(
     repo: &dyn ProposalRepository,
@@ -287,9 +316,6 @@ pub(crate) async fn reconcile_enacted_for_authority(
         .await?;
 
     for proposal in approved {
-        if proposal.is_cancel() {
-            continue;
-        }
         if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
             continue;
         }
@@ -316,6 +342,23 @@ pub(crate) async fn reconcile_enacted_for_authority(
         if !enacted {
             continue;
         }
+        if let Some(target_action_id) = &proposal.target_action_id {
+            let applied = repo
+                .enact_cancel(&proposal.action_id, target_action_id)
+                .await?;
+            if !applied {
+                repo.update_broadcast_status(
+                    &proposal.action_id,
+                    BroadcastStatus::RevealConfirmed,
+                    Some(ProposalStatus::Expired),
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            }
+            continue;
+        }
         repo.update_broadcast_status(
             &proposal.action_id,
             BroadcastStatus::RevealConfirmed,
@@ -325,6 +368,7 @@ pub(crate) async fn reconcile_enacted_for_authority(
             None,
         )
         .await?;
+        cascade_enact_associated_cancel(repo, &proposal.action_id).await?;
     }
     Ok(())
 }
@@ -381,8 +425,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     };
     require_proposal_authority(&proposal, authority)?;
 
-    if proposal.is_cancel()
-        || proposal.status != ProposalStatus::Approved
+    if proposal.status != ProposalStatus::Approved
         || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
         || proposal.reveal_txid.is_none()
     {
@@ -410,10 +453,55 @@ pub(crate) async fn reconcile_enacted_for_action(
         return Ok(());
     }
 
+    if let Some(target_action_id) = &proposal.target_action_id {
+        let applied = repo.enact_cancel(action_id, target_action_id).await?;
+        if !applied {
+            repo.update_broadcast_status(
+                action_id,
+                BroadcastStatus::RevealConfirmed,
+                Some(ProposalStatus::Expired),
+                None,
+                None,
+                None,
+            )
+            .await?;
+        }
+        return Ok(());
+    }
+
     repo.update_broadcast_status(
         action_id,
         BroadcastStatus::RevealConfirmed,
         Some(ProposalStatus::Enacted),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    cascade_enact_associated_cancel(repo, action_id).await?;
+    Ok(())
+}
+
+/// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
+/// proposal (if any, and still pending/approved) is now moot — the ASM would reject its
+/// broadcast, so mark it `Expired` so it stops appearing as actionable.
+async fn cascade_enact_associated_cancel(
+    repo: &dyn ProposalRepository,
+    target_action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
+        return Ok(());
+    };
+    if matches!(
+        cancel.status,
+        ProposalStatus::Enacted | ProposalStatus::Canceled | ProposalStatus::Expired
+    ) {
+        return Ok(());
+    }
+    repo.update_broadcast_status(
+        &cancel.action_id,
+        cancel.broadcast_status,
+        Some(ProposalStatus::Expired),
         None,
         None,
         None,
@@ -1340,6 +1428,150 @@ mod tests {
 
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Enacted);
+    }
+
+    #[tokio::test]
+    async fn reconcile_marks_target_canceled_when_cancel_enacted() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(&repo, session_b, "mock://asm-membership", &cancel.action_id)
+            .await
+            .unwrap();
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let cancel = repo
+            .find_by_action_id(&cancel.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancel.status, ProposalStatus::Enacted);
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Canceled);
+    }
+
+    #[tokio::test]
+    async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(
+            &repo,
+            session_b.clone(),
+            "mock://asm-membership",
+            &cancel.action_id,
+        )
+        .await
+        .unwrap();
+
+        // Target reaches RevealConfirmed and gets enacted normally before the cancel does.
+        repo.update_broadcast_status(
+            &target.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Enacted);
+
+        // The cancel reaches RevealConfirmed afterwards, but its target is no longer Approved —
+        // the ASM would have rejected the cancel tx, so it should be marked Expired without
+        // touching the already-enacted target.
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
+            .await
+            .unwrap();
+
+        let cancel = repo
+            .find_by_action_id(&cancel.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancel.status, ProposalStatus::Expired);
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Enacted);
     }
 
     // ---------------------------------------------------------------------------

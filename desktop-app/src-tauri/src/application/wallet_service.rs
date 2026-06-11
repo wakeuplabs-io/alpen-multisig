@@ -14,9 +14,22 @@ const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 const SYNC_IDLE_WINDOW: Duration = Duration::from_secs(300);
 
 /// A sync must run longer than this before progress is surfaced to the UI. Below this threshold,
-/// fast (local-node) syncs complete without ever showing a progress indicator, avoiding a flicker
-/// on every refresh.
+/// fast (local-indexer) syncs complete without ever showing a progress indicator, avoiding a
+/// flicker on every refresh.
 const SYNC_PROGRESS_THRESHOLD_MS: u64 = 3_000;
+
+/// Address window surfaced by `list_addresses` and watched during Electrum sync. Revealing up to
+/// this index before each sync keeps parity with the old full-block Emitter scan: a deposit to
+/// any panel-displayed address is detected even if the address was never handed out via
+/// `next_receive_address`.
+const MAX_ADDRESS_WINDOW: u32 = 20;
+
+/// Stop gap for the first-sync Electrum full scan — matches BDK's default lookahead (25), which
+/// is how far beyond revealed indices the old Emitter-based block scan could detect activity.
+const ELECTRUM_STOP_GAP: usize = 25;
+
+/// Max script pubkeys per Electrum batch request.
+const ELECTRUM_BATCH_SIZE: usize = 10;
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
@@ -65,11 +78,13 @@ pub struct TypedError {
     pub message: String,
 }
 
+/// Progress of an in-flight Electrum sync, counted in sync items (script pubkeys, txids,
+/// outpoints) — not blocks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncProgressDto {
-    pub processed_blocks: u32,
-    pub total_blocks: u32,
+    pub processed: u32,
+    pub total: u32,
     pub percent: u8,
 }
 
@@ -123,9 +138,9 @@ pub struct WalletService {
     pub cancel: Arc<tokio::sync::Notify>,
     bg_task_started: Arc<AtomicBool>,
     // Lock-free progress counters — read by `sync_status()` without taking any lock the sync
-    // loop already holds (the loop holds `Mutex<Wallet>` while applying blocks).
-    sync_blocks_processed: Arc<AtomicU32>,
-    sync_blocks_total: Arc<AtomicU32>,
+    // path already holds, and written from the blocking Electrum client thread.
+    sync_items_processed: Arc<AtomicU32>,
+    sync_items_total: Arc<AtomicU32>,
     /// UNIX-epoch millis when the current sync started; `0` when idle.
     sync_started_at_ms: Arc<AtomicU64>,
     node_config: Arc<StdRwLock<NodeConfig>>,
@@ -201,17 +216,18 @@ fn now_unix_ms() -> u64 {
         .as_millis() as u64
 }
 
-fn rpc_error_from_message(msg: String) -> AdminWalletError {
-    if msg.contains("401") || msg.contains("Unauthorized") {
-        AdminWalletError::RpcAuthFailed { message: msg }
-    } else {
-        AdminWalletError::RpcUnreachable { message: msg }
+/// Maps any Electrum client failure (connect, protocol, I/O) to a high-signal error that names
+/// the indexer endpoint, so the signer can distinguish it from a Bitcoin Core RPC problem.
+fn electrum_error(url: &str, e: &impl std::fmt::Display) -> AdminWalletError {
+    AdminWalletError::ElectrumUnreachable {
+        message: format!("{url}: {e}"),
     }
 }
 
 pub fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
+        AdminWalletError::ElectrumUnreachable { .. } => "ElectrumUnreachable".into(),
         AdminWalletError::RpcAuthFailed { .. } => "RpcAuthFailed".into(),
         AdminWalletError::DescriptorParseError { .. } => "DescriptorParseError".into(),
         AdminWalletError::SyncIncomplete { .. } => "SyncIncomplete".into(),
@@ -235,8 +251,8 @@ impl WalletService {
             last_read_at: Arc::new(RwLock::new(None)),
             cancel: Arc::new(tokio::sync::Notify::new()),
             bg_task_started: Arc::new(AtomicBool::new(false)),
-            sync_blocks_processed: Arc::new(AtomicU32::new(0)),
-            sync_blocks_total: Arc::new(AtomicU32::new(0)),
+            sync_items_processed: Arc::new(AtomicU32::new(0)),
+            sync_items_total: Arc::new(AtomicU32::new(0)),
             sync_started_at_ms: Arc::new(AtomicU64::new(0)),
             node_config,
             signer: None,
@@ -308,17 +324,22 @@ impl WalletService {
 
     /// Builds the progress snapshot, surfaced only while a sync is in flight AND it has been
     /// running longer than [`SYNC_PROGRESS_THRESHOLD_MS`]. Reads the lock-free counters.
+    /// `total == 0` means the total is unknown (e.g. a first-sync full scan, which is open-ended
+    /// by gap limit) — no progress is shown rather than a meaningless "0 / 0".
     fn sync_progress_snapshot(&self, is_syncing: bool) -> Option<SyncProgressDto> {
         let started = self.sync_started_at_ms.load(Ordering::Relaxed);
         let elapsed = now_unix_ms().saturating_sub(started);
         if !is_syncing || started == 0 || elapsed <= SYNC_PROGRESS_THRESHOLD_MS {
             return None;
         }
-        let processed = self.sync_blocks_processed.load(Ordering::Relaxed);
-        let total = self.sync_blocks_total.load(Ordering::Relaxed);
+        let processed = self.sync_items_processed.load(Ordering::Relaxed);
+        let total = self.sync_items_total.load(Ordering::Relaxed);
+        if total == 0 {
+            return None;
+        }
         Some(SyncProgressDto {
-            processed_blocks: processed,
-            total_blocks: total,
+            processed,
+            total,
             percent: percent_complete(processed, total),
         })
     }
@@ -328,7 +349,7 @@ impl WalletService {
         *self.last_read_at.write().await = Some(Instant::now());
     }
 
-    /// Sync the wallet with the Bitcoin RPC node.
+    /// Sync the wallet read path (balance, UTXOs, address usage) against the Electrum indexer.
     /// Collapses concurrent callers — if a sync is already in-flight, waits for it.
     pub async fn sync(&self) -> Result<SyncStatusDto, AdminWalletError> {
         // Collapse concurrent calls: if already syncing, spin-wait (simple approach for regtest)
@@ -345,8 +366,8 @@ impl WalletService {
         }
 
         // Reset progress counters and stamp the start time for the 3s threshold gate.
-        self.sync_blocks_processed.store(0, Ordering::SeqCst);
-        self.sync_blocks_total.store(0, Ordering::SeqCst);
+        self.sync_items_processed.store(0, Ordering::SeqCst);
+        self.sync_items_total.store(0, Ordering::SeqCst);
         self.sync_started_at_ms
             .store(now_unix_ms(), Ordering::SeqCst);
 
@@ -369,68 +390,83 @@ impl WalletService {
         }
     }
 
+    /// Syncs via the Electrum protocol (R2.2). Electrum `script_get_history` includes mempool
+    /// transactions, so unconfirmed credits/spends keep the R1.5 / R1.3 semantics the old
+    /// Emitter mempool pass provided.
     async fn do_sync(&self) -> Result<(), AdminWalletError> {
-        use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client, RpcApi};
-        use bdk_bitcoind_rpc::Emitter;
+        use bdk_electrum::BdkElectrumClient;
+        use bdk_wallet::chain::spk_client::{FullScanRequest, SyncRequest};
 
-        let (rpc_url, rpc_user, rpc_pass) = {
-            let cfg = self
-                .node_config
-                .read()
-                .map_err(|_| AdminWalletError::RpcUnreachable {
-                    message: "node config lock poisoned".to_string(),
-                })?;
-            (
-                cfg.btc_rpc_url().to_string(),
-                cfg.btc_rpc_user().to_string(),
-                cfg.btc_rpc_pass().to_string(),
-            )
+        enum Request {
+            /// First sync of the session: gap-limit discovery of historical address usage.
+            FullScan(Box<FullScanRequest<Keychain>>),
+            /// Subsequent syncs: refresh everything the wallet already watches.
+            Sync(Box<SyncRequest<(Keychain, u32)>>),
+        }
+
+        // R2.3: the Electrum URL comes from Node Config (Local / Trusted / Custom),
+        // resolved per sync so a config change applies without restarting the session.
+        let electrum_url = self
+            .node_config
+            .read()
+            .map_err(|_| AdminWalletError::ElectrumUnreachable {
+                message: "node config lock poisoned".to_string(),
+            })?
+            .electrum_url()
+            .to_string();
+        let processed = Arc::clone(&self.sync_items_processed);
+        let total = Arc::clone(&self.sync_items_total);
+
+        // Build the request under the wallet lock, then release it for the network round trips.
+        let request = {
+            let mut wallet = self.wallet.lock().await;
+            // Watch the full address window the panel displays (peek-based), so a deposit to
+            // any displayed address is detected — parity with the old full-block Emitter scan.
+            wallet
+                .reveal_addresses_to(Keychain::External, MAX_ADDRESS_WINDOW - 1)
+                .for_each(drop);
+            if wallet.latest_checkpoint().height() == 0 {
+                Request::FullScan(Box::new(wallet.start_full_scan().build()))
+            } else {
+                let req = wallet
+                    .start_sync_with_revealed_spks()
+                    .inspect(move |_item, progress| {
+                        processed.store(progress.consumed() as u32, Ordering::Relaxed);
+                        total.store(progress.total() as u32, Ordering::Relaxed);
+                    })
+                    .build();
+                Request::Sync(Box::new(req))
+            }
         };
 
-        let rpc = Client::new(&rpc_url, Auth::UserPass(rpc_user, rpc_pass))
-            .map_err(|e| rpc_error_from_message(e.to_string()))?;
+        // The electrum client is blocking I/O — run it off the async runtime, without holding
+        // the wallet lock so reads stay responsive during the sync.
+        let update =
+            tokio::task::spawn_blocking(move || -> Result<bdk_wallet::Update, AdminWalletError> {
+                let client = bdk_electrum::electrum_client::Client::new(&electrum_url)
+                    .map_err(|e| electrum_error(&electrum_url, &e))?;
+                let client = BdkElectrumClient::new(client);
+                match request {
+                    Request::FullScan(req) => client
+                        .full_scan(*req, ELECTRUM_STOP_GAP, ELECTRUM_BATCH_SIZE, false)
+                        .map(bdk_wallet::Update::from),
+                    Request::Sync(req) => client
+                        .sync(*req, ELECTRUM_BATCH_SIZE, false)
+                        .map(bdk_wallet::Update::from),
+                }
+                .map_err(|e| electrum_error(&electrum_url, &e))
+            })
+            .await
+            .map_err(|e| AdminWalletError::SyncIncomplete {
+                message: format!("sync task failed: {e}"),
+            })??;
 
         let mut wallet = self.wallet.lock().await;
-        let checkpoint = wallet.latest_checkpoint();
-
-        // Learn the target tip so the UI can show a meaningful "processed / total" ratio.
-        // The Emitter scans from the checkpoint height up to the current chain tip.
-        let target_height = rpc
-            .get_block_count()
-            .map_err(|e| rpc_error_from_message(e.to_string()))?;
-        let total = target_height.saturating_sub(u64::from(checkpoint.height()));
-        self.sync_blocks_total
-            .store(total.min(u64::from(u32::MAX)) as u32, Ordering::Relaxed);
-
-        let mut emitter = Emitter::new(&rpc, checkpoint, 0);
-
-        loop {
-            match emitter.next_block() {
-                Ok(Some(event)) => {
-                    wallet
-                        .apply_block_connected_to(
-                            &event.block,
-                            event.block_height(),
-                            event.connected_to(),
-                        )
-                        .map_err(|e| AdminWalletError::SyncIncomplete {
-                            message: e.to_string(),
-                        })?;
-                    self.sync_blocks_processed.fetch_add(1, Ordering::Relaxed);
-                }
-                Ok(None) => break,
-                Err(e) => return Err(rpc_error_from_message(e.to_string())),
-            }
-        }
-
-        // Mempool txs are not included in `next_block`; apply them so balance, UTXOs, receive
-        // rotation, and R1.5 unconfirmed UX reflect pending credits/spends before the next block.
-        let mempool_txs = emitter
-            .mempool()
-            .map_err(|e| rpc_error_from_message(e.to_string()))?;
-        if !mempool_txs.is_empty() {
-            wallet.apply_unconfirmed_txs(mempool_txs);
-        }
+        wallet
+            .apply_update(update)
+            .map_err(|e| AdminWalletError::SyncIncomplete {
+                message: e.to_string(),
+            })?;
 
         let tip_height = wallet.latest_checkpoint().height();
         let last_synced_at = secs_to_iso8601(
@@ -623,7 +659,6 @@ impl WalletService {
         page_index: u32,
         page_size: u32,
     ) -> Result<Vec<AddressDto>, AdminWalletError> {
-        const MAX_ADDRESS_WINDOW: u32 = 20;
         let page_size = page_size.clamp(1, MAX_ADDRESS_WINDOW);
         let start = page_index.saturating_mul(page_size);
 
@@ -654,7 +689,7 @@ impl WalletService {
         &self,
         commit_address: &str,
         amount_sats: u64,
-        fee_rate: u64,
+        fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
         // 0. ReadOnly guard — must run before any RPC contact
         let signer = self.signer.as_ref().ok_or(AdminWalletError::ReadOnly)?;
@@ -679,10 +714,7 @@ impl WalletService {
             .require_network(self.network)
             .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
 
-        let fee_rate_val = bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(fee_rate)
-            .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN);
-
-        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate_val)
+        self.build_and_sign_tx(commit_addr, amount_sats, fee_rate)
             .await
     }
 
@@ -1030,7 +1062,12 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
-            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit(
+                "bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa",
+                1000,
+                bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(1)
+                    .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN),
+            )
             .await;
 
         assert!(
@@ -1051,7 +1088,12 @@ mod tests {
         let svc = WalletService::new_watch_only(wallet, test_node_config());
 
         let result = svc
-            .build_signed_commit("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa", 1000, 1)
+            .build_signed_commit(
+                "bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqe0xpa",
+                1000,
+                bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(1)
+                    .unwrap_or(bdk_wallet::bitcoin::FeeRate::BROADCAST_MIN),
+            )
             .await;
 
         assert!(
@@ -1168,16 +1210,38 @@ mod tests {
         svc.sync_in_flight.store(true, Ordering::SeqCst);
         svc.sync_started_at_ms
             .store(now_unix_ms() - 4_000, Ordering::SeqCst);
-        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
-        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+        svc.sync_items_processed.store(234, Ordering::SeqCst);
+        svc.sync_items_total.store(1277, Ordering::SeqCst);
 
         let progress = svc
             .sync_status()
             .sync_progress
             .expect("progress must be present after threshold");
-        assert_eq!(progress.processed_blocks, 234);
-        assert_eq!(progress.total_blocks, 1277);
+        assert_eq!(progress.processed, 234);
+        assert_eq!(progress.total, 1277);
         assert_eq!(progress.percent, 18);
+    }
+
+    // R2.2 (Electrum): progress hidden while total is unknown (e.g. first-sync full scan)
+    #[test]
+    fn sync_status_hides_progress_when_total_unknown() {
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use bdk_wallet::bitcoin::Network;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let svc = WalletService::new(wallet, test_node_config());
+
+        svc.sync_in_flight.store(true, Ordering::SeqCst);
+        svc.sync_started_at_ms
+            .store(now_unix_ms() - 4_000, Ordering::SeqCst);
+        svc.sync_items_processed.store(0, Ordering::SeqCst);
+        svc.sync_items_total.store(0, Ordering::SeqCst);
+
+        assert!(
+            svc.sync_status().sync_progress.is_none(),
+            "progress must be hidden while the total is unknown (full scan)"
+        );
     }
 
     // Step 02 (sync_status progress gate): hidden under the 3s threshold
@@ -1193,8 +1257,8 @@ mod tests {
         svc.sync_in_flight.store(true, Ordering::SeqCst);
         svc.sync_started_at_ms
             .store(now_unix_ms() - 1_000, Ordering::SeqCst);
-        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
-        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+        svc.sync_items_processed.store(234, Ordering::SeqCst);
+        svc.sync_items_total.store(1277, Ordering::SeqCst);
 
         assert!(
             svc.sync_status().sync_progress.is_none(),
@@ -1215,8 +1279,8 @@ mod tests {
         svc.sync_in_flight.store(false, Ordering::SeqCst);
         svc.sync_started_at_ms
             .store(now_unix_ms() - 4_000, Ordering::SeqCst);
-        svc.sync_blocks_processed.store(234, Ordering::SeqCst);
-        svc.sync_blocks_total.store(1277, Ordering::SeqCst);
+        svc.sync_items_processed.store(234, Ordering::SeqCst);
+        svc.sync_items_total.store(1277, Ordering::SeqCst);
 
         assert!(
             svc.sync_status().sync_progress.is_none(),
@@ -1230,13 +1294,13 @@ mod tests {
         assert!(SyncStatusDto::disabled_default().sync_progress.is_none());
 
         let json = serde_json::to_string(&SyncProgressDto {
-            processed_blocks: 1,
-            total_blocks: 2,
+            processed: 1,
+            total: 2,
             percent: 50,
         })
         .expect("serialize");
-        assert!(json.contains("processedBlocks"), "got: {json}");
-        assert!(json.contains("totalBlocks"), "got: {json}");
+        assert!(json.contains("processed"), "got: {json}");
+        assert!(json.contains("total"), "got: {json}");
         assert!(json.contains("percent"), "got: {json}");
     }
 

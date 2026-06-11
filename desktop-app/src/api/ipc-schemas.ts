@@ -43,7 +43,7 @@ export const proposalSchema = z
 		status: proposalStatusSchema,
 		requiredSignatures: z.number(),
 		actionHex: z.string(),
-		actionType: z.enum(['multisig_update', 'vk_update', 'cancel', 'unknown']),
+		actionType: z.enum(['multisig_update', 'vk_update', 'operator_set_update', 'cancel', 'unknown']),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),
@@ -212,9 +212,33 @@ export const nodeConfigSchema = z.object({
 		.string()
 		.nullish()
 		.transform((v) => v ?? undefined),
+	customElectrumUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
 })
 
 export const localNodeStatusSchema = z.object({
 	strataReachable: z.boolean(),
 	btcReachable: z.boolean(),
+	electrumReachable: z.boolean(),
+})
+
+const feePresetSchema = z.object({
+	satPerKvb: z.number(),
+	targetBlocks: z.number(),
+	marginPct: z.number(),
+})
+
+export const feeRatesSchema = z.object({
+	fast: feePresetSchema,
+	medium: feePresetSchema,
+	slow: feePresetSchema,
+	minRelaySatPerKvb: z.number(),
+	maxSatPerKvb: z.number(),
+	source: z.enum(['node', 'electrum', 'cached', 'fallback']),
+	estimatedAtMs: z.number(),
+	revealVbytes: z.number(),
+	commitVbytesEstimate: z.number(),
+	commitDustSats: z.number(),
 })

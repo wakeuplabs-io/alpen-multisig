@@ -35,6 +35,7 @@ strata-asm-params = { workspace = true }
 strata-asm-common = { workspace = true }
 strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-bridge-v1 = { workspace = true }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }
 strata-predicate = { workspace = true }
@@ -49,12 +50,18 @@ rand = "0.8"
 hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
+tracing = "0.1"
 trezor-client = "0.1.5"
 ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
 ledger-transport-hid = "0.11"
 ledger-apdu = "0.11"
 bip39 = "2"
 bdk_wallet = { workspace = true }
+bdk_electrum = { workspace = true }
+
+[dev-dependencies]
+# Wallet sync uses Electrum (bdk_electrum); Core RPC stays only as the regtest
+# funding/mining harness in integration tests.
 bdk_bitcoind_rpc = { workspace = true }
 
 [lib]

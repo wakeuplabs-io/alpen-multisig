@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { getCurrentVk, getMultisigConfig } from '@/api/asm-state'
+import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
-import { buildAdminMultisigUpdateHex, buildVkUpdateHex } from '@/api/action-builder'
+import { buildAdminMultisigUpdateHex, buildOperatorSetUpdateHex, buildVkUpdateHex } from '@/api/action-builder'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
@@ -30,6 +30,8 @@ export type UseCreateProposalReturn = {
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
 	isLoadingCurrentVk: boolean
+	currentOperators: string[]
+	isLoadingOperators: boolean
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
@@ -48,6 +50,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const [isLoadingSeqNo, setIsLoadingSeqNo] = useState(true)
 	const [currentVk, setCurrentVk] = useState<CurrentVk | null>(null)
 	const [isLoadingCurrentVk, setIsLoadingCurrentVk] = useState(true)
+	const [currentOperators, setCurrentOperators] = useState<string[]>([])
+	const [isLoadingOperators, setIsLoadingOperators] = useState(true)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [createdProposal, setCreatedProposal] = useState<Proposal | null>(null)
@@ -71,6 +75,17 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				newThreshold: threshold,
+			})
+			if (!hexResult.ok) throw new Error(hexResult.error)
+			return hexResult.data.actionHex
+		}
+		if (formData.actionType === 'operator_set_update') {
+			const hexResult = await buildOperatorSetUpdateHex({
+				addOperatorKeys: formData.operatorsToAdd.map((r) => r.value.trim()).filter((k) => k.length > 0),
+				removeOperatorIndices: formData.operatorIndicesToRemove
+					.map((r) => r.value.trim())
+					.filter((v) => v.length > 0)
+					.map(Number),
 			})
 			if (!hexResult.ok) throw new Error(hexResult.error)
 			return hexResult.data.actionHex
@@ -123,6 +138,19 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			if (cancelled) return
 			setIsLoadingCurrentVk(false)
 			if (result.ok) setCurrentVk(result.data)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	useEffect(() => {
+		let cancelled = false
+		setIsLoadingOperators(true)
+		getCurrentOperators().then((result) => {
+			if (cancelled) return
+			setIsLoadingOperators(false)
+			if (result.ok) setCurrentOperators(result.data)
 		})
 		return () => {
 			cancelled = true
@@ -195,6 +223,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		isLoadingSeqNo,
 		currentVk,
 		isLoadingCurrentVk,
+		currentOperators,
+		isLoadingOperators,
 		isSubmitting,
 		error,
 		createdProposal,

@@ -53,6 +53,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/proposals/:action_id/cancel",
             post(proposals::create_cancel_proposal),
+        )
+        .route(
+            "/proposals/:action_id/cancel-target-status",
+            get(proposals::get_cancel_target_status),
         );
 
     r.with_state(state)

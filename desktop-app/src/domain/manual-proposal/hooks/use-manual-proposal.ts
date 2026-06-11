@@ -32,7 +32,8 @@ function normalizeHex(s: string): string {
 
 export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting' | 'done' | 'error'
 
-export function useManualProposal(initialBundle?: ManualBundleJson | null) {
+/** `feeRateSatPerKvb === null` while fee presets load — the broadcast step stays blocked until ready. */
+export function useManualProposal(initialBundle: ManualBundleJson | null, feeRateSatPerKvb: number | null) {
 	const { adapter, wallet } = useSession()
 
 	const [step, setStep] = useState<ManualStep>('import')
@@ -331,7 +332,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 	}
 
 	async function handleAdvanceToBroadcast() {
-		if (!hasQuorum || !importData) return
+		if (!hasQuorum || !importData || feeRateSatPerKvb === null) return
 		setBroadcastPhase('preparing')
 		setBroadcastError(null)
 		setStep('broadcast')
@@ -341,6 +342,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			seqNo: importData.seqNo,
 			authority: importData.authority,
 			signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
+			feeRateSatPerKvb,
 		}
 
 		const res = await prepareBroadcastManual(prepInput)
@@ -354,7 +356,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 	}
 
 	async function handleConfirmBroadcast() {
-		if (!importData) return
+		if (!importData || feeRateSatPerKvb === null) return
 		setBroadcastPhase('broadcasting')
 		setBroadcastError(null)
 
@@ -363,6 +365,7 @@ export function useManualProposal(initialBundle?: ManualBundleJson | null) {
 			seqNo: importData.seqNo,
 			authority: importData.authority,
 			signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
+			feeRateSatPerKvb,
 		}
 
 		const res = await broadcastManualProposal(input)

@@ -1,88 +1,57 @@
 // BroadcastDetailsCard — pure-logic contract tests.
 //
 // SCOPE: Only pure TypeScript / pure logic is covered here using the project's
-// existing tsx test runner.
-//
-// The "renders 'UTXOs: N' when utxoCount prop given" and "renders unchanged from
-// Phase 1 when props undefined" requirements cannot be tested without a React
-// DOM renderer (vitest + @testing-library/react).
-// Those tests are BLOCKED_BY_DEPENDENCY — vitest + @testing-library/react not installed.
+// existing tsx test runner. DOM-rendering assertions require vitest +
+// @testing-library/react (BLOCKED_BY_DEPENDENCY — not installed).
 //
 // What IS verified here:
-//   1. The Props interface accepts utxoCount as an optional number.
-//   2. The JSX template emits "UTXOs: {N}" — confirmed by inspecting source; the
-//      value is formatted as `UTXOs: ${utxoCount}` (plain interpolation, no rounding).
-//   3. The component exports correctly (module resolves without error).
+//   1. The component exports correctly (module resolves without error).
+//   2. The Funding Source card no longer renders a UTXO count (removed with the
+//      Electrum-synced funding info — the count duplicated wallet-panel data and
+//      could contradict the balance while a sync was in flight).
+//   3. The broadcast button gate: disabled only while broadcasting, when signing is
+//      unavailable, while funding info is loading, or when the wallet holds 0 sats
+//      (total balance, confirmed + unconfirmed, refreshed after the on-mount sync).
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // ── 1. Module export resolves ─────────────────────────────────────────────────
 import { BroadcastDetailsCard } from '../broadcast-details-card.tsx'
 assert.equal(typeof BroadcastDetailsCard, 'function', 'BroadcastDetailsCard must be exported')
 console.log('BroadcastDetailsCard: module export OK')
 
-// ── 2. utxoCount label formatting ────────────────────────────────────────────
-// The template renders: `UTXOs: {utxoCount}` — plain number formatting.
-// Verified by inspecting the JSX literal in broadcast-details-card.tsx.
-// The following test exercises the same formatting expression in isolation.
+// ── 2. UTXO count removed from the Funding Source card ───────────────────────
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const cardSource = readFileSync(join(__dirname, '..', 'broadcast-details-card.tsx'), 'utf8')
 
-function utxoLabel(count: number): string {
-	return `UTXOs: ${count}`
-}
+assert.ok(!cardSource.includes('utxoCount'), 'card must not take a utxoCount prop anymore')
+assert.ok(!cardSource.includes('UTXOs:'), 'card must not render a UTXO count line anymore')
+assert.ok(
+	cardSource.includes('e2e-admin-wallet-funding-address'),
+	'funding address testid must be e2e-admin-wallet-funding-address (consumed by the e2e fund helper)',
+)
+console.log('BroadcastDetailsCard: UTXO count removed OK')
 
-assert.equal(utxoLabel(1), 'UTXOs: 1', 'single UTXO label')
-assert.equal(utxoLabel(5), 'UTXOs: 5', 'five UTXOs label')
-assert.equal(utxoLabel(0), 'UTXOs: 0', 'zero UTXOs label')
-console.log('BroadcastDetailsCard: utxoCount label formatting OK')
-
-// ── 3. utxoCount is optional — undefined means no UTXOs section rendered ─────
-// The component conditionally renders {utxoCount !== undefined && ...}.
-// Verify the conditional logic:
-function shouldRenderUtxoCount(utxoCount: number | undefined): boolean {
-	return utxoCount !== undefined
-}
-
-assert.equal(shouldRenderUtxoCount(3), true, 'utxoCount=3 → render UTXO line')
-assert.equal(shouldRenderUtxoCount(undefined), false, 'utxoCount=undefined → no UTXO line')
-console.log('BroadcastDetailsCard: utxoCount conditional rendering logic OK')
-
-// ── 4. Broadcast button disabled when wallet has no funds ────────────────────
+// ── 3. Broadcast button disabled when wallet has no funds ────────────────────
+// Mirrors the JSX `disabled` expression.
 function isBroadcastDisabled(opts: {
 	isBroadcasting: boolean
 	canSign: boolean
 	adminWalletInfo: { balanceSats: number } | null | undefined
-	utxoCount?: number
 }): boolean {
-	return (
-		opts.isBroadcasting ||
-		!opts.canSign ||
-		opts.adminWalletInfo == null ||
-		(opts.adminWalletInfo.balanceSats === 0 && (opts.utxoCount === undefined || opts.utxoCount === 0))
-	)
+	return opts.isBroadcasting || !opts.canSign || opts.adminWalletInfo == null || opts.adminWalletInfo.balanceSats === 0
 }
 
 assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 }, utxoCount: 0 }),
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 } }),
 	true,
-	'disabled when balance=0 and utxoCount=0',
+	'disabled when total balance is 0',
 )
 assert.equal(
-	isBroadcastDisabled({
-		isBroadcasting: false,
-		canSign: true,
-		adminWalletInfo: { balanceSats: 0 },
-		utxoCount: undefined,
-	}),
-	true,
-	'disabled when balance=0 and utxoCount unknown',
-)
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 }, utxoCount: 1 }),
-	false,
-	'enabled when balance=0 but utxoCount=1 (sync lag)',
-)
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 700 }, utxoCount: 1 }),
+	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 700 } }),
 	false,
 	'enabled when balance > 0',
 )
@@ -90,6 +59,16 @@ assert.equal(
 	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: null }),
 	true,
 	'disabled when adminWalletInfo is null (loading)',
+)
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: false, canSign: false, adminWalletInfo: { balanceSats: 700 } }),
+	true,
+	'disabled when signing is unavailable',
+)
+assert.equal(
+	isBroadcastDisabled({ isBroadcasting: true, canSign: true, adminWalletInfo: { balanceSats: 700 } }),
+	true,
+	'disabled while broadcasting',
 )
 console.log('BroadcastDetailsCard: broadcast disabled-when-no-funds logic OK')
 

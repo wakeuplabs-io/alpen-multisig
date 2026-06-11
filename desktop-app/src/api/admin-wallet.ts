@@ -34,9 +34,10 @@ export type AddressDto = {
 	isUsed: boolean
 }
 
+// Progress of an in-flight Electrum sync, counted in sync items (scripts, txids, outpoints).
 export type SyncProgressDto = {
-	processedBlocks: number
-	totalBlocks: number
+	processed: number
+	total: number
 	percent: number
 }
 
@@ -52,6 +53,7 @@ export type SyncStatusDto = {
 
 export type AdminWalletError =
 	| { type: 'RpcUnreachable'; message: string }
+	| { type: 'ElectrumUnreachable'; message: string }
 	| { type: 'RpcAuthFailed'; message: string }
 	| { type: 'DescriptorParseError'; message: string }
 	| { type: 'SyncIncomplete'; message: string }

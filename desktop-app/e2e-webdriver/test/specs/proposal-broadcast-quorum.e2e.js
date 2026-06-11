@@ -9,6 +9,12 @@
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 import { mineWhileWaitingForBroadcastDone } from '../helpers/mine-regtest-blocks.mjs'
 import { fundAdminWallet } from '../helpers/fund-admin-wallet.mjs'
+import {
+	openWalletPanel,
+	closeWalletPanel,
+	triggerWalletSync,
+	waitForWalletSyncDone,
+} from '../helpers/wallet-panel.mjs'
 
 describe('Alpen Multisig proposal — broadcast after quorum', () => {
 	it('prepares artifacts and confirms onchain broadcast', async function () {
@@ -30,7 +36,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
 
 		// Wait for the admin wallet address to render so we can read it for funding.
-		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-external-address-0"]')
+		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-funding-address"]')
 		await addressEl.waitForDisplayed({ timeout: 30000 })
 
 		// Fund Admin Wallet before broadcasting — required from Phase 3.6 (sole commit funder).
@@ -38,23 +44,22 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		// when balance is 0.
 		await fundAdminWallet()
 
-		// Navigate back to proposals and re-enter broadcast so useAdminWalletInfo re-fetches
-		// the updated balance (the hook runs once on mount).
-		const backBtn = await $('//button[contains(.,"Back to proposals")]')
-		await backBtn.waitForClickable({ timeout: 10000 })
-		await backBtn.click()
-		await $('//h1[contains(.,"Proposals")]').waitForDisplayed({ timeout: 30000 })
+		// Sync from the wallet panel — the same flow a signer uses after funding. The funding
+		// card must pick up the post-sync balance on its own (it polls the wallet info); no
+		// leave-and-re-enter navigation is needed anymore.
+		await openWalletPanel()
+		await triggerWalletSync()
+		await waitForWalletSyncDone()
+		await closeWalletPanel()
 
-		const broadcastBtn2 = await $('button[data-testid="e2e-proposal-broadcast-button"]')
-		await broadcastBtn2.waitForClickable({ timeout: 30000 })
-		await broadcastBtn2.click()
-		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
-
-		// Screen auto-runs prepare on mount; wait for the confirm step (prepare only shows as Retry on error).
+		// Screen auto-runs prepare on mount; wait for the confirm step (prepare only shows as
+		// Retry on error). The button enables once the polled funding info reflects the synced
+		// balance.
 		const confirmBtn = await $('button[data-testid="e2e-broadcast-confirm"]')
 		await confirmBtn.waitForClickable({
 			timeout: 180000,
-			timeoutMsg: 'Prepare broadcast should finish and enable Confirm & Broadcast',
+			timeoutMsg:
+				'Confirm & Broadcast should enable without re-entering the screen once the funding card picks up the synced balance',
 		})
 
 		await confirmBtn.click()

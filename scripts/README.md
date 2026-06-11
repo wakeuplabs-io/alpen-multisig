@@ -5,6 +5,7 @@ Helper scripts for development and testing of the Alpen Multisig project.
 ## Table of Contents
 
 - [Local Docker Stack](#local-docker-stack) — Full stack via Docker Compose
+- [Fee Estimation Data Generator](#fee-estimation-data-generator) — Populate regtest for fee estimation
 - [WebDriver E2E Tests](#webdriver-e2e-tests) — Full UI test suite on real Tauri binary
 - [Bitcoin regtest node](#bitcoin-regtest-node) — Standalone bitcoind for ASM runner
 - [ASM Runner](#asm-runner) — Strata ASM binary
@@ -58,10 +59,24 @@ Manages a complete local development stack via Docker Compose: Bitcoin, ASM, Pos
 | Service | Port | Description |
 |---|---|---|
 | `bitcoin` | 18443 | Bitcoin Core regtest RPC |
+| `electrs` | 60401 | Electrum indexer (wallet sync — R2) |
 | `asm` | 8080 | Strata ASM runner admin RPC |
 | `postgres` | 5432 | PostgreSQL database |
 | `orchestrator` | 3000 | Backend API (skipped with `--no-orchestrator`) |
 | `regtest-dev-api` | 3001 | Mining/faucet helper |
+
+### Electrum indexer
+
+electrs runs alongside bitcoind and exposes the Electrum protocol on port **60401**.
+
+**Local URL:** `tcp://127.0.0.1:60401`
+
+**Smoke test (after `./scripts/local-stack.sh`):**
+
+```bash
+./scripts/smoke-electrs.sh
+# Expected: OK: electrs is up and indexing.
+```
 
 ### Development Workflows
 
@@ -121,6 +136,95 @@ curl -X POST http://localhost:8080/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"strata_asm_getStatus","id":1}'
 ```
+
+---
+
+## Fee Estimation Data Generator
+
+Populates regtest with confirmed transactions so Bitcoin Core's `estimatesmartfee` returns valid fee estimates. The desktop app uses these estimates for the Slow/Medium/Fast fee presets.
+
+### Why it's needed
+
+On a fresh regtest chain, `estimatesmartfee` returns errors until enough blocks contain transactions with fee data. Without this data, the app falls back to static min-relay rates (1 sat/vB) instead of showing realistic fee estimates.
+
+The script generates transactions across multiple blocks to ensure estimates work for all three confirmation targets:
+- **Fast** (1 block)
+- **Medium** (6 blocks)
+- **Slow** (12 blocks)
+
+### Quick Start
+
+```bash
+# Start the Docker stack first
+./scripts/local-stack.sh
+
+# Generate fee estimation data (default: 25 rounds × 5 txs = 125 transactions)
+./scripts/generate-fee-data.sh
+
+# Check current estimates without generating more data
+./scripts/generate-fee-data.sh --check
+```
+
+### All Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--rounds N` | Number of send-then-mine rounds | 25 |
+| `--txs-per-round N` | Transactions per round | 5 |
+| `--mine-extra N` | Extra empty blocks to mine at the end | 6 |
+| `--vary-fees` | Generate different fee rates for Fast/Medium/Slow targets | — |
+| `--check` | Show current estimates without generating | — |
+| `-h` | Show help | — |
+
+### Common Workflows
+
+```bash
+# Generate data with defaults (recommended for fresh regtest)
+./scripts/generate-fee-data.sh
+
+# Generate more data for better estimate accuracy
+./scripts/generate-fee-data.sh --rounds 50 --txs-per-round 10
+
+# Generate with varied fee rates (experimental, see limitations below)
+./scripts/generate-fee-data.sh --vary-fees
+
+# Just check if estimates are working
+./scripts/generate-fee-data.sh --check
+
+# Generate with extra blocks at the end (for testing deep confirmation targets)
+./scripts/generate-fee-data.sh --mine-extra 20
+```
+
+### How it works
+
+**Default mode:** Each round sends N self-transactions via `sendtoaddress` (wallet RPC), then mines 1 block. Repeats for the configured number of rounds.
+
+**Varied fees mode (`--vary-fees`):** Attempts to create fee differentiation by:
+1. Sending 200 congestion TXs at 1 sat/vB
+2. Sending 100 TXs at 30 sat/vB (fast tier), mining 1 block
+3. Sending 100 TXs at 15 sat/vB (medium tier), mining 5 blocks
+4. Sending 100 TXs at 3 sat/vB (slow tier), mining 11 blocks
+
+### Expected output
+
+```
+=== current fee estimates ===
+  target=1: 0.00001000 BTC/kvB (1000 sat/kvB, ~1.00 sat/vB) [blocks=1]
+  target=6: 0.00001000 BTC/kvB (1000 sat/kvB, ~1.00 sat/vB) [blocks=6]
+  target=12: 0.00001000 BTC/kvB (1000 sat/kvB, ~1.00 sat/vB) [blocks=12]
+```
+
+If you see "ERROR" or "NO ESTIMATE" for any target, run the script with more rounds or check that the Docker stack is running.
+
+### Regtest limitations
+
+**Important:** Regtest cannot simulate realistic fee differentiation because blocks are too large (4MB default). All transactions fit in a single block regardless of fee rate, so `estimatesmartfee` returns similar values for all targets.
+
+To test different fee rates (Fast > Medium > Slow), you need:
+- **Testnet or signet** with real mempool congestion, OR
+- **Custom regtest** with reduced block size: add `-blockmaxweight=40000` to bitcoind config (requires modifying Docker entrypoint)
+
+For most development purposes, the default mode is sufficient to verify that fee estimation works and doesn't fall back to static rates. The app will show the same rate for all three presets, but the estimation pipeline is exercised correctly.
 
 ---
 

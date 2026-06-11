@@ -82,9 +82,10 @@ export function AddressesWithBalanceList({
 							<tbody className="divide-y divide-[#f3f4f6]">
 								{rows.map((row) => (
 									<AddressRow
-										key={row.index}
+										key={`${row.keychain}-${row.index}`}
 										index={row.index}
 										address={row.address}
+										keychain={row.keychain}
 										confirmedSats={row.confirmedSats}
 										unconfirmedSats={row.unconfirmedSats}
 										isUsed={row.isUsed}

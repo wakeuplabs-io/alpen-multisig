@@ -6,9 +6,12 @@ export type NodeConfig = {
 	customBtcRpcUrl?: string
 	customBtcRpcUser?: string
 	customBtcRpcPass?: string
+	// Electrum indexer URL for Admin Wallet sync (R2.3)
+	customElectrumUrl?: string
 }
 
 export type LocalNodeStatus = {
 	strataReachable: boolean
 	btcReachable: boolean
+	electrumReachable: boolean
 }

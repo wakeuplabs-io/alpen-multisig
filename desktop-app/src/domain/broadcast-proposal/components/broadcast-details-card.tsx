@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import type { PrepareBroadcastResult, Proposal } from '@/api/proposals'
 import type { AdminWalletError } from '@/api/admin-wallet'
+import { WalletIcon } from '@/assets/icons'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
@@ -19,11 +21,13 @@ type Props = {
 	isBroadcasting: boolean
 	canSign?: boolean
 	canSignReason?: string
+	targetQueued?: boolean | null
 	adminWalletInfo?: AdminWalletInfoView | null
-	utxoCount?: number
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
 	phase?: BroadcastPhase
+	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
+	feeSelector?: ReactNode
 }
 
 const TIME_UNITS = [
@@ -63,11 +67,12 @@ export function BroadcastDetailsCard({
 	isBroadcasting,
 	canSign = true,
 	canSignReason,
+	targetQueued,
 	adminWalletInfo,
-	utxoCount,
 	lastSyncedAt,
 	syncError,
 	phase,
+	feeSelector,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -135,49 +140,76 @@ export function BroadcastDetailsCard({
 					</p>
 				</div>
 
-				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-					<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
-					<span className="text-[13px] font-medium text-[#111827]">
-						{bundle.estimatedFeeSats.toLocaleString()} sats
-					</span>
-				</div>
+				{feeSelector !== undefined && (
+					<div>
+						<SectionLabel>Network fee</SectionLabel>
+						{feeSelector}
+					</div>
+				)}
+
+				{feeSelector === undefined && (
+					<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
+						<span className="text-[13px] font-medium text-[#111827]">
+							{bundle.estimatedFeeSats.toLocaleString()} sats
+						</span>
+					</div>
+				)}
 
 				{adminWalletInfo !== undefined && (
 					<div>
 						<SectionLabel>Funding Source</SectionLabel>
 						{adminWalletInfo == null ? (
-							<div className="animate-pulse space-y-2">
-								<div className="h-10 rounded-lg bg-[#f3f4f6]" />
-								<div className="h-4 w-48 rounded-md bg-[#f3f4f6]" />
+							<div className="animate-pulse space-y-px overflow-hidden rounded-lg border border-[#f3f4f6]">
+								<div className="h-13 bg-[#f3f4f6]" />
+								<div className="h-10 bg-[#f9fafb]" />
 							</div>
 						) : (
-							<>
-								<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+							<div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
+								<div className="flex items-center justify-between gap-3 bg-[#f9fafb] px-3 py-2.5">
+									<span className="flex min-w-0 items-center gap-2.5">
+										<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e4dfff] bg-[#f5f3ff]">
+											<WalletIcon width={16} height={16} className="text-[#7c6fcd]" />
+										</span>
+										<span className="flex min-w-0 flex-col">
+											<span className="text-[13px] font-medium text-[#111827]">Admin wallet</span>
+											<span className="text-[11px] text-[#9ca3af]">Pays the network fee and commit dust</span>
+										</span>
+									</span>
+									<span className="flex shrink-0 flex-col items-end">
+										<span
+											className={`text-[13px] font-semibold ${
+												adminWalletInfo.balanceSats === 0 ? 'text-[#dc2626]' : 'text-[#111827]'
+											}`}
+										>
+											{adminWalletInfo.balanceSats.toLocaleString()} sats
+										</span>
+										<span className="text-[11px] text-[#9ca3af]">
+											{satsToBtc(adminWalletInfo.balanceSats)} BTC available
+										</span>
+									</span>
+								</div>
+								<div className="flex items-start gap-2 border-t border-[#eef0f2] bg-white px-3 py-2.5">
 									<span
-										data-testid="e2e-admin-wallet-external-address-0"
-										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]"
+										data-testid="e2e-admin-wallet-funding-address"
+										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#6b7280]"
 									>
 										{adminWalletInfo.address}
 									</span>
 									<CopyButton text={adminWalletInfo.address} />
 								</div>
-								<p className="mt-2 text-[13px] text-[#6b7280]">
-									Admin Wallet (BDK){' '}
-									<span className="text-[12px] text-[#9ca3af]">
-										({adminWalletInfo.balanceSats.toLocaleString()} sats)
-									</span>
-								</p>
-								{utxoCount !== undefined && <p className="mt-1 text-[12px] text-[#9ca3af]">UTXOs: {utxoCount}</p>}
 								{syncError != null ? (
-									<p className="mt-1 text-[12px] text-[#ef4444]">
-										Sync error: {'message' in syncError ? syncError.message : syncError.type}
-									</p>
+									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
+										<span className="text-[12px] text-[#ef4444]">
+											Sync error: {'message' in syncError ? syncError.message : syncError.type}
+										</span>
+									</div>
 								) : lastSyncedAt != null ? (
-									<p className="mt-1">
+									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
 										<LastSyncLabel lastSyncedAt={lastSyncedAt} />
-									</p>
+									</div>
 								) : null}
-							</>
+							</div>
 						)}
 					</div>
 				)}
@@ -188,8 +220,9 @@ export function BroadcastDetailsCard({
 					disabled={
 						isBroadcasting ||
 						!canSign ||
+						targetQueued === false ||
 						adminWalletInfo == null ||
-						(adminWalletInfo.balanceSats === 0 && (utxoCount === undefined || utxoCount === 0))
+						adminWalletInfo.balanceSats === 0
 					}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
@@ -200,19 +233,22 @@ export function BroadcastDetailsCard({
 							? 'Broadcasting…'
 							: 'Confirm & Broadcast'}
 				</button>
+				{targetQueued === false && (
+					<p className="mt-2 text-center text-[12px] text-[#b91c1c]">
+						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
+						cancel can no longer be broadcast.
+					</p>
+				)}
 				{!canSign && (
 					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
 						{canSignReason ?? 'Hardware wallet required to sign'}
 					</p>
 				)}
-				{canSign &&
-					adminWalletInfo != null &&
-					adminWalletInfo.balanceSats === 0 &&
-					(utxoCount === undefined || utxoCount === 0) && (
-						<p className="mt-2 text-center text-[12px] text-[#6b7280]">
-							Insufficient balance — fund the admin wallet to broadcast
-						</p>
-					)}
+				{canSign && adminWalletInfo != null && adminWalletInfo.balanceSats === 0 && (
+					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+						Insufficient balance — fund the admin wallet to broadcast
+					</p>
+				)}
 			</div>
 		</div>
 	)

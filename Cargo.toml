@@ -16,6 +16,7 @@ strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://
 strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-bridge-v1 = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
 
 # From alpenlabs/strata-common (rc19 — matches alpenlabs/asm @ e0461f8 workspace)
@@ -37,6 +38,7 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # BDK (Bitcoin Development Kit) — admin wallet infrastructure
 bdk_wallet = "1"
+bdk_electrum = "0.21"
 bdk_bitcoind_rpc = "0.18"
 
 # Shared across workspace members

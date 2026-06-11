@@ -26,6 +26,9 @@ const inFlightActionIds = new Set<string>()
 /** Interval between confirmation polls while in `awaiting-confirmation`. */
 const CONFIRMATION_POLL_INTERVAL_MS = 8000
 
+/** Debounce for background re-prepares triggered by fee-rate changes (custom rate stepping). */
+const RATE_REFRESH_DEBOUNCE_MS = 350
+
 type UseBroadcastProposalReturn = {
 	phase: BroadcastPhase
 	bundle: PrepareBroadcastResult | null
@@ -50,13 +53,20 @@ export function mergeBroadcastWithProposal(broadcast: BroadcastResult, proposal:
 	}
 }
 
-function buildBroadcastInput(baseUrl: string, actionId: string): BroadcastInput {
-	return { baseUrl, actionId }
+function buildBroadcastInput(baseUrl: string, actionId: string, feeRateSatPerKvb: number): BroadcastInput {
+	return { baseUrl, actionId, feeRateSatPerKvb }
 }
 
+/**
+ * `feeRateSatPerKvb === null` means fee presets are still loading: prepare is
+ * deferred and broadcast is a no-op until a real rate is available. This both
+ * prevents broadcasting at an unintended default rate and avoids a double
+ * prepare when the loaded rate replaces a placeholder.
+ */
 export function useBroadcastProposal(
 	baseUrl: string,
 	actionId: string,
+	feeRateSatPerKvb: number | null,
 	signerKind: SignerKind = 'mnemonic',
 	adapter?: WalletAdapter,
 ): UseBroadcastProposalReturn {
@@ -66,6 +76,7 @@ export function useBroadcastProposal(
 	const [proposal, setProposal] = useState<Proposal | null>(null)
 	const [error, setError] = useState<BroadcastError | null>(null)
 	const broadcastStarted = useRef(false)
+	const hasPreparedOnce = useRef(false)
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
 	const clearConfirmationPoll = useCallback(() => {
@@ -135,46 +146,68 @@ export function useBroadcastProposal(
 	useEffect(() => clearConfirmationPoll, [clearConfirmationPoll])
 
 	useEffect(() => {
-		if (!actionId) return
+		if (!actionId || feeRateSatPerKvb === null) return
 		let active = true
-		setPhase('preparing')
-		setError(null)
-		Promise.all([
-			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
-			getProposalByActionId({ baseUrl, actionId }),
-		]).then(([res, proposalRes]) => {
-			if (!active) return
-			if (!res.ok) {
-				setError(deriveBroadcastError(res.error))
-				setPhase('error')
-				return
-			}
-			if (proposalRes.ok) {
-				const p = proposalRes.data
-				setProposal(p)
-				const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status)
-				if (resumePhase !== null) {
-					applyProposal(p)
-					setBundle(res.data)
-					setPhase(resumePhase)
-					// Reconcile: a still-unconfirmed reveal keeps polling until it confirms.
-					if (resumePhase === 'awaiting-confirmation') startConfirmationPoll()
+		// Only the first prepare drives the loading skeleton. Fee-rate changes re-prepare
+		// in the background (debounced) so the confirm card stays mounted — broadcast always
+		// reads `feeRateSatPerKvb` directly, so a momentarily stale bundle is display-only.
+		const isRateRefresh = hasPreparedOnce.current
+		if (!isRateRefresh) {
+			setPhase('preparing')
+			setError(null)
+		}
+		const run = () => {
+			void Promise.all([
+				prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
+				getProposalByActionId({ baseUrl, actionId }),
+			]).then(([res, proposalRes]) => {
+				if (!active) return
+				hasPreparedOnce.current = true
+				if (!res.ok) {
+					setError(deriveBroadcastError(res.error))
+					setPhase('error')
 					return
 				}
-			}
-			setBundle(res.data)
-			setPhase('confirming')
-		})
+				if (isRateRefresh) {
+					if (proposalRes.ok) setProposal(proposalRes.data)
+					setBundle(res.data)
+					return
+				}
+				if (proposalRes.ok) {
+					const p = proposalRes.data
+					setProposal(p)
+					const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status)
+					if (resumePhase !== null) {
+						applyProposal(p)
+						setBundle(res.data)
+						setPhase(resumePhase)
+						// Reconcile: a still-unconfirmed reveal keeps polling until it confirms.
+						if (resumePhase === 'awaiting-confirmation') startConfirmationPoll()
+						return
+					}
+				}
+				setBundle(res.data)
+				setPhase('confirming')
+			})
+		}
+		let debounce: ReturnType<typeof setTimeout> | null = null
+		if (isRateRefresh) {
+			debounce = setTimeout(run, RATE_REFRESH_DEBOUNCE_MS)
+		} else {
+			run()
+		}
 		return () => {
 			active = false
+			if (debounce !== null) clearTimeout(debounce)
 		}
-	}, [actionId, baseUrl, applyProposal, startConfirmationPoll])
+	}, [actionId, baseUrl, feeRateSatPerKvb, applyProposal, startConfirmationPoll])
 
 	async function prepare() {
+		if (feeRateSatPerKvb === null) return
 		setPhase('preparing')
 		setError(null)
 		const [res, proposalRes] = await Promise.all([
-			prepareBroadcast(buildBroadcastInput(baseUrl, actionId)),
+			prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
 			getProposalByActionId({ baseUrl, actionId }),
 		])
 		if (!res.ok) {
@@ -190,7 +223,7 @@ export function useBroadcastProposal(
 	}
 
 	async function broadcast() {
-		if (broadcastStarted.current || inFlightActionIds.has(actionId)) {
+		if (feeRateSatPerKvb === null || broadcastStarted.current || inFlightActionIds.has(actionId)) {
 			return
 		}
 		if (adapter !== undefined) {
@@ -227,7 +260,7 @@ export function useBroadcastProposal(
 			setPhase('broadcasting')
 		}
 		try {
-			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId))
+			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb))
 			if (!res.ok) {
 				setError(deriveBroadcastError(res.error))
 				setPhase('error')

@@ -66,4 +66,18 @@ pub(crate) trait ProposalRepository: Send + Sync {
         action_id: &ActionId,
         update_id: u32,
     ) -> Result<(), AppError>;
+
+    /// Atomically mark a cancel proposal as `Enacted` and its target as `Canceled`,
+    /// but only if the target is still `Approved`.
+    ///
+    /// Returns `Ok(true)` if the target was `Approved` and both transitions were applied.
+    /// Returns `Ok(false)` without mutating anything if the target was no longer `Approved`
+    /// (e.g. it was already `Enacted`, `Canceled`, or `Expired` via another path) — in that
+    /// case the ASM would have rejected the cancel tx, so the cancel proposal did not actually
+    /// take effect and the caller must decide how to reflect that.
+    async fn enact_cancel(
+        &self,
+        cancel_action_id: &ActionId,
+        target_action_id: &ActionId,
+    ) -> Result<bool, AppError>;
 }

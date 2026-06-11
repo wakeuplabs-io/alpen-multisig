@@ -10,13 +10,15 @@ import {
 
 type Props = {
 	title: string
-	actionType: 'signer_update' | 'vk_update'
+	actionType: 'signer_update' | 'vk_update' | 'operator_set_update'
 	seqNo: string
 	keysToAdd: string[]
 	keysToRemove: string[]
 	threshold: string
 	vkTypeId: VkPredicateType
 	newVkHex: string
+	operatorsToAdd: string[]
+	operatorIndicesToRemove: string[]
 	sighashHex: string | null
 	authorityLabel: string
 	currentSigners: string[]
@@ -53,13 +55,20 @@ export function CreateProposalPreview({
 	threshold,
 	vkTypeId,
 	newVkHex,
+	operatorsToAdd,
+	operatorIndicesToRemove,
 	sighashHex,
 	authorityLabel,
 	currentSigners,
 	currentThreshold,
 	createdProposal,
 }: Props) {
-	const actionTypeLabel = actionType === 'signer_update' ? 'Signer update' : 'Verification key update'
+	const actionTypeLabel =
+		actionType === 'signer_update'
+			? 'Signer update'
+			: actionType === 'operator_set_update'
+				? 'Bridge Operator update'
+				: 'Verification key update'
 
 	const removeNorm = new Set(
 		keysToRemove
@@ -125,7 +134,40 @@ export function CreateProposalPreview({
 
 			<div className="border-t border-[#e5e7eb]" />
 
-			{actionType === 'signer_update' ? (
+			{actionType === 'operator_set_update' ? (
+				<div className="flex flex-col gap-4">
+					{operatorsToAdd.length > 0 && (
+						<div>
+							<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+								Operators to Add ({operatorsToAdd.length})
+							</p>
+							<div className="flex flex-col gap-1">
+								{operatorsToAdd.map((key, i) => (
+									<div key={i} className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2">
+										<span className="shrink-0 text-xs font-medium text-[#059669]">+</span>
+										<span className="min-w-0 flex-1 break-all font-mono text-xs text-[#374151]">{key}</span>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+					{operatorIndicesToRemove.length > 0 && (
+						<div>
+							<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+								Operator Indices to Remove ({operatorIndicesToRemove.length})
+							</p>
+							<div className="flex flex-col gap-1">
+								{operatorIndicesToRemove.map((idx, i) => (
+									<div key={i} className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2">
+										<span className="shrink-0 text-xs font-medium text-[#dc2626]">–</span>
+										<span className="text-sm text-[#374151]">Index {idx}</span>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+			) : actionType === 'signer_update' ? (
 				<div>
 					<p className="m-0 mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Signer Set Change</p>
 					<div className="overflow-hidden rounded-xl border border-[#e5e7eb]">

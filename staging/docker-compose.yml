@@ -26,6 +26,25 @@ services:
       retries: 10
       start_period: 30s
 
+  electrs:
+    build:
+      context: ..
+      dockerfile: staging/Dockerfile.electrs
+    ports:
+      - "60401:60401"
+    volumes:
+      - electrs-data:/data
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/60401' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   asm:
     build:
       context: ..
@@ -104,3 +123,4 @@ services:
 volumes:
   bitcoin-data:
   asm-data:
+  electrs-data:

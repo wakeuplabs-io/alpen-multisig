@@ -3,11 +3,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
- * Pre-funds the Admin Wallet external address on regtest.
+ * Pre-funds the Admin Wallet on regtest.
  *
  * From Phase 3.6, the commit transaction is always funded from the Admin Wallet (BDK).
- * The Admin Wallet external address (m/86'/0'/73'/0/0) must hold spendable UTXOs before
- * "Confirm & Broadcast", or commit funding fails with an insufficient-funds error.
+ * The Admin Wallet must hold spendable UTXOs before "Confirm & Broadcast", or commit
+ * funding fails with an insufficient-funds error. The funding target is the rotating
+ * receive address shown in the broadcast screen's "Funding Source" card.
  *
  * Uses the regtest-dev-api faucet endpoint (HTTP) — same as local-stack.sh --fund.
  */
@@ -17,13 +18,13 @@ const FAUCET_URL = process.env.REGTEST_DEV_API_URL ?? 'http://127.0.0.1:3001'
 const FUND_AMOUNT_BTC = '0.01'
 
 /**
- * Reads the Admin Wallet external address from the broadcast screen UI.
+ * Reads the Admin Wallet funding (receive) address from the broadcast screen UI.
  * The "Funding Source" card renders the address once prepare-broadcast has run.
  *
- * @returns {Promise<string>} Admin Wallet external address at index 0
+ * @returns {Promise<string>} Admin Wallet current receive address
  */
 async function readAdminWalletAddressFromUI() {
-	const addressEl = await $('[data-testid="e2e-admin-wallet-external-address-0"]')
+	const addressEl = await $('[data-testid="e2e-admin-wallet-funding-address"]')
 	await addressEl.waitForDisplayed({ timeout: 30000 })
 	return (await addressEl.getText()).trim()
 }

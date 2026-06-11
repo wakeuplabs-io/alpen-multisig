@@ -10,16 +10,21 @@ fn main() {
     commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .manage(pending_reveals)
         .setup(|app| {
+            use desktop_app::application::fee_estimation::FeeCacheState;
             use desktop_app::application::wallet_session::WalletSession;
             use desktop_app::infrastructure::node_config_store::{
                 load_node_config, NodeConfigState,
             };
             use std::sync::{Arc, RwLock};
+
             let config = load_node_config(app.handle());
             let node_config_arc = Arc::new(RwLock::new(config));
             let wallet_session = WalletSession::with_node_config(Arc::clone(&node_config_arc));
             app.manage(NodeConfigState(node_config_arc));
             app.manage(wallet_session);
+            // Fee cache (M2): survives across fee_rates_estimate calls; estimators
+            // are rebuilt per call from the current node config.
+            app.manage(FeeCacheState::default());
             Ok(())
         })
         .run(tauri::generate_context!())
