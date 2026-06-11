@@ -123,11 +123,17 @@ fn extract_multisig_config_update(
             Authority::SequencerManager,
             MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)),
         ) => Ok(Some(update.config())),
+        (
+            Authority::AlpenAdmin,
+            MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)),
+        ) => Ok(Some(update.config())),
         // MultisigUpdate variant present but wrong authority — data integrity issue.
         (
             _,
             MultisigAction::Update(
-                UpdateAction::StrataAdminMultisig(_) | UpdateAction::StrataSeqManagerMultisig(_),
+                UpdateAction::StrataAdminMultisig(_)
+                | UpdateAction::StrataSeqManagerMultisig(_)
+                | UpdateAction::AlpenAdminMultisig(_),
             ),
         ) => Err(AppError::BadRequest(
             "action variant does not match proposal authority for enactment check".to_string(),
@@ -210,6 +216,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
+        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),

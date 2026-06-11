@@ -38,6 +38,8 @@ export function authorityFromRole(role: AuthRole): string {
 			return 'strata_admin'
 		case AuthRole.StrataSequencerManager:
 			return 'sequencer_manager'
+		case AuthRole.AlpenAdministrator:
+			return 'alpen_admin'
 		default:
 			return 'strata_admin'
 	}

@@ -71,7 +71,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				throw new Error('Threshold must be an integer between 1 and 255')
 			}
 			const hexResult = await buildAdminMultisigUpdateHex({
-				role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager',
+				role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin',
 				addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				newThreshold: threshold,
@@ -133,6 +133,14 @@ export function useCreateProposal(): UseCreateProposalReturn {
 
 	useEffect(() => {
 		let cancelled = false
+		// The current-VK RPC only exposes the OL STF predicate (Strata Admin's VK).
+		// For Alpen Admin (EE STF VK), no on-chain lookup is available yet, so the
+		// form falls back to its "could not load" state.
+		if (authorityFromRole(selectedRole) !== 'strata_admin') {
+			setIsLoadingCurrentVk(false)
+			setCurrentVk(null)
+			return
+		}
 		setIsLoadingCurrentVk(true)
 		getCurrentVk().then((result) => {
 			if (cancelled) return
@@ -142,7 +150,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [selectedRole])
 
 	useEffect(() => {
 		let cancelled = false
