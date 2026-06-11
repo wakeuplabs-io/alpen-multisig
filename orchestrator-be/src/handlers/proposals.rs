@@ -176,9 +176,9 @@ pub async fn get_proposal(
     }))
 }
 
-/// Pre-broadcast guard for Cancel proposals: reports whether the target action is still
-/// queued (pending) on the live ASM. If it is no longer queued, the ASM would reject the
-/// Cancel tx and the UI should not allow broadcasting it.
+/// Pre-broadcast guard for Cancel proposals: reports whether the target proposal is still
+/// `Approved` in our records. If it is not (e.g. already `Enacted` via the normal flow), the
+/// ASM would reject the Cancel tx and the UI should not allow broadcasting it.
 #[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
 pub async fn get_cancel_target_status(
     State(state): State<AppState>,
@@ -186,20 +186,9 @@ pub async fn get_cancel_target_status(
     Path(action_id): Path<String>,
 ) -> Result<Json<CancelTargetStatusResponse>> {
     let action_id = ActionId(action_id);
-    let proposal =
-        proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
-
-    if !proposal.is_cancel() {
-        return Err(AppError::BadRequest(
-            "proposal is not a cancel proposal".to_string(),
-        ));
-    }
-
-    let target_queued = crate::infrastructure::asm_enactment::is_cancel_target_queued(
-        &state.asm_rpc_url,
-        &proposal.action_hex,
-    )
-    .await?;
+    let target_queued =
+        proposals::get_cancel_target_status(state.repo.as_ref(), auth.authority, &action_id)
+            .await?;
 
     Ok(Json(CancelTargetStatusResponse { target_queued }))
 }

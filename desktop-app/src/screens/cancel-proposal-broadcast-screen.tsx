@@ -18,8 +18,19 @@ export function CancelProposalBroadcastScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
-	const { isResolvingCancel, cancelResolveError, phase, bundle, result, proposal, error, prepare, broadcast } =
-		useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	const {
+		isResolvingCancel,
+		cancelResolveError,
+		targetQueued,
+		targetQueuedError,
+		phase,
+		bundle,
+		result,
+		proposal,
+		error,
+		prepare,
+		broadcast,
+	} = useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '')
 
 	async function handleBack() {
 		await disconnectSession()
@@ -90,12 +101,21 @@ export function CancelProposalBroadcastScreen() {
 						</div>
 					)}
 
+					{targetQueuedError !== null && (
+						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+							<p className="m-0 text-sm text-[#991b1b]">
+								Could not verify the target action's queue status: {targetQueuedError}
+							</p>
+						</div>
+					)}
+
 					{showDetails && (
 						<BroadcastDetailsCard
 							bundle={bundle}
 							proposal={proposal}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
+							targetQueued={targetQueued}
 						/>
 					)}
 

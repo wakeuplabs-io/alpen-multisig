@@ -110,33 +110,6 @@ pub(crate) async fn is_proposal_enacted_on_asm(
     }
 }
 
-/// Returns true when the target action of a Cancel proposal is still queued (pending) on the
-/// live ASM. Used as a pre-broadcast guard: if the target already left the queue, the ASM would
-/// reject the Cancel tx (`UnknownAction`/`CancelUpdateMismatch`).
-pub(crate) async fn is_cancel_target_queued(
-    rpc_url: &str,
-    cancel_action_hex: &str,
-) -> Result<bool, AppError> {
-    if let Some(enacted) = mock_is_enacted(rpc_url) {
-        return Ok(!enacted);
-    }
-
-    let action =
-        action_codec::decode_multisig_action_hex(cancel_action_hex).map_err(AppError::BadRequest)?;
-    let MultisigAction::Cancel(cancel) = action else {
-        return Err(AppError::BadRequest(
-            "action is not a Cancel action".to_string(),
-        ));
-    };
-
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
-        .await
-        .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-    Ok(admin.find_queued(cancel.target_id()).is_some())
-}
-
 fn predicate_keys_match(proposed: &PredicateKey, current: &PredicateKey) -> bool {
     proposed.id() == current.id() && proposed.condition() == current.condition()
 }

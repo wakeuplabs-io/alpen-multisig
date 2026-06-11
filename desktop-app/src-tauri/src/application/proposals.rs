@@ -1003,11 +1003,15 @@ mod tests {
         async fn get_cancel_target_status(
             &self,
             _action_id: &str,
-        ) -> Result<crate::application::orchestrator_client::CancelTargetStatusResponse, OrchestratorError>
-        {
-            Ok(crate::application::orchestrator_client::CancelTargetStatusResponse {
-                target_queued: true,
-            })
+        ) -> Result<
+            crate::application::orchestrator_client::CancelTargetStatusResponse,
+            OrchestratorError,
+        > {
+            Ok(
+                crate::application::orchestrator_client::CancelTargetStatusResponse {
+                    target_queued: true,
+                },
+            )
         }
 
         async fn approve_action(
@@ -1565,11 +1569,15 @@ mod tests {
         async fn get_cancel_target_status(
             &self,
             _action_id: &str,
-        ) -> Result<crate::application::orchestrator_client::CancelTargetStatusResponse, OrchestratorError>
-        {
-            Ok(crate::application::orchestrator_client::CancelTargetStatusResponse {
-                target_queued: true,
-            })
+        ) -> Result<
+            crate::application::orchestrator_client::CancelTargetStatusResponse,
+            OrchestratorError,
+        > {
+            Ok(
+                crate::application::orchestrator_client::CancelTargetStatusResponse {
+                    target_queued: true,
+                },
+            )
         }
         async fn approve_action(
             &self,
