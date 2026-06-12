@@ -23,7 +23,14 @@ console.log('parseAmountSats OK')
 
 // ── canConfirmSend (P6.1 interim gate, PRD §4.3.5.5) ─────────────────────────
 
-const ready = { isDestinationValid: true, amountSats: 30_000, isFeeReady: true, isSubmitting: false }
+const ready = {
+	isDestinationValid: true,
+	amountSats: 30_000,
+	isMax: false,
+	isFeeReady: true,
+	isEstimateReady: true,
+	isSubmitting: false,
+}
 
 assert.equal(canConfirmSend(ready), true, 'all-valid gate must enable Confirm')
 
@@ -36,7 +43,19 @@ assert.equal(
 assert.equal(canConfirmSend({ ...ready, amountSats: null }), false, 'unparseable amount must disable')
 assert.equal(canConfirmSend({ ...ready, amountSats: 0 }), false, 'zero amount must disable (§4.3.5.2)')
 assert.equal(canConfirmSend({ ...ready, isFeeReady: false }), false, 'missing fee presets must disable')
+assert.equal(
+	canConfirmSend({ ...ready, isEstimateReady: false }),
+	false,
+	'pending/failed estimate must disable (P6.3 — insufficient funds blocks Confirm, §4.3.5.2)',
+)
 assert.equal(canConfirmSend({ ...ready, isSubmitting: true }), false, 'mid-submit must disable (no double send)')
+
+// Max (drain) mode: the amount field tracks the boundary — null/zero amount is fine.
+assert.equal(
+	canConfirmSend({ ...ready, isMax: true, amountSats: null }),
+	true,
+	'Max mode must not require a parsed amount (drain ignores it)',
+)
 
 console.log('canConfirmSend OK')
 console.log('send-validation.test.ts PASS')

@@ -264,7 +264,7 @@ let psbt = builder.finish().map_err(map_send_create_tx_error)?;
 
 Normative properties (each backed by a test in §7):
 
-1. **Change routing (§4.3.5.4):** BDK's `TxBuilder` sources the change script from the wallet's **internal keychain next-unused index** — the same gap-aware discipline as R1.3's `next_unused_address`. The change output of a normal send MUST satisfy `wallet.is_mine(script)` with `KeychainKind::Internal` at the first unused index. Repeated estimate dry-runs MUST NOT advance the internal index (BDK's unused-aware change selection makes consecutive builds reuse the same index until it is observed used).
+1. **Change routing (§4.3.5.4):** BDK's `TxBuilder` sources the change script from the wallet's **internal keychain first-unused index** (lowest revealed-unused, else next index). The change output of a normal send MUST satisfy `wallet.is_mine(script)` with `KeychainKind::Internal` at the first unused index. **Implementation finding (P6.3):** BDK *reveals and `mark_used`s* the chosen internal index at the end of every `create_tx` — so a naive estimate would burn one gap-limit slot per debounced keystroke. Estimate builds therefore pass an **explicit peeked change script** (`peek_change_spk`: mirrors BDK's selection without revealing/marking, routed via `drain_to`); the real send passes none, letting BDK reveal+mark as intended. Repeated estimates MUST NOT advance the internal index (pinned by `estimate_is_side_effect_free`).
 2. **Drain builds have exactly one recipient output** and no wallet-owned output; the recipient value is `max_amount_sats`.
 3. **RBF:** inputs use the BDK default sequence (signals BIP-125). Do **not** call `set_exact_sequence`.
 4. **Coin selection:** BDK default (spendable = confirmed + unconfirmed wallet-owned). The "wallet balance" of the PRD formula is `BalanceDto.total_sats` — same convention as the broadcast funding gate (`admin_wallet_info` doc, `commands/admin_wallet.rs:131-138`).
@@ -495,7 +495,7 @@ Behavior contract:
 
 - **Destination** **[P6.2]**: debounce 300 ms after last keystroke → `validateSendAddress`. Stale responses discarded (request id / active-flag pattern as in `useFeePresets`). Inline error rendered from §6.2; Confirm gated on `status === 'valid'`.
 - **Amount** **[P6.1 basic, P6.3 full]**: integer sats input (`inputMode="numeric"`, reject non-digits). `0`/empty keeps Confirm disabled (no error shown for empty; `Amount must be greater than zero` for explicit 0). BTC equivalent sub-label.
-- **Max** **[P6.3]**: enabled only when destination is `valid` and presets are `ready` (vsize depends on the destination script type — D3). Click sets `{ sats: estimate.maxAmountSats, isMax: true }` from a drain dry-run. Any manual edit of amount, destination, or rate clears `isMax`.
+- **Max** **[P6.3]**: enabled only when destination is `valid` and presets are `ready` (vsize depends on the destination script type — D3). Click sets `{ sats: estimate.maxAmountSats, isMax: true }` from a drain dry-run. A manual edit of the amount or the destination clears `isMax`; a **rate change keeps it** and recomputes the boundary (PRD §4.3.5.2 — the max moves with the fee).
 - **Fee** **[P6.3]**: `useFeePresets` with initial selection `{ kind: 'preset', preset: 'fast' }` (D4); `SendFeeRateControl` renders presets + custom (step `FEE_RATE_STEP_SAT_PER_KVB`, bounds `minRelaySatPerKvb`/`maxSatPerKvb` from the presets DTO — never hardcoded). Rate changes re-run the estimate; if `isMax`, the Max amount is recomputed from the new drain dry-run (PRD: boundary recomputes on fee change).
 - **Estimate** **[P6.3]**: debounced on (valid destination ∧ amount > 0 ∧ rate). `ready` feeds the summary row (`Network fee ~N sats · change M sats`); `error: InsufficientFunds` renders the §4.3.5.2 copy and disables Confirm.
 - **`canConfirm`** **[P6.4 closes]** — pure predicate in `send-validation.ts`:
@@ -644,7 +644,7 @@ Stack: `scripts/bitcoind-asm-runner.sh` + electrs (R2.1 compose) + dev-mnemonic 
 | Risk | Mitigation |
 |---|---|
 | Estimate/send drift (UTXO changes between dry-run and Confirm) | Shared `build_send_psbt`; send re-runs coin selection at Confirm time; worst case is a typed `InsufficientFunds`/`BroadcastFailed` with the form retained |
-| Estimate advancing the internal keychain index | `estimate_is_side_effect_free` test pins BDK's unused-aware change behavior; regression breaks CI |
+| Estimate advancing the internal keychain index | BDK `create_tx` reveals + `mark_used`s the change index per build — estimates route change to an explicitly peeked script (`peek_change_spk` + `drain_to`) instead; `estimate_is_side_effect_free` pins it, regression breaks CI |
 | Legacy base58 testnet addresses accepted on regtest | Upstream rust-bitcoin semantics; documented in §3.2 — mainnet unaffected |
 | `drain_wallet` with zero spendable UTXOs | BDK `CoinSelection` error → `InsufficientFunds`; Max button additionally hidden when `totalSats == 0` |
 | Spending unconfirmed change immediately after a send | Allowed by design (BDK default; matches broadcast funding-gate convention). The chain enforces ancestry; failures surface as `BroadcastFailed` |

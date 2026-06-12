@@ -15,10 +15,15 @@ export type FeePresetsState =
 			setCustomRate: (satPerKvb: number) => void
 	  }
 
-export function useFeePresets(): FeePresetsState {
+/**
+ * @param initialSelection Governance broadcast defaults to Medium; the wallet
+ * Send form passes Fast — PRD §4.3.5.3 requires the "next block" rate as the
+ * default there.
+ */
+export function useFeePresets(initialSelection: FeeSelection = { kind: 'preset', preset: 'medium' }): FeePresetsState {
 	const [presets, setPresets] = useState<FeeRates | null>(null)
 	const [error, setError] = useState<string | null>(null)
-	const [selection, setSelection] = useState<FeeSelection>({ kind: 'preset', preset: 'medium' })
+	const [selection, setSelection] = useState<FeeSelection>(initialSelection)
 
 	useEffect(() => {
 		let active = true

@@ -34,6 +34,29 @@ pub struct SendInput {
     pub drain_wallet: bool,
 }
 
+/// Dry-run result for the Send form (P6.3) — never signed, never broadcast.
+///
+/// Powers the fee preview, the **Max** button (drain dry-run), and the PRD
+/// §4.3.5.2 "Insufficient funds" boundary *before* Confirm. Produced and
+/// consumed against the last-synced wallet state — no network I/O.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendEstimateDto {
+    /// Effective amount: the input amount, or the computed max for drain runs.
+    pub amount_sats: u64,
+    pub fee_sats: u64,
+    pub fee_rate_sat_per_kvb: u64,
+    /// Estimated virtual size implied by the fee at the requested rate
+    /// (`ceil(fee · 1000 / rate)`) — BDK prices the fee over the estimated
+    /// satisfied weight, which an unsigned tx cannot report directly.
+    pub vsize_vbytes: u64,
+    /// Change returned to the wallet's internal keychain. 0 for drain builds.
+    pub change_sats: u64,
+    /// Max spendable to this destination at this rate (drain dry-run), so the
+    /// UI keeps the Max button and the insufficient-funds boundary in sync.
+    pub max_amount_sats: u64,
+}
+
 /// Outcome of a successful send: the transaction is signed and broadcast.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -212,15 +235,35 @@ fn map_send_create_tx_error(e: bdk_wallet::error::CreateTxError) -> SendError {
     }
 }
 
-/// Builds the send PSBT — shared by the send and (Phase 6.3) estimate paths so
-/// an estimate can only diverge from the send by UTXO drift, never by
+/// First-unused internal (change) script **without revealing or marking** —
+/// mirrors BDK's own change selection (lowest revealed-unused, else peek the
+/// next index). Estimate builds route change here explicitly: BDK's default
+/// change path reveals + `mark_used`s an internal index per build, which would
+/// burn one gap-limit slot per debounced keystroke.
+fn peek_change_spk(wallet: &bdk_wallet::Wallet) -> bdk_wallet::bitcoin::ScriptBuf {
+    let keychain = bdk_wallet::KeychainKind::Internal;
+    if let Some((_, spk)) = wallet.spk_index().unused_keychain_spks(keychain).next() {
+        return spk;
+    }
+    let next = wallet.next_derivation_index(keychain);
+    wallet.peek_address(keychain, next).address.script_pubkey()
+}
+
+/// Builds the send PSBT — shared by the send and estimate (P6.3) paths so an
+/// estimate can only diverge from the send by UTXO drift, never by
 /// construction. Inputs keep the BDK default sequence (signals BIP-125), so
 /// every send is listed and RBF-bumpable via the Phase 5 surfaces.
+///
+/// `estimate_change_spk`: `Some` on the estimate path — an explicit, peeked
+/// change script so the dry-run stays keychain-neutral; `None` on the real
+/// send, where BDK reveals + marks the change index (it will genuinely be
+/// used once the tx broadcasts).
 fn build_send_psbt(
     wallet: &mut bdk_wallet::Wallet,
     dest: &bdk_wallet::bitcoin::Address,
     input: &SendInput,
     rate: FeeRate,
+    estimate_change_spk: Option<&bdk_wallet::bitcoin::ScriptBuf>,
 ) -> Result<bdk_wallet::bitcoin::Psbt, SendError> {
     let mut builder = wallet.build_tx();
     if input.drain_wallet {
@@ -231,14 +274,99 @@ fn build_send_psbt(
             dest.script_pubkey(),
             bdk_wallet::bitcoin::Amount::from_sat(input.amount_sats),
         );
+        if let Some(spk) = estimate_change_spk {
+            // Excess routes here instead of BDK deriving (and consuming) an
+            // internal index — same script BDK would have picked.
+            builder.drain_to(spk.clone());
+        }
     }
     builder.fee_rate(rate.to_bdk());
     builder.finish().map_err(map_send_create_tx_error)
 }
 
+/// Reads the fee, change, and destination amount out of a freshly built,
+/// unsigned send PSBT. Shared by the estimate path for both the requested
+/// build and the Max (drain) dry-run.
+fn read_unsigned_send(
+    wallet: &bdk_wallet::Wallet,
+    psbt: &bdk_wallet::bitcoin::Psbt,
+    dest_spk: &bdk_wallet::bitcoin::ScriptBuf,
+) -> Result<(u64, u64, u64), SendError> {
+    let tx = &psbt.unsigned_tx;
+    let fee_sats = wallet
+        .calculate_fee(tx)
+        .map(|fee| fee.to_sat())
+        .map_err(|e| SendError::BuildFailed {
+            message: format!("estimate fee unknown: {e}"),
+        })?;
+    let change_sats = tx
+        .output
+        .iter()
+        .filter(|out| wallet.is_mine(out.script_pubkey.clone()))
+        .map(|out| out.value.to_sat())
+        .sum::<u64>();
+    let amount_sats = tx
+        .output
+        .iter()
+        .find(|out| &out.script_pubkey == dest_spk)
+        .map(|out| out.value.to_sat())
+        .unwrap_or(0);
+    Ok((fee_sats, change_sats, amount_sats))
+}
+
 // ── Use-case ────────────────────────────────────────────────────────────────
 
 impl WalletService {
+    /// Dry-run build for the Send form (P6.3): fee preview, **Max** boundary,
+    /// and the PRD §4.3.5.2 insufficient-funds check before Confirm.
+    ///
+    /// Read-only over the last-synced wallet state — wallet lock only; **no
+    /// signing, no network I/O, no keychain mutation** (BDK's change selection
+    /// is peek-based, so repeated estimates never advance the internal index).
+    /// No signer is required: watch-only sessions may preview too. The same
+    /// `build_send_psbt` backs the real send, so an estimate can only diverge
+    /// from the send by UTXO drift, never by construction.
+    pub async fn estimate_send(
+        &self,
+        input: &SendInput,
+        rate: FeeRate,
+    ) -> Result<SendEstimateDto, SendError> {
+        let dest = parse_send_destination(&input.address, self.network())?;
+        if !input.drain_wallet && input.amount_sats == 0 {
+            return Err(SendError::InvalidAmount);
+        }
+        let dest_spk = dest.script_pubkey();
+
+        let mut wallet = self.wallet.lock().await;
+        let change_spk = peek_change_spk(&wallet);
+
+        // Requested build — recipient + change, or drain.
+        let psbt = build_send_psbt(&mut wallet, &dest, input, rate, Some(&change_spk))?;
+        let (fee_sats, change_sats, amount_sats) = read_unsigned_send(&wallet, &psbt, &dest_spk)?;
+
+        // Max boundary: a drain dry-run to the same destination at the same
+        // rate. The requested build already IS the drain when drain_wallet.
+        let max_amount_sats = if input.drain_wallet {
+            amount_sats
+        } else {
+            let drain_input = SendInput {
+                drain_wallet: true,
+                ..input.clone()
+            };
+            let drain_psbt = build_send_psbt(&mut wallet, &dest, &drain_input, rate, None)?;
+            read_unsigned_send(&wallet, &drain_psbt, &dest_spk)?.2
+        };
+
+        Ok(SendEstimateDto {
+            amount_sats,
+            fee_rate_sat_per_kvb: rate.sat_per_kvb(),
+            vsize_vbytes: fee_sats.saturating_mul(1_000).div_ceil(rate.sat_per_kvb()),
+            fee_sats,
+            change_sats,
+            max_amount_sats,
+        })
+    }
+
     /// Sends BTC from the Admin Wallet (PRD §4.3.5): build → sign through the
     /// session [`PsbtSigner`](crate::application::psbt_signer::PsbtSigner) port
     /// → broadcast Electrum-first with node fallback → result with txid.
@@ -273,7 +401,7 @@ impl WalletService {
         // 5. Build.
         let psbt = {
             let mut wallet = self.wallet.lock().await;
-            build_send_psbt(&mut wallet, &dest, input, rate)?
+            build_send_psbt(&mut wallet, &dest, input, rate, None)?
         };
 
         // 6. Sign through the session signer port (same flow as commit funding, R1.1).
@@ -537,6 +665,206 @@ mod tests {
         let svc = WalletService::new_watch_only(funded_wallet(), test_node_config());
         let dto = svc.validate_send_address(&dest_p2wpkh_regtest());
         assert!(dto.is_valid);
+    }
+
+    // ── estimate_send (P6.3) ────────────────────────────────────────────────
+
+    fn estimate_input(amount_sats: u64) -> SendInput {
+        send_input(&dest_p2wpkh_regtest(), amount_sats)
+    }
+
+    #[tokio::test]
+    async fn estimate_normal_send_returns_fee_change_and_max() {
+        let svc = signing_service(funded_wallet());
+
+        let est = svc
+            .estimate_send(&estimate_input(30_000), rate_5_sat_vb())
+            .await
+            .expect("estimate must succeed");
+
+        assert_eq!(est.amount_sats, 30_000);
+        assert!(est.fee_sats > 0, "estimate must price a fee");
+        assert_eq!(
+            est.change_sats,
+            100_000 - 30_000 - est.fee_sats,
+            "change = inputs − amount − fee on the single-UTXO fixture"
+        );
+        assert!(
+            est.max_amount_sats > 30_000 && est.max_amount_sats < 100_000,
+            "max ({}) must sit between the amount and the funding",
+            est.max_amount_sats
+        );
+        assert_eq!(est.fee_rate_sat_per_kvb, 5_000);
+        assert!(est.vsize_vbytes > 0);
+    }
+
+    #[tokio::test]
+    async fn estimate_is_side_effect_free() {
+        let svc = signing_service(funded_wallet());
+        let index_before = svc
+            .wallet
+            .lock()
+            .await
+            .next_derivation_index(KeychainKind::Internal);
+
+        let first = svc
+            .estimate_send(&estimate_input(30_000), rate_5_sat_vb())
+            .await
+            .expect("first estimate ok");
+        let second = svc
+            .estimate_send(&estimate_input(30_000), rate_5_sat_vb())
+            .await
+            .expect("second estimate ok");
+
+        assert_eq!(first, second, "consecutive estimates must be identical");
+        let index_after = svc
+            .wallet
+            .lock()
+            .await
+            .next_derivation_index(KeychainKind::Internal);
+        assert_eq!(
+            index_before, index_after,
+            "estimates must not advance the internal keychain index"
+        );
+        let balance = svc.get_balance().await.expect("balance ok");
+        assert_eq!(balance.total_sats, 100_000, "estimates must not move funds");
+    }
+
+    #[tokio::test]
+    async fn estimate_drain_returns_max_and_zero_change() {
+        let svc = signing_service(funded_wallet());
+        let input = SendInput {
+            drain_wallet: true,
+            ..estimate_input(0)
+        };
+
+        let est = svc
+            .estimate_send(&input, rate_5_sat_vb())
+            .await
+            .expect("drain estimate must succeed");
+
+        assert_eq!(est.change_sats, 0, "drain builds produce no change");
+        assert_eq!(
+            est.amount_sats, est.max_amount_sats,
+            "the drain amount IS the max"
+        );
+        assert_eq!(est.amount_sats + est.fee_sats, 100_000);
+    }
+
+    #[tokio::test]
+    async fn max_then_send_drain_spends_everything() {
+        let svc = signing_service(funded_wallet());
+        let drain = SendInput {
+            drain_wallet: true,
+            ..estimate_input(0)
+        };
+        let est = svc
+            .estimate_send(&drain, rate_5_sat_vb())
+            .await
+            .expect("drain estimate ok");
+
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+        let result = svc
+            .send_to_address(&drain, rate_5_sat_vb(), &mock_chain(&[Arc::clone(&mock)]))
+            .await
+            .expect("drain send must succeed");
+
+        assert_eq!(
+            result.amount_sats, est.max_amount_sats,
+            "the send must realize exactly the estimated max"
+        );
+        assert_eq!(result.fee_sats, est.fee_sats, "estimate/send fee parity");
+        assert_eq!(result.change_sats, 0);
+    }
+
+    #[tokio::test]
+    async fn estimate_amount_over_balance_returns_insufficient_funds() {
+        let svc = signing_service(funded_wallet());
+
+        let result = svc
+            .estimate_send(&estimate_input(200_000), rate_5_sat_vb())
+            .await;
+
+        assert!(
+            matches!(result, Err(SendError::InsufficientFunds { .. })),
+            "got: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn max_recomputes_when_rate_changes() {
+        let svc = signing_service(funded_wallet());
+        let low = svc
+            .estimate_send(&estimate_input(30_000), FeeRate::new(1_000, 1_000).unwrap())
+            .await
+            .expect("low-rate estimate ok");
+        let high = svc
+            .estimate_send(
+                &estimate_input(30_000),
+                FeeRate::new(50_000, 1_000).unwrap(),
+            )
+            .await
+            .expect("high-rate estimate ok");
+
+        assert!(
+            high.max_amount_sats < low.max_amount_sats,
+            "a higher rate must strictly shrink the max ({} !< {})",
+            high.max_amount_sats,
+            low.max_amount_sats
+        );
+    }
+
+    #[tokio::test]
+    async fn estimate_send_consistency_fee_parity() {
+        let svc = signing_service(funded_wallet());
+        let input = estimate_input(30_000);
+        let est = svc
+            .estimate_send(&input, rate_5_sat_vb())
+            .await
+            .expect("estimate ok");
+
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+        let result = svc
+            .send_to_address(&input, rate_5_sat_vb(), &mock_chain(&[Arc::clone(&mock)]))
+            .await
+            .expect("send ok");
+
+        assert_eq!(
+            result.fee_sats, est.fee_sats,
+            "send must realize the estimated fee exactly (same builder, same state)"
+        );
+        assert_eq!(result.change_sats, est.change_sats);
+    }
+
+    #[tokio::test]
+    async fn estimate_works_on_watch_only_sessions() {
+        // Read-only dry run — no signer required (only Confirm needs one).
+        let svc = WalletService::new_watch_only(funded_wallet(), test_node_config());
+
+        let est = svc
+            .estimate_send(&estimate_input(30_000), rate_5_sat_vb())
+            .await
+            .expect("watch-only estimate must succeed");
+        assert!(est.fee_sats > 0);
+    }
+
+    #[test]
+    fn estimate_dto_serializes_camel_case() {
+        let dto = SendEstimateDto {
+            amount_sats: 30_000,
+            fee_sats: 705,
+            fee_rate_sat_per_kvb: 5_000,
+            vsize_vbytes: 141,
+            change_sats: 69_295,
+            max_amount_sats: 99_295,
+        };
+        let json = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(json["amountSats"], 30_000);
+        assert_eq!(json["feeSats"], 705);
+        assert_eq!(json["feeRateSatPerKvb"], 5_000);
+        assert_eq!(json["vsizeVbytes"], 141);
+        assert_eq!(json["changeSats"], 69_295);
+        assert_eq!(json["maxAmountSats"], 99_295);
     }
 
     // ── send_to_address — guards ────────────────────────────────────────────

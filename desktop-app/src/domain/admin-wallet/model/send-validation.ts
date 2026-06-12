@@ -18,17 +18,21 @@ export type SendConfirmGate = {
 	/** True only when the backend validated the destination (P6.2, §4.3.5.1). */
 	isDestinationValid: boolean
 	amountSats: number | null
+	/** Max mode (drain) — the amount field tracks the boundary, not the user. */
+	isMax: boolean
 	isFeeReady: boolean
+	/** True only when the dry-run estimate succeeded (P6.3, §4.3.5.2). */
+	isEstimateReady: boolean
 	isSubmitting: boolean
 }
 
 /**
- * Confirm gate (PRD §4.3.5.5): backend-validated destination, positive
- * amount, fee presets loaded, not mid-submit. P6.3 adds estimate readiness;
- * the backend rejects independently either way.
+ * Confirm gate (PRD §4.3.5.5): backend-validated destination, positive amount
+ * (or Max/drain mode), fee presets loaded, dry-run estimate succeeded — an
+ * insufficient-funds or below-dust estimate keeps Confirm disabled — and not
+ * mid-submit. The backend rejects independently either way.
  */
 export function canConfirmSend(gate: SendConfirmGate): boolean {
-	return (
-		gate.isDestinationValid && gate.amountSats !== null && gate.amountSats > 0 && gate.isFeeReady && !gate.isSubmitting
-	)
+	const hasAmount = gate.isMax || (gate.amountSats !== null && gate.amountSats > 0)
+	return gate.isDestinationValid && hasAmount && gate.isFeeReady && gate.isEstimateReady && !gate.isSubmitting
 }

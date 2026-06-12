@@ -8,4 +8,5 @@ export type {
 	BumpMethodDto,
 	SendInput,
 	SendResultDto,
+	SendEstimateDto,
 } from '@/api/admin-wallet'
