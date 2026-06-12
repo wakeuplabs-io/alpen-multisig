@@ -2,7 +2,7 @@ use bdk_wallet::KeychainKind;
 use desktop_app::application::pending_reveals::{pending_commit_to_reveal, PendingReveals};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
 use desktop_app::application::wallet_send::{
-    send_error_code, SendAddressValidationDto, SendError, SendInput, SendResultDto,
+    send_error_code, SendAddressValidationDto, SendError, SendEstimateDto, SendInput, SendResultDto,
 };
 use desktop_app::application::wallet_service::{
     error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
@@ -365,6 +365,29 @@ pub async fn admin_wallet_validate_send_address(
     Ok(svc.validate_send_address(&address))
 }
 
+/// Dry-run estimate for the Send form (Phase 6 P6.3, PRD §4.3.5.2/§4.3.5.3).
+///
+/// Validates the rate, then builds the requested transaction (and a drain
+/// dry-run for the Max boundary) over the last-synced wallet state — never
+/// signed, never broadcast, no pre-sync (it runs per debounced keystroke; the
+/// panel's sync loop keeps state fresh). `InsufficientFunds` /
+/// `AmountBelowDust` here are how the form learns the §4.3.5.2 boundary
+/// before Confirm. No signer required — watch-only sessions may preview.
+#[tauri::command]
+pub async fn admin_wallet_estimate_send(
+    input: SendInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<SendEstimateDto, String> {
+    let rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| serialize_send_error(&SendError::from(e)))?;
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    svc.estimate_send(&input, rate)
+        .await
+        .map_err(|e| serialize_send_error(&e))
+}
+
 /// Sends BTC from the Admin Wallet (Phase 6, PRD §4.3.5).
 ///
 /// Validates the fee rate, syncs best-effort so the UTXO view is fresh, then
@@ -662,7 +685,11 @@ mod tests {
     #[test]
     fn phase6_commands_registered_in_both_handler_sets() {
         let invoke_src = include_str!("invoke.rs");
-        for command in ["admin_wallet_send", "admin_wallet_validate_send_address"] {
+        for command in [
+            "admin_wallet_send",
+            "admin_wallet_validate_send_address",
+            "admin_wallet_estimate_send",
+        ] {
             let occurrences = invoke_src
                 .split_whitespace()
                 .filter(|tok| tok.trim_matches(',') == format!("super::admin_wallet::{command}"))

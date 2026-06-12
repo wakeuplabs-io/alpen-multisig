@@ -21,3 +21,6 @@ export function formatSendDestinationError(reason: SendAddressInvalidReason, exp
 
 /** Neutral copy when the validation IPC itself is unreachable (blocks Confirm). */
 export const SEND_DESTINATION_UNAVAILABLE_COPY = 'Could not validate the address — check the wallet session.'
+
+/** PRD §4.3.5.2 exact copy for the over-balance amount error. */
+export const SEND_INSUFFICIENT_FUNDS_COPY = 'Insufficient funds'

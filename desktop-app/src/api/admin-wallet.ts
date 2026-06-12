@@ -214,6 +214,25 @@ export function validateSendAddress(address: string): Promise<ApiResult<SendAddr
 	return tauriCall<SendAddressValidationDto>('admin_wallet_validate_send_address', { address })
 }
 
+// Phase 6 P6.3 (PRD §4.3.5.2/§4.3.5.3): dry-run estimate — never signed, never
+// broadcast. Powers the fee preview, the Max button (drainWallet: true), and
+// the "Insufficient funds" boundary before Confirm.
+export type SendEstimateDto = {
+	// Effective amount: the input amount, or the computed max for drain runs.
+	amountSats: number
+	feeSats: number
+	feeRateSatPerKvb: number
+	vsizeVbytes: number
+	// Change returned to the wallet's internal keychain. 0 for drain builds.
+	changeSats: number
+	// Max spendable to this destination at this rate (drain dry-run).
+	maxAmountSats: number
+}
+
+export function estimateSend(input: SendInput): Promise<ApiResult<SendEstimateDto>> {
+	return tauriCall<SendEstimateDto>('admin_wallet_estimate_send', { input })
+}
+
 export type WalletSessionInitInput = {
 	mnemonic: string
 	network?: string
