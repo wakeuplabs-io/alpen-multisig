@@ -7,7 +7,7 @@ import {
 	SEND_INSUFFICIENT_FUNDS_COPY,
 	formatSendDestinationError,
 } from '@/domain/admin-wallet/model/format-send-error'
-import { canConfirmSend } from '@/domain/admin-wallet/model/send-validation'
+import { amountInputError, canConfirmSend } from '@/domain/admin-wallet/model/send-validation'
 import { formatSatPerVb } from '@/domain/fee-selection/model/fee-rate'
 import { SendFeeRateControl } from './send-fee-rate-control'
 import { SendResultCard } from './send-result-card'
@@ -91,13 +91,15 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 			: destination.status === 'unavailable'
 				? SEND_DESTINATION_UNAVAILABLE_COPY
 				: null
-	// §4.3.5.2: boundary failures from the dry-run surface under the amount.
+	// Input-shape errors first (no estimate runs for them), then §4.3.5.2
+	// boundary failures from the dry-run.
 	const amountError =
-		estimate.status === 'error'
+		amountInputError(amountInput) ??
+		(estimate.status === 'error'
 			? estimate.error.type === 'InsufficientFunds'
 				? SEND_INSUFFICIENT_FUNDS_COPY
 				: formatAdminWalletError(estimate.error).body
-			: null
+			: null)
 	const canApplyMax = destination.status === 'valid' && fee.status === 'ready' && !isSubmitting
 	const canConfirm = canConfirmSend({
 		isDestinationValid: destination.status === 'valid',

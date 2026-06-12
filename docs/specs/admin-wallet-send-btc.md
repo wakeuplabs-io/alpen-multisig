@@ -4,7 +4,7 @@
 **Plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md) Phase 6 (Send BTC happy path).
 **Compliance:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) §4.3.5 — **FAIL → PASS (regtest / dev mnemonic)** on completion of this phase; HW path stays **FAIL** until Phase 8.
 **Implementation spec:** [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) — full technical design (types, IPC contracts, error codes, BDK build semantics, UI state machines, test plan) for slices P6.1–P6.4.
-**Status:** Designed — roadmap (this document) + implementation spec ready; slices pending delivery.
+**Status:** **Delivered** ✅ — P6.1 PR [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), P6.2 PR [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), P6.3 PR [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), P6.4 P64PR. §4.3.5 **PASS (regtest / dev mnemonic)**.
 
 ---
 

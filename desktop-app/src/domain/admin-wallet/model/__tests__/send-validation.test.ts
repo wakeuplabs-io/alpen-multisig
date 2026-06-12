@@ -1,7 +1,7 @@
 // send-validation — pure model tests (Phase 6, PRD §4.3.5.2 / §4.3.5.5).
 
 import assert from 'node:assert/strict'
-import { canConfirmSend, parseAmountSats } from '../send-validation.ts'
+import { amountInputError, canConfirmSend, parseAmountSats } from '../send-validation.ts'
 
 // ── parseAmountSats ──────────────────────────────────────────────────────────
 
@@ -58,4 +58,16 @@ assert.equal(
 )
 
 console.log('canConfirmSend OK')
+
+// ── amountInputError (P6.4, inline copy for non-submittable amounts) ─────────
+
+assert.equal(amountInputError(''), null, 'empty field stays silent (gate handles it)')
+assert.equal(amountInputError('   '), null, 'whitespace-only stays silent')
+assert.equal(amountInputError('30000'), null, 'valid amount has no error')
+assert.equal(amountInputError('0'), 'Amount must be greater than zero.')
+assert.equal(amountInputError('abc'), 'Enter a whole number of sats.')
+assert.equal(amountInputError('1.5'), 'Enter a whole number of sats.')
+assert.equal(amountInputError('-1'), 'Enter a whole number of sats.')
+
+console.log('amountInputError OK')
 console.log('send-validation.test.ts PASS')
