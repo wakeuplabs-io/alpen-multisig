@@ -25,7 +25,9 @@ import {
 	triggerWalletSync,
 	waitForWalletSyncDone,
 	readBalanceText,
+	waitForBalanceIncrease,
 	waitForUnconfirmedBalance,
+	waitForNoUnconfirmedBalance,
 } from '../helpers/wallet-panel.mjs'
 
 const FUND_AMOUNT_BTC = '0.01'
@@ -45,16 +47,21 @@ describe('Alpen Multisig — Fee-bump (PRD §4.3.3)', () => {
 		await openWalletPanel()
 
 		const receiveAddress = await readReceiveAddress()
+		const initialBalance = await readBalanceText()
+
 		fundAddressViaFaucet(receiveAddress, FUND_AMOUNT_BTC)
 		mineRegtestBlocks(2)
 
 		await triggerWalletSync()
 		await waitForWalletSyncDone()
 
-		// Verify balance increased
+		// Close and reopen panel to trigger balance re-fetch
 		await closeWalletPanel()
 		await browser.pause(500)
 		await openWalletPanel()
+
+		// Wait for balance to increase (this is the key - wait for actual increase)
+		await waitForBalanceIncrease(initialBalance, 30000)
 
 		const balanceAfterFund = await readBalanceText()
 		expect(parseFloat(balanceAfterFund)).toBeGreaterThan(0)
