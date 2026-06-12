@@ -216,15 +216,21 @@ export const nodeConfigSchema = z.object({
 		.string()
 		.nullish()
 		.transform((v) => v ?? undefined),
+	customOrchestratorUrl: z
+		.string()
+		.nullish()
+		.transform((v) => v ?? undefined),
 })
 
 export const localNodeStatusSchema = z.object({
 	strataReachable: z.boolean(),
 	btcReachable: z.boolean(),
 	electrumReachable: z.boolean(),
+	orchestratorReachable: z.boolean(),
 	strataUrl: z.string(),
 	btcUrl: z.string(),
 	electrumUrl: z.string(),
+	orchestratorUrl: z.string(),
 })
 
 const feePresetSchema = z.object({

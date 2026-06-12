@@ -7,7 +7,7 @@ import {
 	buildSequencerKeyUpdateHex,
 	buildVkUpdateHex,
 } from '@/api/action-builder'
-import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
@@ -133,7 +133,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	useEffect(() => {
 		let cancelled = false
 		setIsLoadingSeqNo(true)
-		getNextSeqNo({ baseUrl: ORCHESTRATOR_BASE_URL }).then((result) => {
+		getNextSeqNo({ baseUrl: getOrchestratorBaseUrl() }).then((result) => {
 			if (cancelled) return
 			setIsLoadingSeqNo(false)
 			if (result.ok) setNextSeqNo(result.data)
@@ -196,7 +196,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			const sig = await adapter.signSighash(sighashResult.data.sighashHex, { seqno: seqNo, actionHex })
 
 			const createResult = await createProposal({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				seqNo,
 				actionHex,
 				signerPubkey: sig.publicKeyHex,

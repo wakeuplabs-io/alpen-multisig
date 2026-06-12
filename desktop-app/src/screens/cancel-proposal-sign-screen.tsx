@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { buildCancelActionHex } from '@/api/action-builder'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { orchestratorAuthGetSession } from '@/api/orchestrator-auth'
 import {
 	approveProposal,
@@ -75,7 +75,7 @@ export function CancelProposalSignScreen() {
 				if (mounted) setSignerPubkey(pubkey)
 
 				// Fetch the parent (target) proposal
-				const parentRes = await getProposalByActionId({ baseUrl: ORCHESTRATOR_BASE_URL, actionId })
+				const parentRes = await getProposalByActionId({ baseUrl: getOrchestratorBaseUrl(), actionId })
 				if (!parentRes.ok) throw new Error(parentRes.error)
 				const parent = parentRes.data
 				if (mounted) setParentProposal(parent)
@@ -83,7 +83,7 @@ export function CancelProposalSignScreen() {
 				if (parent.cancelProposal !== null) {
 					// Approve flow: cancel proposal already exists, fetch it for actionHex + seqNo
 					const cancelRes = await getProposalByActionId({
-						baseUrl: ORCHESTRATOR_BASE_URL,
+						baseUrl: getOrchestratorBaseUrl(),
 						actionId: parent.cancelProposal.actionId,
 					})
 					if (!cancelRes.ok) throw new Error(cancelRes.error)
@@ -105,7 +105,7 @@ export function CancelProposalSignScreen() {
 					}
 				} else {
 					// Initiate flow: build the cancel action hex from the target proposal
-					const seqNoRes = await getNextSeqNo({ baseUrl: ORCHESTRATOR_BASE_URL })
+					const seqNoRes = await getNextSeqNo({ baseUrl: getOrchestratorBaseUrl() })
 					if (!seqNoRes.ok) throw new Error(seqNoRes.error)
 					const nextSeqNo = seqNoRes.data
 
@@ -166,7 +166,7 @@ export function CancelProposalSignScreen() {
 
 			if (flow === 'initiate') {
 				const res = await createCancelProposal({
-					baseUrl: ORCHESTRATOR_BASE_URL,
+					baseUrl: getOrchestratorBaseUrl(),
 					targetActionId: actionId!,
 					seqNo: cancelSeqNo,
 					actionHex: cancelActionHex,
@@ -177,7 +177,7 @@ export function CancelProposalSignScreen() {
 			} else {
 				if (!cancelActionId) throw new Error('Cancel proposal action ID is missing.')
 				const res = await approveProposal({
-					baseUrl: ORCHESTRATOR_BASE_URL,
+					baseUrl: getOrchestratorBaseUrl(),
 					actionId: cancelActionId,
 					signerPubkey,
 					signatureHex: signed.signatureHex,

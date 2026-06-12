@@ -17,6 +17,9 @@ pub struct NodeConfigDto {
     /// without the field deserializing.
     #[serde(default)]
     pub custom_electrum_url: Option<String>,
+    /// Orchestrator backend URL override (frontend-only resolution).
+    #[serde(default)]
+    pub custom_orchestrator_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -25,9 +28,11 @@ pub struct LocalNodeStatusDto {
     pub strata_reachable: bool,
     pub btc_reachable: bool,
     pub electrum_reachable: bool,
+    pub orchestrator_reachable: bool,
     pub strata_url: String,
     pub btc_url: String,
     pub electrum_url: String,
+    pub orchestrator_url: String,
 }
 
 fn mode_to_str(mode: &ConnectionMode) -> &'static str {
@@ -60,6 +65,7 @@ pub async fn get_node_config(state: State<'_, NodeConfigState>) -> Result<NodeCo
         custom_btc_rpc_user: cfg.custom_btc_rpc_user,
         custom_btc_rpc_pass: cfg.custom_btc_rpc_pass,
         custom_electrum_url: cfg.custom_electrum_url,
+        custom_orchestrator_url: cfg.custom_orchestrator_url,
     })
 }
 
@@ -76,6 +82,7 @@ pub async fn save_node_config(
         custom_btc_rpc_user: config.custom_btc_rpc_user,
         custom_btc_rpc_pass: config.custom_btc_rpc_pass,
         custom_electrum_url: config.custom_electrum_url,
+        custom_orchestrator_url: config.custom_orchestrator_url,
     };
     node_config_store::save_node_config(&app, &new_config)?;
     let mut guard = state.0.write().map_err(|e| format!("lock error: {e}"))?;
@@ -84,7 +91,10 @@ pub async fn save_node_config(
 }
 
 #[tauri::command]
-pub async fn check_local_node(config: NodeConfigDto) -> Result<LocalNodeStatusDto, String> {
+pub async fn check_local_node(
+    config: NodeConfigDto,
+    orchestrator_url: String,
+) -> Result<LocalNodeStatusDto, String> {
     let cfg = NodeConfig {
         mode: mode_from_str(&config.mode),
         custom_strata_rpc_url: config.custom_strata_rpc_url,
@@ -92,6 +102,7 @@ pub async fn check_local_node(config: NodeConfigDto) -> Result<LocalNodeStatusDt
         custom_btc_rpc_user: config.custom_btc_rpc_user,
         custom_btc_rpc_pass: config.custom_btc_rpc_pass,
         custom_electrum_url: config.custom_electrum_url,
+        custom_orchestrator_url: config.custom_orchestrator_url,
     };
 
     let client = reqwest::Client::builder()
@@ -115,12 +126,21 @@ pub async fn check_local_node(config: NodeConfigDto) -> Result<LocalNodeStatusDt
     .await
     .is_ok_and(|r| r.is_ok());
 
+    let orchestrator_health_url = format!("{}/health", orchestrator_url.trim_end_matches('/'));
+    let orchestrator_reachable = client
+        .get(&orchestrator_health_url)
+        .send()
+        .await
+        .is_ok_and(|res| res.status().is_success());
+
     Ok(LocalNodeStatusDto {
         strata_reachable,
         btc_reachable,
         electrum_reachable,
+        orchestrator_reachable,
         strata_url: cfg.strata_rpc_url().to_string(),
         btc_url: cfg.btc_rpc_url().to_string(),
         electrum_url: cfg.electrum_url().to_string(),
+        orchestrator_url,
     })
 }

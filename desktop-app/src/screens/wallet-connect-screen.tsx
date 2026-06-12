@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOutMutedIcon, LogOutRedIcon, SettingsGearIcon } from '@/assets/icons'
+import { LogOutMutedIcon, LogOutRedIcon } from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { NodeConfigModal } from '@/domain/node-config/components/node-config-modal'
+import { NetworkStatusPill } from '@/domain/node-config/components/network-status-pill'
 import { useNodeConfig } from '@/domain/node-config/hooks/use-node-config'
 
 const AUTHORITY_OPTIONS: AuthorityOption[] = [
@@ -212,21 +213,11 @@ export function WalletConnectScreen() {
 								Disconnect
 							</button>
 						) : null}
-						<button
-							type="button"
-							aria-label="Node connection settings"
+						<NetworkStatusPill
+							mode={nodeConfig?.mode ?? 'local'}
+							localNodeStatus={localNodeStatus}
 							onClick={() => setIsNodeConfigOpen(true)}
-							className={`relative inline-flex items-center justify-center rounded-lg border p-1.5 text-[#6b7280] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
-								localNodeUnreachable
-									? 'border-amber-300 text-amber-500 hover:text-amber-600'
-									: 'border-[#e5e7eb] bg-white'
-							}`}
-						>
-							<SettingsGearIcon width={14} height={14} className="text-current" />
-							{localNodeUnreachable && (
-								<span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-400" aria-hidden />
-							)}
-						</button>
+						/>
 					</>
 				}
 			>
