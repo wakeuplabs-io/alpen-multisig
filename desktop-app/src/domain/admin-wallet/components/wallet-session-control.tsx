@@ -67,6 +67,8 @@ export function WalletSessionControl({
 					expandedSection={panel.expandedSection}
 					onToggleAddresses={panel.onToggleAddresses}
 					onToggleTransactions={panel.onToggleTransactions}
+					onOpenSend={panel.onOpenSend}
+					onCloseSend={panel.onCloseSend}
 					syncStatus={panel.syncStatus}
 					isSyncRefreshing={panel.isSyncRefreshing}
 					syncError={panel.syncError}
