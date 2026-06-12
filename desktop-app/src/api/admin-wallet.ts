@@ -199,6 +199,21 @@ export function sendFromAdminWallet(input: SendInput): Promise<ApiResult<SendRes
 	return tauriCall<SendResultDto>('admin_wallet_send', { input })
 }
 
+// Phase 6 P6.2 (PRD §4.3.5.1): inline destination validation.
+export type SendAddressInvalidReason = 'invalid-address' | 'wrong-network'
+
+// Validation failures are a successful IPC result (form states, not faults);
+// the exact PRD copy is rendered from reason + expectedNetwork.
+export type SendAddressValidationDto = {
+	isValid: boolean
+	reason: SendAddressInvalidReason | null
+	expectedNetwork: string
+}
+
+export function validateSendAddress(address: string): Promise<ApiResult<SendAddressValidationDto>> {
+	return tauriCall<SendAddressValidationDto>('admin_wallet_validate_send_address', { address })
+}
+
 export type WalletSessionInitInput = {
 	mnemonic: string
 	network?: string

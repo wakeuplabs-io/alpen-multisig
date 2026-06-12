@@ -1,7 +1,9 @@
 use bdk_wallet::KeychainKind;
 use desktop_app::application::pending_reveals::{pending_commit_to_reveal, PendingReveals};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
-use desktop_app::application::wallet_send::{send_error_code, SendError, SendInput, SendResultDto};
+use desktop_app::application::wallet_send::{
+    send_error_code, SendAddressValidationDto, SendError, SendInput, SendResultDto,
+};
 use desktop_app::application::wallet_service::{
     error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
@@ -346,6 +348,23 @@ fn serialize_send_error(e: &SendError) -> String {
     serde_json::json!({ "type": send_error_code(e), "message": e.to_string() }).to_string()
 }
 
+/// Validates a Send destination against the session network (Phase 6 P6.2,
+/// PRD §4.3.5.1). Pure parse — no signer required (watch-only sessions can
+/// type addresses), no wallet lock, no network I/O. Validation failures are a
+/// **successful** result (form states, not faults); the frontend renders the
+/// exact PRD copy from `reason` + `expectedNetwork`. Errs only when no wallet
+/// session is active (tagged `Disabled`).
+#[tauri::command]
+pub async fn admin_wallet_validate_send_address(
+    address: String,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<SendAddressValidationDto, String> {
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    Ok(svc.validate_send_address(&address))
+}
+
 /// Sends BTC from the Admin Wallet (Phase 6, PRD §4.3.5).
 ///
 /// Validates the fee rate, syncs best-effort so the UTXO view is fresh, then
@@ -643,15 +662,16 @@ mod tests {
     #[test]
     fn phase6_commands_registered_in_both_handler_sets() {
         let invoke_src = include_str!("invoke.rs");
-        let command = "admin_wallet_send";
-        let occurrences = invoke_src
-            .split_whitespace()
-            .filter(|tok| tok.trim_matches(',') == format!("super::admin_wallet::{command}"))
-            .count();
-        assert_eq!(
-            occurrences, 2,
-            "{command} must appear in attach_production AND attach_with_dev_signing"
-        );
+        for command in ["admin_wallet_send", "admin_wallet_validate_send_address"] {
+            let occurrences = invoke_src
+                .split_whitespace()
+                .filter(|tok| tok.trim_matches(',') == format!("super::admin_wallet::{command}"))
+                .count();
+            assert_eq!(
+                occurrences, 2,
+                "{command} must appear in attach_production AND attach_with_dev_signing"
+            );
+        }
     }
 
     /// IPC contract: send errors serialize as the tagged `{ type, message }` shape.

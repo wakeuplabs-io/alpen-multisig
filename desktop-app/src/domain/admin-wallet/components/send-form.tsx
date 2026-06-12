@@ -1,8 +1,12 @@
-import { useState } from 'react'
 import { useSend } from '@/domain/admin-wallet/hooks/use-send'
+import { useSendForm } from '@/domain/admin-wallet/hooks/use-send-form'
 import { formatAdminWalletError } from '@/domain/admin-wallet/model/format-admin-wallet-error'
 import { formatBtcFromSats } from '@/domain/admin-wallet/model/format-btc-from-sats'
-import { canConfirmSend, parseAmountSats } from '@/domain/admin-wallet/model/send-validation'
+import {
+	SEND_DESTINATION_UNAVAILABLE_COPY,
+	formatSendDestinationError,
+} from '@/domain/admin-wallet/model/format-send-error'
+import { canConfirmSend } from '@/domain/admin-wallet/model/send-validation'
 import { formatSatPerVb } from '@/domain/fee-selection/model/fee-rate'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { SendResultCard } from './send-result-card'
@@ -17,17 +21,16 @@ export type SendFormProps = {
 }
 
 /**
- * Phase 6 (PRD §4.3.5) — Send BTC form, P6.1 walking skeleton: destination,
- * amount in sats, default "next block" (Fast) fee rate, Confirm → txid.
- * P6.2 adds inline destination validation, P6.3 the fee control + Max +
- * estimate, P6.4 the final confirm-gate contract.
+ * Phase 6 (PRD §4.3.5) — Send BTC form. P6.2: inline, backend-authoritative
+ * destination validation with the exact PRD §4.3.5.1 copy; Confirm gated on a
+ * validated destination. P6.3 adds the fee control + Max + estimate, P6.4 the
+ * final confirm-gate contract.
  *
  * On submit failure the field values are retained for retry or back-out
- * (PRD §4.3.5.5.1) — submission state lives in `useSend`, fields stay local.
+ * (PRD §4.3.5.5.1) — submission state lives in `useSend`, fields in `useSendForm`.
  */
 export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
-	const [address, setAddress] = useState('')
-	const [amountInput, setAmountInput] = useState('')
+	const { address, setAddress, destination, amountInput, setAmountInput, amountSats, resetFields } = useSendForm()
 	const feePresets = useFeePresets()
 	const { state, send, reset } = useSend()
 
@@ -48,8 +51,7 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 				result={state.result}
 				onDone={() => {
 					reset()
-					setAddress('')
-					setAmountInput('')
+					resetFields()
 					onAfterSend()
 					onBack()
 				}}
@@ -57,20 +59,25 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 		)
 	}
 
-	const amountSats = parseAmountSats(amountInput)
 	const isSubmitting = state.status === 'submitting'
 	// PRD §4.3.5.3: the default rate is the node's "next block" estimate — the Fast preset.
 	const fastRateSatPerKvb = feePresets.status === 'ready' ? feePresets.presets.fast.satPerKvb : null
+	const destinationError =
+		destination.status === 'invalid'
+			? formatSendDestinationError(destination.reason, destination.expectedNetwork)
+			: destination.status === 'unavailable'
+				? SEND_DESTINATION_UNAVAILABLE_COPY
+				: null
 	const canConfirm = canConfirmSend({
-		hasDestination: address.trim() !== '',
+		isDestinationValid: destination.status === 'valid',
 		amountSats,
 		isFeeReady: fastRateSatPerKvb !== null,
 		isSubmitting,
 	})
 
 	function handleConfirm() {
-		if (fastRateSatPerKvb === null || amountSats === null) return
-		void send({ address: address.trim(), amountSats, feeRateSatPerKvb: fastRateSatPerKvb })
+		if (fastRateSatPerKvb === null || amountSats === null || destination.status !== 'valid') return
+		void send({ address: destination.address, amountSats, feeRateSatPerKvb: fastRateSatPerKvb })
 	}
 
 	return (
@@ -88,9 +95,19 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 					value={address}
 					onChange={(e) => setAddress(e.target.value)}
 					disabled={isSubmitting}
+					aria-invalid={destinationError !== null}
 					data-testid="e2e-wallet-send-address-input"
-					className="mt-1 w-full rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 font-mono text-[12px] text-[#111827] transition focus:border-[#111827] focus:outline-none disabled:bg-[#f9fafb] disabled:text-[#9ca3af]"
+					className={`mt-1 w-full rounded-lg border bg-white px-2.5 py-2 font-mono text-[12px] text-[#111827] transition focus:outline-none disabled:bg-[#f9fafb] disabled:text-[#9ca3af] ${
+						destinationError !== null
+							? 'border-[#ef4444] focus:border-[#ef4444]'
+							: 'border-[#e5e7eb] focus:border-[#111827]'
+					}`}
 				/>
+				{destinationError !== null && (
+					<p className="m-0 mt-1 text-[12px] text-[#ef4444]" data-testid="e2e-wallet-send-address-error">
+						{destinationError}
+					</p>
+				)}
 			</div>
 
 			<div>

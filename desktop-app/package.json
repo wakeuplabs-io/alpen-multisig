@@ -37,6 +37,8 @@
     "test:model-bump-fee-rate": "tsx src/domain/admin-wallet/model/__tests__/bump-fee-rate.test.ts",
     "test:hooks-use-unconfirmed-txs": "tsx src/domain/admin-wallet/hooks/__tests__/use-unconfirmed-txs.test.ts",
     "test:hooks-use-send": "tsx src/domain/admin-wallet/hooks/__tests__/use-send.test.ts",
+    "test:hooks-use-send-form": "tsx src/domain/admin-wallet/hooks/__tests__/use-send-form.test.ts",
+    "test:model-format-send-error": "tsx src/domain/admin-wallet/model/__tests__/format-send-error.test.ts",
     "test:model-send-validation": "tsx src/domain/admin-wallet/model/__tests__/send-validation.test.ts",
     "test:architecture": "tsx src/domain/admin-wallet/architecture.test.ts",
     "preview": "vite preview",

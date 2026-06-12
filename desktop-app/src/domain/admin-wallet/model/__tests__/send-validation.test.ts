@@ -23,12 +23,16 @@ console.log('parseAmountSats OK')
 
 // ── canConfirmSend (P6.1 interim gate, PRD §4.3.5.5) ─────────────────────────
 
-const ready = { hasDestination: true, amountSats: 30_000, isFeeReady: true, isSubmitting: false }
+const ready = { isDestinationValid: true, amountSats: 30_000, isFeeReady: true, isSubmitting: false }
 
 assert.equal(canConfirmSend(ready), true, 'all-valid gate must enable Confirm')
 
 // Each gating dimension toggled independently must disable Confirm.
-assert.equal(canConfirmSend({ ...ready, hasDestination: false }), false, 'empty destination must disable')
+assert.equal(
+	canConfirmSend({ ...ready, isDestinationValid: false }),
+	false,
+	'unvalidated destination must disable (P6.2 — backend-authoritative, §4.3.5.1)',
+)
 assert.equal(canConfirmSend({ ...ready, amountSats: null }), false, 'unparseable amount must disable')
 assert.equal(canConfirmSend({ ...ready, amountSats: 0 }), false, 'zero amount must disable (§4.3.5.2)')
 assert.equal(canConfirmSend({ ...ready, isFeeReady: false }), false, 'missing fee presets must disable')
