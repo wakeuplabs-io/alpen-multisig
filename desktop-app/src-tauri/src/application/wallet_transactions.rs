@@ -142,7 +142,8 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
 // ── Fee arithmetic ──────────────────────────────────────────────────────────
 
 /// Fee rate in sat/kvB from an absolute fee and a vsize (ceiling, never underreports).
-fn fee_rate_sat_per_kvb(fee_sats: u64, vsize_vbytes: u64) -> u64 {
+/// Shared with the Phase 6 send path (`wallet_send.rs`).
+pub(crate) fn fee_rate_sat_per_kvb(fee_sats: u64, vsize_vbytes: u64) -> u64 {
     fee_sats.saturating_mul(1_000).div_ceil(vsize_vbytes.max(1))
 }
 
