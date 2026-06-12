@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-12 (Phase 6 Send **complete** ✅ — §4.3.5 PASS on the regtest/dev-mnemonic path, PRs #289/#292/#293/P64PR; §4.3.5.5.1 HW on-device → Phase 8)
+**Last updated:** 2026-06-12 (Phase 6 Send **complete** ✅ — §4.3.5 PASS on the regtest/dev-mnemonic path, PRs #289/#292/#293/[#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294); §4.3.5.5.1 HW on-device → Phase 8)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -82,7 +82,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
 | 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 7 / 8 |
 | 4.3.4.3 | Rotate after credit (one-time use) | **PASS** | R1.3, `next_receive_address` | BDK “used” on observe-in-tx |
-| 4.3.5 | Send BTC form + validations | **PASS** | Phase 6 — PRs [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), P64PR; specs [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) | **Regtest/testnet dev-mnemonic path.** HW on-device confirm → Phase 8; mainnet → Phase 10 |
+| 4.3.5 | Send BTC form + validations | **PASS** | Phase 6 — PRs [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), [#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294); specs [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) | **Regtest/testnet dev-mnemonic path.** HW on-device confirm → Phase 8; mainnet → Phase 10 |
 | 4.3.5.1 | Destination validation (standard types, network mismatch copy) | **PASS** | P6.2 (PR #292) — `admin_wallet_validate_send_address`, `format-send-error.ts` | Exact PRD copy byte-tested; backend-authoritative parse; debounced inline |
 | 4.3.5.2 | Amount valid / Max / "Insufficient funds" | **PASS** | P6.3 (PR #293) — `estimate_send` dry-run, Max = drain build | Boundary surfaced pre-Confirm; Max recomputes with fee rate |
 | 4.3.5.3 | Manual fee rate (0.1 s/vB, default next-block) | **PASS** | P6.3 (PR #293) — `SendFeeRateControl`, presets default **Fast** (1 block) | 0.1 step, max 10 000, bounds from DTO; custom entry |
@@ -127,7 +127,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
 | Wallet panel UI | R1.7 | **PASS** |
 | §4.3.3 | Phase 5 | **PARTIAL** (F-001 persistence ✅; E2E spec created; HW bump Phase 8) |
-| §4.3.5 | Phase 6 (PRs #289/#292/#293/P64PR) | **PASS** (regtest / dev mnemonic) ✅ — HW on-device Phase 8 |
+| §4.3.5 | Phase 6 (PRs #289/#292/#293/[#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294)) | **PASS** (regtest / dev mnemonic) ✅ — HW on-device Phase 8 |
 | US-H4 broadcast fee | Phase 4 | **PASS** ✅ |
 
 **Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Phase 5:** done ✅. **Phase 6:** done ✅ (Send — regtest/dev mnemonic). **Next:** Phase 7 (Admin ID UI + receive QR).
