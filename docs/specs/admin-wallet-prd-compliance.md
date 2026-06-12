@@ -76,7 +76,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----|------------------------|--------|------------------|-------|
 | 4.3.1 | Wallet total net + unconfirmed net visible | **PASS** | R1.5, `WalletBalance`, `do_sync` mempool | UX convention above; sync backend → R2 |
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
-| 4.3.3 | Unconfirmed tx list + fee bump | **PARTIAL** | Phase 5 — `wallet_transactions.rs`, `admin_wallet_list_unconfirmed_txs` / `admin_wallet_bump_fee` IPC, `UnconfirmedTxsList` panel section; [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) | Unconfirmed **sent** txs listed with fee/rate. Plain sends bump via **RBF** (BDK `build_fee_bump`); governance commits with a pending pre-signed reveal bump via **CPFP** — a child on the reveal's change lifts the commit+reveal package rate (RBF would invalidate the reveal, R1.0.1). Both sign via session `PsbtSigner`, Electrum-first broadcast. Watch-only sessions see the list; Bump disabled. **Preconditions for PASS:** (1) F-001 persistence fix merged (PendingReveals survives restart), (2) WebDriver E2E for fee-bump flow, (3) HW signing path for bump (Phase 8). Watch-only cannot bump with HW signing; Trezor Admin Wallet PSBT signing not implemented. |
+| 4.3.3 | Unconfirmed tx list + fee bump | **PARTIAL** | Phase 5 — `wallet_transactions.rs`, `admin_wallet_list_unconfirmed_txs` / `admin_wallet_bump_fee` IPC, `UnconfirmedTxsList` panel section; [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md); E2E spec: `desktop-app/e2e-webdriver/test/specs/fee-bump.e2e.js` | Unconfirmed **sent** txs listed with fee/rate. Plain sends bump via **RBF** (BDK `build_fee_bump`); governance commits with a pending pre-signed reveal bump via **CPFP** — a child on the reveal's change lifts the commit+reveal package rate (RBF would invalidate the reveal, R1.0.1). Both sign via session `PsbtSigner`, Electrum-first broadcast. Watch-only sessions see the list; Bump disabled. **Preconditions for PASS:** (1) F-001 persistence fix merged ✅, (2) WebDriver E2E for fee-bump flow (spec created; run `cd desktop-app/e2e-webdriver && npm run test:e2e:fee-bump`), (3) HW signing path for bump (Phase 8). Watch-only cannot bump with HW signing; Trezor Admin Wallet PSBT signing not implemented. |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
 | 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 7 |
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
@@ -126,7 +126,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | §4.3.2 | R1.6 | **PASS** |
 | §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
 | Wallet panel UI | R1.7 | **PASS** |
-| §4.3.3 | Phase 5 | **PARTIAL** (F-001 persistence ✅; E2E + HW bump pending) |
+| §4.3.3 | Phase 5 | **PARTIAL** (F-001 persistence ✅; E2E spec created; HW bump Phase 8) |
 | §4.3.5 | Phase 6 (spec [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md)) | **FAIL** → PASS on Phase 6 (mnemonic regtest); HW Phase 8 |
 | US-H4 broadcast fee | Phase 4 | **PASS** ✅ |
 
