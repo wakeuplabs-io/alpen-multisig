@@ -279,14 +279,16 @@ export function CreateProposalForm({
 							<div>
 								<p className="mb-3 text-sm font-medium text-[#111827]">Action type</p>
 								<div className="grid grid-cols-2 gap-3">
-									<ActionTypeCard
-										title="Verification key update"
-										description="Rotate the Alpen VK."
-										selected={actionType === 'vk_update'}
-										onClick={() =>
-											form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })
-										}
-									/>
+									{authority !== 'alpen_admin' && (
+										<ActionTypeCard
+											title="Verification key update"
+											description="Rotate the Alpen VK."
+											selected={actionType === 'vk_update'}
+											onClick={() =>
+												form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })
+											}
+										/>
+									)}
 									<ActionTypeCard
 										title="Signer update"
 										description="Add / remove signers or change threshold."
