@@ -58,7 +58,12 @@ export async function readReceiveAddress() {
 			return (await addrEl.getText()).trim()
 		} catch (err) {
 			lastError = err
-			if (!String(err?.message ?? err).toLowerCase().includes('stale')) throw err
+			if (
+				!String(err?.message ?? err)
+					.toLowerCase()
+					.includes('stale')
+			)
+				throw err
 			await browser.pause(500)
 		}
 	}
