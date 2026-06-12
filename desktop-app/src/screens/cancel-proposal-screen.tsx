@@ -1,5 +1,5 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
@@ -26,7 +26,7 @@ export function CancelProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
-	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
 	const currentBlockHeight = useBlockHeight()
 

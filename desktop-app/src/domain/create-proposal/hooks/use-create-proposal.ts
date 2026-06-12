@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
-import { buildAdminMultisigUpdateHex, buildOperatorSetUpdateHex, buildVkUpdateHex } from '@/api/action-builder'
-import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import {
+	buildAdminMultisigUpdateHex,
+	buildOperatorSetUpdateHex,
+	buildSequencerKeyUpdateHex,
+	buildVkUpdateHex,
+} from '@/api/action-builder'
+import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
@@ -79,6 +84,13 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			if (!hexResult.ok) throw new Error(hexResult.error)
 			return hexResult.data.actionHex
 		}
+		if (formData.actionType === 'sequencer_key_update') {
+			const hexResult = await buildSequencerKeyUpdateHex({
+				newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex),
+			})
+			if (!hexResult.ok) throw new Error(hexResult.error)
+			return hexResult.data.actionHex
+		}
 		if (formData.actionType === 'operator_set_update') {
 			const hexResult = await buildOperatorSetUpdateHex({
 				addOperatorKeys: formData.operatorsToAdd.map((r) => r.value.trim()).filter((k) => k.length > 0),
@@ -121,7 +133,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	useEffect(() => {
 		let cancelled = false
 		setIsLoadingSeqNo(true)
-		getNextSeqNo({ baseUrl: ORCHESTRATOR_BASE_URL }).then((result) => {
+		getNextSeqNo({ baseUrl: getOrchestratorBaseUrl() }).then((result) => {
 			if (cancelled) return
 			setIsLoadingSeqNo(false)
 			if (result.ok) setNextSeqNo(result.data)
@@ -184,7 +196,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			const sig = await adapter.signSighash(sighashResult.data.sighashHex, { seqno: seqNo, actionHex })
 
 			const createResult = await createProposal({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				seqNo,
 				actionHex,
 				signerPubkey: sig.publicKeyHex,

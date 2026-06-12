@@ -12,6 +12,7 @@ export type UnconfirmedTxRowProps = {
 function bumpTitle(row: UnconfirmedTxView, isWatchOnly: boolean): string | undefined {
 	if (isWatchOnly) return 'Hardware wallet required to sign'
 	if (row.bumpDisabledReason === 'not-rbf') return 'This transaction does not signal RBF'
+	if (row.bumpDisabledReason === 'cpfp-stats-unavailable') return 'Sync the wallet to load package fee data'
 	if (row.bumpMethod === 'cpfp') return 'Accelerates the commit+reveal package via a child transaction (CPFP)'
 	return undefined
 }
@@ -28,6 +29,13 @@ function StatusBadge({ row }: { row: UnconfirmedTxView }) {
 		return (
 			<span className="flex-none rounded-full bg-[#f3f4f6] px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-[#6b7280]">
 				Not replaceable
+			</span>
+		)
+	}
+	if (row.bumpDisabledReason === 'cpfp-stats-unavailable') {
+		return (
+			<span className="flex-none rounded-full bg-[#fef3c7] px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-[#92400e]">
+				Sync required
 			</span>
 		)
 	}

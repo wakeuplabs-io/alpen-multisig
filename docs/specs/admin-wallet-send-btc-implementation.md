@@ -49,16 +49,20 @@ React SendForm (walletSection=send)
   │
   └─ [Confirm] admin_wallet_send { input }
         0. FeeRate::new(rate, FALLBACK_MIN_RELAY_SAT_PER_KVB)  → InvalidFeeRate
+        1. best-effort pre-sync (warn on failure — broadcast layer is the authority;
+           sync lives in the IPC command, mirroring admin_wallet_bump_fee, so the
+           use-case stays free of network I/O except broadcast and its unit tests
+           stay hermetic)
         └─► WalletService::send_to_address
               1. signer present?            else ReadOnly
               2. signer.allowed_on(network)? else SignerNotAllowedOnNetwork
               3. parse + network-check destination → InvalidAddress | WrongNetwork
               4. amount guards               → InvalidAmount (zero w/o drain)
-              5. best-effort sync (warn on failure — broadcast layer is the authority)
-              6. build PSBT (recipient or drain)  → InsufficientFunds | AmountBelowDust | BuildFailed
-              7. sign_and_finalize_psbt (PsbtSigner port)  → SignFailed   [nothing broadcast]
-              8. broadcast_single_with_fallback (Electrum → node) → BroadcastFailed
-              9. best-effort post-sync; return SendResultDto { txid, … }
+              5. build PSBT (recipient or drain)  → InsufficientFunds | AmountBelowDust | BuildFailed
+              6. sign_and_finalize_psbt (PsbtSigner port)  → SignFailed   [nothing broadcast]
+              7. broadcast_single_with_fallback (Electrum → node) → BroadcastFailed
+              8. return SendResultDto { txid, … }
+        2. best-effort post-sync (panel converges: balance drops, pending list shows the send)
 ```
 
 Secrets never cross IPC. React only ever sees strings/numbers and typed error codes.
@@ -282,17 +286,20 @@ Normative properties (each backed by a test in §7):
 2. allowed_on(network) → false ⇒ Err(SignerNotAllowedOnNetwork)
 3. parse_send_destination(input.address, self.network())  ⇒ InvalidAddress | WrongNetwork
 4. !drain && amount_sats == 0                              ⇒ Err(InvalidAmount)
-5. self.sync().await — best-effort: on Err log tracing::warn! and continue (D8)
-6. build PSBT per §3.4                                     ⇒ InsufficientFunds | AmountBelowDust | BuildFailed
-7. sign_and_finalize_psbt(psbt)                            ⇒ SignFailed (nothing broadcast yet)
-8. fee = wallet.calculate_fee(&tx)  (all prevouts wallet-known ⇒ exact)
+5. build PSBT per §3.4                                     ⇒ InsufficientFunds | AmountBelowDust | BuildFailed
+6. sign_and_finalize_psbt(psbt)                            ⇒ SignFailed (nothing broadcast yet)
+7. fee = wallet.calculate_fee(&tx)  (all prevouts wallet-known ⇒ exact)
    tx_hex = consensus::encode::serialize_hex(&tx)
    broadcast_single_with_fallback(broadcasters, &tx_hex)   ⇒ BroadcastFailed (join all errors with "; ")
-9. best-effort post-sync (panel converges: balance drops, pending list shows the send)
-10. Ok(SendResultDto { txid: tx.compute_txid().to_string(), … })
+8. Ok(SendResultDto { txid: tx.compute_txid().to_string(), … })
 ```
 
-Step 7 failure is the **reject path** (§4.3.5.5.1): a signer error — including a future Phase 8 on-device rejection — returns `SignFailed` *before* any network contact. The UI keeps the filled form (§6.5). The `MnemonicPsbtSigner` cannot physically reject; the typed path is exercised in tests via a watch-only/`ReadOnly` session and by the existing `HwPsbtSigner` timeout mapping.
+The best-effort pre/post sync (D8) lives in the **IPC command**, not in
+`send_to_address` — exactly like `admin_wallet_bump_fee` — so the use-case
+performs no network I/O besides the broadcast and its unit tests stay hermetic
+(a live local electrs cannot contaminate fixture wallet state).
+
+Step 6 failure is the **reject path** (§4.3.5.5.1): a signer error — including a future Phase 8 on-device rejection — returns `SignFailed` *before* any network contact. The UI keeps the filled form (§6.5). The `MnemonicPsbtSigner` cannot physically reject; the typed path is exercised in tests via a watch-only/`ReadOnly` session and by the existing `HwPsbtSigner` timeout mapping.
 
 ### 3.6 IPC commands (`commands/admin_wallet.rs`)
 

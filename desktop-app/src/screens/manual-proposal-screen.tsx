@@ -367,6 +367,8 @@ export function ManualProposalScreen() {
 					expandedSection={expandedSection}
 					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
 					onToggleTransactions={() => setExpandedSection(expandedSection === 'transactions' ? null : 'transactions')}
+					onOpenSend={() => setExpandedSection('send')}
+					onCloseSend={() => setExpandedSection(null)}
 					syncStatus={syncHook.syncStatus}
 					isSyncRefreshing={syncHook.isLoading}
 					syncError={syncHook.error}
