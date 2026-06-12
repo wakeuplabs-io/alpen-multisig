@@ -220,4 +220,39 @@ assert.equal(
 )
 console.log('Rule 7 PASS: unconfirmed transactions + fee-bump wiring')
 
+// ── Rule 8: Phase 6 Send wiring — panel sub-view, capability gating, PRD copy ──
+
+const sendFormPath = path.join(domainRoot, 'components', 'send-form.tsx')
+const sendFormSource = fs.readFileSync(sendFormPath, 'utf8')
+const sendCopyPath = path.join(domainRoot, 'model', 'format-send-error.ts')
+const sendCopySource = fs.readFileSync(sendCopyPath, 'utf8')
+const panelContentForSend = fs.readFileSync(walletPanelContentPath, 'utf8')
+
+const rule8Violations: string[] = []
+if (!panelContentForSend.includes('SendForm')) {
+	rule8Violations.push('wallet-panel-content.tsx: must render SendForm for the send section')
+}
+if (!panelContentForSend.includes('isWatchOnly={isWatchOnly}')) {
+	rule8Violations.push('wallet-panel-content.tsx: SendForm must receive the capability-derived isWatchOnly')
+}
+if (!panelContentForSend.includes('onAfterSend={onRefreshSync}')) {
+	rule8Violations.push('wallet-panel-content.tsx: a successful send must trigger the panel sync+refresh')
+}
+if (!sendFormSource.includes('canConfirmSend')) {
+	rule8Violations.push('send-form.tsx: Confirm must be gated by the canConfirmSend predicate (§4.3.5.5)')
+}
+// PRD §4.3.5.1 / §4.3.5.2 copy lives in exactly one audited file — literal drift fails CI.
+if (!sendCopySource.includes("'Destination must be a bitcoin address.'")) {
+	rule8Violations.push("format-send-error.ts: must contain the literal 'Destination must be a bitcoin address.'")
+}
+if (!sendCopySource.includes('`Destination must be a ${expectedNetwork} bitcoin address.`')) {
+	rule8Violations.push('format-send-error.ts: must contain the wrong-network PRD copy template')
+}
+if (!sendCopySource.includes("'Insufficient funds'")) {
+	rule8Violations.push("format-send-error.ts: must contain the literal 'Insufficient funds' (§4.3.5.2)")
+}
+
+assert.equal(rule8Violations.length, 0, `Rule 8 violations — Phase 6 Send wiring:\n  ${rule8Violations.join('\n  ')}`)
+console.log('Rule 8 PASS: Send form wiring + PRD copy literals')
+
 console.log('All architecture compliance checks passed.')

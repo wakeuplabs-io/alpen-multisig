@@ -14,6 +14,19 @@ export function parseAmountSats(raw: string): number | null {
 	return val
 }
 
+/**
+ * Inline copy for a non-empty amount field that cannot be submitted
+ * (P6.4, §4.3.5.5 — the Confirm gate stays silent on an empty field).
+ */
+export function amountInputError(raw: string): string | null {
+	const trimmed = raw.trim()
+	if (trimmed === '') return null
+	const parsed = parseAmountSats(trimmed)
+	if (parsed === null) return 'Enter a whole number of sats.'
+	if (parsed === 0) return 'Amount must be greater than zero.'
+	return null
+}
+
 export type SendConfirmGate = {
 	/** True only when the backend validated the destination (P6.2, §4.3.5.1). */
 	isDestinationValid: boolean

@@ -4,7 +4,7 @@
 **Functional roadmap:** [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) — slices **P6.1 → P6.2 → P6.3 → P6.4**, PRD traceability per slice.
 **Plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md) Phase 6.
 **Compliance:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) §4.3.5 sub-rows.
-**Status:** Ready for implementation — this document is the technical design for all four slices.
+**Status:** **Implemented** ✅ — P6.1 PR [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), P6.2 PR [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), P6.3 PR [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), P6.4 PR [#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294). Implementation-time amendments are annotated in place (§1.3/§3.5 sync placement, §3.4 BDK `mark_used` finding, §6.3 `unavailable` state, Max-vs-rate semantics).
 
 This spec is written so that an engineer with no prior context on Phases 1–5 can implement Send end-to-end by following it together with the referenced source files. Every type, command, error variant, validation rule, UI state, and test obligation is specified. Where a slice boundary matters, the section is tagged **[P6.1]**–**[P6.4]**.
 

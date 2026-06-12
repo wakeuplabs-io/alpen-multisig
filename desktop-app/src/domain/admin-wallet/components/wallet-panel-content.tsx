@@ -71,7 +71,17 @@ export function WalletPanelContent({
 	if (expandedSection === 'send') {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
-				<h3 className="m-0 mb-3 text-[13px] font-semibold text-[#111827]">Send BTC</h3>
+				<div className="mb-3 flex items-center gap-2">
+					<button
+						type="button"
+						onClick={onCloseSend}
+						aria-label="Back to wallet"
+						className="flex h-6 w-6 items-center justify-center rounded-md border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+					>
+						←
+					</button>
+					<h3 className="m-0 text-[13px] font-semibold text-[#111827]">Send BTC</h3>
+				</div>
 				<SendForm isWatchOnly={isWatchOnly} onBack={onCloseSend} onAfterSend={onRefreshSync} />
 			</div>
 		)
