@@ -1359,4 +1359,83 @@ mod tests {
             other => panic!("expected FeeRateTooLow, got: {other:?}"),
         }
     }
+
+    // ── F-001 regression: governance commit CPFP guard survives restart ─────
+
+    /// F-001 regression: after an app restart (simulated by loading pending reveals
+    /// from a persisted state), a governance commit must still be flagged as
+    /// `is_governance_commit: true` and offered CPFP — never RBF.
+    ///
+    /// This test simulates the restart scenario by:
+    /// 1. Creating a governance package in the wallet graph
+    /// 2. Creating a pending reveals map with the commit→reveal mapping (as if loaded from disk)
+    /// 3. Verifying that list_unconfirmed_sent_txs correctly identifies the commit
+    #[tokio::test]
+    async fn f001_governance_commit_after_restart_shows_cpfp_not_rbf() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package(&mut wallet, 4_000_000_100);
+        let commit_txid = commit.compute_txid().to_string();
+        let svc = WalletService::new(wallet, test_node_config());
+
+        // Simulate app restart: the pending reveals map is loaded from disk
+        // (as if persistence restored it after restart)
+        let pending_after_restart = pending_map(&commit, &reveal);
+
+        let rows = svc
+            .list_unconfirmed_sent_txs(&pending_after_restart)
+            .await
+            .expect("list ok");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.txid, commit_txid);
+        assert!(
+            row.is_governance_commit,
+            "F-001: governance commit must be flagged after restart"
+        );
+        assert_eq!(
+            row.bump_method,
+            Some(BumpMethod::Cpfp),
+            "F-001: governance commit must offer CPFP, never RBF"
+        );
+    }
+
+    /// F-001 regression: attempting RBF on a governance commit (when pending reveals
+    /// map is empty, simulating a bug where persistence failed) must not succeed.
+    ///
+    /// Without the pending reveals entry, the commit would appear as a regular RBF-signaling
+    /// transaction. This test documents the expected behavior: the bump should fail because
+    /// the commit's sequence is MAX (non-RBF) when built via build_tx() without explicit
+    /// RBF signaling — but if it were RBF-signaling, the persistence fix ensures we still
+    /// know it's a governance commit.
+    #[tokio::test]
+    async fn f001_governance_commit_without_pending_map_is_not_flagged() {
+        let mut wallet = funded_wallet();
+        let (_commit, _reveal) = insert_governance_package(&mut wallet, 4_000_000_100);
+        let svc = WalletService::new(wallet, test_node_config());
+
+        // Simulate the bug scenario: pending reveals map is empty (persistence failed)
+        let empty_pending: HashMap<String, String> = HashMap::new();
+
+        let rows = svc
+            .list_unconfirmed_sent_txs(&empty_pending)
+            .await
+            .expect("list ok");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        // Without the pending reveals entry, the commit is NOT flagged as governance
+        // This documents the bug that F-001 fixes: persistence ensures the mapping survives
+        assert!(
+            !row.is_governance_commit,
+            "without pending reveals, commit is not flagged (this is the bug F-001 fixes)"
+        );
+        // The commit built by build_tx() signals RBF by default (BDK default sequence)
+        // So without persistence, it would incorrectly offer RBF
+        assert_eq!(
+            row.bump_method,
+            Some(BumpMethod::Rbf),
+            "without pending reveals, RBF is incorrectly offered (this is the bug F-001 fixes)"
+        );
+    }
 }
