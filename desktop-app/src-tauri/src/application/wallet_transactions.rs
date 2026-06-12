@@ -301,7 +301,14 @@ impl WalletService {
                 })
             })
             .collect();
-        rows.sort_by(|a, b| b.last_seen_secs.cmp(&a.last_seen_secs));
+        // F-012: Sort newest-first by last_seen, with stable fallback to txid when
+        // last_seen is None (indexer didn't provide a timestamp). This ensures
+        // deterministic ordering even when some txs lack mempool timestamps.
+        rows.sort_by(|a, b| {
+            b.last_seen_secs
+                .cmp(&a.last_seen_secs)
+                .then_with(|| a.txid.cmp(&b.txid))
+        });
         Ok(rows)
     }
 
@@ -459,11 +466,16 @@ impl WalletService {
         })?;
         let reveal_tx = bdk_wallet::bitcoin::Transaction::clone(&reveal.tx_node.tx);
 
-        // Anchor: the reveal's change output back to the Admin Wallet.
+        // F-007: Select the largest wallet-owned output for deterministic anchor selection.
+        // When multiple outputs are mine, picking the largest ensures consistent behavior
+        // and avoids edge cases where a small dust output is selected first.
         let vout = reveal_tx
             .output
             .iter()
-            .position(|out| wallet.is_mine(out.script_pubkey.clone()))
+            .enumerate()
+            .filter(|(_, out)| wallet.is_mine(out.script_pubkey.clone()))
+            .max_by_key(|(_, out)| out.value)
+            .map(|(idx, _)| idx)
             .ok_or_else(|| {
                 unavailable("the reveal pays no change back to the admin wallet".to_string())
             })?;
@@ -493,6 +505,28 @@ impl WalletService {
         builder.drain_to(drain_script);
         builder.fee_absolute(Amount::from_sat(child_fee));
         let psbt = builder.finish().map_err(map_create_tx_error)?;
+
+        // F-006: Verify actual package rate meets requested rate.
+        // If BDK added extra inputs to fund the fee, the realized package rate may be
+        // lower than requested. We allow a small epsilon (10%) tolerance since the child
+        // is RBF-bumpable if needed.
+        let child_tx = psbt.unsigned_tx.clone();
+        let child_vsize = child_tx.vsize() as u64;
+        let actual_package_vsize = package.vsize_vbytes + child_vsize;
+        let actual_package_fee = package.fee_sats + child_fee;
+        let actual_package_rate = fee_rate_sat_per_kvb(actual_package_fee, actual_package_vsize);
+        let requested_rate_sat_per_kvb = new_rate.sat_per_kvb();
+        // Allow 10% tolerance: actual rate >= 90% of requested rate
+        let min_acceptable_rate = requested_rate_sat_per_kvb.saturating_mul(90) / 100;
+        if actual_package_rate < min_acceptable_rate {
+            return Err(BumpFeeError::FeeRateTooLow {
+                required_sat_per_kvb: fee_rate_sat_per_kvb(
+                    package.fee_sats + child_fee,
+                    actual_package_vsize,
+                ),
+            });
+        }
+
         Ok((psbt, package))
     }
 }
