@@ -25,6 +25,7 @@ export function ScreenShell({ children, headerContent, centerContent = false }: 
 			>
 				<div className="flex w-full max-w-[1360px] flex-col gap-5">{children}</div>
 			</main>
+			<div className="pointer-events-none fixed bottom-2 right-3 text-[11px] text-[#9ca3af]">v{__APP_VERSION__}</div>
 		</div>
 	)
 }

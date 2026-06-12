@@ -19,6 +19,15 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		availabilityLabel: 'Available',
 		enabled: true,
 	},
+	{
+		id: 'alpen-administrator',
+		role: AuthRole.AlpenAdministrator,
+		label: 'Alpen Administrator',
+		description: 'Alpen protocol parameters (EE verification key, signers).',
+		signerSetSource: 'Alpen ASM state',
+		availabilityLabel: 'Available',
+		enabled: true,
+	},
 ]
 
 export function WalletConnectScreen() {

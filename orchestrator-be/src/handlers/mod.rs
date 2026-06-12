@@ -227,7 +227,7 @@ mod tests {
         let req = json_request(
             "POST",
             "/auth/challenge",
-            Some(json!({ "authority": "alpen_admin" })),
+            Some(json!({ "authority": "security_council" })),
             None,
         );
         let resp = app.clone().oneshot(req).await.unwrap();

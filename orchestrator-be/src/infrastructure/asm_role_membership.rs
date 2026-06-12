@@ -177,6 +177,7 @@ fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
+        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
@@ -196,6 +197,10 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     role_to_keys.insert(
         Role::StrataSequencerManager,
         authority_keys_hex(&admin, Role::StrataSequencerManager)?,
+    );
+    role_to_keys.insert(
+        Role::AlpenAdministrator,
+        authority_keys_hex(&admin, Role::AlpenAdministrator)?,
     );
 
     Ok(role_to_keys)
@@ -344,6 +349,9 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
                 "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             ) || mock_strata_signer_b_pk_matches(signer_pubkey)
         }
+        Authority::AlpenAdmin => signer_pubkey.eq_ignore_ascii_case(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        ),
         Authority::SequencerManager => false,
         _ => return None,
     };
@@ -363,6 +371,7 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
     match authority {
         Authority::StrataAdmin => Some(0),
         Authority::SequencerManager => Some(0),
+        Authority::AlpenAdmin => Some(0),
         _ => None,
     }
 }
@@ -381,6 +390,7 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     match authority {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
+        Authority::AlpenAdmin => Some(2),
         _ => None,
     }
 }
@@ -423,7 +433,7 @@ mod tests {
         );
         assert_eq!(
             authority_asm_support(AlpenAdmin),
-            AuthorityAsmSupport::Unsupported
+            AuthorityAsmSupport::Supported
         );
         assert_eq!(
             authority_asm_support(SecurityCouncil),
