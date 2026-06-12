@@ -62,7 +62,8 @@ Tests the coordination flow between the desktop application and orchestrator bac
 | Sequencer Manager Signer update | Sequencer Manager | **Covered** |
 | Sequencer update | Sequencer Manager | **Covered** |
 | Cancel action | Admin / Sequencer Manager | **Covered** |
-| Alpen Administrator updates | Alpen Admin | Pending upstream role definition |
+| Alpen Administrator Signer update | Alpen Admin | **Covered** |
+| Alpen Administrator VK update | Alpen Admin | Not yet supported (enactment detection pending) |
 | Security Council updates | Security Council | Pending upstream role definition |
 | block_payout | Payout Admin | Separate test suite (Bitcoin-native flow) |
 
@@ -72,11 +73,13 @@ Tests the coordination flow between the desktop application and orchestrator bac
 |-----------|---------------|-------|
 | **Strata Administrator** | Full | All supported update types tested |
 | **Strata Sequencer Manager** | Full | Immediate execution path tested |
-| **Alpen Administrator** | Partial | Blocked on upstream role definition |
+| **Alpen Administrator** | Partial | Signer updates supported; VK update pending enactment detection |
 | **Security Council** | Partial | Blocked on upstream role definition |
 | **Payout Administrator** | Separate | `block_payout` has dedicated test suite |
 
 ## Test Results
+
+> **Note:** Test counts below are snapshots from the most recent CI run. For current test results, run `cargo test --workspace` locally or check the CI pipeline status on GitHub.
 
 ### Unit Tests
 
