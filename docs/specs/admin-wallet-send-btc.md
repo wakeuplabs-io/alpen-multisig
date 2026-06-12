@@ -3,7 +3,8 @@
 **PRD:** [`03-prd-update.md`](../0-prd/03-prd-update.md) §4.3.5 — *"Send BTC"* (Send-to, Amount, Fee rate, Change routing, Confirm gate).
 **Plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md) Phase 6 (Send BTC happy path).
 **Compliance:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) §4.3.5 — **FAIL → PASS (regtest / dev mnemonic)** on completion of this phase; HW path stays **FAIL** until Phase 8.
-**Status:** Planned — roadmap (this document). Detailed slice specs + TDD are written when each increment is picked up.
+**Implementation spec:** [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) — full technical design (types, IPC contracts, error codes, BDK build semantics, UI state machines, test plan) for slices P6.1–P6.4.
+**Status:** Designed — roadmap (this document) + implementation spec ready; slices pending delivery.
 
 ---
 

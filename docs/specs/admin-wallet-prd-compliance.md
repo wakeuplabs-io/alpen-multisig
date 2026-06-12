@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-12 (Release 2 ✅; Phase 4 ✅; Phase 5 ✅; Phase 6 Send roadmap spec added — [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md))
+**Last updated:** 2026-06-12 (Release 2 ✅; Phase 4 ✅; Phase 5 ✅; Phase 6 Send designed — [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) roadmap + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) technical spec)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -82,7 +82,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
 | 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 7 / 8 |
 | 4.3.4.3 | Rotate after credit (one-time use) | **PASS** | R1.3, `next_receive_address` | BDK “used” on observe-in-tx |
-| 4.3.5 | Send BTC form + validations | **FAIL** | Phase 6 spec [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) | Phase 6 (mnemonic regtest) → PASS on completion; Phase 8 (HW). Slices P6.1–P6.4 |
+| 4.3.5 | Send BTC form + validations | **FAIL** | Phase 6 specs [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) | Phase 6 (mnemonic regtest) → PASS on completion; Phase 8 (HW). Slices P6.1–P6.4 |
 | 4.3.5.1 | Destination validation (standard types, network mismatch copy) | **FAIL** | Phase 6 P6.2 | Exact PRD error copy; backend-authoritative parse |
 | 4.3.5.2 | Amount valid / Max / "Insufficient funds" | **FAIL** | Phase 6 P6.3 | Max recomputes with fee rate |
 | 4.3.5.3 | Manual fee rate (0.1 s/vB, default next-block) | **FAIL** | Phase 6 P6.1 (reuse) / P6.3 (full) | Reuses Phase 4 `FeeRateSelector` |

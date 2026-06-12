@@ -53,7 +53,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.3 ✅ | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** ✅ | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`governance-broadcast-fee-selection-implementation.md`](./governance-broadcast-fee-selection-implementation.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF for sends, CPFP for governance commits); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
-| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern; [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) — slices **P6.1 → P6.2 → P6.3 → P6.4** |
+| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern; [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) — slices **P6.1 → P6.2 → P6.3 → P6.4** |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 9 | Shared Send + governance broadcast UX | Alta S9/S11, PRD §5.3.2 (shared Send chrome; fee entry → Phase 4/5) |
@@ -631,7 +631,7 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 #### Phase 6 — Send BTC happy path (regtest, dev mnemonic)
 
-**Spec:** [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) — roadmap with per-increment PRD §4.3.5 traceability; detailed slice specs + TDD authored when each increment is picked up.
+**Specs:** [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) (functional roadmap, per-increment PRD §4.3.5 traceability) · [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) (technical design: `wallet_send.rs` use-case, IPC contracts + error codes, BDK build/drain semantics, UI state machines, full test plan).
 
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee control aligned with Phase 4, change to `…/1/*`).
 
