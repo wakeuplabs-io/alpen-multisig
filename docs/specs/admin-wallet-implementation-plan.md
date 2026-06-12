@@ -53,7 +53,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.3 ✅ | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** ✅ | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`governance-broadcast-fee-selection-implementation.md`](./governance-broadcast-fee-selection-implementation.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF for sends, CPFP for governance commits); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
-| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
+| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern; [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) — slices **P6.1 → P6.2 → P6.3 → P6.4** |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 9 | Shared Send + governance broadcast UX | Alta S9/S11, PRD §5.3.2 (shared Send chrome; fee entry → Phase 4/5) |
@@ -631,15 +631,26 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 #### Phase 6 — Send BTC happy path (regtest, dev mnemonic)
 
+**Spec:** [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) — roadmap with per-increment PRD §4.3.5 traceability; detailed slice specs + TDD authored when each increment is picked up.
+
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee control aligned with Phase 4, change to `…/1/*`).
 
-**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate.
+**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate. Composes existing pieces (Phase 4 fee control, R1.1 `PsbtSigner`, Phase 4 M3 `TxBroadcaster`, R1.3 change-index discipline) — no new protocol or custody primitive.
 
-**Out of scope:** Hardware confirm, mainnet, full governance Send chrome (Phase 9).
+**Out of scope:** Hardware confirm (Phase 8), mainnet (Phase 10), full governance Send chrome (Phase 9).
 
-**Done when:** Regtest send succeeds with change to first unused internal index.
+**Slices (in order — each shippable on regtest, dev mnemonic):**
 
-**Primary code areas:** `WalletService` send path, Send screen, validation helpers.
+| Slice | Goal | PRD §4.3.5 |
+|---|---|---|
+| **P6.1** | Send pipeline walking skeleton: build → sign → broadcast, change to first unused internal index, minimal Confirm → txid | §4.3.5.4, §4.3.5.5 / §4.3.5.5.1 (thin fee reuse of §4.3.5.3) |
+| **P6.2** | Destination validation — standard types accepted; network / non-address rejected with exact PRD copy | §4.3.5.1 |
+| **P6.3** | Amount + fee contract + **Max** — `amount ≤ balance − fee`, "Insufficient funds"; default next-block, 0.1 step, max 10 000 | §4.3.5.2, §4.3.5.3 |
+| **P6.4** | Confirm gate + result / reject-retry surfaces | §4.3.5.5, §4.3.5.5.1 |
+
+**Done when:** Regtest send succeeds with change to first unused internal index; every §4.3.5 MUST met on the dev-mnemonic path; watch-only/HW sessions see Send disabled ("Hardware wallet required to sign"); §4.3.5 **PASS (regtest / dev mnemonic)** in the compliance matrix.
+
+**Primary code areas:** `WalletService` send path, Send screen, validation helpers, reused `fee-selection/` selector.
 
 ---
 
