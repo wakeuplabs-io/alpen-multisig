@@ -81,6 +81,10 @@ pub struct BumpFeeResultDto {
     /// RBF: replacement rate. CPFP: resulting package rate.
     pub fee_rate_sat_per_kvb: u64,
     pub method: BumpMethod,
+    /// Warning message when pre-bump sync failed but bump proceeded with stale state.
+    /// UI should display this to alert the user that the wallet view may be outdated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_warning: Option<String>,
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
@@ -395,6 +399,7 @@ impl WalletService {
             fee_rate_sat_per_kvb: fee_rate,
             fee_sats,
             method,
+            sync_warning: None,
         })
     }
 
@@ -1322,11 +1327,30 @@ mod tests {
             fee_sats: 500,
             fee_rate_sat_per_kvb: 5_000,
             method: BumpMethod::Rbf,
+            sync_warning: None,
         };
         let json = serde_json::to_value(&dto).expect("serialize");
         assert_eq!(json["newTxid"], "cd");
         assert_eq!(json["targetTxid"], "ab");
         assert_eq!(json["method"], "rbf");
+        assert!(
+            json.get("syncWarning").is_none(),
+            "None sync_warning must be skipped"
+        );
+    }
+
+    #[test]
+    fn bump_fee_result_dto_serializes_sync_warning_when_present() {
+        let dto = BumpFeeResultDto {
+            new_txid: "cd".into(),
+            target_txid: "ab".into(),
+            fee_sats: 500,
+            fee_rate_sat_per_kvb: 5_000,
+            method: BumpMethod::Rbf,
+            sync_warning: Some("Wallet sync failed".to_string()),
+        };
+        let json = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(json["syncWarning"], "Wallet sync failed");
     }
 
     // ── PackageStats::required_child_fee ────────────────────────────────────

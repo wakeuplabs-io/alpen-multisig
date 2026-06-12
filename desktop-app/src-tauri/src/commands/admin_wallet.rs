@@ -310,15 +310,27 @@ pub async fn admin_wallet_bump_fee(
 
     // Best-effort pre-sync: a stale view is ultimately caught by the node, which
     // rejects replacements of confirmed or already-replaced transactions.
-    if let Err(e) = svc.sync().await {
-        tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
-    }
+    // F-008: Track sync failure to surface as warning in result.
+    let sync_warning = match svc.sync().await {
+        Ok(_) => None,
+        Err(e) => {
+            tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
+            Some(format!(
+                "Wallet sync failed before bump: {}. Proceeding with last-known state. \
+                 If the bump fails, sync the wallet and retry.",
+                e
+            ))
+        }
+    };
 
     let commit_to_reveal = pending_commit_to_reveal(&pending);
-    let result = svc
+    let mut result = svc
         .bump_fee(&input.txid, rate, &commit_to_reveal, &broadcasters)
         .await
         .map_err(|e| serialize_bump_error(&e))?;
+
+    // F-008: Attach sync warning to result for UI display.
+    result.sync_warning = sync_warning;
 
     // Best-effort post-sync so the panel reflects the replacement immediately.
     if let Err(e) = svc.sync().await {
