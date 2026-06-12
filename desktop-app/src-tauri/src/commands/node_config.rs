@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
-use desktop_app::config::{LOCAL_BTC_RPC_URL, LOCAL_ELECTRUM_URL, LOCAL_STRATA_RPC_URL};
 use desktop_app::infrastructure::node_config_store::{
     self, ConnectionMode, NodeConfig, NodeConfigState,
 };
@@ -26,6 +25,9 @@ pub struct LocalNodeStatusDto {
     pub strata_reachable: bool,
     pub btc_reachable: bool,
     pub electrum_reachable: bool,
+    pub strata_url: String,
+    pub btc_url: String,
+    pub electrum_url: String,
 }
 
 fn mode_to_str(mode: &ConnectionMode) -> &'static str {
@@ -82,18 +84,30 @@ pub async fn save_node_config(
 }
 
 #[tauri::command]
-pub async fn check_local_node() -> Result<LocalNodeStatusDto, String> {
+pub async fn check_local_node(config: NodeConfigDto) -> Result<LocalNodeStatusDto, String> {
+    let cfg = NodeConfig {
+        mode: mode_from_str(&config.mode),
+        custom_strata_rpc_url: config.custom_strata_rpc_url,
+        custom_btc_rpc_url: config.custom_btc_rpc_url,
+        custom_btc_rpc_user: config.custom_btc_rpc_user,
+        custom_btc_rpc_pass: config.custom_btc_rpc_pass,
+        custom_electrum_url: config.custom_electrum_url,
+    };
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
         .build()
         .map_err(|e| format!("failed to build http client: {e}"))?;
 
-    let strata_reachable = client.get(LOCAL_STRATA_RPC_URL).send().await.is_ok();
+    let strata_reachable = client.get(cfg.strata_rpc_url()).send().await.is_ok();
 
-    let btc_reachable = client.get(LOCAL_BTC_RPC_URL).send().await.is_ok();
+    let btc_reachable = client.get(cfg.btc_rpc_url()).send().await.is_ok();
 
-    // Electrum speaks raw TCP (tcp://host:port), not HTTP — probe with a TCP connect.
-    let electrum_addr = LOCAL_ELECTRUM_URL.trim_start_matches("tcp://");
+    // Electrum speaks raw TCP (tcp:// or ssl://host:port), not HTTP — probe with a TCP connect.
+    let electrum_addr = cfg
+        .electrum_url()
+        .trim_start_matches("tcp://")
+        .trim_start_matches("ssl://");
     let electrum_reachable = tokio::time::timeout(
         std::time::Duration::from_secs(3),
         tokio::net::TcpStream::connect(electrum_addr),
@@ -105,5 +119,8 @@ pub async fn check_local_node() -> Result<LocalNodeStatusDto, String> {
         strata_reachable,
         btc_reachable,
         electrum_reachable,
+        strata_url: cfg.strata_rpc_url().to_string(),
+        btc_url: cfg.btc_rpc_url().to_string(),
+        electrum_url: cfg.electrum_url().to_string(),
     })
 }

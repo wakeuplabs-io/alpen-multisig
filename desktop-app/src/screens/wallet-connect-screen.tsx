@@ -28,6 +28,15 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		availabilityLabel: 'Available',
 		enabled: true,
 	},
+	{
+		id: 'strata-sequencer-manager',
+		role: AuthRole.StrataSequencerManager,
+		label: 'Strata Sequencer Manager',
+		description: 'Sequencer key rotation and signer set updates.',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Available',
+		enabled: true,
+	},
 ]
 
 export function WalletConnectScreen() {

@@ -131,12 +131,21 @@ pub struct VkUpdate {
     pub condition: Vec<u8>,
 }
 
+/// An update to the Strata sequencer's public key.
+///
+/// Authorized by the Strata Sequencer Manager multisig.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SequencerKeyUpdate {
+    pub new_pub_key: EvenPubKey,
+}
+
 /// A governance action that a signer can propose.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     MultisigUpdate(MultisigUpdate),
     VkUpdate(VkUpdate),
     OperatorSetUpdate(OperatorSetUpdate),
+    SequencerKeyUpdate(SequencerKeyUpdate),
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -180,7 +189,9 @@ mod tests {
         let action = Action::MultisigUpdate(update.clone());
         match action {
             Action::MultisigUpdate(u) => assert_eq!(u, update),
-            Action::VkUpdate(_) | Action::OperatorSetUpdate(_) => panic!("unexpected variant"),
+            Action::VkUpdate(_) | Action::OperatorSetUpdate(_) | Action::SequencerKeyUpdate(_) => {
+                panic!("unexpected variant")
+            }
         }
     }
 
@@ -223,6 +234,15 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, EvenPubKeyError::InvalidPoint(_)));
+    }
+
+    #[test]
+    fn test_sequencer_key_update_builds() {
+        let pk = EvenPubKey::from_hex(EVEN_KEY_HEX).unwrap();
+        let update = SequencerKeyUpdate {
+            new_pub_key: pk.clone(),
+        };
+        assert_eq!(update.new_pub_key, pk);
     }
 
     #[test]

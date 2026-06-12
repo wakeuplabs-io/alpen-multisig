@@ -40,6 +40,16 @@ export function buildOperatorSetUpdateHex(
 	return tauriCall('build_operator_set_update_hex', { input }, buildActionHexResponseSchema)
 }
 
+export type BuildSequencerKeyUpdateHexInput = {
+	newPubKey: string
+}
+
+export function buildSequencerKeyUpdateHex(
+	input: BuildSequencerKeyUpdateHexInput,
+): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_sequencer_key_update_hex', { input }, buildActionHexResponseSchema)
+}
+
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_cancel_action_hex', { targetActionHex }, buildActionHexResponseSchema)
 }
