@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import type { ConnectionMode, LocalNodeStatus, NodeConfig } from '../model/node-config.types'
 
 type Props = {
@@ -121,6 +122,11 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 										reachable={localNodeStatus.electrumReachable}
 										url={localNodeStatus.electrumUrl}
 									/>
+									<StatusLine
+										label="Orchestrator"
+										reachable={localNodeStatus.orchestratorReachable}
+										url={localNodeStatus.orchestratorUrl}
+									/>
 									<button
 										type="button"
 										onClick={() => onRecheck(draft)}
@@ -158,6 +164,24 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 								</label>
 							)
 						})}
+
+						{draft.mode === 'local' && (
+							<div className="mt-1 space-y-3 rounded-xl border border-[#e5e7eb] p-4">
+								<div>
+									<label className="mb-1 block text-[12px] font-medium text-[#374151]">Orchestrator URL</label>
+									<input
+										type="url"
+										placeholder={ORCHESTRATOR_BASE_URL}
+										value={draft.customOrchestratorUrl ?? ''}
+										onChange={(e) => setDraft((prev) => ({ ...prev, customOrchestratorUrl: e.target.value }))}
+										className="w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-[13px] text-[#0a0a0a] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]"
+									/>
+									<p className="mt-1 text-[11px] text-[#9ca3af]">
+										Backend coordination API. Leave empty to use the default ({ORCHESTRATOR_BASE_URL}).
+									</p>
+								</div>
+							</div>
+						)}
 
 						{draft.mode === 'custom' && (
 							<div className="mt-1 space-y-3 rounded-xl border border-[#e5e7eb] p-4">

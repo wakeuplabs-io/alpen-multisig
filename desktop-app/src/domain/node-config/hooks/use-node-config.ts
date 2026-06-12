@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { checkLocalNode, getNodeConfig, saveNodeConfig } from '@/api/node-config'
+import { setOrchestratorBaseUrlOverride } from '@/api/orchestrator-auth'
 import type { LocalNodeStatus, NodeConfig } from '@/domain/node-config/model/node-config.types'
 
 type UseNodeConfigResult = {
@@ -22,7 +23,10 @@ export function useNodeConfig(): UseNodeConfigResult {
 	const fetchAll = useCallback(async () => {
 		setIsLoading(true)
 		const configResult = await getNodeConfig()
-		if (configResult.ok) setConfig(configResult.data)
+		if (configResult.ok) {
+			setConfig(configResult.data)
+			setOrchestratorBaseUrlOverride(configResult.data.customOrchestratorUrl ?? null)
+		}
 		const statusResult = await checkLocalNode(configResult.ok ? configResult.data : { mode: 'local' })
 		if (statusResult.ok) setLocalNodeStatus(statusResult.data)
 		setIsLoading(false)
@@ -44,6 +48,7 @@ export function useNodeConfig(): UseNodeConfigResult {
 		const result = await saveNodeConfig(draft)
 		if (result.ok) {
 			setConfig(draft)
+			setOrchestratorBaseUrlOverride(draft.customOrchestratorUrl ?? null)
 			const statusResult = await checkLocalNode(draft)
 			if (statusResult.ok) setLocalNodeStatus(statusResult.data)
 		}

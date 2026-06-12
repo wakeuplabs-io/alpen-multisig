@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
@@ -50,7 +50,7 @@ export function BroadcastProposalScreen() {
 	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
 
 	const { phase, bundle, result, proposal, error, prepare, broadcast } = useBroadcastProposal(
-		ORCHESTRATOR_BASE_URL,
+		getOrchestratorBaseUrl(),
 		actionId ?? '',
 		feeRateSatPerKvb,
 		signerKind,

@@ -7,6 +7,28 @@ import { z } from 'zod'
 
 export const ORCHESTRATOR_BASE_URL = import.meta.env.VITE_ORCHESTRATOR_BASE_URL ?? 'http://127.0.0.1:3000/api/v1'
 
+let orchestratorBaseUrlOverride: string | null = null
+
+// Lets node-config load/save apply a per-machine orchestrator URL override.
+// Falls back to ORCHESTRATOR_BASE_URL (env default) when unset.
+export function setOrchestratorBaseUrlOverride(url: string | null): void {
+	orchestratorBaseUrlOverride = url?.trim() || null
+}
+
+export function getOrchestratorBaseUrl(): string {
+	return orchestratorBaseUrlOverride ?? ORCHESTRATOR_BASE_URL
+}
+
+// Resolves the orchestrator URL a given node config would use, without touching the
+// active override. Used to preview/recheck connectivity while editing node settings.
+export function resolveOrchestratorBaseUrl(config: { mode: string; customOrchestratorUrl?: string }): string {
+	if (config.mode === 'local') {
+		const custom = config.customOrchestratorUrl?.trim()
+		if (custom) return custom
+	}
+	return ORCHESTRATOR_BASE_URL
+}
+
 export type OrchestratorAuthChallenge = {
 	challengeId: string
 	challengeHex: string
