@@ -222,6 +222,9 @@ export const localNodeStatusSchema = z.object({
 	strataReachable: z.boolean(),
 	btcReachable: z.boolean(),
 	electrumReachable: z.boolean(),
+	strataUrl: z.string(),
+	btcUrl: z.string(),
+	electrumUrl: z.string(),
 })
 
 const feePresetSchema = z.object({

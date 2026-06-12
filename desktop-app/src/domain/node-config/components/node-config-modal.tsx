@@ -9,7 +9,7 @@ type Props = {
 	isSaving: boolean
 	onSave: (draft: NodeConfig) => void | Promise<void>
 	onClose: () => void
-	onRecheck: () => void
+	onRecheck: (config: NodeConfig) => void
 }
 
 type ModeOption = { value: ConnectionMode; label: string; description: string }
@@ -39,12 +39,12 @@ function NodeStatusDot({ reachable }: { reachable: boolean | null }) {
 	)
 }
 
-function StatusLine({ label, reachable }: { label: string; reachable: boolean | null }) {
+function StatusLine({ label, reachable, url }: { label: string; reachable: boolean | null; url: string }) {
 	if (reachable === null) return null
 	return (
 		<span className="flex items-center gap-1.5 text-[11px] text-[#6b7280]">
 			<NodeStatusDot reachable={reachable} />
-			{label}: {reachable ? 'connected' : 'not found'}
+			{label} ({url}): {reachable ? 'connected' : 'not found'}
 		</span>
 	)
 }
@@ -65,7 +65,9 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 		!localNodeStatus.btcReachable
 
 	function handleModeChange(mode: ConnectionMode) {
-		setDraft((prev) => ({ ...prev, mode }))
+		const next = { ...draft, mode }
+		setDraft(next)
+		onRecheck(next)
 	}
 
 	function handleSubmit(e: React.FormEvent) {
@@ -80,7 +82,7 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 				if (e.target === e.currentTarget) onClose()
 			}}
 		>
-			<div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white shadow-xl">
+			<div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-2xl border border-[#e5e7eb] bg-white shadow-xl">
 				<div className="flex items-center justify-between border-b border-[#f3f4f6] px-6 py-4">
 					<h2 className="text-[15px] font-semibold text-[#0a0a0a]">Node connection</h2>
 					<button
@@ -95,8 +97,41 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 					</button>
 				</div>
 
-				<form onSubmit={handleSubmit}>
-					<div className="space-y-2 px-6 py-5">
+				<form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-6 py-5">
+						{localNodeStatus && (
+							<div className="mb-4 rounded-xl border border-[#e5e7eb] p-4">
+								<div className="flex items-center justify-between">
+									<p className="text-[11px] font-medium uppercase tracking-wide text-[#9ca3af]">Connection status</p>
+									<NodeStatusDot reachable={localNodeStatus.strataReachable || localNodeStatus.btcReachable} />
+								</div>
+								<div className="mt-2 flex flex-col gap-0.5">
+									<StatusLine
+										label="Strata RPC"
+										reachable={localNodeStatus.strataReachable}
+										url={localNodeStatus.strataUrl}
+									/>
+									<StatusLine
+										label="Bitcoin RPC"
+										reachable={localNodeStatus.btcReachable}
+										url={localNodeStatus.btcUrl}
+									/>
+									<StatusLine
+										label="Electrum indexer"
+										reachable={localNodeStatus.electrumReachable}
+										url={localNodeStatus.electrumUrl}
+									/>
+									<button
+										type="button"
+										onClick={() => onRecheck(draft)}
+										className="mt-1 w-fit text-[11px] text-[#6b7280] underline underline-offset-2 hover:text-[#374151]"
+									>
+										Recheck
+									</button>
+								</div>
+							</div>
+						)}
+
 						<p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-[#9ca3af]">Node source</p>
 
 						{MODE_OPTIONS.map((opt) => {
@@ -117,29 +152,8 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 										className="mt-0.5 accent-[#0a0a0a]"
 									/>
 									<div className="flex-1 min-w-0">
-										<div className="flex items-center gap-2">
-											<span className="text-[13px] font-medium text-[#0a0a0a]">{opt.label}</span>
-											{opt.value === 'local' && localNodeStatus && (
-												<span className="flex items-center gap-1">
-													<NodeStatusDot reachable={localNodeStatus.strataReachable || localNodeStatus.btcReachable} />
-												</span>
-											)}
-										</div>
+										<span className="text-[13px] font-medium text-[#0a0a0a]">{opt.label}</span>
 										<p className="mt-0.5 text-[12px] text-[#6b7280]">{opt.description}</p>
-										{opt.value === 'local' && isSelected && localNodeStatus && (
-											<div className="mt-2 flex flex-col gap-0.5">
-												<StatusLine label="Strata RPC" reachable={localNodeStatus.strataReachable} />
-												<StatusLine label="Bitcoin RPC" reachable={localNodeStatus.btcReachable} />
-												<StatusLine label="Electrum indexer" reachable={localNodeStatus.electrumReachable} />
-												<button
-													type="button"
-													onClick={onRecheck}
-													className="mt-1 w-fit text-[11px] text-[#6b7280] underline underline-offset-2 hover:text-[#374151]"
-												>
-													Recheck
-												</button>
-											</div>
-										)}
 									</div>
 								</label>
 							)

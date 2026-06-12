@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
-import { buildAdminMultisigUpdateHex, buildOperatorSetUpdateHex, buildVkUpdateHex } from '@/api/action-builder'
+import {
+	buildAdminMultisigUpdateHex,
+	buildOperatorSetUpdateHex,
+	buildSequencerKeyUpdateHex,
+	buildVkUpdateHex,
+} from '@/api/action-builder'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
@@ -75,6 +80,13 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 				newThreshold: threshold,
+			})
+			if (!hexResult.ok) throw new Error(hexResult.error)
+			return hexResult.data.actionHex
+		}
+		if (formData.actionType === 'sequencer_key_update') {
+			const hexResult = await buildSequencerKeyUpdateHex({
+				newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex),
 			})
 			if (!hexResult.ok) throw new Error(hexResult.error)
 			return hexResult.data.actionHex

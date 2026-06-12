@@ -11,6 +11,6 @@ export function saveNodeConfig(config: NodeConfig): Promise<ApiResult<void>> {
 	return tauriCall('save_node_config', { config })
 }
 
-export function checkLocalNode(): Promise<ApiResult<LocalNodeStatus>> {
-	return tauriCall('check_local_node', {}, localNodeStatusSchema)
+export function checkLocalNode(config: NodeConfig): Promise<ApiResult<LocalNodeStatus>> {
+	return tauriCall('check_local_node', { config }, localNodeStatusSchema)
 }

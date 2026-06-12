@@ -14,4 +14,7 @@ export type LocalNodeStatus = {
 	strataReachable: boolean
 	btcReachable: boolean
 	electrumReachable: boolean
+	strataUrl: string
+	btcUrl: string
+	electrumUrl: string
 }

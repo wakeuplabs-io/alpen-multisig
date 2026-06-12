@@ -8,12 +8,14 @@ import {
 	isSessionExpiredReauthError,
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
+import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
+import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
@@ -49,6 +51,7 @@ const defaultFormValues: CreateProposalFormValues = {
 	newVkHex: '',
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
+	newSequencerKeyHex: '',
 }
 
 export function CreateProposalForm({
@@ -89,9 +92,11 @@ export function CreateProposalForm({
 
 	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])
 
+	const actionTypeOptions = useMemo(() => getActionTypeOptions(authority), [authority])
+
 	const form = useForm<CreateProposalFormValues, unknown, CreateProposalFormValues>({
 		resolver,
-		defaultValues: defaultFormValues,
+		defaultValues: { ...defaultFormValues, actionType: getDefaultActionType(authority) },
 		mode: 'all',
 		reValidateMode: 'onChange',
 	})
@@ -268,6 +273,7 @@ export function CreateProposalForm({
 							operatorIndicesToRemove={previewData.operatorIndicesToRemove
 								.map((r) => r.value.trim())
 								.filter((v) => v.length > 0)}
+							newSequencerKeyHex={previewData.newSequencerKeyHex}
 							sighashHex={previewSighashHex}
 							authorityLabel={authorityLabel}
 							currentSigners={multisigConfig?.signers ?? []}
@@ -279,34 +285,17 @@ export function CreateProposalForm({
 							<div>
 								<p className="mb-3 text-sm font-medium text-[#111827]">Action type</p>
 								<div className="grid grid-cols-2 gap-3">
-									{authority !== 'alpen_admin' && (
+									{actionTypeOptions.map((option) => (
 										<ActionTypeCard
-											title="Verification key update"
-											description="Rotate the Alpen VK."
-											selected={actionType === 'vk_update'}
+											key={option.actionType}
+											title={option.title}
+											description={option.description}
+											selected={actionType === option.actionType}
 											onClick={() =>
-												form.setValue('actionType', 'vk_update', { shouldValidate: true, shouldDirty: true })
+												form.setValue('actionType', option.actionType, { shouldValidate: true, shouldDirty: true })
 											}
 										/>
-									)}
-									<ActionTypeCard
-										title="Signer update"
-										description="Add / remove signers or change threshold."
-										selected={actionType === 'signer_update'}
-										onClick={() =>
-											form.setValue('actionType', 'signer_update', { shouldValidate: true, shouldDirty: true })
-										}
-									/>
-									{authority !== 'alpen_admin' && (
-										<ActionTypeCard
-											title="Bridge Operator update"
-											description="Add operators by key or remove by index."
-											selected={actionType === 'operator_set_update'}
-											onClick={() =>
-												form.setValue('actionType', 'operator_set_update', { shouldValidate: true, shouldDirty: true })
-											}
-										/>
-									)}
+									))}
 								</div>
 							</div>
 
@@ -358,6 +347,8 @@ export function CreateProposalForm({
 									currentOperators={currentOperators}
 									isLoadingOperators={isLoadingOperators}
 								/>
+							) : actionType === 'sequencer_key_update' ? (
+								<SequencerKeyUpdateFormFields />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
