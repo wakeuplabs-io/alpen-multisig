@@ -476,6 +476,9 @@ type DestinationState =
 	| { status: 'validating'; address: string }
 	| { status: 'valid'; address: string }
 	| { status: 'invalid'; address: string; reason: 'invalid-address' | 'wrong-network'; expectedNetwork: string }
+	// Validation IPC unreachable (no session / transport): Confirm stays blocked
+	// with neutral copy — a failing validator must never silently report valid.
+	| { status: 'unavailable'; address: string }
 
 type AmountState =
 	| { status: 'empty' }

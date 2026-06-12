@@ -154,6 +154,49 @@ pub fn parse_send_destination(
         })
 }
 
+/// Inline-validation result for the Send form's destination field (P6.2).
+///
+/// Validation failures are a **successful** IPC result — they are form states,
+/// not faults. The frontend renders the exact PRD §4.3.5.1 copy from `reason`
+/// + `expected_network`; the backend stays copy-free.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendAddressValidationDto {
+    pub is_valid: bool,
+    /// `"invalid-address"` | `"wrong-network"` | null.
+    pub reason: Option<String>,
+    /// `network_display_name(wallet.network)` — drives the copy template.
+    pub expected_network: String,
+}
+
+/// Maps a [`parse_send_destination`] outcome to the inline-validation DTO.
+pub fn validate_send_destination_dto(
+    address: &str,
+    network: bdk_wallet::bitcoin::Network,
+) -> SendAddressValidationDto {
+    let expected_network = network_display_name(network).to_string();
+    let reason = match parse_send_destination(address, network) {
+        Ok(_) => None,
+        Err(SendError::WrongNetwork { .. }) => Some("wrong-network".to_string()),
+        // parse_send_destination only returns the two destination errors;
+        // anything else is defensively reported as not-an-address.
+        Err(_) => Some("invalid-address".to_string()),
+    };
+    SendAddressValidationDto {
+        is_valid: reason.is_none(),
+        reason,
+        expected_network,
+    }
+}
+
+impl WalletService {
+    /// Validates a send destination against the session network (PRD §4.3.5.1).
+    /// Pure parse — no I/O, no wallet lock; works for watch-only sessions too.
+    pub fn validate_send_address(&self, address: &str) -> SendAddressValidationDto {
+        validate_send_destination_dto(address, self.network())
+    }
+}
+
 // ── BDK error mapping ───────────────────────────────────────────────────────
 
 fn map_send_create_tx_error(e: bdk_wallet::error::CreateTxError) -> SendError {
@@ -450,6 +493,50 @@ mod tests {
         assert_eq!(network_display_name(Network::Testnet4), "testnet");
         assert_eq!(network_display_name(Network::Signet), "signet");
         assert_eq!(network_display_name(Network::Regtest), "regtest");
+    }
+
+    // ── validate_send_destination_dto (P6.2) ────────────────────────────────
+
+    #[test]
+    fn validate_dto_valid_regtest_address_is_valid_with_no_reason() {
+        let dto = validate_send_destination_dto(&dest_p2wpkh_regtest(), Network::Regtest);
+        assert!(dto.is_valid);
+        assert_eq!(dto.reason, None);
+        assert_eq!(dto.expected_network, "regtest");
+    }
+
+    #[test]
+    fn validate_dto_garbage_reports_invalid_address() {
+        let dto = validate_send_destination_dto("not-an-address", Network::Regtest);
+        assert!(!dto.is_valid);
+        assert_eq!(dto.reason.as_deref(), Some("invalid-address"));
+        assert_eq!(dto.expected_network, "regtest");
+    }
+
+    #[test]
+    fn validate_dto_mainnet_address_on_regtest_reports_wrong_network() {
+        let dto = validate_send_destination_dto(DEST_P2WPKH_MAINNET, Network::Regtest);
+        assert!(!dto.is_valid);
+        assert_eq!(dto.reason.as_deref(), Some("wrong-network"));
+        assert_eq!(dto.expected_network, "regtest");
+    }
+
+    #[test]
+    fn validate_dto_serializes_camel_case() {
+        let dto = validate_send_destination_dto("not-an-address", Network::Regtest);
+        let json = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(json["isValid"], false);
+        assert_eq!(json["reason"], "invalid-address");
+        assert_eq!(json["expectedNetwork"], "regtest");
+    }
+
+    #[tokio::test]
+    async fn validate_send_address_works_on_watch_only_sessions() {
+        // Pure derivation/parse — no ReadOnly gate (watch-only users type
+        // addresses too; only Confirm requires a signer).
+        let svc = WalletService::new_watch_only(funded_wallet(), test_node_config());
+        let dto = svc.validate_send_address(&dest_p2wpkh_regtest());
+        assert!(dto.is_valid);
     }
 
     // ── send_to_address — guards ────────────────────────────────────────────

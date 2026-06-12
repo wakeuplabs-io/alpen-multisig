@@ -15,18 +15,20 @@ export function parseAmountSats(raw: string): number | null {
 }
 
 export type SendConfirmGate = {
-	hasDestination: boolean
+	/** True only when the backend validated the destination (P6.2, §4.3.5.1). */
+	isDestinationValid: boolean
 	amountSats: number | null
 	isFeeReady: boolean
 	isSubmitting: boolean
 }
 
 /**
- * P6.1 interim Confirm gate (PRD §4.3.5.5): destination entered, positive
- * amount, fee presets loaded, not mid-submit. P6.2/P6.3 tighten this with
- * backend-validated destination and estimate readiness; the backend rejects
- * independently either way.
+ * Confirm gate (PRD §4.3.5.5): backend-validated destination, positive
+ * amount, fee presets loaded, not mid-submit. P6.3 adds estimate readiness;
+ * the backend rejects independently either way.
  */
 export function canConfirmSend(gate: SendConfirmGate): boolean {
-	return gate.hasDestination && gate.amountSats !== null && gate.amountSats > 0 && gate.isFeeReady && !gate.isSubmitting
+	return (
+		gate.isDestinationValid && gate.amountSats !== null && gate.amountSats > 0 && gate.isFeeReady && !gate.isSubmitting
+	)
 }
