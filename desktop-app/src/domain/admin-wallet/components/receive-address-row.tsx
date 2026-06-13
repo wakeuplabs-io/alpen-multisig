@@ -73,7 +73,8 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 					<button
 						type="button"
 						onClick={handleCopy}
-						title="Click to copy"
+						title={address}
+						aria-label={copied ? 'Address copied' : 'Copy receive address'}
 						data-testid="e2e-wallet-receive-address-value"
 						className="min-w-0 flex-1 truncate rounded-md text-left font-mono text-[12px] leading-[1.45] text-[#374151] transition hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9480f5]"
 					>
