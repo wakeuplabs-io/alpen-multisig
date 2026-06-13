@@ -873,19 +873,79 @@ mod tests {
 
     #[tokio::test]
     async fn list_sorts_newest_first_by_last_seen() {
-        let mut wallet = funded_wallet();
-        // Two independent confirmed UTXOs so the two spends do not conflict.
-        receive_output_in_latest_block(&mut wallet, 50_000);
-        let older = insert_unconfirmed_spend(&mut wallet, true, 4_000_000_100);
-        let newer = insert_unconfirmed_spend(&mut wallet, true, 4_000_000_900);
-        let svc = WalletService::new(wallet, test_node_config());
+        // Build from scratch to capture confirmed outpoints for explicit UTXO selection.
+        // Without it, BDK's coin-selection sometimes picks the change from `older` as an
+        // input for `newer`, making `newer` a child of `older`. The canonical iterator then
+        // assigns `older` the `last_seen` of `newer` (4_000_000_900) transitively, causing
+        // both rows to tie on `last_seen` and the txid fallback to produce a wrong order.
+        let mut wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        insert_checkpoint(
+            &mut wallet,
+            BlockId {
+                height: 1_000,
+                hash: BlockHash::all_zeros(),
+            },
+        );
+        let utxo_older = receive_output_in_latest_block(&mut wallet, 100_000);
+        let utxo_newer = receive_output_in_latest_block(&mut wallet, 50_000);
 
+        let older = {
+            let mut builder = wallet.build_tx();
+            builder.add_recipient(external_script(), Amount::from_sat(40_000));
+            builder
+                .add_utxo(utxo_older)
+                .expect("utxo_older must be unspent");
+            builder.manually_selected_only();
+            let mut psbt = builder.finish().expect("build older spend");
+            assert!(
+                wallet
+                    .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                    .expect("sign older"),
+                "older must finalize"
+            );
+            let tx = psbt.extract_tx().expect("extract older");
+            insert_tx(&mut wallet, tx.clone());
+            insert_seen_at(&mut wallet, tx.compute_txid(), 4_000_000_100);
+            tx
+        };
+
+        let newer = {
+            let mut builder = wallet.build_tx();
+            builder.add_recipient(external_script(), Amount::from_sat(40_000));
+            builder
+                .add_utxo(utxo_newer)
+                .expect("utxo_newer must be unspent");
+            builder.manually_selected_only();
+            let mut psbt = builder.finish().expect("build newer spend");
+            assert!(
+                wallet
+                    .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                    .expect("sign newer"),
+                "newer must finalize"
+            );
+            let tx = psbt.extract_tx().expect("extract newer");
+            insert_tx(&mut wallet, tx.clone());
+            insert_seen_at(&mut wallet, tx.compute_txid(), 4_000_000_900);
+            tx
+        };
+
+        let svc = WalletService::new(wallet, test_node_config());
         let rows = svc
             .list_unconfirmed_sent_txs(&HashMap::new())
             .await
             .expect("list ok");
 
         assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows[0].last_seen_secs,
+            Some(4_000_000_900),
+            "newer must be first (highest last_seen)"
+        );
+        assert_eq!(
+            rows[1].last_seen_secs,
+            Some(4_000_000_100),
+            "older must be second"
+        );
         assert_eq!(rows[0].txid, newer.compute_txid().to_string());
         assert_eq!(rows[1].txid, older.compute_txid().to_string());
     }
