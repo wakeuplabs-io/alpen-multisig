@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-12 (Phase 6 Send **complete** ✅ — §4.3.5 PASS on the regtest/dev-mnemonic path, PRs #289/#292/#293/[#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294); §4.3.5.5.1 HW on-device → Phase 8)
+**Last updated:** 2026-06-13 (Phase 7 **complete** ✅ — §4.1 Admin ID display/copy + §4.3.4.1 receive QR & click-to-copy PASS; spec [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md). HW verify §4.2/§4.3.4.2 → Phase 8)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -67,8 +67,8 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 4.1 | See Admin ID, copy to clipboard | **FAIL** | — | Phase 7; today only truncated signer in `SessionChip` |
-| 4.2 | View Admin ID on HW to verify | **FAIL** | — | Phase 7 |
+| 4.1 | See Admin ID, copy to clipboard | **PASS** | Phase 7 — `AdminIdRow`; [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) | Full Admin ID shown + copy at top of wallet panel; auth-only safety caption ("never send funds here"); no QR on Admin ID by design |
+| 4.2 | View Admin ID on HW to verify | **FAIL** | — | Phase 8 (HW device adapters) |
 
 ### PRD §4.3 — Admin Wallet management
 
@@ -78,9 +78,9 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | 4.3.2 | Each funded address + per-address net | **PASS** | R1.6, `compose-addresses-with-balance.ts` | External indices with balance > 0 only; change with funds not listed (Phase 2 policy) |
 | 4.3.3 | Unconfirmed tx list + fee bump | **PARTIAL** | Phase 5 — `wallet_transactions.rs`, `admin_wallet_list_unconfirmed_txs` / `admin_wallet_bump_fee` IPC, `UnconfirmedTxsList` panel section; [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md); E2E spec: `desktop-app/e2e-webdriver/test/specs/fee-bump.e2e.js` | Unconfirmed **sent** txs listed with fee/rate. Plain sends bump via **RBF** (BDK `build_fee_bump`); governance commits with a pending pre-signed reveal bump via **CPFP** — a child on the reveal's change lifts the commit+reveal package rate (RBF would invalidate the reveal, R1.0.1). Both sign via session `PsbtSigner`, Electrum-first broadcast. Watch-only sessions see the list; Bump disabled. **Preconditions for PASS:** (1) F-001 persistence fix merged ✅, (2) WebDriver E2E for fee-bump flow (spec created; run `cd desktop-app/e2e-webdriver && npm run test:e2e:fee-bump`), (3) HW signing path for bump (Phase 8). Watch-only cannot bump with HW signing; Trezor Admin Wallet PSBT signing not implemented. |
 | 4.3.4.1 | First unused receive address (text) | **PASS** | R1.3, `ReceiveAddressRow` | — |
-| 4.3.4.1 | Receive address in QR | **FAIL** | — | Phase 7 |
-| 4.3.4.1 | Copy via text or QR click | **PARTIAL** | `CopyButton` on text | QR not shipped |
-| 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 7 / 8 |
+| 4.3.4.1 | Receive address in QR | **PASS** | Phase 7 — `ReceiveAddressRow` + `QrCode` (`qrcode.react`); [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) | Bare-address payload (not BIP-21); pinned by `build-receive-qr-value` test |
+| 4.3.4.1 | Copy via text or QR click | **PASS** | Phase 7 — shared `useClipboardCopy`; address text + QR + icon all copy | — |
+| 4.3.4.2 | Verify receive address on HW | **FAIL** | — | Phase 8 (HW device adapters) |
 | 4.3.4.3 | Rotate after credit (one-time use) | **PASS** | R1.3, `next_receive_address` | BDK “used” on observe-in-tx |
 | 4.3.5 | Send BTC form + validations | **PASS** | Phase 6 — PRs [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), [#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294); specs [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) | **Regtest/testnet dev-mnemonic path.** HW on-device confirm → Phase 8; mainnet → Phase 10 |
 | 4.3.5.1 | Destination validation (standard types, network mismatch copy) | **PASS** | P6.2 (PR #292) — `admin_wallet_validate_send_address`, `format-send-error.ts` | Exact PRD copy byte-tested; backend-authoritative parse; debounced inline |
@@ -124,13 +124,13 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 |----------------|-----------------|---------------|
 | §4.3.1 | R1.5 | **PASS** |
 | §4.3.2 | R1.6 | **PASS** |
-| §4.3.4 | R1.3 (rotation only) | **PARTIAL** (QR + HW verify **FAIL**) |
+| §4.3.4 | R1.3 (rotation) + Phase 7 (QR + click-to-copy) | **PARTIAL** (QR ✅ Phase 7; HW verify **FAIL** → Phase 8) |
 | Wallet panel UI | R1.7 | **PASS** |
 | §4.3.3 | Phase 5 | **PARTIAL** (F-001 persistence ✅; E2E spec created; HW bump Phase 8) |
 | §4.3.5 | Phase 6 (PRs #289/#292/#293/[#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294)) | **PASS** (regtest / dev mnemonic) ✅ — HW on-device Phase 8 |
 | US-H4 broadcast fee | Phase 4 | **PASS** ✅ |
 
-**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Phase 5:** done ✅. **Phase 6:** done ✅ (Send — regtest/dev mnemonic). **Next:** Phase 7 (Admin ID UI + receive QR).
+**Release 1:** R1.0–R1.7 done. **Release 2:** R2.1–R2.3 done ✅. **Phase 4:** done ✅. **Phase 5:** done ✅. **Phase 6:** done ✅ (Send — regtest/dev mnemonic). **Phase 7:** done ✅ (Admin ID display/copy + receive QR & click-to-copy). **Next:** Phase 8 (HW direct adapters — Send-on-HW + verify-on-device, incl. §4.2 / §4.3.4.2).
 
 ---
 

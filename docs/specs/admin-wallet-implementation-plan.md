@@ -656,19 +656,20 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 ---
 
-#### Phase 7 — Admin ID UI (receive rotation shipped in Release 1)
+#### Phase 7 — Admin ID UI (receive rotation shipped in Release 1) — **DONE ✅**
 
 > Receive-address rotation is delivered in **Release 1 (R1.3)**. This phase covers only the remainder.
+> Shipped: spec [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md); §4.1 + §4.3.4.1 **PASS** in the compliance matrix.
 
-**Goal:** PRD §4.1–4.2 Admin ID display/copy + QR.
+**Goal:** PRD §4.1 Admin ID display/copy + §4.3.4.1 receive QR.
 
-**In scope:** Admin ID `m/84'/0'/73'/0/0` shown and copyable in UI; QR for receive/Admin ID.
+**In scope (delivered):** Admin ID `m/84'/0'/73'/0/0` shown in full and copyable at the top of the wallet panel (`AdminIdRow`), with an auth-only safety caption; receive address rendered as text **and** QR (`QrCode` over `qrcode.react`), with click-to-copy on the text, the QR, and the icon (shared `useClipboardCopy`).
 
-**Out of scope:** Receive rotation (Release 1, R1.3); HW verify-on-device (Phase 8).
+**Out of scope:** Receive rotation (Release 1, R1.3); **HW verify-on-device** for both the Admin ID (§4.2) and the receive address (§4.3.4.2) → **Phase 8**. By signer-safety decision the **Admin ID gets no QR** (auth-only, must never receive funds) — PRD mandates QR only for the receive address.
 
-**Done when:** Admin ID visible and copyable per PRD.
+**Done when:** Admin ID visible and copyable per PRD. ✅
 
-**Primary code areas:** settings/header Admin ID, wallet Receive tab (display only).
+**Primary code areas:** `domain/admin-wallet/components/admin-id-row.tsx`, `receive-address-row.tsx`, `wallet-panel-content.tsx`; shared `components/qr-code.tsx`, `hooks/use-clipboard-copy.ts`; pure `model/{build-receive-qr-value,admin-id-presentation}.ts`.
 
 ---
 

@@ -52,6 +52,7 @@ export function WalletSessionControl({
 				/>
 				<WalletPanelContent
 					disabledError={panel.disabledError}
+					adminId={addressSample}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
