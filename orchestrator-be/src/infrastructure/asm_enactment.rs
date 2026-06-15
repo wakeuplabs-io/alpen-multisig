@@ -51,7 +51,22 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 checkpoint.checkpoint_predicate(),
             ))
         }
-        MultisigAction::Update(UpdateAction::EeStfVk(_)) => Ok(false),
+        MultisigAction::Update(UpdateAction::EeStfVk(update)) => {
+            if authority != Authority::AlpenAdmin {
+                return Err(AppError::BadRequest(
+                    "EeStfVk proposal requires AlpenAdmin authority".to_string(),
+                ));
+            }
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let alpen = admin.authority(Role::AlpenAdministrator).ok_or_else(|| {
+                AppError::BadRequest(
+                    "admin state missing authority for role `AlpenAdministrator`".to_string(),
+                )
+            })?;
+            let target = UpdateAction::EeStfVk(update.clone());
+            let still_queued = admin.queued().iter().any(|q| q.action() == &target);
+            Ok(ee_stf_vk_enacted(alpen.last_seqno(), seq_no, still_queued))
+        }
         MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let current_keys: Vec<String> = bridge
@@ -106,6 +121,12 @@ pub(crate) async fn is_proposal_enacted_on_asm(
 
 fn predicate_keys_match(proposed: &PredicateKey, current: &PredicateKey) -> bool {
     proposed.id() == current.id() && proposed.condition() == current.condition()
+}
+
+/// EE STF VK updates emit an `EePredicateKeyUpdate` manifest log (no checkpoint field).
+/// Treat as enacted once the reveal consumed the seqno and the update left the admin queue.
+fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
+    last_seqno >= seq_no && !still_queued
 }
 
 /// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
@@ -431,5 +452,12 @@ mod tests {
     fn operator_set_no_op_is_vacuously_enacted() {
         let current = vec![even_key_hex_from_scalar(1)];
         assert!(operator_set_post_conditions_met(&current, &[], &[]));
+    }
+
+    #[test]
+    fn ee_stf_vk_enacted_requires_seqno_consumed_and_not_queued() {
+        assert!(!ee_stf_vk_enacted(2, 3, false));
+        assert!(!ee_stf_vk_enacted(3, 3, true));
+        assert!(ee_stf_vk_enacted(3, 3, false));
     }
 }
