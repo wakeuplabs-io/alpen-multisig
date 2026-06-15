@@ -672,6 +672,9 @@ pub async fn create_update_action(
     };
 
     let proposal = client.create_proposal(request).await?;
+    if proposal.status == "pending" && orchestrator_quorum_reached(&proposal) {
+        return transition_to_approved(client, &proposal.action_id).await;
+    }
     Ok(proposal)
 }
 
@@ -882,6 +885,7 @@ mod tests {
         last_report_request:
             Mutex<Option<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
         should_fail: bool,
+        required_signatures: u16,
     }
 
     impl MockOrchestratorClient {
@@ -895,6 +899,14 @@ mod tests {
                 report_broadcast_called: Mutex::new(false),
                 last_report_request: Mutex::new(None),
                 should_fail: false,
+                required_signatures: 2,
+            }
+        }
+
+        fn with_required_signatures(required_signatures: u16) -> Self {
+            Self {
+                required_signatures,
+                ..Self::new()
             }
         }
 
@@ -908,6 +920,7 @@ mod tests {
                 report_broadcast_called: Mutex::new(false),
                 last_report_request: Mutex::new(None),
                 should_fail: true,
+                required_signatures: 2,
             }
         }
 
@@ -960,7 +973,7 @@ mod tests {
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![ProposalSignature {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
@@ -1000,7 +1013,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![],
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1054,7 +1067,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures,
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1119,7 +1132,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![],
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1228,6 +1241,21 @@ mod tests {
         let req = mock.last_create_request().expect("request sent");
         assert_eq!(req.seq_no, 1);
         assert_eq!(req.action_hex, action_hex);
+    }
+
+    #[tokio::test]
+    async fn test_create_at_quorum_calls_transition() {
+        let mock = MockOrchestratorClient::with_required_signatures(1);
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 1, &action_hex);
+
+        let result = create_update_action(&mock, &action_hex, 1, &sig)
+            .await
+            .expect("should succeed");
+
+        assert_eq!(result.status, "approved");
+        assert!(*mock.transition_called.lock().unwrap());
     }
 
     #[tokio::test]
