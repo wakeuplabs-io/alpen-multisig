@@ -20,6 +20,12 @@ pub enum DecodedAction {
         remove_keys: Vec<String>,
         new_threshold: u8,
     },
+    #[serde(rename = "vk_update", rename_all = "camelCase")]
+    VkUpdate {
+        authority: String,
+        type_id: u8,
+        condition_hex: String,
+    },
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -37,9 +43,12 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
             new_threshold: update.new_threshold.get(),
         },
-        Ok(Action::VkUpdate(_)) | Ok(Action::OperatorSetUpdate(_)) | Err(_) => {
-            DecodedAction::Unknown { raw_hex: hex }
-        }
+        Ok(Action::VkUpdate(update)) => DecodedAction::VkUpdate {
+            authority: update.authority.as_str().to_string(),
+            type_id: update.type_id,
+            condition_hex: hex::encode(&update.condition),
+        },
+        Ok(Action::OperatorSetUpdate(_)) | Err(_) => DecodedAction::Unknown { raw_hex: hex },
     }
 }
 

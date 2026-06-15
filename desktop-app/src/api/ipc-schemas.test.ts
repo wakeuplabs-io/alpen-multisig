@@ -95,6 +95,14 @@ assert.equal(actionMultisig.success, true)
 const actionUnknown = decodedActionSchema.safeParse({ kind: 'unknown', rawHex: 'deadbeef' })
 assert.equal(actionUnknown.success, true)
 
+const actionVk = decodedActionSchema.safeParse({
+	kind: 'vk_update',
+	authority: 'strata_admin',
+	typeId: 1,
+	conditionHex: '',
+})
+assert.equal(actionVk.success, true)
+
 // orchestrator-auth raw schemas (snake_case from Tauri)
 const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({ challenge_id: 'c1', challenge_hex: 'aa' })
 assert.equal(rawChallenge.success, true)

@@ -3,6 +3,7 @@ import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
@@ -47,16 +48,8 @@ export function SignScreen() {
 		proposal.signatures.some((signature) => signature.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
 	const canSign = proposal?.status === 'pending' && !signerAlreadySigned
 	const proposalTypeLabel = useMemo(() => {
-		if (proposal === null) {
-			return 'Proposal update'
-		}
-		if (proposal.authority.toLowerCase().includes('sequencer')) {
-			return 'Sequencer update'
-		}
-		if (proposal.actionHex.toLowerCase().startsWith('0x01')) {
-			return 'Verification key update'
-		}
-		return 'Signer update'
+		if (proposal === null) return 'Proposal update'
+		return inferProposalTypeLabel(proposal)
 	}, [proposal])
 
 	const proposalTitle = useMemo(() => {

@@ -31,6 +31,13 @@ export const VK_PREDICATE_TYPE_LABELS: Record<VkPredicateType, string> = {
 	sp1_groth16: 'Sp1Groth16',
 }
 
+export function vkPredicateLabelFromTypeId(typeId: number): string {
+	for (const t of VK_PREDICATE_TYPES) {
+		if (VK_PREDICATE_TYPE_IDS[t] === typeId) return VK_PREDICATE_TYPE_LABELS[t]
+	}
+	return `Type ${typeId}`
+}
+
 /** condition hex length in chars (2 chars per byte) */
 const VK_CONDITION_HEX_LENGTH: Partial<Record<VkPredicateType, number>> = {
 	bip340_schnorr: 64, // 32 bytes — x-only pubkey

@@ -1,5 +1,6 @@
 import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
+import { vkPredicateLabelFromTypeId } from '@/domain/create-proposal/model/create-proposal.schema'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {
@@ -89,6 +90,24 @@ function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { ki
 	)
 }
 
+function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'vk_update' }> }) {
+	return (
+		<div className="mt-5">
+			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+				New verification key
+			</p>
+			<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2.5">
+				<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-[11px] font-medium text-[#92400e]">
+					{vkPredicateLabelFromTypeId(action.typeId)}
+				</span>
+				{action.conditionHex.length > 0 && (
+					<code className="block break-all font-mono text-[12px] leading-5 text-[#111827]">{action.conditionHex}</code>
+				)}
+			</div>
+		</div>
+	)
+}
+
 function UnknownActionDetails({ rawHex }: { rawHex: string }) {
 	return (
 		<div className="mt-5">
@@ -129,6 +148,8 @@ export function SignProposalView({
 
 			{decodedAction === null ? null : decodedAction.kind === 'multisig_update' ? (
 				<MultisigUpdateDetails action={decodedAction} />
+			) : decodedAction.kind === 'vk_update' ? (
+				<VkUpdateDetails action={decodedAction} />
 			) : (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
 			)}
