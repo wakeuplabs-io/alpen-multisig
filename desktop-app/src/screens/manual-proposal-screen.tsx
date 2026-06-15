@@ -351,6 +351,7 @@ export function ManualProposalScreen() {
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
+					adminIdAddress={wallet.addressSample}
 					disabledError={walletDisabledError}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}

@@ -3,6 +3,7 @@ import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
 import { DisabledWalletCard } from './disabled-wallet-card'
+import { AdminIdRow } from './admin-id-row'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
 import { AddressesWithBalanceList } from './addresses-with-balance-list'
@@ -10,6 +11,7 @@ import { UnconfirmedTxsList } from './unconfirmed-txs-list'
 import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
+	adminIdAddress: string | undefined
 	disabledError: AdminWalletError | null
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
@@ -33,6 +35,7 @@ export type WalletPanelContentProps = {
 }
 
 export function WalletPanelContent({
+	adminIdAddress,
 	disabledError,
 	confirmedBalanceSats,
 	unconfirmedBalanceSats,
@@ -54,51 +57,58 @@ export function WalletPanelContent({
 	syncError,
 	onRefreshSync,
 }: WalletPanelContentProps) {
-	if (disabledError !== null && (disabledError.type === 'Disabled' || disabledError.type === 'RegtestGuardViolation')) {
-		return (
-			<div className="p-4">
-				<DisabledWalletCard error={disabledError} />
-			</div>
-		)
-	}
+	const walletDisabled =
+		disabledError !== null && (disabledError.type === 'Disabled' || disabledError.type === 'RegtestGuardViolation')
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
-			<WalletBalance
-				confirmedSats={confirmedBalanceSats}
-				unconfirmedSats={unconfirmedBalanceSats}
-				isLoading={isBalanceLoading}
-			/>
+			<AdminIdRow address={adminIdAddress} />
 
-			<div className="mt-5">
-				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
-			</div>
+			{walletDisabled ? (
+				<div className="mt-5">
+					<DisabledWalletCard error={disabledError} />
+				</div>
+			) : (
+				<>
+					<div className={adminIdAddress ? 'mt-5' : ''}>
+						<WalletBalance
+							confirmedSats={confirmedBalanceSats}
+							unconfirmedSats={unconfirmedBalanceSats}
+							isLoading={isBalanceLoading}
+						/>
+					</div>
 
-			<div className="mt-5 border-t border-[#f3f4f6] pt-4">
-				<AddressesWithBalanceList
-					rows={addressRows}
-					isLoading={addressRowsLoading}
-					error={addressRowsError}
-					isExpanded={expandedSection === 'addresses'}
-					onToggle={onToggleAddresses}
-				/>
-			</div>
+					<div className="mt-5">
+						<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
+					</div>
 
-			<div className="mt-2 border-t border-[#f3f4f6] pt-2">
-				<UnconfirmedTxsList
-					rows={unconfirmedTxRows}
-					isLoading={unconfirmedTxsLoading}
-					error={unconfirmedTxsError}
-					isExpanded={expandedSection === 'transactions'}
-					onToggle={onToggleTransactions}
-					isWatchOnly={isWatchOnly}
-					onAfterBump={onRefreshSync}
-				/>
-			</div>
+					<div className="mt-5 border-t border-[#f3f4f6] pt-4">
+						<AddressesWithBalanceList
+							rows={addressRows}
+							isLoading={addressRowsLoading}
+							error={addressRowsError}
+							isExpanded={expandedSection === 'addresses'}
+							onToggle={onToggleAddresses}
+						/>
+					</div>
 
-			<div className="mt-auto border-t border-[#f3f4f6] pt-4">
-				<SyncChip syncStatus={syncStatus} isRefreshing={isSyncRefreshing} error={syncError} onRefresh={onRefreshSync} />
-			</div>
+					<div className="mt-2 border-t border-[#f3f4f6] pt-2">
+						<UnconfirmedTxsList
+							rows={unconfirmedTxRows}
+							isLoading={unconfirmedTxsLoading}
+							error={unconfirmedTxsError}
+							isExpanded={expandedSection === 'transactions'}
+							onToggle={onToggleTransactions}
+							isWatchOnly={isWatchOnly}
+							onAfterBump={onRefreshSync}
+						/>
+					</div>
+
+					<div className="mt-auto border-t border-[#f3f4f6] pt-4">
+						<SyncChip syncStatus={syncStatus} isRefreshing={isSyncRefreshing} error={syncError} onRefresh={onRefreshSync} />
+					</div>
+				</>
+			)}
 		</div>
 	)
 }

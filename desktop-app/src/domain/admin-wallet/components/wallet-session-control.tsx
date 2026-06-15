@@ -51,6 +51,7 @@ export function WalletSessionControl({
 					isWatchOnly={panel.isWatchOnly}
 				/>
 				<WalletPanelContent
+					adminIdAddress={addressSample}
 					disabledError={panel.disabledError}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
