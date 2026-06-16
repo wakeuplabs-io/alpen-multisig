@@ -220,4 +220,83 @@ assert.equal(
 )
 console.log('Rule 7 PASS: unconfirmed transactions + fee-bump wiring')
 
+// ── Rule 8: Phase 6 Send wiring — panel sub-view, capability gating, PRD copy ──
+
+const sendFormPath = path.join(domainRoot, 'components', 'send-form.tsx')
+const sendFormSource = fs.readFileSync(sendFormPath, 'utf8')
+const sendCopyPath = path.join(domainRoot, 'model', 'format-send-error.ts')
+const sendCopySource = fs.readFileSync(sendCopyPath, 'utf8')
+const panelContentForSend = fs.readFileSync(walletPanelContentPath, 'utf8')
+
+const rule8Violations: string[] = []
+if (!panelContentForSend.includes('SendForm')) {
+	rule8Violations.push('wallet-panel-content.tsx: must render SendForm for the send section')
+}
+if (!panelContentForSend.includes('isWatchOnly={isWatchOnly}')) {
+	rule8Violations.push('wallet-panel-content.tsx: SendForm must receive the capability-derived isWatchOnly')
+}
+if (!panelContentForSend.includes('onAfterSend={onRefreshSync}')) {
+	rule8Violations.push('wallet-panel-content.tsx: a successful send must trigger the panel sync+refresh')
+}
+if (!sendFormSource.includes('canConfirmSend')) {
+	rule8Violations.push('send-form.tsx: Confirm must be gated by the canConfirmSend predicate (§4.3.5.5)')
+}
+// PRD §4.3.5.1 / §4.3.5.2 copy lives in exactly one audited file — literal drift fails CI.
+if (!sendCopySource.includes("'Destination must be a bitcoin address.'")) {
+	rule8Violations.push("format-send-error.ts: must contain the literal 'Destination must be a bitcoin address.'")
+}
+if (!sendCopySource.includes('`Destination must be a ${expectedNetwork} bitcoin address.`')) {
+	rule8Violations.push('format-send-error.ts: must contain the wrong-network PRD copy template')
+}
+if (!sendCopySource.includes("'Insufficient funds'")) {
+	rule8Violations.push("format-send-error.ts: must contain the literal 'Insufficient funds' (§4.3.5.2)")
+}
+
+assert.equal(rule8Violations.length, 0, `Rule 8 violations — Phase 6 Send wiring:\n  ${rule8Violations.join('\n  ')}`)
+console.log('Rule 8 PASS: Send form wiring + PRD copy literals')
+
+// ── Rule 9: Phase 7 wiring — Admin ID row (§4.1) + receive QR (§4.3.4.1) ──────
+
+const adminIdRowPath = path.join(componentsDir, 'admin-id-row.tsx')
+const adminIdPresentationPath = path.join(modelDir, 'admin-id-presentation.ts')
+const receiveRowPath = path.join(componentsDir, 'receive-address-row.tsx')
+const sessionControlPath = path.join(componentsDir, 'wallet-session-control.tsx')
+
+const adminIdRow = fs.readFileSync(adminIdRowPath, 'utf8')
+const adminIdPresentation = fs.readFileSync(adminIdPresentationPath, 'utf8')
+const receiveRow = fs.readFileSync(receiveRowPath, 'utf8')
+const sessionControl = fs.readFileSync(sessionControlPath, 'utf8')
+const panelContentForAdminId = fs.readFileSync(walletPanelContentPath, 'utf8')
+
+const rule9Violations: string[] = []
+// §4.1: the panel renders the Admin ID row and threads the auth address in.
+if (!panelContentForAdminId.includes('AdminIdRow')) {
+	rule9Violations.push('wallet-panel-content.tsx: must render AdminIdRow (§4.1)')
+}
+if (!panelContentForAdminId.includes('adminId={adminId}')) {
+	rule9Violations.push('wallet-panel-content.tsx: must forward adminId to AdminIdRow')
+}
+if (!sessionControl.includes('adminId={addressSample}')) {
+	rule9Violations.push('wallet-session-control.tsx: must pass the session addressSample as adminId')
+}
+// Safety caption is a single audited literal (mirrors the §4.3.5 send-copy pattern).
+if (!adminIdPresentation.includes('never send funds to this address.')) {
+	rule9Violations.push('admin-id-presentation.ts: must own the Admin ID safety caption literal')
+}
+// §4.3.4.1: the receive row renders a real QR code.
+if (!receiveRow.includes('QrCode')) {
+	rule9Violations.push('receive-address-row.tsx: must render a QrCode (§4.3.4.1)')
+}
+// Signer safety: the Admin ID is auth-only and must NOT present a scannable QR.
+if (adminIdRow.includes('QrCode')) {
+	rule9Violations.push('admin-id-row.tsx: must NOT render a QR for the Admin ID (auth-only, never fundable)')
+}
+
+assert.equal(
+	rule9Violations.length,
+	0,
+	`Rule 9 violations — Phase 7 Admin ID + receive QR:\n  ${rule9Violations.join('\n  ')}`,
+)
+console.log('Rule 9 PASS: Admin ID row + receive QR wiring')
+
 console.log('All architecture compliance checks passed.')

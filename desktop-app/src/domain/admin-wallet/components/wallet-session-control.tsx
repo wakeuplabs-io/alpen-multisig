@@ -52,6 +52,7 @@ export function WalletSessionControl({
 				/>
 				<WalletPanelContent
 					disabledError={panel.disabledError}
+					adminId={addressSample}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
@@ -67,6 +68,8 @@ export function WalletSessionControl({
 					expandedSection={panel.expandedSection}
 					onToggleAddresses={panel.onToggleAddresses}
 					onToggleTransactions={panel.onToggleTransactions}
+					onOpenSend={panel.onOpenSend}
+					onCloseSend={panel.onCloseSend}
 					syncStatus={panel.syncStatus}
 					isSyncRefreshing={panel.isSyncRefreshing}
 					syncError={panel.syncError}

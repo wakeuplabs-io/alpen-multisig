@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { LogOutMutedIcon, LogOutRedIcon, ShieldPurpleIcon } from '@/assets/icons'
-import { AuthRole } from '@/types'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
+import { authorityLabelForRole } from '@/lib/authority-label'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
@@ -21,8 +21,7 @@ export function ProposalsDashboardScreen() {
 
 	const panel = useWalletPanelData()
 
-	const authorityLabel =
-		selectedRole === AuthRole.StrataAdministrator ? 'Strata Administrator' : 'Strata Sequencer Manager'
+	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -38,7 +37,7 @@ export function ProposalsDashboardScreen() {
 				throw new Error(currentSession.error)
 			}
 			setSignerPubkey(currentSession.data?.signerPubkey ?? null)
-			const response = await listProposals({ baseUrl: ORCHESTRATOR_BASE_URL })
+			const response = await listProposals({ baseUrl: getOrchestratorBaseUrl() })
 			if (!response.ok) {
 				throw new Error(response.error)
 			}

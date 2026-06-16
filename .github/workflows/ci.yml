@@ -106,6 +106,9 @@ jobs:
           npm run test:derive-proposal-actions --workspace desktop-app
           npm run test:model-format-sync-progress-label --workspace desktop-app
           npm run test:model-fee-rate --workspace desktop-app
+          npm run test:model-build-receive-qr-value --workspace desktop-app
+          npm run test:model-admin-id-presentation --workspace desktop-app
+          npm run test:architecture --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app

@@ -53,7 +53,7 @@ The **Admin Wallet** is the signer's BIP-86 Taproot (`m/86'/0'/73'/n/n`) BTC cus
 | R2.3 ✅ | Electrum URL in Node Config | Same pattern as BTC RPC / Strata — Local, Trusted, Custom |
 | **4** ✅ | **Governance broadcast fee rate** | **US-H4** — sat/vB on commit broadcast; default from chain RPC; [`governance-broadcast-fee-selection.md`](./governance-broadcast-fee-selection.md); [`governance-broadcast-fee-selection-implementation.md`](./governance-broadcast-fee-selection-implementation.md); [`02-prd-update-impact.md`](../1-proposal/02-prd-update-impact.md) |
 | 5 ✅ | Transactions + fee-bump | PRD §4.3.3 (RBF for sends, CPFP for governance commits); [`admin-wallet-transactions-fee-bump.md`](./admin-wallet-transactions-fee-bump.md) |
-| 6 | Send BTC happy path | PRD §4.3.5 (regtest, dev mnemonic); reuses Phase 4 fee control pattern |
+| 6 ✅ | Send BTC happy path | PRD §4.3.5 **PASS (regtest / dev mnemonic)**; PRs [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289) (P6.1), [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292) (P6.2), [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293) (P6.3), [#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294) (P6.4); [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) + [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) |
 | 7 | Admin ID UI (receive rotation → R1.3) | PRD §4.1–4.2 |
 | 8 | HW adapters — Send-on-HW (broadcast signing → R1.1) | PRD §3.2 (Trezor/Ledger PSBT, no HWI) |
 | 9 | Shared Send + governance broadcast UX | Alta S9/S11, PRD §5.3.2 (shared Send chrome; fee entry → Phase 4/5) |
@@ -122,7 +122,7 @@ flowchart LR
 
 ## 4. Phased plan
 
-The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) and **Phase 5** (Transactions + fee-bump, PRD §4.3.3) are also complete. **Next:** Phase 6 (Send BTC happy path). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
+The plan has four parts: the completed **Foundation** (Phases 1–3.8), the completed **Release 1** (R1.0–R1.7), the completed **Release 2** (R2.1–R2.3 — Electrum wallet sync), and **Remaining phases (4–10)**. **Phase 4** (governance broadcast fee rate, US-H4) and **Phase 5** (Transactions + fee-bump, PRD §4.3.3) are also complete. **Phase 6** (Send BTC happy path) is complete ✅. **Next:** Phase 7 (Admin ID UI). PRD status: [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md).
 
 ### Foundation (Phases 1–3.8) — done
 
@@ -553,7 +553,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 **Done when:** R2.1–R2.3 complete — wallet panel read path syncs in production-viable time; Release 1 wallet UX parity; governance broadcast unchanged; CI green.
 
-**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Phase 5** (Transactions + fee-bump) is complete ✅. **Next:** Phase 6 (Send BTC happy path).
+**Prerequisite for:** Phases 5–10 on testnet/mainnet (R2 ✅). **Phase 4** (US-H4 broadcast fee rate) is also complete ✅. **Phase 5** (Transactions + fee-bump) and **Phase 6** (Send BTC) are complete ✅. **Next:** Phase 7 (Admin ID UI).
 
 **Supersedes:** [`admin-wallet-sync-progress.md`](./admin-wallet-sync-progress.md) as the primary mitigation for slow sync — block-scan progress UI remains **deferred** unless still needed post-R2.2.
 
@@ -585,7 +585,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 ### Remaining phases (5–10)
 
-Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Transactions + fee-bump) is complete ✅; **Phase 6** (Send BTC happy path) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
+Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Phase 5** (Transactions + fee-bump) and **Phase 6** (Send BTC happy path) are complete ✅; **Phase 7** (Admin ID UI) is next. **Phase 7 (receive QR) and Phase 8 (HW Send)** overlap with work already started in Release 1 — entries below list only what remains.
 
 #### Phase 4 — Governance broadcast fee rate ✅
 
@@ -629,33 +629,47 @@ Phases 5–10 continue after **Release 2** and **Phase 4** (both complete). **Ph
 
 ---
 
-#### Phase 6 — Send BTC happy path (regtest, dev mnemonic)
+#### Phase 6 — Send BTC happy path (regtest, dev mnemonic) ✅
+
+**Status:** Complete — P6.1 PR [#289](https://github.com/wakeuplabs-io/alpen-multisig/pull/289), P6.2 PR [#292](https://github.com/wakeuplabs-io/alpen-multisig/pull/292), P6.3 PR [#293](https://github.com/wakeuplabs-io/alpen-multisig/pull/293), P6.4 PR [#294](https://github.com/wakeuplabs-io/alpen-multisig/pull/294). PRD §4.3.5 **PASS (regtest / dev mnemonic)** in the compliance matrix; HW on-device confirm → Phase 8, mainnet → Phase 10.
+
+**Specs:** [`admin-wallet-send-btc.md`](./admin-wallet-send-btc.md) (functional roadmap, per-increment PRD §4.3.5 traceability) · [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) (technical design: `wallet_send.rs` use-case, IPC contracts + error codes, BDK build/drain semantics, UI state machines, full test plan).
 
 **Goal:** PRD §4.3.5 Send with validations (address network, amount, fee control aligned with Phase 4, change to `…/1/*`).
 
-**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate.
+**In scope:** Build/sign/broadcast via BDK; dev mnemonic on regtest; Confirm gate. Composes existing pieces (Phase 4 fee control, R1.1 `PsbtSigner`, Phase 4 M3 `TxBroadcaster`, R1.3 change-index discipline) — no new protocol or custody primitive.
 
-**Out of scope:** Hardware confirm, mainnet, full governance Send chrome (Phase 9).
+**Out of scope:** Hardware confirm (Phase 8), mainnet (Phase 10), full governance Send chrome (Phase 9).
 
-**Done when:** Regtest send succeeds with change to first unused internal index.
+**Slices (in order — each shippable on regtest, dev mnemonic):**
 
-**Primary code areas:** `WalletService` send path, Send screen, validation helpers.
+| Slice | Goal | PRD §4.3.5 |
+|---|---|---|
+| **P6.1** | Send pipeline walking skeleton: build → sign → broadcast, change to first unused internal index, minimal Confirm → txid | §4.3.5.4, §4.3.5.5 / §4.3.5.5.1 (thin fee reuse of §4.3.5.3) |
+| **P6.2** | Destination validation — standard types accepted; network / non-address rejected with exact PRD copy | §4.3.5.1 |
+| **P6.3** | Amount + fee contract + **Max** — `amount ≤ balance − fee`, "Insufficient funds"; default next-block, 0.1 step, max 10 000 | §4.3.5.2, §4.3.5.3 |
+| **P6.4** | Confirm gate + result / reject-retry surfaces | §4.3.5.5, §4.3.5.5.1 |
+
+**Done when:** Regtest send succeeds with change to first unused internal index; every §4.3.5 MUST met on the dev-mnemonic path; watch-only/HW sessions see Send disabled ("Hardware wallet required to sign"); §4.3.5 **PASS (regtest / dev mnemonic)** in the compliance matrix.
+
+**Primary code areas:** `WalletService` send path, Send screen, validation helpers, reused `fee-selection/` selector.
 
 ---
 
-#### Phase 7 — Admin ID UI (receive rotation shipped in Release 1)
+#### Phase 7 — Admin ID UI (receive rotation shipped in Release 1) — **DONE ✅**
 
 > Receive-address rotation is delivered in **Release 1 (R1.3)**. This phase covers only the remainder.
+> Shipped: spec [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md); §4.1 + §4.3.4.1 **PASS** in the compliance matrix.
 
-**Goal:** PRD §4.1–4.2 Admin ID display/copy + QR.
+**Goal:** PRD §4.1 Admin ID display/copy + §4.3.4.1 receive QR.
 
-**In scope:** Admin ID `m/84'/0'/73'/0/0` shown and copyable in UI; QR for receive/Admin ID.
+**In scope (delivered):** Admin ID `m/84'/0'/73'/0/0` shown in full and copyable at the top of the wallet panel (`AdminIdRow`), with an auth-only safety caption; receive address rendered as text **and** QR (`QrCode` over `qrcode.react`), with click-to-copy on the text, the QR, and the icon (shared `useClipboardCopy`).
 
-**Out of scope:** Receive rotation (Release 1, R1.3); HW verify-on-device (Phase 8).
+**Out of scope:** Receive rotation (Release 1, R1.3); **HW verify-on-device** for both the Admin ID (§4.2) and the receive address (§4.3.4.2) → **Phase 8**. By signer-safety decision the **Admin ID gets no QR** (auth-only, must never receive funds) — PRD mandates QR only for the receive address.
 
-**Done when:** Admin ID visible and copyable per PRD.
+**Done when:** Admin ID visible and copyable per PRD. ✅
 
-**Primary code areas:** settings/header Admin ID, wallet Receive tab (display only).
+**Primary code areas:** `domain/admin-wallet/components/admin-id-row.tsx`, `receive-address-row.tsx`, `wallet-panel-content.tsx`; shared `components/qr-code.tsx`, `hooks/use-clipboard-copy.ts`; pure `model/{build-receive-qr-value,admin-id-presentation}.ts`.
 
 ---
 

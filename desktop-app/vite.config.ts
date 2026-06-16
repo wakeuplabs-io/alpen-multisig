@@ -16,6 +16,20 @@ export default defineConfig({
 			'@': path.resolve(__dirname, './src'),
 		},
 	},
+	// Tauri renders in a modern evergreen webview (WebView2 / WebKitGTK), so the
+	// browser-matrix default target is unnecessary — and esbuild >= 0.28 (forced
+	// via the root `overrides` for GHSA-gv7w-rqvm-qjhr) no longer down-levels
+	// syntax to those old targets. Apply es2022 to both the build output and
+	// the dev-server pre-bundling (optimizeDeps) paths so packages like zod v4
+	// and react-hook-form v7.75+ don't hit the same esbuild transform error.
+	build: {
+		target: 'es2022',
+	},
+	optimizeDeps: {
+		esbuildOptions: {
+			target: 'es2022',
+		},
+	},
 	// Prevent vite from obscuring Rust errors
 	clearScreen: false,
 	// Tauri expects a fixed port

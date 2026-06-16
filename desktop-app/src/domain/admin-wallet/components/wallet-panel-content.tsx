@@ -3,14 +3,18 @@ import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
 import { DisabledWalletCard } from './disabled-wallet-card'
+import { AdminIdRow } from './admin-id-row'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
 import { AddressesWithBalanceList } from './addresses-with-balance-list'
 import { UnconfirmedTxsList } from './unconfirmed-txs-list'
+import { SendForm } from './send-form'
 import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
 	disabledError: AdminWalletError | null
+	/** Canonical BIP-84 Admin ID (auth address) shown at the top of the panel (PRD §4.1). */
+	adminId: string | undefined
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
@@ -26,6 +30,8 @@ export type WalletPanelContentProps = {
 	expandedSection: WalletPanelSection | null
 	onToggleAddresses(): void
 	onToggleTransactions(): void
+	onOpenSend(): void
+	onCloseSend(): void
 	syncStatus: SyncStatusDto | null
 	isSyncRefreshing: boolean
 	syncError: AdminWalletError | null
@@ -34,6 +40,7 @@ export type WalletPanelContentProps = {
 
 export function WalletPanelContent({
 	disabledError,
+	adminId,
 	confirmedBalanceSats,
 	unconfirmedBalanceSats,
 	isBalanceLoading,
@@ -49,6 +56,8 @@ export function WalletPanelContent({
 	expandedSection,
 	onToggleAddresses,
 	onToggleTransactions,
+	onOpenSend,
+	onCloseSend,
 	syncStatus,
 	isSyncRefreshing,
 	syncError,
@@ -62,13 +71,55 @@ export function WalletPanelContent({
 		)
 	}
 
+	// Send sub-view (Phase 6, PRD §4.3.5): replaces the accordion stack while open.
+	if (expandedSection === 'send') {
+		return (
+			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+				<div className="mb-3 flex items-center gap-2">
+					<button
+						type="button"
+						onClick={onCloseSend}
+						aria-label="Back to wallet"
+						className="flex h-6 w-6 items-center justify-center rounded-md border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+					>
+						←
+					</button>
+					<h3 className="m-0 text-[13px] font-semibold text-[#111827]">Send BTC</h3>
+				</div>
+				<SendForm isWatchOnly={isWatchOnly} onBack={onCloseSend} onAfterSend={onRefreshSync} />
+			</div>
+		)
+	}
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+			<div className="mb-4">
+				<AdminIdRow adminId={adminId} />
+			</div>
+
 			<WalletBalance
 				confirmedSats={confirmedBalanceSats}
 				unconfirmedSats={unconfirmedBalanceSats}
 				isLoading={isBalanceLoading}
 			/>
+
+			<div className="mt-4">
+				<button
+					type="button"
+					onClick={onOpenSend}
+					disabled={isWatchOnly}
+					title={isWatchOnly ? 'Hardware wallet required to sign' : undefined}
+					data-testid="e2e-wallet-send-open"
+					className={`w-full rounded-lg px-3 py-2 text-[13px] font-medium transition ${
+						isWatchOnly
+							? 'cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]'
+							: 'bg-[#111827] text-white hover:bg-[#1f2937]'
+					}`}
+				>
+					Send
+				</button>
+				{isWatchOnly && <p className="m-0 mt-1 text-[11px] text-[#9ca3af]">Hardware wallet required to sign</p>}
+			</div>
 
 			<div className="mt-5">
 				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />

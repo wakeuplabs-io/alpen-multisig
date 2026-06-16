@@ -35,6 +35,7 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
         custom_btc_rpc_pass: Some(btc_pass),
         custom_strata_rpc_url: None,
         custom_electrum_url: std::env::var("ELECTRUM_URL").ok(),
+        custom_orchestrator_url: None,
     }));
 
     let account_xpub = tokio::task::spawn_blocking(|| ledger::get_account_xpub("m/86'/1'/73'"))

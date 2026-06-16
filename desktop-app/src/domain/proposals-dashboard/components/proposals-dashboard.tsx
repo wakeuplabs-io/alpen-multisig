@@ -211,12 +211,12 @@ function PendingTab({
 
 	return (
 		<div className="flex flex-col gap-7">
-			{quorumReached.length > 0 && (
+			{pending.length > 0 && (
 				<ProposalGroup
-					title="Quorum reached"
-					count={quorumReached.length}
-					groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
-					proposals={quorumReached}
+					title="Pending"
+					count={pending.length}
+					groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
+					proposals={pending}
 					signerPubkey={signerPubkey}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
@@ -224,12 +224,12 @@ function PendingTab({
 					onCancelProposal={onCancelProposal}
 				/>
 			)}
-			{pending.length > 0 && (
+			{quorumReached.length > 0 && (
 				<ProposalGroup
-					title="Pending"
-					count={pending.length}
-					groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
-					proposals={pending}
+					title="Quorum reached"
+					count={quorumReached.length}
+					groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
+					proposals={quorumReached}
 					signerPubkey={signerPubkey}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}

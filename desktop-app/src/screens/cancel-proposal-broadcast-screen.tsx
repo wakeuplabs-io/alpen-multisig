@@ -1,5 +1,5 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
@@ -36,7 +36,7 @@ export function CancelProposalBroadcastScreen() {
 		error,
 		prepare,
 		broadcast,
-	} = useCancelBroadcast(ORCHESTRATOR_BASE_URL, actionId ?? '', feeRateSatPerKvb)
+	} = useCancelBroadcast(getOrchestratorBaseUrl(), actionId ?? '', feeRateSatPerKvb)
 
 	async function handleBack() {
 		await disconnectSession()

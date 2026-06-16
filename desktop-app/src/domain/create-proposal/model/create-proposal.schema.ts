@@ -45,7 +45,7 @@ const VK_CONDITION_HEX_LENGTH: Partial<Record<VkPredicateType, number>> = {
 }
 
 const createProposalFormObjectSchema = z.object({
-	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update']),
+	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update', 'sequencer_key_update']),
 	seqNo: z.string(),
 	title: z.string().max(512, 'Title must be at most 512 characters'),
 	keysToAdd: z.array(keyRowSchema),
@@ -55,6 +55,7 @@ const createProposalFormObjectSchema = z.object({
 	newVkHex: z.string(),
 	operatorsToAdd: z.array(keyRowSchema),
 	operatorIndicesToRemove: z.array(keyRowSchema),
+	newSequencerKeyHex: z.string(),
 })
 
 export type CreateProposalFormValues = z.infer<typeof createProposalFormObjectSchema>
@@ -323,6 +324,17 @@ export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildC
 						message: 'Duplicate operator index',
 					})
 				}
+			}
+		} else if (data.actionType === 'sequencer_key_update') {
+			const key = data.newSequencerKeyHex.trim()
+			if (key.length === 0) {
+				ctx.addIssue({ code: 'custom', path: ['newSequencerKeyHex'], message: 'New sequencer key is required' })
+			} else if (!EVEN_PUBKEY_HEX_PATTERN.test(key)) {
+				ctx.addIssue({
+					code: 'custom',
+					path: ['newSequencerKeyHex'],
+					message: 'Sequencer key must be an x-only pubkey hex (32 bytes, 64 hex chars, no 02/03 prefix)',
+				})
 			}
 		} else {
 			const expectedLen = VK_CONDITION_HEX_LENGTH[data.vkTypeId]
