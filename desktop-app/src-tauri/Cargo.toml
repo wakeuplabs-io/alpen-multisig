@@ -33,8 +33,8 @@ rfd = "0.15"
 strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
 strata-asm-params = { workspace = true }
 strata-asm-common = { workspace = true }
-strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "71e8287e72dcabf79d05b821fb48c81ff27f8a3b" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "71e8287e72dcabf79d05b821fb48c81ff27f8a3b" }
 strata-asm-proto-bridge-v1 = { workspace = true }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }

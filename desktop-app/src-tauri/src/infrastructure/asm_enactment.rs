@@ -85,11 +85,17 @@ fn extract_multisig_config_update(
             Authority::SequencerManager,
             MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)),
         ) => Ok(Some(update.config())),
+        (
+            Authority::SecurityCouncil,
+            MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(update)),
+        ) => Ok(Some(update.config())),
         // MultisigUpdate variant present but wrong authority — data integrity issue.
         (
             _,
             MultisigAction::Update(
-                UpdateAction::StrataAdminMultisig(_) | UpdateAction::StrataSeqManagerMultisig(_),
+                UpdateAction::StrataAdminMultisig(_)
+                | UpdateAction::StrataSeqManagerMultisig(_)
+                | UpdateAction::StrataSecurityCouncilMultisig(_),
             ),
         ) => {
             Err("action variant does not match proposal authority for enactment check".to_string())

@@ -8,6 +8,8 @@ export function authorityLabelForRole(role: AuthRole): string {
 			return 'Strata Sequencer Manager'
 		case AuthRole.AlpenAdministrator:
 			return 'Alpen Administrator'
+		case AuthRole.StrataSecurityCouncil:
+			return 'Strata Security Council'
 		default:
 			return 'Unknown authority'
 	}

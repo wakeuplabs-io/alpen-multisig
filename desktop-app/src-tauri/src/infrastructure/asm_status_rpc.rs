@@ -5,7 +5,7 @@ use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
-use strata_asm_proto_checkpoint::{state::CheckpointState, subprotocol::CheckpointSubprotocol};
+use strata_asm_proto_checkpoint::{CheckpointState, CheckpointSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::auth::AuthRole;
@@ -67,6 +67,10 @@ pub async fn fetch_role_membership(
     role_to_keys.insert(
         AuthRole::AlpenAdministrator,
         authority_keys_hex(&admin, AuthRole::AlpenAdministrator)?,
+    );
+    role_to_keys.insert(
+        AuthRole::StrataSecurityCouncil,
+        authority_keys_hex(&admin, AuthRole::StrataSecurityCouncil)?,
     );
 
     Ok((role_to_keys, now_unix_ms()))

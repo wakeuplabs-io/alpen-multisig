@@ -9,8 +9,8 @@ use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
-use strata_asm_proto_checkpoint::state::CheckpointState;
-use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
+use strata_asm_proto_checkpoint::CheckpointState;
+use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_predicate::PredicateKey;
@@ -127,13 +127,18 @@ fn extract_multisig_config_update(
             Authority::AlpenAdmin,
             MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)),
         ) => Ok(Some(update.config())),
+        (
+            Authority::SecurityCouncil,
+            MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(update)),
+        ) => Ok(Some(update.config())),
         // MultisigUpdate variant present but wrong authority — data integrity issue.
         (
             _,
             MultisigAction::Update(
                 UpdateAction::StrataAdminMultisig(_)
                 | UpdateAction::StrataSeqManagerMultisig(_)
-                | UpdateAction::AlpenAdminMultisig(_),
+                | UpdateAction::AlpenAdminMultisig(_)
+                | UpdateAction::StrataSecurityCouncilMultisig(_),
             ),
         ) => Err(AppError::BadRequest(
             "action variant does not match proposal authority for enactment check".to_string(),
@@ -217,6 +222,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),

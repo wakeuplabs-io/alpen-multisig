@@ -253,11 +253,7 @@ pub fn logout() -> Result<(), String> {
 }
 
 fn role_wire(role: AuthRole) -> &'static str {
-    match role {
-        AuthRole::StrataAdministrator => "strata_administrator",
-        AuthRole::StrataSequencerManager => "strata_sequencer_manager",
-        AuthRole::AlpenAdministrator => "alpen_administrator",
-    }
+    role.as_wire_str()
 }
 
 fn now_unix_ms() -> u64 {

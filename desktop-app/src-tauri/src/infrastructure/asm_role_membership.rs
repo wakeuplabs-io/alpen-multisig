@@ -30,6 +30,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),

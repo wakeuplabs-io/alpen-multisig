@@ -10,7 +10,7 @@ use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
     AlpenAdminMultisigUpdate, EeStfVkUpdate, OlStfVkUpdate,
     OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
-    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -117,6 +117,11 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                 )),
                 Authority::AlpenAdmin => Ok(MultisigAction::Update(
                     UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(config_update)),
+                )),
+                Authority::SecurityCouncil => Ok(MultisigAction::Update(
+                    UpdateAction::StrataSecurityCouncilMultisig(
+                        StrataSecurityCouncilMultisigUpdate::new(config_update),
+                    ),
                 )),
                 other => Err(CodecError::UnsupportedAuthority(format!(
                     "encoding not implemented for authority `{other:?}`"
@@ -233,8 +238,22 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
                 condition: key.condition().to_vec(),
             }))
         }
+        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(update)) => {
+            let domain_update =
+                multisig_update_from_threshold_config(Authority::SecurityCouncil, update.config())?;
+            Ok(Action::MultisigUpdate(domain_update))
+        }
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
+        }
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => {
+            Err(CodecError::UnsupportedVariant("Defcon1"))
+        }
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => {
+            Err(CodecError::UnsupportedVariant("Defcon3"))
+        }
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
+            Err(CodecError::UnsupportedVariant("SafeHarbourAddress"))
         }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }

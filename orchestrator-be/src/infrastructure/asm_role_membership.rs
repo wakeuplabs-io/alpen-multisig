@@ -163,6 +163,7 @@ fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, Str
         Authority::StrataAdmin => Ok(UpdateTxType::StrataAdminMultisigUpdate),
         Authority::AlpenAdmin => Ok(UpdateTxType::AlpenAdminMultisigUpdate),
         Authority::SequencerManager => Ok(UpdateTxType::StrataSeqManagerMultisigUpdate),
+        Authority::SecurityCouncil => Ok(UpdateTxType::StrataSecurityCouncilMultisigUpdate),
         _ => Err(format!(
             "authority `{authority:?}` has no UpdateTxType mapping"
         )),
@@ -178,6 +179,7 @@ fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
@@ -201,6 +203,10 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     role_to_keys.insert(
         Role::AlpenAdministrator,
         authority_keys_hex(&admin, Role::AlpenAdministrator)?,
+    );
+    role_to_keys.insert(
+        Role::StrataSecurityCouncil,
+        authority_keys_hex(&admin, Role::StrataSecurityCouncil)?,
     );
 
     Ok(role_to_keys)
@@ -353,6 +359,9 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         ),
         Authority::SequencerManager => false,
+        Authority::SecurityCouncil => signer_pubkey.eq_ignore_ascii_case(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        ),
         _ => return None,
     };
     Some(is_member)
@@ -372,6 +381,7 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
         Authority::StrataAdmin => Some(0),
         Authority::SequencerManager => Some(0),
         Authority::AlpenAdmin => Some(0),
+        Authority::SecurityCouncil => Some(0),
         _ => None,
     }
 }
@@ -391,6 +401,7 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
         Authority::AlpenAdmin => Some(2),
+        Authority::SecurityCouncil => Some(2),
         _ => None,
     }
 }
@@ -406,7 +417,10 @@ fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
         return None;
     }
     match authority {
-        Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
+        Authority::StrataAdmin
+        | Authority::AlpenAdmin
+        | Authority::SequencerManager
+        | Authority::SecurityCouncil => Some(2016),
         _ => None,
     }
 }
@@ -437,7 +451,7 @@ mod tests {
         );
         assert_eq!(
             authority_asm_support(SecurityCouncil),
-            AuthorityAsmSupport::Unsupported
+            AuthorityAsmSupport::Supported
         );
         assert_eq!(
             authority_asm_support(PayoutAdmin),
@@ -453,5 +467,37 @@ mod tests {
             "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
         );
         assert_eq!(is_member, Some(true));
+    }
+
+    #[test]
+    fn security_council_has_mock_mappings() {
+        assert_eq!(
+            authority_to_update_tx_type(Authority::SecurityCouncil),
+            Ok(UpdateTxType::StrataSecurityCouncilMultisigUpdate)
+        );
+        assert_eq!(
+            authority_to_role(Authority::SecurityCouncil),
+            Ok(Role::StrataSecurityCouncil)
+        );
+
+        let is_member = mock_membership(
+            "mock://asm-membership",
+            Authority::SecurityCouncil,
+            "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+        );
+        assert_eq!(is_member, Some(true));
+
+        assert_eq!(
+            mock_last_seqno("mock://asm-membership", Authority::SecurityCouncil),
+            Some(0)
+        );
+        assert_eq!(
+            mock_threshold("mock://asm-membership", Authority::SecurityCouncil),
+            Some(2)
+        );
+        assert_eq!(
+            mock_lock_period("mock://asm-membership", Authority::SecurityCouncil),
+            Some(2016)
+        );
     }
 }

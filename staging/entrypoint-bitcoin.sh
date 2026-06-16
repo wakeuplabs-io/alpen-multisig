@@ -22,7 +22,7 @@ if [ ! -f "$INITIALIZED_FLAG" ]; then
         -server=1 -txindex=1 \
         -rpcbind=127.0.0.1 -rpcallowip=127.0.0.1 \
         -rpcuser=user -rpcpassword=password -rpcport=18443 \
-        -zmqpubrawblock=tcp://0.0.0.0:28332 \
+        -zmqpubhashblock=tcp://0.0.0.0:28332 \
         -fallbackfee=0.0002 \
         -daemon
 
@@ -53,7 +53,7 @@ exec bitcoind \
     -server=1 -txindex=1 \
     -rpcbind=0.0.0.0 -rpcallowip=0.0.0.0/0 \
     -rpcuser=user -rpcpassword=password -rpcport=18443 \
-    -zmqpubrawblock=tcp://0.0.0.0:28332 \
+    -zmqpubhashblock=tcp://0.0.0.0:28332 \
     -fallbackfee=0.0002 \
     -wallet=staging \
     -daemon=0

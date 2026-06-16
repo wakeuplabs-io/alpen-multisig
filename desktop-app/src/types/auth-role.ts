@@ -3,4 +3,5 @@ export enum AuthRole {
 	StrataSequencerManager = 'strata_sequencer_manager',
 	AlpenAdministrator = 'alpen_administrator',
 	PayoutAdministrator = 'payout_administrator',
+	StrataSecurityCouncil = 'security_council',
 }

@@ -62,8 +62,10 @@ export function authorityFromRole(role: AuthRole): string {
 			return 'sequencer_manager'
 		case AuthRole.AlpenAdministrator:
 			return 'alpen_admin'
+		case AuthRole.StrataSecurityCouncil:
+			return 'security_council'
 		default:
-			return 'strata_admin'
+			throw new Error(`No authority mapping for role: ${role}`)
 	}
 }
 

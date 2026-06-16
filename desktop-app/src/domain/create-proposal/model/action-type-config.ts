@@ -27,6 +27,16 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 		title: 'Sequencer key update',
 		description: 'Rotate the sequencer public key.',
 	},
+	defcon1: {
+		actionType: 'defcon1',
+		title: 'Defcon 1',
+		description: 'Immediate bridge safe harbour activation. Irreversible.',
+	},
+	defcon3: {
+		actionType: 'defcon3',
+		title: 'Defcon 3',
+		description: 'Timelocked bridge safe harbour activation.',
+	},
 }
 
 /** Action types available to each authority, in display order. The first entry is the default selection. */
@@ -34,6 +44,7 @@ const ACTION_TYPES_BY_AUTHORITY: Record<string, ActionType[]> = {
 	strata_admin: ['signer_update', 'vk_update', 'operator_set_update'],
 	sequencer_manager: ['signer_update', 'sequencer_key_update'],
 	alpen_admin: ['signer_update', 'vk_update'],
+	security_council: ['defcon1', 'defcon3'],
 }
 
 export function getActionTypeOptions(authority: string): ActionTypeOption[] {

@@ -38,6 +38,15 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		availabilityLabel: 'Available',
 		enabled: true,
 	},
+	{
+		id: 'strata-security-council',
+		role: AuthRole.StrataSecurityCouncil,
+		label: 'Strata Security Council',
+		description: 'Emergency Defcon actions (bridge safe harbour activation).',
+		signerSetSource: 'Strata ASM state',
+		availabilityLabel: 'Available',
+		enabled: true,
+	},
 ]
 
 export function WalletConnectScreen() {

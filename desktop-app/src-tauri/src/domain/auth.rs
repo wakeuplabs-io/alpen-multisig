@@ -9,6 +9,7 @@ pub enum AuthRole {
     StrataAdministrator,
     StrataSequencerManager,
     AlpenAdministrator,
+    StrataSecurityCouncil,
 }
 
 impl AuthRole {
@@ -17,6 +18,7 @@ impl AuthRole {
             AuthRole::StrataAdministrator => Role::StrataAdministrator,
             AuthRole::StrataSequencerManager => Role::StrataSequencerManager,
             AuthRole::AlpenAdministrator => Role::AlpenAdministrator,
+            AuthRole::StrataSecurityCouncil => Role::StrataSecurityCouncil,
         }
     }
 
@@ -25,6 +27,7 @@ impl AuthRole {
             AuthRole::StrataAdministrator => "strata_administrator",
             AuthRole::StrataSequencerManager => "strata_sequencer_manager",
             AuthRole::AlpenAdministrator => "alpen_administrator",
+            AuthRole::StrataSecurityCouncil => "security_council",
         }
     }
 }
