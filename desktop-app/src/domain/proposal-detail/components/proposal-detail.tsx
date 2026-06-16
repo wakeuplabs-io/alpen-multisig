@@ -13,6 +13,7 @@ import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-dec
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
+import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 
 type Props = {
 	proposal: Proposal
@@ -159,7 +160,7 @@ export function ProposalDetail({
 						<div className="min-w-0 flex-1">
 							<h2 className="m-0 font-['BIZ_UDPMincho'] text-[28px] leading-[1.2] text-[#0a0a0a]">{title}</h2>
 							<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
-								#{proposal.seqNo} · Signer update · {proposal.authority}
+								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {proposal.authority}
 							</p>
 						</div>
 						<StatusBadge status={displayStatus} />
