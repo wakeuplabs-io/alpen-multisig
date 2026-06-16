@@ -54,5 +54,6 @@ pub mod node_broadcaster;
 pub mod node_config_store;
 pub mod node_fee_estimator;
 pub mod orchestrator_client;
+pub mod pending_reveals_store;
 pub mod rpc_timeout;
 pub mod signing;

@@ -176,12 +176,18 @@ jobs:
           codesign --force --deep --sign - "$APP_PATH"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
 
+          # Derive version from the git tag (v0.2.0 → 0.2.0); fall back to
+          # 0.0.0-dev for workflow_dispatch runs that carry no tag.
+          TAG="${GITHUB_REF_NAME:-}"
+          APP_VERSION="${TAG#v}"
+          APP_VERSION="${APP_VERSION:-0.0.0-dev}"
+
           rm -f target/release/bundle/dmg/*.dmg
           bash target/release/bundle/dmg/bundle_dmg.sh \
             --volname "Alpen Multisig" \
             --icon-size 80 \
             --app-drop-link 180 170 \
-            "target/release/bundle/dmg/Alpen Multisig_0.1.0_aarch64.dmg" \
+            "target/release/bundle/dmg/Alpen Multisig_${APP_VERSION}_aarch64.dmg" \
             "target/release/bundle/macos/"
 
       - name: Record reproducibility digests

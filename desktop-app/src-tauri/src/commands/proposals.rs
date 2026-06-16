@@ -175,6 +175,9 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
         Ok(desktop_app::domain::action::Action::OperatorSetUpdate(_)) => {
             "operator_set_update".to_string()
         }
+        Ok(desktop_app::domain::action::Action::SequencerKeyUpdate(_)) => {
+            "sequencer_key_update".to_string()
+        }
         Err(_) => "unknown".to_string(),
     }
 }

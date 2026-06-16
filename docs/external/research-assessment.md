@@ -38,8 +38,10 @@ The `AdminTxType` enum defines the supported update types:
 The following update types require additional role definitions or protocol specifications from Alpen Labs:
 
 **Missing role definitions:**
-- Alpen Administrator updates (verification key update, signer set update)
 - Security Council updates (signer update, Defcon 1 transaction, Defcon 3 transaction)
+
+**Partially supported:**
+- Alpen Administrator VK update (`EeStfVk`) — Action encoding and signing supported; enactment detection on ASM not yet implemented. Signer updates (`AlpenAdminMultisigUpdate`) are fully supported.
 
 **Undefined protocol concepts:**
 - Safe Harbor address update
@@ -54,8 +56,8 @@ The following update types require additional role definitions or protocol speci
 | Authority | Supported Update Types |
 |-----------|------------------------|
 | Strata Sequencer Manager | 2/2 |
-| Strata Administrator | 3/7 |
-| Alpen Administrator | Requires upstream role definition |
+| Strata Administrator | 3/3 (signer, VK, operator) |
+| Alpen Administrator | 1/2 (signer supported; VK update pending enactment detection) |
 | Security Council | Requires upstream role definition |
 | Payout Administrator | Separate protocol implementation |
 

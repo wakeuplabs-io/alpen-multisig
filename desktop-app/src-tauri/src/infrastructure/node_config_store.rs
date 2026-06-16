@@ -32,6 +32,10 @@ pub struct NodeConfig {
     /// pre-R2.3 `node-config.json` files loading without error.
     #[serde(default)]
     pub custom_electrum_url: Option<String>,
+    /// Orchestrator backend URL override, applied by the frontend on top of
+    /// `VITE_ORCHESTRATOR_BASE_URL`. Not used by any Rust-side resolution.
+    #[serde(default)]
+    pub custom_orchestrator_url: Option<String>,
 }
 
 impl NodeConfig {

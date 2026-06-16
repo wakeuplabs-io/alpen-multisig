@@ -26,6 +26,8 @@ export type BumpFeeFormProps = {
 	suggestedSatPerKvb: number
 	maxSatPerKvb: number
 	vsizeVbytes: number
+	/** Target txid being bumped (for F-011 summary). */
+	targetTxid: string
 	state: BumpFeeState
 	onConfirm(satPerKvb: number): void
 	onClose(): void
@@ -50,6 +52,7 @@ export function BumpFeeForm({
 	suggestedSatPerKvb,
 	maxSatPerKvb,
 	vsizeVbytes,
+	targetTxid,
 	state,
 	onConfirm,
 	onClose,
@@ -161,6 +164,23 @@ export function BumpFeeForm({
 					{formatAdminWalletError(state.error).body}
 				</p>
 			)}
+
+			{/* F-011: Lightweight summary before confirming — shows method, target txid, and estimated fee */}
+			<div className="mt-2 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.5">
+				<p className="m-0 text-[11px] text-[#6b7280]">
+					<span className="font-medium text-[#374151]">{method === 'cpfp' ? 'CPFP' : 'RBF'}</span>
+					{' · '}
+					<span className="font-mono" title={targetTxid}>
+						tx {truncTxid(targetTxid)}
+					</span>
+					{estimatedFee !== null && (
+						<>
+							{' · '}
+							<span className="font-medium text-[#111827]">~{estimatedFee.toLocaleString()} sats</span>
+						</>
+					)}
+				</p>
+			</div>
 
 			<div className="mt-2 flex items-center gap-2">
 				<button

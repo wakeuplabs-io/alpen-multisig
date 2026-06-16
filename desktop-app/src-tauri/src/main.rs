@@ -6,7 +6,8 @@ use tauri::Manager;
 
 fn main() {
     desktop_app::infrastructure::env_loader::load_dotenv_files();
-    let pending_reveals = desktop_app::application::pending_reveals::new();
+    let pending_reveals =
+        desktop_app::infrastructure::pending_reveals_store::new_with_persistence();
     commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .manage(pending_reveals)
         .setup(|app| {
@@ -15,7 +16,12 @@ fn main() {
             use desktop_app::infrastructure::node_config_store::{
                 load_node_config, NodeConfigState,
             };
+            use desktop_app::infrastructure::pending_reveals_store::init_app_data_dir;
             use std::sync::{Arc, RwLock};
+
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                init_app_data_dir(data_dir);
+            }
 
             let config = load_node_config(app.handle());
             let node_config_arc = Arc::new(RwLock::new(config));

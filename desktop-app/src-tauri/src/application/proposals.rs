@@ -285,17 +285,15 @@ pub async fn submit_commit_then_reveal(
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
         // Step 5: Insert into PendingReveals BEFORE any broadcast.
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.insert(
-                action_id.to_string(),
-                crate::application::pending_reveals::PendingReveal {
-                    reveal_tx_hex: reveal_hex.clone(),
-                    reveal_txid: reveal_txid.clone(),
-                    commit_txid: commit_txid.clone(),
-                },
-            );
-        }
+        crate::infrastructure::pending_reveals_store::insert_and_persist(
+            pending,
+            action_id.to_string(),
+            crate::application::pending_reveals::PendingReveal {
+                reveal_tx_hex: reveal_hex.clone(),
+                reveal_txid: reveal_txid.clone(),
+                commit_txid: commit_txid.clone(),
+            },
+        );
 
         // Step 6: Broadcast — Electrum first, node fallback.
         broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
@@ -389,10 +387,7 @@ pub async fn await_reveal_confirmation(
     )
     .await?;
 
-    {
-        let mut guard = pending.lock().unwrap();
-        guard.remove(action_id);
-    }
+    crate::infrastructure::pending_reveals_store::remove_and_persist(pending, action_id);
 
     Ok(ConfirmOutcome::Confirmed)
 }
@@ -618,17 +613,15 @@ pub async fn broadcast_manual(
         let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.insert(
-                pending_key.clone(),
-                crate::application::pending_reveals::PendingReveal {
-                    reveal_tx_hex: reveal_hex.clone(),
-                    reveal_txid: reveal_txid.clone(),
-                    commit_txid: commit_txid.clone(),
-                },
-            );
-        }
+        crate::infrastructure::pending_reveals_store::insert_and_persist(
+            pending,
+            pending_key.clone(),
+            crate::application::pending_reveals::PendingReveal {
+                reveal_tx_hex: reveal_hex.clone(),
+                reveal_txid: reveal_txid.clone(),
+                commit_txid: commit_txid.clone(),
+            },
+        );
 
         broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
 
@@ -640,10 +633,7 @@ pub async fn broadcast_manual(
         )
         .await?;
 
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.remove(&pending_key);
-        }
+        crate::infrastructure::pending_reveals_store::remove_and_persist(pending, &pending_key);
 
         Ok((commit_txid, reveal_txid))
     }
@@ -672,6 +662,9 @@ pub async fn create_update_action(
     };
 
     let proposal = client.create_proposal(request).await?;
+    if proposal.status == "pending" && orchestrator_quorum_reached(&proposal) {
+        return transition_to_approved(client, &proposal.action_id).await;
+    }
     Ok(proposal)
 }
 
@@ -882,6 +875,7 @@ mod tests {
         last_report_request:
             Mutex<Option<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
         should_fail: bool,
+        required_signatures: u16,
     }
 
     impl MockOrchestratorClient {
@@ -895,6 +889,14 @@ mod tests {
                 report_broadcast_called: Mutex::new(false),
                 last_report_request: Mutex::new(None),
                 should_fail: false,
+                required_signatures: 2,
+            }
+        }
+
+        fn with_required_signatures(required_signatures: u16) -> Self {
+            Self {
+                required_signatures,
+                ..Self::new()
             }
         }
 
@@ -908,6 +910,7 @@ mod tests {
                 report_broadcast_called: Mutex::new(false),
                 last_report_request: Mutex::new(None),
                 should_fail: true,
+                required_signatures: 2,
             }
         }
 
@@ -960,7 +963,7 @@ mod tests {
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![ProposalSignature {
                     signer_pubkey: request.signer_pubkey.clone(),
                     signature_hex: request.signature_hex.clone(),
@@ -1000,7 +1003,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![],
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1054,7 +1057,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures,
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1119,7 +1122,7 @@ mod tests {
                 seq_no: 1,
                 action_hex: demo_action_hex(),
                 status: "pending".to_string(),
-                required_signatures: 2,
+                required_signatures: self.required_signatures,
                 signatures: vec![],
                 broadcast_status: "idle".to_string(),
                 commit_txid: None,
@@ -1228,6 +1231,21 @@ mod tests {
         let req = mock.last_create_request().expect("request sent");
         assert_eq!(req.seq_no, 1);
         assert_eq!(req.action_hex, action_hex);
+    }
+
+    #[tokio::test]
+    async fn test_create_at_quorum_calls_transition() {
+        let mock = MockOrchestratorClient::with_required_signatures(1);
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 1, &action_hex);
+
+        let result = create_update_action(&mock, &action_hex, 1, &sig)
+            .await
+            .expect("should succeed");
+
+        assert_eq!(result.status, "approved");
+        assert!(*mock.transition_called.lock().unwrap());
     }
 
     #[tokio::test]

@@ -351,8 +351,8 @@ export function ManualProposalScreen() {
 			<WalletPanel isOpen={isOpen} onClose={close} panelId="wallet-slide-dialog">
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
-					adminIdAddress={wallet.addressSample}
 					disabledError={walletDisabledError}
+					adminId={wallet.addressSample}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}
@@ -368,6 +368,8 @@ export function ManualProposalScreen() {
 					expandedSection={expandedSection}
 					onToggleAddresses={() => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses')}
 					onToggleTransactions={() => setExpandedSection(expandedSection === 'transactions' ? null : 'transactions')}
+					onOpenSend={() => setExpandedSection('send')}
+					onCloseSend={() => setExpandedSection(null)}
 					syncStatus={syncHook.syncStatus}
 					isSyncRefreshing={syncHook.isLoading}
 					syncError={syncHook.error}
