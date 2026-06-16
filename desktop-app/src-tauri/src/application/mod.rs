@@ -9,6 +9,7 @@ pub mod commit_funding;
 pub mod fee_estimation;
 pub mod orchestrator_auth;
 pub mod orchestrator_client;
+pub mod orchestrator_url;
 pub mod pending_reveals;
 pub mod proposals;
 pub mod psbt_signer;

@@ -4,6 +4,7 @@ use desktop_app::application::orchestrator_client::{
     CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
     ReportBroadcastProgressRequest,
 };
+use desktop_app::application::orchestrator_url::validate_orchestrator_base_url;
 use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
@@ -224,54 +225,11 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
     }
 }
 
-fn validate_orchestrator_base_url(base_url: &str) -> Result<(), String> {
-    let trimmed = base_url.trim();
-    if trimmed.starts_with("https://") {
-        return Ok(());
-    }
-    if trimmed.starts_with("http://localhost")
-        || trimmed.starts_with("http://127.0.0.1")
-        || trimmed.starts_with("http://[::1]")
-    {
-        return Ok(());
-    }
-    let allow_insecure = std::env::var("ALLOW_INSECURE_HTTP_URL")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    if allow_insecure {
-        return Ok(());
-    }
-    Err(
-        "orchestrator base_url must use https:// (http://localhost or 127.0.0.1 allowed for local dev only)"
-            .to_string(),
-    )
-}
-
 fn build_client(base_url: String) -> Result<HttpOrchestratorClient, String> {
     validate_orchestrator_base_url(&base_url)?;
     let session = orchestrator_auth::get_session()?
         .ok_or_else(|| "no orchestrator session; authenticate first".to_string())?;
     Ok(HttpOrchestratorClient::new(base_url).with_bearer_token(session.token))
-}
-
-#[cfg(test)]
-mod url_tests {
-    use super::validate_orchestrator_base_url;
-
-    #[test]
-    fn rejects_plain_http_remote() {
-        assert!(validate_orchestrator_base_url("http://evil.example/api/v1").is_err());
-    }
-
-    #[test]
-    fn allows_https() {
-        assert!(validate_orchestrator_base_url("https://orchestrator.example/api/v1").is_ok());
-    }
-
-    #[test]
-    fn allows_localhost_http() {
-        assert!(validate_orchestrator_base_url("http://127.0.0.1:3000/api/v1").is_ok());
-    }
 }
 
 #[cfg(test)]

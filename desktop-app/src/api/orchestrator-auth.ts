@@ -29,6 +29,17 @@ export function resolveOrchestratorBaseUrl(config: { mode: string; customOrchest
 	return ORCHESTRATOR_BASE_URL
 }
 
+// Override applied at runtime after node-config load/save — only in local mode.
+export function orchestratorOverrideFromConfig(config: {
+	mode: string
+	customOrchestratorUrl?: string
+}): string | null {
+	if (config.mode !== 'local') {
+		return null
+	}
+	return config.customOrchestratorUrl?.trim() || null
+}
+
 export type OrchestratorAuthChallenge = {
 	challengeId: string
 	challengeHex: string
