@@ -123,6 +123,12 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		removeKeys: z.array(z.string()),
 		newThreshold: z.number(),
 	}),
+	z.object({
+		kind: z.literal('vk_update'),
+		authority: z.string(),
+		typeId: z.number(),
+		conditionHex: z.string(),
+	}),
 	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
 ])
 

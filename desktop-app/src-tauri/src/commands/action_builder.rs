@@ -21,6 +21,12 @@ pub enum DecodedAction {
         remove_keys: Vec<String>,
         new_threshold: u8,
     },
+    #[serde(rename = "vk_update", rename_all = "camelCase")]
+    VkUpdate {
+        authority: String,
+        type_id: u8,
+        condition_hex: String,
+    },
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -38,10 +44,14 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
             new_threshold: update.new_threshold.get(),
         },
-        Ok(Action::VkUpdate(_))
-        | Ok(Action::OperatorSetUpdate(_))
-        | Ok(Action::SequencerKeyUpdate(_))
-        | Err(_) => DecodedAction::Unknown { raw_hex: hex },
+        Ok(Action::VkUpdate(update)) => DecodedAction::VkUpdate {
+            authority: update.authority.as_str().to_string(),
+            type_id: update.type_id,
+            condition_hex: hex::encode(&update.condition),
+        },
+        Ok(Action::OperatorSetUpdate(_)) | Ok(Action::SequencerKeyUpdate(_)) | Err(_) => {
+            DecodedAction::Unknown { raw_hex: hex }
+        }
     }
 }
 
@@ -163,6 +173,60 @@ pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHe
     let action_hex =
         action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
     Ok(BuildActionHexResponse { action_hex })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_vk_update_roundtrip() {
+        let input = BuildVkUpdateHexInput {
+            authority: "alpen_admin".to_string(),
+            type_id: 1,
+            condition_hex: String::new(),
+        };
+        let hex = build_vk_update_hex(input)
+            .expect("build should succeed")
+            .action_hex;
+        match decode_action_hex(hex) {
+            DecodedAction::VkUpdate {
+                authority,
+                type_id,
+                condition_hex,
+            } => {
+                assert_eq!(authority, "alpen_admin");
+                assert_eq!(type_id, 1);
+                assert_eq!(condition_hex, "");
+            }
+            other => panic!("expected VkUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decode_vk_update_with_condition_hex() {
+        let condition = "ab".repeat(32);
+        let input = BuildVkUpdateHexInput {
+            authority: "strata_admin".to_string(),
+            type_id: 10,
+            condition_hex: condition.clone(),
+        };
+        let hex = build_vk_update_hex(input)
+            .expect("build should succeed")
+            .action_hex;
+        match decode_action_hex(hex) {
+            DecodedAction::VkUpdate {
+                authority,
+                type_id,
+                condition_hex,
+            } => {
+                assert_eq!(authority, "strata_admin");
+                assert_eq!(type_id, 10);
+                assert_eq!(condition_hex, condition);
+            }
+            other => panic!("expected VkUpdate, got {other:?}"),
+        }
+    }
 }
 
 #[tauri::command]

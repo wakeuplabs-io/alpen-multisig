@@ -11,6 +11,7 @@ import {
 	UndoIcon,
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
+import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
@@ -397,7 +398,7 @@ function ProposalCard({
 	const signaturesProgress =
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
-	const proposalTypeLabel = inferProposalType(proposal)
+	const proposalTypeLabel = inferProposalTypeLabel(proposal)
 	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
 	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
 	const awaitingEnactment = proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
@@ -545,17 +546,7 @@ function ProposalCard({
 
 function buildProposalTitle(proposal: Proposal): string {
 	if (proposal.kind === 'cancel') return `Cancel #${proposal.seqNo}`
-	return `Proposal #${proposal.seqNo} - ${inferProposalType(proposal)}`
-}
-
-function inferProposalType(proposal: Proposal): string {
-	if (proposal.kind === 'cancel') return 'Cancel'
-	if (proposal.actionType === 'vk_update') return 'Verification key update'
-	if (proposal.actionType === 'operator_set_update') return 'Operator set update'
-	if (proposal.actionType === 'multisig_update') {
-		return proposal.authority.toLowerCase().includes('sequencer') ? 'Sequencer update' : 'Signer update'
-	}
-	return 'Unknown'
+	return `Proposal #${proposal.seqNo} - ${inferProposalTypeLabel(proposal)}`
 }
 
 type DisplayStatus = ProposalStatus | 'awaiting_enactment'
