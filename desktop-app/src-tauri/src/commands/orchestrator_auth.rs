@@ -2,6 +2,7 @@ use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
     CompleteOrchestratorAuthRequest, OrchestratorAuthChallenge, OrchestratorAuthSession,
 };
+use desktop_app::application::orchestrator_url::validate_orchestrator_base_url;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +26,7 @@ pub struct CompleteOrchestratorAuthInput {
 pub async fn orchestrator_auth_start(
     input: StartOrchestratorAuthInput,
 ) -> Result<OrchestratorAuthChallenge, String> {
+    validate_orchestrator_base_url(&input.base_url)?;
     orchestrator_auth::start_challenge(&input.base_url, &input.authority).await
 }
 
@@ -32,6 +34,7 @@ pub async fn orchestrator_auth_start(
 pub async fn orchestrator_auth_complete(
     input: CompleteOrchestratorAuthInput,
 ) -> Result<OrchestratorAuthSession, String> {
+    validate_orchestrator_base_url(&input.base_url)?;
     orchestrator_auth::complete_auth(
         &input.base_url,
         CompleteOrchestratorAuthRequest {
@@ -51,5 +54,6 @@ pub fn orchestrator_auth_get_session() -> Result<Option<OrchestratorAuthSession>
 
 #[tauri::command]
 pub async fn orchestrator_auth_logout(base_url: String) -> Result<(), String> {
+    validate_orchestrator_base_url(&base_url)?;
     orchestrator_auth::logout(&base_url).await
 }
