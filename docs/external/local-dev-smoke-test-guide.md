@@ -1,255 +1,135 @@
-# Local Dev Smoke Test Guide (APB)
+# Local Dev Smoke Test Guide
 
-> **Who this guide is for:** anyone — even with zero prior experience — who wants to try the
-> Alpen Multisig application **end-to-end on their own machine**, starting from a fresh copy of
-> the source code. You do **not** need to understand Bitcoin internals, Rust, or the Strata
-> protocol to follow it. Every step is a copy‑paste command or a click, and after each one we
-> tell you exactly what success looks like.
+> **Who this is for:** anyone — even with zero experience — who wants to try the Alpen Multisig
+> app **end-to-end on their own machine**, starting from a fresh copy of the source code. You do
+> **not** need to know Bitcoin, Rust, or the Strata protocol. Every step is a copy‑paste command
+> or a click, and after each one we tell you what success looks like.
 >
-> **What you will achieve:** a fully working local test network (a private Bitcoin "regtest"
-> chain plus every supporting service), the desktop app running in development mode, and one
-> complete governance action — creating a proposal, signing it with two signers, and
-> broadcasting it on your local chain.
+> **What you'll do:** start a private throwaway test network on your computer, open the app, and
+> complete one full governance action — create a proposal, sign it with two signers, and
+> broadcast it.
 >
-> **How long it takes:** about 30–60 minutes the first time (most of it is the computer building
-> things while you wait), and a few minutes on later runs.
+> **Time:** ~30–60 min the first time (mostly your computer building things while you wait), a
+> few minutes after that.
 
-This is the **single detailed walkthrough** for trying the app locally. For other topics, see:
+**Good news:** there is almost nothing to configure. The helper script starts every service for
+you, and the app already points at that local network by default. You mostly run two commands and
+then click through the app.
 
-- Installing a packaged release (not source): [Setup Guide](./setup-guide.md)
-- How the system is put together: [Architecture Overview](./architecture-overview.md)
-- Backend endpoints and authentication: [API Reference](./api-reference.md)
-- Supported hardware signing devices: [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md)
+For other topics see: [Setup Guide](./setup-guide.md) (install a packaged release),
+[Architecture Overview](./architecture-overview.md), [API Reference](./api-reference.md), and the
+[Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md). This document is the single
+detailed walkthrough for trying the app locally.
 
 ---
 
 ## Table of contents
 
-1. [Before you start: what you are about to run](#1-before-you-start-what-you-are-about-to-run)
-2. [Prerequisites (install these once)](#2-prerequisites-install-these-once)
-3. [Get the source code](#3-get-the-source-code)
-4. [Bring up the local services (the "stack")](#4-bring-up-the-local-services-the-stack)
-5. [Confirm every service is healthy](#5-confirm-every-service-is-healthy)
-6. [Configure and start the desktop app](#6-configure-and-start-the-desktop-app)
-7. [Happy‑path governance smoke test](#7-happy-path-governance-smoke-test)
-8. [Shutting everything down](#8-shutting-everything-down)
-9. [Troubleshooting (read this when something breaks)](#9-troubleshooting-read-this-when-something-breaks)
-10. [Quick reference card](#10-quick-reference-card)
+1. [Install the tools (once)](#1-install-the-tools-once)
+2. [Get the source code](#2-get-the-source-code)
+3. [Start the local network](#3-start-the-local-network)
+4. [Check everything is healthy](#4-check-everything-is-healthy)
+5. [Start the app](#5-start-the-app)
+6. [Run the smoke test](#6-run-the-smoke-test)
+7. [Shut everything down](#7-shut-everything-down)
+8. [Troubleshooting](#8-troubleshooting)
+9. [Quick reference](#9-quick-reference)
 
 ---
 
-## 1. Before you start: what you are about to run
-
-The app does not work alone — it talks to a small set of background **services**. The helper
-script in this repository starts all of them for you inside **Docker** (a tool that runs
-software in isolated "containers" so you don't have to install each piece by hand).
-
-| Service | What it does (in plain words) | Runs on your machine at |
-|---|---|---|
-| Bitcoin (regtest) | A private, throwaway Bitcoin network only you can see. Lets you mine blocks and send coins freely. | `localhost:18443` |
-| electrs | Lets the app quickly look up wallet balances on the chain. | `localhost:60401` |
-| ASM | The Strata "Anchor State Machine" that processes governance actions. | `localhost:8080` |
-| Orchestrator | The backend that coordinates proposals and collects signatures. | `localhost:3000` |
-| Regtest Dev API | A convenience helper to mine blocks and hand out free test coins. | `localhost:3001` |
-| PostgreSQL | The database the backend uses. | `localhost:5432` |
-
-> **"regtest" in one sentence:** it is a fake Bitcoin network meant for testing — coins have no
-> value, and you create blocks on demand by "mining" them with a single command.
-
-You will also run the **desktop app** itself in *development mode*, which means it runs straight
-from the source code (no installer needed) and reloads as code changes.
-
----
-
-## 2. Prerequisites (install these once)
+## 1. Install the tools (once)
 
 You need a **Linux** or **macOS** machine with a graphical desktop (the app opens a window, so a
-headless/SSH‑only server will not work for the final UI steps).
+headless/SSH‑only server won't work).
 
-Install the tools below. After each install, run the **"Verify"** command — if it prints a
-version number, you are good.
+Install each tool below, then run its **Verify** line — if it prints a version, you're good.
 
-### 2.1 Docker and Docker Compose v2
+| Tool | What it's for | Install | Verify |
+|---|---|---|---|
+| **Docker** + Compose v2 | Runs all the background services | <https://docs.docker.com/get-docker/> | `docker compose version` and `docker ps` (must not error) |
+| **Git** | Downloads the code | your OS package manager | `git --version` |
+| **Rust** (rustup) | Builds the app's native side | <https://rustup.rs> | `cargo --version` |
+| **Node.js 20** | Builds the app's interface | `nvm install 20 && nvm use 20` | `node --version` (v20.x) |
+| **curl** + **jq** | Used by the helper script | `sudo apt install jq` / `brew install jq` | `jq --version` |
 
-Runs all the background services.
+**Two extra notes:**
 
-- Install: follow the official guide for your OS at <https://docs.docker.com/get-docker/>.
-- On Linux, make sure your user can run Docker without `sudo` (see Docker's "post‑install" steps).
+- **Make sure Docker is actually running** before you start (on macOS, open Docker Desktop).
+  `docker ps` should print a table header with no error.
+- **You need access to the private `asm` submodule.** This comes with your Alpen Labs GitHub
+  account over SSH — if you can open <https://github.com/alpenlabs/asm> while logged in, you're
+  set. (Set up SSH if needed: <https://docs.github.com/en/authentication/connecting-to-github-with-ssh>.)
 
-**Verify:**
-
-```bash
-docker --version
-docker compose version
-```
-
-Expected: two version lines, e.g. `Docker version 27.x` and `Docker Compose version v2.x`.
-Also make sure the Docker engine is actually **running** (on macOS, open Docker Desktop):
-
-```bash
-docker ps
-```
-
-Expected: a table header (it can be empty) and **no** error like `Cannot connect to the Docker daemon`.
-
-### 2.2 Git
-
-Used to download the source code.
-
-**Verify:**
-
-```bash
-git --version
-```
-
-Expected: `git version 2.x`.
-
-> You also need **access to the private `asm` component** that ships as a Git "submodule". This
-> is normally granted through your Alpen Labs GitHub account over SSH. If you can open
-> <https://github.com/alpenlabs/asm> while logged in, you have access. If you are not sure, set
-> up an SSH key now: <https://docs.github.com/en/authentication/connecting-to-github-with-ssh>.
-
-### 2.3 Rust toolchain
-
-Used to build the backend and the desktop app's native side.
-
-- Install via rustup: <https://rustup.rs> (accept the defaults).
-- This project pins a specific Rust version in `rust-toolchain.toml`. You do **not** need to pick
-  it manually — the first build will download and use it automatically.
-
-**Verify:**
-
-```bash
-rustc --version
-cargo --version
-```
-
-Expected: both print a version. (They may show a different version than the project pin; that's
-fine — the pinned one is fetched on first build.)
-
-### 2.4 Node.js 20
-
-Used to build the desktop app's user interface.
-
-- The project expects **Node 20** (see the `.nvmrc` file). The easiest way is
-  [nvm](https://github.com/nvm-sh/nvm):
-
-```bash
-nvm install 20
-nvm use 20
-```
-
-**Verify:**
-
-```bash
-node --version   # should print v20.x
-npm --version
-```
-
-### 2.5 Command‑line helpers: `curl` and `jq`
-
-The startup script uses these to check health and hand out test coins.
-
-**Verify:**
-
-```bash
-curl --version
-jq --version
-```
-
-If `jq` is missing: `sudo apt install jq` (Linux) or `brew install jq` (macOS).
-
-### 2.6 Tauri system libraries (the desktop app's GUI engine)
-
-The desktop window is built with **Tauri**, which needs a few system libraries.
+**Tauri system libraries** (the app's window engine):
 
 - **Linux (Debian/Ubuntu):**
 
   ```bash
-  sudo apt update
-  sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+  sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
     libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 
-- **macOS:** install the Xcode Command Line Tools:
+- **macOS:** `xcode-select --install`
 
-  ```bash
-  xcode-select --install
-  ```
-
-> Full, always‑current Tauri prerequisites for every OS:
-> <https://tauri.app/start/prerequisites/>.
-
-**Checkpoint — you are ready when:** every "Verify" command above printed a version and
-`docker ps` did not error.
+> Always‑current Tauri prerequisites for every OS: <https://tauri.app/start/prerequisites/>.
 
 ---
 
-## 3. Get the source code
+## 2. Get the source code
 
-Use the **`main`** branch — that is where released, deliverable code lives. The `asm` component
-is a **submodule**, so it must be downloaded together with the main code; the
-`--recurse-submodules` flag does that in one go.
+Use the **`main`** branch — that's where released, deliverable code lives. The `--recurse-submodules`
+flag also downloads the `asm` component in one go.
 
 ```bash
 git clone --branch main --recurse-submodules https://github.com/wakeuplabs-io/alpen-multisig.git
 cd alpen-multisig
 ```
 
-**If you already cloned without submodules**, fetch them now:
+**Already cloned without submodules?** Run this once:
 
 ```bash
 git submodule update --init asm
 ```
 
-**Verify the submodule is present** (this file must exist):
+**Check it worked:**
 
 ```bash
-test -f asm/Cargo.toml && echo "OK: asm submodule is present" || echo "MISSING: run git submodule update --init asm"
+test -f asm/Cargo.toml && echo "OK" || echo "MISSING — run: git submodule update --init asm"
 ```
 
-Expected: `OK: asm submodule is present`.
+Expected: `OK`.
 
-> From here on, **run every command from the repository's top folder** (the `alpen-multisig`
-> directory you just entered) unless a step says otherwise.
+> From here on, run every command from this `alpen-multisig` folder.
 
 ---
 
-## 4. Bring up the local services (the "stack")
+## 3. Start the local network
 
-One script builds and starts every background service for you. The **first run downloads and
-builds Docker images, so it can take 10–20 minutes.** This is normal — let it finish.
+One script builds and starts everything (a private Bitcoin test network plus all supporting
+services). **The first run can take 10–20 minutes while it downloads and builds — that's normal.**
 
 ```bash
 ./scripts/local-stack.sh
 ```
 
-**What you should see:** the script prints progress sections such as
-`=== docker compose build ===`, `=== docker compose up (detached) ===`,
-`=== waiting for services to stabilize ===`, and finally `=== stack is up ===` followed by a
-status table where services show `✅ healthy` or `✅ running`.
+**What you should see:** progress sections ending with `=== stack is up ===` and a status table
+where services show `✅ healthy` or `✅ running`. When it finishes, the services keep running in
+the background and you get your terminal back.
 
-When it finishes, the services keep running in the background (detached), so you get your
-terminal back.
-
-> **Tip — start fresh anytime:** if a previous attempt left things in a weird state, run a clean
-> start, which wipes the throwaway chain data and rebuilds from zero:
->
-> ```bash
-> ./scripts/local-stack.sh --clean
-> ```
+> **Want a clean slate later?** `./scripts/local-stack.sh --clean` wipes the throwaway data and
+> starts fresh.
 
 ---
 
-## 5. Confirm every service is healthy
+## 4. Check everything is healthy
 
-**Do not open the app yet.** First make sure every service is up. Run:
+Before opening the app, confirm every service is up:
 
 ```bash
 ./scripts/local-stack.sh --status
 ```
 
-**What you should see:** a list ending with health markers. A healthy stack looks like:
+**What you should see** — every line healthy:
 
 ```
   bitcoin              ✅ healthy   (:18443)
@@ -260,256 +140,160 @@ terminal back.
   regtest-dev-api      ✅ healthy   (:3001)
 ```
 
-If any line shows `🔄 starting`, wait a minute and run the command again — ASM can take a little
-while on the first boot.
-
-### Optional: check each service yourself
-
-These commands prove each service answers. Each should return data (not an error):
-
-```bash
-# Backend (orchestrator) health
-curl http://localhost:3000/api/v1/health
-
-# Regtest helper — mine one block (also confirms it works)
-curl -X POST "http://localhost:3001/mine?count=1"
-
-# ASM status
-curl -X POST http://localhost:8080/ \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"strata_asm_getStatus","id":1}'
-
-# Wallet indexer (electrs)
-./scripts/smoke-electrs.sh   # expected: "OK: electrs is up and indexing."
-```
-
-**Checkpoint — you are ready for the app when:** `--status` shows all services healthy and the
-orchestrator health check returns a response.
+If anything shows `🔄 starting`, wait a minute and run it again — the `asm` service can take a
+little while on first boot.
 
 ---
 
-## 6. Configure and start the desktop app
+## 5. Start the app
 
-### 6.1 Create the app's configuration file
-
-The desktop app reads a small settings file named `desktop-app/.env`. Create it with the values
-that match the local stack. Copy‑paste this whole block exactly:
-
-```bash
-cat > desktop-app/.env <<'EOF'
-VITE_ORCHESTRATOR_BASE_URL=http://127.0.0.1:3000/api/v1
-BITCOIN_NETWORK=regtest
-BITCOIN_MAGIC_BYTES_HEX=414c504e
-BITCOIN_RPC_URL=http://127.0.0.1:18443
-BITCOIN_RPC_USER=user
-BITCOIN_RPC_PASS=password
-STRATA_ADMIN_STATE_RPC_URL=http://127.0.0.1:8080
-EOF
-echo "desktop-app/.env created"
-```
-
-> **Why these matter:** they point the app at your **local** backend and Bitcoin node and tell it
-> to use the **regtest** network. The username/password (`user`/`password`) must match the local
-> stack — if you change them, wallet balances will not load.
-
-### 6.2 Install the UI dependencies
-
-The first time only, download the front‑end packages:
+No configuration needed: the app already points at the local network you just started.
 
 ```bash
 cd desktop-app
-npm install
-```
-
-Expected: it finishes with a summary like `added N packages` and no red `ERR!` lines.
-
-### 6.3 Start the app in development mode
-
-```bash
+npm install        # first time only
 npm run tauri dev
 ```
 
-**What you should see:** the terminal compiles the native side (first time can take several
-minutes), then a **desktop window opens** showing the Alpen Multisig welcome / wallet‑connect
-screen. Leave this terminal running — closing it closes the app.
+**What you should see:** it compiles (first time can take a few minutes), then a **desktop window
+opens** on the welcome / connect screen. Leave this terminal running — closing it closes the app.
 
-**Checkpoint:** the app window is open and the stack from Step 5 is still healthy. You are ready
-to run the smoke test.
+> If the app ever can't reach the network, open **Settings → Node** and confirm the connection
+> mode is **Local** (the default). You shouldn't need to change anything.
 
 ---
 
-## 7. Happy‑path governance smoke test
+## 6. Run the smoke test
 
-You will play **two signers** in turn, using two built‑in test seed phrases ("mnemonics") that
-the local network already recognises as Strata Administrators. Threshold for this action is
-**2 signatures**, so you will sign once as each signer and then broadcast.
+You'll act as **two signers** in turn, using two built‑in test seed phrases that the local network
+already recognises as administrators. This action needs **2 signatures**, so you sign once as each,
+then broadcast.
 
-> **Copy these exactly** (they differ only in the **last word**):
+> **Copy these exactly** — they differ only in the **last word**:
 >
-> - **Primary signer:**
->   `multiply toss magic exclude crawl obey garden black apart room village neglect`
-> - **Co‑signer:**
->   `multiply toss magic exclude crawl obey garden black apart room village absent`
+> - **Signer 1:** `multiply toss magic exclude crawl obey garden black apart room village neglect`
+> - **Signer 2:** `multiply toss magic exclude crawl obey garden black apart room village absent`
 >
-> These are **test‑only** phrases for the local fake network. Never use them on a real network or
-> with real funds.
+> These are **test‑only** phrases for the local fake network. Never use them with real funds.
 
-### Step 7.1 — Connect as the primary signer
+### Step 1 — Connect as Signer 1
 
-1. On the wallet‑connect screen, choose the seed‑phrase option (labeled **"Palabras" / words**)
-   and paste the **primary signer** phrase into the text box.
-2. Confirm to connect with those words.
-3. On **"Select authority"**, wait until **"Strata Administrator"** shows an **"Available"**
-   badge — the app is checking your signer is recognised on the local chain. This can take a few
-   seconds.
-4. Select **Strata Administrator**, then click **Continue**.
-5. On **"Authenticate session"**, click the authenticate button.
+1. On the connect screen, choose the seed‑phrase option (labeled **"Palabras" / words**) and paste
+   **Signer 1**'s phrase.
+2. Confirm to connect.
+3. On **Select authority**, wait until **Strata Administrator** shows an **Available** badge (the
+   app is checking your signer on‑chain — a few seconds). Select it and click **Continue**.
+4. On **Authenticate session**, click the authenticate button.
 
-**What you should see:** the app lands on the **Proposals** screen (a dashboard listing
-proposals, empty on a fresh start).
+**You should see:** the **Proposals** screen (empty on a fresh start).
 
-> If "Strata Administrator" never becomes "Available", your ASM service likely isn't fully up —
-> recheck Step 5, mine a block (`./scripts/local-stack.sh --mine`), and try again.
+### Step 2 — Create a proposal
 
-### Step 7.2 — Create a proposal (as the primary signer)
-
-1. From the Proposals dashboard, click **Create proposal**.
-2. Choose the **Signer update** action card.
-3. Give it a **title** (anything, e.g. `Smoke test add signer`).
-4. In the new‑signer field, paste this test public key and click **Add**:
+1. Click **Create proposal**.
+2. Choose the **Signer update** card.
+3. Enter a **title** (e.g. `Smoke test`).
+4. Paste this test public key and click **Add** — it should appear in the list:
 
    ```
    03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c
    ```
 
-   You should see the key appear in the "added signers" list.
-5. Click **Preview** to reach the **Review** screen.
-6. Click **Sign** (sign & submit).
+5. Click **Preview**, then on the review screen click **Sign**.
 
-**What you should see:** a **signature success** confirmation. The proposal now exists with
-**one of two** required signatures. Back on the Proposals dashboard it appears as pending /
-awaiting more signatures.
+**You should see:** a signature success message. The proposal now has **1 of 2** signatures.
 
-### Step 7.3 — Co‑sign with the second signer
+### Step 3 — Sign as Signer 2
 
-The same person can act as the co‑signer by reconnecting with the other phrase:
+1. **Disconnect** (control in the screen header).
+2. Repeat **Step 1**, but paste **Signer 2**'s phrase.
+3. Open the pending proposal and click **Sign**.
 
-1. **Disconnect** the current session (the disconnect control is in the screen header).
-2. Repeat **Step 7.1**, but paste the **co‑signer** phrase this time.
-3. Open the **pending proposal** you just created.
-4. Click **Sign**.
+**You should see:** the proposal reaches **2 of 2** — **Quorum reached** — and a **Broadcast**
+action appears.
 
-**What you should see:** the proposal now has **2 of 2** signatures and moves to a **"Quorum
-reached"** state. A **Broadcast** action becomes available on that proposal.
+### Step 4 — Broadcast it
 
-### Step 7.4 — Broadcast the action onto regtest
+Broadcasting needs a tiny amount of test coins for fees. You'll fund the wallet, then broadcast.
 
-Broadcasting happens through a **commit → reveal** flow, and it needs a tiny amount of test coins
-in the app's "Admin Wallet" to pay fees. You will fund it, then broadcast.
-
-1. On the quorum‑reached proposal, click **Broadcast**. The **"Broadcast proposal"** screen
-   opens.
-2. The screen shows an **Admin Wallet funding address** (a `bcrt1...` address). **Copy it.**
-3. In a **separate terminal** (keep the app running), give that address some test coins using the
-   faucet helper — replace `<ADDRESS>` with the one you copied:
+1. Click **Broadcast**. The **Broadcast proposal** screen opens and shows an **Admin Wallet
+   funding address** (`bcrt1...`). **Copy it.**
+2. In a **second terminal** (keep the app running), give that address test coins — replace
+   `<ADDRESS>`:
 
    ```bash
    ./scripts/local-stack.sh --fund <ADDRESS> 1
    ```
 
-   Expected: it prints a `TXID:` and `Block:` line and `Done.`
-4. Back in the app, open the **wallet panel** and click **Sync** (the same "refresh balance"
-   action a real signer would use after receiving coins). Wait for the sync to finish, then close
-   the panel.
-5. The **Confirm & Broadcast** button becomes enabled once the synced balance shows up. Click it.
-
-**What you should see:** a **phase progress** view with steps **Commit → Reveal → Enactment**.
-The first heading reads something like *"Broadcasting…"* and then
-*"Submitted — awaiting confirmation…"*.
-
-6. The commit/reveal steps each wait for a block to confirm. On regtest, **you** produce blocks.
-   In your separate terminal, mine a few blocks to move things along (repeat as the steps
+   Expected: it prints `TXID:`, `Block:`, and `Done.`
+3. Back in the app, open the **wallet panel**, click **Sync**, wait for it to finish, and close the
+   panel.
+4. The **Confirm & Broadcast** button becomes enabled — click it.
+5. A progress view shows **Commit → Reveal → Enactment**. These steps wait for blocks, and on this
+   test network **you** create blocks. In your second terminal, mine a few (repeat as the steps
    advance):
 
    ```bash
    ./scripts/local-stack.sh --mine 1
    ```
 
-   Mine one, watch the screen advance, mine again if it's still waiting. A handful of blocks is
-   plenty.
+**✅ Done looks like:** the progress reaches a completion heading such as **Reveal confirmed** /
+**Proposal enacted**, with a done banner. That's a full end‑to‑end success — your governance action
+was committed and revealed on your local network.
 
-**✅ What "done" looks like:** the phase progress reaches a completion heading such as
-**"Reveal confirmed"** / **"Proposal enacted"**, and a **done banner** appears. That means your
-governance action was committed and revealed on your local regtest chain — a full end‑to‑end
-success.
-
-> **No device prompt appears** in this flow because you signed with seed phrases, not a hardware
-> wallet. That is expected. To try a hardware‑wallet signer instead, see the
+> No device prompt appears because you signed with seed phrases, not a hardware wallet — that's
+> expected. To try a hardware signer, see the
 > [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md).
 
 ---
 
-## 8. Shutting everything down
+## 7. Shut everything down
 
-1. In the desktop‑app terminal, press **Ctrl + C** to close the app.
-2. Stop the background services:
-
-   ```bash
-   ./scripts/local-stack.sh --stop
-   ```
-
-3. To also delete the throwaway chain/database data (full reset for next time):
-
-   ```bash
-   ./scripts/local-stack.sh --clean
-   ```
+1. In the app terminal, press **Ctrl + C** to close the app.
+2. Stop the services: `./scripts/local-stack.sh --stop`
+3. (Optional) full reset, wiping test data: `./scripts/local-stack.sh --clean`
 
 ---
 
-## 9. Troubleshooting (read this when something breaks)
+## 8. Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `Cannot connect to the Docker daemon` | Docker engine isn't running | Start Docker (open Docker Desktop on macOS; `sudo systemctl start docker` on Linux). Re‑check with `docker ps`. |
-| `asm submodule not populated` / `MISSING: run git submodule update` | Submodule not downloaded | `git submodule update --init asm`. If it fails with a permission error, set up GitHub SSH access (see [2.2](#22-git)). |
-| Startup fails with **"port is already allocated"** or **"address already in use"** | Another program (or an old run) is using a needed port (`18443`, `60401`, `8080`, `3000`, `3001`, `5432`) | Find and stop it: `lsof -i :3000` (swap in the port), then stop that process — or `./scripts/local-stack.sh --stop` to clear a previous run. |
-| `--status` shows a service as `🔄 starting` or `❌` | Service still booting, or it crashed | Wait a minute and re‑run `--status`. If still failing, view logs: `docker compose -f staging/docker-compose.local.yml logs <service>` (e.g. `asm`). |
-| "Strata Administrator" never turns **Available** at login | ASM not fully synced, or chain has no blocks yet | Confirm ASM is healthy (Step 5), then `./scripts/local-stack.sh --mine 1` and retry the login. |
-| Wallet balance stays **0** after funding | Sync lag, or wrong RPC credentials | Click **Sync** again and wait; mine a block (`--mine 1`) so the funding transaction confirms; verify `desktop-app/.env` still has `BITCOIN_RPC_USER=user` and `BITCOIN_RPC_PASS=password`. |
-| **Confirm & Broadcast** stays disabled | Admin Wallet balance not picked up yet | Make sure you funded the address from the screen, then **Sync** in the wallet panel and wait for it to finish. |
-| Broadcast seems **stuck** on Commit or Reveal | Those steps wait for block confirmations | Mine blocks: `./scripts/local-stack.sh --mine 1` (repeat a few times). |
-| App window never opens / native build errors on Linux | Missing Tauri system libraries | Re‑install the packages in [2.6](#26-tauri-system-libraries-the-desktop-apps-gui-engine). |
-| App can't reach the backend | Wrong/missing config, or backend down | Confirm `desktop-app/.env` exists with `VITE_ORCHESTRATOR_BASE_URL=http://127.0.0.1:3000/api/v1`, and that `curl http://localhost:3000/api/v1/health` responds. |
+| Symptom | Fix |
+|---|---|
+| `Cannot connect to the Docker daemon` | Start Docker (Docker Desktop on macOS; `sudo systemctl start docker` on Linux), then re‑check with `docker ps`. |
+| `asm submodule not populated` / `MISSING` | Run `git submodule update --init asm`. If it's a permission error, set up GitHub SSH access. |
+| **"port already in use"** on startup | Something else uses a needed port (`18443`, `60401`, `8080`, `3000`, `3001`, `5432`). Find it with `lsof -i :3000` (swap the port) and stop it — or clear a previous run with `./scripts/local-stack.sh --stop`. |
+| A service shows `🔄 starting` or `❌` | Wait a minute and re‑run `--status`. Still failing? View logs: `docker compose -f staging/docker-compose.local.yml logs <service>` (e.g. `asm`). |
+| **Strata Administrator** never turns **Available** at login | The network needs a block: `./scripts/local-stack.sh --mine 1`, then retry the login. |
+| Wallet balance stays **0** after funding | Mine a block so the funding confirms (`--mine 1`), then click **Sync** again and wait. |
+| **Confirm & Broadcast** stays disabled | Make sure you funded the address shown on screen, then **Sync** in the wallet panel and wait for it to finish. |
+| Broadcast seems **stuck** on Commit or Reveal | Those steps wait for confirmations — mine more blocks: `./scripts/local-stack.sh --mine 1` (repeat). |
+| App window won't open / native build errors (Linux) | Re‑install the Tauri system libraries from [Step 1](#1-install-the-tools-once). |
+| App can't reach the network | Open **Settings → Node** and confirm the mode is **Local**. Re‑check the stack with `./scripts/local-stack.sh --status`. |
 
-**Still stuck?** Capture the relevant logs and open an issue at
-<https://github.com/wakeuplabs-io/alpen-multisig/issues>.
+**Still stuck?** Open an issue at <https://github.com/wakeuplabs-io/alpen-multisig/issues>.
 
 ---
 
-## 10. Quick reference card
+## 9. Quick reference
 
-**Test seed phrases (regtest only):**
+**Test seed phrases (local network only):**
 
-- Primary: `multiply toss magic exclude crawl obey garden black apart room village neglect`
-- Co‑signer: `multiply toss magic exclude crawl obey garden black apart room village absent`
+- Signer 1: `multiply toss magic exclude crawl obey garden black apart room village neglect`
+- Signer 2: `multiply toss magic exclude crawl obey garden black apart room village absent`
 
-**Test signer public key (for the add‑signer proposal):**
+**Test public key (for the proposal):**
 
 ```
 03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c
 ```
 
-**Everyday commands (run from the repository root):**
+**Commands (run from the repository root):**
 
 | Goal | Command |
 |---|---|
-| Start everything | `./scripts/local-stack.sh` |
-| Clean start (wipe data) | `./scripts/local-stack.sh --clean` |
+| Start the network | `./scripts/local-stack.sh` |
 | Check health | `./scripts/local-stack.sh --status` |
-| Mine N blocks | `./scripts/local-stack.sh --mine N` |
+| Mine 1 block | `./scripts/local-stack.sh --mine 1` |
 | Fund an address | `./scripts/local-stack.sh --fund <ADDRESS> 1` |
 | Stop everything | `./scripts/local-stack.sh --stop` |
+| Clean reset | `./scripts/local-stack.sh --clean` |
 | Start the app | `cd desktop-app && npm run tauri dev` |
-
-**Service ports:** Bitcoin `18443` · electrs `60401` · ASM `8080` · Orchestrator `3000` ·
-Regtest Dev API `3001` · PostgreSQL `5432`.
