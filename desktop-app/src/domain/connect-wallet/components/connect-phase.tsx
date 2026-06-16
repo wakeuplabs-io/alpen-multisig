@@ -160,7 +160,7 @@ export function ConnectPhase({
 				/>
 				{mnemonicError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{mnemonicError}</p>}
 
-				{walletVendor === 'mnemonic' && (
+				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
 					<>
 						<button
 							type="button"
