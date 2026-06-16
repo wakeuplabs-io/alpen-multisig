@@ -77,6 +77,11 @@ export type AdminWalletError =
 	| { type: 'BuildFailed'; message: string }
 	| { type: 'SignFailed'; message: string }
 	| { type: 'BroadcastFailed'; message: string }
+	// Phase 6 — Send (PRD §4.3.5)
+	| { type: 'InvalidAddress'; message: string }
+	| { type: 'WrongNetwork'; message: string }
+	| { type: 'InvalidAmount'; message: string }
+	| { type: 'AmountBelowDust'; message: string }
 
 export function getAdminWalletInfo(): Promise<ApiResult<AdminWalletInfo>> {
 	return tauriCall<AdminWalletInfo>('get_admin_wallet_info', {})
@@ -165,6 +170,67 @@ export function listAdminWalletUnconfirmedTxs(): Promise<ApiResult<UnconfirmedTx
 
 export function bumpAdminWalletFee(input: BumpFeeInput): Promise<ApiResult<BumpFeeResultDto>> {
 	return tauriCall<BumpFeeResultDto>('admin_wallet_bump_fee', { input })
+}
+
+// Phase 6 (PRD §4.3.5): Send BTC from the Admin Wallet.
+export type SendInput = {
+	address: string
+	// Ignored when drainWallet is true (Max flow).
+	amountSats: number
+	feeRateSatPerKvb: number
+	// Max flow: spend all spendable UTXOs to address, no change output.
+	drainWallet?: boolean
+}
+
+export type SendResultDto = {
+	txid: string
+	// Effective amount paid to the destination (the drain value for Max sends).
+	amountSats: number
+	feeSats: number
+	// Realized rate: ceil(fee · 1000 / vsize) in sat/kvB.
+	feeRateSatPerKvb: number
+	vsizeVbytes: number
+	// Change returned to the wallet's internal keychain. 0 for drain builds.
+	changeSats: number
+	drained: boolean
+}
+
+export function sendFromAdminWallet(input: SendInput): Promise<ApiResult<SendResultDto>> {
+	return tauriCall<SendResultDto>('admin_wallet_send', { input })
+}
+
+// Phase 6 P6.2 (PRD §4.3.5.1): inline destination validation.
+export type SendAddressInvalidReason = 'invalid-address' | 'wrong-network'
+
+// Validation failures are a successful IPC result (form states, not faults);
+// the exact PRD copy is rendered from reason + expectedNetwork.
+export type SendAddressValidationDto = {
+	isValid: boolean
+	reason: SendAddressInvalidReason | null
+	expectedNetwork: string
+}
+
+export function validateSendAddress(address: string): Promise<ApiResult<SendAddressValidationDto>> {
+	return tauriCall<SendAddressValidationDto>('admin_wallet_validate_send_address', { address })
+}
+
+// Phase 6 P6.3 (PRD §4.3.5.2/§4.3.5.3): dry-run estimate — never signed, never
+// broadcast. Powers the fee preview, the Max button (drainWallet: true), and
+// the "Insufficient funds" boundary before Confirm.
+export type SendEstimateDto = {
+	// Effective amount: the input amount, or the computed max for drain runs.
+	amountSats: number
+	feeSats: number
+	feeRateSatPerKvb: number
+	vsizeVbytes: number
+	// Change returned to the wallet's internal keychain. 0 for drain builds.
+	changeSats: number
+	// Max spendable to this destination at this rate (drain dry-run).
+	maxAmountSats: number
+}
+
+export function estimateSend(input: SendInput): Promise<ApiResult<SendEstimateDto>> {
+	return tauriCall<SendEstimateDto>('admin_wallet_estimate_send', { input })
 }
 
 export type WalletSessionInitInput = {

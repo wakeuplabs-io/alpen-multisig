@@ -1,5 +1,5 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
 import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
@@ -30,7 +30,7 @@ export function ProposalDetailScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
-	const { proposal, isLoading, error, reload } = useProposalDetail(ORCHESTRATOR_BASE_URL, actionId ?? '')
+	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
 	const currentBlockHeight = useBlockHeight()
 
@@ -41,7 +41,7 @@ export function ProposalDetailScreen() {
 	async function handlePasteSignatures(sigs: PastedSignature[], broadcastState: ImportBroadcastState) {
 		if (!actionId || !proposal) return
 		for (const sig of sigs) {
-			const res = await approveProposal({ baseUrl: ORCHESTRATOR_BASE_URL, actionId, ...sig })
+			const res = await approveProposal({ baseUrl: getOrchestratorBaseUrl(), actionId, ...sig })
 			if (!res.ok) {
 				console.warn(`Failed to import signature for ${sig.signerPubkey}: ${res.error}`)
 			}
@@ -54,7 +54,7 @@ export function ProposalDetailScreen() {
 			const effectiveBroadcastStatus = broadcastState.broadcastStatus ?? proposal.broadcastStatus
 			// Sync broadcast state without proposalStatus so this call always succeeds.
 			await reportBroadcastProgress({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				actionId,
 				broadcastStatus: effectiveBroadcastStatus,
 				commitTxid: broadcastState.commitTxid ?? undefined,
@@ -65,7 +65,7 @@ export function ProposalDetailScreen() {
 			// reload reconcile will transition when ASM confirms.
 			if (effectiveBroadcastStatus === 'reveal_confirmed') {
 				await reportBroadcastProgress({
-					baseUrl: ORCHESTRATOR_BASE_URL,
+					baseUrl: getOrchestratorBaseUrl(),
 					actionId,
 					broadcastStatus: 'reveal_confirmed',
 					proposalStatus: 'enacted',

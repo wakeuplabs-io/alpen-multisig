@@ -63,6 +63,19 @@
     }
     .result.ok  { background: #0d2a0d; color: #4caf50; border: 1px solid #1e4a1e; }
     .result.err { background: #2a0d0d; color: #f44336; border: 1px solid #4a1e1e; }
+    .signer {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 12px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .signer .label { color: #666; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; }
+    .signer .value { word-break: break-all; }
+    .signer .roles { color: #4caf50; }
   </style>
 </head>
 <body>
@@ -81,6 +94,37 @@
     <input id="count" type="number" value="5" min="1" placeholder="Block count" />
     <button onclick="mine()">Mine</button>
     <div id="mine-result" class="result"></div>
+  </div>
+
+  <div class="card">
+    <h2>Roles &amp; Admins</h2>
+
+    <div class="signer">
+      <span class="label">Seed phrase</span>
+      <span class="value">multiply toss magic exclude crawl obey garden black apart room village neglect</span>
+      <span class="label">Public key</span>
+      <span class="value">02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7</span>
+      <span class="label">Roles</span>
+      <span class="value roles">strata_administrator, strata_sequencer_manager, alpen_administrator</span>
+    </div>
+
+    <div class="signer">
+      <span class="label">Seed phrase</span>
+      <span class="value">multiply toss magic exclude crawl obey garden black apart room village absent</span>
+      <span class="label">Public key</span>
+      <span class="value">029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e</span>
+      <span class="label">Roles</span>
+      <span class="value roles">strata_administrator</span>
+    </div>
+
+    <div class="signer">
+      <span class="label">Seed phrase</span>
+      <span class="value">multiply toss magic exclude crawl obey garden black apart room village jar</span>
+      <span class="label">Public key</span>
+      <span class="value">030e85756649a1ed5629bff6c464009bd5b807bacf01c8026b45992c4d00de2ebb</span>
+      <span class="label">Roles</span>
+      <span class="value roles">strata_sequencer_manager, alpen_administrator</span>
+    </div>
   </div>
 
   <script>

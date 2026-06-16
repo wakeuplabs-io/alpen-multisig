@@ -285,17 +285,15 @@ pub async fn submit_commit_then_reveal(
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
         // Step 5: Insert into PendingReveals BEFORE any broadcast.
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.insert(
-                action_id.to_string(),
-                crate::application::pending_reveals::PendingReveal {
-                    reveal_tx_hex: reveal_hex.clone(),
-                    reveal_txid: reveal_txid.clone(),
-                    commit_txid: commit_txid.clone(),
-                },
-            );
-        }
+        crate::infrastructure::pending_reveals_store::insert_and_persist(
+            pending,
+            action_id.to_string(),
+            crate::application::pending_reveals::PendingReveal {
+                reveal_tx_hex: reveal_hex.clone(),
+                reveal_txid: reveal_txid.clone(),
+                commit_txid: commit_txid.clone(),
+            },
+        );
 
         // Step 6: Broadcast — Electrum first, node fallback.
         broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
@@ -389,10 +387,7 @@ pub async fn await_reveal_confirmation(
     )
     .await?;
 
-    {
-        let mut guard = pending.lock().unwrap();
-        guard.remove(action_id);
-    }
+    crate::infrastructure::pending_reveals_store::remove_and_persist(pending, action_id);
 
     Ok(ConfirmOutcome::Confirmed)
 }
@@ -618,17 +613,15 @@ pub async fn broadcast_manual(
         let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.insert(
-                pending_key.clone(),
-                crate::application::pending_reveals::PendingReveal {
-                    reveal_tx_hex: reveal_hex.clone(),
-                    reveal_txid: reveal_txid.clone(),
-                    commit_txid: commit_txid.clone(),
-                },
-            );
-        }
+        crate::infrastructure::pending_reveals_store::insert_and_persist(
+            pending,
+            pending_key.clone(),
+            crate::application::pending_reveals::PendingReveal {
+                reveal_tx_hex: reveal_hex.clone(),
+                reveal_txid: reveal_txid.clone(),
+                commit_txid: commit_txid.clone(),
+            },
+        );
 
         broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
 
@@ -640,10 +633,7 @@ pub async fn broadcast_manual(
         )
         .await?;
 
-        {
-            let mut guard = pending.lock().unwrap();
-            guard.remove(&pending_key);
-        }
+        crate::infrastructure::pending_reveals_store::remove_and_persist(pending, &pending_key);
 
         Ok((commit_txid, reveal_txid))
     }

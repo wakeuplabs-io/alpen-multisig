@@ -1,7 +1,8 @@
 use std::num::NonZeroU8;
 
 use desktop_app::domain::action::{
-    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, VkUpdate,
+    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SequencerKeyUpdate,
+    VkUpdate,
 };
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
@@ -37,9 +38,10 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
             new_threshold: update.new_threshold.get(),
         },
-        Ok(Action::VkUpdate(_)) | Ok(Action::OperatorSetUpdate(_)) | Err(_) => {
-            DecodedAction::Unknown { raw_hex: hex }
-        }
+        Ok(Action::VkUpdate(_))
+        | Ok(Action::OperatorSetUpdate(_))
+        | Ok(Action::SequencerKeyUpdate(_))
+        | Err(_) => DecodedAction::Unknown { raw_hex: hex },
     }
 }
 
@@ -120,6 +122,24 @@ pub fn build_operator_set_update_hex(
         add_members,
         remove_members: input.remove_operator_indices,
     });
+    let action_hex =
+        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildSequencerKeyUpdateHexInput {
+    pub new_pub_key: String,
+}
+
+#[tauri::command]
+pub fn build_sequencer_key_update_hex(
+    input: BuildSequencerKeyUpdateHexInput,
+) -> Result<BuildActionHexResponse, String> {
+    let new_pub_key = EvenPubKey::from_hex(input.new_pub_key.trim())
+        .map_err(|e| format!("invalid sequencer key: {e}"))?;
+    let action = Action::SequencerKeyUpdate(SequencerKeyUpdate { new_pub_key });
     let action_hex =
         action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
     Ok(BuildActionHexResponse { action_hex })

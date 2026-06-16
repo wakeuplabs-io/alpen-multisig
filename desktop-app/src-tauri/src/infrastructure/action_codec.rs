@@ -9,17 +9,19 @@ use std::num::NonZeroU8;
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
     AlpenAdminMultisigUpdate, EeStfVkUpdate, OlStfVkUpdate,
-    OperatorSetUpdate as StrataOperatorSetUpdate, StrataAdminMultisigUpdate,
-    StrataSeqManagerMultisigUpdate,
+    OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
+    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_crypto::EvenPublicKey;
+use strata_identifiers::Buf32;
 use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::action::{
-    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError, VkUpdate,
+    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError,
+    SequencerKeyUpdate, VkUpdate,
 };
 use crate::domain::authority::Authority;
 
@@ -145,6 +147,9 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                 StrataOperatorSetUpdate::new(add, update.remove_members.clone()),
             )))
         }
+        Action::SequencerKeyUpdate(update) => Ok(MultisigAction::Update(UpdateAction::Sequencer(
+            StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
+        ))),
     }
 }
 
@@ -186,8 +191,12 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
                 multisig_update_from_threshold_config(Authority::StrataAdmin, update.config())?;
             Ok(Action::MultisigUpdate(domain_update))
         }
-        MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(_)) => {
-            Err(CodecError::UnsupportedVariant("StrataSeqManagerMultisig"))
+        MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)) => {
+            let domain_update = multisig_update_from_threshold_config(
+                Authority::SequencerManager,
+                update.config(),
+            )?;
+            Ok(Action::MultisigUpdate(domain_update))
         }
         MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)) => {
             let domain_update =
@@ -202,8 +211,11 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
                 remove_members: remove,
             }))
         }
-        MultisigAction::Update(UpdateAction::Sequencer(_)) => {
-            Err(CodecError::UnsupportedVariant("Sequencer"))
+        MultisigAction::Update(UpdateAction::Sequencer(update)) => {
+            let new_pub_key = EvenPubKey::new(update.into_inner().0);
+            Ok(Action::SequencerKeyUpdate(SequencerKeyUpdate {
+                new_pub_key,
+            }))
         }
         MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
             let key = update.into_key();
@@ -398,6 +410,82 @@ mod tests {
         let hex = encode_hex(&action).expect("encode ok");
         let decoded = decode_hex(&hex).expect("decode ok");
         assert_eq!(decoded, action);
+    }
+
+    fn sample_seq_manager_action() -> Action {
+        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::SequencerManager,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        })
+    }
+
+    #[test]
+    fn test_seq_manager_multisig_roundtrip_hex() {
+        let action = sample_seq_manager_action();
+        let encoded = encode_hex(&action).expect("encode ok");
+        let decoded = decode_hex(&encoded).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_seq_manager_multisig_roundtrip_bytes() {
+        let action = sample_seq_manager_action();
+        let bytes = encode(&action).expect("encode ok");
+        let decoded = decode(&bytes).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_seq_manager_multisig_encode_matches_direct_strata_ssz() {
+        let pk_bytes = hex::decode(VALID_HEX).unwrap();
+        let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
+        let strata_pk = CompressedPublicKey::from(secp_pk);
+        let config_update =
+            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_update = StrataSeqManagerMultisigUpdate::new(config_update);
+        let strata_action =
+            MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(strata_update));
+        let direct_bytes = strata_action.as_ssz_bytes();
+
+        let domain_bytes = encode(&sample_seq_manager_action()).unwrap();
+        assert_eq!(domain_bytes, direct_bytes);
+    }
+
+    fn sample_sequencer_key_update_action() -> Action {
+        let even_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let pk = EvenPubKey::from_hex(even_key_hex).unwrap();
+        Action::SequencerKeyUpdate(SequencerKeyUpdate { new_pub_key: pk })
+    }
+
+    #[test]
+    fn test_sequencer_key_update_roundtrip_hex() {
+        let action = sample_sequencer_key_update_action();
+        let encoded = encode_hex(&action).expect("encode ok");
+        let decoded = decode_hex(&encoded).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_sequencer_key_update_roundtrip_bytes() {
+        let action = sample_sequencer_key_update_action();
+        let bytes = encode(&action).expect("encode ok");
+        let decoded = decode(&bytes).expect("decode ok");
+        assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn test_sequencer_key_update_encode_matches_direct_strata_ssz() {
+        let even_key_hex = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let bytes = hex::decode(even_key_hex).unwrap();
+        let strata_update = StrataSequencerUpdate::new(Buf32(bytes.try_into().unwrap()));
+        let strata_action = MultisigAction::Update(UpdateAction::Sequencer(strata_update));
+        let direct_bytes = strata_action.as_ssz_bytes();
+
+        let domain_bytes = encode(&sample_sequencer_key_update_action()).unwrap();
+        assert_eq!(domain_bytes, direct_bytes);
     }
 
     #[test]

@@ -1,6 +1,9 @@
 use bdk_wallet::KeychainKind;
 use desktop_app::application::pending_reveals::{pending_commit_to_reveal, PendingReveals};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
+use desktop_app::application::wallet_send::{
+    send_error_code, SendAddressValidationDto, SendError, SendEstimateDto, SendInput, SendResultDto,
+};
 use desktop_app::application::wallet_service::{
     error_code, AddressDto, BalanceDto, SyncStatusDto, UtxoDto, WalletService,
 };
@@ -309,19 +312,129 @@ pub async fn admin_wallet_bump_fee(
 
     // Best-effort pre-sync: a stale view is ultimately caught by the node, which
     // rejects replacements of confirmed or already-replaced transactions.
-    if let Err(e) = svc.sync().await {
-        tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
-    }
+    // F-008: Track sync failure to surface as warning in result.
+    let sync_warning = match svc.sync().await {
+        Ok(_) => None,
+        Err(e) => {
+            tracing::warn!(error = %e, "pre-bump sync failed; proceeding with last-known wallet state");
+            Some(format!(
+                "Wallet sync failed before bump: {}. Proceeding with last-known state. \
+                 If the bump fails, sync the wallet and retry.",
+                e
+            ))
+        }
+    };
 
     let commit_to_reveal = pending_commit_to_reveal(&pending);
-    let result = svc
+    let mut result = svc
         .bump_fee(&input.txid, rate, &commit_to_reveal, &broadcasters)
         .await
         .map_err(|e| serialize_bump_error(&e))?;
 
+    // F-008: Attach sync warning to result for UI display.
+    result.sync_warning = sync_warning;
+
     // Best-effort post-sync so the panel reflects the replacement immediately.
     if let Err(e) = svc.sync().await {
         tracing::warn!(error = %e, "post-bump sync failed; panel will converge on next sync");
+    }
+
+    Ok(result)
+}
+
+/// Serialize a [`SendError`] into the tagged `{ "type", "message" }` shape the
+/// frontend `AdminWalletError` union expects (same convention as `serialize_wallet_error`).
+fn serialize_send_error(e: &SendError) -> String {
+    serde_json::json!({ "type": send_error_code(e), "message": e.to_string() }).to_string()
+}
+
+/// Validates a Send destination against the session network (Phase 6 P6.2,
+/// PRD §4.3.5.1). Pure parse — no signer required (watch-only sessions can
+/// type addresses), no wallet lock, no network I/O. Validation failures are a
+/// **successful** result (form states, not faults); the frontend renders the
+/// exact PRD copy from `reason` + `expectedNetwork`. Errs only when no wallet
+/// session is active (tagged `Disabled`).
+#[tauri::command]
+pub async fn admin_wallet_validate_send_address(
+    address: String,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<SendAddressValidationDto, String> {
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    Ok(svc.validate_send_address(&address))
+}
+
+/// Dry-run estimate for the Send form (Phase 6 P6.3, PRD §4.3.5.2/§4.3.5.3).
+///
+/// Validates the rate, then builds the requested transaction (and a drain
+/// dry-run for the Max boundary) over the last-synced wallet state — never
+/// signed, never broadcast, no pre-sync (it runs per debounced keystroke; the
+/// panel's sync loop keeps state fresh). `InsufficientFunds` /
+/// `AmountBelowDust` here are how the form learns the §4.3.5.2 boundary
+/// before Confirm. No signer required — watch-only sessions may preview.
+#[tauri::command]
+pub async fn admin_wallet_estimate_send(
+    input: SendInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+) -> Result<SendEstimateDto, String> {
+    let rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| serialize_send_error(&SendError::from(e)))?;
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    svc.estimate_send(&input, rate)
+        .await
+        .map_err(|e| serialize_send_error(&e))
+}
+
+/// Sends BTC from the Admin Wallet (Phase 6, PRD §4.3.5).
+///
+/// Validates the fee rate, syncs best-effort so the UTXO view is fresh, then
+/// builds/signs/broadcasts through `WalletService::send_to_address` (session
+/// `PsbtSigner`, Electrum-first broadcast with node fallback) and re-syncs so
+/// the panel converges (balance drops, pending list shows the send).
+#[tauri::command]
+pub async fn admin_wallet_send(
+    input: SendInput,
+    wallet_session: tauri::State<'_, WalletSession>,
+    node_config: tauri::State<'_, NodeConfigState>,
+) -> Result<SendResultDto, String> {
+    // Validate the rate before any wallet or network work.
+    let rate = FeeRate::new(input.fee_rate_sat_per_kvb, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+        .map_err(|e| serialize_send_error(&SendError::from(e)))?;
+
+    let svc = wallet_session
+        .current_or_fallback()
+        .map_err(serialize_wallet_error)?;
+    let cfg = node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .clone();
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(cfg.btc_rpc_url(), cfg.btc_rpc_user(), cfg.btc_rpc_pass()),
+    );
+    // Broadcaster chain: Electrum first, node fallback — same order as governance broadcast.
+    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
+        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
+    ];
+
+    // Best-effort pre-sync: a stale UTXO view is ultimately caught by the network,
+    // which rejects spends of confirmed-elsewhere or missing inputs.
+    if let Err(e) = svc.sync().await {
+        tracing::warn!(error = %e, "pre-send sync failed; proceeding with last-known wallet state");
+    }
+
+    let result = svc
+        .send_to_address(&input, rate, &broadcasters)
+        .await
+        .map_err(|e| serialize_send_error(&e))?;
+
+    // Best-effort post-sync so the panel reflects the send immediately.
+    if let Err(e) = svc.sync().await {
+        tracing::warn!(error = %e, "post-send sync failed; panel will converge on next sync");
     }
 
     Ok(result)
@@ -562,6 +675,61 @@ mod tests {
                 .expect("deserialize");
         assert_eq!(input.txid, "ab");
         assert_eq!(input.fee_rate_sat_per_kvb, 5_000);
+    }
+
+    // ---- Phase 6: Send BTC (PRD §4.3.5) ----
+
+    /// The Phase 6 send command must be registered in BOTH handler sets — capability
+    /// is enforced per-signer at runtime (`allowed_on(network)`), same as Phase 5.
+    /// (P6.2/P6.3 extend this list with the validate/estimate commands.)
+    #[test]
+    fn phase6_commands_registered_in_both_handler_sets() {
+        let invoke_src = include_str!("invoke.rs");
+        for command in [
+            "admin_wallet_send",
+            "admin_wallet_validate_send_address",
+            "admin_wallet_estimate_send",
+        ] {
+            let occurrences = invoke_src
+                .split_whitespace()
+                .filter(|tok| tok.trim_matches(',') == format!("super::admin_wallet::{command}"))
+                .count();
+            assert_eq!(
+                occurrences, 2,
+                "{command} must appear in attach_production AND attach_with_dev_signing"
+            );
+        }
+    }
+
+    /// IPC contract: send errors serialize as the tagged `{ type, message }` shape.
+    #[test]
+    fn serialize_send_error_emits_tagged_type_and_message() {
+        let json = serialize_send_error(&SendError::WrongNetwork {
+            address: "bc1q…".to_string(),
+            expected_network: "regtest".to_string(),
+        });
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "WrongNetwork");
+        assert!(value["message"]
+            .as_str()
+            .expect("message string")
+            .contains("regtest"));
+
+        let json = serialize_send_error(&SendError::InvalidAmount);
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "InvalidAmount");
+    }
+
+    /// An out-of-range rate must serialize as the tagged InvalidFeeRate error
+    /// (the command validates before touching the wallet).
+    #[test]
+    fn send_invalid_fee_rate_serializes_as_tagged_invalid_fee_rate() {
+        let err = FeeRate::new(0, FALLBACK_MIN_RELAY_SAT_PER_KVB)
+            .map(|_| ())
+            .expect_err("zero rate must be rejected");
+        let json = serialize_send_error(&SendError::from(err));
+        let value: serde_json::Value = serde_json::from_str(&json).expect("valid JSON object");
+        assert_eq!(value["type"], "InvalidFeeRate");
     }
 
     #[test]

@@ -122,7 +122,7 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'InsufficientFunds':
 			return {
 				title: 'Insufficient funds',
-				body: 'The wallet balance cannot cover the increased fee.',
+				body: 'The wallet balance cannot cover this transaction and its fee.',
 				severity: 'warning',
 			}
 		case 'BuildFailed':
@@ -140,7 +140,32 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 		case 'BroadcastFailed':
 			return {
 				title: 'Broadcast failed',
-				body: `The replacement was signed but could not be broadcast. ${err.message}`,
+				body: `The transaction was signed but could not be broadcast. ${err.message}`,
+				severity: 'warning',
+			}
+		// Phase 6 — Send (PRD §4.3.5)
+		case 'InvalidAddress':
+			return {
+				title: 'Invalid destination',
+				body: 'Destination must be a bitcoin address.',
+				severity: 'warning',
+			}
+		case 'WrongNetwork':
+			return {
+				title: 'Wrong network',
+				body: err.message,
+				severity: 'warning',
+			}
+		case 'InvalidAmount':
+			return {
+				title: 'Invalid amount',
+				body: 'Send amount must be greater than zero.',
+				severity: 'warning',
+			}
+		case 'AmountBelowDust':
+			return {
+				title: 'Amount too small',
+				body: 'Amount is below the dust limit.',
 				severity: 'warning',
 			}
 	}

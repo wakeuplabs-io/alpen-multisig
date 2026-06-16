@@ -131,6 +131,7 @@ export function UnconfirmedTxsList({
 												suggestedSatPerKvb={suggestedBumpRateSatPerKvb(fastPresetSatPerKvb, minBump)}
 												maxSatPerKvb={maxSatPerKvb}
 												vsizeVbytes={row.vsizeVbytes}
+												targetTxid={row.txid}
 												state={bumpHook.state}
 												onConfirm={(satPerKvb) => handleConfirm(row, satPerKvb)}
 												onClose={handleCloseForm}

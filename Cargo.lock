@@ -1476,6 +1476,7 @@ dependencies = [
  "strata-asm-proto-bridge-v1",
  "strata-asm-proto-checkpoint",
  "strata-crypto",
+ "strata-identifiers",
  "strata-l1-envelope-fmt",
  "strata-l1-txfmt",
  "strata-predicate",
