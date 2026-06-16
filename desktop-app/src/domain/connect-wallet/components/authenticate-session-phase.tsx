@@ -1,3 +1,4 @@
+import { CopyButton } from '@/components/copy-button'
 import type { SigningStepInfo } from '@/contexts/session-context'
 
 type Props = {
@@ -73,12 +74,18 @@ export function AuthenticateSessionPhase({
 						<p className="m-0 mt-1 text-sm font-medium text-[#111827]">{authorityLabel}</p>
 					</div>
 					<div>
-						<p className="m-0 text-xs text-[#9ca3af]">Signer address</p>
-						<p className="m-0 mt-1 font-mono text-xs text-[#111827]">{signerAddress}</p>
+						<p className="m-0 text-xs text-[#9ca3af]">Admin ID</p>
+						<div className="mt-1 flex items-start justify-between gap-2">
+							<p className="m-0 min-w-0 break-all font-mono text-xs text-[#111827]">{signerAddress}</p>
+							<CopyButton text={signerAddress} variant="icon" />
+						</div>
 					</div>
 					<div>
 						<p className="m-0 text-xs text-[#9ca3af]">Compressed public key</p>
-						<p className="m-0 mt-1 break-all font-mono text-xs text-[#111827]">{compressedPublicKey}</p>
+						<div className="mt-1 flex items-start justify-between gap-2">
+							<p className="m-0 min-w-0 break-all font-mono text-xs text-[#111827]">{compressedPublicKey}</p>
+							<CopyButton text={compressedPublicKey} variant="icon" />
+						</div>
 					</div>
 					<div className="grid grid-cols-2 gap-3">
 						<div>

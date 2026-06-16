@@ -147,7 +147,7 @@ export function ConnectPhase({
 						}`}
 						onClick={handleUseMnemonic}
 					>
-						Palabras
+						Mnemonic
 					</button>
 				</div>
 				<textarea
@@ -246,7 +246,7 @@ export function ConnectPhase({
 				) : (
 					<>
 						<UsbStrokeWhiteIcon width={20} height={20} className="block shrink-0" />
-						{walletVendor === 'mnemonic' ? 'Connect with words' : 'Connect wallet'}
+						{walletVendor === 'mnemonic' ? 'Connect with mnemonic' : 'Connect wallet'}
 					</>
 				)}
 			</button>
