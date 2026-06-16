@@ -804,13 +804,10 @@ mod tests {
             .await
             .unwrap();
 
-        let next = next_seq_no_for_authority(
-            &repo,
-            "mock://asm-membership",
-            Authority::StrataAdmin,
-        )
-        .await
-        .unwrap();
+        let next =
+            next_seq_no_for_authority(&repo, "mock://asm-membership", Authority::StrataAdmin)
+                .await
+                .unwrap();
 
         assert_eq!(next, 6);
     }
