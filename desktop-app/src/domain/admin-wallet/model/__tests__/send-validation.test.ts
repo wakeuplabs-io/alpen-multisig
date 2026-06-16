@@ -1,0 +1,73 @@
+// send-validation — pure model tests (Phase 6, PRD §4.3.5.2 / §4.3.5.5).
+
+import assert from 'node:assert/strict'
+import { amountInputError, canConfirmSend, parseAmountSats } from '../send-validation.ts'
+
+// ── parseAmountSats ──────────────────────────────────────────────────────────
+
+// Accepts plain digit strings (sats are integers).
+assert.equal(parseAmountSats('0'), 0)
+assert.equal(parseAmountSats('1'), 1)
+assert.equal(parseAmountSats('30000'), 30_000)
+assert.equal(parseAmountSats('  30000  '), 30_000, 'surrounding whitespace is trimmed')
+
+// Rejects everything that is not a plain non-negative integer.
+for (const bad of ['', '   ', '-1', '1.5', '1e3', '0x10', '1,000', '1_000', 'abc', '10 sats', '+5']) {
+	assert.equal(parseAmountSats(bad), null, `${JSON.stringify(bad)} must parse to null`)
+}
+
+// Rejects unsafe integers (would lose precision crossing IPC).
+assert.equal(parseAmountSats('9007199254740993'), null, 'beyond Number.MAX_SAFE_INTEGER must be rejected')
+
+console.log('parseAmountSats OK')
+
+// ── canConfirmSend (P6.1 interim gate, PRD §4.3.5.5) ─────────────────────────
+
+const ready = {
+	isDestinationValid: true,
+	amountSats: 30_000,
+	isMax: false,
+	isFeeReady: true,
+	isEstimateReady: true,
+	isSubmitting: false,
+}
+
+assert.equal(canConfirmSend(ready), true, 'all-valid gate must enable Confirm')
+
+// Each gating dimension toggled independently must disable Confirm.
+assert.equal(
+	canConfirmSend({ ...ready, isDestinationValid: false }),
+	false,
+	'unvalidated destination must disable (P6.2 — backend-authoritative, §4.3.5.1)',
+)
+assert.equal(canConfirmSend({ ...ready, amountSats: null }), false, 'unparseable amount must disable')
+assert.equal(canConfirmSend({ ...ready, amountSats: 0 }), false, 'zero amount must disable (§4.3.5.2)')
+assert.equal(canConfirmSend({ ...ready, isFeeReady: false }), false, 'missing fee presets must disable')
+assert.equal(
+	canConfirmSend({ ...ready, isEstimateReady: false }),
+	false,
+	'pending/failed estimate must disable (P6.3 — insufficient funds blocks Confirm, §4.3.5.2)',
+)
+assert.equal(canConfirmSend({ ...ready, isSubmitting: true }), false, 'mid-submit must disable (no double send)')
+
+// Max (drain) mode: the amount field tracks the boundary — null/zero amount is fine.
+assert.equal(
+	canConfirmSend({ ...ready, isMax: true, amountSats: null }),
+	true,
+	'Max mode must not require a parsed amount (drain ignores it)',
+)
+
+console.log('canConfirmSend OK')
+
+// ── amountInputError (P6.4, inline copy for non-submittable amounts) ─────────
+
+assert.equal(amountInputError(''), null, 'empty field stays silent (gate handles it)')
+assert.equal(amountInputError('   '), null, 'whitespace-only stays silent')
+assert.equal(amountInputError('30000'), null, 'valid amount has no error')
+assert.equal(amountInputError('0'), 'Amount must be greater than zero.')
+assert.equal(amountInputError('abc'), 'Enter a whole number of sats.')
+assert.equal(amountInputError('1.5'), 'Enter a whole number of sats.')
+assert.equal(amountInputError('-1'), 'Enter a whole number of sats.')
+
+console.log('amountInputError OK')
+console.log('send-validation.test.ts PASS')

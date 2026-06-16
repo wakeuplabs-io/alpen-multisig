@@ -3,7 +3,7 @@ import { formatSatPerVb } from '@/domain/fee-selection/model/fee-rate'
 import { formatSignedSats } from './format-signed-sats'
 import { truncTxid } from './trunc-txid'
 
-export type BumpDisabledReason = 'not-rbf' | null
+export type BumpDisabledReason = 'not-rbf' | 'cpfp-stats-unavailable' | null
 
 export type UnconfirmedTxView = {
 	txid: string
@@ -38,6 +38,17 @@ export function composeUnconfirmedTxRows(txs: UnconfirmedTxDto[]): UnconfirmedTx
 		const effectiveFeeSats = usesPackageStats ? tx.packageFeeSats : tx.feeSats
 		const effectiveRate = usesPackageStats ? tx.packageFeeRateSatPerKvb : tx.feeRateSatPerKvb
 		const effectiveVsize = usesPackageStats && tx.packageVsizeVbytes !== null ? tx.packageVsizeVbytes : tx.vsizeVbytes
+
+		// F-009: CPFP rows require package stats to bump. If the reveal is not in the
+		// wallet graph yet (packageFeeSats is null), disable bump until sync completes.
+		const cpfpStatsUnavailable = tx.bumpMethod === 'cpfp' && tx.packageFeeSats === null
+		const canBump = tx.bumpMethod !== null && !cpfpStatsUnavailable
+		const bumpDisabledReason: BumpDisabledReason = cpfpStatsUnavailable
+			? 'cpfp-stats-unavailable'
+			: tx.bumpMethod === null
+				? 'not-rbf'
+				: null
+
 		return {
 			txid: tx.txid,
 			shortTxid: truncTxid(tx.txid),
@@ -48,8 +59,8 @@ export function composeUnconfirmedTxRows(txs: UnconfirmedTxDto[]): UnconfirmedTx
 			lastSeenIso: tx.lastSeenSecs !== null ? new Date(tx.lastSeenSecs * 1000).toISOString() : null,
 			isGovernanceCommit: tx.isGovernanceCommit,
 			bumpMethod: tx.bumpMethod,
-			canBump: tx.bumpMethod !== null,
-			bumpDisabledReason: tx.bumpMethod === null ? 'not-rbf' : null,
+			canBump,
+			bumpDisabledReason,
 			currentFeeRateSatPerKvb: effectiveRate,
 			currentFeeSats: effectiveFeeSats,
 			vsizeVbytes: effectiveVsize,

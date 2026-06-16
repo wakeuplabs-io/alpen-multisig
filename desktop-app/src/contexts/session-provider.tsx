@@ -5,7 +5,7 @@ import {
 	orchestratorAuthGetSession,
 	orchestratorAuthLogout,
 	orchestratorAuthStart,
-	ORCHESTRATOR_BASE_URL,
+	getOrchestratorBaseUrl,
 } from '@/api/orchestrator-auth'
 import { walletSessionInit, walletSessionInitWatchOnly } from '@/api/admin-wallet'
 import { SessionContext, type SigningStepInfo } from '@/contexts/session-context'
@@ -50,11 +50,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (currentSession.data.authority === expectedAuthority) {
 				return
 			}
-			await orchestratorAuthLogout(ORCHESTRATOR_BASE_URL)
+			await orchestratorAuthLogout(getOrchestratorBaseUrl())
 		}
 
 		const challengeResult = await orchestratorAuthStart({
-			baseUrl: ORCHESTRATOR_BASE_URL,
+			baseUrl: getOrchestratorBaseUrl(),
 			authority: authorityFromRole(selectedRole),
 		})
 		if (!challengeResult.ok) {
@@ -63,7 +63,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
 		const signature = await adapter.signSighash(challengeResult.data.challengeHex)
 		const completeResult = await orchestratorAuthComplete({
-			baseUrl: ORCHESTRATOR_BASE_URL,
+			baseUrl: getOrchestratorBaseUrl(),
 			challengeId: challengeResult.data.challengeId,
 			signerPubkey: signature.publicKeyHex,
 			signatureHex: signature.signatureHex,
@@ -84,7 +84,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 				)
 			}
 			const challengeResult = await orchestratorAuthStart({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				authority: authorityFromRole(selectedRole),
 			})
 			if (!challengeResult.ok) {
@@ -93,7 +93,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 1, totalSteps: 1 })
 			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
 			const completeResult = await orchestratorAuthComplete({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				challengeId: challengeResult.data.challengeId,
 				signerPubkey: signature.publicKeyHex,
 				signatureHex: signature.signatureHex,
@@ -130,7 +130,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	const disconnectSession = useCallback(async () => {
 		setIsOrchestratorSessionActive(false)
 		setOrchestratorExpiresAtMs(null)
-		void (await orchestratorAuthLogout(ORCHESTRATOR_BASE_URL))
+		void (await orchestratorAuthLogout(getOrchestratorBaseUrl()))
 		await logout()
 		clearSession()
 	}, [clearSession, logout])

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { checkLocalNode, getNodeConfig, saveNodeConfig } from '@/api/node-config'
+import { orchestratorOverrideFromConfig, setOrchestratorBaseUrlOverride } from '@/api/orchestrator-auth'
 import type { LocalNodeStatus, NodeConfig } from '@/domain/node-config/model/node-config.types'
 
 type UseNodeConfigResult = {
@@ -10,7 +11,7 @@ type UseNodeConfigResult = {
 	isSaving: boolean
 	localNodeUnreachable: boolean
 	saveConfig: (draft: NodeConfig) => Promise<void>
-	recheck: () => void
+	recheck: (config: NodeConfig) => void
 }
 
 export function useNodeConfig(): UseNodeConfigResult {
@@ -21,8 +22,12 @@ export function useNodeConfig(): UseNodeConfigResult {
 
 	const fetchAll = useCallback(async () => {
 		setIsLoading(true)
-		const [configResult, statusResult] = await Promise.all([getNodeConfig(), checkLocalNode()])
-		if (configResult.ok) setConfig(configResult.data)
+		const configResult = await getNodeConfig()
+		if (configResult.ok) {
+			setConfig(configResult.data)
+			setOrchestratorBaseUrlOverride(orchestratorOverrideFromConfig(configResult.data))
+		}
+		const statusResult = await checkLocalNode(configResult.ok ? configResult.data : { mode: 'local' })
 		if (statusResult.ok) setLocalNodeStatus(statusResult.data)
 		setIsLoading(false)
 	}, [])
@@ -31,16 +36,20 @@ export function useNodeConfig(): UseNodeConfigResult {
 		void fetchAll()
 	}, [fetchAll])
 
-	const recheck = useCallback(() => {
-		void fetchAll()
-	}, [fetchAll])
+	const recheck = useCallback((config: NodeConfig) => {
+		void (async () => {
+			const statusResult = await checkLocalNode(config)
+			if (statusResult.ok) setLocalNodeStatus(statusResult.data)
+		})()
+	}, [])
 
 	const saveConfigFn = useCallback(async (draft: NodeConfig) => {
 		setIsSaving(true)
 		const result = await saveNodeConfig(draft)
 		if (result.ok) {
 			setConfig(draft)
-			const statusResult = await checkLocalNode()
+			setOrchestratorBaseUrlOverride(orchestratorOverrideFromConfig(draft))
+			const statusResult = await checkLocalNode(draft)
 			if (statusResult.ok) setLocalNodeStatus(statusResult.data)
 		}
 		setIsSaving(false)

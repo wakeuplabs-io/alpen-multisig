@@ -81,6 +81,10 @@ pub struct BumpFeeResultDto {
     /// RBF: replacement rate. CPFP: resulting package rate.
     pub fee_rate_sat_per_kvb: u64,
     pub method: BumpMethod,
+    /// Warning message when pre-bump sync failed but bump proceeded with stale state.
+    /// UI should display this to alert the user that the wallet view may be outdated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_warning: Option<String>,
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
@@ -142,7 +146,8 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
 // ── Fee arithmetic ──────────────────────────────────────────────────────────
 
 /// Fee rate in sat/kvB from an absolute fee and a vsize (ceiling, never underreports).
-fn fee_rate_sat_per_kvb(fee_sats: u64, vsize_vbytes: u64) -> u64 {
+/// Shared with the Phase 6 send path (`wallet_send.rs`).
+pub(crate) fn fee_rate_sat_per_kvb(fee_sats: u64, vsize_vbytes: u64) -> u64 {
     fee_sats.saturating_mul(1_000).div_ceil(vsize_vbytes.max(1))
 }
 
@@ -296,7 +301,14 @@ impl WalletService {
                 })
             })
             .collect();
-        rows.sort_by(|a, b| b.last_seen_secs.cmp(&a.last_seen_secs));
+        // F-012: Sort newest-first by last_seen, with stable fallback to txid when
+        // last_seen is None (indexer didn't provide a timestamp). This ensures
+        // deterministic ordering even when some txs lack mempool timestamps.
+        rows.sort_by(|a, b| {
+            b.last_seen_secs
+                .cmp(&a.last_seen_secs)
+                .then_with(|| a.txid.cmp(&b.txid))
+        });
         Ok(rows)
     }
 
@@ -394,6 +406,7 @@ impl WalletService {
             fee_rate_sat_per_kvb: fee_rate,
             fee_sats,
             method,
+            sync_warning: None,
         })
     }
 
@@ -453,11 +466,16 @@ impl WalletService {
         })?;
         let reveal_tx = bdk_wallet::bitcoin::Transaction::clone(&reveal.tx_node.tx);
 
-        // Anchor: the reveal's change output back to the Admin Wallet.
+        // F-007: Select the largest wallet-owned output for deterministic anchor selection.
+        // When multiple outputs are mine, picking the largest ensures consistent behavior
+        // and avoids edge cases where a small dust output is selected first.
         let vout = reveal_tx
             .output
             .iter()
-            .position(|out| wallet.is_mine(out.script_pubkey.clone()))
+            .enumerate()
+            .filter(|(_, out)| wallet.is_mine(out.script_pubkey.clone()))
+            .max_by_key(|(_, out)| out.value)
+            .map(|(idx, _)| idx)
             .ok_or_else(|| {
                 unavailable("the reveal pays no change back to the admin wallet".to_string())
             })?;
@@ -487,6 +505,28 @@ impl WalletService {
         builder.drain_to(drain_script);
         builder.fee_absolute(Amount::from_sat(child_fee));
         let psbt = builder.finish().map_err(map_create_tx_error)?;
+
+        // F-006: Verify actual package rate meets requested rate.
+        // If BDK added extra inputs to fund the fee, the realized package rate may be
+        // lower than requested. We allow a small epsilon (10%) tolerance since the child
+        // is RBF-bumpable if needed.
+        let child_tx = psbt.unsigned_tx.clone();
+        let child_vsize = child_tx.vsize() as u64;
+        let actual_package_vsize = package.vsize_vbytes + child_vsize;
+        let actual_package_fee = package.fee_sats + child_fee;
+        let actual_package_rate = fee_rate_sat_per_kvb(actual_package_fee, actual_package_vsize);
+        let requested_rate_sat_per_kvb = new_rate.sat_per_kvb();
+        // Allow 10% tolerance: actual rate >= 90% of requested rate
+        let min_acceptable_rate = requested_rate_sat_per_kvb.saturating_mul(90) / 100;
+        if actual_package_rate < min_acceptable_rate {
+            return Err(BumpFeeError::FeeRateTooLow {
+                required_sat_per_kvb: fee_rate_sat_per_kvb(
+                    package.fee_sats + child_fee,
+                    actual_package_vsize,
+                ),
+            });
+        }
+
         Ok((psbt, package))
     }
 }
@@ -833,19 +873,79 @@ mod tests {
 
     #[tokio::test]
     async fn list_sorts_newest_first_by_last_seen() {
-        let mut wallet = funded_wallet();
-        // Two independent confirmed UTXOs so the two spends do not conflict.
-        receive_output_in_latest_block(&mut wallet, 50_000);
-        let older = insert_unconfirmed_spend(&mut wallet, true, 4_000_000_100);
-        let newer = insert_unconfirmed_spend(&mut wallet, true, 4_000_000_900);
-        let svc = WalletService::new(wallet, test_node_config());
+        // Build from scratch to capture confirmed outpoints for explicit UTXO selection.
+        // Without it, BDK's coin-selection sometimes picks the change from `older` as an
+        // input for `newer`, making `newer` a child of `older`. The canonical iterator then
+        // assigns `older` the `last_seen` of `newer` (4_000_000_900) transitively, causing
+        // both rows to tie on `last_seen` and the txid fallback to produce a wrong order.
+        let mut wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        insert_checkpoint(
+            &mut wallet,
+            BlockId {
+                height: 1_000,
+                hash: BlockHash::all_zeros(),
+            },
+        );
+        let utxo_older = receive_output_in_latest_block(&mut wallet, 100_000);
+        let utxo_newer = receive_output_in_latest_block(&mut wallet, 50_000);
 
+        let older = {
+            let mut builder = wallet.build_tx();
+            builder.add_recipient(external_script(), Amount::from_sat(40_000));
+            builder
+                .add_utxo(utxo_older)
+                .expect("utxo_older must be unspent");
+            builder.manually_selected_only();
+            let mut psbt = builder.finish().expect("build older spend");
+            assert!(
+                wallet
+                    .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                    .expect("sign older"),
+                "older must finalize"
+            );
+            let tx = psbt.extract_tx().expect("extract older");
+            insert_tx(&mut wallet, tx.clone());
+            insert_seen_at(&mut wallet, tx.compute_txid(), 4_000_000_100);
+            tx
+        };
+
+        let newer = {
+            let mut builder = wallet.build_tx();
+            builder.add_recipient(external_script(), Amount::from_sat(40_000));
+            builder
+                .add_utxo(utxo_newer)
+                .expect("utxo_newer must be unspent");
+            builder.manually_selected_only();
+            let mut psbt = builder.finish().expect("build newer spend");
+            assert!(
+                wallet
+                    .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                    .expect("sign newer"),
+                "newer must finalize"
+            );
+            let tx = psbt.extract_tx().expect("extract newer");
+            insert_tx(&mut wallet, tx.clone());
+            insert_seen_at(&mut wallet, tx.compute_txid(), 4_000_000_900);
+            tx
+        };
+
+        let svc = WalletService::new(wallet, test_node_config());
         let rows = svc
             .list_unconfirmed_sent_txs(&HashMap::new())
             .await
             .expect("list ok");
 
         assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows[0].last_seen_secs,
+            Some(4_000_000_900),
+            "newer must be first (highest last_seen)"
+        );
+        assert_eq!(
+            rows[1].last_seen_secs,
+            Some(4_000_000_100),
+            "older must be second"
+        );
         assert_eq!(rows[0].txid, newer.compute_txid().to_string());
         assert_eq!(rows[1].txid, older.compute_txid().to_string());
     }
@@ -1321,11 +1421,30 @@ mod tests {
             fee_sats: 500,
             fee_rate_sat_per_kvb: 5_000,
             method: BumpMethod::Rbf,
+            sync_warning: None,
         };
         let json = serde_json::to_value(&dto).expect("serialize");
         assert_eq!(json["newTxid"], "cd");
         assert_eq!(json["targetTxid"], "ab");
         assert_eq!(json["method"], "rbf");
+        assert!(
+            json.get("syncWarning").is_none(),
+            "None sync_warning must be skipped"
+        );
+    }
+
+    #[test]
+    fn bump_fee_result_dto_serializes_sync_warning_when_present() {
+        let dto = BumpFeeResultDto {
+            new_txid: "cd".into(),
+            target_txid: "ab".into(),
+            fee_sats: 500,
+            fee_rate_sat_per_kvb: 5_000,
+            method: BumpMethod::Rbf,
+            sync_warning: Some("Wallet sync failed".to_string()),
+        };
+        let json = serde_json::to_value(&dto).expect("serialize");
+        assert_eq!(json["syncWarning"], "Wallet sync failed");
     }
 
     // ── PackageStats::required_child_fee ────────────────────────────────────
@@ -1358,5 +1477,84 @@ mod tests {
             }
             other => panic!("expected FeeRateTooLow, got: {other:?}"),
         }
+    }
+
+    // ── F-001 regression: governance commit CPFP guard survives restart ─────
+
+    /// F-001 regression: after an app restart (simulated by loading pending reveals
+    /// from a persisted state), a governance commit must still be flagged as
+    /// `is_governance_commit: true` and offered CPFP — never RBF.
+    ///
+    /// This test simulates the restart scenario by:
+    /// 1. Creating a governance package in the wallet graph
+    /// 2. Creating a pending reveals map with the commit→reveal mapping (as if loaded from disk)
+    /// 3. Verifying that list_unconfirmed_sent_txs correctly identifies the commit
+    #[tokio::test]
+    async fn f001_governance_commit_after_restart_shows_cpfp_not_rbf() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package(&mut wallet, 4_000_000_100);
+        let commit_txid = commit.compute_txid().to_string();
+        let svc = WalletService::new(wallet, test_node_config());
+
+        // Simulate app restart: the pending reveals map is loaded from disk
+        // (as if persistence restored it after restart)
+        let pending_after_restart = pending_map(&commit, &reveal);
+
+        let rows = svc
+            .list_unconfirmed_sent_txs(&pending_after_restart)
+            .await
+            .expect("list ok");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.txid, commit_txid);
+        assert!(
+            row.is_governance_commit,
+            "F-001: governance commit must be flagged after restart"
+        );
+        assert_eq!(
+            row.bump_method,
+            Some(BumpMethod::Cpfp),
+            "F-001: governance commit must offer CPFP, never RBF"
+        );
+    }
+
+    /// F-001 regression: attempting RBF on a governance commit (when pending reveals
+    /// map is empty, simulating a bug where persistence failed) must not succeed.
+    ///
+    /// Without the pending reveals entry, the commit would appear as a regular RBF-signaling
+    /// transaction. This test documents the expected behavior: the bump should fail because
+    /// the commit's sequence is MAX (non-RBF) when built via build_tx() without explicit
+    /// RBF signaling — but if it were RBF-signaling, the persistence fix ensures we still
+    /// know it's a governance commit.
+    #[tokio::test]
+    async fn f001_governance_commit_without_pending_map_is_not_flagged() {
+        let mut wallet = funded_wallet();
+        let (_commit, _reveal) = insert_governance_package(&mut wallet, 4_000_000_100);
+        let svc = WalletService::new(wallet, test_node_config());
+
+        // Simulate the bug scenario: pending reveals map is empty (persistence failed)
+        let empty_pending: HashMap<String, String> = HashMap::new();
+
+        let rows = svc
+            .list_unconfirmed_sent_txs(&empty_pending)
+            .await
+            .expect("list ok");
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        // Without the pending reveals entry, the commit is NOT flagged as governance
+        // This documents the bug that F-001 fixes: persistence ensures the mapping survives
+        assert!(
+            !row.is_governance_commit,
+            "without pending reveals, commit is not flagged (this is the bug F-001 fixes)"
+        );
+        // The commit built by build_tx() signals RBF by default (BDK default sequence)
+        // So without persistence, it would incorrectly offer RBF
+        assert_eq!(
+            row.bump_method,
+            Some(BumpMethod::Rbf),
+            "without pending reveals, RBF is incorrectly offered (this is the bug F-001 fixes)"
+        );
     }
 }

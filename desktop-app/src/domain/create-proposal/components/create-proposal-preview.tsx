@@ -10,7 +10,7 @@ import {
 
 type Props = {
 	title: string
-	actionType: 'signer_update' | 'vk_update' | 'operator_set_update'
+	actionType: 'signer_update' | 'vk_update' | 'operator_set_update' | 'sequencer_key_update'
 	seqNo: string
 	keysToAdd: string[]
 	keysToRemove: string[]
@@ -19,6 +19,7 @@ type Props = {
 	newVkHex: string
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
+	newSequencerKeyHex: string
 	sighashHex: string | null
 	authorityLabel: string
 	currentSigners: string[]
@@ -57,6 +58,7 @@ export function CreateProposalPreview({
 	newVkHex,
 	operatorsToAdd,
 	operatorIndicesToRemove,
+	newSequencerKeyHex,
 	sighashHex,
 	authorityLabel,
 	currentSigners,
@@ -68,7 +70,9 @@ export function CreateProposalPreview({
 			? 'Signer update'
 			: actionType === 'operator_set_update'
 				? 'Bridge Operator update'
-				: 'Verification key update'
+				: actionType === 'sequencer_key_update'
+					? 'Sequencer key update'
+					: 'Verification key update'
 
 	const removeNorm = new Set(
 		keysToRemove
@@ -166,6 +170,15 @@ export function CreateProposalPreview({
 							</div>
 						</div>
 					)}
+				</div>
+			) : actionType === 'sequencer_key_update' ? (
+				<div>
+					<p className="m-0 mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+						New Sequencer Public Key
+					</p>
+					<div className="rounded-lg border border-[#e5e7eb] px-4 py-3">
+						<span className="break-all font-mono text-sm text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
+					</div>
 				</div>
 			) : actionType === 'signer_update' ? (
 				<div>

@@ -35,6 +35,8 @@ export type WalletPanelData = {
 	syncError: ReturnType<typeof useAdminWalletSync>['error'] | null
 	onToggleAddresses: () => void
 	onToggleTransactions: () => void
+	onOpenSend: () => void
+	onCloseSend: () => void
 	onRefreshSync: () => Promise<void>
 	disabledError: AdminWalletError | null
 }
@@ -106,6 +108,8 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		syncError: syncHook.error,
 		onToggleAddresses: () => setExpandedSection(expandedSection === 'addresses' ? null : 'addresses'),
 		onToggleTransactions: () => setExpandedSection(expandedSection === 'transactions' ? null : 'transactions'),
+		onOpenSend: () => setExpandedSection('send'),
+		onCloseSend: () => setExpandedSection(null),
 		onRefreshSync: syncAndRefresh,
 		disabledError: showDisabledError ? walletDisabledError : null,
 	}

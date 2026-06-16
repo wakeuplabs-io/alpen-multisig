@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { authorityFromRole, orchestratorAuthGetSession, ORCHESTRATOR_BASE_URL } from '@/api/orchestrator-auth'
+import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
@@ -97,7 +97,7 @@ export function SignScreen() {
 				setSignerPubkey(currentSession.data?.signerPubkey ?? null)
 
 				const proposalResult = await getProposalByActionId({
-					baseUrl: ORCHESTRATOR_BASE_URL,
+					baseUrl: getOrchestratorBaseUrl(),
 					actionId,
 				})
 				if (!proposalResult.ok) {
@@ -180,7 +180,7 @@ export function SignScreen() {
 			})
 			assertWalletPubkeyBinding(signerPubkey, signed.publicKeyHex)
 			const approved = await approveProposal({
-				baseUrl: ORCHESTRATOR_BASE_URL,
+				baseUrl: getOrchestratorBaseUrl(),
 				actionId: proposal.actionId,
 				signerPubkey,
 				signatureHex: signed.signatureHex,

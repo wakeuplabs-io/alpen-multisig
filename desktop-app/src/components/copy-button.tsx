@@ -1,16 +1,12 @@
-import { useState } from 'react'
-import { writeClipboard } from '@/api/tauri-bridge'
+import { useClipboardCopy } from '@/hooks/use-clipboard-copy'
 
 import { CopyClipboardIcon, CheckEmeraldIcon } from '@/assets/icons'
 
 export function CopyButton({ text, variant = 'labeled' }: { text: string; variant?: 'labeled' | 'icon' }) {
-	const [copied, setCopied] = useState(false)
+	const { copied, copy } = useClipboardCopy()
 
 	function handleCopy() {
-		void writeClipboard(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		})
+		copy(text)
 	}
 
 	if (variant === 'icon') {

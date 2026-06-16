@@ -37,10 +37,12 @@ This document summarizes the security review conducted on the Alpen Multisig app
 
 ### Key Principles
 
-1. **Private keys never leave the hardware wallet**
-   - All signing operations occur on the hardware device
-   - Application never has access to raw private keys
+1. **Private keys never leave the hardware wallet (production path)**
+   - All signing operations occur on the hardware device (Trezor/Ledger)
+   - Application never has access to raw private keys in production
    - Session keys are ephemeral and scoped to single authority
+
+   **Development/Testing Exception:** A mnemonic-based software signer (`MnemonicPsbtSigner`) exists for regtest/testnet development and testing. This path must **never** be used with mainnet funds or production keys. The application enforces network guards to prevent mnemonic signing on mainnet.
 
 2. **Backend is coordination only**
    - Does not enforce protocol validity rules

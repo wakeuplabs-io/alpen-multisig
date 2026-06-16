@@ -81,6 +81,8 @@ npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (canonical Admin ID)
 npm run test:e2e:proposal-co-sign-mnemonic # second signer (cosign mnemonic, same canonical path)
 npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
+npm run test:e2e:admin-wallet-panel # admin wallet panel lifecycle (fund, sync, unconfirmed balance)
+npm run test:e2e:fee-bump           # fee-bump flow (PRD §4.3.3) — RBF on unconfirmed send
 ```
 
 Skip the automatic Tauri build (if you already ran `npm run tauri build -- --debug --no-bundle`):
@@ -123,6 +125,14 @@ After login with **`DEMO_MNEMONIC_COSIGN`** (second seed at the same canonical A
 ### [`test/specs/proposal-broadcast-quorum.e2e.js`](test/specs/proposal-broadcast-quorum.e2e.js)
 
 Canonical Admin ID session after login; clicks the first **Broadcast** in **Quorum reached**, **Prepare broadcast**, **Confirm & Broadcast**, then waits for **`e2e-broadcast-done-banner`**. Needs regtest bitcoind + broadcast env in **`desktop-app/.env`** (RPC, mnemonic, magic bytes, ASM URL — see `desktop-app/.env.example`) and a **pre-funded Admin Wallet external address** (see "Admin Wallet pre-funding").
+
+### [`test/specs/admin-wallet-panel.e2e.js`](test/specs/admin-wallet-panel.e2e.js)
+
+Full wallet panel lifecycle: login → open wallet panel → fund receive address → sync → validate confirmed balance → send unconfirmed BTC → validate unconfirmed balance appears → mine → confirm → validate balance resolution. Validates the wallet sync and balance tracking flows.
+
+### [`test/specs/fee-bump.e2e.js`](test/specs/fee-bump.e2e.js)
+
+Fee-bump flow for PRD §4.3.3: login → fund wallet → send unconfirmed BTC → verify transaction appears in "Pending transactions" → click "Bump fee" → enter new fee rate → confirm → verify success with new txid (RBF replacement) → mine → confirm. Validates the RBF path for plain wallet sends. The CPFP path for governance commits requires a pending governance broadcast and is not covered by this automated spec.
 
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 

@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { tauriCall } from '@/api/tauri-bridge'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
-import type { WalletVendor } from '@/wallet/types'
+import type { HwAddressEntry, WalletVendor } from '@/wallet/types'
 
 type Props = {
 	loading: boolean
@@ -28,6 +29,9 @@ export function ConnectPhase({
 	const isSuccess = connectViewState === 'success'
 	const [mnemonicInput, setMnemonicInput] = useState(DEMO_MNEMONIC)
 	const [mnemonicError, setMnemonicError] = useState<string | null>(null)
+	const [debugEntry, setDebugEntry] = useState<HwAddressEntry | null>(null)
+	const [debugLoading, setDebugLoading] = useState(false)
+	const [debugError, setDebugError] = useState<string | null>(null)
 
 	function handleUseTrezor() {
 		onSelectWalletMethod('trezor')
@@ -47,6 +51,23 @@ export function ConnectPhase({
 		}
 		onSelectWalletMethod('mnemonic', words)
 		setMnemonicError(null)
+	}
+
+	async function handleShowDebugAddress() {
+		const words = mnemonicInput.trim() || DEMO_MNEMONIC
+		setDebugLoading(true)
+		setDebugError(null)
+		setDebugEntry(null)
+		const result = await tauriCall<HwAddressEntry[]>('list_mnemonic_addresses', {
+			mnemonic: words,
+			count: 1,
+		})
+		setDebugLoading(false)
+		if (!result.ok) {
+			setDebugError(result.error)
+			return
+		}
+		setDebugEntry(result.data[0] ?? null)
 	}
 
 	return (
@@ -126,7 +147,7 @@ export function ConnectPhase({
 						}`}
 						onClick={handleUseMnemonic}
 					>
-						Palabras
+						Mnemonic
 					</button>
 				</div>
 				<textarea
@@ -138,6 +159,37 @@ export function ConnectPhase({
 					onChange={(event) => setMnemonicInput(event.target.value)}
 				/>
 				{mnemonicError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{mnemonicError}</p>}
+
+				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
+					<>
+						<button
+							type="button"
+							data-testid="e2e-debug-show-address"
+							className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-1.5 text-xs font-medium text-[#374151] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
+							onClick={handleShowDebugAddress}
+							disabled={debugLoading}
+						>
+							{debugLoading ? 'Deriving address…' : 'Show compressed pubkey / address (debug)'}
+						</button>
+						{debugError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{debugError}</p>}
+						{debugEntry !== null && (
+							<div className="mt-2 rounded-md border border-[#e5e7eb] bg-white p-2 text-[11px] text-[#374151]">
+								<p className="m-0 break-all">
+									<span className="font-medium text-[#6b7280]">Public key: </span>
+									{debugEntry.publicKeyHex}
+								</p>
+								<p className="m-0 mt-1 break-all">
+									<span className="font-medium text-[#6b7280]">Address: </span>
+									{debugEntry.address}
+								</p>
+								<p className="m-0 mt-1 break-all">
+									<span className="font-medium text-[#6b7280]">Path: </span>
+									{debugEntry.derivationPath}
+								</p>
+							</div>
+						)}
+					</>
+				)}
 			</div>
 
 			{/* Status message */}
@@ -194,7 +246,7 @@ export function ConnectPhase({
 				) : (
 					<>
 						<UsbStrokeWhiteIcon width={20} height={20} className="block shrink-0" />
-						{walletVendor === 'mnemonic' ? 'Connect with words' : 'Connect wallet'}
+						{walletVendor === 'mnemonic' ? 'Connect with mnemonic' : 'Connect wallet'}
 					</>
 				)}
 			</button>
