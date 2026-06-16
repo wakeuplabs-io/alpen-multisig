@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -34,14 +34,39 @@ pub fn load_pending_reveals() -> HashMap<String, PendingReveal> {
         None => return HashMap::new(),
     };
     let path = data_dir.join(PENDING_REVEALS_FILE);
-    let Ok(contents) = std::fs::read_to_string(&path) else {
+    if !path.exists() {
         return HashMap::new();
+    }
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "failed to read pending reveals store; starting with empty store"
+            );
+            return HashMap::new();
+        }
     };
     let store: PendingRevealsStore = match serde_json::from_str(&contents) {
         Ok(s) => s,
-        Err(_) => return HashMap::new(),
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "pending reveals store is corrupted; starting with empty store"
+            );
+            return HashMap::new();
+        }
     };
     store.entries
+}
+
+fn atomic_write(path: &Path, contents: &str) -> std::io::Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, contents)?;
+    std::fs::rename(&tmp_path, path)?;
+    Ok(())
 }
 
 pub fn save_pending_reveals(entries: &HashMap<String, PendingReveal>) {
@@ -49,17 +74,32 @@ pub fn save_pending_reveals(entries: &HashMap<String, PendingReveal>) {
         Some(dir) => dir,
         None => return,
     };
-    if std::fs::create_dir_all(&data_dir).is_err() {
+    if let Err(e) = std::fs::create_dir_all(&data_dir) {
+        tracing::warn!(
+            path = %data_dir.display(),
+            error = %e,
+            "failed to create app data dir for pending reveals store"
+        );
         return;
     }
     let path = data_dir.join(PENDING_REVEALS_FILE);
     let store = PendingRevealsStore {
         entries: entries.clone(),
     };
-    let Ok(json) = serde_json::to_string_pretty(&store) else {
-        return;
+    let json = match serde_json::to_string_pretty(&store) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to serialize pending reveals store");
+            return;
+        }
     };
-    let _ = std::fs::write(path, json);
+    if let Err(e) = atomic_write(&path, &json) {
+        tracing::warn!(
+            path = %path.display(),
+            error = %e,
+            "failed to persist pending reveals store"
+        );
+    }
 }
 
 pub fn insert_and_persist(store: &PendingReveals, action_id: String, reveal: PendingReveal) {
@@ -117,5 +157,21 @@ mod tests {
     fn load_returns_empty_when_no_app_data_dir_set() {
         let result = load_pending_reveals();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn atomic_write_persists_readable_file() {
+        let dir =
+            std::env::temp_dir().join(format!("pending-reveals-atomic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join(PENDING_REVEALS_FILE);
+        let payload = r#"{"entries":{}}"#;
+
+        atomic_write(&path, payload).expect("atomic write");
+        let read = std::fs::read_to_string(&path).expect("read back");
+        assert_eq!(read, payload);
+        assert!(!path.with_extension("tmp").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
