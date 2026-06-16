@@ -93,9 +93,7 @@ function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { ki
 function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'vk_update' }> }) {
 	return (
 		<div className="mt-5">
-			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
-				New verification key
-			</p>
+			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">New verification key</p>
 			<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2.5">
 				<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-[11px] font-medium text-[#92400e]">
 					{vkPredicateLabelFromTypeId(action.typeId)}
