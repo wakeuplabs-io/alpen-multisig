@@ -103,11 +103,13 @@ pub async fn get_next_seq_no(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
 ) -> Result<Json<NextSeqNoResponse>> {
-    let last_seqno =
-        asm_role_membership::last_seqno_for_authority(&state.asm_rpc_url, auth.authority).await?;
-    Ok(Json(NextSeqNoResponse {
-        next_seq_no: last_seqno + 1,
-    }))
+    let next_seq_no = proposals::next_seq_no_for_authority(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        auth.authority,
+    )
+    .await?;
+    Ok(Json(NextSeqNoResponse { next_seq_no }))
 }
 
 #[tracing::instrument(skip(state, auth), fields(authority = ?auth.authority))]

@@ -11,7 +11,8 @@ use crate::domain::proposal::{
 };
 use crate::error::AppError;
 use crate::infrastructure::asm_role_membership::{
-    lock_period_for_authority, threshold_for_authority, update_id_in_queue_for_action,
+    last_seqno_for_authority, lock_period_for_authority, threshold_for_authority,
+    update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 use chrono::Utc;
@@ -231,6 +232,23 @@ pub(crate) async fn list_proposals(
     status: Option<ProposalStatus>,
 ) -> Result<Vec<Proposal>, AppError> {
     repo.list_by_status(authority, status).await
+}
+
+/// Next seq_no for a new proposal: one past the greater of on-chain ASM `last_seqno`
+/// and the highest seq_no already stored locally for this authority.
+pub(crate) async fn next_seq_no_for_authority(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    authority: Authority,
+) -> Result<u64, AppError> {
+    let asm_last = last_seqno_for_authority(asm_rpc_url, authority).await?;
+    let proposals = list_proposals(repo, authority, None).await?;
+    let local_max = proposals.iter().map(|p| p.seq_no).max().unwrap_or(0);
+    Ok(next_seq_no_from_state(asm_last, local_max))
+}
+
+pub(crate) fn next_seq_no_from_state(asm_last_seqno: u64, local_max_seq_no: u64) -> u64 {
+    std::cmp::max(asm_last_seqno, local_max_seq_no) + 1
 }
 
 /// Lazily expire a pending proposal that has exceeded the 7-day TTL.
@@ -753,6 +771,45 @@ mod tests {
                 .to_string(),
             signature_hex: "sig_b".to_string(),
         }
+    }
+
+    #[test]
+    fn test_next_seq_no_from_state_uses_asm_when_no_local_proposals() {
+        assert_eq!(next_seq_no_from_state(5, 0), 6);
+    }
+
+    #[test]
+    fn test_next_seq_no_from_state_increments_past_local_pending() {
+        assert_eq!(next_seq_no_from_state(2, 4), 5);
+    }
+
+    #[test]
+    fn test_next_seq_no_from_state_asm_ahead_of_stale_local() {
+        assert_eq!(next_seq_no_from_state(10, 3), 11);
+    }
+
+    #[tokio::test]
+    async fn test_next_seq_no_for_authority_considers_local_proposals() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        create_update_action(&repo, session.clone(), 3, ACTION_HEX, &sig, 2)
+            .await
+            .unwrap();
+        create_update_action(&repo, session.clone(), 5, "cafebabe", &sig, 2)
+            .await
+            .unwrap();
+
+        let next =
+            next_seq_no_for_authority(&repo, "mock://asm-membership", Authority::StrataAdmin)
+                .await
+                .unwrap();
+
+        assert_eq!(next, 6);
     }
 
     #[tokio::test]
