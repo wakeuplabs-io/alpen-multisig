@@ -255,4 +255,48 @@ if (!sendCopySource.includes("'Insufficient funds'")) {
 assert.equal(rule8Violations.length, 0, `Rule 8 violations — Phase 6 Send wiring:\n  ${rule8Violations.join('\n  ')}`)
 console.log('Rule 8 PASS: Send form wiring + PRD copy literals')
 
+// ── Rule 9: Phase 7 wiring — Admin ID row (§4.1) + receive QR (§4.3.4.1) ──────
+
+const adminIdRowPath = path.join(componentsDir, 'admin-id-row.tsx')
+const adminIdPresentationPath = path.join(modelDir, 'admin-id-presentation.ts')
+const receiveRowPath = path.join(componentsDir, 'receive-address-row.tsx')
+const sessionControlPath = path.join(componentsDir, 'wallet-session-control.tsx')
+
+const adminIdRow = fs.readFileSync(adminIdRowPath, 'utf8')
+const adminIdPresentation = fs.readFileSync(adminIdPresentationPath, 'utf8')
+const receiveRow = fs.readFileSync(receiveRowPath, 'utf8')
+const sessionControl = fs.readFileSync(sessionControlPath, 'utf8')
+const panelContentForAdminId = fs.readFileSync(walletPanelContentPath, 'utf8')
+
+const rule9Violations: string[] = []
+// §4.1: the panel renders the Admin ID row and threads the auth address in.
+if (!panelContentForAdminId.includes('AdminIdRow')) {
+	rule9Violations.push('wallet-panel-content.tsx: must render AdminIdRow (§4.1)')
+}
+if (!panelContentForAdminId.includes('adminId={adminId}')) {
+	rule9Violations.push('wallet-panel-content.tsx: must forward adminId to AdminIdRow')
+}
+if (!sessionControl.includes('adminId={addressSample}')) {
+	rule9Violations.push('wallet-session-control.tsx: must pass the session addressSample as adminId')
+}
+// Safety caption is a single audited literal (mirrors the §4.3.5 send-copy pattern).
+if (!adminIdPresentation.includes('never send funds to this address.')) {
+	rule9Violations.push('admin-id-presentation.ts: must own the Admin ID safety caption literal')
+}
+// §4.3.4.1: the receive row renders a real QR code.
+if (!receiveRow.includes('QrCode')) {
+	rule9Violations.push('receive-address-row.tsx: must render a QrCode (§4.3.4.1)')
+}
+// Signer safety: the Admin ID is auth-only and must NOT present a scannable QR.
+if (adminIdRow.includes('QrCode')) {
+	rule9Violations.push('admin-id-row.tsx: must NOT render a QR for the Admin ID (auth-only, never fundable)')
+}
+
+assert.equal(
+	rule9Violations.length,
+	0,
+	`Rule 9 violations — Phase 7 Admin ID + receive QR:\n  ${rule9Violations.join('\n  ')}`,
+)
+console.log('Rule 9 PASS: Admin ID row + receive QR wiring')
+
 console.log('All architecture compliance checks passed.')

@@ -3,6 +3,7 @@ import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
 import { DisabledWalletCard } from './disabled-wallet-card'
+import { AdminIdRow } from './admin-id-row'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
 import { AddressesWithBalanceList } from './addresses-with-balance-list'
@@ -12,6 +13,8 @@ import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
 	disabledError: AdminWalletError | null
+	/** Canonical BIP-84 Admin ID (auth address) shown at the top of the panel (PRD §4.1). */
+	adminId: string | undefined
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
@@ -37,6 +40,7 @@ export type WalletPanelContentProps = {
 
 export function WalletPanelContent({
 	disabledError,
+	adminId,
 	confirmedBalanceSats,
 	unconfirmedBalanceSats,
 	isBalanceLoading,
@@ -89,6 +93,10 @@ export function WalletPanelContent({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+			<div className="mb-4">
+				<AdminIdRow adminId={adminId} />
+			</div>
+
 			<WalletBalance
 				confirmedSats={confirmedBalanceSats}
 				unconfirmedSats={unconfirmedBalanceSats}
