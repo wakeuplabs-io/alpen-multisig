@@ -250,6 +250,17 @@ was committed and revealed on your local network.
 | **Confirm & Broadcast** stays disabled | Make sure you funded the address shown on screen, then **Sync** in the wallet panel and wait for it to finish. |
 | Broadcast seems **stuck** on Commit or Reveal | Those steps wait for confirmations — mine more blocks: `./scripts/local-stack.sh --mine 1` (repeat). |
 | App can't reach the network | Open **Settings → Node** and confirm the mode is **Local**. Re‑check the stack with `./scripts/local-stack.sh --status`. |
+| App won't open (Linux) — missing system library error | The app needs the WebKit/GTK system libraries. Install them (see below) and try again. |
+
+**App won't open on Linux (missing system libraries):** if the app fails to start with an error
+about a missing `libwebkit2gtk` (or similar) library, install the system dependencies and retry:
+
+```bash
+sudo apt update && sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+On **macOS**, if the app won't open due to missing developer tools, run `xcode-select --install`.
 
 **Still stuck?** Open an issue at <https://github.com/wakeuplabs-io/alpen-multisig/issues>.
 
