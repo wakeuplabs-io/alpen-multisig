@@ -1,6 +1,6 @@
 import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
-import { vkPredicateLabelFromTypeId } from '@/domain/create-proposal/model/create-proposal.schema'
+import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {

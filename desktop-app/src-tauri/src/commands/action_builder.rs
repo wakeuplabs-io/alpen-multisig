@@ -175,6 +175,48 @@ pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHe
     Ok(BuildActionHexResponse { action_hex })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_vk_update_roundtrip() {
+        let input = BuildVkUpdateHexInput {
+            authority: "alpen_admin".to_string(),
+            type_id: 1,
+            condition_hex: String::new(),
+        };
+        let hex = build_vk_update_hex(input).expect("build should succeed").action_hex;
+        match decode_action_hex(hex) {
+            DecodedAction::VkUpdate { authority, type_id, condition_hex } => {
+                assert_eq!(authority, "alpen_admin");
+                assert_eq!(type_id, 1);
+                assert_eq!(condition_hex, "");
+            }
+            other => panic!("expected VkUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decode_vk_update_with_condition_hex() {
+        let condition = "ab".repeat(32);
+        let input = BuildVkUpdateHexInput {
+            authority: "strata_admin".to_string(),
+            type_id: 10,
+            condition_hex: condition.clone(),
+        };
+        let hex = build_vk_update_hex(input).expect("build should succeed").action_hex;
+        match decode_action_hex(hex) {
+            DecodedAction::VkUpdate { authority, type_id, condition_hex } => {
+                assert_eq!(authority, "strata_admin");
+                assert_eq!(type_id, 10);
+                assert_eq!(condition_hex, condition);
+            }
+            other => panic!("expected VkUpdate, got {other:?}"),
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn build_cancel_action_hex(
     target_action_hex: String,
