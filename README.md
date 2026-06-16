@@ -53,6 +53,18 @@ npm run build
 
 ## Documentation Pointers
 
+### External (client-facing) documentation
+
+Client-facing deliverables live in [`docs/external/`](docs/external/README.md) — start there for setup, architecture, API, and release verification.
+
+- **New here? Try the app end-to-end:** [Local Dev Smoke Test Guide](docs/external/local-dev-smoke-test-guide.md) — a beginner-friendly, assume-nothing walkthrough that brings up the full local stack and runs a complete governance action on regtest.
+- Install a packaged release: [Setup Guide](docs/external/setup-guide.md)
+- System design: [Architecture Overview](docs/external/architecture-overview.md)
+- Backend endpoints: [API Reference](docs/external/api-reference.md)
+- Full index: [`docs/external/README.md`](docs/external/README.md)
+
+### Internal references
+
 - Architecture overview: `docs/architecture/overview.md`
 - Discovery index: `docs/2-discovery/README.md`
 - Story map / slices: `docs/3-stories/story-map.md`
