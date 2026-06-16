@@ -215,6 +215,11 @@ action appears.
 
 Broadcasting needs a tiny amount of test coins for fees. You'll fund the wallet, then broadcast.
 
+> **Prefer buttons over the terminal?** Open **`faucet-ui/index.html`** (double‑click it, or
+> open the file in your browser) for a small page with **Send BTC** and **Mine Blocks** buttons —
+> it does the same as the `--fund` and `--mine` commands below, and also lists the test seed
+> phrases and their roles. Keep the local network running while you use it.
+
 1. Click **Broadcast**. The **Broadcast proposal** screen opens and shows an **Admin Wallet
    funding address** (`bcrt1...`). **Copy it.**
 2. In a **second terminal** (keep the app running), give that address test coins — replace
@@ -297,3 +302,7 @@ was committed and revealed on your local network.
 | Stop everything | `./scripts/local-stack.sh --stop` |
 | Clean reset | `./scripts/local-stack.sh --clean` |
 | Start the app | `cd desktop-app && npm run tauri dev` |
+
+> **Tip:** instead of the `--fund` and `--mine` commands, you can open **`faucet-ui/index.html`**
+> in your browser for clickable **Send BTC** and **Mine Blocks** buttons (it also lists the test
+> seed phrases and roles).
