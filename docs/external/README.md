@@ -9,6 +9,7 @@ This directory contains the complete set of client-facing deliverables for the A
 | Document | Description | PRD Reference |
 |----------|-------------|---------------|
 | [Setup Guide](./setup-guide.md) | Installation, first-run setup, and configuration | PRD §1.4 |
+| [Local Dev Smoke Test Guide (APB)](./local-dev-smoke-test-guide.md) | Beginner-friendly, end-to-end walkthrough to run the full app from source and complete a governance action on a local regtest network | PRD §1.4 |
 | [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md) | Supported devices and requirements | PRD §3.2 |
 
 ### Architecture and Design
