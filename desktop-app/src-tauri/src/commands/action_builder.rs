@@ -186,9 +186,15 @@ mod tests {
             type_id: 1,
             condition_hex: String::new(),
         };
-        let hex = build_vk_update_hex(input).expect("build should succeed").action_hex;
+        let hex = build_vk_update_hex(input)
+            .expect("build should succeed")
+            .action_hex;
         match decode_action_hex(hex) {
-            DecodedAction::VkUpdate { authority, type_id, condition_hex } => {
+            DecodedAction::VkUpdate {
+                authority,
+                type_id,
+                condition_hex,
+            } => {
                 assert_eq!(authority, "alpen_admin");
                 assert_eq!(type_id, 1);
                 assert_eq!(condition_hex, "");
@@ -205,9 +211,15 @@ mod tests {
             type_id: 10,
             condition_hex: condition.clone(),
         };
-        let hex = build_vk_update_hex(input).expect("build should succeed").action_hex;
+        let hex = build_vk_update_hex(input)
+            .expect("build should succeed")
+            .action_hex;
         match decode_action_hex(hex) {
-            DecodedAction::VkUpdate { authority, type_id, condition_hex } => {
+            DecodedAction::VkUpdate {
+                authority,
+                type_id,
+                condition_hex,
+            } => {
                 assert_eq!(authority, "strata_admin");
                 assert_eq!(type_id, 10);
                 assert_eq!(condition_hex, condition);
