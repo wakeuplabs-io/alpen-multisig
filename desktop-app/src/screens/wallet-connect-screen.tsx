@@ -171,9 +171,9 @@ export function WalletConnectScreen() {
 		await disconnectSession()
 	}
 
-	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) {
+	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) {
 		if (method === 'trezor') {
-			selectAdapter('trezor')
+			selectAdapter('trezor', { passphrase })
 			return
 		}
 		if (method === 'ledger') {

@@ -7,7 +7,7 @@ import { createTrezorAdapter } from './trezor-adapter'
 export function createWalletAdapter(vendor: WalletVendor, opts: WalletAdapterOptions = {}): WalletAdapter {
 	if (vendor === 'mock') return createMockAdapter()
 	if (vendor === 'ledger') return createLedgerAdapter()
-	if (vendor === 'trezor') return createTrezorAdapter()
+	if (vendor === 'trezor') return createTrezorAdapter(opts.passphrase)
 	// mnemonic
 	if (!opts.mnemonic?.trim()) throw new Error('A BIP39 mnemonic is required for the mnemonic wallet.')
 	return createMnemonicAdapter({
