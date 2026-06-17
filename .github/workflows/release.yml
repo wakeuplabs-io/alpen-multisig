@@ -100,7 +100,7 @@ jobs:
         # Tier 1 reproducibility (binary + frontend). These digests are published
         # and folded into the signed SHA256SUMS so an independent rebuild can be
         # compared without trusting the installer wrappers. See
-        # docs/operations/reproducible-builds.md.
+        # docs/external/reproducible-builds.md.
         run: |
           dist_digest="$(cd desktop-app/dist && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
           {
@@ -193,7 +193,7 @@ jobs:
       - name: Record reproducibility digests
         # macOS ships `shasum`, not `sha256sum`. The signed/notarized .dmg is not
         # reproducible by construction; we record the unsigned binary + frontend
-        # (Tier 1) only. See docs/operations/reproducible-builds.md.
+        # (Tier 1) only. See docs/external/reproducible-builds.md.
         run: |
           dist_digest="$(cd desktop-app/dist && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)"
           {
@@ -353,7 +353,7 @@ jobs:
           {
             echo "# Reproducibility digests for this release (Tier 1: binary + frontend)."
             echo "# Independent rebuild + comparison recipe:"
-            echo "#   docs/operations/reproducible-builds.md"
+            echo "#   docs/external/reproducible-builds.md"
             echo
             cat repro-digests-linux.txt
             echo
