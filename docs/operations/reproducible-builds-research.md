@@ -129,7 +129,8 @@ Target **Tier 1 as the D4 deliverable**, with Tier 2 documented as a follow-up:
 **Tier 1 implemented (D4).** The config (`trim-paths`, `SOURCE_DATE_EPOCH`, pinned Node) and the
 published `REPRODUCIBLE-DIGESTS.txt` (folded into the signed `SHA256SUMS`) are live in
 `release.yml`; the independent rebuild recipe is `scripts/verify-reproducible-build.sh`, documented
-in [`reproducible-builds.md`](./reproducible-builds.md).
+in [`reproducible-builds.md`](./reproducible-builds.md) (internal pointer; canonical guide:
+[`../external/reproducible-builds.md`](../external/reproducible-builds.md)).
 
 Follow-ups (not part of D4): spike Tier 2 on `.deb`/AppImage to measure how far the bundler gets us
 with `SOURCE_DATE_EPOCH` before deciding on `strip-nondeterminism` post-processing; Tier 3 (signed

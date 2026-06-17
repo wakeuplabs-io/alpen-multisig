@@ -8,7 +8,7 @@
 # `desktop-app` release binary and the Vite `dist/` frontend — not the installer
 # wrappers (.deb/.rpm/AppImage/.dmg), which are only partially reproducible, and
 # not the signed macOS .dmg, which cannot be bit-for-bit by construction.
-# See docs/operations/reproducible-builds.md for the full rationale.
+# See docs/external/reproducible-builds.md for the full rationale.
 #
 # Usage:
 #   scripts/verify-reproducible-build.sh path/to/REPRODUCIBLE-DIGESTS.txt

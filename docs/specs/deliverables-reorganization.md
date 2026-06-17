@@ -1,5 +1,10 @@
 # Spec: Client-Facing Deliverables Reorganization
 
+> **Execution note (2026-06):** `docs/external/` is populated. Internal duplicates were consolidated:
+> `operations/verifying-releases.md` removed (use `external/verifying-releases.md`);
+> `operations/reproducible-builds.md`, `release-signing-mvp.md`, and `deliverable/research.md` are
+> internal pointers to the matching `external/` documents.
+
 ## Objective
 Reorganize project documentation to clearly separate client-facing deliverables (external) from internal development artifacts. Ensure all committed deliverables from the proposal and PRDs exist as polished, professional documents suitable for delivery to Alpen Labs.
 

@@ -49,4 +49,4 @@ no signature (authenticity) — see the release workflow's graceful-degradation 
 
 ## Verifying a release
 
-See [`docs/operations/verifying-releases.md`](../docs/operations/verifying-releases.md).
+See [`docs/external/verifying-releases.md`](../docs/external/verifying-releases.md).

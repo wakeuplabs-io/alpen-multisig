@@ -46,7 +46,7 @@ bdk_bitcoind_rpc = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Reproducible builds (D4 / NF-2) — see docs/operations/reproducible-builds.md.
+# Reproducible builds (D4 / NF-2) — see docs/external/reproducible-builds.md.
 # `trim-paths` strips absolute build paths ($HOME, $CARGO_HOME, git/registry deps)
 # from the release binary so two machines produce byte-identical output. Combined
 # with the pinned toolchain, committed lockfile, and SOURCE_DATE_EPOCH set in the
