@@ -1,8 +1,10 @@
 # Desktop App Executable — Delivery Plan (SSOT)
 
-This document is the **single source of truth** for building, packaging, signing, and
-distributing the desktop application executable. It consolidates the requirements scattered
-across the PRD, proposal, story map, ADRs, and assessments into one incremental plan.
+**Client-facing overview (canonical):** [`docs/external/build-and-release-process.md`](../external/build-and-release-process.md)
+
+This document is the **internal single source of truth** for deliverable status (D1–D8),
+closure, and handed-off follow-ups. It consolidates requirements scattered across the PRD,
+proposal, story map, ADRs, and assessments into one incremental plan.
 
 It is intentionally **non-technical**: each deliverable describes the user-facing value and the
 requirements it closes, not the implementation. Technical design is produced per deliverable when
@@ -40,7 +42,7 @@ Historical baseline that motivated this plan — what existed at the outset (now
 - No release workflow, no artifact publication, no checksums.
 - `tauri.conf.json` declares `bundle.targets: "all"` but has **no** signing configuration.
 - No code signing on any platform; no reproducibility verification.
-- A manual Linux PGP MVP is sketched in [`release-signing-mvp.md`](./release-signing-mvp.md) but not automated.
+- A manual Linux PGP MVP was sketched before D3; see [`release-signing-mvp.md`](./release-signing-mvp.md) (internal pointer).
 
 Two adversarial assessment rounds (`assessment/2026-05-13-*`, `assessment/2026-05-14-*`) flagged
 the missing release/signing pipeline as a **BLOCKER** before any external release.
@@ -82,13 +84,14 @@ earlier ones. Status is tracked here as the plan progresses.
 - **Value:** A signer can download a binary, verify a detached signature over the published
   `SHA256SUMS` manifest, and trust it came from the project. Single named-employee signing as the
   first trust anchor, using the manifest-and-keyring model (Option A) so D7 is purely additive.
-- **Closes:** PRD §1.3, NF-3 — partial (single signer). Builds on
-  [`release-signing-mvp.md`](./release-signing-mvp.md).
+- **Closes:** PRD §1.3, NF-3 — partial (single signer). See
+  [`release-signing-mvp.md`](./release-signing-mvp.md) (internal) and
+  [`../external/release-signing.md`](../external/release-signing.md) (client).
 - **Status:** Done. `release.yml` generates `SHA256SUMS` over all platform artifacts and
   publishes a detached signature `SHA256SUMS.<signer>.asc` when a signing key is configured
   (graceful degradation: checksums always ship; signature ships once `PGP_PRIVATE_KEY` is set).
   Authorized public keys live in [`release-keys/`](../../release-keys/); user verification guide in
-  [`verifying-releases.md`](./verifying-releases.md). An Alpen Labs employee generated a personal
+  [`../external/verifying-releases.md`](../external/verifying-releases.md). An Alpen Labs employee generated a personal
   key, committed its public half to `release-keys/`, and set the `PGP_PRIVATE_KEY`/`PGP_PASSPHRASE`
   secrets + `PGP_SIGNER_ID` variable; signed releases verified.
 
@@ -102,7 +105,7 @@ earlier ones. Status is tracked here as the plan progresses.
   (binary + frontend SHA-256 per platform), folded into the signed `SHA256SUMS` so the signature
   commits to it. An independent party reproduces and compares with
   `scripts/verify-reproducible-build.sh`; the recipe and honest tier limits are documented in
-  [`reproducible-builds.md`](./reproducible-builds.md). Tier 2 (installer wrappers) and Tier 3
+  [`../external/reproducible-builds.md`](../external/reproducible-builds.md). Tier 2 (installer wrappers) and Tier 3
   (signed `.dmg`, infeasible by construction) remain out of scope and are tracked as follow-ups.
   Research and evidence: [`reproducible-builds-research.md`](./reproducible-builds-research.md).
 
@@ -208,11 +211,14 @@ on Alpen Labs:
 
 ## Related documents
 
+- [`../external/build-and-release-process.md`](../external/build-and-release-process.md) — client-facing build and release overview.
 - [`desktop-build-linux.md`](./desktop-build-linux.md) — Linux local build steps (D1).
-- [`release-signing-mvp.md`](./release-signing-mvp.md) — Linux PGP MVP detail (feeds D3).
-- [`verifying-releases.md`](./verifying-releases.md) — user-facing release verification guide (D3).
+- [`release-signing-mvp.md`](./release-signing-mvp.md) — internal pointer to signing docs and D3/D7 context.
+- [`../external/release-signing.md`](../external/release-signing.md) — client-facing release signing (D3/D7).
+- [`../external/verifying-releases.md`](../external/verifying-releases.md) — client-facing release verification (D3).
 - [`reproducible-builds-research.md`](./reproducible-builds-research.md) — reproducibility research and plan (D4).
-- [`reproducible-builds.md`](./reproducible-builds.md) — how to independently reproduce and verify a release (D4).
+- [`reproducible-builds.md`](./reproducible-builds.md) — internal pointer to reproducible-builds guide (D4).
+- [`../external/reproducible-builds.md`](../external/reproducible-builds.md) — client-facing reproducible builds (D4).
 - [`platform-code-signing-requirements.md`](./platform-code-signing-requirements.md) — Apple Developer ID and Authenticode requirements for Alpen Labs (D6).
 - [`multi-employee-signing-requirements.md`](./multi-employee-signing-requirements.md) — employee PGP key generation and signing ceremony process (D7).
 - [`../3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) — NF-1…NF-4 (and NF-16/NF-17, HWI bundling, currently out of scope).
