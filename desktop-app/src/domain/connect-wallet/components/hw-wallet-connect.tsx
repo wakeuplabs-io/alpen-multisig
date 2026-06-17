@@ -14,7 +14,7 @@ import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/ty
 type Props = {
 	adapter: WalletAdapter
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
 	onConnected: (info: WalletAccountInfo | null) => void
 	/** Wired to the shell header so Disconnect lives only in the top bar. */
 	disconnectRef?: MutableRefObject<(() => void) | null>
@@ -60,6 +60,11 @@ export function HwWalletConnect({
 		void connectRef.current()
 	}, [shouldAutoConnect])
 
+	function handleConnectTrezor(passphrase?: string) {
+		onSelectWalletMethod('trezor', undefined, passphrase)
+		setShouldAutoConnect(true)
+	}
+
 	function handleConnectMnemonic(mnemonic: string) {
 		onSelectWalletMethod('mnemonic', mnemonic)
 		setShouldAutoConnect(true)
@@ -97,6 +102,7 @@ export function HwWalletConnect({
 					connectViewState={state.connectViewState}
 					error={state.error}
 					onConnect={() => void actions.connect()}
+					onConnectTrezor={handleConnectTrezor}
 					onConnectMnemonic={handleConnectMnemonic}
 					walletVendor={walletVendor}
 					onSelectWalletMethod={onSelectWalletMethod}

@@ -6,8 +6,14 @@ use desktop_app::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, 
 use desktop_app::infrastructure::signing::{self, SignatureResult};
 
 #[tauri::command]
-pub async fn get_trezor_info(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
-    trezor::connect(derivation_path)
+pub async fn get_trezor_info(
+    derivation_path: Option<String>,
+    passphrase: Option<String>,
+) -> Result<HwWalletInfo, String> {
+    let pp = passphrase.unwrap_or_default();
+    tokio::task::spawn_blocking(move || trezor::connect(derivation_path, &pp))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Parses the device-kind IPC token into a [`HwDeviceType`] (case-insensitive).
@@ -57,10 +63,12 @@ pub async fn sign_with_trezor(
     seqno: u64,
     action_hex: String,
     derivation_path: String,
+    passphrase: Option<String>,
 ) -> Result<SignatureResult, String> {
     let message = signing::render_signing_message(seqno, &action_hex)?;
+    let pp = passphrase.unwrap_or_default();
     tokio::task::spawn_blocking(move || {
-        trezor::sign_admin_sps65_binding(&message, &derivation_path)
+        trezor::sign_admin_sps65_binding(&message, &derivation_path, &pp)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -70,25 +78,29 @@ pub async fn sign_with_trezor(
 pub async fn sign_challenge_with_trezor(
     challenge_hex: String,
     derivation_path: String,
+    passphrase: Option<String>,
 ) -> Result<SignatureResult, String> {
+    let pp = passphrase.unwrap_or_default();
     tokio::task::spawn_blocking(move || {
-        trezor::sign_admin_sps65_binding(&challenge_hex, &derivation_path)
+        trezor::sign_admin_sps65_binding(&challenge_hex, &derivation_path, &pp)
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn get_trezor_admin_wallet_xpub() -> Result<String, String> {
+pub async fn get_trezor_admin_wallet_xpub(passphrase: Option<String>) -> Result<String, String> {
     let path = "m/86'/0'/73'".to_string();
-    tokio::task::spawn_blocking(move || trezor::get_account_xpub(&path))
+    let pp = passphrase.unwrap_or_default();
+    tokio::task::spawn_blocking(move || trezor::get_account_xpub(&path, &pp))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn get_trezor_master_fingerprint() -> Result<u32, String> {
-    tokio::task::spawn_blocking(trezor::get_master_fingerprint)
+pub async fn get_trezor_master_fingerprint(passphrase: Option<String>) -> Result<u32, String> {
+    let pp = passphrase.unwrap_or_default();
+    tokio::task::spawn_blocking(move || trezor::get_master_fingerprint(&pp))
         .await
         .map_err(|e| e.to_string())?
 }

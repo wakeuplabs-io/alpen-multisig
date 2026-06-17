@@ -115,8 +115,11 @@ fn get_xpub<'a>(
         .map_err(|e: trezor_client::Error| e.to_string())
 }
 
-/// Drive a TrezorResponse to completion, handling ButtonRequests along the way.
-fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> Result<T, String> {
+/// Drive a TrezorResponse to completion, handling ButtonRequests and PassphraseRequests.
+fn resolve<'a, T, R: TrezorMessage>(
+    mut response: TrezorResponse<'a, T, R>,
+    passphrase: &str,
+) -> Result<T, String> {
     loop {
         match response {
             TrezorResponse::Ok(data) => return Ok(data),
@@ -127,15 +130,20 @@ fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> R
             TrezorResponse::PinMatrixRequest(_) => {
                 return Err("PIN entry not supported in this build.".to_string());
             }
-            TrezorResponse::PassphraseRequest(_) => {
-                return Err("Passphrase entry not supported in this build.".to_string());
+            TrezorResponse::PassphraseRequest(req) => {
+                response = if req.on_device() {
+                    req.ack(true)
+                } else {
+                    req.ack_passphrase(passphrase.to_string())
+                }
+                .map_err(|e| format!("PassphraseAck failed: {e}"))?;
             }
         }
     }
 }
 
 /// Connect: read the P2WPKH Admin ID address at the BIP-84 derivation path.
-pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
+pub fn connect(derivation_path: Option<String>, passphrase: &str) -> Result<HwWalletInfo, String> {
     let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
     let path = parse_path(&path_str)?;
 
@@ -150,6 +158,7 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
             false,
         )
         .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        passphrase,
     )?;
 
     let pubkey_hex = hex::encode(xpub.public_key.serialize());
@@ -202,7 +211,7 @@ pub fn verify_address_on_device(
         .map_err(|e: trezor_client::Error| {
             format!("Trezor verify_address at {derivation_path} failed: {e}")
         })?;
-    resolve(resp)?;
+    resolve(resp, "")?;
 
     Ok(())
 }
@@ -212,22 +221,25 @@ pub fn verify_address_on_device(
 /// Uses `SPENDTAPROOT` script type so Trezor derives the correct key material
 /// for a P2TR wallet. `ignore_xpub_magic = true` (set inside `get_xpub`) ensures
 /// standard `xpub` version bytes are returned instead of SLIP-0132 `Xpub` bytes.
-pub fn get_account_xpub(path: &str) -> Result<String, String> {
+pub fn get_account_xpub(path: &str, passphrase: &str) -> Result<String, String> {
     let derivation_path = parse_path(path)?;
     let mut trezor = open_trezor()?;
-    let xpub = resolve(get_xpub(
-        &mut trezor,
-        &derivation_path,
-        InputScriptType::SPENDTAPROOT,
-        Network::Bitcoin,
-        false,
-    )?)?;
+    let xpub = resolve(
+        get_xpub(
+            &mut trezor,
+            &derivation_path,
+            InputScriptType::SPENDTAPROOT,
+            Network::Bitcoin,
+            false,
+        )?,
+        passphrase,
+    )?;
     Ok(xpub.to_string())
 }
 
 /// Returns the master fingerprint (first 4 bytes of hash160 of master public key) from the Trezor.
 /// Obtained by requesting the master xpub at path `m/` and reading the root_fingerprint from the response.
-pub fn get_master_fingerprint() -> Result<u32, String> {
+pub fn get_master_fingerprint(passphrase: &str) -> Result<u32, String> {
     let mut trezor = open_trezor()?;
     let master_path = DerivationPath::from_str("m/").map_err(|e| format!("Invalid path: {e}"))?;
 
@@ -249,7 +261,7 @@ pub fn get_master_fingerprint() -> Result<u32, String> {
         )
         .map_err(|e: trezor_client::Error| e.to_string())?;
 
-    resolve(response)
+    resolve(response, passphrase)
 }
 
 /// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
@@ -262,6 +274,7 @@ pub fn get_master_fingerprint() -> Result<u32, String> {
 pub fn sign_admin_sps65_binding(
     message: &str,
     derivation_path: &str,
+    passphrase: &str,
 ) -> Result<SignatureResult, String> {
     let path = parse_path(derivation_path)?;
     let mut trezor = open_trezor()?;
@@ -275,6 +288,7 @@ pub fn sign_admin_sps65_binding(
             false,
         )
         .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
+        passphrase,
     )?;
 
     let recoverable_sig = resolve(
@@ -286,6 +300,7 @@ pub fn sign_admin_sps65_binding(
             Network::Bitcoin,
         )
         .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
+        passphrase,
     )?;
 
     Ok(SignatureResult {
@@ -310,7 +325,7 @@ fn read_root_fingerprint(trezor: &mut Trezor) -> Result<u32, String> {
             Box::new(|_, m: protos::PublicKey| Ok(m.root_fingerprint())),
         )
         .map_err(|e: trezor_client::Error| e.to_string())?;
-    resolve(resp)
+    resolve(resp, "")
 }
 
 /// Full BIP-32 derivation path (as Trezor `address_n`) for the wallet-owned key in
@@ -467,6 +482,7 @@ fn sign_taproot_psbt(
         trezor
             .sign_tx(psbt, network)
             .map_err(|e| format!("Trezor sign_tx failed: {e}"))?,
+        "",
     )?;
 
     loop {
@@ -490,6 +506,7 @@ fn sign_taproot_psbt(
             progress
                 .ack_msg(ack)
                 .map_err(|e| format!("Trezor TxAck failed: {e}"))?,
+            "",
         )?;
     }
 

@@ -480,6 +480,8 @@ mod tests {
     use std::sync::RwLock as StdRwLock;
 
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    /// Arbitrary dummy BIP-32 master fingerprint for test injection — no real device needed.
+    const TEST_FINGERPRINT: u32 = 0xDEAD_BEEF;
 
     /// Deterministic regtest P2WPKH destination (derived, so the checksum is
     /// always valid — hardcoded literals have bitten before).
@@ -529,11 +531,12 @@ mod tests {
         device_sign: crate::infrastructure::hw_wallet::hw_psbt_signer::DeviceSignFn,
     ) -> WalletService {
         use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
+        let network = wallet.network();
         let signer = Arc::new(HwPsbtSigner::with_device_sign(
-            0xDEAD_BEEF,
+            TEST_FINGERPRINT,
             device_type,
             "tpubTEST".to_string(),
-            Network::Regtest,
+            network,
             device_sign,
         ));
         WalletService::with_signer(wallet, signer, test_node_config())
