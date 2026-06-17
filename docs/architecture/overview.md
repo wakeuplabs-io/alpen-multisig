@@ -216,7 +216,7 @@ desktop-app/src-tauri/src/
     ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction SSZ codec
     ├── signing.rs           # compute_sighash/sign_sighash/verify_threshold
     ├── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
-    └── hw_wallet/           # Trezor integration + Ledger placeholder module
+    └── hw_wallet/           # Trezor + Ledger device protocols (PSBT signing, address verify), HwPsbtSigner seam
 ```
 
 **Strata crate isolation:** `infrastructure/action_codec.rs` is the single module in the desktop app that imports `strata_asm_params`, `strata_asm_txs_admin`, and `strata_crypto`. All other layers (`domain/`, `application/`, commands, UI) talk in client-owned domain types (`Authority`, `Action`, `MultisigUpdate`, `CompressedPubKey`). A codec test asserts byte-level borsh compatibility with the direct Strata call, guaranteeing the SPS-65 signed form stays identical.

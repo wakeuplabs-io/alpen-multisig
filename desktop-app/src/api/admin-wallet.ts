@@ -255,12 +255,43 @@ export function walletSessionInitWatchOnly(input: WalletSessionInitWatchOnlyInpu
 
 export type SignerKind = 'hardware' | 'mnemonic' | 'none'
 
+// Re-exported from the domain model so presentational components can type their
+// props without importing this API boundary (see admin-wallet architecture rule).
+export type { HwDeviceType, VerifyScriptType } from '@/domain/admin-wallet/model/hw-device'
+import type { HwDeviceType, VerifyScriptType } from '@/domain/admin-wallet/model/hw-device'
+
 export type AdminWalletCapability = {
 	canSign: boolean
 	signerKind: SignerKind
 	reason?: string
+	/** Connected device for verify-on-device dispatch (PRD §4.2 / §4.3.4.2); null when not HW. */
+	deviceType: HwDeviceType | null
+	/** Active session network token (regtest | testnet | signet | bitcoin). */
+	network: string
 }
 
 export function getAdminWalletCanSign(): Promise<ApiResult<AdminWalletCapability>> {
 	return tauriCall<AdminWalletCapability>('admin_wallet_can_sign', {})
+}
+
+// Phase 8 (PRD §4.2 / §4.3.4.2): confirm an address on the connected device screen.
+export type VerifyAddressOnDeviceInput = {
+	derivationPath: string
+	deviceType: HwDeviceType
+	scriptType: VerifyScriptType
+	network?: string
+}
+
+/**
+ * Asks the connected hardware device to display the address at derivationPath so
+ * the signer can compare it on-screen. Resolves on confirm; ApiResult error on
+ * mismatch surfacing, device rejection, or timeout.
+ */
+export function verifyAddressOnDevice(input: VerifyAddressOnDeviceInput): Promise<ApiResult<null>> {
+	return tauriCall<null>('verify_address_on_device', {
+		derivationPath: input.derivationPath,
+		deviceType: input.deviceType,
+		scriptType: input.scriptType,
+		network: input.network,
+	})
 }

@@ -1,11 +1,23 @@
+import type { HwDeviceType } from '../model/hw-device'
 import { QrCode } from '@/components/qr-code'
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy'
 import { CopyClipboardIcon, CheckEmeraldIcon } from '@/assets/icons'
 import { buildReceiveQrValue } from '../model/build-receive-qr-value'
+import { buildReceiveVerifyPath } from '../model/build-verify-path'
+import { VerifyOnDeviceButton } from './verify-on-device-button'
+
+/** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.3.4.2). */
+export type ReceiveVerifyContext = {
+	deviceType: HwDeviceType
+	network: string
+	index: number
+}
 
 export type ReceiveAddressRowProps = {
 	address: string
 	isLoading?: boolean
+	/** When set, renders a "Verify on device" affordance for the receive address (P2TR). */
+	verify?: ReceiveVerifyContext
 }
 
 /**
@@ -14,7 +26,7 @@ export type ReceiveAddressRowProps = {
  * clipboard (§4.3.4.1.1), with shared "Copied!" feedback announced to assistive
  * tech.
  */
-export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps) {
+export function ReceiveAddressRow({ address, isLoading, verify }: ReceiveAddressRowProps) {
 	const { copied, copy } = useClipboardCopy()
 
 	if (isLoading) {
@@ -90,6 +102,18 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 						{copied ? <CheckEmeraldIcon width={14} height={14} /> : <CopyClipboardIcon width={14} height={14} />}
 					</button>
 				</div>
+
+				{verify && (
+					<div className="w-full">
+						<VerifyOnDeviceButton
+							deviceType={verify.deviceType}
+							network={verify.network}
+							derivationPath={buildReceiveVerifyPath(verify.network, verify.index)}
+							scriptType="p2tr"
+							subject="receive address"
+						/>
+					</div>
+				)}
 			</div>
 		</div>
 	)

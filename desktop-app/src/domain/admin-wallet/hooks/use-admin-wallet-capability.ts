@@ -9,6 +9,8 @@ export function useAdminWalletCapability() {
 	const [canSign, setCanSign] = useState(false)
 	const [signerKind, setSignerKind] = useState<'hardware' | 'mnemonic' | 'none'>('none')
 	const [canSignReason, setCanSignReason] = useState<string | undefined>(undefined)
+	const [deviceType, setDeviceType] = useState<'trezor' | 'ledger' | null>(null)
+	const [network, setNetwork] = useState<string>('regtest')
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
 	const fetchCapability = () => {
@@ -17,6 +19,7 @@ export function useAdminWalletCapability() {
 				setCanSign(false)
 				setSignerKind('none')
 				setCanSignReason(undefined)
+				setDeviceType(null)
 				return
 			}
 			const parsed = adminWalletCapabilitySchema.safeParse(result.data)
@@ -25,11 +28,14 @@ export function useAdminWalletCapability() {
 				setCanSign(false)
 				setSignerKind('none')
 				setCanSignReason(undefined)
+				setDeviceType(null)
 				return
 			}
 			setCanSign(parsed.data.canSign)
 			setSignerKind(parsed.data.signerKind)
 			setCanSignReason(formatCanSignReason(parsed.data.reason))
+			setDeviceType(parsed.data.deviceType)
+			setNetwork(parsed.data.network)
 		})
 	}
 
@@ -43,5 +49,5 @@ export function useAdminWalletCapability() {
 		}
 	}, [])
 
-	return { canSign, signerKind, canSignReason }
+	return { canSign, signerKind, canSignReason, deviceType, network }
 }

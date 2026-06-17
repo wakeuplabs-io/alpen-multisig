@@ -16,7 +16,7 @@ use secp256k1::Secp256k1;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use super::HwWalletInfo;
+use super::{AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
 /// Ledger HID and Speculos HTTP only handle one APDU exchange at a time.
@@ -770,6 +770,53 @@ fn sign_admin_wallet_psbt_unlocked(
             master_fingerprint,
             network,
         ))
+    }
+}
+
+/// Confirms the address at `derivation_path` on the Ledger screen.
+///
+/// Displays the extended public key at the full path (`display = true`) so the signer
+/// can confirm the derivation on-device before trusting it. The `script` argument is
+/// accepted for dispatch parity with the Trezor adapter; the Ledger `get_extended_pubkey`
+/// call is script-type agnostic (the path itself encodes BIP-86 vs BIP-84).
+pub fn verify_address_on_device(
+    derivation_path: String,
+    _script: AddressScriptType,
+    _network: bitcoin::Network,
+) -> Result<(), String> {
+    with_ledger_device(|| verify_address_on_device_unlocked(&derivation_path))
+}
+
+fn verify_address_on_device_unlocked(derivation_path: &str) -> Result<(), String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+    let path = parse_path(derivation_path)?;
+
+    if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
+        rt.block_on(async {
+            let client = bitcoin_client_for_speculos(&url)
+                .await
+                .map_err(|e| e.to_string())?;
+            client
+                .get_extended_pubkey(&path, true)
+                .await
+                .map(|_| ())
+                .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
+        })
+    } else {
+        let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
+        let transport = TransportNativeHID::new(&hidapi)
+            .map_err(|e| format!("Ledger not found or locked: {e}"))?;
+        let client = BitcoinClient::new(HidTransport(transport));
+        rt.block_on(async {
+            client
+                .get_extended_pubkey(&path, true)
+                .await
+                .map(|_| ())
+                .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
+        })
     }
 }
 
