@@ -88,6 +88,7 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 		const result = await tauriCall<null>('verify_address_on_device', {
 			derivationPath: selectedEntry.derivationPath,
+			passphrase: adapter.passphrase ?? '',
 		})
 
 		setIsVerifyingAddress(false)

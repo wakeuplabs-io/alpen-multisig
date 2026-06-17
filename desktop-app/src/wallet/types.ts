@@ -42,6 +42,7 @@ export type SigningContext = {
 export type WalletAdapter = {
 	readonly vendor: WalletVendor
 	readonly supportsSighashSigning: boolean
+	readonly passphrase?: string
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
