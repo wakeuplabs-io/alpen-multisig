@@ -10,8 +10,29 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  detect-changes:
+    name: Detect changed files
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'orchestrator-be/**'
+              - 'desktop-app/**'
+              - 'e2e-tests/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/**'
+
   rust:
     name: Rust (Lint, Build, Test)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     continue-on-error: false
     steps:
@@ -67,6 +88,8 @@ jobs:
 
   frontend:
     name: Frontend (Lint, Format, Build)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
