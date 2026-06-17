@@ -54,14 +54,14 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 	return (
 		<div className="py-2.5" data-testid={`e2e-wallet-tx-row-${row.txid}`}>
 			<div className="flex items-center justify-between gap-2">
-				<span className="flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-[#111827]" title={row.txid}>
+				<span className="flex min-w-0 items-center gap-1.5 font-mono text-label text-[#111827]" title={row.txid}>
 					<span className="min-w-0 truncate">{row.shortTxid}</span>
 					<CopyButton text={row.txid} variant="icon" />
 				</span>
-				<span className="flex-none font-mono text-[12px] tabular-nums text-[#111827]">{row.netLabel}</span>
+				<span className="flex-none font-mono text-label tabular-nums text-[#111827]">{row.netLabel}</span>
 			</div>
 			<div className="mt-1 flex items-center justify-between gap-2">
-				<span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#6b7280]">
+				<span className="flex min-w-0 items-center gap-1.5 text-mono-sm text-[#6b7280]">
 					<StatusBadge row={row} />
 					<span className="truncate">
 						{feeNoun} {row.feeLabel} · {row.feeRateLabel}
@@ -75,7 +75,7 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 					title={bumpTitle(row, isWatchOnly)}
 					aria-expanded={isBumpOpen}
 					data-testid={`e2e-wallet-tx-bump-${row.txid}`}
-					className={`flex-none rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+					className={`flex-none rounded-lg border px-2.5 py-1 text-mono-sm font-medium transition ${
 						isBumpDisabled
 							? 'cursor-not-allowed border-[#f3f4f6] text-[#d1d5db]'
 							: isBumpOpen

@@ -57,7 +57,7 @@ function LastSyncLabel({ lastSyncedAt }: { lastSyncedAt: string }) {
 		return () => clearInterval(interval)
 	}, [])
 
-	return <span className="text-[12px] text-[#9ca3af]">Last sync: {relativeTime(lastSyncedAt)}</span>
+	return <span className="text-label text-[#9ca3af]">Last sync: {relativeTime(lastSyncedAt)}</span>
 }
 
 export function BroadcastDetailsCard({
@@ -90,12 +90,10 @@ export function BroadcastDetailsCard({
 				<div className="border-b border-[#f3f4f6] p-6 pb-5">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="m-0 font-['BIZ_UDPMincho'] text-[26px] leading-[1.2] text-[#0a0a0a]">
-								Proposal #{proposal.seqNo}
-							</h2>
-							<p className="m-0 mt-1 text-[13px] text-[#6b7280]">{proposal.authority}</p>
+							<h2 className="m-0 font-display text-[26px] leading-[1.2] text-[#0a0a0a]">Proposal #{proposal.seqNo}</h2>
+							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{proposal.authority}</p>
 						</div>
-						<span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.75 text-[11px] font-medium whitespace-nowrap text-[#059669]">
+						<span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap text-[#059669]">
 							<span className="h-1.5 w-1.5 flex-none rounded-full bg-[#059669]" aria-hidden="true" />
 							Quorum reached
 						</span>
@@ -103,8 +101,8 @@ export function BroadcastDetailsCard({
 
 					<div className="mt-4">
 						<div className="mb-1.5 flex items-center justify-between gap-3">
-							<p className="m-0 text-[13px] font-medium text-[#121212]">Signatures</p>
-							<p className="m-0 text-[13px] font-medium text-[#121212]">
+							<p className="m-0 text-body-sm font-medium text-[#121212]">Signatures</p>
+							<p className="m-0 text-body-sm font-medium text-[#121212]">
 								{collectedSignatures} / {requiredSignatures} <span className="font-normal text-[#6b7280]">signed</span>
 							</p>
 						</div>
@@ -122,20 +120,20 @@ export function BroadcastDetailsCard({
 				<div>
 					<SectionLabel>Commit TX (preview)</SectionLabel>
 					<div className="flex items-start gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-						<span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#111827]">
+						<span className="min-w-0 flex-1 break-all font-mono text-label leading-relaxed text-[#111827]">
 							{bundle.commitAddress}
 						</span>
 						<CopyButton text={bundle.commitAddress} />
 					</div>
-					<p className="mt-2 text-[13px] text-[#6b7280]">
+					<p className="mt-2 text-body-sm text-[#6b7280]">
 						{satsToBtc(bundle.commitAmountSats)} BTC{' '}
-						<span className="text-[12px] text-[#9ca3af]">({bundle.commitAmountSats.toLocaleString()} sats)</span>
+						<span className="text-label text-[#9ca3af]">({bundle.commitAmountSats.toLocaleString()} sats)</span>
 					</p>
 				</div>
 
 				<div>
 					<SectionLabel>Reveal TX</SectionLabel>
-					<p className="text-[13px] text-[#6b7280]">
+					<p className="text-body-sm text-[#6b7280]">
 						Signed locally and broadcast in the same package as the commit — no separate confirmation wait.
 					</p>
 				</div>
@@ -149,8 +147,8 @@ export function BroadcastDetailsCard({
 
 				{feeSelector === undefined && (
 					<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
-						<span className="text-[13px] font-medium text-[#111827]">
+						<span className="text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Estimated fee</span>
+						<span className="text-body-sm font-medium text-[#111827]">
 							{bundle.estimatedFeeSats.toLocaleString()} sats
 						</span>
 					</div>
@@ -168,23 +166,23 @@ export function BroadcastDetailsCard({
 							<div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
 								<div className="flex items-center justify-between gap-3 bg-[#f9fafb] px-3 py-2.5">
 									<span className="flex min-w-0 items-center gap-2.5">
-										<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e4dfff] bg-[#f5f3ff]">
-											<WalletIcon width={16} height={16} className="text-[#7c6fcd]" />
+										<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent-border bg-bg-surface">
+											<WalletIcon width={16} height={16} className="text-accent" />
 										</span>
 										<span className="flex min-w-0 flex-col">
-											<span className="text-[13px] font-medium text-[#111827]">Admin wallet</span>
-											<span className="text-[11px] text-[#9ca3af]">Pays the network fee and commit dust</span>
+											<span className="text-body-sm font-medium text-[#111827]">Admin wallet</span>
+											<span className="text-mono-sm text-[#9ca3af]">Pays the network fee and commit dust</span>
 										</span>
 									</span>
 									<span className="flex shrink-0 flex-col items-end">
 										<span
-											className={`text-[13px] font-semibold ${
+											className={`text-body-sm font-semibold ${
 												adminWalletInfo.balanceSats === 0 ? 'text-[#dc2626]' : 'text-[#111827]'
 											}`}
 										>
 											{adminWalletInfo.balanceSats.toLocaleString()} sats
 										</span>
-										<span className="text-[11px] text-[#9ca3af]">
+										<span className="text-mono-sm text-[#9ca3af]">
 											{satsToBtc(adminWalletInfo.balanceSats)} BTC available
 										</span>
 									</span>
@@ -192,7 +190,7 @@ export function BroadcastDetailsCard({
 								<div className="flex items-start gap-2 border-t border-[#eef0f2] bg-white px-3 py-2.5">
 									<span
 										data-testid="e2e-admin-wallet-funding-address"
-										className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed text-[#6b7280]"
+										className="min-w-0 flex-1 break-all font-mono text-label leading-relaxed text-[#6b7280]"
 									>
 										{adminWalletInfo.address}
 									</span>
@@ -200,7 +198,7 @@ export function BroadcastDetailsCard({
 								</div>
 								{syncError != null ? (
 									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
-										<span className="text-[12px] text-[#ef4444]">
+										<span className="text-label text-[#ef4444]">
 											Sync error: {'message' in syncError ? syncError.message : syncError.type}
 										</span>
 									</div>
@@ -225,7 +223,7 @@ export function BroadcastDetailsCard({
 						adminWalletInfo.balanceSats === 0
 					}
 					onClick={onBroadcast}
-					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{phase === 'awaiting-device'
 						? 'Approve on device…'
@@ -234,18 +232,18 @@ export function BroadcastDetailsCard({
 							: 'Confirm & Broadcast'}
 				</button>
 				{targetQueued === false && (
-					<p className="mt-2 text-center text-[12px] text-[#b91c1c]">
+					<p className="mt-2 text-center text-label text-[#b91c1c]">
 						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
 						cancel can no longer be broadcast.
 					</p>
 				)}
 				{!canSign && (
-					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+					<p className="mt-2 text-center text-label text-[#6b7280]">
 						{canSignReason ?? 'Hardware wallet required to sign'}
 					</p>
 				)}
 				{canSign && adminWalletInfo != null && adminWalletInfo.balanceSats === 0 && (
-					<p className="mt-2 text-center text-[12px] text-[#6b7280]">
+					<p className="mt-2 text-center text-label text-[#6b7280]">
 						Insufficient balance — fund the admin wallet to broadcast
 					</p>
 				)}

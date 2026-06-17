@@ -25,7 +25,7 @@ export function NetworkStatusPill({ mode, localNodeStatus, onClick }: Props) {
 			type="button"
 			aria-label={`Network: ${MODE_LABELS[mode]}, ${isConnected ? 'connected' : 'connection issue'}. Open node settings.`}
 			onClick={onClick}
-			className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
+			className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:bg-[#f3f4f6] hover:text-[#374151] ${
 				isConnected ? 'border-[#e5e7eb]' : 'border-amber-300 text-amber-600 hover:text-amber-700'
 			}`}
 		>

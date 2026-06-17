@@ -28,7 +28,7 @@ export function PendingExpiryCountdown({ expiresAtMs }: Props) {
 
 	if (timeLeftMs <= 0) {
 		return (
-			<span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#dc2626]">
+			<span className="inline-flex items-center gap-1 text-label font-medium text-[#dc2626]">
 				<span aria-hidden="true">⏱</span>
 				Expired
 			</span>
@@ -42,7 +42,7 @@ export function PendingExpiryCountdown({ expiresAtMs }: Props) {
 	const label = isWarning ? `⚠ Expiring soon — ${formatTimeLeft(timeLeftMs)}` : formatTimeLeft(timeLeftMs)
 
 	return (
-		<span className="inline-flex items-center gap-1 text-[12px] font-medium" style={{ color }}>
+		<span className="inline-flex items-center gap-1 text-label font-medium" style={{ color }}>
 			<span aria-hidden="true">⏱</span>
 			{label}
 		</span>

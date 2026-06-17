@@ -94,14 +94,14 @@ export function ManualSignCollect({
 		<div className="space-y-4">
 			{isSigning && (
 				<div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3">
-					<p className="m-0 text-[13px] text-[#1d4ed8]">Waiting for hardware wallet approval…</p>
+					<p className="m-0 text-body-sm text-[#1d4ed8]">Waiting for hardware wallet approval…</p>
 				</div>
 			)}
 
 			{signError && (
 				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-[13px] font-medium text-[#dc2626]">Signing failed</p>
-					<p className="m-0 mt-0.5 text-[12px] text-[#991b1b]">{signError}</p>
+					<p className="m-0 text-body-sm font-medium text-[#dc2626]">Signing failed</p>
+					<p className="m-0 mt-0.5 text-label text-[#991b1b]">{signError}</p>
 				</div>
 			)}
 
@@ -116,7 +116,7 @@ export function ManualSignCollect({
 
 			{hasQuorum && (
 				<div className="flex items-center justify-between gap-3 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-3">
-					<p className="m-0 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#065f46]">
+					<p className="m-0 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#065f46]">
 						<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
 						Quorum reached — ready to broadcast
 					</p>
@@ -125,7 +125,7 @@ export function ManualSignCollect({
 							type="button"
 							title={bundleCopied ? 'Copied!' : 'Copy bundle'}
 							onClick={handleCopyBundle}
-							className="inline-flex items-center rounded-md border border-[#a7f3d0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
+							className="inline-flex items-center rounded-md border border-[#a7f3d0] bg-white px-2.5 py-1.5 text-label font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
 						>
 							<CopyClipboardIcon width={12} height={12} className="text-current" />
 						</button>
@@ -133,7 +133,7 @@ export function ManualSignCollect({
 							type="button"
 							title="Download bundle"
 							onClick={handleDownloadBundle}
-							className="inline-flex items-center rounded-md border border-[#a7f3d0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
+							className="inline-flex items-center rounded-md border border-[#a7f3d0] bg-white px-2.5 py-1.5 text-label font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
 						>
 							<DownloadIcon width={12} height={12} className="text-current" />
 						</button>

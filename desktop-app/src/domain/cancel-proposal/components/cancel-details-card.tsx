@@ -21,7 +21,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 		<button
 			type="button"
 			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 		>
 			<CopyClipboardIcon width={12} height={12} />
 			{copied ? 'Copied!' : (label ?? 'Copy')}
@@ -43,15 +43,15 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#fde68a] bg-[#fffbeb] shadow-sm">
 			<div className="border-b border-[#fde68a] px-6 py-4">
-				<p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-[#92400e]">Cancel proposal</p>
+				<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#92400e]">Cancel proposal</p>
 			</div>
 			<div className="px-6 py-5 space-y-4">
 				{/* Sig progress */}
 				<div>
 					<div className="mb-1.5 flex items-center justify-between gap-3">
-						<p className="m-0 text-[13px] font-medium text-[#111827]">Cancel signatures</p>
+						<p className="m-0 text-body-sm font-medium text-[#111827]">Cancel signatures</p>
 						<div className="flex items-center gap-2">
-							<span className="text-[13px] font-medium text-[#111827]">
+							<span className="text-body-sm font-medium text-[#111827]">
 								{collected} / {required} <span className="font-normal text-[#6b7280]">signed</span>
 							</span>
 							{cancelProposal.signatures.length > 0 && <CopyButton text={sigsJson} label="Copy sigs" />}
@@ -69,21 +69,21 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 				{hasQuorum ? (
 					<button
 						type="button"
-						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 						onClick={onBroadcast}
 					>
 						Broadcast cancel tx
 					</button>
 				) : alreadySigned ? (
 					<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-						<p className="m-0 text-[13px] font-medium text-[#065f46]">
+						<p className="m-0 text-body-sm font-medium text-[#065f46]">
 							You have signed. Waiting for other signers to reach quorum.
 						</p>
 					</div>
 				) : (
 					<button
 						type="button"
-						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 						onClick={onSign}
 					>
 						Sign on hardware wallet

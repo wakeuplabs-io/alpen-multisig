@@ -52,12 +52,12 @@ export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 			>
 				<ImportJsonIcon width={20} height={20} className="text-[#9ca3af]" />
 				<div>
-					<p className="m-0 text-[12px] font-medium text-[#374151]">Drop bundle JSON here</p>
-					<p className="m-0 mt-0.5 text-[11px] text-[#9ca3af]">or click to browse</p>
+					<p className="m-0 text-label font-medium text-[#374151]">Drop bundle JSON here</p>
+					<p className="m-0 mt-0.5 text-mono-sm text-[#9ca3af]">or click to browse</p>
 				</div>
 			</div>
 
-			{error && <p className="text-[12px] text-[#dc2626]">{error}</p>}
+			{error && <p className="text-label text-[#dc2626]">{error}</p>}
 		</div>
 	)
 }

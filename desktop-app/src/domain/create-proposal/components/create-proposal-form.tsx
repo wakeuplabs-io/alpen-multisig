@@ -217,7 +217,7 @@ export function CreateProposalForm({
 						<>
 							<button
 								type="button"
-								className="mb-4 flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
+								className="mb-4 flex items-center gap-1.5 text-body text-[#6b7280] hover:text-[#111827]"
 								onClick={() => {
 									setIsPreviewMode(false)
 									setPreviewSighashHex(null)
@@ -226,10 +226,10 @@ export function CreateProposalForm({
 							>
 								<span>←</span> Back to new proposal
 							</button>
-							<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
+							<h1 className="m-0 font-display text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
 								Review &amp; Sign
 							</h1>
-							<p className="m-0 mt-2 text-sm text-[#6b7280]">
+							<p className="m-0 mt-2 text-body text-[#6b7280]">
 								You are signing the proposal you just drafted. Review the payload, then confirm on your Trezor. Nothing
 								is sent until you sign.
 							</p>
@@ -238,15 +238,15 @@ export function CreateProposalForm({
 						<>
 							<button
 								type="button"
-								className="mb-4 flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
+								className="mb-4 flex items-center gap-1.5 text-body text-[#6b7280] hover:text-[#111827]"
 								onClick={onCancel}
 							>
 								← Back to proposals
 							</button>
-							<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
+							<h1 className="m-0 font-display text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
 								Create {authorityLabel} proposal
 							</h1>
-							<p className="m-0 mt-2 text-sm text-[#6b7280]">
+							<p className="m-0 mt-2 text-body text-[#6b7280]">
 								Authority: <span className="font-semibold text-[#111827]">{authorityLabel}</span> · You will sign this
 								proposal immediately after creation.
 							</p>
@@ -283,7 +283,7 @@ export function CreateProposalForm({
 					) : (
 						<div className="flex flex-col gap-6">
 							<div>
-								<p className="mb-3 text-sm font-medium text-[#111827]">Action type</p>
+								<p className="mb-3 text-body font-medium text-[#111827]">Action type</p>
 								<div className="grid grid-cols-2 gap-3">
 									{actionTypeOptions.map((option) => (
 										<ActionTypeCard
@@ -314,17 +314,17 @@ export function CreateProposalForm({
 										disabled={isLoadingSeqNo}
 									/>
 									{isLoadingSeqNo && (
-										<span className="absolute right-8 top-1/2 -translate-y-1/2 text-xs text-[#6b7280]">...</span>
+										<span className="absolute right-8 top-1/2 -translate-y-1/2 text-label text-[#6b7280]">...</span>
 									)}
 								</div>
 								{!isLoadingSeqNo && nextSeqNo !== null && !formState.dirtyFields.seqNo && (
-									<p className="mt-1 text-xs text-[#6b7280]">Auto-detected from chain</p>
+									<p className="mt-1 text-label text-[#6b7280]">Auto-detected from chain</p>
 								)}
 								{formState.errors.seqNo?.message && <p className={fieldErrorClass}>{formState.errors.seqNo.message}</p>}
 							</div>
 
 							<div>
-								<label className="text-sm font-medium text-[#111827]">Title</label>
+								<label className="text-body font-medium text-[#111827]">Title</label>
 								<input
 									type="text"
 									className={textInputClass}
@@ -356,7 +356,7 @@ export function CreateProposalForm({
 					)}
 
 					{error && !isPreviewMode && (
-						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#991b1b]">
+						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-body text-[#991b1b]">
 							{error}
 						</div>
 					)}
@@ -367,18 +367,18 @@ export function CreateProposalForm({
 								createdProposal ? (
 									<button
 										type="button"
-										className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-6 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a]"
+										className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-6 py-2.5 text-body font-medium text-white hover:bg-[#1a1a1a]"
 										onClick={onCancel}
 									>
 										Continue →
 									</button>
 								) : (
 									<>
-										{error && <p className="mr-auto text-sm text-[#b91c1c]">{error}</p>}
+										{error && <p className="mr-auto text-body text-[#b91c1c]">{error}</p>}
 										<button
 											type="submit"
 											data-testid="e2e-create-proposal-sign-submit"
-											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-body font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
 											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
@@ -390,7 +390,7 @@ export function CreateProposalForm({
 								<>
 									<button
 										type="button"
-										className="rounded-full border border-[#0a0a0a] bg-white px-6 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
+										className="rounded-full border border-[#0a0a0a] bg-white px-6 py-2.5 text-body font-medium text-[#0a0a0a] hover:bg-bg-base"
 										onClick={onCancel}
 										disabled={isSubmitting}
 									>
@@ -399,7 +399,7 @@ export function CreateProposalForm({
 									<button
 										type="button"
 										data-testid="e2e-create-proposal-preview"
-										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-sm font-medium text-[#111827] hover:bg-[#f8f8fb] disabled:cursor-not-allowed disabled:opacity-50"
+										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-body font-medium text-[#111827] hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
 										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										onClick={() => void handlePreviewClick()}
 									>
@@ -415,13 +415,13 @@ export function CreateProposalForm({
 			{showReauthModal && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4">
 					<div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-						<p className="m-0 text-lg font-semibold text-[#111827]">Session expired</p>
-						<p className="m-0 mt-2 text-sm text-[#6b7280]">{SESSION_EXPIRED_REAUTH_MESSAGE}</p>
-						{reauthError && <p className="m-0 mt-3 text-sm text-[#b91c1c]">{reauthError}</p>}
+						<p className="m-0 text-heading font-semibold text-[#111827]">Session expired</p>
+						<p className="m-0 mt-2 text-body text-[#6b7280]">{SESSION_EXPIRED_REAUTH_MESSAGE}</p>
+						{reauthError && <p className="m-0 mt-3 text-body text-[#b91c1c]">{reauthError}</p>}
 						<div className="mt-6 flex items-center justify-end gap-3">
 							<button
 								type="button"
-								className="rounded-full border border-[#0a0a0a] bg-white px-5 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb] disabled:opacity-50"
+								className="rounded-full border border-[#0a0a0a] bg-white px-5 py-2 text-body font-medium text-[#0a0a0a] hover:bg-bg-base disabled:opacity-50"
 								onClick={() => {
 									setPendingAction(null)
 									setShowReauthModal(false)
@@ -432,7 +432,7 @@ export function CreateProposalForm({
 							</button>
 							<button
 								type="button"
-								className="rounded-lg bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white hover:bg-[#1a1a1a] disabled:bg-[#9ca3af]"
+								className="rounded-lg bg-[#0a0a0a] px-5 py-2 text-body font-medium text-white hover:bg-[#1a1a1a] disabled:bg-[#9ca3af]"
 								onClick={() => void handleReauthenticateAndRetry()}
 								disabled={isReauthenticating}
 							>

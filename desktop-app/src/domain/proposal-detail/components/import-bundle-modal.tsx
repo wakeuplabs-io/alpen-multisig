@@ -228,14 +228,14 @@ export function ImportBundleModal({
 		<Backdrop onClose={onClose}>
 			<div className="flex flex-col gap-5">
 				<div>
-					<h2 className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">Import bundle</h2>
-					<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+					<h2 className="m-0 font-display text-display-sm font-normal text-[#0a0a0a]">Import bundle</h2>
+					<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 						Paste a complete proposal bundle. New signatures, broadcast TXIDs, and execution state will be synced.
 					</p>
 				</div>
 
 				<textarea
-					className="h-40 w-full resize-none rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3 font-mono text-[12px] text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
+					className="h-40 w-full resize-none rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3 font-mono text-label text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
 					placeholder={
 						'Paste JSON bundle here…\n{ "signatures": [...], "broadcastStatus": "reveal_confirmed", "commitTxid": "…" }'
 					}
@@ -246,13 +246,13 @@ export function ImportBundleModal({
 
 				{parseResult !== null && !parseResult.ok && (
 					<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-[12px] font-medium text-[#dc2626]">{parseResult.error}</p>
+						<p className="m-0 text-label font-medium text-[#dc2626]">{parseResult.error}</p>
 					</div>
 				)}
 
 				{verifyState.status === 'error' && (
 					<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-[12px] font-medium text-[#dc2626]">Bitcoin check failed: {verifyState.message}</p>
+						<p className="m-0 text-label font-medium text-[#dc2626]">Bitcoin check failed: {verifyState.message}</p>
 					</div>
 				)}
 
@@ -260,7 +260,7 @@ export function ImportBundleModal({
 					<div className="space-y-2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-3">
 						{preview.newSigs.length > 0 && (
 							<div className="space-y-1">
-								<p className="m-0 text-[12px] font-semibold text-[#065f46]">
+								<p className="m-0 text-label font-semibold text-[#065f46]">
 									{preview.newSigs.length} new signature{preview.newSigs.length !== 1 ? 's' : ''} to sync
 									{preview.skipped > 0 && (
 										<span className="ml-2 font-normal text-[#6b7280]">
@@ -269,7 +269,7 @@ export function ImportBundleModal({
 									)}
 								</p>
 								{preview.newSigs.map((s, i) => (
-									<p key={i} className="m-0 truncate font-mono text-[11px] text-[#374151]">
+									<p key={i} className="m-0 truncate font-mono text-mono-sm text-[#374151]">
 										{s.signerPubkey.slice(0, 14)}…{s.signerPubkey.slice(-8)}
 									</p>
 								))}
@@ -281,18 +281,18 @@ export function ImportBundleModal({
 							broadcastState?.revealTxid !== null) && (
 							<div className="space-y-0.5">
 								{broadcastState?.broadcastStatus && (
-									<p className="m-0 text-[12px] font-semibold text-[#065f46]">
+									<p className="m-0 text-label font-semibold text-[#065f46]">
 										Broadcast state →{' '}
 										<span className="font-normal">{BROADCAST_LABELS[broadcastState.broadcastStatus]}</span>
 									</p>
 								)}
 								{broadcastState?.commitTxid && (
 									<div className="flex items-center gap-1.5">
-										<p className="m-0 min-w-0 flex-1 truncate font-mono text-[11px] text-[#374151]">
+										<p className="m-0 min-w-0 flex-1 truncate font-mono text-mono-sm text-[#374151]">
 											commit: {broadcastState.commitTxid}
 										</p>
 										{verifiedStatus?.commitConfirmations !== null && verifiedStatus !== null && (
-											<span className="shrink-0 text-[11px] text-[#059669]">
+											<span className="shrink-0 text-mono-sm text-[#059669]">
 												{verifiedStatus.commitConfirmations} conf
 											</span>
 										)}
@@ -300,11 +300,11 @@ export function ImportBundleModal({
 								)}
 								{broadcastState?.revealTxid && (
 									<div className="flex items-center gap-1.5">
-										<p className="m-0 min-w-0 flex-1 truncate font-mono text-[11px] text-[#374151]">
+										<p className="m-0 min-w-0 flex-1 truncate font-mono text-mono-sm text-[#374151]">
 											reveal: {broadcastState.revealTxid}
 										</p>
 										{verifiedStatus?.revealConfirmations !== null && verifiedStatus !== null && (
-											<span className="shrink-0 text-[11px] text-[#059669]">
+											<span className="shrink-0 text-mono-sm text-[#059669]">
 												{verifiedStatus.revealConfirmations} conf
 											</span>
 										)}
@@ -314,13 +314,13 @@ export function ImportBundleModal({
 						)}
 
 						{broadcastState?.proposalStatus === 'enacted' && (
-							<p className="m-0 text-[12px] font-semibold text-[#065f46]">
+							<p className="m-0 text-label font-semibold text-[#065f46]">
 								Execution state → <span className="font-normal">Enacted (will verify on-chain)</span>
 							</p>
 						)}
 
 						{!hasSomethingToSync && (
-							<p className="m-0 text-[12px] text-[#6b7280]">DB is already up to date — nothing to sync.</p>
+							<p className="m-0 text-label text-[#6b7280]">DB is already up to date — nothing to sync.</p>
 						)}
 					</div>
 				)}
@@ -333,7 +333,7 @@ export function ImportBundleModal({
 								type="button"
 								disabled={verifyState.status === 'loading'}
 								onClick={() => void handleVerifyOnBitcoin()}
-								className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-[12px] font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+								className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{verifyState.status === 'loading' ? 'Checking…' : 'Verify on Bitcoin'}
 							</button>
@@ -343,7 +343,7 @@ export function ImportBundleModal({
 					<div className="flex items-center gap-2.5">
 						<button
 							type="button"
-							className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+							className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 							onClick={onClose}
 						>
 							Cancel
@@ -353,7 +353,7 @@ export function ImportBundleModal({
 							<button
 								type="button"
 								disabled={raw.trim().length === 0}
-								className="inline-flex items-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+								className="inline-flex items-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={handlePreview}
 							>
 								Preview
@@ -363,7 +363,7 @@ export function ImportBundleModal({
 						{preview !== null && !hasSomethingToSync && (
 							<button
 								type="button"
-								className="inline-flex items-center rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+								className="inline-flex items-center rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 								onClick={onClose}
 							>
 								Close
@@ -373,7 +373,7 @@ export function ImportBundleModal({
 						{hasSomethingToSync && (
 							<button
 								type="button"
-								className="inline-flex items-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+								className="inline-flex items-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 								onClick={handleImport}
 							>
 								Sync

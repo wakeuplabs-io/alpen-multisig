@@ -81,7 +81,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 	return (
 		<>
 			<div>
-				<p className="mb-3 text-sm font-medium text-[#6b7280]">Update Signers</p>
+				<p className="mb-2 text-body-sm font-medium text-[#6b7280]">Update Signers</p>
 				{isLoadingConfig ? (
 					<div className="space-y-2">
 						{[1, 2, 3].map((i) => (
@@ -96,15 +96,15 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								return (
 									<div
 										key={signer}
-										className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
+										className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2"
 									>
 										{isPendingRemoval ? (
-											<span className="shrink-0 text-sm font-medium text-[#dc2626]">–</span>
+											<span className="shrink-0 text-body-sm font-medium text-[#dc2626]">–</span>
 										) : (
-											<span className="h-4 w-4 shrink-0 rounded-full border border-[#d1d5db]" />
+											<span className="h-3.5 w-3.5 shrink-0 rounded-full border border-[#d1d5db]" />
 										)}
 										<span
-											className={`min-w-0 flex-1 break-all font-mono text-sm ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
 										>
 											{signer}
 										</span>
@@ -137,13 +137,13 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								return (
 									<div key={index} className="flex flex-col gap-1">
 										<div
-											className={`flex items-center gap-3 rounded-lg border bg-white px-4 py-3 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
+											className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
 										>
 											<span
-												className={`h-4 w-4 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
+												className={`h-3.5 w-3.5 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
 											/>
 											<span
-												className={`min-w-0 flex-1 break-all font-mono text-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
+												className={`min-w-0 flex-1 break-all font-mono text-body-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
 												data-testid="e2e-added-signer-value"
 											>
 												{value}
@@ -161,7 +161,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 									</div>
 								)
 							})}
-							{hasNoSigners && <div className="py-4 text-center text-sm text-[#9ca3af]">No signers remaining.</div>}
+							{hasNoSigners && <div className="py-4 text-center text-body text-[#9ca3af]">No signers remaining.</div>}
 						</div>
 					</div>
 				)}
@@ -169,12 +169,12 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 			</div>
 
 			<div>
-				<label className="text-sm font-medium text-[#6b7280]">Add new signer (compressed pubkey hex)</label>
+				<label className="text-body-sm font-medium text-[#6b7280]">Add new signer (compressed pubkey hex)</label>
 				<div className="mt-1.5 flex gap-2">
 					<input
 						type="text"
 						data-testid="e2e-new-signer-pubkey-input"
-						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 font-mono text-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
+						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2 font-mono text-body-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
 						placeholder="02… or 03… (33-byte hex)"
 						value={newSignerInput}
 						onChange={(e) => setNewSignerInput(e.target.value)}
@@ -189,7 +189,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 					<button
 						type="button"
 						data-testid="e2e-new-signer-add-button"
-						className="shrink-0 rounded-lg border border-[#0a0a0a] px-4 py-2.5 text-sm font-medium text-[#0a0a0a] hover:bg-[#f8f8fb]"
+						className="shrink-0 rounded-lg border border-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-[#0a0a0a] hover:bg-bg-base"
 						onClick={handleAddSigner}
 					>
 						+ Add

@@ -128,24 +128,24 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							/>
 						))}
 					</div>
-					<h2 className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">
+					<h2 className="m-0 font-display text-display-sm font-normal text-[#0a0a0a]">
 						{step === 1 && 'Load false claim reports'}
 						{step === 2 && 'Review inputs'}
 						{step === 3 && 'Set fee rate'}
 						{step === 4 && 'Confirm transaction'}
 					</h2>
-					<p className="m-0 mt-1 text-[12px] text-[#6b7280]">Step {step} of 4</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">Step {step} of 4</p>
 				</div>
 
 				{/* Step 1 */}
 				{step === 1 && (
 					<>
 						<div>
-							<p className="m-0 mb-2 text-[13px] text-[#374151]">
+							<p className="m-0 mb-2 text-body-sm text-[#374151]">
 								Paste false claim reports below (one JSON object per line), or upload a file.
 							</p>
 							<textarea
-								className="h-40 w-full resize-none rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3 font-mono text-[12px] text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
+								className="h-40 w-full resize-none rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3 font-mono text-label text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
 								placeholder={'{"claimId":"claim-001","outpoint":"abc...def:1","amount":100000,"proof":"..."}'}
 								value={rawReports}
 								onChange={(e) => setRawReports(e.target.value)}
@@ -154,7 +154,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							<div className="mt-2 flex items-center gap-2">
 								<button
 									type="button"
-									className="text-[12px] text-[#6b7280] underline underline-offset-2 transition hover:text-[#374151]"
+									className="text-label text-[#6b7280] underline underline-offset-2 transition hover:text-[#374151]"
 									onClick={() => fileRef.current?.click()}
 								>
 									Upload file instead
@@ -165,7 +165,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						<div className="flex items-center justify-end gap-2.5">
 							<button
 								type="button"
-								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 								onClick={onClose}
 							>
 								Cancel
@@ -173,7 +173,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							<button
 								type="button"
 								disabled={rawReports.trim().length === 0}
-								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
+								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={handleParseReports}
 							>
 								Next
@@ -187,7 +187,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 					<>
 						{invalidReports.length > 0 && (
 							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-[13px] font-medium text-[#991b1b]">
+								<p className="m-0 text-body-sm font-medium text-[#991b1b]">
 									{invalidReports.length} report{invalidReports.length !== 1 ? 's' : ''} ignored (invalid proof or
 									missing fields)
 								</p>
@@ -196,30 +196,30 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 
 						{exceedsLimit && (
 							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-[13px] font-medium text-[#991b1b]">
+								<p className="m-0 text-body-sm font-medium text-[#991b1b]">
 									Your transaction exceeds the size limit, please remove one or more inputs to reduce its size.
 								</p>
 							</div>
 						)}
 
 						<div>
-							<p className="m-0 mb-2 text-[13px] font-medium text-[#374151]">
+							<p className="m-0 mb-2 text-body-sm font-medium text-[#374151]">
 								{inputs.length} input{inputs.length !== 1 ? 's' : ''} — remove any to adjust the transaction
 							</p>
 							{inputs.length === 0 ? (
-								<div className="rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-4 text-center text-[13px] text-[#9ca3af]">
+								<div className="rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-4 text-center text-body-sm text-[#9ca3af]">
 									No valid unspent inputs found.
 								</div>
 							) : (
-								<div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] p-3">
+								<div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-xl border border-[#e5e7eb] bg-bg-base p-3">
 									{inputs.map((input) => (
 										<div
 											key={input.outpoint}
 											className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 shadow-sm"
 										>
 											<div className="min-w-0">
-												<span className="font-mono text-[12px] text-[#374151]">{truncate(input.outpoint)}</span>
-												<span className="ml-2 text-[11px] text-[#9ca3af]">({formatSats(input.amount)})</span>
+												<span className="font-mono text-label text-[#374151]">{truncate(input.outpoint)}</span>
+												<span className="ml-2 text-mono-sm text-[#9ca3af]">({formatSats(input.amount)})</span>
 											</div>
 											<button
 												type="button"
@@ -257,7 +257,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						<div className="flex items-center justify-between gap-2.5">
 							<button
 								type="button"
-								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 								onClick={() => setStep(1)}
 							>
 								Back
@@ -265,7 +265,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							<button
 								type="button"
 								disabled={inputs.length === 0 || exceedsLimit}
-								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
+								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={() => setStep(3)}
 							>
 								Next
@@ -278,7 +278,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 				{step === 3 && (
 					<>
 						<div>
-							<label className="mb-1.5 block text-[13px] font-medium text-[#374151]" htmlFor="fee-rate">
+							<label className="mb-1.5 block text-body-sm font-medium text-[#374151]" htmlFor="fee-rate">
 								Fee rate (sat/vB)
 							</label>
 							<input
@@ -289,12 +289,12 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 								step={0.1}
 								value={feeRate}
 								onChange={(e) => setFeeRate(Math.max(0.1, Math.min(10000, Number(e.target.value))))}
-								className="w-full rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-2.5 text-[13px] text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
+								className="w-full rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-2.5 text-body-sm text-[#0a0a0a] outline-none transition focus:border-[#0a0a0a] focus:bg-white"
 							/>
-							<p className="m-0 mt-2 text-[12px] text-[#6b7280]">Range: 0.1 – 10,000 sat/vB in increments of 0.1</p>
+							<p className="m-0 mt-2 text-label text-[#6b7280]">Range: 0.1 – 10,000 sat/vB in increments of 0.1</p>
 						</div>
 
-						<div className="flex items-start gap-2.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3">
+						<div className="flex items-start gap-2.5 rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3">
 							<svg
 								width={14}
 								height={14}
@@ -307,19 +307,19 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 								<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 								<circle cx="12" cy="16" r="1" fill="currentColor" />
 							</svg>
-							<p className="m-0 text-[13px] text-[#6b7280]">
+							<p className="m-0 text-body-sm text-[#6b7280]">
 								Fee paid from <strong className="text-[#374151]">Admin Wallet</strong>.
 							</p>
 						</div>
 
-						<div className="rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3">
+						<div className="rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3">
 							<div className="flex items-center justify-between gap-3">
-								<span className="text-[12px] text-[#6b7280]">Estimated fee</span>
-								<span className="text-[13px] font-medium text-[#0a0a0a]">{formatSats(estimatedFeeSats)}</span>
+								<span className="text-label text-[#6b7280]">Estimated fee</span>
+								<span className="text-body-sm font-medium text-[#0a0a0a]">{formatSats(estimatedFeeSats)}</span>
 							</div>
 							<div className="mt-1.5 flex items-center justify-between gap-3">
-								<span className="text-[12px] text-[#6b7280]">Admin Wallet balance</span>
-								<span className="text-[13px] font-medium text-[#0a0a0a]">{formatSats(walletBalanceSats)}</span>
+								<span className="text-label text-[#6b7280]">Admin Wallet balance</span>
+								<span className="text-body-sm font-medium text-[#0a0a0a]">{formatSats(walletBalanceSats)}</span>
 							</div>
 						</div>
 
@@ -337,7 +337,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 									<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 									<circle cx="12" cy="16" r="1" fill="currentColor" />
 								</svg>
-								<p className="m-0 text-[13px] text-[#991b1b]">
+								<p className="m-0 text-body-sm text-[#991b1b]">
 									Admin Wallet balance is insufficient to cover the estimated fee. Lower the fee rate or fund the
 									wallet.
 								</p>
@@ -347,7 +347,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						<div className="flex items-center justify-between gap-2.5">
 							<button
 								type="button"
-								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 								onClick={() => setStep(2)}
 							>
 								Back
@@ -355,7 +355,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							<button
 								type="button"
 								disabled={insufficientBalance}
-								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
+								className="rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={() => setStep(4)}
 							>
 								Next
@@ -367,7 +367,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 				{/* Step 4 */}
 				{step === 4 && (
 					<>
-						<div className="rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-4">
+						<div className="rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-4">
 							<dl className="flex flex-col gap-2.5">
 								<SummaryRow label="block_payouts inputs" value={`${inputs.length}`} />
 								<SummaryRow label="Fee rate" value={`${feeRate} sat/vB`} />
@@ -376,7 +376,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 							</dl>
 						</div>
 
-						<div className="flex items-start gap-2.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3">
+						<div className="flex items-start gap-2.5 rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3">
 							<svg
 								width={14}
 								height={14}
@@ -389,7 +389,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 								<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 								<circle cx="12" cy="16" r="1" fill="currentColor" />
 							</svg>
-							<p className="m-0 text-[13px] text-[#92400e]">
+							<p className="m-0 text-body-sm text-[#92400e]">
 								Clicking <strong>Confirm</strong> will create this transaction and add your signature to it.
 							</p>
 						</div>
@@ -397,14 +397,14 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						<div className="flex items-center justify-between gap-2.5">
 							<button
 								type="button"
-								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+								className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 								onClick={() => setStep(3)}
 							>
 								Back
 							</button>
 							<button
 								type="button"
-								className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+								className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 								onClick={handleConfirm}
 							>
 								Confirm
@@ -420,8 +420,8 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 function SummaryRow({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex items-center justify-between gap-3">
-			<dt className="text-[12px] text-[#6b7280]">{label}</dt>
-			<dd className="m-0 text-[13px] font-medium text-[#0a0a0a]">{value}</dd>
+			<dt className="text-label text-[#6b7280]">{label}</dt>
+			<dd className="m-0 text-body-sm font-medium text-[#0a0a0a]">{value}</dd>
 		</div>
 	)
 }

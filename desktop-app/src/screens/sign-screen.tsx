@@ -6,7 +6,7 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
-import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useSession } from '@/hooks/use-session'
@@ -216,12 +216,14 @@ export function SignScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -230,7 +232,7 @@ export function SignScreen() {
 					/>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleBack()}
 					>
 						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
@@ -242,31 +244,31 @@ export function SignScreen() {
 			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
+					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
 					onClick={() => navigate('/proposals')}
 				>
 					← Back
 				</button>
 
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Sign proposal
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 					Review the payload, then confirm on your Trezor. Nothing is sent until you sign.
 				</p>
 
 				{isLoading ? (
-					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#6b7280]">
+					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-body text-[#6b7280]">
 						Loading proposal...
 					</div>
 				) : null}
 
 				{loadError ? (
 					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-sm text-[#991b1b]">{loadError}</p>
+						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
 							onClick={() => navigate('/proposals')}
 						>
 							Back to proposals
@@ -276,7 +278,7 @@ export function SignScreen() {
 
 				{!isLoading && proposal !== null && proposal.status !== 'pending' ? (
 					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-sm font-medium text-[#991b1b]">
+						<p className="m-0 text-body font-medium text-[#991b1b]">
 							This proposal is no longer pending and cannot be signed.
 						</p>
 					</div>
@@ -284,7 +286,7 @@ export function SignScreen() {
 
 				{!isLoading && signerAlreadySigned ? (
 					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-sm font-medium text-[#92400e]">
+						<p className="m-0 text-body font-medium text-[#92400e]">
 							You already signed this proposal. Additional signatures from the same signer are not allowed.
 						</p>
 					</div>
@@ -307,21 +309,21 @@ export function SignScreen() {
 						}}
 					>
 						<div className="w-full max-w-120 rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-							<h2 className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">Quorum reached</h2>
-							<p className="m-0 mt-2 text-[14px] text-[#6b7280]">
+							<h2 className="m-0 font-display text-display-sm font-normal text-[#0a0a0a]">Quorum reached</h2>
+							<p className="m-0 mt-2 text-body text-[#6b7280]">
 								This proposal now has enough signatures. Do you want to broadcast the Bitcoin transaction now?
 							</p>
 							<div className="mt-5 flex gap-3">
 								<button
 									type="button"
-									className="flex-1 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+									className="flex-1 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 									onClick={() => navigate(`/proposals/${actionId}/broadcast`)}
 								>
 									Broadcast now
 								</button>
 								<button
 									type="button"
-									className="flex-1 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
+									className="flex-1 rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-body font-medium text-[#374151] transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
 									onClick={() => {
 										setShowQuorumPrompt(false)
 										navigate('/proposals')

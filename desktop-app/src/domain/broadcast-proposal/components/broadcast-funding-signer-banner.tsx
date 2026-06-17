@@ -21,7 +21,7 @@ export function BroadcastFundingSignerBanner({ backendSignerKind, connectVendor 
 	return (
 		<div
 			className={[
-				'rounded-lg border px-4 py-3 text-[13px]',
+				'rounded-lg border px-4 py-3 text-body-sm',
 				mismatch ? 'border-[#fcd34d] bg-[#fffbeb] text-[#92400e]' : 'border-[#e5e7eb] bg-[#f9fafb] text-[#374151]',
 			].join(' ')}
 		>

@@ -20,7 +20,7 @@ export function DownloadButton({ text, filename, label }: { text: string; filena
 		<button
 			type="button"
 			onClick={handleDownload}
-			className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+			className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-label font-medium transition ${
 				downloaded
 					? 'border-[#6ee7b7] bg-[#ecfdf5] text-[#065f46]'
 					: 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#d1d5db] hover:text-[#111827]'

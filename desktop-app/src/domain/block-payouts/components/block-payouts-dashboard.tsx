@@ -42,16 +42,16 @@ export function BlockPayoutsDashboard({
 			{/* Page header */}
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
-					<h1 className="m-0 font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
+					<h1 className="m-0 font-display text-display-md font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
 						Block Payouts
 					</h1>
-					<p className="m-0 mt-1 text-[13px] leading-normal text-[#6b7280]">
+					<p className="m-0 mt-1 text-body-sm leading-normal text-[#6b7280]">
 						Manage block_payouts transactions for the Payout Administrator multisig.
 					</p>
 				</div>
 				<button
 					type="button"
-					className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+					className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 					onClick={openCreateModal}
 				>
 					<span aria-hidden="true">+</span>
@@ -60,12 +60,12 @@ export function BlockPayoutsDashboard({
 			</div>
 
 			{/* Tabs */}
-			<div className="mb-5 flex gap-0.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] p-1">
+			<div className="mb-5 flex gap-0.5 rounded-xl border border-[#e5e7eb] bg-bg-base p-1">
 				{TAB_LABELS.map(({ id, label }) => (
 					<button
 						key={id}
 						type="button"
-						className="flex-1 rounded-lg py-2 text-[13px] font-medium transition"
+						className="flex-1 rounded-lg py-2 text-body-sm font-medium transition"
 						style={
 							activeTab === id
 								? { background: '#fff', color: '#0a0a0a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
@@ -120,7 +120,7 @@ export function BlockPayoutsDashboard({
 			{/* Toast */}
 			{toast && (
 				<div
-					className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-5 py-3 text-[13px] font-medium text-[#065f46] shadow-lg"
+					className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-5 py-3 text-body-sm font-medium text-[#065f46] shadow-lg"
 					role="status"
 					aria-live="polite"
 				>

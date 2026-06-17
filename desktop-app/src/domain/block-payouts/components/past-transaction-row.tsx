@@ -42,12 +42,12 @@ export function PastTransactionRow({ tx, onRebroadcast, onCopyRawTx }: Props) {
 			<div className="flex items-center gap-4 px-5 py-3.5">
 				{/* TX ID */}
 				<div className="min-w-0 flex-1">
-					<span className="font-mono text-[13px] font-medium text-[#0a0a0a]">{truncate(tx.id, 12, 6)}</span>
+					<span className="font-mono text-body-sm font-medium text-[#0a0a0a]">{truncate(tx.id, 12, 6)}</span>
 				</div>
 
 				{/* Status badge */}
 				<span
-					className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium"
+					className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-mono-sm font-medium"
 					style={
 						isConfirmed
 							? { background: '#ecfdf5', color: '#059669', borderColor: '#a7f3d0' }
@@ -63,7 +63,7 @@ export function PastTransactionRow({ tx, onRebroadcast, onCopyRawTx }: Props) {
 				</span>
 
 				{/* Timestamp */}
-				<span className="w-44 shrink-0 text-right text-[12px] text-[#6b7280]">
+				<span className="w-44 shrink-0 text-right text-label text-[#6b7280]">
 					{isConfirmed && tx.blockTimestamp ? formatDate(tx.blockTimestamp) : formatDate(tx.broadcastAt)}
 				</span>
 
@@ -73,7 +73,7 @@ export function PastTransactionRow({ tx, onRebroadcast, onCopyRawTx }: Props) {
 						<>
 							<button
 								type="button"
-								className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-[12px] font-medium text-[#374151] transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
+								className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 py-1.5 text-label font-medium text-[#374151] transition hover:border-[#d1d5db] hover:bg-[#f9fafb]"
 								onClick={onRebroadcast}
 							>
 								<svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -140,12 +140,12 @@ export function PastTransactionRow({ tx, onRebroadcast, onCopyRawTx }: Props) {
 			{/* Inputs section */}
 			{expanded && tx.inputs.length > 0 && (
 				<div className="border-t border-[#f3f4f6] px-5 pb-4 pt-3">
-					<p className="m-0 mb-1.5 text-[12px] font-semibold uppercase tracking-wider text-[#9ca3af]">Inputs</p>
+					<p className="m-0 mb-1.5 text-label font-semibold uppercase tracking-wider text-[#9ca3af]">Inputs</p>
 					<div className="flex flex-col gap-1">
 						{pagedInputs.map((input) => (
 							<div key={input.outpoint} className="flex items-center gap-1.5">
-								<span className="font-mono text-[12px] text-[#374151]">{truncate(input.outpoint, 16, 6)}</span>
-								<span className="text-[11px] text-[#9ca3af]">({formatSats(input.amount)})</span>
+								<span className="font-mono text-label text-[#374151]">{truncate(input.outpoint, 16, 6)}</span>
+								<span className="text-mono-sm text-[#9ca3af]">({formatSats(input.amount)})</span>
 								{input.isConflicting && <ConflictingInputIcon />}
 							</div>
 						))}

@@ -83,10 +83,10 @@ export function SendFeeRateControl({
 									: 'border-[#e5e7eb] bg-white hover:border-[#d1d5db]'
 							}`}
 						>
-							<span className={`text-[12px] font-medium ${isActive ? 'text-[#111827]' : 'text-[#374151]'}`}>
+							<span className={`text-label font-medium ${isActive ? 'text-[#111827]' : 'text-[#374151]'}`}>
 								{label}
 							</span>
-							<span className="text-[11px] text-[#6b7280]">{formatSatPerVb(rate.satPerKvb)}</span>
+							<span className="text-mono-sm text-[#6b7280]">{formatSatPerVb(rate.satPerKvb)}</span>
 							<span className="text-[10px] text-[#9ca3af]">
 								~{rate.targetBlocks} blk{rate.targetBlocks !== 1 ? 's' : ''}
 							</span>
@@ -103,8 +103,8 @@ export function SendFeeRateControl({
 						isCustom ? 'border-[#111827] bg-[#fafafa] shadow-sm' : 'border-[#e5e7eb] bg-white hover:border-[#d1d5db]'
 					}`}
 				>
-					<span className={`text-[12px] font-medium ${isCustom ? 'text-[#111827]' : 'text-[#374151]'}`}>Custom</span>
-					<span className="text-[11px] text-[#6b7280]">{isCustom ? formatSatPerVb(activeSatPerKvb) : '—'}</span>
+					<span className={`text-label font-medium ${isCustom ? 'text-[#111827]' : 'text-[#374151]'}`}>Custom</span>
+					<span className="text-mono-sm text-[#6b7280]">{isCustom ? formatSatPerVb(activeSatPerKvb) : '—'}</span>
 					<span className="text-[10px] text-[#9ca3af]">sat/vB</span>
 				</button>
 			</div>
@@ -131,9 +131,9 @@ export function SendFeeRateControl({
 								onBlur={handleSelectCustom}
 								disabled={disabled}
 								aria-label="Custom fee rate in sat/vB"
-								className="w-16 border-0 bg-transparent px-2 py-1 text-center text-[12px] font-medium text-[#111827] focus:outline-none"
+								className="w-16 border-0 bg-transparent px-2 py-1 text-center text-label font-medium text-[#111827] focus:outline-none"
 							/>
-							<span className="pr-2 text-[11px] text-[#9ca3af]">sat/vB</span>
+							<span className="pr-2 text-mono-sm text-[#9ca3af]">sat/vB</span>
 						</div>
 						<button
 							type="button"
@@ -154,7 +154,7 @@ export function SendFeeRateControl({
 			{presets.source === 'fallback' && (
 				<div className="flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-2.5 py-2">
 					<AlertTriangleIcon width={13} height={13} className="mt-0.5 shrink-0 text-[#d97706]" />
-					<p className="m-0 text-[11px] leading-relaxed text-[#92400e]">
+					<p className="m-0 text-mono-sm leading-relaxed text-[#92400e]">
 						Live fee estimates are unavailable — these rates are a static fallback. Review before sending.
 					</p>
 				</div>

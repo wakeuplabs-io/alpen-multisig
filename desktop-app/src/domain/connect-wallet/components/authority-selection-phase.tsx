@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import type { AuthRole } from '@/types'
+import { AuthorityShieldIcon, AuthorityLayersIcon, AuthorityServerIcon } from '@/assets/icons'
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
 
 export type AuthorityOption = {
@@ -20,6 +22,12 @@ type Props = {
 	onBack: () => void
 }
 
+const AUTHORITY_ICONS: Record<string, ReactNode> = {
+	'alpen-administrator': <AuthorityShieldIcon width={22} height={22} />,
+	'strata-administrator': <AuthorityLayersIcon width={22} height={22} />,
+	'strata-sequencer-manager': <AuthorityServerIcon width={22} height={22} />,
+}
+
 export function AuthoritySelectionPhase({
 	selectedAuthorityId,
 	options,
@@ -31,15 +39,15 @@ export function AuthoritySelectionPhase({
 	const selectedOption = options.find((option) => option.id === selectedAuthorityId) ?? null
 	const canContinue = !isChecking && selectedOption?.enabled === true
 	const continueButtonClassName = canContinue
-		? 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
-		: 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
+		? 'rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a]'
+		: 'rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-body font-medium text-white'
 
 	return (
 		<div className="mx-auto w-full max-w-150 pb-28">
 			<div className="mb-3 flex items-center justify-between">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1 text-sm text-[#666] transition hover:text-[#0a0a0a]"
+					className="inline-flex items-center gap-1 text-body text-[#666] transition hover:text-[#0a0a0a]"
 					onClick={onBack}
 				>
 					<span aria-hidden="true">←</span>
@@ -50,12 +58,12 @@ export function AuthoritySelectionPhase({
 				</p>
 			</div>
 
-			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
+			<h1 className="m-0 font-display text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
 				Select authority
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Choose which governance authority you are acting as. Alpen verifies this signer address before creating your
-				session.
+				Choose which governance authority you are acting as. Alpen will verify that your selected address is a
+				registered signer before advancing.
 			</p>
 
 			<div className="mt-5 space-y-3">
@@ -69,31 +77,69 @@ export function AuthoritySelectionPhase({
 							: option.enabled
 								? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#059669]'
 								: 'border-[#e5e7eb] bg-white text-[#6b7280]'
+
+					const iconBgClass = isSelected
+						? 'bg-accent-surface text-accent'
+						: isDisabled
+							? 'bg-[#f3f4f6] text-[#d1d5db]'
+							: 'bg-[#f3f4f6] text-[#9ca3af]'
+
 					return (
 						<button
 							key={option.id}
 							type="button"
-							className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+							className={`w-full rounded-xl border px-5 py-4 text-left transition ${
 								isSelected
-									? 'border-[#5b44c9] bg-[#f5f3ff]'
+									? 'border-accent bg-accent-surface'
 									: isDisabled
-										? 'border-[#e5e7eb] bg-[#f8f8fb] opacity-75'
+										? 'border-[#e5e7eb] bg-bg-base opacity-75'
 										: 'border-[#e5e7eb] bg-white hover:border-[#d1d5db]'
 							}`}
 							onClick={() => onSelectAuthority(option.id)}
 							disabled={isDisabled}
 						>
-							<div className="flex items-start justify-between gap-3">
-								<div>
-									<p className="m-0 text-[1rem] font-medium text-[#111827]">{option.label}</p>
-									<p className="m-0 mt-1 text-sm text-[#6b7280]">{option.description}</p>
-									<p className="m-0 mt-1 text-xs text-[#9ca3af]">Signer set: {option.signerSetSource}</p>
+							<div className="flex items-start gap-4">
+								<div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBgClass}`}>
+									{AUTHORITY_ICONS[option.id] ?? <AuthorityShieldIcon width={22} height={22} />}
 								</div>
-								<span
-									className={`inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-medium ${badgeClassName}`}
-								>
-									{badgeLabel}
-								</span>
+								<div className="min-w-0 flex-1">
+									<div className="flex items-start justify-between gap-3">
+										<p
+											className={`m-0 text-[1rem] font-semibold ${isDisabled && !isSelected ? 'text-[#9ca3af]' : 'text-[#111827]'}`}
+										>
+											{option.label}
+										</p>
+										<span
+											className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-[0.68rem] font-medium ${badgeClassName}`}
+										>
+											{option.enabled && !isChecking && (
+												<svg
+													width="12"
+													height="12"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2.5"
+													strokeLinecap="round"
+													aria-hidden="true"
+												>
+													<path d="M5 12l5 5L20 7" />
+												</svg>
+											)}
+											{badgeLabel}
+										</span>
+									</div>
+									<p
+										className={`m-0 mt-1 text-body ${isDisabled && !isSelected ? 'text-[#d1d5db]' : 'text-[#6b7280]'}`}
+									>
+										{option.description}
+									</p>
+									<p
+										className={`m-0 mt-1.5 text-label ${isDisabled && !isSelected ? 'text-[#d1d5db]' : 'text-[#9ca3af]'}`}
+									>
+										Signer set · {option.signerSetSource}
+									</p>
+								</div>
 							</div>
 						</button>
 					)
@@ -104,7 +150,7 @@ export function AuthoritySelectionPhase({
 				left={
 					<>
 						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Authority</p>
-						<p className="m-0 mt-1 text-sm text-[#334155]">
+						<p className="m-0 mt-1 text-body text-[#334155]">
 							{selectedOption ? selectedOption.label : 'Select an authority from the list above'}
 						</p>
 					</>
