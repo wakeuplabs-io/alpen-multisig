@@ -100,33 +100,33 @@ if [[ ! -d "$CORE_DIR" ]]; then
 	exit 1
 fi
 
-echo "[1/5] Stopping previous emulator processes (if any)..."
+echo "[1/6] Stopping previous emulator processes (if any)..."
 pkill -f "trezord-go -e $PORT" || true
 pkill -f "$CORE_DIR/emu.py" || true
 sleep 1
 
-echo "[2/5] Starting trezord-go on port $PORT..."
+echo "[2/6] Starting trezord-go on port $PORT..."
 trezord-go -e "$PORT" >/tmp/trezord-go.log 2>&1 &
 sleep 1
 
 if [[ "$BUILD_FLAG" == "--build" ]]; then
-	echo "[3/5] Building firmware for model $MODEL..."
+	echo "[3/6] Building firmware for model $MODEL..."
 	(
 		cd "$CORE_DIR"
 		uv run make build_unix TREZOR_MODEL="$MODEL"
 	)
 else
-	echo "[3/5] Skipping build (pass --build to compile first)."
+	echo "[3/6] Skipping build (pass --build to compile first)."
 fi
 
-echo "[4/5] Starting emulator..."
+echo "[4/6] Starting emulator..."
 (
 	cd "$CORE_DIR"
 	TREZOR_MODEL="$MODEL" uv run ./emu.py -t -P "$PORT" >/tmp/trezor-emu.log 2>&1 &
 )
 sleep 2
 
-echo "[5/5] Loading device seed and PIN..."
+echo "[5/6] Loading device seed and PIN..."
 TREZORCTL_DIR="$TREZOR_REPO"
 if [[ -d "$PYTHON_DIR" ]]; then
 	TREZORCTL_DIR="$PYTHON_DIR"
@@ -164,6 +164,21 @@ while (( ATTEMPT <= MAX_ATTEMPTS )); do
 	sleep 1
 	ATTEMPT=$((ATTEMPT + 1))
 done
+
+PASSPHRASE_ENABLED=""
+if [[ -f "$CONFIG_FILE" ]]; then
+	PASSPHRASE_ENABLED="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('trezor_passphrase',''))" "$CONFIG_FILE" 2>/dev/null || true)"
+fi
+
+if [[ "$PASSPHRASE_ENABLED" == "true" ]]; then
+	echo "[6/6] Enabling passphrase on emulator..."
+	(
+		cd "$TREZORCTL_DIR"
+		uv run trezorctl -p "udp:127.0.0.1:$PORT" set passphrase enabled 2>&1
+	) || echo "Warning: could not enable passphrase (may require manual setup)."
+else
+	echo "[6/6] Passphrase not enabled (set \"trezor_passphrase\": \"true\" in config.json to enable)."
+fi
 
 echo
 echo "Trezor emulator is ready."

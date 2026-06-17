@@ -18,16 +18,21 @@ type SignatureResult = {
 	signatureHex: string
 }
 
-export function createTrezorAdapter(): WalletAdapter {
+export function createTrezorAdapter(passphrase?: string): WalletAdapter {
 	let publicKeyHex: string | null = null
 	let currentDerivationPath = ADMIN_ID_PATH
+	const pp = passphrase ?? ''
 
 	return {
 		vendor: 'trezor',
 		supportsSighashSigning: true,
+		passphrase: pp || undefined,
 
 		async connect(): Promise<WalletAccountInfo> {
-			const result = await tauriCall<HwWalletInfo>('get_trezor_info', { derivationPath: ADMIN_ID_PATH })
+			const result = await tauriCall<HwWalletInfo>('get_trezor_info', {
+				derivationPath: ADMIN_ID_PATH,
+				passphrase: pp,
+			})
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
 			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
@@ -53,6 +58,7 @@ export function createTrezorAdapter(): WalletAdapter {
 				const result = await tauriCall<SignatureResult>('sign_challenge_with_trezor', {
 					challengeHex: sighashHex,
 					derivationPath: currentDerivationPath,
+					passphrase: pp,
 				})
 				if (!result.ok) throw new Error(result.error)
 				return {
@@ -65,6 +71,7 @@ export function createTrezorAdapter(): WalletAdapter {
 				seqno: context.seqno,
 				actionHex: context.actionHex,
 				derivationPath: currentDerivationPath,
+				passphrase: pp,
 			})
 			if (!result.ok) throw new Error(result.error)
 			return {
@@ -75,13 +82,13 @@ export function createTrezorAdapter(): WalletAdapter {
 		},
 
 		async getAccountXpub(): Promise<string> {
-			const result = await tauriCall<string>('get_trezor_admin_wallet_xpub', {})
+			const result = await tauriCall<string>('get_trezor_admin_wallet_xpub', { passphrase: pp })
 			if (!result.ok) throw new Error(result.error)
 			return result.data
 		},
 
 		async getMasterFingerprint(): Promise<number> {
-			const result = await tauriCall<number>('get_trezor_master_fingerprint', {})
+			const result = await tauriCall<number>('get_trezor_master_fingerprint', { passphrase: pp })
 			if (!result.ok) {
 				throw new Error(result.error)
 			}

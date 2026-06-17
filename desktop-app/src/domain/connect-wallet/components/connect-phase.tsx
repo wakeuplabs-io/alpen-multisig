@@ -12,8 +12,9 @@ type Props = {
 	error: string | null
 	onConnect: () => void
 	onConnectMnemonic?: (mnemonic: string) => void
+	onConnectTrezor?: (passphrase?: string) => void
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
 }
 
 export function ConnectPhase({
@@ -22,6 +23,7 @@ export function ConnectPhase({
 	error,
 	onConnect,
 	onConnectMnemonic,
+	onConnectTrezor,
 	walletVendor,
 	onSelectWalletMethod,
 }: Props) {
@@ -32,9 +34,10 @@ export function ConnectPhase({
 	const [debugEntry, setDebugEntry] = useState<HwAddressEntry | null>(null)
 	const [debugLoading, setDebugLoading] = useState(false)
 	const [debugError, setDebugError] = useState<string | null>(null)
+	const [trezorPassphrase, setTrezorPassphrase] = useState('')
 
 	function handleUseTrezor() {
-		onSelectWalletMethod('trezor')
+		onSelectWalletMethod('trezor', undefined, trezorPassphrase || undefined)
 		setMnemonicError(null)
 	}
 
@@ -158,6 +161,21 @@ export function ConnectPhase({
 					value={mnemonicInput}
 					onChange={(event) => setMnemonicInput(event.target.value)}
 				/>
+				{walletVendor === 'trezor' && (
+					<div className="mt-2">
+						<label className="text-mono-sm font-medium text-[#9ca3af]" htmlFor="trezor-passphrase">
+							Passphrase (optional)
+						</label>
+						<input
+							id="trezor-passphrase"
+							type="password"
+							className="mt-1 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
+							placeholder="Leave empty for default wallet"
+							value={trezorPassphrase}
+							onChange={(event) => setTrezorPassphrase(event.target.value)}
+						/>
+					</div>
+				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-[#dc2626]">{mnemonicError}</p>}
 
 				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
@@ -232,7 +250,9 @@ export function ConnectPhase({
 				onClick={
 					walletVendor === 'mnemonic' && onConnectMnemonic
 						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
-						: onConnect
+						: walletVendor === 'trezor' && onConnectTrezor
+							? () => onConnectTrezor(trezorPassphrase || undefined)
+							: onConnect
 				}
 				disabled={loading || isSuccess}
 			>
