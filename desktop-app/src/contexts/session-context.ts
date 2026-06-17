@@ -4,6 +4,7 @@ import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVend
 
 export type SigningStepInfo = {
 	challengeHex: string
+	challengeMessage: string
 	step: number
 	totalSteps: number
 }

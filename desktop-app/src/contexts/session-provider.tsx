@@ -61,7 +61,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			throw new Error(challengeResult.error)
 		}
 
-		const signature = await adapter.signSighash(challengeResult.data.challengeHex)
+		const signature = await adapter.signSighash(challengeResult.data.challengeMessage)
 		const completeResult = await orchestratorAuthComplete({
 			baseUrl: getOrchestratorBaseUrl(),
 			challengeId: challengeResult.data.challengeId,
@@ -90,8 +90,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (!challengeResult.ok) {
 				throw new Error(challengeResult.error)
 			}
-			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 1, totalSteps: 1 })
-			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
+			setSigningStep({
+				challengeHex: challengeResult.data.challengeHex,
+				challengeMessage: challengeResult.data.challengeMessage,
+				step: 1,
+				totalSteps: 1,
+			})
+			const signature = await adapter.signSighash(challengeResult.data.challengeMessage)
 			const completeResult = await orchestratorAuthComplete({
 				baseUrl: getOrchestratorBaseUrl(),
 				challengeId: challengeResult.data.challengeId,
@@ -112,9 +117,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	/** Manual/offline flow: on-chain membership auth + admin wallet init (1 hardware-wallet signature). */
 	const connectOnChainSession = useCallback(async () => {
 		try {
-			await authenticate((challengeHex: string) => {
-				setSigningStep({ challengeHex, step: 1, totalSteps: 1 })
-				return adapter.signSighash(challengeHex)
+			await authenticate((challengeMessage: string) => {
+				setSigningStep({ challengeHex: '', challengeMessage, step: 1, totalSteps: 1 })
+				return adapter.signSighash(challengeMessage)
 			})
 			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
 			if (!adminWalletInit.ok) {

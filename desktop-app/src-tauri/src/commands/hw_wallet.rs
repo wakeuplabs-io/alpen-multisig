@@ -43,13 +43,13 @@ pub async fn sign_with_trezor(
 
 #[tauri::command]
 pub async fn sign_challenge_with_trezor(
-    challenge_hex: String,
+    challenge_message: String,
     derivation_path: String,
     passphrase: Option<String>,
 ) -> Result<SignatureResult, String> {
     let pp = passphrase.unwrap_or_default();
     tokio::task::spawn_blocking(move || {
-        trezor::sign_admin_sps65_binding(&challenge_hex, &derivation_path, &pp)
+        trezor::sign_admin_sps65_binding(&challenge_message, &derivation_path, &pp)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -130,11 +130,11 @@ pub async fn get_ledger_master_fingerprint() -> Result<u32, String> {
 
 #[tauri::command]
 pub async fn sign_challenge_with_ledger(
-    challenge_hex: String,
+    challenge_message: String,
     derivation_path: String,
 ) -> Result<SignatureResult, String> {
     tokio::task::spawn_blocking(move || {
-        ledger::sign_admin_sps65_binding(&challenge_hex, &derivation_path)
+        ledger::sign_admin_sps65_binding(&challenge_message, &derivation_path)
     })
     .await
     .map_err(|e| e.to_string())?

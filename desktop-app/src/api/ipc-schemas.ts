@@ -69,6 +69,7 @@ export const authRoleSchema = z.nativeEnum(AuthRole)
 export const authChallengeSchema = z.object({
 	challengeId: z.string(),
 	challengeHex: z.string(),
+	challengeMessage: z.string(),
 	nonceHex: z.string(),
 	domain: z.string(),
 	role: authRoleSchema,
@@ -136,6 +137,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 export const rawOrchestratorAuthChallengeSchema = z.object({
 	challenge_id: z.string(),
 	challenge_hex: z.string(),
+	challenge_message: z.string(),
 })
 
 export const rawOrchestratorAuthSessionSchema = z.object({

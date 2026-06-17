@@ -34,6 +34,7 @@ impl AuthRole {
 pub struct AuthChallenge {
     pub challenge_id: String,
     pub challenge_hex: String,
+    pub challenge_message: String,
     pub nonce_hex: String,
     pub domain: String,
     pub role: AuthRole,
