@@ -29,8 +29,8 @@ export function AuthenticateSessionPhase({
 	onManualProposal,
 }: Props) {
 	const authenticateButtonClassName = isAuthenticating
-		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-sm font-medium text-white'
-		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]'
+		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-body font-medium text-white'
+		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a]'
 
 	function getButtonLabel() {
 		if (!isAuthenticating) return `Authenticate with ${adapterLabel}`
@@ -45,7 +45,7 @@ export function AuthenticateSessionPhase({
 			<div className="mb-3 flex items-center justify-between">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1 text-sm text-[#666] transition hover:text-[#0a0a0a]"
+					className="inline-flex items-center gap-1 text-body text-[#666] transition hover:text-[#0a0a0a]"
 					onClick={onBackToAuthority}
 				>
 					<span aria-hidden="true">←</span>
@@ -56,7 +56,7 @@ export function AuthenticateSessionPhase({
 				</p>
 			</div>
 
-			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
+			<h1 className="m-0 font-display text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
 				Authenticate session
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
@@ -70,31 +70,31 @@ export function AuthenticateSessionPhase({
 				</p>
 				<div className="mt-3 grid gap-3">
 					<div>
-						<p className="m-0 text-xs text-[#9ca3af]">Authority</p>
-						<p className="m-0 mt-1 text-sm font-medium text-[#111827]">{authorityLabel}</p>
+						<p className="m-0 text-label text-[#9ca3af]">Authority</p>
+						<p className="m-0 mt-1 text-body font-medium text-[#111827]">{authorityLabel}</p>
 					</div>
 					<div>
-						<p className="m-0 text-xs text-[#9ca3af]">Admin ID</p>
+						<p className="m-0 text-label text-[#9ca3af]">Admin ID</p>
 						<div className="mt-1 flex items-start justify-between gap-2">
-							<p className="m-0 min-w-0 break-all font-mono text-xs text-[#111827]">{signerAddress}</p>
+							<p className="m-0 min-w-0 break-all font-mono text-label text-[#111827]">{signerAddress}</p>
 							<CopyButton text={signerAddress} variant="icon" />
 						</div>
 					</div>
 					<div>
-						<p className="m-0 text-xs text-[#9ca3af]">Compressed public key</p>
+						<p className="m-0 text-label text-[#9ca3af]">Compressed public key</p>
 						<div className="mt-1 flex items-start justify-between gap-2">
-							<p className="m-0 min-w-0 break-all font-mono text-xs text-[#111827]">{compressedPublicKey}</p>
+							<p className="m-0 min-w-0 break-all font-mono text-label text-[#111827]">{compressedPublicKey}</p>
 							<CopyButton text={compressedPublicKey} variant="icon" />
 						</div>
 					</div>
 					<div className="grid grid-cols-2 gap-3">
 						<div>
-							<p className="m-0 text-xs text-[#9ca3af]">Session expiry</p>
-							<p className="m-0 mt-1 text-sm font-medium text-[#111827]">30 minutes</p>
+							<p className="m-0 text-label text-[#9ca3af]">Session expiry</p>
+							<p className="m-0 mt-1 text-body font-medium text-[#111827]">30 minutes</p>
 						</div>
 						<div>
-							<p className="m-0 text-xs text-[#9ca3af]">Challenge nonce</p>
-							<p className="m-0 mt-1 font-mono text-xs text-[#111827]">Generated per request</p>
+							<p className="m-0 text-label text-[#9ca3af]">Challenge nonce</p>
+							<p className="m-0 mt-1 font-mono text-label text-[#111827]">Generated per request</p>
 						</div>
 					</div>
 				</div>
@@ -132,7 +132,7 @@ export function AuthenticateSessionPhase({
 			<div className="mt-3 text-center">
 				<button
 					type="button"
-					className="text-[12px] text-[#9ca3af] transition hover:text-[#6b7280]"
+					className="text-label text-[#9ca3af] transition hover:text-[#6b7280]"
 					onClick={onManualProposal}
 				>
 					Enter proposal manually (offline)

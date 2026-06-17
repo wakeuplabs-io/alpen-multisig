@@ -1,6 +1,6 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
-import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
@@ -47,12 +47,14 @@ export function CancelProposalScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -61,7 +63,7 @@ export function CancelProposalScreen() {
 					/>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleBack()}
 					>
 						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
@@ -73,16 +75,16 @@ export function CancelProposalScreen() {
 			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
+					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
 					onClick={() => navigate(`/proposals/${actionId}`)}
 				>
 					← Back to proposal
 				</button>
 
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Cancel proposal
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 					Collect cancel signatures and broadcast to remove the queued update before it activates.
 				</p>
 
@@ -96,10 +98,10 @@ export function CancelProposalScreen() {
 
 					{error && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">{error}</p>
+							<p className="m-0 text-body text-[#991b1b]">{error}</p>
 							<button
 								type="button"
-								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
 								onClick={reload}
 							>
 								Retry
@@ -112,7 +114,7 @@ export function CancelProposalScreen() {
 							{/* Target already enacted — cancellation no longer possible */}
 							{proposal.status === 'enacted' && (
 								<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-									<p className="m-0 text-sm font-medium text-[#991b1b]">
+									<p className="m-0 text-body font-medium text-[#991b1b]">
 										This proposal has already been enacted. Cancellation is no longer possible.
 									</p>
 								</div>
@@ -142,13 +144,13 @@ export function CancelProposalScreen() {
 									/>
 								) : (
 									<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-										<p className="m-0 text-[13px] text-[#6b7280]">
+										<p className="m-0 text-body-sm text-[#6b7280]">
 											No cancel proposal initiated yet. Sign on your hardware wallet to start collecting cancel
 											signatures.
 										</p>
 										<button
 											type="button"
-											className="mt-4 w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+											className="mt-4 w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 											onClick={() => navigate(`/proposals/${actionId}/cancel/sign`)}
 										>
 											Initiate cancel

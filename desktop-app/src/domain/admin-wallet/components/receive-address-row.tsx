@@ -33,8 +33,8 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 	if (!address) {
 		return (
 			<div className="rounded-xl border border-[#f3f4f6] px-4 py-3">
-				<span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
-				<p className="mt-1.5 text-[12px] text-[#9ca3af]">No receive address yet</p>
+				<span className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
+				<p className="mt-1.5 text-label text-[#9ca3af]">No receive address yet</p>
 			</div>
 		)
 	}
@@ -48,10 +48,10 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 	return (
 		<div className="rounded-xl border border-[#f3f4f6] px-4 py-3" data-testid="e2e-wallet-receive-address-row">
 			<div className="flex items-center justify-between gap-2">
-				<span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
+				<span className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Receive address</span>
 				<span
 					aria-live="polite"
-					className={`text-[11px] font-medium transition-opacity ${copied ? 'text-[#059669] opacity-100' : 'text-[#9ca3af] opacity-100'}`}
+					className={`text-mono-sm font-medium transition-opacity ${copied ? 'text-[#059669] opacity-100' : 'text-[#9ca3af] opacity-100'}`}
 				>
 					{copied ? 'Copied!' : 'Tap to copy'}
 				</span>
@@ -64,7 +64,7 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 					aria-label={copied ? 'Address copied' : 'Copy receive address from QR code'}
 					title="Click to copy"
 					data-testid="e2e-wallet-receive-qr"
-					className="rounded-lg border border-[#f3f4f6] bg-white p-2.5 transition hover:border-[#d1d5db] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9480f5]"
+					className="rounded-lg border border-[#f3f4f6] bg-white p-2.5 transition hover:border-[#d1d5db] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
 				>
 					<QrCode value={qrValue} size={132} ariaLabel="Receive address QR code" />
 				</button>
@@ -76,7 +76,7 @@ export function ReceiveAddressRow({ address, isLoading }: ReceiveAddressRowProps
 						title={address}
 						aria-label={copied ? 'Address copied' : 'Copy receive address'}
 						data-testid="e2e-wallet-receive-address-value"
-						className="min-w-0 flex-1 truncate rounded-md text-left font-mono text-[12px] leading-[1.45] text-[#374151] transition hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9480f5]"
+						className="min-w-0 flex-1 truncate rounded-md text-left font-mono text-label leading-[1.45] text-[#374151] transition hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
 					>
 						{address}
 					</button>

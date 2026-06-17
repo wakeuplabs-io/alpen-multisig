@@ -35,7 +35,7 @@ function CopyButton({ text }: { text: string }) {
 		<button
 			type="button"
 			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 		>
 			<CopyClipboardIcon width={12} height={12} />
 			{copied ? 'Copied!' : 'Copy'}
@@ -46,9 +46,9 @@ function CopyButton({ text }: { text: string }) {
 function TxidRow({ label, txid }: { label: string; txid: string }) {
 	return (
 		<div>
-			<p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
+			<p className="mb-1.5 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
 			<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-				<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">{txid}</span>
+				<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">{txid}</span>
 				<CopyButton text={txid} />
 			</div>
 		</div>
@@ -86,7 +86,7 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 			<div className="border-b border-[#f3f4f6] px-6 py-4">
-				<h3 className="m-0 text-[15px] font-semibold text-[#111827]">
+				<h3 className="m-0 text-body-lg font-semibold text-[#111827]">
 					{isDone
 						? isEnacted
 							? 'Proposal enacted'
@@ -131,14 +131,14 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 									<div className="min-w-0 pb-5">
 										<p
 											className={[
-												'm-0 text-[13px] font-medium',
+												'm-0 text-body-sm font-medium',
 												done ? 'text-[#0f9d7a]' : active ? 'text-[#111827]' : 'text-[#9ca3af]',
 											].join(' ')}
 										>
 											{stepLabel(i, step.label)}
 											{active && <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#0f9d7a]" />}
 										</p>
-										<p className="m-0 mt-0.5 text-[12px] text-[#9ca3af]">{stepDetail(i, step.detail)}</p>
+										<p className="m-0 mt-0.5 text-label text-[#9ca3af]">{stepDetail(i, step.detail)}</p>
 									</div>
 								</div>
 							)
@@ -156,14 +156,14 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 				{isError && error && (
 					<div className="space-y-3">
 						<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-[13px] text-[#b91c1c]">{error.message}</p>
+							<p className="m-0 text-body-sm text-[#b91c1c]">{error.message}</p>
 						</div>
 						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
 							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
-								<p className="m-0 text-[13px] font-medium text-[#111827]">Broadcast manually</p>
-								<p className="m-0 text-[12px] text-[#6b7280]">
+								<p className="m-0 text-body-sm font-medium text-[#111827]">Broadcast manually</p>
+								<p className="m-0 text-label text-[#6b7280]">
 									Broadcast the commit first, then the reveal, via any Bitcoin node (
-									<code className="font-mono text-[11px]">sendrawtransaction</code>).
+									<code className="font-mono text-mono-sm">sendrawtransaction</code>).
 								</p>
 								<TxidRow label="Commit TX (broadcast first)" txid={error.commitTxHex} />
 								<TxidRow label="Reveal TX (broadcast second)" txid={error.revealTxHex} />

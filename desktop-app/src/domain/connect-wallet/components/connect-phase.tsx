@@ -74,7 +74,7 @@ export function ConnectPhase({
 		<>
 			{/* Device icon area */}
 			<div
-				className={`relative mb-5 flex h-33 items-center justify-center rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] ${
+				className={`relative mb-5 flex h-33 items-center justify-center rounded-xl border border-[#e5e7eb] bg-bg-base ${
 					isDetecting ? 'hw-detect-pulse' : ''
 				}`}
 			>
@@ -83,7 +83,7 @@ export function ConnectPhase({
 						isSuccess
 							? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#059669]'
 							: isDetecting
-								? 'border-[#ddd8ff]'
+								? 'border-accent-border'
 								: 'border-[#e5e7eb]'
 					}`}
 				>
@@ -92,7 +92,7 @@ export function ConnectPhase({
 			</div>
 
 			{/* Heading */}
-			<h1 className="m-0 font-['BIZ_UDPMincho'] text-[32px] font-normal leading-[1.2] tracking-[-0.01em] text-[#0a0a0a]">
+			<h1 className="m-0 font-display text-[32px] font-normal leading-[1.2] tracking-[-0.01em] text-[#0a0a0a]">
 				{isSuccess
 					? 'Device connected'
 					: walletVendor === 'mnemonic'
@@ -101,7 +101,7 @@ export function ConnectPhase({
 			</h1>
 
 			{/* Subtitle */}
-			<p className="mb-0 mt-2.5 text-[14px] leading-[1.6] text-[#6b7280]">
+			<p className="mb-0 mt-2.5 text-body leading-[1.6] text-[#6b7280]">
 				{isSuccess
 					? 'Device detected. Loading canonical signer…'
 					: walletVendor === 'mnemonic'
@@ -112,11 +112,11 @@ export function ConnectPhase({
 			</p>
 
 			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-[#fafafa] p-3">
-				<p className="m-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[#9ca3af]">Connection method</p>
+				<p className="m-0 text-mono-sm font-medium uppercase tracking-[0.12em] text-[#9ca3af]">Connection method</p>
 				<div className="mt-2 flex items-center gap-2">
 					<button
 						type="button"
-						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'trezor'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
 								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
@@ -128,7 +128,7 @@ export function ConnectPhase({
 					<button
 						type="button"
 						data-testid="e2e-connect-ledger"
-						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'ledger'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
 								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
@@ -140,7 +140,7 @@ export function ConnectPhase({
 					<button
 						type="button"
 						data-testid="e2e-connect-palabras"
-						className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'mnemonic'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
 								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
@@ -152,28 +152,28 @@ export function ConnectPhase({
 				</div>
 				<textarea
 					data-testid="e2e-connect-mnemonic-textarea"
-					className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-xs text-[#111827] outline-none focus:border-[#9ca3af]"
+					className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
 					rows={2}
 					placeholder="seed words..."
 					value={mnemonicInput}
 					onChange={(event) => setMnemonicInput(event.target.value)}
 				/>
-				{mnemonicError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{mnemonicError}</p>}
+				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-[#dc2626]">{mnemonicError}</p>}
 
 				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
 					<>
 						<button
 							type="button"
 							data-testid="e2e-debug-show-address"
-							className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-1.5 text-xs font-medium text-[#374151] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
+							className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-1.5 text-label font-medium text-[#374151] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
 							onClick={handleShowDebugAddress}
 							disabled={debugLoading}
 						>
 							{debugLoading ? 'Deriving address…' : 'Show compressed pubkey / address (debug)'}
 						</button>
-						{debugError !== null && <p className="m-0 mt-1 text-[12px] text-[#dc2626]">{debugError}</p>}
+						{debugError !== null && <p className="m-0 mt-1 text-label text-[#dc2626]">{debugError}</p>}
 						{debugEntry !== null && (
-							<div className="mt-2 rounded-md border border-[#e5e7eb] bg-white p-2 text-[11px] text-[#374151]">
+							<div className="mt-2 rounded-md border border-[#e5e7eb] bg-white p-2 text-mono-sm text-[#374151]">
 								<p className="m-0 break-all">
 									<span className="font-medium text-[#6b7280]">Public key: </span>
 									{debugEntry.publicKeyHex}
@@ -194,15 +194,15 @@ export function ConnectPhase({
 
 			{/* Status message */}
 			{isDetecting && (
-				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#ddd8ff] bg-[#f8f7ff] px-3.5 py-3 text-[13px]">
+				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-accent-border bg-bg-surface px-3.5 py-3 text-body-sm">
 					<span
 						className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2"
-						style={{ borderColor: '#ddd8ff', borderTopColor: '#9480f5' }}
+						style={{ borderColor: 'var(--color-accent-border)', borderTopColor: 'var(--color-accent)' }}
 						aria-hidden="true"
 					/>
 					<div className="flex-1">
 						<div className="font-medium text-[#0a0a0a]">Detecting device…</div>
-						<div className="mt-0.5 text-[12px] text-[#6b7280]">
+						<div className="mt-0.5 text-label text-[#6b7280]">
 							{walletVendor === 'ledger' ? 'Looking for a Ledger on USB.' : 'Looking for a Trezor on USB.'}
 						</div>
 					</div>
@@ -210,13 +210,13 @@ export function ConnectPhase({
 			)}
 
 			{isSuccess && (
-				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] px-3.5 py-3 text-[13px]">
+				<div className="mt-5 flex items-center gap-2.5 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] px-3.5 py-3 text-body-sm">
 					<SuccessIcon tone="emerald" />
 					<div className="flex-1">
 						<div className="font-medium text-[#059669]">
 							{walletVendor === 'ledger' ? 'Ledger detected' : 'Trezor detected'}
 						</div>
-						<div className="mt-0.5 text-[12px] text-[#047857]">Advancing to authority selection…</div>
+						<div className="mt-0.5 text-label text-[#047857]">Advancing to authority selection…</div>
 					</div>
 				</div>
 			)}
@@ -224,7 +224,7 @@ export function ConnectPhase({
 			{/* Action button */}
 			<button
 				data-testid="e2e-connect-with-words"
-				className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-[14px] font-medium transition active:scale-[0.98] ${
+				className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-body font-medium transition active:scale-[0.98] ${
 					isSuccess || isDetecting
 						? 'cursor-not-allowed border border-[#a3a3a3] bg-[#a3a3a3] text-white opacity-70'
 						: 'border border-[#0a0a0a] bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
@@ -252,14 +252,14 @@ export function ConnectPhase({
 			</button>
 
 			{/* Security note */}
-			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-[12px] text-[#9ca3af]">
+			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-label text-[#9ca3af]">
 				<ShieldCheckMutedIcon width={16} height={16} className="block shrink-0" />
 				{walletVendor === 'mnemonic'
 					? 'Your seed words are used locally to derive keys. Alpen only receives signatures.'
 					: 'Your keys never leave the device. Alpen only receives signatures.'}
 			</p>
 
-			{error && <p className="mt-3 text-[13px] text-[#dc2626]">{error}</p>}
+			{error && <p className="mt-3 text-body-sm text-[#dc2626]">{error}</p>}
 		</>
 	)
 }

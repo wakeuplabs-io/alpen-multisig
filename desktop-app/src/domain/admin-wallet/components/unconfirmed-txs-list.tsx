@@ -67,9 +67,9 @@ export function UnconfirmedTxsList({
 				className="flex w-full items-center justify-between px-0 py-2.5 text-left hover:bg-transparent"
 				data-testid="e2e-wallet-transactions-toggle"
 			>
-				<span className="flex items-center font-sans text-[13px] font-medium text-[#374151]">
+				<span className="flex items-center font-sans text-body-sm font-medium text-[#374151]">
 					Pending transactions
-					<span className="ml-2 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[11px] tabular-nums text-[#6b7280]">
+					<span className="ml-2 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-mono-sm tabular-nums text-[#6b7280]">
 						{count}
 					</span>
 				</span>
@@ -101,11 +101,11 @@ export function UnconfirmedTxsList({
 					)}
 
 					{error !== null && rows === null && !isLoading && (
-						<div className="py-3 text-[12px] text-[#ef4444]">{formatAdminWalletError(error).body}</div>
+						<div className="py-3 text-label text-[#ef4444]">{formatAdminWalletError(error).body}</div>
 					)}
 
 					{rows !== null && rows.length === 0 && !isLoading && error === null && (
-						<div className="py-3 text-[12px] text-[#9ca3af]" data-testid="e2e-wallet-transactions-empty">
+						<div className="py-3 text-label text-[#9ca3af]" data-testid="e2e-wallet-transactions-empty">
 							No pending transactions
 						</div>
 					)}

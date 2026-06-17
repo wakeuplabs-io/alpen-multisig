@@ -11,7 +11,7 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
-import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -211,12 +211,14 @@ export function CancelProposalSignScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -225,7 +227,7 @@ export function CancelProposalSignScreen() {
 					/>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleBack()}
 					>
 						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
@@ -234,32 +236,32 @@ export function CancelProposalSignScreen() {
 				</>
 			}
 		>
-			<div className="mx-auto w-full max-w-[760px]">
+			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
+					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
 					onClick={() => navigate(`/proposals/${actionId}/cancel`)}
 				>
 					← Back to cancel
 				</button>
 
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					{flowTitle}
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">{flowSubtitle}</p>
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{flowSubtitle}</p>
 
 				{isLoading && (
-					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#6b7280]">
+					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-body text-[#6b7280]">
 						Loading…
 					</div>
 				)}
 
 				{loadError && (
 					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-sm text-[#991b1b]">{loadError}</p>
+						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
 							onClick={() => navigate(`/proposals/${actionId}/cancel`)}
 						>
 							Back to cancel
@@ -269,7 +271,7 @@ export function CancelProposalSignScreen() {
 
 				{!isLoading && alreadySigned && (
 					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-sm font-medium text-[#92400e]">You have already signed this cancel proposal.</p>
+						<p className="m-0 text-body font-medium text-[#92400e]">You have already signed this cancel proposal.</p>
 					</div>
 				)}
 
@@ -277,19 +279,19 @@ export function CancelProposalSignScreen() {
 					<div className="mt-5 space-y-4">
 						{/* Target proposal context */}
 						<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-							<p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Target proposal</p>
-							<p className="m-0 mt-1 text-[13px] font-medium text-[#111827]">
+							<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Target proposal</p>
+							<p className="m-0 mt-1 text-body-sm font-medium text-[#111827]">
 								Proposal #{parentProposal.seqNo} · {parentProposal.authority}
 							</p>
-							<p className="m-0 mt-0.5 text-[12px] text-[#6b7280]">
+							<p className="m-0 mt-0.5 text-label text-[#6b7280]">
 								This cancel action will remove the queued update from the activation queue.
 							</p>
 						</div>
 
 						{/* Sighash */}
 						<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-							<p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">Sighash to sign</p>
-							<code className="mt-1.5 block break-all font-mono text-[12px] leading-5 text-[#374151]">
+							<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Sighash to sign</p>
+							<code className="mt-1.5 block break-all font-mono text-label leading-5 text-[#374151]">
 								{sighashHex || '—'}
 							</code>
 						</div>
@@ -297,14 +299,14 @@ export function CancelProposalSignScreen() {
 						{/* Sign error */}
 						{signError && (
 							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-sm text-[#991b1b]">{signError}</p>
+								<p className="m-0 text-body text-[#991b1b]">{signError}</p>
 							</div>
 						)}
 
 						{/* Sign success */}
 						{signResult && (
 							<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-								<p className="m-0 text-sm font-medium text-[#065f46]">Signed successfully.</p>
+								<p className="m-0 text-body font-medium text-[#065f46]">Signed successfully.</p>
 							</div>
 						)}
 
@@ -313,7 +315,7 @@ export function CancelProposalSignScreen() {
 							<button
 								type="button"
 								disabled={isSigning || !sighashHex}
-								className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+								className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
 								onClick={() => void handleSign()}
 							>
 								{buttonLabel}

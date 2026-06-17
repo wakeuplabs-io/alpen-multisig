@@ -22,7 +22,7 @@ export function ConflictingInputIcon() {
 			</button>
 			{visible && (
 				<span
-					className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-[12px] leading-[1.5] text-[#92400e] shadow-sm"
+					className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-label leading-[1.5] text-[#92400e] shadow-sm"
 					role="tooltip"
 				>
 					This input is included in multiple Pending transactions.

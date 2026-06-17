@@ -6,6 +6,7 @@ import {
 	CopyClipboardIcon,
 	DownloadIcon,
 	ImportJsonIcon,
+	SendIcon,
 	SignaturePenMutedIcon,
 } from '@/assets/icons'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
@@ -39,7 +40,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 		<button
 			type="button"
 			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 		>
 			<CopyClipboardIcon width={12} height={12} />
 			{copied ? 'Copied!' : (label ?? 'Copy')}
@@ -48,7 +49,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 function SectionLabel({ children }: { children: string }) {
-	return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
+	return <p className="mb-2 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
 type DisplayStatus = ProposalStatus | 'awaiting_enactment'
@@ -72,7 +73,7 @@ function StatusBadge({ status }: { status: DisplayStatus }) {
 	const s = STATUS_CONFIG[status]
 	return (
 		<span
-			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-[11px] font-medium whitespace-nowrap"
+			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"
 			style={{ background: s.bg, color: s.text, borderColor: s.border }}
 		>
 			<span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: s.dot }} aria-hidden="true" />
@@ -158,8 +159,8 @@ export function ProposalDetail({
 				<div className="p-6 pb-5">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="m-0 font-['BIZ_UDPMincho'] text-[28px] leading-[1.2] text-[#0a0a0a]">{title}</h2>
-							<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+							<h2 className="m-0 font-display text-display-md leading-[1.2] text-[#0a0a0a]">{title}</h2>
+							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {proposal.authority}
 							</p>
 						</div>
@@ -169,8 +170,8 @@ export function ProposalDetail({
 					{/* Signatures progress */}
 					<div className="mt-5">
 						<div className="mb-1.5 flex items-center justify-between gap-3">
-							<p className="m-0 text-[13px] font-medium text-[#121212]">Signatures</p>
-							<p className="m-0 text-[13px] font-medium text-[#121212]">
+							<p className="m-0 text-body-sm font-medium text-[#121212]">Signatures</p>
+							<p className="m-0 text-body-sm font-medium text-[#121212]">
 								{collectedSignatures} / {requiredSignatures} <span className="font-normal text-[#6b7280]">signed</span>
 							</p>
 						</div>
@@ -186,9 +187,15 @@ export function ProposalDetail({
 					</div>
 
 					{hasQuorum && (
-						<p className="m-0 mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#0f9d7a]">
+						<p className="m-0 mt-3 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
 							<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
-							Quorum reached — ready to broadcast
+							Quorum reached — ready to send
+							<span
+								className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
+								title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
+							>
+								?
+							</span>
 						</p>
 					)}
 				</div>
@@ -200,71 +207,69 @@ export function ProposalDetail({
 					<div className="border-b border-[#f3f4f6] px-6 py-4">
 						<SectionLabel>Signer set change</SectionLabel>
 					</div>
-					<div className="overflow-x-auto">
-						<table className="w-full border-collapse text-[12px]">
-							<thead>
-								<tr className="border-b border-[#f3f4f6] bg-[#f9fafb]">
-									<th className="px-6 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
-										Before
-									</th>
-									<th className="px-6 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
-										After
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{decodedData.signerSetChange.rows.map((row, i) => (
-									<tr key={i} className="border-b border-[#f3f4f6] last:border-0">
-										<td className="px-6 py-3">
-											{row.inBefore ? (
-												<span
-													className={`font-mono leading-relaxed ${row.isRemoved ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
-												>
-													{row.isRemoved && <span className="mr-1 text-[#dc2626]">−</span>}
-													{row.pubkey}
-												</span>
-											) : (
-												<span className="text-[#9ca3af]">—</span>
-											)}
-										</td>
-										<td className="px-6 py-3">
-											{row.inAfter ? (
-												<span
-													className={`font-mono leading-relaxed ${row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'}`}
-												>
-													{row.isAdded && <span className="mr-1 text-[#0f9d7a]">+</span>}
-													{row.pubkey}
-												</span>
-											) : (
-												<span className="text-[#9ca3af]">—</span>
-											)}
-										</td>
-									</tr>
-								))}
-								{/* Threshold row */}
-								<tr className="border-t border-[#e5e7eb] bg-[#f9fafb]">
-									<td className="px-6 py-3">
-										<span className="text-[11px] font-medium uppercase tracking-wide text-[#9ca3af]">Threshold </span>
-										{decodedData.signerSetChange.thresholdBefore !== null ? (
-											<span className="font-medium text-[#374151]">
-												{decodedData.signerSetChange.thresholdBefore} of{' '}
-												{decodedData.signerSetChange.rows.filter((r) => r.inBefore).length}
+					<table className="w-full table-fixed border-collapse">
+						<thead>
+							<tr className="border-b border-[#f3f4f6] bg-[#f9fafb]">
+								<th className="w-1/2 px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+									Before
+								</th>
+								<th className="w-1/2 border-l border-[#f3f4f6] px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+									After
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{decodedData.signerSetChange.rows.map((row, i) => (
+								<tr key={i} className="border-b border-[#f3f4f6] last:border-0">
+									<td className="px-4 py-2.5 align-top">
+										{row.inBefore ? (
+											<span
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+											>
+												{row.isRemoved && <span className="mr-1 text-[#dc2626]">−</span>}
+												{row.pubkey}
 											</span>
 										) : (
 											<span className="text-[#9ca3af]">—</span>
 										)}
 									</td>
-									<td className="px-6 py-3">
-										<span className="text-[11px] font-medium uppercase tracking-wide text-[#9ca3af]">Threshold </span>
-										<span className="font-medium text-[#374151]">
-											{decodedData.signerSetChange.thresholdAfter} of{' '}
-											{decodedData.signerSetChange.rows.filter((r) => r.inAfter).length}
-										</span>
+									<td className="border-l border-[#f3f4f6] px-4 py-2.5 align-top">
+										{row.inAfter ? (
+											<span
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'}`}
+											>
+												{row.isAdded && <span className="mr-1 text-[#0f9d7a]">+</span>}
+												{row.pubkey}
+											</span>
+										) : (
+											<span className="text-[#9ca3af]">—</span>
+										)}
 									</td>
 								</tr>
-							</tbody>
-						</table>
-					</div>
+							))}
+							{/* Threshold row */}
+							<tr className="border-t border-[#e5e7eb] bg-[#f9fafb]">
+								<td className="px-4 py-2.5 text-label">
+									<span className="text-[#9ca3af]">Threshold </span>
+									{decodedData.signerSetChange.thresholdBefore !== null ? (
+										<span className="font-mono font-medium text-[#374151]">
+											{decodedData.signerSetChange.thresholdBefore} of{' '}
+											{decodedData.signerSetChange.rows.filter((r) => r.inBefore).length}
+										</span>
+									) : (
+										<span className="text-[#9ca3af]">—</span>
+									)}
+								</td>
+								<td className="border-l border-[#f3f4f6] px-4 py-2.5 text-label">
+									<span className="text-[#9ca3af]">Threshold </span>
+									<span className="font-mono font-medium text-[#374151]">
+										{decodedData.signerSetChange.thresholdAfter} of{' '}
+										{decodedData.signerSetChange.rows.filter((r) => r.inAfter).length}
+									</span>
+								</td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
 			)}
 
@@ -273,7 +278,7 @@ export function ProposalDetail({
 				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm p-6 py-5">
 					<SectionLabel>SPS-65 Sighash</SectionLabel>
 					<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-						<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">
+						<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
 							{decodedData.sighashHex}
 						</span>
 						<CopyButton text={decodedData.sighashHex} />
@@ -284,7 +289,7 @@ export function ProposalDetail({
 			{/* ── Approvals ── */}
 			<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-[#f3f4f6] px-6 py-4">
-					<p className="m-0 text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
+					<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
 						Approvals · {collectedSignatures} of {requiredSignatures}
 					</p>
 					{proposal.signatures.length > 0 && <CopyButton text={signaturesJson} label="Copy signatures" />}
@@ -298,9 +303,9 @@ export function ProposalDetail({
 								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0f9d7a]">
 									<SignaturePenMutedIcon width={10} height={10} style={{ filter: 'brightness(10)' }} />
 								</span>
-								<span className="flex-1 font-mono text-[12px] text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
+								<span className="flex-1 font-mono text-label text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
 								{isMe && (
-									<span className="rounded-full border border-[#c4b5fd] bg-[#f5f3ff] px-2 py-0.5 text-[10px] font-medium text-[#7c6fcd]">
+									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-accent-hover">
 										YOU
 									</span>
 								)}
@@ -312,7 +317,7 @@ export function ProposalDetail({
 								>
 									<CopyClipboardIcon width={13} height={13} />
 								</button>
-								<span className="shrink-0 text-[12px] text-[#6b7280]">Signed</span>
+								<span className="shrink-0 text-label text-[#6b7280]">Signed</span>
 							</div>
 						)
 					})}
@@ -323,14 +328,14 @@ export function ProposalDetail({
 						.map((signer, i) => (
 							<div key={`pending-${i}`} className="flex items-center gap-3 px-6 py-3">
 								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d1d5db] bg-white" />
-								<span className="flex-1 font-mono text-[12px] text-[#6b7280]">{truncatePubkey(signer)}</span>
-								<span className="shrink-0 text-[12px] text-[#9ca3af]">Pending</span>
+								<span className="flex-1 font-mono text-label text-[#6b7280]">{truncatePubkey(signer)}</span>
+								<span className="shrink-0 text-label text-[#9ca3af]">Pending</span>
 							</div>
 						))}
 
 					{/* Fallback if no signer data available (allSigners empty, only show signed) */}
 					{decodedData.allSigners.length === 0 && proposal.signatures.length === 0 && (
-						<div className="px-6 py-4 text-[13px] text-[#9ca3af]">No signatures yet.</div>
+						<div className="px-6 py-4 text-body-sm text-[#9ca3af]">No signatures yet.</div>
 					)}
 				</div>
 			</div>
@@ -342,7 +347,7 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Commit TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">
+								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
 									{proposal.commitTxid}
 								</span>
 								<CopyButton text={proposal.commitTxid} />
@@ -353,7 +358,7 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Reveal TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#111827]">
+								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
 									{proposal.revealTxid}
 								</span>
 								<CopyButton text={proposal.revealTxid} />
@@ -370,10 +375,11 @@ export function ProposalDetail({
 						<button
 							type="button"
 							data-testid="e2e-detail-broadcast-button"
-							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 							onClick={onBroadcast}
 						>
-							Broadcast
+							<SendIcon width={14} height={14} />
+							Send
 						</button>
 					)}
 
@@ -381,7 +387,7 @@ export function ProposalDetail({
 						<button
 							type="button"
 							data-testid="e2e-detail-sign-button"
-							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 							onClick={onSign}
 						>
 							Sign
@@ -390,7 +396,7 @@ export function ProposalDetail({
 
 					{!isTerminal && !hasQuorum && alreadySigned && (
 						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-							<p className="m-0 text-[13px] font-medium text-[#065f46]">
+							<p className="m-0 text-body-sm font-medium text-[#065f46]">
 								You have signed this proposal. Waiting for other signers to reach quorum.
 							</p>
 						</div>
@@ -404,11 +410,11 @@ export function ProposalDetail({
 							<button
 								type="button"
 								onClick={() => setShowImportModal(true)}
-								className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+								className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 							>
 								<ImportJsonIcon width={12} height={12} className="text-current" />
 							</button>
-							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-mono-sm text-white opacity-0 transition-opacity group-hover:opacity-100">
 								Import signatures
 							</span>
 						</div>
@@ -417,7 +423,7 @@ export function ProposalDetail({
 						<button
 							type="button"
 							onClick={handleCopyBundle}
-							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 						>
 							{bundleCopied ? (
 								<span className="text-[#0f9d7a]">Copied!</span>
@@ -426,7 +432,7 @@ export function ProposalDetail({
 							)}
 						</button>
 						{!bundleCopied && (
-							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-mono-sm text-white opacity-0 transition-opacity group-hover:opacity-100">
 								Copy bundle
 							</span>
 						)}
@@ -435,7 +441,7 @@ export function ProposalDetail({
 						<button
 							type="button"
 							onClick={handleDownloadBundle}
-							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-xs font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+							className="inline-flex items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
 						>
 							{bundleDownloaded ? (
 								<span className="text-[#0f9d7a]">Saved!</span>
@@ -444,7 +450,7 @@ export function ProposalDetail({
 							)}
 						</button>
 						{!bundleDownloaded && (
-							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-mono-sm text-white opacity-0 transition-opacity group-hover:opacity-100">
 								Download bundle
 							</span>
 						)}

@@ -115,13 +115,13 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 						>
 							{isActive && <ActiveCheckBadge />}
 							<Icon width={18} height={18} className={isActive ? 'text-[#111827]' : 'text-[#9ca3af]'} />
-							<span className={`mt-1 text-[13px] font-medium ${isActive ? 'text-[#111827]' : 'text-[#374151]'}`}>
+							<span className={`mt-1 text-body-sm font-medium ${isActive ? 'text-[#111827]' : 'text-[#374151]'}`}>
 								{label}
 							</span>
-							<span className={`text-[12px] ${isActive ? 'text-[#374151]' : 'text-[#6b7280]'}`}>
+							<span className={`text-label ${isActive ? 'text-[#374151]' : 'text-[#6b7280]'}`}>
 								{formatSatPerVb(rate.satPerKvb)} sat/vB
 							</span>
-							<span className="text-[11px] text-[#9ca3af]">
+							<span className="text-mono-sm text-[#9ca3af]">
 								~{rate.targetBlocks} block{rate.targetBlocks !== 1 ? 's' : ''}
 							</span>
 						</button>
@@ -139,19 +139,19 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 				>
 					{isCustom && <ActiveCheckBadge />}
 					<SlidersIcon width={18} height={18} className={isCustom ? 'text-[#111827]' : 'text-[#9ca3af]'} />
-					<span className={`mt-1 text-[13px] font-medium ${isCustom ? 'text-[#111827]' : 'text-[#374151]'}`}>
+					<span className={`mt-1 text-body-sm font-medium ${isCustom ? 'text-[#111827]' : 'text-[#374151]'}`}>
 						Custom
 					</span>
-					<span className={`text-[12px] ${isCustom ? 'text-[#374151]' : 'text-[#6b7280]'}`}>
+					<span className={`text-label ${isCustom ? 'text-[#374151]' : 'text-[#6b7280]'}`}>
 						{isCustom ? `${formatSatPerVb(activeSatPerKvb)} sat/vB` : '—'}
 					</span>
-					<span className="text-[11px] text-[#9ca3af]">manual rate</span>
+					<span className="text-mono-sm text-[#9ca3af]">manual rate</span>
 				</button>
 			</div>
 
 			{isCustom && (
 				<div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-					<label htmlFor="custom-fee-rate" className="text-[12px] font-medium text-[#374151]">
+					<label htmlFor="custom-fee-rate" className="text-label font-medium text-[#374151]">
 						Custom rate
 					</label>
 					<div className="flex items-center gap-1.5">
@@ -173,9 +173,9 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 								value={customInput}
 								onChange={(e) => handleCustomChange(e.target.value)}
 								onBlur={handleCustomBlur}
-								className="w-16 border-0 bg-transparent px-2.5 py-1.5 text-center text-[13px] font-medium text-[#111827] focus:outline-none"
+								className="w-16 border-0 bg-transparent px-2.5 py-1.5 text-center text-body-sm font-medium text-[#111827] focus:outline-none"
 							/>
-							<span className="pr-2.5 text-[12px] text-[#9ca3af]">sat/vB</span>
+							<span className="pr-2.5 text-label text-[#9ca3af]">sat/vB</span>
 						</div>
 						<button
 							type="button"
@@ -186,7 +186,7 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 							<PlusIcon width={12} height={12} />
 						</button>
 					</div>
-					<span className="ml-auto text-[11px] text-[#9ca3af]">
+					<span className="ml-auto text-mono-sm text-[#9ca3af]">
 						step 0.1 · min {formatSatPerVb(presets.minRelaySatPerKvb)} · max {formatSatPerVb(presets.maxSatPerKvb)}
 					</span>
 				</div>
@@ -195,7 +195,7 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 			{presets.source === 'fallback' && (
 				<div className="flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2.5">
 					<AlertTriangleIcon width={14} height={14} className="mt-0.5 shrink-0 text-[#d97706]" />
-					<p className="m-0 text-[12px] leading-relaxed text-[#92400e]">
+					<p className="m-0 text-label leading-relaxed text-[#92400e]">
 						Live fee estimates are unavailable — these rates are a static fallback from the minimum relay fee. Review
 						before broadcasting.
 					</p>
@@ -215,14 +215,14 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 							height={12}
 							className={`text-[#9ca3af] transition-transform ${isBreakdownOpen ? '' : '-rotate-90'}`}
 						/>
-						<span className="text-[11px] font-semibold uppercase tracking-wider text-[#9ca3af]">
+						<span className="text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
 							Estimated total fee
 						</span>
 					</span>
-					<span className="text-[13px] font-semibold text-[#111827]">{totalFee.toLocaleString()} sats</span>
+					<span className="text-body-sm font-semibold text-[#111827]">{totalFee.toLocaleString()} sats</span>
 				</button>
 				{isBreakdownOpen && (
-					<dl className="m-0 divide-y divide-[#f3f4f6] border-t border-[#e5e7eb] bg-white text-[12px]">
+					<dl className="m-0 divide-y divide-[#f3f4f6] border-t border-[#e5e7eb] bg-white text-label">
 						<FeeBreakdownRow label="Commit fee (est.)" sats={commitFee} />
 						<FeeBreakdownRow label="Reveal fee" sats={revealFee} />
 						<FeeBreakdownRow label="Dust output (commit)" sats={presets.commitDustSats} />

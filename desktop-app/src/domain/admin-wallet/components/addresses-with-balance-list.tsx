@@ -28,9 +28,9 @@ export function AddressesWithBalanceList({
 				className="flex w-full items-center justify-between px-0 py-2.5 text-left hover:bg-transparent"
 				data-testid="e2e-wallet-addresses-toggle"
 			>
-				<span className="flex items-center font-sans text-[13px] font-medium text-[#374151]">
+				<span className="flex items-center font-sans text-body-sm font-medium text-[#374151]">
 					Addresses with balance
-					<span className="ml-2 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[11px] tabular-nums text-[#6b7280]">
+					<span className="ml-2 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-mono-sm tabular-nums text-[#6b7280]">
 						{count}
 					</span>
 				</span>
@@ -62,11 +62,11 @@ export function AddressesWithBalanceList({
 					)}
 
 					{error !== null && rows === null && !isLoading && (
-						<div className="py-3 text-[12px] text-[#ef4444]">{formatAdminWalletError(error).body}</div>
+						<div className="py-3 text-label text-[#ef4444]">{formatAdminWalletError(error).body}</div>
 					)}
 
 					{rows !== null && rows.length === 0 && !isLoading && error === null && (
-						<div className="py-3 text-[12px] text-[#9ca3af]" data-testid="e2e-wallet-addresses-empty">
+						<div className="py-3 text-label text-[#9ca3af]" data-testid="e2e-wallet-addresses-empty">
 							No addresses with balance yet
 						</div>
 					)}
@@ -74,7 +74,7 @@ export function AddressesWithBalanceList({
 					{rows !== null && rows.length > 0 && (
 						<table className="w-full" data-testid="e2e-wallet-addresses-list">
 							<thead>
-								<tr className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#9ca3af]">
+								<tr className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">
 									<th className="py-1 pr-3 text-left font-medium">Address</th>
 									<th className="px-3 py-1 text-right font-medium">Balance</th>
 								</tr>

@@ -29,7 +29,7 @@ export function DisabledWalletCard({ error }: DisabledWalletCardProps) {
 					<line x1="12" y1="8" x2="12" y2="12" />
 					<line x1="12" y1="16" x2="12.01" y2="16" />
 				</svg>
-				<p className="m-0 text-[13px] leading-relaxed text-[#1e40af]">{message}</p>
+				<p className="m-0 text-body-sm leading-relaxed text-[#1e40af]">{message}</p>
 			</div>
 		</div>
 	)

@@ -3,10 +3,12 @@ import { Paginator } from '@/components/paginator'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
 import {
+	AlertTriangleIcon,
 	CheckCircleEmeraldIcon,
 	ChevronRightMutedIcon,
 	ClockAmberIcon,
 	FileTextMutedIcon,
+	SendIcon,
 	SignaturePenMutedIcon,
 	UndoIcon,
 } from '@/assets/icons'
@@ -72,10 +74,10 @@ export function ProposalsDashboard({
 		<section className="mx-auto w-full max-w-200">
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
-					<h1 className="m-0 font-['BIZ_UDPMincho'] text-[28px] font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
+					<h1 className="m-0 font-display text-display-md font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
 						Proposals
 					</h1>
-					<p className="m-0 mt-1 text-[13px] leading-normal text-[#6b7280]">
+					<p className="m-0 mt-1 text-body-sm leading-normal text-[#6b7280]">
 						Proposals you can sign, broadcast, or review under {authorityLabel}.
 					</p>
 				</div>
@@ -92,7 +94,7 @@ export function ProposalsDashboard({
 					<button
 						type="button"
 						data-testid="e2e-dashboard-create-proposal"
-						className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+						className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 						onClick={onCreateProposal}
 					>
 						<span aria-hidden="true">+</span>
@@ -103,10 +105,10 @@ export function ProposalsDashboard({
 
 			{error ? (
 				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-sm text-[#991b1b]">{error}</p>
+					<p className="m-0 text-body text-[#991b1b]">{error}</p>
 					<button
 						type="button"
-						className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+						className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
 						onClick={onRetry}
 					>
 						Retry
@@ -115,7 +117,7 @@ export function ProposalsDashboard({
 			) : null}
 
 			{isLoading ? (
-				<div className="rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#6b7280]">
+				<div className="rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-body text-[#6b7280]">
 					Loading proposals...
 				</div>
 			) : isEmpty ? (
@@ -123,12 +125,12 @@ export function ProposalsDashboard({
 			) : (
 				<>
 					{/* Tabs */}
-					<div className="mb-5 flex gap-0.5 rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] p-1">
+					<div className="mb-5 flex gap-0.5 rounded-xl border border-[#e5e7eb] bg-bg-base p-1">
 						{(['pending', 'past'] as Tab[]).map((tab) => (
 							<button
 								key={tab}
 								type="button"
-								className="flex-1 rounded-lg py-2 text-[13px] font-medium transition"
+								className="flex-1 rounded-lg py-2 text-body-sm font-medium transition"
 								style={
 									activeTab === tab
 										? { background: '#fff', color: '#0a0a0a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
@@ -203,8 +205,11 @@ function PendingTab({
 }) {
 	if (quorumReached.length === 0 && pending.length === 0) {
 		return (
-			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-[13px] text-[#9ca3af]">
-				No proposals are currently collecting signatures.
+			<div>
+				<p className="m-0 mb-2 text-body-sm text-[#6b7280]">Stored offchain. Visible only to multisig signers.</p>
+				<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-body-sm text-[#9ca3af]">
+					No proposals are currently collecting signatures.
+				</div>
 			</div>
 		)
 	}
@@ -266,7 +271,7 @@ function PastTab({
 }) {
 	if (totalProposals === 0) {
 		return (
-			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-[13px] text-[#9ca3af]">
+			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-body-sm text-[#9ca3af]">
 				No past proposals yet.
 			</div>
 		)
@@ -293,16 +298,14 @@ function PastTab({
 function EmptyState({ authorityLabel, onCreateProposal }: { authorityLabel: string; onCreateProposal: () => void }) {
 	return (
 		<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-16 text-center">
-			<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[#e5e7eb] bg-[#f8f8fb] text-[#9ca3af]">
+			<div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-[#e5e7eb] bg-bg-base text-[#9ca3af]">
 				<FileTextMutedIcon width={22} height={22} className="block" />
 			</div>
-			<p className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">
-				No proposals for {authorityLabel}
-			</p>
-			<p className="m-0 mt-2 text-[13px] text-[#6b7280]">Create the first proposal to begin collecting signatures.</p>
+			<p className="m-0 font-display text-display-sm font-normal text-[#0a0a0a]">No proposals for {authorityLabel}</p>
+			<p className="m-0 mt-2 text-body-sm text-[#6b7280]">Create the first proposal to begin collecting signatures.</p>
 			<button
 				type="button"
-				className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#2a2a2a]"
+				className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a]"
 				onClick={onCreateProposal}
 			>
 				<span aria-hidden="true">+</span>
@@ -350,7 +353,7 @@ function ProposalGroup({
 				/>
 				{groupIcon}
 				<h2
-					className="m-0 text-[13px] font-semibold uppercase tracking-wider"
+					className="m-0 text-body-sm font-semibold uppercase tracking-wider"
 					style={{ color: '#6b7280', fontFamily: 'inherit' }}
 				>
 					{title}
@@ -407,7 +410,7 @@ function ProposalCard({
 		<button
 			type="button"
 			data-testid="e2e-proposal-sign-button"
-			className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+			className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-body font-medium text-white transition hover:bg-black"
 			onClick={(e) => {
 				e.stopPropagation()
 				onSignProposal(proposal.actionId)
@@ -421,14 +424,13 @@ function ProposalCard({
 		<div
 			className="group"
 			style={{
-				background: '#fff',
-				border: `1px solid ${hovered ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
+				background: hovered ? 'var(--color-bg-surface)' : '#fff',
+				border: `1px solid ${hovered ? 'var(--color-border-accent)' : 'var(--color-border)'}`,
 				borderRadius: 12,
-				padding: '18px 18px 16px',
+				padding: '18px 20px',
 				cursor: 'pointer',
 				transition: 'all 150ms ease',
 				transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
-				boxShadow: hovered ? 'var(--shadow-card)' : 'none',
 			}}
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => setHovered(false)}
@@ -436,9 +438,14 @@ function ProposalCard({
 		>
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
-					<p className="m-0 font-['BIZ_UDPMincho'] text-[24px] leading-[1.2] text-[#121212]">{proposalTitle}</p>
-					<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
-						#{proposal.seqNo} · {proposalTypeLabel} · {proposal.authority}
+					<p className="m-0 font-display text-heading leading-[1.3] text-[#121212]">{proposalTitle}</p>
+					<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
+						#{proposal.seqNo} · {proposalTypeLabel} · Created{' '}
+						{new Date(proposal.createdAtMs).toLocaleDateString(undefined, {
+							year: 'numeric',
+							month: 'short',
+							day: 'numeric',
+						})}
 						{proposal.kind === 'cancel' && proposal.targetActionId !== null && (
 							<>
 								{' '}
@@ -450,11 +457,11 @@ function ProposalCard({
 				<StatusBadge status={awaitingEnactment ? 'awaiting_enactment' : proposal.status} />
 			</div>
 
-			<div className="mt-5">
-				<div className="mb-1.5 flex items-center justify-between gap-3">
-					<p className="m-0 text-[14px] font-medium text-[#121212]">Signatures</p>
-					<p className="m-0 text-[30px] font-medium leading-none text-[#121212]">
-						{collectedSignatures} / {requiredSignatures} <span className="text-[18px]">signed</span>
+			<div className="mt-4">
+				<div className="mb-1.5 flex items-baseline justify-between gap-3">
+					<p className="m-0 text-body-sm text-[#121212]">Signatures</p>
+					<p className="m-0 text-body-sm font-medium text-[#121212]">
+						{collectedSignatures} / {requiredSignatures} <span className="font-normal text-[#6b7280]">signed</span>
 					</p>
 				</div>
 
@@ -468,6 +475,18 @@ function ProposalCard({
 					/>
 				</div>
 
+				{proposal.cancelProposal !== null && (
+					<div className="mt-3 flex items-center gap-2 rounded-lg border border-[#fde68a] bg-[#fefce8] px-3 py-2">
+						<AlertTriangleIcon width={13} height={13} className="shrink-0 text-[#d97706]" />
+						<p className="m-0 flex-1 text-label text-[#6b7280]">
+							<span className="font-semibold text-[#d97706]">
+								{proposal.cancelProposal.signatures.length} of {proposal.cancelProposal.requiredSignatures}
+							</span>{' '}
+							cancellation signature{proposal.cancelProposal.signatures.length === 1 ? '' : 's'} collected
+						</p>
+					</div>
+				)}
+
 				{proposal.status === 'pending' && (
 					<div className="mt-1.5">
 						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
@@ -477,22 +496,29 @@ function ProposalCard({
 
 			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
-					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
+					<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
-						Quorum reached - ready to broadcast
+						Quorum reached — ready to send
+						<span
+							className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
+							title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
+						>
+							?
+						</span>
 					</p>
 					<div className="flex shrink-0 items-center gap-2">
 						{signButton}
 						<button
 							type="button"
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+							className="inline-flex items-center gap-1.5 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-body font-medium text-white transition hover:bg-black"
 							onClick={(e) => {
 								e.stopPropagation()
 								onBroadcastProposal(proposal.actionId)
 							}}
 							data-testid="e2e-proposal-broadcast-button"
 						>
-							Broadcast
+							<SendIcon width={14} height={14} />
+							Send
 						</button>
 					</div>
 				</div>
@@ -500,15 +526,15 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<div className="flex items-start justify-between gap-3">
 						<div>
-							<p className="m-0 text-[14px] font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
-							<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
+							<p className="m-0 text-body font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">
 								Refresh the dashboard after the confirmation delay to see enacted status.
 							</p>
 						</div>
 						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
 							<button
 								type="button"
-								className="shrink-0 rounded-xl border border-[#dc2626] bg-white px-3 py-1.5 text-[13px] font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+								className="shrink-0 rounded-xl border border-[#dc2626] bg-white px-3 py-1.5 text-body-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
 								onClick={(e) => {
 									e.stopPropagation()
 									onCancelProposal(proposal.actionId)
@@ -521,11 +547,11 @@ function ProposalCard({
 				</div>
 			) : broadcastInProgress ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-[14px] font-medium text-[#6b7280]">Broadcast in progress</p>
+					<p className="m-0 text-body font-medium text-[#6b7280]">Broadcast in progress</p>
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
-					<p className="m-0 inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0f9d7a]">
+					<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
 						Quorum reached
 					</p>
@@ -533,7 +559,7 @@ function ProposalCard({
 				</div>
 			) : (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
-					<p className="m-0 flex items-center gap-1 text-xs text-[#6b7280]">
+					<p className="m-0 flex items-center gap-1 text-label text-[#6b7280]">
 						<SignaturePenMutedIcon width={12} height={12} className="block shrink-0" />
 						{collectedSignatures} {collectedSignatures === 1 ? 'signature' : 'signatures'} collected
 					</p>
@@ -570,7 +596,7 @@ function StatusBadge({ status }: { status: DisplayStatus }) {
 	const s = STATUS_CONFIG[status]
 	return (
 		<span
-			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-[10px] py-[3px] text-[11px] font-medium whitespace-nowrap"
+			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"
 			style={{ background: s.bg, color: s.text, borderColor: s.border }}
 		>
 			<span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: s.dot }} aria-hidden="true" />

@@ -19,19 +19,19 @@ export function WalletPanelHeader({
 	return (
 		<div className="flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-5 py-4">
 			<div className="flex min-w-0 flex-1 items-center gap-2.5">
-				<span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-[#f4f2ff] text-[#9480f5]">
+				<span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-bg-surface text-accent">
 					<WalletIcon width={18} height={18} />
 				</span>
 				<div className="min-w-0 flex-1">
 					<div className="flex min-w-0 items-center gap-2">
 						<h2
 							id="wallet-panel-title"
-							className="m-0 truncate font-sans text-[15px] font-medium tracking-[0.02em] text-[#111827]"
+							className="m-0 truncate font-sans text-body-lg font-medium tracking-[0.02em] text-[#111827]"
 						>
 							{title}
 						</h2>
 						{isWatchOnly && (
-							<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[11px] text-[#9ca3af]">
+							<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#f3f4f6] px-2 py-0.5 text-mono-sm text-[#9ca3af]">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="14"
@@ -51,7 +51,7 @@ export function WalletPanelHeader({
 							</span>
 						)}
 					</div>
-					{subtitle && <p className="m-0 mt-0.5 truncate font-mono text-[11px] text-[#4b5563]">{subtitle}</p>}
+					{subtitle && <p className="m-0 mt-0.5 truncate font-mono text-mono-sm text-[#4b5563]">{subtitle}</p>}
 				</div>
 			</div>
 			<button
