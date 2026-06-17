@@ -1,6 +1,8 @@
 //! Hardware wallet Tauri commands.
 
-use desktop_app::infrastructure::hw_wallet::{ledger, trezor, HwWalletInfo};
+use bdk_wallet::bitcoin::Network;
+use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
+use desktop_app::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::signing::{self, SignatureResult};
 
 #[tauri::command]
@@ -8,11 +10,46 @@ pub async fn get_trezor_info(derivation_path: Option<String>) -> Result<HwWallet
     trezor::connect(derivation_path)
 }
 
+/// Parses the device-kind IPC token into a [`HwDeviceType`] (case-insensitive).
+fn parse_device_kind(token: &str) -> Result<HwDeviceType, String> {
+    match token.trim().to_ascii_lowercase().as_str() {
+        "trezor" => Ok(HwDeviceType::Trezor),
+        "ledger" => Ok(HwDeviceType::Ledger),
+        other => Err(format!(
+            "unknown device type '{other}' (expected trezor or ledger)"
+        )),
+    }
+}
+
+/// Parses the network IPC token; defaults to regtest when absent (matches the session default).
+fn parse_verify_network(network: Option<&str>) -> Network {
+    match network.unwrap_or("regtest") {
+        "testnet" => Network::Testnet,
+        "bitcoin" | "mainnet" => Network::Bitcoin,
+        "signet" => Network::Signet,
+        _ => Network::Regtest,
+    }
+}
+
+/// Confirms an address on the **connected** device screen (PRD §4.2 Admin ID,
+/// §4.3.4.2 receive). Dispatches to Trezor or Ledger, with the script type
+/// (`p2tr` receive / `p2wpkh` Admin ID) and the active network.
 #[tauri::command]
-pub async fn verify_address_on_device(derivation_path: String) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || trezor::verify_address_on_device(derivation_path))
-        .await
-        .map_err(|e| e.to_string())?
+pub async fn verify_address_on_device(
+    derivation_path: String,
+    device_type: String,
+    script_type: String,
+    network: Option<String>,
+) -> Result<(), String> {
+    let device = parse_device_kind(&device_type)?;
+    let script = AddressScriptType::parse(&script_type)?;
+    let net = parse_verify_network(network.as_deref());
+    tokio::task::spawn_blocking(move || match device {
+        HwDeviceType::Trezor => trezor::verify_address_on_device(derivation_path, script, net),
+        HwDeviceType::Ledger => ledger::verify_address_on_device(derivation_path, script, net),
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -126,7 +163,38 @@ pub async fn sign_challenge_with_ledger(
 
 #[cfg(test)]
 mod tests {
-    use super::ledger_admin_wallet_xpub_path;
+    use super::{
+        ledger_admin_wallet_xpub_path, parse_device_kind, parse_verify_network, AddressScriptType,
+        HwDeviceType, Network,
+    };
+
+    #[test]
+    fn parse_device_kind_accepts_both_devices_case_insensitively() {
+        assert_eq!(parse_device_kind("trezor"), Ok(HwDeviceType::Trezor));
+        assert_eq!(parse_device_kind("Ledger"), Ok(HwDeviceType::Ledger));
+        assert!(parse_device_kind("keystone").is_err());
+    }
+
+    #[test]
+    fn verify_dispatch_maps_script_type_per_authority() {
+        // Receive row → P2TR; Admin ID row → P2WPKH.
+        assert_eq!(
+            AddressScriptType::parse("p2tr"),
+            Ok(AddressScriptType::Taproot)
+        );
+        assert_eq!(
+            AddressScriptType::parse("p2wpkh"),
+            Ok(AddressScriptType::WitnessPubkeyHash)
+        );
+    }
+
+    #[test]
+    fn parse_verify_network_honors_active_network_and_defaults_to_regtest() {
+        assert_eq!(parse_verify_network(None), Network::Regtest);
+        assert_eq!(parse_verify_network(Some("testnet")), Network::Testnet);
+        assert_eq!(parse_verify_network(Some("mainnet")), Network::Bitcoin);
+        assert_eq!(parse_verify_network(Some("bitcoin")), Network::Bitcoin);
+    }
 
     #[test]
     fn ledger_uses_testnet_coin_type_on_regtest() {

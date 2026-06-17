@@ -106,7 +106,7 @@ Single responsibilities (one sentence each):
 
 ## Decisions & open questions
 
-**Settled by evidence (not open):** Trezor/Ledger device behavior is **not** added to CI. Device validation is manual against emulators (`scripts/*-up.sh`) or real hardware, consistent with how Ledger broadcast signing is exercised today (see Testing strategy). CI covers only the no-device seams. The deliverable therefore **must include a written manual test playbook** for the on-device paths.
+**Settled by evidence (not open):** Trezor/Ledger device behavior is **not** added to CI. Device validation is manual against emulators (`scripts/*-up.sh`) or real hardware, consistent with how Ledger broadcast signing is exercised today (see Testing strategy). CI covers only the no-device seams. The deliverable therefore **must include a written manual test playbook** for the on-device paths — delivered in [`admin-wallet-hw-send-and-verify-manual-playbook.md`](./admin-wallet-hw-send-and-verify-manual-playbook.md).
 
 **Agent's discretion:**
 

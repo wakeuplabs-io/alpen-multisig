@@ -87,6 +87,12 @@ pub struct AdminWalletSignStatus {
     pub can_sign: bool,
     pub signer_kind: String,
     pub reason: Option<String>,
+    /// Specific connected device (`trezor` | `ledger`) for HW sessions; `None` otherwise.
+    /// Drives verify-on-device dispatch (PRD §4.2 / §4.3.4.2) and the Send confirm-on-device UI.
+    pub device_type: Option<String>,
+    /// Active session network token (`regtest` | `testnet` | `signet` | `bitcoin`), so the
+    /// verify-on-device call uses the right coin path.
+    pub network: String,
 }
 
 /// Maps internal signer labels to the FE capability DTO (`hardware` | `mnemonic` | `none`).
@@ -98,18 +104,45 @@ fn capability_signer_kind(raw: &str) -> &'static str {
     }
 }
 
+/// The specific HW device token (`trezor` | `ledger`) for verify-on-device dispatch,
+/// or `None` for software / no signer.
+fn hw_device_type(raw: &str) -> Option<String> {
+    match raw {
+        "trezor" | "ledger" => Some(raw.to_string()),
+        _ => None,
+    }
+}
+
+/// Network token for the FE (`regtest` | `testnet` | `signet` | `bitcoin`).
+fn network_token(network: bdk_wallet::bitcoin::Network) -> &'static str {
+    use bdk_wallet::bitcoin::Network;
+    match network {
+        Network::Bitcoin => "bitcoin",
+        Network::Testnet | Network::Testnet4 => "testnet",
+        Network::Signet => "signet",
+        Network::Regtest => "regtest",
+    }
+}
+
 #[tauri::command]
 pub async fn admin_wallet_can_sign(
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<AdminWalletSignStatus, String> {
     let can_sign = wallet_session.can_sign();
+    let current = wallet_session.current();
+    let network = current
+        .as_ref()
+        .map(|svc| network_token(svc.network()).to_string())
+        .unwrap_or_else(|| "regtest".to_string());
+    let raw_kind = current.as_ref().map(|svc| svc.signer_kind());
+    let device_type = raw_kind.as_deref().and_then(hw_device_type);
     let (signer_kind, reason) = if can_sign {
-        match wallet_session.current() {
-            Some(svc) => (capability_signer_kind(&svc.signer_kind()).to_string(), None),
+        match raw_kind {
+            Some(kind) => (capability_signer_kind(&kind).to_string(), None),
             None => ("none".to_string(), Some("no-session".to_string())),
         }
     } else {
-        match wallet_session.current() {
+        match current {
             None => ("none".to_string(), Some("no-session".to_string())),
             Some(_) => ("none".to_string(), Some("watch-only-no-signer".to_string())),
         }
@@ -118,6 +151,8 @@ pub async fn admin_wallet_can_sign(
         can_sign,
         signer_kind,
         reason,
+        device_type,
+        network,
     })
 }
 
@@ -556,6 +591,23 @@ mod tests {
         assert_eq!(super::capability_signer_kind("trezor"), "hardware");
         assert_eq!(super::capability_signer_kind("mnemonic"), "mnemonic");
         assert_eq!(super::capability_signer_kind("unknown"), "none");
+    }
+
+    #[test]
+    fn hw_device_type_exposes_specific_device_for_verify_dispatch() {
+        assert_eq!(super::hw_device_type("trezor"), Some("trezor".to_string()));
+        assert_eq!(super::hw_device_type("ledger"), Some("ledger".to_string()));
+        assert_eq!(super::hw_device_type("mnemonic"), None);
+        assert_eq!(super::hw_device_type("none"), None);
+    }
+
+    #[test]
+    fn network_token_maps_each_network() {
+        use bdk_wallet::bitcoin::Network;
+        assert_eq!(super::network_token(Network::Regtest), "regtest");
+        assert_eq!(super::network_token(Network::Testnet), "testnet");
+        assert_eq!(super::network_token(Network::Signet), "signet");
+        assert_eq!(super::network_token(Network::Bitcoin), "bitcoin");
     }
 
     /// Unit: admin_wallet_can_sign returns false when no session.

@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { tauriCall } from '@/api/tauri-bridge'
+import { verifyAddressOnDevice } from '@/api/admin-wallet'
+import type { HwDeviceType } from '@/api/admin-wallet'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
+
+/** The connected device kind for verify dispatch, or null for software vendors. */
+function hwDeviceType(vendor: WalletAdapter['vendor']): HwDeviceType | null {
+	return vendor === 'trezor' || vendor === 'ledger' ? vendor : null
+}
+
+/** Infers the network token from an Admin ID derivation path's coin type (0' → mainnet, else regtest). */
+function networkFromPath(derivationPath: string): string {
+	return /\/0'\/73'/.test(derivationPath) || /\/0h\/73h/.test(derivationPath) ? 'bitcoin' : 'regtest'
+}
 
 type Params = {
 	adapter: WalletAdapter
@@ -82,12 +93,18 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 	async function verifyOnDevice() {
 		if (!selectedEntry) return
+		const deviceType = hwDeviceType(adapter.vendor)
+		if (!deviceType) return
 
 		setIsVerifyingAddress(true)
 		setVerifyMessage(null)
 
-		const result = await tauriCall<null>('verify_address_on_device', {
+		// Admin ID is BIP-84 / P2WPKH; dispatch to the connected device on its network.
+		const result = await verifyAddressOnDevice({
 			derivationPath: selectedEntry.derivationPath,
+			deviceType,
+			scriptType: 'p2wpkh',
+			network: networkFromPath(selectedEntry.derivationPath),
 		})
 
 		setIsVerifyingAddress(false)
@@ -97,7 +114,7 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 			return
 		}
 
-		setVerifyMessage('Path/public key confirmed on device.')
+		setVerifyMessage('Address confirmed on device.')
 	}
 
 	const disconnect = useCallback(() => {
