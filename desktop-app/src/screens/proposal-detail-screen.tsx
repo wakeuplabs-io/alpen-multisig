@@ -1,7 +1,7 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
-import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
@@ -85,12 +85,14 @@ export function ProposalDetailScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -99,7 +101,7 @@ export function ProposalDetailScreen() {
 					/>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleBack()}
 					>
 						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
@@ -111,16 +113,16 @@ export function ProposalDetailScreen() {
 			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
+					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
 					onClick={() => navigate('/proposals')}
 				>
 					← Back to proposals
 				</button>
 
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Proposal detail
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">Review signatures, action payload, and broadcast status.</p>
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">Review signatures, action payload, and broadcast status.</p>
 
 				<div className="mt-6">
 					{isLoading && (
@@ -134,10 +136,10 @@ export function ProposalDetailScreen() {
 
 					{error && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">{error}</p>
+							<p className="m-0 text-body text-[#991b1b]">{error}</p>
 							<button
 								type="button"
-								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-xs font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
 								onClick={reload}
 							>
 								Retry
@@ -191,13 +193,13 @@ export function ProposalDetailScreen() {
 							{/* In-progress cancel banner */}
 							{proposal.cancelProposal !== null && (
 								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-									<p className="m-0 text-[13px] text-[#d97706]">
+									<p className="m-0 text-body-sm text-[#d97706]">
 										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
 										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
 									</p>
 									<button
 										type="button"
-										className="shrink-0 text-[13px] font-medium text-[#d97706] transition hover:text-[#b45309]"
+										className="shrink-0 text-body-sm font-medium text-[#d97706] transition hover:text-[#b45309]"
 										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
 									>
 										View cancel →
@@ -212,7 +214,7 @@ export function ProposalDetailScreen() {
 								proposal.cancelProposal === null && (
 									<button
 										type="button"
-										className="mt-4 w-full rounded-xl border border-[#dc2626] bg-white px-4 py-2.5 text-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+										className="mt-4 w-full rounded-xl border border-[#dc2626] bg-white px-4 py-2.5 text-body font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
 										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
 									>
 										Cancel this proposal

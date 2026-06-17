@@ -84,7 +84,7 @@ export function WalletPanelContent({
 					>
 						←
 					</button>
-					<h3 className="m-0 text-[13px] font-semibold text-[#111827]">Send BTC</h3>
+					<h3 className="m-0 text-body-sm font-semibold text-[#111827]">Send BTC</h3>
 				</div>
 				<SendForm isWatchOnly={isWatchOnly} onBack={onCloseSend} onAfterSend={onRefreshSync} />
 			</div>
@@ -110,7 +110,7 @@ export function WalletPanelContent({
 					disabled={isWatchOnly}
 					title={isWatchOnly ? 'Hardware wallet required to sign' : undefined}
 					data-testid="e2e-wallet-send-open"
-					className={`w-full rounded-lg px-3 py-2 text-[13px] font-medium transition ${
+					className={`w-full rounded-lg px-3 py-2 text-body-sm font-medium transition ${
 						isWatchOnly
 							? 'cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]'
 							: 'bg-[#111827] text-white hover:bg-[#1f2937]'
@@ -118,7 +118,7 @@ export function WalletPanelContent({
 				>
 					Send
 				</button>
-				{isWatchOnly && <p className="m-0 mt-1 text-[11px] text-[#9ca3af]">Hardware wallet required to sign</p>}
+				{isWatchOnly && <p className="m-0 mt-1 text-mono-sm text-[#9ca3af]">Hardware wallet required to sign</p>}
 			</div>
 
 			<div className="mt-5">

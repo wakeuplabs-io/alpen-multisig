@@ -18,14 +18,14 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 		<Backdrop onClose={onClose}>
 			<div className="flex flex-col gap-5">
 				<div>
-					<h2 className="m-0 font-['BIZ_UDPMincho'] text-[22px] font-normal text-[#0a0a0a]">Sign transaction</h2>
-					<p className="m-0 mt-1 text-[13px] text-[#6b7280]">Review the transaction details before signing.</p>
+					<h2 className="m-0 font-display text-display-sm font-normal text-[#0a0a0a]">Sign transaction</h2>
+					<p className="m-0 mt-1 text-body-sm text-[#6b7280]">Review the transaction details before signing.</p>
 				</div>
 
 				{/* Summary */}
-				<div className="rounded-xl border border-[#e5e7eb] bg-[#f8f8fb] px-4 py-3.5">
+				<div className="rounded-xl border border-[#e5e7eb] bg-bg-base px-4 py-3.5">
 					<dl className="flex flex-col gap-2">
-						<Row label="Transaction ID" value={<span className="font-mono text-[13px]">{truncate(tx.id)}</span>} />
+						<Row label="Transaction ID" value={<span className="font-mono text-body-sm">{truncate(tx.id)}</span>} />
 						<Row label="Inputs" value={`${tx.inputs.length} input${tx.inputs.length !== 1 ? 's' : ''}`} />
 						<Row
 							label="Signatures"
@@ -58,7 +58,7 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 						<path d="M12 9v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 						<circle cx="12" cy="17" r="1" fill="currentColor" />
 					</svg>
-					<p className="m-0 text-[13px] text-[#92400e]">
+					<p className="m-0 text-body-sm text-[#92400e]">
 						You are about to sign this <strong>block_payouts</strong> transaction. This action cannot be undone.
 					</p>
 				</div>
@@ -67,14 +67,14 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 				<div className="flex items-center justify-end gap-2.5">
 					<button
 						type="button"
-						className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+						className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-body-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
 						onClick={onClose}
 					>
 						Cancel
 					</button>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#2a2a2a] active:scale-[0.98]"
 						onClick={onSign}
 					>
 						<svg width={13} height={13} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -97,8 +97,8 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
 	return (
 		<div className="flex items-center justify-between gap-3">
-			<dt className="text-[12px] text-[#6b7280]">{label}</dt>
-			<dd className="m-0 text-[13px] font-medium text-[#0a0a0a]">{value}</dd>
+			<dt className="text-label text-[#6b7280]">{label}</dt>
+			<dd className="m-0 text-body-sm font-medium text-[#0a0a0a]">{value}</dd>
 		</div>
 	)
 }

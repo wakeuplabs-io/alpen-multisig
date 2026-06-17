@@ -11,7 +11,7 @@ export function SequencerKeyUpdateFormFields() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div>
-				<label className="text-sm font-medium text-[#111827]">New sequencer public key</label>
+				<label className="text-body font-medium text-[#111827]">New sequencer public key</label>
 				<input
 					type="text"
 					className={monoInputClass}

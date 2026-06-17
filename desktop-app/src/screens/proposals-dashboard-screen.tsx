@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
-import { LogOutMutedIcon, LogOutRedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, LogOutRedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -73,13 +73,14 @@ export function ProposalsDashboardScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
-
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -89,7 +90,7 @@ export function ProposalsDashboardScreen() {
 
 					<button
 						type="button"
-						className="group/disconnect inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="group/disconnect inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleDisconnect()}
 					>
 						<span className="relative inline-flex h-3 w-3 shrink-0">

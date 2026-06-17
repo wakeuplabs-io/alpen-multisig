@@ -15,17 +15,20 @@ export type AdminIdRowProps = {
  */
 export function AdminIdRow({ adminId }: AdminIdRowProps) {
 	const label = (
-		<span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-[#7c6cf0]">
-			<ShieldCheckMutedIcon width={13} height={13} className="text-[#9480f5]" />
+		<span className="inline-flex items-center gap-1.5 text-mono-sm font-medium uppercase tracking-[0.08em] text-accent">
+			<ShieldCheckMutedIcon width={13} height={13} className="text-accent" />
 			{ADMIN_ID_LABEL}
 		</span>
 	)
 
 	if (!isDisplayableAdminId(adminId)) {
 		return (
-			<div className="rounded-xl border border-[#ece9fb] bg-[#faf9ff] px-4 py-3" data-testid="e2e-wallet-admin-id-row">
+			<div
+				className="rounded-xl border border-accent-border bg-bg-surface px-4 py-3"
+				data-testid="e2e-wallet-admin-id-row"
+			>
 				{label}
-				<p className="mt-1.5 text-[12px] text-[#9ca3af]">Unknown</p>
+				<p className="mt-1.5 text-label text-[#9ca3af]">Unknown</p>
 			</div>
 		)
 	}
@@ -33,19 +36,22 @@ export function AdminIdRow({ adminId }: AdminIdRowProps) {
 	const value = adminId as string
 
 	return (
-		<div className="rounded-xl border border-[#ece9fb] bg-[#faf9ff] px-4 py-3" data-testid="e2e-wallet-admin-id-row">
+		<div
+			className="rounded-xl border border-accent-border bg-bg-surface px-4 py-3"
+			data-testid="e2e-wallet-admin-id-row"
+		>
 			<div className="flex items-center justify-between gap-2">
 				{label}
 				<CopyButton text={value} variant="labeled" />
 			</div>
 			<p
-				className="mt-1.5 break-all font-mono text-[12px] leading-[1.5] text-[#374151]"
+				className="mt-1.5 break-all font-mono text-label leading-[1.5] text-[#374151]"
 				title={value}
 				data-testid="e2e-wallet-admin-id-value"
 			>
 				{value}
 			</p>
-			<p className="mt-2 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-[#b45309]">
+			<p className="mt-2 inline-flex items-start gap-1.5 text-mono-sm leading-[1.45] text-[#b45309]">
 				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-[#d97706]" />
 				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>

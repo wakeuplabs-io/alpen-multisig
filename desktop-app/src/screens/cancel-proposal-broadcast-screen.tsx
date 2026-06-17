@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
-import { LogOutMutedIcon, ShieldPurpleIcon } from '@/assets/icons'
+import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
@@ -52,12 +52,14 @@ export function CancelProposalBroadcastScreen() {
 
 	return (
 		<ScreenShell
+			authorityBadge={
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-accent-border bg-bg-surface px-2.5 py-1.25 text-label font-medium text-accent-hover">
+					<ShieldAccentIcon width={12} height={12} className="block shrink-0" />
+					{authorityLabel}
+				</span>
+			}
 			headerContent={
 				<>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-[#e4dfff] bg-[#f5f3ff] px-2.5 py-1.25 text-[12px] font-medium text-[#7c6fcd]">
-						<ShieldPurpleIcon width={12} height={12} className="block shrink-0" />
-						{authorityLabel}
-					</span>
 					<WalletSessionControl
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
@@ -66,7 +68,7 @@ export function CancelProposalBroadcastScreen() {
 					/>
 					<button
 						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-[12px] font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
+						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
 						onClick={() => void handleBack()}
 					>
 						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
@@ -78,16 +80,16 @@ export function CancelProposalBroadcastScreen() {
 			<div className="mx-auto w-full max-w-190">
 				<button
 					type="button"
-					className="inline-flex items-center gap-1.5 text-sm text-[#6b7280] transition hover:text-[#111827]"
+					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
 					onClick={() => navigate(`/proposals/${actionId}/cancel`)}
 				>
 					← Back to cancel proposal
 				</button>
 
-				<h1 className="m-0 mt-3 font-['BIZ_UDPMincho'] text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
+				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Broadcast cancel tx
 				</h1>
-				<p className="m-0 mt-1 text-[13px] text-[#6b7280]">
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 					Cancel signatures have reached quorum. Review the commit details, then broadcast to remove the queued update.
 				</p>
 
@@ -103,13 +105,13 @@ export function CancelProposalBroadcastScreen() {
 
 					{cancelResolveError !== null && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">{cancelResolveError.message}</p>
+							<p className="m-0 text-body text-[#991b1b]">{cancelResolveError.message}</p>
 						</div>
 					)}
 
 					{targetQueuedError !== null && (
 						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-sm text-[#991b1b]">
+							<p className="m-0 text-body text-[#991b1b]">
 								Could not verify the target action's queue status: {targetQueuedError}
 							</p>
 						</div>
@@ -147,12 +149,12 @@ export function CancelProposalBroadcastScreen() {
 
 					{phase === 'done' && (
 						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-							<p className="m-0 text-sm font-medium text-[#065f46]">
+							<p className="m-0 text-body font-medium text-[#065f46]">
 								Cancel transaction confirmed on-chain. The queued update has been removed.
 							</p>
 							<button
 								type="button"
-								className="mt-3 inline-flex items-center rounded-md border border-[#065f46] bg-white px-3 py-1.5 text-xs font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
+								className="mt-3 inline-flex items-center rounded-md border border-[#065f46] bg-white px-3 py-1.5 text-label font-medium text-[#065f46] transition hover:bg-[#f0fdf4]"
 								onClick={() => navigate('/proposals')}
 							>
 								Back to proposals
@@ -164,7 +166,7 @@ export function CancelProposalBroadcastScreen() {
 						<button
 							type="button"
 							onClick={() => void prepare()}
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-body font-medium text-white transition hover:bg-black"
 						>
 							Retry
 						</button>

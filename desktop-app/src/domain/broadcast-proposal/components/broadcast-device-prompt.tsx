@@ -14,8 +14,8 @@ export function BroadcastDevicePrompt() {
 					<line x1="12" y1="18" x2="12" y2="18.01" />
 				</svg>
 				<div>
-					<p className="m-0 text-[13px] font-medium text-[#111827]">Confirm on your device</p>
-					<p className="m-0 mt-1 text-[12px] text-[#6b7280]">
+					<p className="m-0 text-body-sm font-medium text-[#111827]">Confirm on your device</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">
 						Broadcast uses two Ledger steps (not the same as login “Sign message”): first register the Admin Wallet
 						policy, then review the commit transaction. Press <strong>right</strong> on every screen until the app
 						finishes.
