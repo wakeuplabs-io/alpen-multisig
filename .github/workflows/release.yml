@@ -172,7 +172,7 @@ jobs:
         # Developer ID (see docs/operations/platform-code-signing-requirements.md),
         # this step should be replaced with proper signing/notarization.
         run: |
-          APP_PATH="target/release/bundle/macos/Alpen Multisig.app"
+          APP_PATH="target/release/bundle/macos/Strata Multisig.app"
           codesign --force --deep --sign - "$APP_PATH"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
 
@@ -184,10 +184,10 @@ jobs:
 
           rm -f target/release/bundle/dmg/*.dmg
           bash target/release/bundle/dmg/bundle_dmg.sh \
-            --volname "Alpen Multisig" \
+            --volname "Strata Multisig" \
             --icon-size 80 \
             --app-drop-link 180 170 \
-            "target/release/bundle/dmg/Alpen Multisig_${APP_VERSION}_aarch64.dmg" \
+            "target/release/bundle/dmg/Strata Multisig_${APP_VERSION}_aarch64.dmg" \
             "target/release/bundle/macos/"
 
       - name: Record reproducibility digests
