@@ -3,9 +3,9 @@
 > **Current — SSOT:** P-ID and wave closure tracker on `develop`. For open backlog items, use [`deferred-backlog.md`](./deferred-backlog.md). See [`assessment/README.md`](./README.md).
 
 **Base branch:** `develop`  
-**Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  
+**Source:** [archive/action-plan-2026-05-14.md](archive/action-plan-2026-05-14.md)  
 **Wave 2:** **Closed** (sign-off 2026-05-19; A–G merged on `develop`).  
-**Gap review:** [wave2-exit-gap-review.md](wave2-exit-gap-review.md)  
+**Gap review:** [archive/wave2-exit-gap-review.md](archive/wave2-exit-gap-review.md)  
 **Wave 3:** **Closed** (sign-off 2026-05-20; W3-0–W3-8 merged on `develop`).  
 **Assessment:** **Closed** (2026-05-20). Deferred items captured as USs / NFRs in [deferred-backlog.md](deferred-backlog.md). No Wave 4 scheduled.
 
@@ -19,7 +19,7 @@ PR [#134](https://github.com/wakeuplabs-io/alpen-multisig/pull/134). E2E PASS 20
 
 ## Wave 2 — closed
 
-Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop → main` deferred** until Wave 3 + assessment action plan complete.
+Sign-off 2026-05-19. Slice deferrals: `archive/wave2-track-*-followups.md`. **`develop → main` deferred** until Wave 3 + assessment action plan complete.
 
 ### Tracks merged
 
@@ -28,17 +28,17 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | A Secrets / IPC | [#136](https://github.com/wakeuplabs-io/alpen-multisig/pull/136) | 2026-05-19 | — |
 | B Coordination | [#138](https://github.com/wakeuplabs-io/alpen-multisig/pull/138) | 2026-05-19 | — |
 | C Supply chain | [#137](https://github.com/wakeuplabs-io/alpen-multisig/pull/137) | 2026-05-19 | — |
-| D Correctness & ops | [#139](https://github.com/wakeuplabs-io/alpen-multisig/pull/139) | 2026-05-19 | [wave2-track-d-followups.md](wave2-track-d-followups.md) |
-| E Test floor | [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) | 2026-05-19 | [wave2-track-e-followups.md](wave2-track-e-followups.md) |
-| F Docs & signer safety | [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) | 2026-05-19 | [wave2-track-f-followups.md](wave2-track-f-followups.md) |
-| G Discovery | [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) | 2026-05-19 | [wave2-track-g-followups.md](wave2-track-g-followups.md) |
+| D Correctness & ops | [#139](https://github.com/wakeuplabs-io/alpen-multisig/pull/139) | 2026-05-19 | [archive/wave2-track-d-followups.md](archive/wave2-track-d-followups.md) |
+| E Test floor | [#140](https://github.com/wakeuplabs-io/alpen-multisig/pull/140) | 2026-05-19 | [archive/wave2-track-e-followups.md](archive/wave2-track-e-followups.md) |
+| F Docs & signer safety | [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) | 2026-05-19 | [archive/wave2-track-f-followups.md](archive/wave2-track-f-followups.md) |
+| G Discovery | [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) | 2026-05-19 | [archive/wave2-track-g-followups.md](archive/wave2-track-g-followups.md) |
 
 ### Track F — docs & signer safety (merged slice)
 
 | P-ID | Status | Notes |
 |------|--------|-------|
 | P-051 | done | Runbook, threat model, signer-safety model + README links |
-| P-005, P-006 | follow-up | [wave2-track-f-followups.md](wave2-track-f-followups.md) |
+| P-005, P-006 | follow-up | [archive/wave2-track-f-followups.md](archive/wave2-track-f-followups.md) |
 | P-055 | deferred | Post-merge docs PR — gate §4 resolved; awaits legal OK for in-repo excerpts |
 
 ---
@@ -52,7 +52,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 | ADR-006 / no auto-approve | **Yes** (B) |
 | RPC timeouts (orchestrator) | **Yes** (D slice) |
 | Runbook + threat model + signer safety | **Yes** (F) |
-| Tier 0 all closed | **No** — deferred items in [wave2-exit-gap-review.md](wave2-exit-gap-review.md) |
+| Tier 0 all closed | **No** — deferred items in [archive/wave2-exit-gap-review.md](archive/wave2-exit-gap-review.md) |
 | Full Wave 2 plan (every P-ID) | **No** — track follow-up docs |
 
 **Wave 2 complete on `develop`.** Human gates §1–§4 resolved. Active work: Wave 3 + follow-up slices on `develop`; `main` updates after Wave 3 close-out.
@@ -72,7 +72,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 
 ## Human decisions
 
-[wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) — **all gates resolved** (§3 US-H5 → Wave 3; §4 P-055 → post-merge docs + legal OK).
+[archive/wave2-human-decisions-pending.md](archive/wave2-human-decisions-pending.md) — **all gates resolved** (§3 US-H5 → Wave 3; §4 P-055 → post-merge docs + legal OK).
 
 ---
 
@@ -87,7 +87,7 @@ Sign-off 2026-05-19. Slice deferrals: `wave2-track-*-followups.md`. **`develop �
 ## Wave 3 — Stabilization — **Closed**
 
 **Sign-off:** 2026-05-20. All P-IDs done; W3-0–W3-8 merged on `develop`.  
-**Playbook:** [wave3-stabilization-execution-playbook.md](wave3-stabilization-execution-playbook.md)  
+**Playbook:** [archive/wave3-stabilization-execution-playbook.md](archive/wave3-stabilization-execution-playbook.md)  
 **Rule:** one P-ID → one commit; one PR → one or more P-IDs; open draft PR before first implementation commit.
 
 ### PR rows

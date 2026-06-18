@@ -4,9 +4,9 @@ PR [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) merged **P-0
 
 | Artifact | Path |
 |----------|------|
-| Ops runbook | [runbook.md](../operations/runbook.md) |
-| Threat model | [threat-model.md](../security/threat-model.md) |
-| Signer safety model | [signer-safety-model.md](../specs/signer-safety-model.md) |
+| Ops runbook | [runbook.md](../../operations/runbook.md) |
+| Threat model | [threat-model.md](../../security/threat-model.md) |
+| Signer safety model | [signer-safety-model.md](../../specs/signer-safety-model.md) |
 | Internal navigation | [`docs/README.md`](../README.md) — ops runbook and security model rows |
 
 ## Not in #141 (Wave 2 plan remainder)
@@ -19,5 +19,5 @@ PR [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) merged **P-0
 
 ## Dependencies
 
-- **P-006** ← [wave2-p053-digest-usability.md](../2-discovery/wave2-p053-digest-usability.md) sessions (Track G execution).
+- **P-006** ← [wave2-p053-digest-usability.md](../../2-discovery/wave2-p053-digest-usability.md) sessions (Track G execution).
 - **P-055** ← Alpen legal-of-record confirmation on excerpt scope; then doc hygiene pass + minimal archive PR (not blocking develop → main).

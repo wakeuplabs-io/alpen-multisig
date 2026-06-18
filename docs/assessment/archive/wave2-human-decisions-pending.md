@@ -18,7 +18,7 @@ This file is the gate log for Wave 2: **resolved** entries record what was decid
 - Desktop calls `PATCH /proposals/:action_id` with `{ "proposal_status": "approved" }` after quorum (Tauri application layer).
 - Broadcast claim requires `approved` + `broadcast_status == idle`; threshold checked at transition and at claim (P-035).
 
-**SSOT:** [ADR-006: Backend coordination boundary](../architecture/adrs/006-backend-coordination-boundary.md) (Accepted).
+**SSOT:** [ADR-006: Backend coordination boundary](../../architecture/adrs/006-backend-coordination-boundary.md) (Accepted).
 
 **Unblocks:** Track B `P-012`; ADR-006 final wording.
 
@@ -74,9 +74,9 @@ Out of scope for this release (develop → main):
 **In scope for Wave 2 sign-off and develop → main** (already implemented and validated):
 
 - Online coordination
-- Explicit `approved` via `PATCH` per [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md)
+- Explicit `approved` via `PATCH` per [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md)
 - Desktop commit/reveal broadcast (P-066)
-- Secret custody per Decision #2 and [secret-custody-wave2.md](../specs/secret-custody-wave2.md)
+- Secret custody per Decision #2 and [secret-custody-wave2.md](../../specs/secret-custody-wave2.md)
 - Passing proposal-flow E2E + manual enactment confirmation
 
 **PRD §2.3** remains a **committed follow-up** in Wave 3 — not a blocker for Wave 2 sign-off or the develop → main merge.

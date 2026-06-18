@@ -1,11 +1,11 @@
 # Wave 2 Track G — follow-up backlog
 
-PR [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) merged **P-053 planning** (Wave 2 PR queue A–G complete — see [action-plan-progress.md](action-plan-progress.md)):
+PR [#142](https://github.com/wakeuplabs-io/alpen-multisig/pull/142) merged **P-053 planning** (Wave 2 PR queue A–G complete — see [action-plan-progress.md](../action-plan-progress.md)):
 
 | Artifact | Path |
 |----------|------|
-| Signer interview plan | [wave2-p053-interview-plan.md](../2-discovery/wave2-p053-interview-plan.md) |
-| Digest verification usability protocol | [wave2-p053-digest-usability.md](../2-discovery/wave2-p053-digest-usability.md) |
+| Signer interview plan | [wave2-p053-interview-plan.md](../../2-discovery/wave2-p053-interview-plan.md) |
+| Digest verification usability protocol | [wave2-p053-digest-usability.md](../../2-discovery/wave2-p053-digest-usability.md) |
 
 Human gate log lives on `develop`: [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) (not part of #142 diff).
 

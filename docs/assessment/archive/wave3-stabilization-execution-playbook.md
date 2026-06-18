@@ -3,7 +3,7 @@
 **Status:** **Closed** 2026-05-20 — all W3-0 through W3-8 PRs merged on `develop`.  
 **Base branch:** `develop` only — **`develop → main` is out of scope.**  
 **Source plan:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md) (Wave 3 section updated by W3-8).  
-**Tracker (SSOT):** [action-plan-progress.md](action-plan-progress.md) — all P-ID status lives there; **no GitHub Issues** for Wave 3.
+**Tracker (SSOT):** [action-plan-progress.md](../action-plan-progress.md) — all P-ID status lives there; **no GitHub Issues** for Wave 3.
 
 ---
 
@@ -16,7 +16,7 @@ A single branch (`wave3/stabilization`) carried **all** stabilization work with 
 - **One P-ID (or tracker row) → one implementation commit** (TDD red+green may be squashed into that commit).
 - **One PR → one or more P-IDs**, each with **its own commit**.
 - **Open draft PR** before the first implementation commit; run the verify gate after **every** commit.
-- **Update** [action-plan-progress.md](action-plan-progress.md) when a P-ID moves `pending` → `in_progress` → `done`.
+- **Update** [action-plan-progress.md](../action-plan-progress.md) when a P-ID moves `pending` → `in_progress` → `done`.
 
 **Do not:** one commit per whole PR, or one mega-branch for all Wave 3.
 
@@ -24,7 +24,7 @@ A single branch (`wave3/stabilization`) carried **all** stabilization work with 
 
 ## PR grouping (P-IDs → PRs)
 
-Each row is one PR (one branch, serial merge). **Commits** are tagged by **P-ID** in the subject (e.g. `fix(P-019): …`). Status is tracked in [action-plan-progress.md](action-plan-progress.md), not in GitHub Issues.
+Each row is one PR (one branch, serial merge). **Commits** are tagged by **P-ID** in the subject (e.g. `fix(P-019): …`). Status is tracked in [action-plan-progress.md](../action-plan-progress.md), not in GitHub Issues.
 
 | PR | Title | P-IDs in PR (1 commit each) | Group? | Rationale |
 | -- | ----- | --------------------------- | ------ | --------- |
@@ -102,7 +102,7 @@ git pull origin develop
 
 Only **one** Wave 3 PR open at a time. No git worktrees.
 
-Mark the PR row **`in_progress`** and listed P-IDs **`in_progress`** in [action-plan-progress.md](action-plan-progress.md).
+Mark the PR row **`in_progress`** and listed P-IDs **`in_progress`** in [action-plan-progress.md](../action-plan-progress.md).
 
 ### 1. Branch
 
@@ -259,7 +259,7 @@ flowchart TD
 
 | Document | Role |
 | -------- | ---- |
-| [action-plan-progress.md](action-plan-progress.md) | **Status** — P-ID and PR rows (SSOT) |
+| [action-plan-progress.md](../action-plan-progress.md) | **Status** — P-ID and PR rows (SSOT) |
 | This playbook | **How** — grouping, TDD, gates, commit rules |
 | [action-plan-2026-05-14.md](action-plan-2026-05-14.md) | **What** — scope (W3-8) |
 | [wave2-track-d-followups.md](wave2-track-d-followups.md) | P-019, P-023, P-027, P-029 context |

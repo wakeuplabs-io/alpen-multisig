@@ -1,8 +1,8 @@
 # Alpen Multisig — Consolidated Action Plan (2026-05-14)
 
-> **Historical.** Snapshot from 2026-05-14 synthesis. For current backlog and P-ID closure, use [`deferred-backlog.md`](./deferred-backlog.md) and [`action-plan-progress.md`](./action-plan-progress.md) — see [`assessment/README.md`](./README.md).
+> **Historical.** Snapshot from 2026-05-14 synthesis. For current backlog and P-ID closure, use [`deferred-backlog.md`](./deferred-backlog.md) and [`action-plan-progress.md`](./action-plan-progress.md) — see [`assessment/README.md`](../README.md).
 
-**Inputs:** Historical synthesis from May 2025 adversarial assessments (folders removed when stale). **Current resolution:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), [wave2-exit-gap-review.md](wave2-exit-gap-review.md), [action-plan-progress.md](action-plan-progress.md).
+**Inputs:** Historical synthesis from May 2025 adversarial assessments (folders removed when stale). **Current resolution:** [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md), [wave2-exit-gap-review.md](wave2-exit-gap-review.md), [action-plan-progress.md](../action-plan-progress.md).
 **Method:** Cross-audit synthesis. Each item carries a stable **P-###** ID inherited from the 2026-05-13 meta-review, with deltas from 2026-05-14 marked **[Δ 05-14]**.
 **Status:** Read-only synthesis. No runtime probes were executed; severities are code-read.
 
@@ -10,31 +10,31 @@
 
 ## 1. Executive summary
 
-**Historical context:** This document synthesizes May 2025 adversarial assessments (source folders removed when stale). Several Tier-0 findings from the 2026-05-14 re-read are **closed in code** — see [action-plan-progress.md](action-plan-progress.md) and [wave2-exit-gap-review.md](wave2-exit-gap-review.md).
+**Historical context:** This document synthesizes May 2025 adversarial assessments (source folders removed when stale). Several Tier-0 findings from the 2026-05-14 re-read are **closed in code** — see [action-plan-progress.md](../action-plan-progress.md) and [wave2-exit-gap-review.md](wave2-exit-gap-review.md).
 
 **Closed since synthesis:**
 - **Broadcast boundary (P-066, P-062):** Desktop executes commit/reveal; orchestrator exposes `claim_broadcast` and PATCH coordination only. IPC returns persisted `approved` / `reveal_broadcasted` statuses.
-- **Coordination-only boundary ([ADR-006](../architecture/adrs/006-backend-coordination-boundary.md)):** Explicit `pending → approved` transition; signature ingest does not auto-approve.
+- **Coordination-only boundary ([ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md)):** Explicit `pending → approved` transition; signature ingest does not auto-approve.
 - **Persistent proposals (NFR-PERSIST):** Postgres when `DATABASE_URL` is set.
 
-**Still open:** [deferred-backlog.md](deferred-backlog.md) and Wave 2/3 track follow-ups. US-H5 manual fallback is partial — `/manual` and [manual-execution-flow.md](../specs/manual-execution-flow.md).
+**Still open:** [deferred-backlog.md](../deferred-backlog.md) and Wave 2/3 track follow-ups. US-H5 manual fallback is partial — `/manual` and [manual-execution-flow.md](../../specs/manual-execution-flow.md).
 
 The risk themes below remain a useful historical map; severities are not re-audited in this edit.
 
 1. **Signer-key surface is wide open.** Operator secret key defaults to the well-known test key; mnemonics and private keys cross the Tauri IPC boundary in plaintext; CSP is `null`; releases are unsigned; there is no SCA in CI; the frontend even has a `VITE_OPERATOR_SECRET_KEY_HEX` path that can leak through sourcemaps.
-2. **Broadcast boundary — resolved (P-066, P-062).** See §2.1 and [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).
+2. **Broadcast boundary — resolved (P-066, P-062).** See §2.1 and [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md).
 3. **Type, error, and identity drift across Rust ↔ TS.** Backend `Authority` has 5 variants, Tauri shell has a subset, React has 2 (`StrataAdministrator`, `StrataSequencerManager`). [Δ 05-14] Duplicate-signer detection compares pubkeys with `==` while session auth uses `eq_ignore_ascii_case` — the same Trezor signer can pass dedup twice. Errors collapse to `error: string` at every boundary; no Zod validation at the bridge; `u64 seq_no` is exposed as a JSON `number`.
 4. **Coordination state durability — partially resolved.** Postgres persistence is available; in-memory remains the dev default. Broadcast idempotency, append-only audit log, and correlation IDs remain open.
 
 Doc/process layer: manual-fallback story (US-H5) is partially implemented; README/AGENTS Diataxis work and shared types (P-022) remain.
 
-**Production-readiness window:** Historical estimate from May 2025; see [action-plan-progress.md](action-plan-progress.md) for current closure status.
+**Production-readiness window:** Historical estimate from May 2025; see [action-plan-progress.md](../action-plan-progress.md) for current closure status.
 
 ---
 
 ## 2. What changed between 2026-05-13 and 2026-05-14
 
-> **Status (2026-06):** Rows 1–2 are **resolved in code**. Row 7 (P-061/P-066) **implemented**. See [action-plan-progress.md](action-plan-progress.md).
+> **Status (2026-06):** Rows 1–2 are **resolved in code**. Row 7 (P-061/P-066) **implemented**. See [action-plan-progress.md](../action-plan-progress.md).
 
 | # | Change | Direction |
 |---|---|---|
@@ -98,7 +98,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-009 | Session token has no authority binding; cross-authority reuse. Validate `session.authority === authorityFromRole(selectedRole)` before reuse; `await authLogout()` before re-auth. | S | 03, 04, 13 |
 | P-010 | Deep-link `/proposals/:actionId/sign` bypasses authority context. Refuse to render if `proposal.authority` ≠ selected role. | S | 03, 13 |
 | P-011 | Unsigned releases, no SCA, no committed lockfile, npm `^`-ranges, git-rev–pinned `alpen-*` with no signature verification. Commit `package-lock.json`, `npm ci`, `cargo audit` + `cargo deny`, pre-commit secret-scanning. | M | 02, 05 |
-| P-012 | ~~Backend auto-approves on threshold~~ — **CLOSED:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) documents explicit `approve_action`; ingest does not auto-transition. Threshold resync tests remain in Wave 3. | — | 06, 13, 16 |
+| P-012 | ~~Backend auto-approves on threshold~~ — **CLOSED:** [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md) documents explicit `approve_action`; ingest does not auto-transition. Threshold resync tests remain in Wave 3. | — | 06, 13, 16 |
 | P-013 | `parse_network` defaults to `regtest`. Require explicit `bitcoin`/`testnet`/`signet`/`regtest`; fail otherwise. | S | 02 |
 | P-014 | Bearer token transported over user-supplied `base_url`; no HTTPS enforcement. Reject non-`https://` in `build_client` (allow `http://localhost` only in dev). | S | 02 |
 | P-015 | `VITE_OPERATOR_SECRET_KEY_HEX` env path can leak via sourcemaps. Delete env var; load operator key only in Rust at startup. | S | 02, 05 |
@@ -152,7 +152,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-048 | No encryption at rest; broadcast errors echo RPC URLs / credentials. `pgcrypto` for `signer_pubkey`/`signature_hex`; sanitize broadcast errors. | M | 09 |
 | P-049 | No desktop local persistence; drafts vanish on crash. | S | 09 |
 | P-050 | Diataxis collapse in `README.md` and `AGENTS.md`. Rewrite README as 5-line tutorial; AGENTS.md as reference. | S | 15 |
-| P-051 | Missing docs: backend ops runbook, signer-safety model, threat model, incident playbook, capability cross-links, build-and-release reproducibility guide, testing-strategy doc. **ADR-006 landed.** **Partial resolution (post-2026-05-14):** runbook, threat model, signer-safety exist — see [`operations/runbook.md`](../operations/runbook.md), [`security/threat-model.md`](../security/threat-model.md), [`specs/signer-safety-model.md`](../specs/signer-safety-model.md); remainder open in [`action-plan-progress.md`](./action-plan-progress.md). | L | 15 |
+| P-051 | Missing docs: backend ops runbook, signer-safety model, threat model, incident playbook, capability cross-links, build-and-release reproducibility guide, testing-strategy doc. **ADR-006 landed.** **Partial resolution (post-2026-05-14):** runbook, threat model, signer-safety exist — see [`operations/runbook.md`](../../operations/runbook.md), [`security/threat-model.md`](../../security/threat-model.md), [`specs/signer-safety-model.md`](../../specs/signer-safety-model.md); remainder open in [`action-plan-progress.md`](./action-plan-progress.md). | L | 15 |
 | P-052 | `docs/3-stories/` has no DoR/DoD; US-H5 manual fallback unspecified; no cancellation flow; no signer-rotation story. Add 8-item DoR checklist; story-by-story audit. | M | 12, 13, 15 |
 | P-053 | Zero user discovery (5–8 signer interviews, digest-verification usability test, manual-fallback tabletop sim). | L | 12 |
 | P-054 | Rule/skill stack drifts (`.claude/rules/` vs `.cursor/rules/`; missing `description:` for auto-trigger; `rust-specialist` vs `rust-backend-standards` disagreement on `.unwrap()`). Verify Cursor IDE loading semantics first; consolidate. | S | 17 |
@@ -164,7 +164,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 
 ## 4. Cross-cutting themes (do not lose these in the per-ticket churn)
 
-- **"Backend coordination only" is documented in [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).** Remaining work: forbidden-import lint, SPS-65 citation in code (P-028, P-055).
+- **"Backend coordination only" is documented in [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md).** Remaining work: forbidden-import lint, SPS-65 citation in code (P-028, P-055).
 - **Single source of truth is broken everywhere.** Authority defined 3×, rules duplicated, constants hardcoded in multiple places. P-022 + P-043 + P-054 + P-064 share a single root cause: no shared types/codegen.
 - **In-memory by default leaks across every concern.** Proposals, sessions, challenges, broadcast claims. P-016 + P-017 + P-031 are one architectural decision.
 - **No correlation chain frontend → Tauri → backend → on-chain.** P-023 + P-029 + P-051 must ship together for ops to be honest.
@@ -203,7 +203,7 @@ The plan is structured around three sequential "waves." Earlier waves remove exi
 #### 5.1 Wave 1 — execution record (2026-05-16)
 
 **Delivered on:** `fix/action-plan-wave1-2026-05-14` → draft PR #134 (`develop` base).  
-**Tracker:** [action-plan-progress.md](action-plan-progress.md).
+**Tracker:** [action-plan-progress.md](../action-plan-progress.md).
 
 **How it was run**
 
@@ -311,7 +311,7 @@ These are not engineering tasks — they are policy/scope decisions that must be
 2. **SPS-65 archival in-repo (P-055).** Are we allowed to ship excerpts of the SPS-65 Notion document under `docs/specs/sps-reference/`? Stakeholder: Alpen legal-of-record.
 3. **Cursor IDE rule semantics (P-054).** Confirm whether `.cursor/rules/` is IDE-managed or source-controlled before we delete or consolidate.
 4. **Operator-key custody model (P-001, P-003, P-040).** Sidecar daemon, OS keychain, HSM, or hardware-wallet–only? The choice changes Wave-2 implementation across two teams.
-5. **Manual fallback scope (P-052, P-053).** **Partial** — `/manual` and [manual-execution-flow.md](../specs/manual-execution-flow.md) shipped; export/reconcile in [deferred-backlog.md](deferred-backlog.md) US-H5.
+5. **Manual fallback scope (P-052, P-053).** **Partial** — `/manual` and [manual-execution-flow.md](../../specs/manual-execution-flow.md) shipped; export/reconcile in [deferred-backlog.md](../deferred-backlog.md) US-H5.
 
 ---
 
@@ -340,8 +340,8 @@ These four PRs alone close 4 of 19 BLOCKERs in roughly 5 engineering days and un
 
 ## 9. Closure note (2026-06)
 
-Material decisions from this plan landed in [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), Wave 2 execution tracks ([wave2-exit-gap-review.md](wave2-exit-gap-review.md)), and ongoing backlog ([deferred-backlog.md](deferred-backlog.md)). May 2025 adversarial assessment folders were removed when stale; use the links above for current status.
+Material decisions from this plan landed in [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md), Wave 2 execution tracks ([wave2-exit-gap-review.md](wave2-exit-gap-review.md)), and ongoing backlog ([deferred-backlog.md](../deferred-backlog.md)). May 2025 adversarial assessment folders were removed when stale; use the links above for current status.
 
 ---
 
-*End of consolidated action plan. Status tracking: [action-plan-progress.md](action-plan-progress.md). Coordination boundary: [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).*
+*End of consolidated action plan. Status tracking: [action-plan-progress.md](../action-plan-progress.md). Coordination boundary: [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md).*
