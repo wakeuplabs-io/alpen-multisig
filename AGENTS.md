@@ -13,12 +13,10 @@ docs/
 ├── architecture/       # System architecture overview
 │   └── adrs/           # Architecture Decision Records
 ├── specs/              # Feature specs (functional contracts)
-├── assessment/         # Backlog SSOT + archive/ (wave history)
+├── assessment/         # Backlog SSOT, audits/, archive/ (wave history)
 ├── operations/         # Runbook, threat model, delivery plan
 ├── archive/            # Historical: features/, evolution/, poc-specs/ — not SSOT
 ├── external/           # Client-facing deliverables (canonical for delivery)
-├── reviews/            # Point-in-time audits (see resolution banners)
-├── analysis/           # Targeted implementation audits
 └── README.md           # Internal SSOT map — start here for navigation
 ```
 
