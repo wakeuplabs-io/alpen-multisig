@@ -2,6 +2,15 @@
 
 This document defines the baseline architecture for the Alpen Multisig application. It serves as the reference for all implementation decisions going forward.
 
+### Documentation SSOT
+
+| Topic | SSOT | Do not use for current architecture |
+|-------|------|-------------------------------------|
+| System design | This document + [`adrs/`](./adrs/) | [`deliverable/research.md`](../deliverable/research.md) (stub → client deliverable), `specs/poc*.md` (historical POC) |
+| Accepted decisions | [`adrs/`](./adrs/) | [`2-discovery/`](../2-discovery/) notes, dated assessments |
+
+Full internal map and conflict rules: [`docs/README.md`](../README.md).
+
 ## System Context
 
 Alpen Multisig is a desktop application that enables authorized signers to manage on-chain governance of the Strata bridge and Alpen rollup. The system coordinates signature collection off-chain, constructs Bitcoin transactions embedding governance payloads (SPS-50/51/65), and broadcasts them for the ASM (Administration State Machine) to process deterministically.
