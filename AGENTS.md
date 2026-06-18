@@ -105,6 +105,8 @@ npm run build
 
 ## Rule Files
 
+**SSOT:** [`.cursor/rules/`](.cursor/rules/) for Cursor; [`.claude/rules/`](.claude/rules/) is a maintained mirror — update both when changing agent conventions.
+
 Rules in `.claude/rules/` auto-load based on `paths` frontmatter — only the rules relevant to the files being edited are loaded into context:
 
 - `typescript-standards.md` — Loaded for `desktop-app/src/**/*.{ts,tsx}`
