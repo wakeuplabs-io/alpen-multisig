@@ -8,13 +8,15 @@ The Alpen Multisig application includes a comprehensive integration test suite t
 
 ## Test Environment
 
+> **Scope note:** The Rust workspace suite below validates protocol and coordination layers. It does **not** cover all PRD update types, full E2E WebDriver desktop flows, or physical hardware on every CI run. See [Limitations](#limitations) and the [compatibility matrix](./hardware-wallet-matrix.md).
+
 | Component | Configuration |
 |-----------|---------------|
 | **Language** | Rust (nightly toolchain) |
 | **Test Framework** | Cargo test + custom integration harness |
 | **Protocol Crates** | `strata-asm-txs-admin`, `strata-crypto`, `strata-asm-params` |
 | **Network** | Testnet (regtest mode for local testing) |
-| **Hardware Wallets** | Trezor emulator, Ledger emulator |
+| **Hardware Wallets** | Trezor emulator, Ledger emulator (CI/dev); physical Trezor/Ledger for manual QA — see [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md) |
 
 ## Test Coverage
 
