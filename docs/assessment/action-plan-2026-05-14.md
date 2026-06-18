@@ -1,6 +1,6 @@
 # Alpen Multisig — Consolidated Action Plan (2026-05-14)
 
-**Inputs:** `docs/assessment/2026-05-13-adversarial/` (17 axes + meta-review) and `docs/assessment/2026-05-14-adversarial/` (17 axes, fresh re-read after project update).
+**Inputs:** Historical synthesis from May 2025 adversarial assessments (2026-05-14 round retained until removed). **Current resolution:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), [wave2-exit-gap-review.md](wave2-exit-gap-review.md), [action-plan-progress.md](action-plan-progress.md).
 **Method:** Cross-audit synthesis. Each item carries a stable **P-###** ID inherited from the 2026-05-13 meta-review, with deltas from 2026-05-14 marked **[Δ 05-14]**.
 **Status:** Read-only synthesis. No runtime probes were executed; severities are code-read.
 
@@ -327,4 +327,4 @@ These four PRs alone close 4 of 19 BLOCKERs in roughly 5 engineering days and un
 
 ---
 
-*End of consolidated action plan. Cross-references: `docs/assessment/2026-05-13-adversarial/00-summary-adversarial.md`, `docs/assessment/2026-05-13-adversarial/99-meta-review.md`, `docs/assessment/2026-05-14-adversarial/00-summary-adversarial.md`.*
+*End of consolidated action plan. Status tracking: [action-plan-progress.md](action-plan-progress.md). Coordination boundary: [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).*

@@ -44,8 +44,7 @@ Historical baseline that motivated this plan — what existed at the outset (now
 - No code signing on any platform; no reproducibility verification.
 - A manual Linux PGP MVP was sketched before D3; see [`release-signing-mvp.md`](./release-signing-mvp.md) (internal pointer).
 
-Two adversarial assessment rounds (`assessment/2026-05-13-*`, `assessment/2026-05-14-*`) flagged
-the missing release/signing pipeline as a **BLOCKER** before any external release.
+Historical adversarial assessments (May 2025) flagged the missing release/signing pipeline as a **BLOCKER** before any external release. That pipeline is now implemented (see Closure summary).
 
 ## Incremental deliverables
 
