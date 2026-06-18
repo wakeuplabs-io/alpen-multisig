@@ -25,6 +25,11 @@ The signer MUST be presented with three speed presets plus a custom option:
 
 The **Medium** preset MUST be selected by default.
 
+> **Wallet Send uses a different default:** Admin Wallet Send (PRD §4.3.5.3) overrides the
+> initial preset to **Fast** (next-block estimate). Governance broadcast and fee-bump on
+> governance rows keep **Medium** as the default. See
+> [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) decision D4.
+
 ### 3.1 Fee Estimate Source
 
 Fee estimates MUST come from the connected Bitcoin node via `estimatesmartfee` using the following confirmation targets:
