@@ -71,6 +71,8 @@ The discovery plan was organised around five focused POCs. Each one reduced a sp
 
 Several POC findings (`03`, `04`, `05-poc3`) carry **post-discovery notes** pointing to the decisions that refined or replaced their original conclusions. Follow those pointers rather than trusting the body of the doc in isolation.
 
+**Explicit status banners:** `01-conceptual-overview` (reference/historical), `03-poc1-findings`, `04-poc2-findings`, `05-poc3-findings`, `09-functional-analysis` (superseded), `14-poc4-plan` (executed), `05-snapshot-reference` (reference). Others are **Complete** for Phase 1 unless a post-discovery note says otherwise.
+
 ---
 
 ## What Phase 1 produced
