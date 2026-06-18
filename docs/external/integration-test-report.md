@@ -79,12 +79,13 @@ Tests the coordination flow between the desktop application and orchestrator bac
 
 ## Test Results
 
-> **Note:** Test counts below are snapshots from the most recent CI run. For current test results, run `cargo test --workspace` locally or check the CI pipeline status on GitHub.
+> **Note:** Counts below are **unit-test pass snapshots**, not PRD feature completeness.
+> To reproduce: `cargo test --workspace` from a clean checkout on the release tag (or current `develop`).
 
 ### Unit Tests
 
-| Component | Tests | Passed | Failed | Coverage |
-|-----------|-------|--------|--------|----------|
+| Component | Tests | Passed | Failed | Pass rate |
+|-----------|-------|--------|--------|-----------|
 | Backend domain | 24 | 24 | 0 | 100% |
 | Backend handlers | 18 | 18 | 0 | 100% |
 | Desktop signing | 13 | 13 | 0 | 100% |
