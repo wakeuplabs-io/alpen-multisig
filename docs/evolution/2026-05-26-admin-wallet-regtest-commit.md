@@ -121,7 +121,7 @@ Minor note: Cargo.lock required updating due to new BDK workspace dependencies. 
 
 This feature ran DELIVER wave only (no DISCUSS, DESIGN, or DISTILL waves). No lasting architecture, UX, or scenario artifacts were produced. No migration is required.
 
-The workspace `docs/feature/admin-wallet-regtest-commit/` contains only session artifacts:
+The workspace `docs/archive/features/admin-wallet-regtest-commit/` contains only session artifacts:
 - `deliver/execution-log.json`
 - `deliver/roadmap.json`
 - `deliver/.develop-progress.json`

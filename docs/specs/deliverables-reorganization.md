@@ -76,7 +76,7 @@ All documents in:
 - `docs/3-stories/` (3 files)
 - `docs/architecture/` (7 files including ADRs)
 - `docs/specs/` (**56** files)
-- `docs/feature/` (13 directories)
+- `docs/archive/features/` (13 directories)
 - `docs/analysis/` (1 file)
 - `docs/assessment/` (**10** files)
 - `docs/evolution/` (13 files)

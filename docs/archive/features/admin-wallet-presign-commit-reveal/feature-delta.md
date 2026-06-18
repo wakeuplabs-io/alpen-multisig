@@ -172,6 +172,6 @@ R1.0.1 pre-sign commit+reveal shipped across 8 TDD steps on the `docs/admin-wall
 
 ## Wave: DELIVER / [REF] Pre-requisites
 
-- DESIGN wave: `docs/feature/admin-wallet-presign-commit-reveal/feature-delta.md` (DDD D1–D10, component decomposition)
+- DESIGN wave: `docs/archive/features/admin-wallet-presign-commit-reveal/feature-delta.md` (DDD D1–D10, component decomposition)
 - R1.0 ephemeral reveal key: `docs/specs/admin-wallet-ephemeral-reveal-key.md`
 - Spec R1.0.1: `docs/specs/admin-wallet-presign-commit-reveal.md`

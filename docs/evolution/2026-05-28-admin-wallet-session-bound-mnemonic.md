@@ -123,10 +123,10 @@ extension point, not an oversight.
 - `docs/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md` (this file)
 
 ### Machine artifacts (DES)
-- `docs/feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json`
-- `docs/feature/admin-wallet-session-bound-mnemonic/deliver/execution-log.json`
-- `docs/feature/admin-wallet-session-bound-mnemonic/deliver/.develop-progress.json`
-- `docs/feature/admin-wallet-session-bound-mnemonic/deliver/mutation-report.md`
+- `docs/archive/features/admin-wallet-session-bound-mnemonic/deliver/roadmap.json`
+- `docs/archive/features/admin-wallet-session-bound-mnemonic/deliver/execution-log.json`
+- `docs/archive/features/admin-wallet-session-bound-mnemonic/deliver/.develop-progress.json`
+- `docs/archive/features/admin-wallet-session-bound-mnemonic/deliver/mutation-report.md`
 
 ---
 
