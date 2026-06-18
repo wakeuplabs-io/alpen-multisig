@@ -362,3 +362,12 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - Payout Administrator full product line (partial `block_payout` coverage).
 - Shared Send UX unifying wallet Send and governance broadcast (Phase 9).
 - US-H5 manual-fallback export/reconcile polish when orchestrator is down.
+
+## Capability status (where to look)
+
+| Area | Document |
+|------|----------|
+| Admin Wallet / PRD §4 | [`admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
+| Integration test pass rates by authority | [`external/integration-test-report.md`](../external/integration-test-report.md) |
+| Upstream Alpen crate gaps | [`2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) |
+| Deferred user stories & NFRs | [`assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) |
