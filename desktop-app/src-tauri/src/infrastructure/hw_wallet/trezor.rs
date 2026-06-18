@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
 use bitcoin::address::KnownHrp;
-use bitcoin::bip32::{DerivationPath, Xpub};
+use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use bitcoin::Network;
 use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
-use super::HwWalletInfo;
+use super::{AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
@@ -175,21 +175,43 @@ pub fn connect(derivation_path: Option<String>, passphrase: &str) -> Result<HwWa
     })
 }
 
-pub fn verify_address_on_device(derivation_path: String, passphrase: &str) -> Result<(), String> {
+/// Trezor `InputScriptType` for an address script type — taproot (BIP-86) vs
+/// native witness pubkey hash (BIP-84). Pure mapping; no device contact.
+fn input_script_type(script: AddressScriptType) -> InputScriptType {
+    match script {
+        AddressScriptType::Taproot => InputScriptType::SPENDTAPROOT,
+        AddressScriptType::WitnessPubkeyHash => InputScriptType::SPENDWITNESS,
+    }
+}
+
+/// Confirms the address at `derivation_path` on the Trezor screen, using the
+/// script type (P2TR receive / P2WPKH Admin ID) and network the session runs on.
+///
+/// Uses `GetAddress` with `show_display = true` so the device renders the actual
+/// address for the signer to compare, instead of just the public key.
+pub fn verify_address_on_device(
+    derivation_path: String,
+    script: AddressScriptType,
+    network: Network,
+) -> Result<(), String> {
     let path = parse_path(&derivation_path)?;
     let mut trezor = open_trezor()?;
+    let coin = utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?;
 
-    resolve(
-        get_xpub(
-            &mut trezor,
-            &path,
-            InputScriptType::SPENDWITNESS,
-            Network::Bitcoin,
-            true,
+    let mut req = protos::GetAddress::new();
+    req.address_n = utils::convert_path(&path);
+    req.set_coin_name(coin);
+    req.set_show_display(true);
+    req.set_script_type(input_script_type(script));
+    let resp = trezor
+        .call(
+            req,
+            Box::new(|_, m: protos::Address| Ok(m.address().to_string())),
         )
-        .map_err(|e| format!("Trezor verify_address at {derivation_path} failed: {e}"))?,
-        passphrase,
-    )?;
+        .map_err(|e: trezor_client::Error| {
+            format!("Trezor verify_address at {derivation_path} failed: {e}")
+        })?;
+    resolve(resp, "")?;
 
     Ok(())
 }
@@ -287,15 +309,249 @@ pub fn sign_admin_sps65_binding(
     })
 }
 
-/// Taproot key-path PSBT signing for Admin Wallet commit funding (not yet implemented).
-pub fn sign_admin_wallet_psbt(
-    _psbt: &mut bitcoin::psbt::Psbt,
-    _account_xpub: &str,
-    _master_fingerprint: u32,
-    _network: Network,
+/// Reads the device root fingerprint from the currently open session (xpub at `m/`),
+/// so we can verify the connected Trezor matches the session before signing.
+fn read_root_fingerprint(trezor: &mut Trezor) -> Result<u32, String> {
+    let master = DerivationPath::from_str("m/").map_err(|e| format!("invalid path: {e}"))?;
+    let mut req = protos::GetPublicKey::new();
+    req.address_n = utils::convert_path(&master);
+    req.set_show_display(false);
+    req.set_coin_name(utils::coin_name(Network::Bitcoin).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_script_type(InputScriptType::SPENDTAPROOT);
+    req.set_ignore_xpub_magic(true);
+    let resp = trezor
+        .call(
+            req,
+            Box::new(|_, m: protos::PublicKey| Ok(m.root_fingerprint())),
+        )
+        .map_err(|e: trezor_client::Error| e.to_string())?;
+    resolve(resp, "")
+}
+
+/// Full BIP-32 derivation path (as Trezor `address_n`) for the wallet-owned key in
+/// a taproot PSBT input/output, matched by the device fingerprint. `None` for
+/// outputs that are not wallet-owned (e.g. the send recipient).
+fn wallet_address_n(
+    origins: &std::collections::BTreeMap<
+        bitcoin::secp256k1::XOnlyPublicKey,
+        (
+            Vec<bitcoin::taproot::TapLeafHash>,
+            (Fingerprint, DerivationPath),
+        ),
+    >,
+    expected_fp: Fingerprint,
+) -> Option<Vec<u32>> {
+    origins
+        .values()
+        .find(|(_, (fp, _))| *fp == expected_fp)
+        .map(|(_, (_, path))| utils::convert_path(path))
+}
+
+/// Builds the `TxAck` for a TXINPUT request, marking the wallet input as a taproot
+/// key-path spend (`SPENDTAPROOT`) with its full derivation path and witness amount.
+fn ack_input(
+    req: &protos::TxRequest,
+    psbt: &bitcoin::psbt::Psbt,
+    expected_fp: Fingerprint,
+) -> Result<protos::TxAck, String> {
+    if req.details.has_tx_hash() {
+        return Err("Trezor requested a previous tx; a taproot spend needs none".to_string());
+    }
+    let idx = req.details.request_index() as usize;
+    let txin = psbt
+        .unsigned_tx
+        .input
+        .get(idx)
+        .ok_or_else(|| format!("TxRequest input index {idx} out of range"))?;
+    let psbt_input = psbt
+        .inputs
+        .get(idx)
+        .ok_or_else(|| format!("PSBT input {idx} missing"))?;
+    let txout = psbt_input
+        .witness_utxo
+        .as_ref()
+        .ok_or_else(|| format!("PSBT input {idx} has no witness_utxo"))?;
+    let address_n = wallet_address_n(&psbt_input.tap_key_origins, expected_fp)
+        .ok_or_else(|| format!("PSBT input {idx} has no taproot key origin for the device"))?;
+
+    let mut data_input = protos::tx_ack::transaction_type::TxInputType::new();
+    data_input.set_prev_hash(utils::to_rev_bytes(txin.previous_output.txid.as_raw_hash()).to_vec());
+    data_input.set_prev_index(txin.previous_output.vout);
+    data_input.set_sequence(txin.sequence.to_consensus_u32());
+    data_input.set_script_type(InputScriptType::SPENDTAPROOT);
+    data_input.set_amount(txout.value.to_sat());
+    data_input.address_n = address_n;
+
+    let mut msg = protos::TxAck::new();
+    msg.tx.mut_or_insert_default().inputs.push(data_input);
+    Ok(msg)
+}
+
+/// Builds the `TxAck` for a TXOUTPUT request: wallet-owned outputs (change) are
+/// `PAYTOTAPROOT` with their derivation path; all others pay to the literal address.
+fn ack_output(
+    req: &protos::TxRequest,
+    psbt: &bitcoin::psbt::Psbt,
+    network: Network,
+    expected_fp: Fingerprint,
+) -> Result<protos::TxAck, String> {
+    if req.details.has_tx_hash() {
+        return Err(
+            "Trezor requested a previous tx output; a taproot spend needs none".to_string(),
+        );
+    }
+    let idx = req.details.request_index() as usize;
+    let txout = psbt
+        .unsigned_tx
+        .output
+        .get(idx)
+        .ok_or_else(|| format!("TxRequest output index {idx} out of range"))?;
+    let psbt_output = psbt
+        .outputs
+        .get(idx)
+        .ok_or_else(|| format!("PSBT output {idx} missing"))?;
+
+    use protos::OutputScriptType;
+    let mut data_output = protos::tx_ack::transaction_type::TxOutputType::new();
+    data_output.set_amount(txout.value.to_sat());
+    match wallet_address_n(&psbt_output.tap_key_origins, expected_fp) {
+        Some(address_n) => {
+            data_output.address_n = address_n;
+            data_output.set_script_type(OutputScriptType::PAYTOTAPROOT);
+        }
+        None => {
+            let address = utils::address_from_script(&txout.script_pubkey, network)
+                .ok_or_else(|| format!("output {idx} script is not a standard address"))?;
+            data_output.set_address(address.to_string());
+            data_output.set_script_type(OutputScriptType::PAYTOADDRESS);
+        }
+    }
+
+    let mut msg = protos::TxAck::new();
+    msg.tx.mut_or_insert_default().outputs.push(data_output);
+    Ok(msg)
+}
+
+/// Builds the `TxAck` for a TXMETA request of the tx being signed.
+fn ack_meta(psbt: &bitcoin::psbt::Psbt) -> protos::TxAck {
+    let tx = &psbt.unsigned_tx;
+    let mut msg = protos::TxAck::new();
+    let meta = msg.tx.mut_or_insert_default();
+    meta.set_version(tx.version.0 as u32);
+    meta.set_lock_time(tx.lock_time.to_consensus_u32());
+    meta.set_inputs_cnt(tx.input.len() as u32);
+    meta.set_outputs_cnt(tx.output.len() as u32);
+    msg
+}
+
+/// Applies the device-returned 64-byte Schnorr signatures onto the matching PSBT
+/// inputs as taproot key-path signatures (SIGHASH_DEFAULT).
+fn apply_taproot_signatures(
+    psbt: &mut bitcoin::psbt::Psbt,
+    signatures: &[(usize, Vec<u8>)],
 ) -> Result<(), String> {
-    Err(
-        "Trezor Admin Wallet PSBT signing is not implemented yet; use Ledger or mnemonic (Palabras) on regtest"
-            .to_string(),
-    )
+    for (idx, sig) in signatures {
+        let input = psbt
+            .inputs
+            .get_mut(*idx)
+            .ok_or_else(|| format!("device returned a signature for unknown input {idx}"))?;
+        let schnorr = bitcoin::secp256k1::schnorr::Signature::from_slice(sig)
+            .map_err(|e| format!("invalid taproot signature for input {idx}: {e}"))?;
+        input.tap_key_sig = Some(bitcoin::taproot::Signature {
+            signature: schnorr,
+            sighash_type: bitcoin::sighash::TapSighashType::Default,
+        });
+    }
+    Ok(())
+}
+
+/// Drives the Trezor `SignTx` flow for a taproot key-path spend, collecting the
+/// signatures and applying them to `psbt`. trezor-client 0.1.5's built-in flow
+/// classifies P2TR inputs as `EXTERNAL` (won't sign), so we ack each request
+/// ourselves with the correct taproot script types.
+fn sign_taproot_psbt(
+    trezor: &mut Trezor,
+    psbt: &mut bitcoin::psbt::Psbt,
+    expected_fp: Fingerprint,
+    network: Network,
+) -> Result<(), String> {
+    use protos::tx_request::RequestType;
+
+    let mut signatures: Vec<(usize, Vec<u8>)> = Vec::new();
+    let mut progress = resolve(
+        trezor
+            .sign_tx(psbt, network)
+            .map_err(|e| format!("Trezor sign_tx failed: {e}"))?,
+        "",
+    )?;
+
+    loop {
+        if let Some((index, sig)) = progress.get_signature() {
+            signatures.push((index, sig.to_vec()));
+        }
+        if progress.finished() {
+            break;
+        }
+        let ack = match progress.tx_request().request_type() {
+            RequestType::TXINPUT => ack_input(progress.tx_request(), psbt, expected_fp)?,
+            RequestType::TXOUTPUT => ack_output(progress.tx_request(), psbt, network, expected_fp)?,
+            RequestType::TXMETA => ack_meta(psbt),
+            other => {
+                return Err(format!(
+                    "unsupported Trezor TxRequest type {other:?} for a taproot spend"
+                ))
+            }
+        };
+        progress = resolve(
+            progress
+                .ack_msg(ack)
+                .map_err(|e| format!("Trezor TxAck failed: {e}"))?,
+            "",
+        )?;
+    }
+
+    apply_taproot_signatures(psbt, &signatures)
+}
+
+/// Taproot key-path PSBT signing for the Admin Wallet (BIP-86, P2TR), mirroring the
+/// Ledger adapter: verify the device fingerprint matches the session, sign every
+/// wallet-owned input on device, and apply the signatures back onto the PSBT.
+///
+/// Must run on a **blocking thread** (`tokio::task::spawn_blocking`). `account_xpub`
+/// is unused — Trezor derives keys from the per-input `address_n` it receives — but
+/// kept in the signature for parity with the Ledger entry point.
+pub fn sign_admin_wallet_psbt(
+    psbt: &mut bitcoin::psbt::Psbt,
+    _account_xpub: &str,
+    master_fingerprint: u32,
+    network: Network,
+) -> Result<(), String> {
+    let mut trezor = open_trezor()?;
+
+    let actual = read_root_fingerprint(&mut trezor)?;
+    if actual != master_fingerprint {
+        return Err(format!(
+            "wrong Trezor device: expected fingerprint 0x{master_fingerprint:08X}, got 0x{actual:08X}"
+        ));
+    }
+
+    let expected_fp = Fingerprint::from(master_fingerprint.to_le_bytes());
+    sign_taproot_psbt(&mut trezor, psbt, expected_fp, network)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_script_type_maps_taproot_and_witness() {
+        assert_eq!(
+            input_script_type(AddressScriptType::Taproot),
+            InputScriptType::SPENDTAPROOT
+        );
+        assert_eq!(
+            input_script_type(AddressScriptType::WitnessPubkeyHash),
+            InputScriptType::SPENDWITNESS
+        );
+    }
 }

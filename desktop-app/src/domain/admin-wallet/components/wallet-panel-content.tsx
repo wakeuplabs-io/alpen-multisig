@@ -19,6 +19,12 @@ export type WalletPanelContentProps = {
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
+	/** External index of the current receive address (verify-on-device path). */
+	receiveIndex: number | null
+	/** Connected HW device (verify-on-device affordances), or null for software / no signer. */
+	hwDeviceType: 'trezor' | 'ledger' | null
+	/** Active session network token (verify-on-device coin path). */
+	network: string
 	isAddressesLoading: boolean
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
@@ -45,6 +51,9 @@ export function WalletPanelContent({
 	unconfirmedBalanceSats,
 	isBalanceLoading,
 	receiveAddress,
+	receiveIndex,
+	hwDeviceType,
+	network,
 	isAddressesLoading,
 	addressRows,
 	addressRowsLoading,
@@ -86,7 +95,12 @@ export function WalletPanelContent({
 					</button>
 					<h3 className="m-0 text-body-sm font-semibold text-[#111827]">Send BTC</h3>
 				</div>
-				<SendForm isWatchOnly={isWatchOnly} onBack={onCloseSend} onAfterSend={onRefreshSync} />
+				<SendForm
+					isWatchOnly={isWatchOnly}
+					deviceType={hwDeviceType}
+					onBack={onCloseSend}
+					onAfterSend={onRefreshSync}
+				/>
 			</div>
 		)
 	}
@@ -94,7 +108,7 @@ export function WalletPanelContent({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
 			<div className="mb-4">
-				<AdminIdRow adminId={adminId} />
+				<AdminIdRow adminId={adminId} verify={hwDeviceType ? { deviceType: hwDeviceType, network } : undefined} />
 			</div>
 
 			<WalletBalance
@@ -122,7 +136,15 @@ export function WalletPanelContent({
 			</div>
 
 			<div className="mt-5">
-				<ReceiveAddressRow address={receiveAddress ?? ''} isLoading={isAddressesLoading} />
+				<ReceiveAddressRow
+					address={receiveAddress ?? ''}
+					isLoading={isAddressesLoading}
+					verify={
+						hwDeviceType && receiveIndex !== null
+							? { deviceType: hwDeviceType, network, index: receiveIndex }
+							: undefined
+					}
+				/>
 			</div>
 
 			<div className="mt-5 border-t border-[#f3f4f6] pt-4">
