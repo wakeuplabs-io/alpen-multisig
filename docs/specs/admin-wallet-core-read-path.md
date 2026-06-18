@@ -315,7 +315,7 @@ Phase 2 introduces no manual fallback path — it adds read-only observability. 
 
 **R1.5 addition:** after the block loop, `do_sync` calls `Emitter::mempool()` and `wallet.apply_unconfirmed_txs(...)`. IPC contracts and DTO shapes are unchanged; `admin_wallet_get_balance` and `admin_wallet_sync` behavior now reflect mempool credits/spends before confirmation.
 
-See [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) and [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
+See [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) and [`2026-06-03-admin-wallet-balance-ux.md`](../archive/evolution/2026-06-03-admin-wallet-balance-ux.md).
 
 ## Amendment (R1.6 — addresses UX)
 
@@ -325,7 +325,7 @@ desktop app splits external UTXOs per derivation index into `confirmedSats` and 
 wallet panel (PRD §4.3.2). Mempool visibility for unconfirmed UTXOs on regtest depends on the R1.5 `do_sync` amendment
 above.
 
-See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) and [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+See [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) and [`2026-06-03-admin-wallet-addresses-ux.md`](../archive/evolution/2026-06-03-admin-wallet-addresses-ux.md).
 
 ## Planned change (Release 2 — Electrum sync)
 

@@ -49,7 +49,7 @@ Phase 3 delivered a React/TypeScript slide-over WalletPanel integrated into the 
 ### Docs
 - `docs/specs/admin-wallet-ui-shell.md`
 - `docs/archive/features/admin-wallet-ui-shell/feature-delta.md` (this file)
-- `docs/evolution/2026-05-28-admin-wallet-ui-shell.md`
+- `docs/archive/evolution/2026-05-28-admin-wallet-ui-shell.md`
 
 ---
 

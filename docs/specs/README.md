@@ -10,8 +10,8 @@ When documents disagree about **what the system should do**, use this order:
 |-------|----------|---------|
 | 1. Functional contract | `specs/<feature>.md` | **SSOT** for feature behavior and acceptance |
 | 2. Implementation notes | `specs/<feature>-implementation.md`, phase plans | How the slice was built; may lag the functional spec |
-| 3. DELIVER delta | [`archive/features/<name>/feature-delta.md`](../archive/features/) | nWave execution delta; not a substitute for layer 1 |
-| 4. Archived summary | [`evolution/`](../evolution/) | Post-merge narrative; historical |
+| 3. Delivery delta | [`archive/features/<name>/feature-delta.md`](../archive/features/) | Execution record; not a substitute for layer 1 |
+| 4. Archived summary | [`archive/evolution/`](../archive/evolution/) | Post-merge narrative; historical |
 
 See [Conflict resolution](../README.md#conflict-resolution) rule #3: functional spec wins over implementation spec.
 
@@ -30,5 +30,6 @@ Files matching `poc*.md` are bannered **historical** — walking-skeleton eviden
 
 ## Related indexes
 
-- DELIVER artifacts: [`archive/features/README.md`](../archive/features/README.md)
-- Archived features: [`evolution/README.md`](../evolution/README.md)
+- Delivery archive: [`archive/features/README.md`](../archive/features/README.md)
+- Post-merge summaries: [`archive/evolution/README.md`](../archive/evolution/README.md)
+- Archive overview: [`archive/README.md`](../archive/README.md)

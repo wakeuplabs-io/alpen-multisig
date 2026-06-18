@@ -3,7 +3,7 @@
 **Program**: Admin Wallet — Release 1 (R1.2)
 **Branch**: `feature/admin-wallet-clean-wallet-ui`
 **Spec**: [docs/specs/admin-wallet-clean-wallet-ui.md](../../specs/admin-wallet-clean-wallet-ui.md)
-**Evolution**: [docs/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md](../../evolution/2026-06-02-admin-wallet-clean-wallet-ui.md)
+**Evolution**: [docs/archive/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md](../../evolution/2026-06-02-admin-wallet-clean-wallet-ui.md)
 
 ---
 

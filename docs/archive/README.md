@@ -8,7 +8,7 @@
 |------|------|
 | Current behavior | [`specs/<feature>.md`](../specs/) |
 | PRD compliance (Admin Wallet) | [`specs/admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
-| Delivery execution record | This folder |
+| Delivery / post-merge history | This folder |
 
 If an archived doc contradicts a current spec, the spec wins — see [`specs/README.md`](../specs/README.md).
 
@@ -17,5 +17,5 @@ If an archived doc contradicts a current spec, the spec wins — see [`specs/REA
 | Path | Purpose |
 |------|---------|
 | [`features/`](./features/) | Delivery execution records (`roadmap.json`, `execution-log.json`, `feature-delta.md`) |
-| [`evolution/`](./evolution/) | Post-merge summaries (see PR5) |
-| [`poc-specs/`](./poc-specs/) | Walking-skeleton POC specs (see PR6) |
+| [`evolution/`](./evolution/) | Post-merge summaries |
+| [`poc-specs/`](./poc-specs/) | Walking-skeleton POC specs (added in consolidation PR6) |

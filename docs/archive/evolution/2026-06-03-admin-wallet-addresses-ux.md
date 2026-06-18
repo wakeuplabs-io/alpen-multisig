@@ -85,8 +85,8 @@ activity, with unconfirmed effects visible. Phase 2 already exposed `UtxoDto.con
 - `docs/specs/admin-wallet-balance-ux.md` (links)
 - `docs/specs/admin-wallet-core-read-path.md` (R1.6 amendment)
 - `docs/specs/admin-wallet-ui-shell.md` (§4.3.2 note)
-- `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md` (this file)
-- `docs/evolution/2026-06-03-admin-wallet-balance-ux.md` (post-R1.6 links)
+- `docs/archive/evolution/2026-06-03-admin-wallet-addresses-ux.md` (this file)
+- `docs/archive/evolution/2026-06-03-admin-wallet-balance-ux.md` (post-R1.6 links)
 
 ## Known Limitations
 

@@ -77,7 +77,7 @@ Single increment delivered via the SDD workflow (spec → branch → red/green T
 
 - `docs/specs/admin-wallet-implementation-plan.md`
 - `docs/architecture/overview.md`
-- `docs/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`
+- `docs/archive/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`
 
 ## Verification
 

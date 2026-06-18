@@ -4,7 +4,7 @@
 **PR:** #198
 **Branch:** feat/admin-wallet-presign-commit-reveal
 **Spec:** docs/specs/admin-wallet-presign-commit-reveal.md
-**Builds on:** R1.0 (docs/evolution/2026-05-30-admin-wallet-ephemeral-reveal-key.md)
+**Builds on:** R1.0 (docs/archive/evolution/2026-05-30-admin-wallet-ephemeral-reveal-key.md)
 
 ## Summary
 
