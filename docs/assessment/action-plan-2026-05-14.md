@@ -1,5 +1,7 @@
 # Alpen Multisig — Consolidated Action Plan (2026-05-14)
 
+> **Histórico.** Snapshot from 2026-05-14 synthesis. For current backlog and P-ID closure, use [`deferred-backlog.md`](./deferred-backlog.md) and [`action-plan-progress.md`](./action-plan-progress.md) — see [`assessment/README.md`](./README.md).
+
 **Inputs:** Historical synthesis from May 2025 adversarial assessments (folders removed when stale). **Current resolution:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), [wave2-exit-gap-review.md](wave2-exit-gap-review.md), [action-plan-progress.md](action-plan-progress.md).
 **Method:** Cross-audit synthesis. Each item carries a stable **P-###** ID inherited from the 2026-05-13 meta-review, with deltas from 2026-05-14 marked **[Δ 05-14]**.
 **Status:** Read-only synthesis. No runtime probes were executed; severities are code-read.
@@ -150,7 +152,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-048 | No encryption at rest; broadcast errors echo RPC URLs / credentials. `pgcrypto` for `signer_pubkey`/`signature_hex`; sanitize broadcast errors. | M | 09 |
 | P-049 | No desktop local persistence; drafts vanish on crash. | S | 09 |
 | P-050 | Diataxis collapse in `README.md` and `AGENTS.md`. Rewrite README as 5-line tutorial; AGENTS.md as reference. | S | 15 |
-| P-051 | Missing docs: backend ops runbook, signer-safety model, threat model, incident playbook, capability cross-links, build-and-release reproducibility guide, testing-strategy doc. **ADR-006 landed.** | L | 15 |
+| P-051 | Missing docs: backend ops runbook, signer-safety model, threat model, incident playbook, capability cross-links, build-and-release reproducibility guide, testing-strategy doc. **ADR-006 landed.** **Partial resolution (post-2026-05-14):** runbook, threat model, signer-safety exist — see [`operations/runbook.md`](../operations/runbook.md), [`security/threat-model.md`](../security/threat-model.md), [`specs/signer-safety-model.md`](../specs/signer-safety-model.md); remainder open in [`action-plan-progress.md`](./action-plan-progress.md). | L | 15 |
 | P-052 | `docs/3-stories/` has no DoR/DoD; US-H5 manual fallback unspecified; no cancellation flow; no signer-rotation story. Add 8-item DoR checklist; story-by-story audit. | M | 12, 13, 15 |
 | P-053 | Zero user discovery (5–8 signer interviews, digest-verification usability test, manual-fallback tabletop sim). | L | 12 |
 | P-054 | Rule/skill stack drifts (`.claude/rules/` vs `.cursor/rules/`; missing `description:` for auto-trigger; `rust-specialist` vs `rust-backend-standards` disagreement on `.unwrap()`). Verify Cursor IDE loading semantics first; consolidate. | S | 17 |
