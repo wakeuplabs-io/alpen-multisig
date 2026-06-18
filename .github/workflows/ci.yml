@@ -43,20 +43,39 @@ jobs:
 
       # Default ubuntu-latest images reserve a lot of disk for unused toolchains; reclaim so
       # `cargo build` + `rust-cache` post-step (`cargo metadata`) do not hit ENOSPC.
+      # Both removals run in parallel since they touch independent paths.
       - name: Free runner disk space
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /usr/local/lib/android &
+          wait
 
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2026-01-01
           components: rustfmt, clippy
 
+      # Caching the downloaded .deb archives turns the slowest CI step (mirror-bound apt
+      # downloads, historically 4-13 min) into a near-instant install on cache hit. apt still
+      # runs `update` and re-downloads any package whose version moved, so this degrades safely.
+      - name: Cache Tauri apt packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-tauri-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: apt-tauri-${{ runner.os }}-
+
       - name: Install Tauri system dependencies
         run: |
+          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libappindicator3-dev libudev-dev libusb-1.0-0-dev
+          mkdir -p ~/apt-cache/partial
+          # Point apt's archive cache at the restored dir: present .debs are reused, missing
+          # ones are downloaded into it and picked up by the post-job cache save.
+          sudo apt-get install -y -o Dir::Cache::archives="$HOME/apt-cache" \
+            libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libappindicator3-dev libudev-dev libusb-1.0-0-dev
+          # Hand ownership back to the runner user so actions/cache can read the dir on save.
+          sudo chown -R "$USER" ~/apt-cache
 
       # Ubuntu 24.04+ runners do not ship a `bitcoind` apt package; use a pinned release tarball
       # (aligns with `bitcoind-async-client` / corepc `29_0` features in this workspace).
