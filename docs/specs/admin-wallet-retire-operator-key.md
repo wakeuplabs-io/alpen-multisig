@@ -262,7 +262,7 @@ Forward-looking docs (must be cleaned):
   Admin Wallet-derived commit internal key.
 - `docs/specs/secret-custody-wave2.md`
 - `docs/specs/admin-wallet-regtest-commit-funding.md`
-- `docs/security/threat-model.md`
+- `docs/operations/threat-model.md`
 - `docs/operations/runbook.md`
 - `desktop-app/e2e-webdriver/README.md`
 

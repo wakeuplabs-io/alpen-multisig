@@ -1,6 +1,6 @@
 # Signer safety model (P-051)
 
-**SSOT (security — signer UX):** Pair with [`security/threat-model.md`](../security/threat-model.md) for assets, trust boundaries, and top risks. Threat model = what can go wrong; this doc = what the signer must verify. Read both; do not duplicate.
+**SSOT (security — signer UX):** Pair with [`operations/threat-model.md`](../operations/threat-model.md) for assets, trust boundaries, and top risks. Threat model = what can go wrong; this doc = what the signer must verify. Read both; do not duplicate.
 
 ## Principles
 

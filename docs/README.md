@@ -32,10 +32,10 @@ flowchart LR
 | Capability / coverage pointers | [`architecture/overview.md`](./architecture/overview.md#capability-status-where-to-look), [`3-stories/README.md`](./3-stories/README.md#capability-status-where-to-look) | Current |
 | Open backlog (user stories + NFRs) | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md) | Current |
 | Wave / P-ID closure tracking | [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | Current |
-| Ops (runbook, local stack) | [`operations/runbook.md`](./operations/runbook.md) | Current |
+| Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
+| Ops (runbook, local stack) | [`operations/runbook.md`](./operations/runbook.md), [`operations/README.md`](./operations/README.md) | Current |
 | Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
-| Security model | [`security/threat-model.md`](./security/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | `specs/poc*.md` (bannered historical) | Historical |
 | Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Historical |
@@ -53,7 +53,7 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 | Architecture decisions | [`architecture/adrs/`](./architecture/adrs/) | [`2-discovery/`](./2-discovery/), dated assessments | Discovery is Phase 1 evidence; accepted decisions are ADRs only |
 | Backlog & closure | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md), [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | [`action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md), `wave2-track-*`, [`wave2-human-decisions-pending.md`](./assessment/archive/wave2-human-decisions-pending.md) | See [`assessment/README.md`](./assessment/README.md) ([conflict rule #6](#conflict-resolution)) |
 | Operations | [`operations/runbook.md`](./operations/runbook.md) | [`action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md) P-051 severity row | Runbook and related ops docs exist; 2026-05-14 table is a historical snapshot |
-| Security | [`security/threat-model.md`](./security/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
+| Security | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
 
 Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`feature/README.md`](./feature/README.md), [`evolution/README.md`](./evolution/README.md).
 
@@ -81,8 +81,7 @@ When documents disagree, use this order:
 | `evolution/` | Archived feature summaries post-merge — see [`evolution/README.md`](./evolution/README.md) |
 | `assessment/` | Backlog, wave tracks, action-plan synthesis — see [`assessment/README.md`](./assessment/README.md) |
 | `external/` | Client deliverables (canonical for delivery) |
-| `operations/` | Runbook, delivery plan; short pointers to `external/` |
-| `security/` | Threat model |
+| `operations/` | Runbook, threat model, delivery plan; stubs point to `external/` — see [`operations/README.md`](./operations/README.md) |
 | `reviews/` | Dated codebase audits |
 | `analysis/` | Targeted implementation audits |
 

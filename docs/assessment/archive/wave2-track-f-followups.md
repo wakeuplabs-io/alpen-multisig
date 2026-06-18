@@ -5,7 +5,7 @@ PR [#141](https://github.com/wakeuplabs-io/alpen-multisig/pull/141) merged **P-0
 | Artifact | Path |
 |----------|------|
 | Ops runbook | [runbook.md](../../operations/runbook.md) |
-| Threat model | [threat-model.md](../../security/threat-model.md) |
+| Threat model | [threat-model.md](../../operations/threat-model.md) |
 | Signer safety model | [signer-safety-model.md](../../specs/signer-safety-model.md) |
 | Internal navigation | [`docs/README.md`](../README.md) — ops runbook and security model rows |
 
