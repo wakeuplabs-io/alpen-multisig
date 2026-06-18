@@ -26,10 +26,10 @@ Compliance matrix wins over phase checkmarks ([conflict rule #4](../README.md#co
 
 ## Historical POC specs
 
-Files matching `poc*.md` are bannered **historical** — walking-skeleton evidence from Phase 1. Do not use them for current architecture or behavior; see [`architecture/overview.md`](../architecture/overview.md).
+Walking-skeleton POC specs live in [`archive/poc-specs/`](../archive/poc-specs/). Do not use them for current architecture or behavior; see [`architecture/overview.md`](../architecture/overview.md).
 
 ## Related indexes
 
 - Delivery archive: [`archive/features/README.md`](../archive/features/README.md)
-- Post-merge summaries: [`archive/evolution/README.md`](../archive/evolution/README.md)
+- Post-merge summaries: [`archive/evolution/`](../archive/evolution/)
 - Archive overview: [`archive/README.md`](../archive/README.md)

@@ -19,3 +19,4 @@ If an archived doc contradicts a current spec, the spec wins — see [`specs/REA
 | [`features/`](./features/) | Delivery execution records (`roadmap.json`, `execution-log.json`, `feature-delta.md`) |
 | [`evolution/`](./evolution/) | Post-merge summaries |
 | [`poc-specs/`](./poc-specs/) | Walking-skeleton POC specs |
+| [`meta/`](./meta/) | Completed meta-specs (e.g. deliverables reorganization) |
