@@ -1,5 +1,5 @@
 # Spec: POC-4 E2E — Propose → Sign → Verify Flow
-> **Status: Historical (walking skeleton / POC).** Superseded for product behavior by [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md), [`architecture/overview.md`](../architecture/overview.md), and active `admin-wallet-*` specs. Kept for traceability.
+> **Status: Historical (walking skeleton / POC).** Superseded for product behavior by [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md), [`architecture/overview.md`](../../architecture/overview.md), and active `admin-wallet-*` specs. Kept for traceability.
 >
 
 ## Objective
@@ -92,7 +92,7 @@ Lives in `e2e-tests/tests/e2e_propose_sign.rs`. Depends on `desktop-app` lib.
 
 ## Related
 
-- [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md) — Alpen crate pins
-- [ADR-005](../architecture/adrs/005-layered-architecture.md) — Layered desktop architecture
-- [`2-discovery/README.md`](../2-discovery/README.md) — POC findings index
+- [ADR-001](../../architecture/adrs/001-alpen-crate-dependencies.md) — Alpen crate pins
+- [ADR-005](../../architecture/adrs/005-layered-architecture.md) — Layered desktop architecture
+- [`2-discovery/README.md`](../../2-discovery/README.md) — POC findings index
 

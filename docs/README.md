@@ -37,7 +37,7 @@ flowchart LR
 | Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
-| POC / walking-skeleton specs | `specs/poc*.md` (bannered historical) | Historical |
+| POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Historical |
 | Implementation audits | [`analysis/`](./analysis/) | Reference |
 
@@ -47,7 +47,7 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 
 | Domain | SSOT (read for current truth) | Do not use for current truth | Why |
 |--------|-------------------------------|------------------------------|-----|
-| System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | `specs/poc*.md` | POC walking-skeleton specs (historical) |
+| System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | [`archive/poc-specs/`](./archive/poc-specs/) | POC specs are pre-production snapshots |
 | Admin Wallet PRD §4 | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | [`specs/admin-wallet-implementation-plan.md`](./specs/admin-wallet-implementation-plan.md) | Plan tracks engineering slices; PASS/FAIL lives only in the compliance matrix ([conflict rule #4](#conflict-resolution)) |
 | Feature contract | `specs/<feature>.md` | `*-implementation.md`, [`archive/features/`](./archive/features/) `feature-delta.md`, [`archive/evolution/`](./archive/evolution/) | See [`specs/README.md`](./specs/README.md) layer order ([conflict rule #3](#conflict-resolution)) |
 | Architecture decisions | [`architecture/adrs/`](./architecture/adrs/) | [`2-discovery/`](./2-discovery/), dated assessments | Discovery is Phase 1 evidence; accepted decisions are ADRs only |

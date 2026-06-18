@@ -6,7 +6,7 @@ This document defines the baseline architecture for the Alpen Multisig applicati
 
 | Topic | SSOT | Do not use for current architecture |
 |-------|------|-------------------------------------|
-| System design | This document + [`adrs/`](./adrs/) | `specs/poc*.md` (historical POC) |
+| System design | This document + [`adrs/`](./adrs/) | [`archive/poc-specs/`](../archive/poc-specs/) (historical POC) |
 | Accepted decisions | [`adrs/`](./adrs/) | [`2-discovery/`](../2-discovery/) notes, dated assessments |
 
 Full internal map and conflict rules: [`docs/README.md`](../README.md).
