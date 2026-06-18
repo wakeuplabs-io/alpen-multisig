@@ -1,6 +1,6 @@
 # Crate inventory — internal index
 
-> **Reference.** Phase 1 crate snapshot for the client deliverable. **SSOT for workspace pins:** root `Cargo.toml`. **SSOT for PRD coverage gaps:** [`2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md). Client-facing summary: [`external/research-assessment.md`](../external/research-assessment.md) §1.
+> **Reference.** Phase 1 crate snapshot for the client deliverable. **SSOT for workspace pins:** root `Cargo.toml`. **SSOT for PRD coverage gaps:** [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md). Client-facing summary: [`external/research-assessment.md`](../external/research-assessment.md) §1.
 
 ### 1.1 Crate Inventory
 

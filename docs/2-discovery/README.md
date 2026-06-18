@@ -3,7 +3,7 @@
 This folder holds the research, POC findings, and technical investigations produced during **Phase 1 (Protocol Research & Architecture)** of the [WakeUp Labs proposal](../1-proposal/01-alpen-multisig-proposal.md). The consolidated output of this phase lives in two places:
 
 - **Deliverable (client)** — [`docs/external/research-assessment.md`](../external/research-assessment.md).
-- **Internal index** — [`docs/deliverable/research.md`](../deliverable/research.md) and [`docs/deliverable/crate-inventory.md`](../deliverable/crate-inventory.md).
+- **Internal index** — [`crate-inventory.md`](./crate-inventory.md) and [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md). Client research: [`docs/external/research-assessment.md`](../external/research-assessment.md).
 - **Architecture** — [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/). **Current architecture decisions** live in ADRs only — not in discovery notes below.
 
 Everything under this folder is **raw source material**: POC plans, POC findings, functional analyses, and targeted investigations. It exists so reviewers can trace any claim in the deliverable back to its evidence.
@@ -77,7 +77,7 @@ Several POC findings (`03`, `04`, `05-poc3`) carry **post-discovery notes** poin
 
 ## What Phase 1 produced
 
-- **Crate integration assessment** — coverage gaps classified by authority and update type, re-validated after the 2026-04-17 `alpenlabs/asm` migration. See [`docs/external/research-assessment.md`](../external/research-assessment.md) §1, [`crate-inventory.md`](../deliverable/crate-inventory.md), and [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md).
+- **Crate integration assessment** — coverage gaps classified by authority and update type, re-validated after the 2026-04-17 `alpenlabs/asm` migration. See [`docs/external/research-assessment.md`](../external/research-assessment.md) §1, [`crate-inventory.md`](./crate-inventory.md), and [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md).
 - **Hardware wallet compatibility matrix** — SPS-65 sighash vs. BIP-137 gap identified; Rust-native integration path chosen over WebView JS SDKs. See [`docs/external/research-assessment.md`](../external/research-assessment.md) §2, [`docs/external/hardware-wallet-matrix.md`](../external/hardware-wallet-matrix.md), and the HW wallet arc above.
 - **Architecture document** — layered architecture (ADR-005), Alpen crate dependency strategy (ADR-001), application-layer strategy (ADR-002, ADR-003), CI pipeline (ADR-004). See [`docs/architecture/overview.md`](../architecture/overview.md).
 - **Upstream readiness assessment** — executive-level maturity findings informing scope commitments. See [`12-upstream-readiness-findings.md`](./12-upstream-readiness-findings.md).
