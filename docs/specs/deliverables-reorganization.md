@@ -5,6 +5,15 @@
 > `operations/reproducible-builds.md`, `release-signing-mvp.md`, and `deliverable/research.md` are
 > internal pointers to the matching `external/` documents.
 
+### Completed (2026-06)
+
+| Item | Status |
+|------|--------|
+| `docs/external/` directory populated | Done — see [`external/README.md`](../external/README.md) |
+| Internal duplicate removal / stubs | Done — [#316](https://github.com/wakeuplabs-io/alpen-multisig/pull/316) |
+| Stale adversarial assessments | Removed — [#323–#328](https://github.com/wakeuplabs-io/alpen-multisig/pull/323) |
+| Internal SSOT navigation map | [`docs/README.md`](../README.md) |
+
 ## Objective
 Reorganize project documentation to clearly separate client-facing deliverables (external) from internal development artifacts. Ensure all committed deliverables from the proposal and PRDs exist as polished, professional documents suitable for delivery to Alpen Labs.
 
@@ -66,13 +75,17 @@ All documents in:
 - `docs/2-discovery/` (24 files)
 - `docs/3-stories/` (3 files)
 - `docs/architecture/` (7 files including ADRs)
-- `docs/specs/` (49 files)
+- `docs/specs/` (**56** files)
 - `docs/feature/` (13 directories)
 - `docs/analysis/` (1 file)
-- `docs/assessment/` (12 files)
+- `docs/assessment/` (**10** files)
 - `docs/evolution/` (13 files)
 - `docs/reviews/` (2 files)
 - `docs/security/` (1 file)
+
+> **Count note (2026-06):** Spec and assessment counts above were refreshed; re-run `find docs/specs -name '*.md' | wc -l` after large doc changes.
+
+**Hardware wallets (PRD vs implementation):** The proposal commits to HWI-compatible device support. Production uses **Rust-native** Trezor (`trezor-client`) and Ledger (`hwi-rs`) integration — not a bundled HWI subprocess. See [`2-discovery/06-hardware-wallet-architecture.md`](../2-discovery/06-hardware-wallet-architecture.md).
 
 Internal operational documents (remain in `docs/operations/`):
 - `runbook.md`
