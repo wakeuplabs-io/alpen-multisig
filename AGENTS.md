@@ -19,7 +19,6 @@ docs/
 ├── external/           # Client-facing deliverables (canonical for delivery)
 ├── operations/         # Runbook, delivery plan; stubs point to external/
 ├── security/           # Threat model
-├── deliverable/        # Internal indexes → external/
 ├── reviews/            # Point-in-time audits (see resolution banners)
 ├── analysis/           # Targeted implementation audits
 └── README.md           # Internal SSOT map — start here for navigation

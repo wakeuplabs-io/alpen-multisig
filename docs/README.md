@@ -47,7 +47,7 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 
 | Domain | SSOT (read for current truth) | Do not use for current truth | Why |
 |--------|-------------------------------|------------------------------|-----|
-| System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | [`deliverable/research.md`](./deliverable/research.md), `specs/poc*.md` | Research stub indexes external deliverable; POC specs are pre-production snapshots |
+| System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | `specs/poc*.md` | POC walking-skeleton specs (historical) |
 | Admin Wallet PRD §4 | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | [`specs/admin-wallet-implementation-plan.md`](./specs/admin-wallet-implementation-plan.md) | Plan tracks engineering slices; PASS/FAIL lives only in the compliance matrix ([conflict rule #4](#conflict-resolution)) |
 | Feature contract | `specs/<feature>.md` | `*-implementation.md`, [`feature/`](./feature/) `feature-delta.md`, [`evolution/`](./evolution/) | See [`specs/README.md`](./specs/README.md) layer order ([conflict rule #3](#conflict-resolution)) |
 | Architecture decisions | [`architecture/adrs/`](./architecture/adrs/) | [`2-discovery/`](./2-discovery/), dated assessments | Discovery is Phase 1 evidence; accepted decisions are ADRs only |
@@ -65,7 +65,7 @@ When documents disagree, use this order:
 2. **Architecture decisions:** `architecture/adrs/` (e.g. ADR-006 over legacy assessment claims).
 3. **Feature contract:** `specs/<feature>.md` (functional spec wins over implementation spec if they conflict).
 4. **Admin Wallet PRD status:** `admin-wallet-prd-compliance.md` over phase checkmarks in `admin-wallet-implementation-plan.md`.
-5. **Client deliverables:** `docs/external/` over internal stubs in `operations/` and `deliverable/`.
+5. **Client deliverables:** `docs/external/` over internal stubs in `operations/`.
 6. **Backlog truth:** `deferred-backlog.md` + `action-plan-progress.md` over historical `action-plan-2026-05-14.md` severity tables.
 
 ## Directory index
@@ -73,7 +73,7 @@ When documents disagree, use this order:
 | Path | Purpose |
 |------|---------|
 | `0-prd/`, `1-proposal/` | Frozen client inputs |
-| `2-discovery/` | Phase 1 research and POC findings (historical context) |
+| `2-discovery/` | Phase 1 research and POC findings (historical context); includes [`crate-inventory.md`](./2-discovery/crate-inventory.md) |
 | `3-stories/` | Story map and non-functional items |
 | `architecture/` | Overview + ADRs |
 | `specs/` | Per-feature contracts and implementation notes — see [`specs/README.md`](./specs/README.md) |
@@ -83,7 +83,6 @@ When documents disagree, use this order:
 | `external/` | Client deliverables (canonical for delivery) |
 | `operations/` | Runbook, delivery plan; short pointers to `external/` |
 | `security/` | Threat model |
-| `deliverable/` | Internal indexes → `external/` |
 | `reviews/` | Dated codebase audits |
 | `analysis/` | Targeted implementation audits |
 
