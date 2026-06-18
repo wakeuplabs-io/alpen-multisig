@@ -1,6 +1,6 @@
 # Action plan — progress tracker
 
-> **Vigente — SSOT:** P-ID and wave closure tracker on `develop`. For open backlog items, use [`deferred-backlog.md`](./deferred-backlog.md). See [`assessment/README.md`](./README.md).
+> **Current — SSOT:** P-ID and wave closure tracker on `develop`. For open backlog items, use [`deferred-backlog.md`](./deferred-backlog.md). See [`assessment/README.md`](./README.md).
 
 **Base branch:** `develop`  
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md)  

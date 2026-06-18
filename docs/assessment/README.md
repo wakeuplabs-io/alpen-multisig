@@ -4,7 +4,7 @@
 
 This folder mixes **vigente trackers** with **historical snapshots**. Do not treat every file here as current truth.
 
-## Vigente (SSOT)
+## Current (SSOT)
 
 | File | Role |
 |------|------|
