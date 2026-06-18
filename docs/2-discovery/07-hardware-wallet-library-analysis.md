@@ -11,7 +11,7 @@ sighash = SHA256( SHA256(tag) || seqno_be_bytes(8) || sighash_payload )
 tag     = "strata/admin/<type_name>"
 ```
 
-**POC / legacy note:** Early JS adapters used **Bitcoin Signed Message** (BIP-137): the device signs `SHA256d("\x18Bitcoin Signed Message:\n" + varint(len) + message_bytes)`. That produces a **different digest** than the bare SPS-65 sighash. A signature from `sign_message` / BIP-137 **cannot** be verified with `verify_threshold(..., sighash_hex)` against the SPS-65 digest — see `docs/specs/poc5-trezor-hw-wallet-integration.md` (open issue: BIP-137 vs raw ECDSA).
+**POC / legacy note:** Early JS adapters used **Bitcoin Signed Message** (BIP-137): the device signs `SHA256d("\x18Bitcoin Signed Message:\n" + varint(len) + message_bytes)`. That produces a **different digest** than the bare SPS-65 sighash. A signature from `sign_message` / BIP-137 **cannot** be verified with `verify_threshold(..., sighash_hex)` against the SPS-65 digest — see `docs/archive/poc-specs/poc5-trezor-hw-wallet-integration.md` (open issue: BIP-137 vs raw ECDSA).
 
 **Library decision:** For **production** Trezor (and Ledger parity), the Rust stack must implement a path where the device ends up signing (or committing to) material that verifies as **ECDSA(msg = SPS-65 sighash, ...)** per protocol — not only “the same API as the old JS POC.”
 
@@ -122,7 +122,7 @@ Under **strict SPS-65**, a hardware signature is acceptable only if it verifies 
 - **Crate:** [`trezor-client`](https://crates.io/crates/trezor-client)
 - **What it is:** The most complete **community** Rust client for Trezor. HID + Trezor protobuf (`trezor-common`). Supports Bitcoin, Ethereum, and others.
 - **`sign_message`:** Convenient for **POC / debugging** (matches TrezorConnect `signMessage` and the old JS adapter). **Not** a production path for admin SPS-65 signatures — see §3.1.
-- **Production direction:** Use the crate’s (or the wire protocol’s) **Bitcoin transaction signing** surface — e.g. PSBT / `SignTx`-style flows — so that the commitment the user approves aligns with how the protocol verifies admin threshold signatures. Exact PSBT construction that binds the SPS-65 digest is a **protocol + product** design step; at library level we only assert: **do not ship `sign_message` as the SPS-65 Trezor adapter.** See `docs/specs/poc5-trezor-hw-wallet-integration.md` (resolution options; Option B PSBT / `sign_tx` called out there as the production-leaning direction).
+- **Production direction:** Use the crate’s (or the wire protocol’s) **Bitcoin transaction signing** surface — e.g. PSBT / `SignTx`-style flows — so that the commitment the user approves aligns with how the protocol verifies admin threshold signatures. Exact PSBT construction that binds the SPS-65 digest is a **protocol + product** design step; at library level we only assert: **do not ship `sign_message` as the SPS-65 Trezor adapter.** See `docs/archive/poc-specs/poc5-trezor-hw-wallet-integration.md` (resolution options; Option B PSBT / `sign_tx` called out there as the production-leaning direction).
 - **Version:** 0.1.5 (docs build failed; 0.1.4 docs are available and stable)
 - **Maintenance:** Not officially maintained by Trezor. Treat as **integration dependency** to validate against emulator + `verify_threshold`, not as a guarantee of long-term API stability.
 

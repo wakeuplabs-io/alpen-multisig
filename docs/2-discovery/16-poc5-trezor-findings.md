@@ -13,7 +13,7 @@ This document consolidates **POC-5 implementation results** (Trezor over HID, Ta
 - **TypeScript adapter** — [`desktop-app/src/wallet/trezor-poc-adapter.ts`](../../desktop-app/src/wallet/trezor-poc-adapter.ts)
 - **Wallet types** — [`desktop-app/src/wallet/types.ts`](../../desktop-app/src/wallet/types.ts)
 - **Integration test binary** — [`desktop-app/src-tauri/src/bin/trezor_test.rs`](../../desktop-app/src-tauri/src/bin/trezor_test.rs)
-- **Spec** — [`docs/specs/poc5-trezor-hw-wallet-integration.md`](../specs/poc5-trezor-hw-wallet-integration.md)
+- **Spec** — [`docs/archive/poc-specs/poc5-trezor-hw-wallet-integration.md`](../archive/poc-specs/poc5-trezor-hw-wallet-integration.md)
 - **Protocol** — SPS-65 (admin digest), BIP-137 (Bitcoin Signed Message), BIP-143 (SegWit ECDSA sighash)
 
 ---

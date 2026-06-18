@@ -160,7 +160,7 @@ This is a deliberate divergence from Safe's strict nonce ordering. The Strata mo
 ### 4.2 For Understanding EIP-712 vs. SPS-65 Signing
 
 - **EIP-712 spec** — `eips.ethereum.org/EIPS/eip-712`: the Ethereum standard for typed structured data hashing. The domain separator + struct hash pattern maps directly to the tag + sighash_payload pattern in SPS-65. Reading EIP-712 will solidify understanding of *why* the SPS-65 sighash is constructed the way it is.
-- **`signing.rs`** in this repo — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs): the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/specs/poc3-signing-lib.md`.
+- **`signing.rs`** in this repo — [`desktop-app/src-tauri/src/infrastructure/signing.rs`](../../desktop-app/src-tauri/src/infrastructure/signing.rs): the production implementation of `compute_sighash`, `sign_sighash`, `verify_threshold` using Alpen crates. Read alongside `docs/archive/poc-specs/poc3-signing-lib.md`.
 
 ### 4.3 For Understanding Multisig On-Chain Execution (Gnosis Safe)
 
