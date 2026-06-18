@@ -19,7 +19,7 @@ The parallel **engineering PR queue is complete**. Wave 2 landed as **slices**; 
 | No auto-Approve; ADR-006 + threshold at claim | **Met** | Track B — [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) |
 | All RPC calls in `tokio::time::timeout` + structured errors | **Partial** (accepted) | Orchestrator 30s (D); desktop + retries → [wave2-track-d-followups.md](wave2-track-d-followups.md) |
 | Every Tier 0 BLOCKER from 2026-05-14 closed | **Partial** (accepted) | Remainder → follow-ups / Wave 3 |
-| Ops runbook + threat model + signer-safety linked from README | **Met** | Track F — [README.md](../../README.md) |
+| Ops runbook + threat model + signer-safety linked from README | **Met** | Track F — [`operations/runbook.md`](../operations/runbook.md), [`security/threat-model.md`](../security/threat-model.md), [`specs/signer-safety-model.md`](../specs/signer-safety-model.md) |
 | E2E proposal flow on `develop` | **Met** | 2026-05-19 — 3 WDIO specs; height 548 |
 | Manual enactment sign-off | **Met** | 3 Strata Administrator signers incl. `03dd6d7…427c` |
 | Human gates §1–§4 | **Met** | [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) |
