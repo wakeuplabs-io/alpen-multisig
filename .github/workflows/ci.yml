@@ -55,21 +55,26 @@ jobs:
           toolchain: nightly-2026-01-01
           components: rustfmt, clippy
 
-      # Caching the downloaded .deb archives turns the slowest CI step (mirror-bound apt
-      # downloads, historically 4-13 min) into a near-instant install on cache hit. apt still
-      # runs `update` and re-downloads any package whose version moved, so this degrades safely.
+      # Caching the downloaded .deb archives turns the slowest CI step (mirror-bound apt downloads,
+      # historically 4-13 min, observed as low as 244 kB/s) into a near-instant install on cache hit.
+      # The key is a manual version tag, NOT a file hash: bump the `-v1` suffix only when the package
+      # list below changes, so unrelated workflow edits don't evict the cache. restore-keys lets a new
+      # tag warm-start from the previous cache by prefix, avoiding a fresh full download on bump.
       - name: Cache Tauri apt packages
         uses: actions/cache@v4
         with:
           path: ~/apt-cache
-          key: apt-tauri-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: apt-tauri-${{ runner.os }}-v1
           restore-keys: apt-tauri-${{ runner.os }}-
 
       - name: Install Tauri system dependencies
         run: |
           set -euxo pipefail
-          sudo apt-get update
+          # World-writable so apt's unprivileged `_apt` user can write downloads here without the
+          # "unsandboxed as root" warning. Ephemeral CI dir, so loose perms are fine.
           mkdir -p ~/apt-cache/partial
+          chmod -R 777 ~/apt-cache
+          sudo apt-get update
           # Point apt's archive cache at the restored dir: present .debs are reused, missing
           # ones are downloaded into it and picked up by the post-job cache save.
           sudo apt-get install -y -o Dir::Cache::archives="$HOME/apt-cache" \
