@@ -382,7 +382,7 @@
           "description": "Manual real-device path: connect Trezor/Ledger, log in via HW, broadcast approved proposal, confirm on-device, verify commit+reveal",
           "test_file": "N/A (manual release checklist)",
           "scenario_name": "manual real-device path verification",
-          "files_to_create": ["docs/feature/admin-wallet-session-driven-broadcast-signing/deliver/release-checklist.md"],
+          "files_to_create": ["docs/archive/features/admin-wallet-session-driven-broadcast-signing/deliver/release-checklist.md"],
           "files_to_modify": [],
           "depends_on": ["05-02"],
           "acceptance_criteria": "Real Trezor/Ledger → HW login → broadcast → 'Confirm on your device' prompt → physical confirm → commit+reveal confirmed; unplug/refuse → HwDisconnected/HwUserRefused copy, no 'Resubmit reveal' control, nothing broadcast"

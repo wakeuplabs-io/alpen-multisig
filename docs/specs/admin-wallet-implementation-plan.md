@@ -289,7 +289,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 #### Phase 3.7 — Session-bound Admin Wallet (mnemonic login) ✅
 
-**Status:** Complete (3.7a session slot + 3.7b session-bound commit/reveal key + 3.7c `ADMIN_WALLET_REGTEST_MNEMONIC` removed). See [evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md) and [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json).
+**Status:** Complete (3.7a session slot + 3.7b session-bound commit/reveal key + 3.7c `ADMIN_WALLET_REGTEST_MNEMONIC` removed). See [evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md) and [roadmap Phase 06](../archive/features/admin-wallet-session-bound-mnemonic/deliver/roadmap.json).
 **Spec:** [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
 
 **Goal:** Bind the `WalletService` lifecycle **and** the SPS-50 commit/reveal internal key to the user's login session so that when the user logs in with "Palabras" (dev mnemonic), the Admin Wallet, commit funding, and reveal signing material all derive from *that same mnemonic* — not from a separate `ADMIN_WALLET_REGTEST_MNEMONIC` env var. Closes the PRD §3.2 gap where Admin Wallet, Admin ID, and broadcast key were sourced independently.

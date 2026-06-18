@@ -16,4 +16,4 @@ If an evolution doc contradicts a current spec, the spec wins — see [`specs/RE
 
 ## Naming
 
-Files are dated or named after the feature slug (e.g. `2026-06-03-admin-wallet-balance-ux.md`). Pair with the matching [`feature/`](../feature/) subdirectory and functional spec for full context.
+Files are dated or named after the feature slug (e.g. `2026-06-03-admin-wallet-balance-ux.md`). Pair with the matching [`archive/features/`](../archive/features/) subdirectory and functional spec for full context.

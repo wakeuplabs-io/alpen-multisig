@@ -25,8 +25,8 @@ Phase 1 of the Admin Wallet program (US-H7) is complete. The desktop app can now
 - `desktop-app/src/screens/broadcast-proposal-screen.tsx` — wires `useAdminWalletInfo` and passes to `BroadcastDetailsCard`
 
 **Artefacts**
-- `docs/feature/admin-wallet-regtest-commit/deliver/roadmap.json` — 6-step delivery plan
-- `docs/feature/admin-wallet-regtest-commit/deliver/execution-log.json` — DES audit log (all 6 steps PASS)
+- `docs/archive/features/admin-wallet-regtest-commit/deliver/roadmap.json` — 6-step delivery plan
+- `docs/archive/features/admin-wallet-regtest-commit/deliver/execution-log.json` — DES audit log (all 6 steps PASS)
 - `Cargo.lock` — updated
 
 ## Wave: DELIVER / [REF] Scenarios Green Count

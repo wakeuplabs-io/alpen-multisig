@@ -98,4 +98,4 @@ A latent display issue was also fixed: the receive-address row rendered at 11px 
 - Spec: `docs/specs/admin-wallet-watch-only-hw-wallet.md`
 - Implementation plan: `docs/specs/admin-wallet-implementation-plan.md` (Phase 3.8 row)
 - Predecessor evolution: `docs/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md`
-- Feature workspace (deliver audit trail): `docs/feature/admin-wallet-watch-only-hw-wallet/`
+- Feature workspace (deliver audit trail): `docs/archive/features/admin-wallet-watch-only-hw-wallet/`

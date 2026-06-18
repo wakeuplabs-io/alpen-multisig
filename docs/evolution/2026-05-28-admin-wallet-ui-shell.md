@@ -95,7 +95,7 @@ The implementation ports the Alta WalletPanel design pattern into the existing T
 
 ### Docs
 - `docs/specs/admin-wallet-ui-shell.md`
-- `docs/feature/admin-wallet-ui-shell/feature-delta.md`
+- `docs/archive/features/admin-wallet-ui-shell/feature-delta.md`
 - `docs/evolution/2026-05-28-admin-wallet-ui-shell.md` (this file)
 
 ---

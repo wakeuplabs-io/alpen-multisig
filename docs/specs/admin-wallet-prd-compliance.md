@@ -151,7 +151,7 @@ The implementation plan previously stated post-Foundation reveal key at `m/86'/0
 
 The plan previously excluded Electrum and deferred indexer backends to a separate program. **Current plan:** Electrum is **in scope** as Release 2.
 
-Legacy feature roadmaps under `docs/feature/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
+Legacy feature roadmaps under `docs/archive/features/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
 
 ---
 
