@@ -3,7 +3,7 @@
 > **Current — SSOT:** Open user-story and NFR backlog after Waves 1–3. For P-ID closure status, use [`action-plan-progress.md`](./action-plan-progress.md). See [`assessment/README.md`](./README.md).
 
 **Created:** 2026-05-20  
-**Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md) — items not addressed in Waves 1–3.  
+**Source:** [action-plan-2026-05-14.md](archive/action-plan-2026-05-14.md) — items not addressed in Waves 1–3.  
 **Status:** Assessment closed. Items below are captured as User Stories or Non-Functional Requirements for future implementation planning. No Wave 4 is scheduled; pick up individual items as standalone PRs or group them into a new wave as needed.
 
 ---
@@ -28,7 +28,7 @@
 **Acceptance criteria (met):**
 - Signer can construct and broadcast the commit/reveal pair using any Bitcoin RPC endpoint without the orchestrator being online (via manual flow).
 
-**Source:** PRD §2.3; [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) §3; P-052.  
+**Source:** PRD §2.3; [wave2-human-decisions-pending.md](archive/wave2-human-decisions-pending.md) §3; P-052.  
 **Priority:** High.
 
 ---
