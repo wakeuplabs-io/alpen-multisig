@@ -13,6 +13,10 @@ This folder mixes **current trackers** with **historical snapshots** under [`arc
 
 When an item is PASS in `action-plan-progress.md`, a dated assessment row does **not** reopen it unless progress is updated first.
 
+## Audits ([`audits/`](./audits/))
+
+Point-in-time codebase reviews and implementation audits. **Not SSOT** — read resolution banners; open items flow to [`deferred-backlog.md`](./deferred-backlog.md) or delivery specs in [`specs/`](../specs/). See [`audits/README.md`](./audits/README.md).
+
 ## Historical / snapshot ([`archive/`](./archive/))
 
 | File | Role |

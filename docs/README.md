@@ -38,8 +38,7 @@ flowchart LR
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
-| Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Historical |
-| Implementation audits | [`analysis/`](./analysis/) | Reference |
+| Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |
 
 ## SSOT vs. historical competitors
 
@@ -77,12 +76,10 @@ When documents disagree, use this order:
 | `3-stories/` | Story map and non-functional items |
 | `architecture/` | Overview + ADRs |
 | `specs/` | Per-feature contracts — see [`specs/README.md`](./specs/README.md) |
-| `assessment/` | Backlog SSOT + [`archive/`](./assessment/archive/) — see [`assessment/README.md`](./assessment/README.md) |
+| `assessment/` | Backlog SSOT, [`audits/`](./assessment/audits/), [`archive/`](./assessment/archive/) — see [`assessment/README.md`](./assessment/README.md) |
 | `operations/` | Runbook, threat model, delivery plan — see [`operations/README.md`](./operations/README.md) |
 | `archive/` | Historical delivery records, evolution, POC specs — **not SSOT** |
 | `external/` | Client deliverables (canonical for delivery) |
-| `reviews/` | Dated codebase audits |
-| `analysis/` | Targeted implementation audits |
 
 ## Agent rules
 

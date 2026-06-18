@@ -1,6 +1,6 @@
 # Proposal Status Lifecycle — Implementation Audit
 
-> **Type:** Implementation audit (not a product spec). **Supersedes:** nothing — use [`proposal-lifecycle-expiry-and-status-completion.md`](../specs/proposal-lifecycle-expiry-and-status-completion.md) for the delivery spec. **Backlog:** [US-EXP](../assessment/deferred-backlog.md) (expiry). **Story context:** [`story-map.md`](../3-stories/story-map.md).
+> **Type:** Implementation audit (not a product spec). **Supersedes:** nothing — use [`proposal-lifecycle-expiry-and-status-completion.md`](../../specs/proposal-lifecycle-expiry-and-status-completion.md) for the delivery spec. **Backlog:** [US-EXP](../deferred-backlog.md) (expiry). **Story context:** [`story-map.md`](../../3-stories/story-map.md).
 
 **Date:** 2026-06-04  
 **Branch:** `feat/manual-proposal-flow`  

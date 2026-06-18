@@ -1,6 +1,6 @@
 # Comprehensive Codebase Review — Alpen Multisig
 
-> **Resolution index (2026-06):** Point-in-time audit on `develop` (2026-05-22). Open items are tracked in [`deferred-backlog.md`](../assessment/deferred-backlog.md). Broadcast boundary: [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md). Do not treat severity tables below as current blockers without checking backlog closure.
+> **Resolution index (2026-06):** Point-in-time audit on `develop` (2026-05-22). Open items are tracked in [`deferred-backlog.md`](../deferred-backlog.md). Broadcast boundary: [ADR-006](../../architecture/adrs/006-backend-coordination-boundary.md). Do not treat severity tables below as current blockers without checking backlog closure.
 
 > **Date**: 2026-05-22  
 > **Branch**: `develop`  
@@ -460,8 +460,8 @@ All P1 items must be resolved before expanding scope to the remaining multisigs.
 
 | Area | Status | Where tracked |
 |------|--------|---------------|
-| P1 expiry / cross-authority / inferProposalType | **Open** | [`deferred-backlog.md`](../assessment/deferred-backlog.md), [`proposal-lifecycle-expiry-and-status-completion.md`](../specs/proposal-lifecycle-expiry-and-status-completion.md) |
+| P1 expiry / cross-authority / inferProposalType | **Open** | [`deferred-backlog.md`](../deferred-backlog.md), [`proposal-lifecycle-expiry-and-status-completion.md`](../../specs/proposal-lifecycle-expiry-and-status-completion.md) |
 | P2 broadcast regression / session leak | **Partial / open** | Backlog + follow-up specs |
-| P3 remaining PRD gaps | **Scope-dependent** | [`admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
-| 3/5 authorities unwired | **DEFERRED** (intentional) | [`2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) |
+| P3 remaining PRD gaps | **Scope-dependent** | [`admin-wallet-prd-compliance.md`](../../specs/admin-wallet-prd-compliance.md) |
+| 3/5 authorities unwired | **DEFERRED** (intentional) | [`2-discovery/08-alpen-crate-prd-coverage.md`](../../2-discovery/08-alpen-crate-prd-coverage.md) |
 | Core StrataAdmin + SequencerManager flow | **Sound** (review conclusion stands) | This document §5 |
