@@ -2,6 +2,8 @@
 
 Phase 1 delivers **US-H7** — see [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md).
 
+**SSOT for PRD PASS/FAIL:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) only — not phase ✅ markers in this plan. See [conflict rule #4](../README.md#conflict-resolution).
+
 **PRD compliance:** PASS / FAIL / PARTIAL per requirement is maintained in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). A phase or Release step marked ✅ here means the **engineering slice** shipped, not that every PRD MUST in that section is PASS.
 
 ## 1. Purpose and scope
