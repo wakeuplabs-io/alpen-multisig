@@ -12,7 +12,7 @@ Files here are **archived post-merge summaries** — narrative closure for nWave
 | PRD compliance (Admin Wallet) | [`specs/admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
 | What changed when it landed | This folder (historical) |
 
-If an evolution doc contradicts a vigente spec, the spec wins — see [`specs/README.md`](../specs/README.md).
+If an evolution doc contradicts a current spec, the spec wins — see [`specs/README.md`](../specs/README.md).
 
 ## Naming
 

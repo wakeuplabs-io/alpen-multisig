@@ -1,6 +1,6 @@
 # Deferred backlog — post-assessment
 
-> **Vigente — SSOT:** Open user-story and NFR backlog after Waves 1–3. For P-ID closure status, use [`action-plan-progress.md`](./action-plan-progress.md). See [`assessment/README.md`](./README.md).
+> **Current — SSOT:** Open user-story and NFR backlog after Waves 1–3. For P-ID closure status, use [`action-plan-progress.md`](./action-plan-progress.md). See [`assessment/README.md`](./README.md).
 
 **Created:** 2026-05-20  
 **Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md) — items not addressed in Waves 1–3.  

@@ -1,6 +1,6 @@
 # Alpen Multisig — Consolidated Action Plan (2026-05-14)
 
-> **Histórico.** Snapshot from 2026-05-14 synthesis. For current backlog and P-ID closure, use [`deferred-backlog.md`](./deferred-backlog.md) and [`action-plan-progress.md`](./action-plan-progress.md) — see [`assessment/README.md`](./README.md).
+> **Historical.** Snapshot from 2026-05-14 synthesis. For current backlog and P-ID closure, use [`deferred-backlog.md`](./deferred-backlog.md) and [`action-plan-progress.md`](./action-plan-progress.md) — see [`assessment/README.md`](./README.md).
 
 **Inputs:** Historical synthesis from May 2025 adversarial assessments (folders removed when stale). **Current resolution:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), [wave2-exit-gap-review.md](wave2-exit-gap-review.md), [action-plan-progress.md](action-plan-progress.md).
 **Method:** Cross-audit synthesis. Each item carries a stable **P-###** ID inherited from the 2026-05-13 meta-review, with deltas from 2026-05-14 marked **[Δ 05-14]**.

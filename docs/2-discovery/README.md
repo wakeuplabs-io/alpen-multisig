@@ -4,7 +4,7 @@ This folder holds the research, POC findings, and technical investigations produ
 
 - **Deliverable (client)** — [`docs/external/research-assessment.md`](../external/research-assessment.md).
 - **Internal index** — [`docs/deliverable/research.md`](../deliverable/research.md) and [`docs/deliverable/crate-inventory.md`](../deliverable/crate-inventory.md).
-- **Architecture** — [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/). **Vigente architecture decisions** live in ADRs only — not in discovery notes below.
+- **Architecture** — [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/). **Current architecture decisions** live in ADRs only — not in discovery notes below.
 
 Everything under this folder is **raw source material**: POC plans, POC findings, functional analyses, and targeted investigations. It exists so reviewers can trace any claim in the deliverable back to its evidence.
 
