@@ -1,5 +1,7 @@
 # Broadcast Implementation Audit — 2026-05-09
 
+> **Resolution (2026-06):** Historical audit. `orchestrator-be/.../broadcast_tx.rs` was removed; desktop executes commit/reveal; orchestrator records metadata via `claim_broadcast` / PATCH only. See [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) and [`proposal-broadcast-commit-reveal.md`](../specs/proposal-broadcast-commit-reveal.md). Findings below are not current architecture.
+
 **Scope**: Broadcast commit/reveal implementation and post-broadcast signer update flow.  
 **Files reviewed**:
 - `orchestrator-be/src/infrastructure/broadcast_tx.rs`
@@ -210,3 +212,16 @@ The flow:
 | M1 | Medium | 65-byte signature path accepted without pubkey verification |
 | M2 | Medium | Signer index truncated to `u8` without bounds check |
 | M3 | Medium | `Enacted` status semantics diverge from PRD (~2016-block enactment delay not reflected) |
+
+---
+
+## Resolution status (2026-06)
+
+| ID | Status | Notes |
+|----|--------|-------|
+| C1 | **Obsolete** | Orchestrator no longer builds reveal txs (`broadcast_tx` module removed) |
+| H1 | **Partially addressed** | In-flight guards exist on desktop path; see [`proposal-broadcast-commit-reveal.md`](../specs/proposal-broadcast-commit-reveal.md) |
+| H2 | **Resolved** | Desktop broadcast + coordinator `claim_broadcast` / PATCH ([ADR-006](../architecture/adrs/006-backend-coordination-boundary.md)) |
+| H3 | **Partially addressed** | Authority scoping improved (Wave 1 P-002); remaining gaps in [`deferred-backlog.md`](../assessment/deferred-backlog.md) |
+| H4 | **Deferred** | AlpenAdmin / SecurityCouncil / PayoutAdmin — upstream crate gaps |
+| M1–M3 | **Open / tracked** | See [`deferred-backlog.md`](../assessment/deferred-backlog.md) and lifecycle specs |
