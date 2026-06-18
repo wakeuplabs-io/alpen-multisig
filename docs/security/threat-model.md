@@ -1,5 +1,7 @@
 # Threat model (P-051) — summary
 
+**SSOT (security — assets & risks):** Pair with [`specs/signer-safety-model.md`](../specs/signer-safety-model.md) for signer UX principles. This doc covers threats and mitigations; signer-safety covers what the signer must verify. Read both; do not duplicate.
+
 ## Assets
 
 - Signer private keys (HW wallet, mnemonic dev path, operator key for broadcast)
