@@ -422,3 +422,5 @@ These items belong elsewhere and are not stories in this map:
 ## Traceability
 
 Each US cites its PRD source. The full extraction grids behind this map (47 raw UI seeds + 9 backend seeds + discovery shaping factors) are available on request — not committed here to keep the map minimal.
+
+**Implementation audits:** PRD §3–4 lifecycle gap analysis lives in [`docs/analysis/proposal_status_lifecycle_audit.md`](../analysis/proposal_status_lifecycle_audit.md); delivery tracking in [`proposal-lifecycle-expiry-and-status-completion.md`](../specs/proposal-lifecycle-expiry-and-status-completion.md) and [US-EXP](../assessment/deferred-backlog.md) in the deferred backlog.
