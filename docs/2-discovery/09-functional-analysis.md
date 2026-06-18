@@ -5,11 +5,11 @@
 > The content has been absorbed by more authoritative documents:
 > - Actors, use cases, and proposal lifecycle → [`docs/3-stories/story-map.md`](../3-stories/story-map.md)
 > - Non-functional requirements → [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md)
-> - System architecture & tech stack → [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/)
+> - System architecture & tech stack → [`docs/architecture/overview.md`](../architecture/overview.md) and the ADRs under [`docs/architecture/adrs/`](../architecture/adrs/) — especially [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) for backend coordination boundaries
 > - Hardware wallet architecture → [`06-hardware-wallet-architecture.md`](./06-hardware-wallet-architecture.md), [`07-hardware-wallet-library-analysis.md`](./07-hardware-wallet-library-analysis.md), [`16-poc5-trezor-findings.md`](./16-poc5-trezor-findings.md)
 > - Crate / PRD coverage → [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md)
 >
-> Any reference to Borsh in this document should be read as **SSZ** per the [ASM repo migration](./11-asm-repo-migration.md). Any reference to "Axum + Postgres" describes the PRD target stack; the walking skeleton runs Axum + in-memory repo (Postgres deferred, see NF-6).
+> Any reference to Borsh in this document should be read as **SSZ** per the [ASM repo migration](./11-asm-repo-migration.md). Any reference to "Axum + Postgres" describes the PRD target stack; **implemented:** Postgres when `DATABASE_URL` is set, in-memory for local dev (see NF-6 in [`non-functional-items.md`](../3-stories/non-functional-items.md)).
 
 ## 1. System Overview
 
