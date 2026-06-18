@@ -61,7 +61,7 @@ PRD §4.3.1 requires the signer to see total balance net of unconfirmed movement
 - `docs/specs/admin-wallet-balance-ux.md`
 - `docs/specs/admin-wallet-implementation-plan.md` (R1.5 ✅; next → R1.6; post-R1: **R2** Electrum sync)
 - `docs/specs/admin-wallet-core-read-path.md` (sync amendment note)
-- `docs/evolution/2026-06-03-admin-wallet-balance-ux.md` (this file)
+- `docs/archive/evolution/2026-06-03-admin-wallet-balance-ux.md` (this file)
 
 ## Known Limitations (post-R1.5)
 

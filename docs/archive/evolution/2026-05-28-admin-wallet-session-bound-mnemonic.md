@@ -120,7 +120,7 @@ extension point, not an oversight.
 ### Docs
 - `docs/specs/admin-wallet-session-bound-mnemonic.md`
 - `docs/specs/admin-wallet-implementation-plan.md` (Phase 3.7 marked complete)
-- `docs/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md` (this file)
+- `docs/archive/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md` (this file)
 
 ### Machine artifacts (DES)
 - `docs/archive/features/admin-wallet-session-bound-mnemonic/deliver/roadmap.json`

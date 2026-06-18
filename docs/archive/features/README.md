@@ -23,4 +23,4 @@ Each subdirectory holds **execution records** — not the functional contract fo
 
 If `feature-delta.md` contradicts the functional spec, the spec wins.
 
-See also [`archive/README.md`](../README.md).
+See also [`archive/README.md`](../README.md) and [`archive/evolution/README.md`](../evolution/README.md).

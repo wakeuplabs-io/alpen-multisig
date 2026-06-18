@@ -49,13 +49,13 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 |--------|-------------------------------|------------------------------|-----|
 | System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | `specs/poc*.md` | POC walking-skeleton specs (historical) |
 | Admin Wallet PRD §4 | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | [`specs/admin-wallet-implementation-plan.md`](./specs/admin-wallet-implementation-plan.md) | Plan tracks engineering slices; PASS/FAIL lives only in the compliance matrix ([conflict rule #4](#conflict-resolution)) |
-| Feature contract | `specs/<feature>.md` | `*-implementation.md`, [`archive/features/`](../archive/features/) `feature-delta.md`, [`evolution/`](./evolution/) | See [`specs/README.md`](./specs/README.md) layer order ([conflict rule #3](#conflict-resolution)) |
+| Feature contract | `specs/<feature>.md` | `*-implementation.md`, [`archive/features/`](./archive/features/) `feature-delta.md`, [`archive/evolution/`](./archive/evolution/) | See [`specs/README.md`](./specs/README.md) layer order ([conflict rule #3](#conflict-resolution)) |
 | Architecture decisions | [`architecture/adrs/`](./architecture/adrs/) | [`2-discovery/`](./2-discovery/), dated assessments | Discovery is Phase 1 evidence; accepted decisions are ADRs only |
 | Backlog & closure | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md), [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | [`action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md), `wave2-track-*`, [`wave2-human-decisions-pending.md`](./assessment/archive/wave2-human-decisions-pending.md) | See [`assessment/README.md`](./assessment/README.md) ([conflict rule #6](#conflict-resolution)) |
 | Operations | [`operations/runbook.md`](./operations/runbook.md) | [`action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md) P-051 severity row | Runbook and related ops docs exist; 2026-05-14 table is a historical snapshot |
 | Security | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
 
-Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`archive/features/README.md`](./feature/README.md), [`evolution/README.md`](./evolution/README.md).
+Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`archive/features/README.md`](./archive/features/README.md), [`archive/evolution/README.md`](./archive/evolution/README.md).
 
 ## Conflict resolution
 
@@ -78,7 +78,6 @@ When documents disagree, use this order:
 | `architecture/` | Overview + ADRs |
 | `specs/` | Per-feature contracts and implementation notes — see [`specs/README.md`](./specs/README.md) |
 | `archive/` | Historical delivery records, evolution, POC specs — see [`archive/README.md`](./archive/README.md) |
-| `evolution/` | Archived feature summaries post-merge — see [`evolution/README.md`](./evolution/README.md) |
 | `assessment/` | Backlog, wave tracks, action-plan synthesis — see [`assessment/README.md`](./assessment/README.md) |
 | `external/` | Client deliverables (canonical for delivery) |
 | `operations/` | Runbook, threat model, delivery plan; stubs point to `external/` — see [`operations/README.md`](./operations/README.md) |
