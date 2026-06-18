@@ -8,27 +8,36 @@
 
 ## 1. Executive summary
 
-Both audits converge on the same verdict: **`alpen-multisig` is a thoughtfully layered POC and is NOT safe to operate as a governance authority today.** The 2026-05-14 re-read does **not** improve the verdict — it adds new BLOCKING evidence on top of the May 13 cluster and **retracts only one item** (`/api/v1` does exist; the "no API versioning" finding is dropped).
+**Historical context:** This document synthesizes May 2025 adversarial assessments (source folders removed when stale). Several Tier-0 findings from the 2026-05-14 re-read are **closed in code** — see [action-plan-progress.md](action-plan-progress.md) and [wave2-exit-gap-review.md](wave2-exit-gap-review.md).
 
-The risk landscape clusters into four reinforcing themes:
+**Closed since synthesis:**
+- **Broadcast boundary (P-066, P-062):** Desktop executes commit/reveal; orchestrator exposes `claim_broadcast` and PATCH coordination only. IPC returns persisted `approved` / `reveal_broadcasted` statuses.
+- **Coordination-only boundary ([ADR-006](../architecture/adrs/006-backend-coordination-boundary.md)):** Explicit `pending → approved` transition; signature ingest does not auto-approve.
+- **Persistent proposals (NFR-PERSIST):** Postgres when `DATABASE_URL` is set.
+
+**Still open:** [deferred-backlog.md](deferred-backlog.md) and Wave 2/3 track follow-ups. US-H5 manual fallback is partial — `/manual` and [manual-execution-flow.md](../specs/manual-execution-flow.md).
+
+The risk themes below remain a useful historical map; severities are not re-audited in this edit.
 
 1. **Signer-key surface is wide open.** Operator secret key defaults to the well-known test key; mnemonics and private keys cross the Tauri IPC boundary in plaintext; CSP is `null`; releases are unsigned; there is no SCA in CI; the frontend even has a `VITE_OPERATOR_SECRET_KEY_HEX` path that can leak through sourcemaps.
-2. **Broadcast boundary (resolved in code, 2026-05-16).** [Δ 05-14] Audits correctly identified lifecycle desync and hard-coded UI statuses. The interim fix (server-side `POST …/broadcast`) violated PRD coordination-only rules. **Current SSOT:** Tauri executes commit/reveal; orchestrator exposes `POST …/broadcast/claim` and `PATCH …/broadcast` only. See §2.1 and **P-066** (implemented).
+2. **Broadcast boundary — resolved (P-066, P-062).** See §2.1 and [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).
 3. **Type, error, and identity drift across Rust ↔ TS.** Backend `Authority` has 5 variants, Tauri shell has a subset, React has 2 (`StrataAdministrator`, `StrataSequencerManager`). [Δ 05-14] Duplicate-signer detection compares pubkeys with `==` while session auth uses `eq_ignore_ascii_case` — the same Trezor signer can pass dedup twice. Errors collapse to `error: string` at every boundary; no Zod validation at the bridge; `u64 seq_no` is exposed as a JSON `number`.
-4. **Coordination state is not durable, not idempotent, not observable.** Proposals, sessions, challenges, and broadcast claims default to `Arc<RwLock<HashMap<…>>>`; broadcast is non-atomic with no RPC timeouts; there is no append-only audit log, no correlation IDs, no `/ready` probe, no rate limit. Once Postgres replaces the in-process lock, every existing race condition gets worse.
+4. **Coordination state durability — partially resolved.** Postgres persistence is available; in-memory remains the dev default. Broadcast idempotency, append-only audit log, and correlation IDs remain open.
 
-Doc/process layer compounds this: zero user discovery, no DoR, manual-fallback story (US-H5) is unvalidated, README/AGENTS suffer Diataxis collapse, `.claude/rules/` vs `.cursor/rules/` drift, and the "coordination only" claim in PRD §1 is contradicted by code (auto-Approve on threshold) with no ADR to reconcile.
+Doc/process layer: manual-fallback story (US-H5) is partially implemented; README/AGENTS Diataxis work and shared types (P-022) remain.
 
-**Production-readiness window:** ~4–6 weeks of focused work to close Tier 0; ~1 quarter for full hardening. This estimate is unchanged from 2026-05-13.
+**Production-readiness window:** Historical estimate from May 2025; see [action-plan-progress.md](action-plan-progress.md) for current closure status.
 
 ---
 
 ## 2. What changed between 2026-05-13 and 2026-05-14
 
+> **Status (2026-06):** Rows 1–2 are **resolved in code**. Row 7 (P-061/P-066) **implemented**. See [action-plan-progress.md](action-plan-progress.md).
+
 | # | Change | Direction |
 |---|---|---|
-| 1 | **Desktop broadcast bypasses orchestrator state machine** — local `broadcast_commit_then_reveal` runs commit/reveal; `claim_broadcast` is dead on the happy path. | **NEW BLOCKER** |
-| 2 | **Hard-coded `BroadcastResultDto` returns `"enacted"` / `"reveal_confirmed"`** — UI shows finality without persisted truth. | **NEW BLOCKER** |
+| 1 | **Desktop broadcast bypasses orchestrator state machine** — local `broadcast_commit_then_reveal` runs commit/reveal; `claim_broadcast` is dead on the happy path. | **RESOLVED** — `submit_commit_then_reveal` calls `claim_broadcast`; coordinator PATCH records txids |
+| 2 | **Hard-coded `BroadcastResultDto` returns `"enacted"` / `"reveal_confirmed"`** — UI shows finality without persisted truth. | **RESOLVED** — returns `approved` / `reveal_broadcasted` from persisted state |
 | 3 | **Pubkey case mismatch between dedup and auth** — `==` vs `eq_ignore_ascii_case` allows the same signer to be counted twice. | Promoted to BLOCKER |
 | 4 | **Tauri `Authority` subset vs backend's 5 variants** — non–Strata-admin proposals fail deserialization in the shell. | Promoted to BLOCKER |
 | 5 | **`/api/v1` confirmed to exist.** Prior "no API versioning" item is **retracted**. | Retraction |
@@ -87,7 +96,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-009 | Session token has no authority binding; cross-authority reuse. Validate `session.authority === authorityFromRole(selectedRole)` before reuse; `await authLogout()` before re-auth. | S | 03, 04, 13 |
 | P-010 | Deep-link `/proposals/:actionId/sign` bypasses authority context. Refuse to render if `proposal.authority` ≠ selected role. | S | 03, 13 |
 | P-011 | Unsigned releases, no SCA, no committed lockfile, npm `^`-ranges, git-rev–pinned `alpen-*` with no signature verification. Commit `package-lock.json`, `npm ci`, `cargo audit` + `cargo deny`, pre-commit secret-scanning. | M | 02, 05 |
-| P-012 | Backend auto-approves on threshold (`required_signatures` snapshotted at create time, never re-synced). PRD §1 forbids threshold checks. Remove auto-transition OR write **ADR-006** carving out an advisory mode + threshold-resync test. | M | 06, 13, 16 |
+| P-012 | ~~Backend auto-approves on threshold~~ — **CLOSED:** [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md) documents explicit `approve_action`; ingest does not auto-transition. Threshold resync tests remain in Wave 3. | — | 06, 13, 16 |
 | P-013 | `parse_network` defaults to `regtest`. Require explicit `bitcoin`/`testnet`/`signet`/`regtest`; fail otherwise. | S | 02 |
 | P-014 | Bearer token transported over user-supplied `base_url`; no HTTPS enforcement. Reject non-`https://` in `build_client` (allow `http://localhost` only in dev). | S | 02 |
 | P-015 | `VITE_OPERATOR_SECRET_KEY_HEX` env path can leak via sourcemaps. Delete env var; load operator key only in Rust at startup. | S | 02, 05 |
@@ -141,7 +150,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 | P-048 | No encryption at rest; broadcast errors echo RPC URLs / credentials. `pgcrypto` for `signer_pubkey`/`signature_hex`; sanitize broadcast errors. | M | 09 |
 | P-049 | No desktop local persistence; drafts vanish on crash. | S | 09 |
 | P-050 | Diataxis collapse in `README.md` and `AGENTS.md`. Rewrite README as 5-line tutorial; AGENTS.md as reference. | S | 15 |
-| P-051 | Missing docs: backend ops runbook, ADR-006 (coordination-only boundary), signer-safety model, threat model, incident playbook, capability matrix, build-and-release reproducibility guide, testing-strategy doc. | L | 15 |
+| P-051 | Missing docs: backend ops runbook, signer-safety model, threat model, incident playbook, capability cross-links, build-and-release reproducibility guide, testing-strategy doc. **ADR-006 landed.** | L | 15 |
 | P-052 | `docs/3-stories/` has no DoR/DoD; US-H5 manual fallback unspecified; no cancellation flow; no signer-rotation story. Add 8-item DoR checklist; story-by-story audit. | M | 12, 13, 15 |
 | P-053 | Zero user discovery (5–8 signer interviews, digest-verification usability test, manual-fallback tabletop sim). | L | 12 |
 | P-054 | Rule/skill stack drifts (`.claude/rules/` vs `.cursor/rules/`; missing `description:` for auto-trigger; `rust-specialist` vs `rust-backend-standards` disagreement on `.unwrap()`). Verify Cursor IDE loading semantics first; consolidate. | S | 17 |
@@ -153,7 +162,7 @@ IDs are stable across audits. Severity uses a single legend: **BLOCKER** (Tier 0
 
 ## 4. Cross-cutting themes (do not lose these in the per-ticket churn)
 
-- **"Backend coordination only" is asserted but unenforced.** Threshold checks live in the application layer; no forbidden-import lint; no ADR-006; no SPS-65 citation. P-012, P-028, P-051, P-055 must move together; otherwise the contradiction re-grows.
+- **"Backend coordination only" is documented in [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md).** Remaining work: forbidden-import lint, SPS-65 citation in code (P-028, P-055).
 - **Single source of truth is broken everywhere.** Authority defined 3×, rules duplicated, constants hardcoded in multiple places. P-022 + P-043 + P-054 + P-064 share a single root cause: no shared types/codegen.
 - **In-memory by default leaks across every concern.** Proposals, sessions, challenges, broadcast claims. P-016 + P-017 + P-031 are one architectural decision.
 - **No correlation chain frontend → Tauri → backend → on-chain.** P-023 + P-029 + P-051 must ship together for ops to be honest.
@@ -296,18 +305,18 @@ Aligned with PRD §1–§2, `docs/2-discovery/01-conceptual-overview.md`, and `d
 
 These are not engineering tasks — they are policy/scope decisions that must be made by the right humans before the corresponding tickets can land cleanly:
 
-1. **Threshold-detection policy (P-012).** Keep auto-Approve as an "advisory" feature documented in ADR-006, or remove it entirely. Stakeholder: Alpen + Wakeup architecture leads.
+1. **Threshold-detection policy (P-012).** **Resolved** — explicit approve per ADR-006. Threshold resync on broadcast remains open (P-035).
 2. **SPS-65 archival in-repo (P-055).** Are we allowed to ship excerpts of the SPS-65 Notion document under `docs/specs/sps-reference/`? Stakeholder: Alpen legal-of-record.
 3. **Cursor IDE rule semantics (P-054).** Confirm whether `.cursor/rules/` is IDE-managed or source-controlled before we delete or consolidate.
 4. **Operator-key custody model (P-001, P-003, P-040).** Sidecar daemon, OS keychain, HSM, or hardware-wallet–only? The choice changes Wave-2 implementation across two teams.
-5. **Manual fallback scope (P-052, P-053).** Is US-H5 a Slice-0/walking-skeleton invariant or a deferred story? PRD §2.3 reads as the former; the story map reads as the latter.
+5. **Manual fallback scope (P-052, P-053).** **Partial** — `/manual` and [manual-execution-flow.md](../specs/manual-execution-flow.md) shipped; export/reconcile in [deferred-backlog.md](deferred-backlog.md) US-H5.
 
 ---
 
 ## 7. Confidence and adversarial caveats
 
 - **Code-read severity, not measured.** None of the disconfirming probes proposed by individual axes were executed. If production deploy scripts already enforce env-var presence and reject the test key, several Tier 0 items downgrade.
-- **"Coordination only" reading (P-012, P-055) depends on SPS-65 interpretation we cannot verify locally.** If Alpen confirms threshold detection is in-scope, P-012 collapses to documentation.
+- **"Coordination only" reading (P-055) depends on SPS-65 interpretation we cannot verify locally.**
 - **`u64` precision (P-021) and BIP-137 (P-033) are real but may not be hit in practice today.** Confirm before allocating Wave-2 effort.
 - **Race conditions (P-019, P-020, P-018) are theoretical until a load test confirms them.** Current Tokio + in-process `RwLock` may serialize accidentally; Postgres path may already use `SELECT FOR UPDATE` in places not re-read this sprint.
 - **The 17 axes overlap heavily.** This document merges duplicates; raw axis-finding counts overstate scope.
@@ -324,6 +333,12 @@ If we can ship only the smallest credible change per track in Wave 1, ship these
 - **D (ops baseline):** P-029 skeleton. One PR: `#[tracing::instrument]` on every handler with `action_id`/`authority`/`seq_no`; `/ready` checks Postgres + RPC URLs.
 
 These four PRs alone close 4 of 19 BLOCKERs in roughly 5 engineering days and unblock the rest of Wave 1.
+
+---
+
+## 9. Closure note (2026-06)
+
+Material decisions from this plan landed in [ADR-006](../architecture/adrs/006-backend-coordination-boundary.md), Wave 2 execution tracks ([wave2-exit-gap-review.md](wave2-exit-gap-review.md)), and ongoing backlog ([deferred-backlog.md](deferred-backlog.md)). May 2025 adversarial assessment folders were removed when stale; use the links above for current status.
 
 ---
 
