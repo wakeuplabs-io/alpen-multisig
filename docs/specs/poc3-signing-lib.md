@@ -1,4 +1,6 @@
 # Spec: POC-3 — Signing Library (Tauri Commands)
+> **Status: Historical (walking skeleton / POC).** Superseded for product behavior by [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md), [`architecture/overview.md`](../architecture/overview.md), and active `admin-wallet-*` specs. Kept for traceability.
+>
 
 ## Objective
 
@@ -89,3 +91,10 @@ All tests target production functions. Test helpers (`generate_demo_keys`, `buil
 - [x] Preserves manual fallback (self-contained, no backend dependency)
 - [x] Authority isolation enforced (demo uses `StrataAdministrator` role)
 - [x] Signer safety guaranteed (private keys only in test helpers, never in production paths)
+
+## Related
+
+- [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md) — Alpen crate pins
+- [ADR-005](../architecture/adrs/005-layered-architecture.md) — Layered desktop architecture
+- [`2-discovery/README.md`](../2-discovery/README.md) — POC findings index
+
