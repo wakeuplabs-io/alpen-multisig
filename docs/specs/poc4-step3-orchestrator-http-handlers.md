@@ -1,4 +1,6 @@
 # Spec: POC-4 Step 3 — Orchestrator HTTP Handlers
+> **Status: Historical (walking skeleton / POC).** Superseded for product behavior by [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md), [`architecture/overview.md`](../architecture/overview.md), and active `admin-wallet-*` specs. Kept for traceability.
+>
 
 ## Objective
 
@@ -118,3 +120,10 @@ All tests are HTTP integration tests (request → router → handler → app lay
 - **`handlers/mod.rs`** — Router definition (unchanged structure).
 
 No new modules. Existing handler files get their `todo!()` replaced with real wiring.
+
+## Related
+
+- [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md) — Alpen crate pins
+- [ADR-005](../architecture/adrs/005-layered-architecture.md) — Layered desktop architecture
+- [`2-discovery/README.md`](../2-discovery/README.md) — POC findings index
+
