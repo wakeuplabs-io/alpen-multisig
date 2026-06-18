@@ -15,4 +15,4 @@
 
 ## Manual fallback (US-H5)
 
-When orchestrator is unavailable after signatures: export payloads, broadcast via any Bitcoin RPC, reconcile metadata when coordinator returns. Scope: [wave2-human-decisions-pending.md](../assessment/wave2-human-decisions-pending.md).
+**Partial.** The `/manual` route and `proposals_broadcast_manual` IPC let a signer broadcast commit/reveal from locally aggregated signatures when the orchestrator is unreachable. Portable export of `actionHex` + signature list and coordinator reconciliation when the backend returns remain open — see [manual-execution-flow.md](./manual-execution-flow.md) and [deferred-backlog.md](../assessment/deferred-backlog.md#us-h5--manual-coordinator-down-fallback).

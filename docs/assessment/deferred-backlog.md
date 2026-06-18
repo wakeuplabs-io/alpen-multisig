@@ -10,13 +10,21 @@
 
 ### US-H5 — Manual coordinator-down fallback
 
+**Status:** Partial.
+
 **As a** signer, **I want to** be able to aggregate signatures and broadcast the commit/reveal transaction manually when the orchestrator is unavailable, **so that** a coordinator outage never permanently blocks an approved proposal from being enacted.
 
-**Acceptance criteria:**
+**Already shipped:**
+- `/manual` UI route and `proposals_broadcast_manual` Tauri command.
+- [manual-execution-flow.md](../specs/manual-execution-flow.md) spec for coordinator-down broadcast.
+
+**Acceptance criteria (remaining):**
 - Signer can export the aggregated `actionHex` + collected `signatureHex` list from the UI as a portable artifact.
-- Signer can construct and broadcast the commit/reveal pair using any Bitcoin RPC endpoint without the orchestrator being online.
-- When the orchestrator comes back, the signer can report broadcast progress (txids) to reconcile state.
 - Offline path is documented in the operations runbook with a step-by-step procedure.
+- When the orchestrator comes back, the signer can report broadcast progress (txids) to reconcile state.
+
+**Acceptance criteria (met):**
+- Signer can construct and broadcast the commit/reveal pair using any Bitcoin RPC endpoint without the orchestrator being online (via manual flow).
 
 **Source:** PRD §2.3; [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) §3; P-052.  
 **Priority:** High.
