@@ -25,21 +25,21 @@ flowchart LR
 
 | If you need… | Read first | Status |
 |--------------|------------|--------|
-| System architecture (internal) | [`architecture/overview.md`](./architecture/overview.md) + [`architecture/adrs/`](./architecture/adrs/) | Vigente |
-| Client-facing architecture | [`external/architecture-overview.md`](./external/architecture-overview.md) | Cliente |
-| Coordination boundary (backend vs desktop) | [ADR-006](./architecture/adrs/006-backend-coordination-boundary.md) | Vigente |
-| Admin Wallet PRD §4 compliance | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | Vigente |
-| Capability / coverage pointers | [`architecture/overview.md`](./architecture/overview.md#capability-status-where-to-look), [`3-stories/README.md`](./3-stories/README.md#capability-status-where-to-look) | Vigente |
-| Open backlog (user stories + NFRs) | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md) | Vigente |
-| Wave / P-ID closure tracking | [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | Vigente |
-| Ops (runbook, local stack) | [`operations/runbook.md`](./operations/runbook.md) | Vigente |
-| Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Vigente |
-| Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Cliente |
-| Security model | [`security/threat-model.md`](./security/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Vigente |
-| Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Histórico / referencia |
-| POC / walking-skeleton specs | `specs/poc*.md` (bannered historical) | Histórico |
-| Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Histórico |
-| Implementation audits | [`analysis/`](./analysis/) | Referencia |
+| System architecture (internal) | [`architecture/overview.md`](./architecture/overview.md) + [`architecture/adrs/`](./architecture/adrs/) | Current |
+| Client-facing architecture | [`external/architecture-overview.md`](./external/architecture-overview.md) | Client |
+| Coordination boundary (backend vs desktop) | [ADR-006](./architecture/adrs/006-backend-coordination-boundary.md) | Current |
+| Admin Wallet PRD §4 compliance | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | Current |
+| Capability / coverage pointers | [`architecture/overview.md`](./architecture/overview.md#capability-status-where-to-look), [`3-stories/README.md`](./3-stories/README.md#capability-status-where-to-look) | Current |
+| Open backlog (user stories + NFRs) | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md) | Current |
+| Wave / P-ID closure tracking | [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | Current |
+| Ops (runbook, local stack) | [`operations/runbook.md`](./operations/runbook.md) | Current |
+| Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
+| Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
+| Security model | [`security/threat-model.md`](./security/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
+| Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
+| POC / walking-skeleton specs | `specs/poc*.md` (bannered historical) | Historical |
+| Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Historical |
+| Implementation audits | [`analysis/`](./analysis/) | Reference |
 
 ## SSOT vs. historical competitors
 

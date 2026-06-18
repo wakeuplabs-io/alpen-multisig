@@ -2,7 +2,7 @@
 
 **Audience:** Engineers tracking backlog closure, wave history, and P-ID resolution.
 
-This folder mixes **vigente trackers** with **historical snapshots**. Do not treat every file here as current truth.
+This folder mixes **current trackers** with **historical snapshots**. Do not treat every file here as current truth.
 
 ## Current (SSOT)
 
