@@ -41,6 +41,22 @@ flowchart LR
 | Point-in-time code reviews | [`reviews/`](./reviews/) (see resolution banners) | Histórico |
 | Implementation audits | [`analysis/`](./analysis/) | Referencia |
 
+## SSOT vs. historical competitors
+
+Use this table when two internal docs seem to disagree. **SSOT** is where current truth lives; **do not use** lists common lookalikes that are historical, phased, or superseded.
+
+| Domain | SSOT (read for current truth) | Do not use for current truth | Why |
+|--------|-------------------------------|------------------------------|-----|
+| System architecture | [`architecture/overview.md`](./architecture/overview.md), [`architecture/adrs/`](./architecture/adrs/) | [`deliverable/research.md`](./deliverable/research.md), `specs/poc*.md` | Research stub indexes external deliverable; POC specs are pre-production snapshots |
+| Admin Wallet PRD §4 | [`specs/admin-wallet-prd-compliance.md`](./specs/admin-wallet-prd-compliance.md) | [`specs/admin-wallet-implementation-plan.md`](./specs/admin-wallet-implementation-plan.md) | Plan tracks engineering slices; PASS/FAIL lives only in the compliance matrix ([conflict rule #4](#conflict-resolution)) |
+| Feature contract | `specs/<feature>.md` | `*-implementation.md`, [`feature/`](./feature/) `feature-delta.md`, [`evolution/`](./evolution/) | See [`specs/README.md`](./specs/README.md) layer order ([conflict rule #3](#conflict-resolution)) |
+| Architecture decisions | [`architecture/adrs/`](./architecture/adrs/) | [`2-discovery/`](./2-discovery/), dated assessments | Discovery is Phase 1 evidence; accepted decisions are ADRs only |
+| Backlog & closure | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md), [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | [`action-plan-2026-05-14.md`](./assessment/action-plan-2026-05-14.md), `wave2-track-*`, [`wave2-human-decisions-pending.md`](./assessment/wave2-human-decisions-pending.md) | See [`assessment/README.md`](./assessment/README.md) ([conflict rule #6](#conflict-resolution)) |
+| Operations | [`operations/runbook.md`](./operations/runbook.md) | [`action-plan-2026-05-14.md`](./assessment/action-plan-2026-05-14.md) P-051 severity row | Runbook and related ops docs exist; 2026-05-14 table is a historical snapshot |
+| Security | [`security/threat-model.md`](./security/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
+
+Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`feature/README.md`](./feature/README.md), [`evolution/README.md`](./evolution/README.md).
+
 ## Conflict resolution
 
 When documents disagree, use this order:
@@ -60,10 +76,10 @@ When documents disagree, use this order:
 | `2-discovery/` | Phase 1 research and POC findings (historical context) |
 | `3-stories/` | Story map and non-functional items |
 | `architecture/` | Overview + ADRs |
-| `specs/` | Per-feature contracts and implementation notes |
-| `feature/` | nWave DELIVER artifacts (`roadmap.json`, deltas) |
-| `evolution/` | Archived feature summaries post-merge |
-| `assessment/` | Backlog, wave tracks, action-plan synthesis |
+| `specs/` | Per-feature contracts and implementation notes — see [`specs/README.md`](./specs/README.md) |
+| `feature/` | nWave DELIVER artifacts (`roadmap.json`, deltas) — see [`feature/README.md`](./feature/README.md) |
+| `evolution/` | Archived feature summaries post-merge — see [`evolution/README.md`](./evolution/README.md) |
+| `assessment/` | Backlog, wave tracks, action-plan synthesis — see [`assessment/README.md`](./assessment/README.md) |
 | `external/` | Client deliverables (canonical for delivery) |
 | `operations/` | Runbook, delivery plan; short pointers to `external/` |
 | `security/` | Threat model |
