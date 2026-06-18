@@ -88,16 +88,16 @@
 
 ### NFR-PERSIST — Persistent proposal storage
 
-**Description:** The orchestrator must store proposals in a durable, append-friendly store so that a process restart does not lose state.
+**Status:** Done.
 
-**Requirement:**
-- `orchestrator-be` supports a Postgres backend (via `sqlx` or equivalent) behind the `ProposalRepository` trait.
-- In-memory backend remains available for local dev/testing.
-- Migration scripts are versioned under `orchestrator-be/migrations/`.
-- `docker-compose.yml` (or equivalent) includes a Postgres service for local stack.
+**Implemented:**
+- `orchestrator-be` Postgres backend (`postgres_repo.rs`) behind the `ProposalRepository` trait when `DATABASE_URL` is set.
+- In-memory backend remains available for local dev/testing (`memory_repo.rs`).
+- Versioned migrations under `orchestrator-be/migrations/`.
+- Postgres service in `staging/docker-compose.yml` for the local stack.
 
 **Source:** P-031.  
-**Priority:** Medium.
+**Priority:** Medium (closed).
 
 ---
 
