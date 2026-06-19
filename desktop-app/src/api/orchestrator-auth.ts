@@ -43,6 +43,7 @@ export function orchestratorOverrideFromConfig(config: {
 export type OrchestratorAuthChallenge = {
 	challengeId: string
 	challengeHex: string
+	challengeMessage: string
 }
 
 export type OrchestratorAuthSession = {
@@ -90,6 +91,7 @@ export function orchestratorAuthStart(
 			data: {
 				challengeId: result.data.challenge_id,
 				challengeHex: result.data.challenge_hex,
+				challengeMessage: result.data.challenge_message,
 			},
 		}
 	})

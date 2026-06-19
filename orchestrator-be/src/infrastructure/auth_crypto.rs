@@ -7,6 +7,10 @@ use rand::RngCore;
 
 const AUTH_DOMAIN: &str = "alpen-multisig/orchestrator/v1";
 
+pub(crate) fn render_challenge_message(role_label: &str, challenge_hex: &str) -> String {
+    format!("Strata Session Authentication v1\nRole: {role_label}\nChallenge: {challenge_hex}")
+}
+
 pub(crate) fn create_challenge_digest(
     authority_wire: &str,
     nonce_hex: &str,
@@ -52,7 +56,7 @@ pub(crate) fn verify_signature(
 }
 
 pub(crate) fn verify_bitcoin_message_signature(
-    challenge_digest_hex: &str,
+    challenge_message: &str,
     signer_pubkey_hex: &str,
     signature_hex: &str,
 ) -> Result<(), String> {
@@ -71,7 +75,7 @@ pub(crate) fn verify_bitcoin_message_signature(
     let recoverable = RecoverableSignature::from_compact(&signature_bytes[..64], recid)
         .map_err(|e| format!("invalid recoverable signature: {e}"))?;
 
-    let message_hash = signed_msg_hash(challenge_digest_hex);
+    let message_hash = signed_msg_hash(challenge_message);
     let message = Message::from_digest_slice(message_hash.as_ref())
         .map_err(|e| format!("invalid signed message digest: {e}"))?;
     let recovered = Secp256k1::new()

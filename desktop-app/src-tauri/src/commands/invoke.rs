@@ -126,6 +126,7 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::signing::sign_action_sighash,
         super::signing::list_mnemonic_addresses,
         super::signing::sign_with_mnemonic_path,
+        super::signing::sign_message_with_mnemonic_path,
         super::admin_wallet::get_admin_wallet_info,
         super::admin_wallet::admin_wallet_get_balance,
         super::admin_wallet::admin_wallet_list_utxos,

@@ -41,12 +41,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 	}, [selectedRole, session])
 
 	const authenticate = useCallback(
-		async (signChallenge: (challengeHex: string) => Promise<SignSighashResult>) => {
+		async (signChallenge: (challengeMessage: string) => Promise<SignSighashResult>) => {
 			const challengeResult = await authStartChallenge({ role: selectedRole })
 			if (!challengeResult.ok) {
 				throw new Error(challengeResult.error)
 			}
-			const signature = await signChallenge(challengeResult.data.challengeHex)
+			const signature = await signChallenge(challengeResult.data.challengeMessage)
 			const completeResult = await authComplete({
 				challengeId: challengeResult.data.challengeId,
 				signerPubkeyHex: signature.publicKeyHex,

@@ -92,9 +92,12 @@ fn start_challenge_with_membership(
         &session_id,
     );
     let challenge_id = nonce_hex.clone();
+    let challenge_hex = hex::encode(challenge_digest);
+    let challenge_message = challenge_verifier::render_challenge_message(role_wire, &challenge_hex);
     let challenge = AuthChallenge {
         challenge_id: challenge_id.clone(),
-        challenge_hex: hex::encode(challenge_digest),
+        challenge_hex,
+        challenge_message,
         nonce_hex,
         domain: "alpen-multisig/auth/v1".to_string(),
         role: input.role,
@@ -153,7 +156,7 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
     let mut state = auth_state()
         .lock()
         .map_err(|_| "auth state lock poisoned".to_string())?;
-    let (challenge_hex, role) = {
+    let (challenge_hex, challenge_message, role) = {
         let pending = state
             .pending
             .get_mut(&input.challenge_id)
@@ -167,6 +170,7 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
         }
         (
             pending.challenge.challenge_hex.clone(),
+            pending.challenge.challenge_message.clone(),
             pending.challenge.role,
         )
     };
@@ -187,7 +191,7 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
 
     match signature_format {
         SIG_FORMAT_BITCOIN_MESSAGE => challenge_verifier::verify_bitcoin_message_signature(
-            &challenge_hex,
+            &challenge_message,
             &input.signer_pubkey_hex,
             &input.signature_hex,
         )?,
