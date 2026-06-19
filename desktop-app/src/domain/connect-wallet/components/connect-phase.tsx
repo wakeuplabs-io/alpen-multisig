@@ -142,7 +142,7 @@ export function ConnectPhase({
 					</button>
 					<button
 						type="button"
-						data-testid="e2e-connect-palabras"
+						data-testid="e2e-connect-mnemonic"
 						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'mnemonic'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
