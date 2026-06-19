@@ -137,6 +137,11 @@ local test network you started — no configuration needed.
 > If the app ever can't reach the network, open **Settings → Node** and confirm the connection
 > mode is **Local** (the default).
 
+> **Note for Mnemonic users:** to enable Mnemonic usage the app has to be opened from the terminal
+> and setting up the following env variable: `ALLOW_DEV_MNEMONIC_SIGNING=1`
+> 
+> Example command for MacOS users: `ALLOW_DEV_MNEMONIC_SIGNING=1 "/Applications/Strata Multisig.app/Contents/MacOS/desktop-app"`
+
 ---
 
 ## 5. Run the smoke test
