@@ -47,8 +47,8 @@ pub fn load_broadcast_env(
     wallet_session: &WalletSession,
     node_config: &NodeConfig,
 ) -> Result<BroadcastEnv, BroadcastEnvError> {
-    let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
-    let network = parse_network(&network_str)?;
+    let network = crate::infrastructure::network_env::network_from_env()
+        .map_err(|e| BroadcastEnvError::InvalidNetwork(e.0))?;
 
     // Gate 1: wallet session must be active
     if wallet_session.current().is_none() {
@@ -85,16 +85,6 @@ pub fn load_broadcast_env(
         confirm_poll_interval_ms,
         confirm_timeout_ms,
     })
-}
-
-fn parse_network(network: &str) -> Result<Network, BroadcastEnvError> {
-    match network {
-        "bitcoin" => Ok(Network::Bitcoin),
-        "testnet" => Ok(Network::Testnet),
-        "signet" => Ok(Network::Signet),
-        "regtest" => Ok(Network::Regtest),
-        other => Err(BroadcastEnvError::InvalidNetwork(other.to_string())),
-    }
 }
 
 fn parse_magic_bytes(hex_str: &str) -> Result<MagicBytes, BroadcastEnvError> {

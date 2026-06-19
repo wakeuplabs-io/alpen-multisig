@@ -3,6 +3,7 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
+use desktop_app::infrastructure::network_env::network_from_env;
 use desktop_app::infrastructure::signing::{self, SignatureResult};
 
 /// Parses the device-kind IPC token into a [`HwDeviceType`] (case-insensitive).
@@ -29,9 +30,9 @@ fn parse_verify_network(network: Option<&str>) -> Network {
 /// BIP-86 Admin Wallet account path by network.
 ///
 /// Mainnet uses coin type `0'`, everything else uses coin type `1'`.
-fn admin_wallet_xpub_path(network: &str) -> &'static str {
+fn admin_wallet_xpub_path(network: Network) -> &'static str {
     match network {
-        "bitcoin" | "mainnet" => "m/86'/0'/73'",
+        Network::Bitcoin => "m/86'/0'/73'",
         _ => "m/86'/1'/73'",
     }
 }
@@ -87,9 +88,8 @@ pub async fn hw_wallet_get_xpub(
     passphrase: Option<String>,
 ) -> Result<String, String> {
     let device = parse_device_kind(&vendor)?;
-    let network_str = std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string());
-    let path = admin_wallet_xpub_path(&network_str).to_string();
-    let network = parse_verify_network(Some(&network_str));
+    let network = network_from_env().map_err(|e| e.to_string())?;
+    let path = admin_wallet_xpub_path(network).to_string();
     let pp = passphrase.unwrap_or_default();
     tokio::task::spawn_blocking(move || device.get_account_xpub(&path, &pp, network))
         .await
@@ -158,15 +158,14 @@ mod tests {
     }
 
     #[test]
-    fn admin_wallet_xpub_path_uses_testnet_coin_type_on_regtest() {
-        assert_eq!(admin_wallet_xpub_path("regtest"), "m/86'/1'/73'");
-        assert_eq!(admin_wallet_xpub_path("testnet"), "m/86'/1'/73'");
-        assert_eq!(admin_wallet_xpub_path("signet"), "m/86'/1'/73'");
+    fn admin_wallet_xpub_path_uses_testnet_coin_type_off_mainnet() {
+        assert_eq!(admin_wallet_xpub_path(Network::Regtest), "m/86'/1'/73'");
+        assert_eq!(admin_wallet_xpub_path(Network::Testnet), "m/86'/1'/73'");
+        assert_eq!(admin_wallet_xpub_path(Network::Signet), "m/86'/1'/73'");
     }
 
     #[test]
     fn admin_wallet_xpub_path_uses_mainnet_coin_type_on_bitcoin() {
-        assert_eq!(admin_wallet_xpub_path("bitcoin"), "m/86'/0'/73'");
-        assert_eq!(admin_wallet_xpub_path("mainnet"), "m/86'/0'/73'");
+        assert_eq!(admin_wallet_xpub_path(Network::Bitcoin), "m/86'/0'/73'");
     }
 }
