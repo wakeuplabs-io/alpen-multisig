@@ -106,11 +106,11 @@ export function AuthenticateSessionPhase({
 						Signing on device — step {signingStep.step} of {signingStep.totalSteps}
 					</p>
 					<p className="m-0 mt-1 text-[0.75rem] text-[#6b7280]">
-						Confirm this hash on your {adapterLabel} — it must match exactly:
+						Confirm this message on your {adapterLabel} — it must match exactly:
 					</p>
-					<p className="m-0 mt-2 break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
-						{signingStep.challengeHex}
-					</p>
+					<pre className="m-0 mt-2 whitespace-pre-wrap break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
+						{signingStep.challengeMessage}
+					</pre>
 				</div>
 			)}
 

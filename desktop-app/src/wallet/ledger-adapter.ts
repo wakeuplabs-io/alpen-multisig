@@ -70,7 +70,7 @@ export function createLedgerAdapter(): WalletAdapter {
 			if (!publicKeyHex) throw new Error('Connect the Ledger first.')
 			if (!context) {
 				const result = await tauriCall<SignatureResult>('sign_challenge_with_ledger', {
-					challengeHex: sighashHex,
+					challengeMessage: sighashHex,
 					derivationPath: currentDerivationPath,
 				})
 				if (!result.ok) throw new Error(result.error)

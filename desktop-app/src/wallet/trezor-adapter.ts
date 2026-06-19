@@ -56,7 +56,7 @@ export function createTrezorAdapter(passphrase?: string): WalletAdapter {
 			if (!publicKeyHex) throw new Error('Connect the Trezor first.')
 			if (!context) {
 				const result = await tauriCall<SignatureResult>('sign_challenge_with_trezor', {
-					challengeHex: sighashHex,
+					challengeMessage: sighashHex,
 					derivationPath: currentDerivationPath,
 					passphrase: pp,
 				})
