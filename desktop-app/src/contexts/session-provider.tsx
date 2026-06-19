@@ -91,7 +91,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 				throw new Error(challengeResult.error)
 			}
 			setSigningStep({
-				challengeHex: challengeResult.data.challengeHex,
 				challengeMessage: challengeResult.data.challengeMessage,
 				step: 1,
 				totalSteps: 1,
@@ -118,7 +117,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	const connectOnChainSession = useCallback(async () => {
 		try {
 			await authenticate((challengeMessage: string) => {
-				setSigningStep({ challengeHex: '', challengeMessage, step: 1, totalSteps: 1 })
+				setSigningStep({ challengeMessage, step: 1, totalSteps: 1 })
 				return adapter.signSighash(challengeMessage)
 			})
 			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
