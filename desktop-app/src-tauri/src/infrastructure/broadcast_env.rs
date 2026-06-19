@@ -14,7 +14,7 @@ pub enum BroadcastEnvError {
     #[error("invalid magic bytes hex: {0}")]
     InvalidMagicBytes(String),
     #[error(
-        "admin wallet session required — disconnect and reconnect your wallet (Ledger, Trezor, or Palabras) before broadcast"
+        "admin wallet session required — disconnect and reconnect your wallet (Ledger, Trezor, or Mnemonic) before broadcast"
     )]
     WalletSessionRequired,
     #[error("admin wallet is watch-only; hardware wallet required to sign")]
