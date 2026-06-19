@@ -50,6 +50,7 @@ pub mod electrum_broadcaster;
 pub mod electrum_fee_estimator;
 pub mod env_loader;
 pub mod hw_wallet;
+pub mod network_env;
 pub mod node_broadcaster;
 pub mod node_config_store;
 pub mod node_fee_estimator;
