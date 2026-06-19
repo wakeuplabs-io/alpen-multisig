@@ -105,7 +105,7 @@ const actionVk = decodedActionSchema.safeParse({
 assert.equal(actionVk.success, true)
 
 // orchestrator-auth raw schemas (snake_case from Tauri)
-const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({ challenge_id: 'c1', challenge_hex: 'aa' })
+const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({ challenge_id: 'c1', challenge_hex: 'aa', challenge_message: 'Sign this message' })
 assert.equal(rawChallenge.success, true)
 
 const rawSession = rawOrchestratorAuthSessionSchema.safeParse({
