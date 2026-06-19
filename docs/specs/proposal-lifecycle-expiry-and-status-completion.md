@@ -2,7 +2,7 @@
 
 ## Objective
 
-Close the PRD §3–4 gaps identified in the lifecycle audit (`docs/analysis/proposal_status_lifecycle_audit.md`).
+Close the PRD §3–4 gaps identified in the lifecycle audit (`docs/assessment/audits/proposal_status_lifecycle_audit.md`).
 Specifically: expose `created_at` through the full stack, enforce the 7-day expiry rule, surface countdown
 UI in all relevant screens, add a quorum-reached broadcast prompt, and add full end-to-end lifecycle test
 coverage via the integration harness.

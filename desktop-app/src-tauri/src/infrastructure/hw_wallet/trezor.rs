@@ -71,7 +71,9 @@ fn sign_message_recoverable<'a>(
     let mut req = protos::SignMessage::new();
     req.address_n = utils::convert_path(path);
     req.set_message(message.as_bytes().to_vec());
-    req.set_coin_name(utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_coin_name(
+        utils::coin_name(trezor_coin_network(network)).map_err(|e| format!("coin_name: {e}"))?,
+    );
     req.set_script_type(script_type);
     trezor
         .call(
@@ -104,7 +106,9 @@ fn get_xpub<'a>(
     let mut req = protos::GetPublicKey::new();
     req.address_n = utils::convert_path(path);
     req.set_show_display(show_display);
-    req.set_coin_name(utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?);
+    req.set_coin_name(
+        utils::coin_name(trezor_coin_network(network)).map_err(|e| format!("coin_name: {e}"))?,
+    );
     req.set_script_type(script_type);
     req.set_ignore_xpub_magic(true);
     trezor
@@ -196,7 +200,8 @@ pub fn verify_address_on_device(
 ) -> Result<(), String> {
     let path = parse_path(&derivation_path)?;
     let mut trezor = open_trezor()?;
-    let coin = utils::coin_name(network).map_err(|e| format!("coin_name: {e}"))?;
+    let coin =
+        utils::coin_name(trezor_coin_network(network)).map_err(|e| format!("coin_name: {e}"))?;
 
     let mut req = protos::GetAddress::new();
     req.address_n = utils::convert_path(&path);
@@ -221,7 +226,7 @@ pub fn verify_address_on_device(
 /// Uses `SPENDTAPROOT` script type so Trezor derives the correct key material
 /// for a P2TR wallet. `ignore_xpub_magic = true` (set inside `get_xpub`) ensures
 /// standard `xpub` version bytes are returned instead of SLIP-0132 `Xpub` bytes.
-pub fn get_account_xpub(path: &str, passphrase: &str) -> Result<String, String> {
+pub fn get_account_xpub(path: &str, passphrase: &str, network: Network) -> Result<String, String> {
     let derivation_path = parse_path(path)?;
     let mut trezor = open_trezor()?;
     let xpub = resolve(
@@ -229,7 +234,7 @@ pub fn get_account_xpub(path: &str, passphrase: &str) -> Result<String, String> 
             &mut trezor,
             &derivation_path,
             InputScriptType::SPENDTAPROOT,
-            Network::Bitcoin,
+            trezor_coin_network(network),
             false,
         )?,
         passphrase,
@@ -465,6 +470,15 @@ fn apply_taproot_signatures(
     Ok(())
 }
 
+/// trezor-client's `coin_name()` only knows Bitcoin and Testnet.
+/// Regtest and Signet are Testnet-compatible for signing purposes.
+fn trezor_coin_network(network: Network) -> Network {
+    match network {
+        Network::Bitcoin => Network::Bitcoin,
+        _ => Network::Testnet,
+    }
+}
+
 /// Drives the Trezor `SignTx` flow for a taproot key-path spend, collecting the
 /// signatures and applying them to `psbt`. trezor-client 0.1.5's built-in flow
 /// classifies P2TR inputs as `EXTERNAL` (won't sign), so we ack each request
@@ -477,10 +491,11 @@ fn sign_taproot_psbt(
 ) -> Result<(), String> {
     use protos::tx_request::RequestType;
 
+    let coin_net = trezor_coin_network(network);
     let mut signatures: Vec<(usize, Vec<u8>)> = Vec::new();
     let mut progress = resolve(
         trezor
-            .sign_tx(psbt, network)
+            .sign_tx(psbt, coin_net)
             .map_err(|e| format!("Trezor sign_tx failed: {e}"))?,
         "",
     )?;
@@ -494,7 +509,9 @@ fn sign_taproot_psbt(
         }
         let ack = match progress.tx_request().request_type() {
             RequestType::TXINPUT => ack_input(progress.tx_request(), psbt, expected_fp)?,
-            RequestType::TXOUTPUT => ack_output(progress.tx_request(), psbt, network, expected_fp)?,
+            RequestType::TXOUTPUT => {
+                ack_output(progress.tx_request(), psbt, coin_net, expected_fp)?
+            }
             RequestType::TXMETA => ack_meta(psbt),
             other => {
                 return Err(format!(
@@ -542,6 +559,14 @@ pub fn sign_admin_wallet_psbt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trezor_coin_network_maps_regtest_and_signet_to_testnet() {
+        assert_eq!(trezor_coin_network(Network::Bitcoin), Network::Bitcoin);
+        assert_eq!(trezor_coin_network(Network::Testnet), Network::Testnet);
+        assert_eq!(trezor_coin_network(Network::Regtest), Network::Testnet);
+        assert_eq!(trezor_coin_network(Network::Signet), Network::Testnet);
+    }
 
     #[test]
     fn input_script_type_maps_taproot_and_witness() {

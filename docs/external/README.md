@@ -1,6 +1,6 @@
 # Alpen Multisig — External Documentation
 
-This directory contains the complete set of client-facing deliverables for the Alpen Multisig application. These documents are intended for delivery to Alpen Labs and provide comprehensive coverage of the system architecture, API, setup procedures, and operational guidance.
+This directory contains client-facing deliverables for the Alpen Multisig application. These documents are intended for delivery to Alpen Labs and describe the delivered scope: architecture, API, setup, operations, and quality artifacts for the current release line.
 
 ## Document Index
 
@@ -43,7 +43,7 @@ All external documents follow these principles:
 1. **PRD Traceability** — Each document references the specific PRD requirement or proposal deliverable it satisfies
 2. **Client-Focused** — Written for a technical audience at Alpen Labs
 3. **Self-Contained** — Each document can be read independently without requiring access to internal development documentation
-4. **Current Scope** — Documentation reflects the current implementation status. Some features (e.g., Alpen Administrator VK update, Security Council support) are pending upstream protocol additions or later development phases
+4. **Current Scope** — Documentation reflects the current implementation status. Some features (e.g., Alpen Administrator VK update enactment detection, Security Council support) depend on upstream protocol work or later phases — see [Architecture Overview](./architecture-overview.md) limitations and open items described there.
 5. **No Internal References** — No references to internal development phases, tracking codes, or working documents
 
 ## Quick Start
@@ -68,7 +68,7 @@ Before using any release:
 For issues, questions, or feedback:
 
 - **GitHub Issues:** [https://github.com/wakeuplabs-io/alpen-multisig/issues](https://github.com/wakeuplabs-io/alpen-multisig/issues)
-- **Documentation:** This directory provides comprehensive documentation for all aspects of the system
+- **Documentation:** This directory provides documentation for the delivered scope of the system
 
 ## Document Maintenance
 

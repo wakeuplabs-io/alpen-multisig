@@ -8,8 +8,8 @@
 
 | Slice | Scope | Delivery |
 |-------|--------|----------|
-| **3.7a** | Session slot, wallet IPC, commit funding from session | Delivered 2026-05-28 ([evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md)) |
-| **3.7b** | Session-bound SPS-50 commit/reveal internal key (`m/86'/0'/73'/2/0`) | Delivered — see [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json) |
+| **3.7a** | Session slot, wallet IPC, commit funding from session | Delivered 2026-05-28 ([evolution](../archive/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md)) |
+| **3.7b** | Session-bound SPS-50 commit/reveal internal key (`m/86'/0'/73'/2/0`) | Delivered — see [roadmap Phase 06](../archive/features/admin-wallet-session-bound-mnemonic/deliver/roadmap.json) |
 | **3.7c** | Remove `ADMIN_WALLET_REGTEST_MNEMONIC` (prod + tests) | **Delivered** — mnemonic only via `wallet_session_init` / `init_from_mnemonic`; tests use constants + session init |
 
 ## Objective

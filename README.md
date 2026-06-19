@@ -15,7 +15,7 @@ Installation steps per platform: [Setup Guide](docs/external/setup-guide.md).
 ## Capabilities
 
 - Governance proposals across the Strata and Alpen administrative multisigs — create, review, sign, and broadcast.
-- Off-chain signature collection, with a manual fallback when the backend is unavailable.
+- Off-chain signature collection; manual proposal flow (`/manual`) when the coordinator is down, with full US-H5 export/reconcile still open — see [manual-execution-flow.md](docs/specs/manual-execution-flow.md) and [deferred-backlog.md](docs/assessment/deferred-backlog.md#us-h5--manual-coordinator-down-fallback).
 - Admin Wallet: send and receive BTC, fee control, and fee-bump (RBF / CPFP).
 - Hardware wallet integration (Trezor, Ledger) — see the [compatibility matrix](docs/external/hardware-wallet-matrix.md).
 - Signed, reproducible builds for Linux, macOS, and Windows.
