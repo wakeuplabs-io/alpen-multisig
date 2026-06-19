@@ -15,6 +15,7 @@ import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 import { BlockPayoutsScreen } from '@/screens/block-payouts-screen'
 import { ManualProposalScreen } from '@/screens/manual-proposal-screen'
+import { SessionExpiryModal } from '@/components/session-expiry-modal'
 
 function RequireAuth({ children }: { children: ReactElement }) {
 	const { isAuthenticated, isOrchestratorSessionActive, isLoading } = useSession()
@@ -33,6 +34,7 @@ export default function App() {
 			<AuthSessionProvider>
 				<WalletSessionProvider>
 					<SessionProvider>
+						<SessionExpiryModal />
 						<Routes>
 							<Route path="/" element={<WalletConnectScreen />} />
 							<Route

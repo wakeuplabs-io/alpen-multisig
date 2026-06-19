@@ -14,6 +14,7 @@ import { computeSighash } from '@/api/signing'
 import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useSession } from '@/hooks/use-session'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -237,13 +238,7 @@ export function CancelProposalSignScreen() {
 			}
 		>
 			<div className="mx-auto w-full max-w-190">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
-					onClick={() => navigate(`/proposals/${actionId}/cancel`)}
-				>
-					← Back to cancel
-				</button>
+				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					{flowTitle}

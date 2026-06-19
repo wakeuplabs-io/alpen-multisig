@@ -151,6 +151,18 @@ export function ProposalsDashboard({
 										{activeProposals.length}
 									</span>
 								)}
+								{tab === 'past' && pastProposals.length > 0 && (
+									<span
+										className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+										style={
+											activeTab === 'past'
+												? { background: '#0a0a0a', color: '#fff' }
+												: { background: '#e5e7eb', color: '#6b7280' }
+										}
+									>
+										{pastProposals.length}
+									</span>
+								)}
 							</button>
 						))}
 					</div>
@@ -205,11 +217,14 @@ function PendingTab({
 }) {
 	if (quorumReached.length === 0 && pending.length === 0) {
 		return (
-			<div>
-				<p className="m-0 mb-2 text-body-sm text-[#6b7280]">Stored offchain. Visible only to multisig signers.</p>
-				<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-body-sm text-[#9ca3af]">
-					No proposals are currently collecting signatures.
+			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-10 text-center">
+				<div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-bg-base">
+					<ClockAmberIcon width={18} height={18} className="block text-[#9ca3af]" />
 				</div>
+				<p className="m-0 text-body-sm font-medium text-[#374151]">No pending proposals</p>
+				<p className="m-0 mt-1 text-label text-[#9ca3af]">
+					New proposals will appear here once created. They need signatures before reaching quorum.
+				</p>
 			</div>
 		)
 	}
@@ -271,8 +286,12 @@ function PastTab({
 }) {
 	if (totalProposals === 0) {
 		return (
-			<div className="rounded-xl border border-[#e5e7eb] bg-white px-5 py-4 text-body-sm text-[#9ca3af]">
-				No past proposals yet.
+			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-10 text-center">
+				<div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-bg-base">
+					<FileTextMutedIcon width={18} height={18} className="block text-[#9ca3af]" />
+				</div>
+				<p className="m-0 text-body-sm font-medium text-[#374151]">No past proposals</p>
+				<p className="m-0 mt-1 text-label text-[#9ca3af]">Enacted, canceled, and expired proposals will appear here.</p>
 			</div>
 		)
 	}
