@@ -269,12 +269,14 @@ run_test() {
 # Run tests in dependency order:
 # 1. wallet-smoke (independent)
 # 2. admin-wallet-panel (independent — tests wallet panel lifecycle)
-# 3. proposal-add-signer (creates a proposal)
-# 4. proposal-co-sign-mnemonic (requires add-signer)
-# 5. proposal-broadcast-quorum (requires co-sign → quorum reached)
+# 3. fee-bump (independent — validates wallet panel balance flow)
+# 4. proposal-add-signer (creates a proposal)
+# 5. proposal-co-sign-mnemonic (requires add-signer)
+# 6. proposal-broadcast-quorum (requires co-sign → quorum reached)
 
 run_test "wallet-smoke" "test/specs/wallet-smoke.e2e.js"
 run_test "admin-wallet-panel" "test/specs/admin-wallet-panel.e2e.js"
+run_test "fee-bump" "test/specs/fee-bump.e2e.js"
 run_test "proposal-add-signer" "test/specs/proposal-add-signer.e2e.js"
 run_test "proposal-co-sign-mnemonic" "test/specs/proposal-co-sign-mnemonic.e2e.js"
 run_test "proposal-broadcast-quorum" "test/specs/proposal-broadcast-quorum.e2e.js"
