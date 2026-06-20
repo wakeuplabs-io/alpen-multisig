@@ -141,7 +141,7 @@ pub fn derive_commit_address(
         .map_err(|e| format!("envelope builder error: {e:?}"))?
         .add_envelope(payload)
         .map_err(|e| format!("add_envelope error: {e:?}"))?
-        .build()
+        .build_without_min_check()
         .map_err(|e| format!("build envelope script error: {e:?}"))?;
 
     let taproot_spend_info = TaprootBuilder::new()

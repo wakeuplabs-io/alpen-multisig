@@ -10,7 +10,7 @@ function labelFor(kind: 'hardware' | 'mnemonic' | 'none', vendor: WalletVendor):
 		return vendor === 'trezor' ? 'Trezor (on-device)' : 'Ledger (on-device)'
 	}
 	if (kind === 'mnemonic') {
-		return 'Palabras / software (no device prompt for commit)'
+		return 'Mnemonic / software (no device prompt for commit)'
 	}
 	return 'Not connected'
 }
@@ -36,13 +36,13 @@ export function BroadcastFundingSignerBanner({ backendSignerKind, connectVendor 
 				</p>
 			) : backendSignerKind === 'mnemonic' ? (
 				<p className="m-0 mt-1 text-[#6b7280]">
-					The commit tx is signed in software (same seed as Palabras). The Ledger emulator will not ask for this step.
+					The commit tx is signed in software (same seed as Mnemonic). The Ledger emulator will not ask for this step.
 				</p>
 			) : null}
 			{mismatch && (
 				<p className="m-0 mt-2 text-[#b45309]">
 					You connected {connectVendor} in the UI, but the Admin Wallet session is not hardware-bound. Disconnect,
-					choose <strong>Ledger</strong> (not Palabras), connect, authenticate again, then retry broadcast.
+					choose <strong>Ledger</strong> (not Mnemonic), connect, authenticate again, then retry broadcast.
 				</p>
 			)}
 		</div>
