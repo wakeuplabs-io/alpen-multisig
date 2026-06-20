@@ -141,24 +141,20 @@ export function ProposalsDashboard({
 								{tab === 'pending' ? 'Pending' : 'Past'}
 								{tab === 'pending' && activeProposals.length > 0 && (
 									<span
-										className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-										style={
-											activeTab === 'pending'
-												? { background: '#0a0a0a', color: '#fff' }
-												: { background: '#e5e7eb', color: '#6b7280' }
-										}
+										className={[
+											'ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+											activeTab === 'pending' ? 'bg-[#0a0a0a] text-white' : 'bg-[#e5e7eb] text-[#6b7280]',
+										].join(' ')}
 									>
 										{activeProposals.length}
 									</span>
 								)}
 								{tab === 'past' && pastProposals.length > 0 && (
 									<span
-										className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-										style={
-											activeTab === 'past'
-												? { background: '#0a0a0a', color: '#fff' }
-												: { background: '#e5e7eb', color: '#6b7280' }
-										}
+										className={[
+											'ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+											activeTab === 'past' ? 'bg-[#0a0a0a] text-white' : 'bg-[#e5e7eb] text-[#6b7280]',
+										].join(' ')}
 									>
 										{pastProposals.length}
 									</span>

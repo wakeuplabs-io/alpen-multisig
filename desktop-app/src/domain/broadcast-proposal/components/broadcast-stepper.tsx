@@ -4,10 +4,16 @@ type StepDef = { label: string; short: string }
 
 const STEPS: StepDef[] = [
 	{ label: 'Fee Selection', short: 'Fee' },
-	{ label: 'Commit', short: 'Commit' },
-	{ label: 'Reveal', short: 'Reveal' },
+	{ label: 'Broadcast', short: 'Broadcast' },
 	{ label: 'Confirmed', short: 'Done' },
 ]
+
+function stepLabel(index: number, fallback: string, phase: BroadcastPhase): string {
+	if (index === STEPS.length - 1 && phase === 'awaiting-confirmation') {
+		return 'Awaiting confirmation'
+	}
+	return fallback
+}
 
 function phaseToStepIndex(phase: BroadcastPhase): number {
 	switch (phase) {
@@ -19,9 +25,8 @@ function phaseToStepIndex(phase: BroadcastPhase): number {
 		case 'broadcasting':
 			return 1
 		case 'awaiting-confirmation':
-			return 3
 		case 'done':
-			return 3
+			return 2
 		case 'error':
 			return -1
 	}
@@ -64,7 +69,7 @@ export function BroadcastStepper({ phase }: Props) {
 									done ? 'text-[#0f9d7a]' : active ? 'text-[#111827]' : 'text-[#9ca3af]',
 								].join(' ')}
 							>
-								{step.label}
+								{stepLabel(i, step.label, phase)}
 							</span>
 						</div>
 					</div>

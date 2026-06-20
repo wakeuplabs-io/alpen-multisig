@@ -16,6 +16,7 @@ export type SessionContextValue = {
 	connectOnChainSession: () => Promise<void>
 	disconnectSession: () => Promise<void>
 	ensureOrchestratorSession: () => Promise<void>
+	extendOrchestratorSession: () => Promise<void>
 	session: AuthSession | null
 	isAuthenticated: boolean
 	isOrchestratorSessionActive: boolean
