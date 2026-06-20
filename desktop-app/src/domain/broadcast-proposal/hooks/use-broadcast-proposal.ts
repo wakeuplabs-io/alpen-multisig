@@ -243,7 +243,7 @@ export function useBroadcastProposal(
 				if (parsed?.success && parsed.data.signerKind !== 'hardware') {
 					setError(
 						deriveBroadcastError(
-							'Admin Wallet is not bound to your hardware device. Disconnect, connect with Ledger (not Palabras), authenticate, then try again.',
+							'Admin Wallet is not bound to your hardware device. Disconnect, connect with Ledger (not Mnemonic), authenticate, then try again.',
 						),
 					)
 					setPhase('error')

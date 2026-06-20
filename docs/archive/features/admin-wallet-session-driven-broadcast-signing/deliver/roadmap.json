@@ -1,0 +1,405 @@
+{
+  "feature_id": "admin-wallet-session-driven-broadcast-signing",
+  "goal": "Implement session-driven broadcast signing with PsbtSigner port, MnemonicPsbtSigner (simulated HW), HwPsbtSigner (real device), structured broadcast error contract, and frontend device-UX.",
+  "slicing_strategy": {
+    "slice_a": "PsbtSigner port + MnemonicPsbtSigner + ALLOW_DEV_MNEMONIC_SIGNING removal + rename + structured error contract (backend) + frontend error parsing (walking skeleton, regtest, no device)",
+    "slice_b": "HwPsbtSigner + device UX + signerKind capability DTO + device prompt component"
+  },
+  "phases": [
+    {
+      "phase_id": "01",
+      "phase_name": "Slice (a) — Backend Foundation: PsbtSigner port, MnemonicPsbtSigner, flag removal, rename",
+      "slice": "a",
+      "steps": [
+        {
+          "step_id": "01-01",
+          "scenario": "BE-04",
+          "description": "Capability matrix — parametrized allowed_on assertions for all signer/network combinations",
+          "test_file": "orchestrator-be/src/application/psbt_signer.rs",
+          "scenario_name": "test_psbt_signer_allowed_on_capability_matrix",
+          "files_to_create": ["orchestrator-be/src/application/psbt_signer.rs"],
+          "files_to_modify": ["orchestrator-be/src/application/mod.rs"],
+          "depends_on": [],
+          "acceptance_criteria": "Mnemonic signer permits signing on test networks (regtest, testnet); rejects mainnet; hardware signer permits all networks (asserted in Phase 04)"
+        },
+        {
+          "step_id": "01-02",
+          "scenario": "BE-03a",
+          "description": "Signer selection — init_from_mnemonic attaches MnemonicPsbtSigner",
+          "test_file": "orchestrator-be/src/application/wallet_session.rs",
+          "scenario_name": "test_init_from_mnemonic_attaches_mnemonic_signer",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_session.rs"],
+          "depends_on": ["01-01"],
+          "acceptance_criteria": "Mnemonic-initialized session has signing capability available on supported networks"
+        },
+        {
+          "step_id": "01-03",
+          "scenario": "BE-03c",
+          "description": "can_sign reflects network capability — signer present AND signer.allowed_on(network)",
+          "test_file": "orchestrator-be/src/application/wallet_service.rs",
+          "scenario_name": "test_wallet_service_can_sign_reflects_network_capability",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_service.rs"],
+          "depends_on": ["01-01", "01-02"],
+          "acceptance_criteria": "Session reports signing capability only when signer supports the active network; false otherwise"
+        },
+        {
+          "step_id": "01-04",
+          "scenario": "BE-06",
+          "description": "HW session present but no signer attached → ReadOnly (not panic, not silent software sign)",
+          "test_file": "orchestrator-be/src/application/wallet_service.rs",
+          "scenario_name": "test_build_signed_commit_no_signer_returns_readonly",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_service.rs", "orchestrator-be/src/infrastructure/admin_wallet/wallet.rs"],
+          "depends_on": ["01-03"],
+          "acceptance_criteria": "Commit build with no signer attached produces read-only error; nothing is broadcast"
+        },
+        {
+          "step_id": "01-05",
+          "scenario": "BE-05",
+          "description": "Mnemonic rejected on mainnet — fail fast, no sync/RPC/PSBT build",
+          "test_file": "orchestrator-be/src/application/wallet_service.rs",
+          "scenario_name": "test_mnemonic_rejected_on_mainnet_fail_fast",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_service.rs", "orchestrator-be/src/infrastructure/admin_wallet/wallet.rs"],
+          "depends_on": ["01-03"],
+          "acceptance_criteria": "Mnemonic signer is rejected on mainnet; broadcast fails before any network I/O with a signer-not-allowed error"
+        },
+        {
+          "step_id": "01-06",
+          "scenario": "BE-16",
+          "description": "Mnemonic on regtest without ALLOW_DEV_MNEMONIC_SIGNING env var — full broadcast succeeds",
+          "test_file": "orchestrator-be/src/application/wallet_service.rs",
+          "scenario_name": "test_mnemonic_on_regtest_without_env_flag_succeeds",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_service.rs", "orchestrator-be/src/infrastructure/broadcast_env.rs"],
+          "depends_on": ["01-01", "01-05"],
+          "acceptance_criteria": "Mnemonic signer is permitted on regtest; broadcast completes successfully without the legacy env flag"
+        },
+        {
+          "step_id": "01-07",
+          "scenario": "BE-01",
+          "description": "Happy path — mnemonic (simulated HW), regtest: build_signed_commit produces valid extractable commit tx",
+          "test_file": "orchestrator-be/src/application/wallet_service.rs",
+          "scenario_name": "test_build_signed_commit_mnemonic_happy_path_regtest",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_service.rs"],
+          "depends_on": ["01-02", "01-03", "01-06"],
+          "acceptance_criteria": "Mnemonic-initialized session produces a valid, extractable commit transaction that broadcasts through commit→reveal→confirmed"
+        },
+        {
+          "step_id": "01-08",
+          "scenario": "BE-10",
+          "description": "Reveal still ephemeral — never calls PsbtSigner",
+          "test_file": "orchestrator-be/src/application/proposals.rs",
+          "scenario_name": "test_reveal_path_never_calls_psbt_signer",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/proposals.rs"],
+          "depends_on": ["01-01", "01-07"],
+          "acceptance_criteria": "Reveal transaction is signed by the ephemeral envelope key, not by the session signer"
+        },
+        {
+          "step_id": "01-09",
+          "scenario": "BE-15",
+          "description": "Regression — downstream broadcast_commit_then_reveal and CommitFunding tests stay green",
+          "test_file": "orchestrator-be/src/application/proposals.rs",
+          "scenario_name": "test_downstream_broadcast_commit_then_reveal_regression",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/application/proposals.rs", "orchestrator-be/src/application/commit_funding.rs"],
+          "depends_on": ["01-07", "01-08"],
+          "acceptance_criteria": "Existing broadcast_commit_then_reveal tests pass; CommitFunding port signature unchanged"
+        },
+        {
+          "step_id": "01-10",
+          "scenario": "FE-02",
+          "description": "Structured-error mapping — all 10 error codes (broadcast_error_code pure helper)",
+          "test_file": "orchestrator-be/src/commands/proposals.rs",
+          "scenario_name": "test_broadcast_error_code_maps_all_10_codes",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/commands/proposals.rs"],
+          "depends_on": ["01-05", "01-04"],
+          "acceptance_criteria": "Every backend error variant produces the correct structured error code per the DDD-8 mapping table with a non-empty human-readable message"
+        },
+        {
+          "step_id": "01-11",
+          "scenario": "BE-11",
+          "description": "Session expiry during broadcast — OrchestratorUnauthorized maps to code=OrchestratorUnauthorized, boundary=BEFORE",
+          "test_file": "orchestrator-be/src/commands/proposals.rs",
+          "scenario_name": "test_broadcast_error_orchestrator_unauthorized",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/commands/proposals.rs"],
+          "depends_on": ["01-10"],
+          "acceptance_criteria": "Orchestrator session expiry produces an error with code indicating unauthorized access, before broadcast boundary, recovery=re-auth→retry"
+        },
+        {
+          "step_id": "01-12",
+          "scenario": "BE-12",
+          "description": "Confirmation timeout — maps to code=Timeout, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true",
+          "test_file": "orchestrator-be/src/commands/proposals.rs",
+          "scenario_name": "test_broadcast_error_confirmation_timeout",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/commands/proposals.rs"],
+          "depends_on": ["01-10"],
+          "acceptance_criteria": "confirm_timeout_ms exceeded → code=Timeout, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true"
+        },
+        {
+          "step_id": "01-13",
+          "scenario": "BE-13",
+          "description": "BitcoinRpc failure BEFORE boundary — code=BitcoinRpc, boundary=BEFORE, recovery=retry-from-scratch, canResubmit=false",
+          "test_file": "orchestrator-be/src/commands/proposals.rs",
+          "scenario_name": "test_broadcast_error_bitcoin_rpc_before_boundary",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/commands/proposals.rs"],
+          "depends_on": ["01-10"],
+          "acceptance_criteria": "RPC error before submit_package → code=BitcoinRpc, boundary=BEFORE, recovery=retry-from-scratch, canResubmit=false (NIT-3)"
+        },
+        {
+          "step_id": "01-14",
+          "scenario": "BE-14",
+          "description": "BitcoinRpc failure AFTER boundary — code=BitcoinRpc, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true",
+          "test_file": "orchestrator-be/src/commands/proposals.rs",
+          "scenario_name": "test_broadcast_error_bitcoin_rpc_after_boundary",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/commands/proposals.rs"],
+          "depends_on": ["01-10", "01-13"],
+          "acceptance_criteria": "RPC error after submit_package with live PendingReveal → code=BitcoinRpc, boundary=AFTER, recovery=resubmit-reveal, canResubmit=true"
+        }
+      ]
+    },
+    {
+      "phase_id": "02",
+      "phase_name": "Slice (a) — Frontend: Structured error contract, error parsing, resubmit gating",
+      "slice": "a",
+      "steps": [
+        {
+          "step_id": "02-01",
+          "scenario": "FE-03a",
+          "description": "deriveBroadcastError parses structured JSON — returns {code, message, recovery} with kind-specific copy",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts",
+          "scenario_name": "deriveBroadcastError parses structured JSON error",
+          "files_to_create": ["desktop-app/src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts"],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/model/broadcast-proposal.ts"],
+          "depends_on": ["01-10"],
+          "acceptance_criteria": "Structured JSON error from backend is parsed into {code, message, recovery} with kind-specific user-facing copy"
+        },
+        {
+          "step_id": "02-02",
+          "scenario": "FE-03b",
+          "description": "deriveBroadcastError falls back for legacy string — returns {code:'Unknown', message:<raw>, recovery:'retry'}",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts",
+          "scenario_name": "deriveBroadcastError falls back for legacy string",
+          "files_to_create": [],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/model/broadcast-proposal.ts"],
+          "depends_on": ["02-01"],
+          "acceptance_criteria": "Given bare legacy error string → returns {code:'Unknown', message:<raw>, recovery:'retry'} (backward compatible)"
+        },
+        {
+          "step_id": "02-03",
+          "scenario": "FE-04",
+          "description": "Resubmit-reveal gating — canResubmit=true ONLY when error.recovery==='resubmit-reveal'; false for HwDisconnected/HwUserRefused/HwSigningFailed/SignerNotAllowedOnNetwork/ReadOnly/OrchestratorUnauthorized",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/hooks/__tests__/use-broadcast-proposal-can-resubmit.test.ts",
+          "scenario_name": "canResubmit is recovery-driven, never Boolean(error)",
+          "files_to_create": ["desktop-app/src/domain/broadcast-proposal/hooks/__tests__/use-broadcast-proposal-can-resubmit.test.ts"],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/hooks/use-broadcast-proposal.ts"],
+          "depends_on": ["02-01", "02-02"],
+          "acceptance_criteria": "Resubmit control is enabled only when the error's recovery guidance is 'resubmit-reveal'; device-absent failure yields canResubmit=false"
+        },
+        {
+          "step_id": "02-04",
+          "scenario": "FE-01",
+          "description": "Button auto-enables when canSign flips true — regression, no new gating code",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-can-sign.test.ts",
+          "scenario_name": "broadcastButtonDisabled enables when canSign=true",
+          "files_to_create": [],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-can-sign.test.ts"],
+          "depends_on": [],
+          "acceptance_criteria": "Broadcast button is enabled when the session has signing capability; disabled when broadcasting or no capability"
+        },
+        {
+          "step_id": "02-05",
+          "scenario": "FE-05b",
+          "description": "Mnemonic path skips device prompt — card behaves byte-identically to R1.0.1 (regression)",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-mnemonic-path.test.tsx",
+          "scenario_name": "mnemonic path skips device prompt, card unchanged",
+          "files_to_create": ["desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-mnemonic-path.test.tsx"],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/components/broadcast-details-card.tsx", "desktop-app/src/domain/broadcast-proposal/components/broadcast-phase-progress.tsx"],
+          "depends_on": ["02-01", "02-03"],
+          "acceptance_criteria": "Mnemonic session → no device prompt rendered; commit→reveal→confirmed advances exactly as R1.0.1"
+        },
+        {
+          "step_id": "02-06",
+          "scenario": "FE-06",
+          "description": "Mnemonic/simulated-HW path keeps card behavior identical — only observable change is structured-error copy + corrected resubmit gating",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-regression.test.tsx",
+          "scenario_name": "mnemonic path card behavior identical to R1.0.1",
+          "files_to_create": ["desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-details-card-regression.test.tsx"],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/components/broadcast-details-card.tsx", "desktop-app/src/domain/broadcast-proposal/components/broadcast-phase-progress.tsx", "desktop-app/src/domain/broadcast-proposal/hooks/use-broadcast-proposal.ts"],
+          "depends_on": ["02-04", "02-05"],
+          "acceptance_criteria": "Mnemonic session: no device prompt, structured-error copy rendered, resubmit gating correct, disabled={isBroadcasting || !canSign} unchanged"
+        }
+      ]
+    },
+    {
+      "phase_id": "03",
+      "phase_name": "Slice (a) — E2E: Mnemonic walking skeleton (regtest, no device)",
+      "slice": "a",
+      "steps": [
+        {
+          "step_id": "03-01",
+          "scenario": "E2E-01",
+          "description": "Regtest e2e — mnemonic walking skeleton: full broadcast on real Tauri binary with Palabras login, commit+reveal confirmed",
+          "test_file": "desktop-app/e2e-webdriver/test/specs/broadcast-mnemonic-walking-skeleton.e2e.js",
+          "scenario_name": "regtest e2e mnemonic walking skeleton",
+          "files_to_create": ["desktop-app/e2e-webdriver/test/specs/broadcast-mnemonic-walking-skeleton.e2e.js"],
+          "files_to_modify": [],
+          "depends_on": ["01-09", "02-06"],
+          "acceptance_criteria": "Palabras login → approve proposal → broadcast → commit→reveal→confirmed; no device prompt appears"
+        },
+        {
+          "step_id": "03-02",
+          "scenario": "E2E-02",
+          "description": "Webdriver — mnemonic walking skeleton (slice a GATE): extend existing broadcast spec with Palabras login, phase progress commit→reveal→confirmed, no device prompt",
+          "test_file": "desktop-app/e2e-webdriver/test/specs/proposal-broadcast-quorum.e2e.js",
+          "scenario_name": "webdriver mnemonic walking skeleton gate",
+          "files_to_create": [],
+          "files_to_modify": ["desktop-app/e2e-webdriver/test/specs/proposal-broadcast-quorum.e2e.js"],
+          "depends_on": ["03-01"],
+          "acceptance_criteria": "Slice (a) completion gate: green CI with Palabras login, unified flow, phase progress correct, no device affordance"
+        }
+      ]
+    },
+    {
+      "phase_id": "04",
+      "phase_name": "Slice (b) — Backend: HwPsbtSigner, device signing, HW error paths",
+      "slice": "b",
+      "steps": [
+        {
+          "step_id": "04-01",
+          "scenario": "BE-03b",
+          "description": "Signer selection — HW: init_from_xpub (with master_fingerprint) attaches HwPsbtSigner",
+          "test_file": "orchestrator-be/src/application/wallet_session.rs",
+          "scenario_name": "test_init_from_xpub_attaches_hw_signer",
+          "files_to_create": ["orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs"],
+          "files_to_modify": ["orchestrator-be/src/application/wallet_session.rs", "orchestrator-be/src/infrastructure/hw_wallet/trezor.rs", "orchestrator-be/src/infrastructure/hw_wallet/ledger.rs"],
+          "depends_on": ["03-02"],
+          "acceptance_criteria": "Hardware wallet login (xpub + fingerprint) produces a session with hardware signing capability"
+        },
+        {
+          "step_id": "04-02",
+          "scenario": "BE-02",
+          "description": "Happy path — HW on-device: sign_psbt runs in spawn_blocking (60s timeout), re-opens by fingerprint, taproot key-path signs",
+          "test_file": "orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs",
+          "scenario_name": "test_hw_psbt_signer_happy_path_with_fake_device",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs"],
+          "depends_on": ["04-01"],
+          "acceptance_criteria": "Hardware signer produces a signed PSBT via on-device signing with 60s timeout; commit finalizes and broadcasts"
+        },
+        {
+          "step_id": "04-03",
+          "scenario": "BE-07",
+          "description": "Device-absent typed error before broadcast — HwDisconnected returned, broadcast_commit_then_reveal never reaches network",
+          "test_file": "orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs",
+          "scenario_name": "test_hw_psbt_signer_device_absent_returns_hw_disconnected",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs", "orchestrator-be/src/application/wallet_session.rs"],
+          "depends_on": ["04-02"],
+          "acceptance_criteria": "Hardware signing attempt with absent device returns disconnected error; nothing is broadcast"
+        },
+        {
+          "step_id": "04-04",
+          "scenario": "BE-08",
+          "description": "Device disconnects mid-sign — 60s timeout or HID error → HwSigningFailed/HwDisconnected, no broadcast",
+          "test_file": "orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs",
+          "scenario_name": "test_hw_psbt_signer_device_disconnect_mid_sign",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs"],
+          "depends_on": ["04-02"],
+          "acceptance_criteria": "Device disconnection during signing returns signing-failed or disconnected error; no broadcast occurs"
+        },
+        {
+          "step_id": "04-05",
+          "scenario": "BE-09",
+          "description": "Fingerprint mismatch — different device plugged in → HwSigningFailed with wrong-device message, no broadcast",
+          "test_file": "orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs",
+          "scenario_name": "test_hw_psbt_signer_fingerprint_mismatch",
+          "files_to_create": [],
+          "files_to_modify": ["orchestrator-be/src/infrastructure/hw_wallet/hw_psbt_signer.rs"],
+          "depends_on": ["04-02"],
+          "acceptance_criteria": "Mismatched hardware device produces signing-failed error indicating wrong device; no broadcast occurs"
+        }
+      ]
+    },
+    {
+      "phase_id": "05",
+      "phase_name": "Slice (b) — Frontend: Device UX, signerKind capability DTO, device prompt",
+      "slice": "b",
+      "steps": [
+        {
+          "step_id": "05-01",
+          "scenario": "FE-05a",
+          "description": "Device-prompt state during HW pre-sign window — awaiting-device phase + BroadcastDevicePrompt renders 'Confirm on your device'",
+          "test_file": "desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-device-prompt.test.tsx",
+          "scenario_name": "device prompt renders during awaiting-device phase",
+          "files_to_create": ["desktop-app/src/domain/broadcast-proposal/components/broadcast-device-prompt.tsx", "desktop-app/src/domain/broadcast-proposal/components/__tests__/broadcast-device-prompt.test.tsx"],
+          "files_to_modify": ["desktop-app/src/domain/broadcast-proposal/model/broadcast-proposal.ts", "desktop-app/src/domain/broadcast-proposal/hooks/use-broadcast-proposal.ts", "desktop-app/src/domain/broadcast-proposal/components/broadcast-details-card.tsx", "desktop-app/src/domain/broadcast-proposal/components/broadcast-phase-progress.tsx"],
+          "depends_on": ["04-05"],
+          "acceptance_criteria": "UI displays device confirmation guidance during hardware signing phase"
+        },
+        {
+          "step_id": "05-02",
+          "scenario": "FE-05a",
+          "description": "signerKind capability DTO — admin_wallet_can_sign returns {canSign, signerKind, reason?}",
+          "test_file": "desktop-app/src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-capability-signer-kind.test.ts",
+          "scenario_name": "signerKind and canSignReason surfaced from capability hook",
+          "files_to_create": ["desktop-app/src/domain/admin-wallet/hooks/__tests__/use-admin-wallet-capability-signer-kind.test.ts"],
+          "files_to_modify": ["desktop-app/src/domain/admin-wallet/hooks/use-admin-wallet-capability.ts", "desktop-app/src/api/admin-wallet.ts", "desktop-app/src/api/ipc-schemas.ts"],
+          "depends_on": ["05-01"],
+          "acceptance_criteria": "Capability query returns signing status, signer type, and optional unavailability reason; legacy bare-bool still accepted for graceful degradation"
+        },
+        {
+          "step_id": "05-03",
+          "scenario": "FE-05b",
+          "description": "Screen wiring — pass signerKind into controller + card; useCancelBroadcast adapts to BroadcastError type",
+          "test_file": "desktop-app/src/screens/__tests__/broadcast-proposal-screen-signer-kind.test.tsx",
+          "scenario_name": "screen wires signerKind into controller and card",
+          "files_to_create": ["desktop-app/src/screens/__tests__/broadcast-proposal-screen-signer-kind.test.tsx"],
+          "files_to_modify": ["desktop-app/src/screens/broadcast-proposal-screen.tsx", "desktop-app/src/domain/cancel-proposal/hooks/use-cancel-broadcast.ts"],
+          "depends_on": ["05-02"],
+          "acceptance_criteria": "Broadcast proposal screen passes signer type and unavailability reason into the broadcast controller and card; cancel broadcast action uses structured error message for user feedback"
+        }
+      ]
+    },
+    {
+      "phase_id": "06",
+      "phase_name": "Slice (b) — E2E: HW device integration (manual release checklist)",
+      "slice": "b",
+      "steps": [
+        {
+          "step_id": "06-01",
+          "scenario": "REG-01",
+          "description": "Manual real-device path: connect Trezor/Ledger, log in via HW, broadcast approved proposal, confirm on-device, verify commit+reveal",
+          "test_file": "N/A (manual release checklist)",
+          "scenario_name": "manual real-device path verification",
+          "files_to_create": ["docs/archive/features/admin-wallet-session-driven-broadcast-signing/deliver/release-checklist.md"],
+          "files_to_modify": [],
+          "depends_on": ["05-02"],
+          "acceptance_criteria": "Real Trezor/Ledger → HW login → broadcast → 'Confirm on your device' prompt → physical confirm → commit+reveal confirmed; unplug/refuse → HwDisconnected/HwUserRefused copy, no 'Resubmit reveal' control, nothing broadcast"
+        }
+      ]
+    }
+  ],
+  "test_doubles_policy": {
+    "MockBitcoinRpc": "Validates RPC method names, simulates submit_package success/unknown-method/RPC error; rejects invalid inputs",
+    "MockOrchestratorClient": "Validates auth token present, simulates 200/401/409 responses",
+    "InMemoryCommitFunding": "Validates network, address format, amount>0; returns deterministic signed Transaction",
+    "FakeHwDevice": "Simulates fingerprint match/mismatch, signing success/failure, device absent, user refusal; validates fingerprint non-empty before signing",
+    "real_io": "E2E-01 and E2E-02 use real Tauri binary, real BDK wallet, real regtest RPC; REG-01 uses real hardware device (manual)"
+  },
+  "quality_gates": {
+    "slice_a_gate": "E2E-02 (webdriver mnemonic walking skeleton) must be green before slice (b) begins",
+    "slice_b_gate": "REG-01 (manual real-device path) must pass before release",
+    "ci_requirements": ["cargo fmt --check", "cargo clippy --workspace --all-targets -- -D warnings", "cargo test --workspace", "npm run format:check", "npm run lint", "npm run build"]
+  }
+}

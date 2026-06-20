@@ -2,6 +2,8 @@
 
 Phase 1 delivers **US-H7** — see [`admin-wallet-regtest-commit-funding.md`](./admin-wallet-regtest-commit-funding.md).
 
+**SSOT for PRD PASS/FAIL:** [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) only — not phase ✅ markers in this plan. See [conflict rule #4](../README.md#conflict-resolution).
+
 **PRD compliance:** PASS / FAIL / PARTIAL per requirement is maintained in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). A phase or Release step marked ✅ here means the **engineering slice** shipped, not that every PRD MUST in that section is PASS.
 
 ## 1. Purpose and scope
@@ -287,7 +289,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 #### Phase 3.7 — Session-bound Admin Wallet (mnemonic login) ✅
 
-**Status:** Complete (3.7a session slot + 3.7b session-bound commit/reveal key + 3.7c `ADMIN_WALLET_REGTEST_MNEMONIC` removed). See [evolution](../evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md) and [roadmap Phase 06](../feature/admin-wallet-session-bound-mnemonic/deliver/roadmap.json).
+**Status:** Complete (3.7a session slot + 3.7b session-bound commit/reveal key + 3.7c `ADMIN_WALLET_REGTEST_MNEMONIC` removed). See [evolution](../archive/evolution/2026-05-28-admin-wallet-session-bound-mnemonic.md) and [roadmap Phase 06](../archive/features/admin-wallet-session-bound-mnemonic/deliver/roadmap.json).
 **Spec:** [`admin-wallet-session-bound-mnemonic.md`](./admin-wallet-session-bound-mnemonic.md).
 
 **Goal:** Bind the `WalletService` lifecycle **and** the SPS-50 commit/reveal internal key to the user's login session so that when the user logs in with "Palabras" (dev mnemonic), the Admin Wallet, commit funding, and reveal signing material all derive from *that same mnemonic* — not from a separate `ADMIN_WALLET_REGTEST_MNEMONIC` env var. Closes the PRD §3.2 gap where Admin Wallet, Admin ID, and broadcast key were sourced independently.
@@ -378,11 +380,11 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Release 1 is complete.** Steps **R1.0–R1.7** are done (R1.5: PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211); R1.6: PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212); R1.7: PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214)). PRD §4.3.1, §4.3.2, and **§4.3.4 rotation** are **PASS** in [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md). PRD §4.3.3 (tx list/RBF), §4.3.4 (QR/HW verify), §4.3.5 (Send), §4.1–4.2 (Admin ID), and **US-H4 broadcast fee** remain open (Phases 4–10). **Next:** **Release 2** (Electrum wallet sync).
 
-**R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
+**R1.0–R1.4 closure:** R1.4 merged via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Evolution: [`2026-06-02-admin-wallet-canonical-connect-paths.md`](../archive/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
-**R1.5 closure:** Branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211). Evolution: [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
+**R1.5 closure:** Branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211). Evolution: [`2026-06-03-admin-wallet-balance-ux.md`](../archive/evolution/2026-06-03-admin-wallet-balance-ux.md).
 
-**R1.6 closure:** Branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) (`0c0c01c` spec, `3d0a5e4` implementation). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md). Manual regtest: per-address confirmed/unconfirmed sub-lines verified.
+**R1.6 closure:** Branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212) (`0c0c01c` spec, `3d0a5e4` implementation). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../archive/evolution/2026-06-03-admin-wallet-addresses-ux.md). Manual regtest: per-address confirmed/unconfirmed sub-lines verified.
 
 **R1.7 closure:** Branch `feature/admin-wallet-r17-ui-polish`, PR [#214](https://github.com/wakeuplabs-io/alpen-multisig/pull/214). Two passes: (a) visual hierarchy + layout refinement, (b) affordances & polish (icon-only copy, wallet avatar, count badge, session chevron, drawer easing/shadow). Spec: [`admin-wallet-wallet-panel-ui-polish.md`](./admin-wallet-wallet-panel-ui-polish.md).
 
@@ -402,7 +404,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 **Spec:** [`admin-wallet-presign-commit-reveal.md`](./admin-wallet-presign-commit-reveal.md) — full technical design, decisions, and test plan.
 
-**Status:** Done — merged PR #198 (2026-05-30). 8 TDD steps; `submit_package` + sequential fallback, in-memory `PendingReveals` + `proposals_resubmit_reveal`, single regtest mine, `commit_confirmed` PATCH dropped. Evolution: [`docs/evolution/2026-05-30-admin-wallet-presign-commit-reveal.md`](../evolution/2026-05-30-admin-wallet-presign-commit-reveal.md).
+**Status:** Done — merged PR #198 (2026-05-30). 8 TDD steps; `submit_package` + sequential fallback, in-memory `PendingReveals` + `proposals_resubmit_reveal`, single regtest mine, `commit_confirmed` PATCH dropped. Evolution: [`docs/archive/evolution/2026-05-30-admin-wallet-presign-commit-reveal.md`](../archive/evolution/2026-05-30-admin-wallet-presign-commit-reveal.md).
 
 **Goal:** Reorder the broadcast flow so the commit and the reveal are both built and signed **before either is broadcast**, then broadcast commit→reveal (atomically via `submitpackage` when the node supports it, otherwise sequentially). Drop the ephemeral key immediately after both are signed. This removes the crash-loss window R1.0 introduces: once the reveal is signed the ephemeral key is no longer needed.
 
@@ -412,7 +414,7 @@ Commit funding, wallet read path, UI shell, operator-key retirement, Admin-Walle
 
 #### R1.1 — Session-driven broadcast signing (adds HW path) ✅
 
-**Status:** Complete — merged to `develop`. Unified `PsbtSigner` port (mnemonic + Ledger on-device); `ALLOW_DEV_MNEMONIC_SIGNING` fully removed as a signing/broadcast gate and replaced by the per-signer `allowed_on(network)` capability (it survives only as the dev-only mnemonic-login IPC exposure gate in `dev_secrets.rs`, P-040). Evolution: [`admin-wallet-session-driven-broadcast-signing-evolution.md`](../evolution/admin-wallet-session-driven-broadcast-signing-evolution.md).
+**Status:** Complete — merged to `develop`. Unified `PsbtSigner` port (mnemonic + Ledger on-device); `ALLOW_DEV_MNEMONIC_SIGNING` fully removed as a signing/broadcast gate and replaced by the per-signer `allowed_on(network)` capability (it survives only as the dev-only mnemonic-login IPC exposure gate in `dev_secrets.rs`, P-040). Evolution: [`admin-wallet-session-driven-broadcast-signing-evolution.md`](../archive/evolution/admin-wallet-session-driven-broadcast-signing-evolution.md).
 
 **Spec:** [`admin-wallet-session-driven-broadcast-signing.md`](./admin-wallet-session-driven-broadcast-signing.md) — full technical design, decisions (D1–D7), and test plan.
 
@@ -431,7 +433,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.2 — Clean wallet UI ✅
 
-**Status:** Complete — branch `feature/admin-wallet-clean-wallet-ui` (commit `138412d`, 2026-06-02). Spec: [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md`](../evolution/2026-06-02-admin-wallet-clean-wallet-ui.md).
+**Status:** Complete — branch `feature/admin-wallet-clean-wallet-ui` (commit `138412d`, 2026-06-02). Spec: [`admin-wallet-clean-wallet-ui.md`](./admin-wallet-clean-wallet-ui.md). Evolution: [`docs/archive/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md`](../archive/evolution/2026-06-02-admin-wallet-clean-wallet-ui.md).
 
 **Goal:** Bring the wallet panel to production quality — remove dev-only affordances and placeholders, consistent loading/empty/error states.
 
@@ -439,7 +441,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.3 — Receive rotation ✅
 
-**Status:** Complete — branch `feature/admin-wallet-receive-rotation` (commit `788d4eb`, 2026-06-02). Evolution: [`docs/evolution/2026-06-02-admin-wallet-receive-rotation.md`](../evolution/2026-06-02-admin-wallet-receive-rotation.md).
+**Status:** Complete — branch `feature/admin-wallet-receive-rotation` (commit `788d4eb`, 2026-06-02). Evolution: [`docs/archive/evolution/2026-06-02-admin-wallet-receive-rotation.md`](../archive/evolution/2026-06-02-admin-wallet-receive-rotation.md).
 
 **Spec:** [`admin-wallet-receive-rotation.md`](./admin-wallet-receive-rotation.md) — full technical design, decisions, and test plan.
 
@@ -451,7 +453,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.4 — Remove connect-time derivation picking ✅
 
-**Status:** Complete — merged to `develop` via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Spec: [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md). Evolution: [`docs/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`](../evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
+**Status:** Complete — merged to `develop` via [PR #206](https://github.com/wakeuplabs-io/alpen-multisig/pull/206) (`9bf5c3f`, 2026-06-02). Spec: [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md). Evolution: [`docs/archive/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md`](../archive/evolution/2026-06-02-admin-wallet-canonical-connect-paths.md).
 
 **Goal:** Drop the connect-flow step where the user manually picks a derivation path/account; derive Admin ID and Admin Wallet automatically at their canonical paths.
 
@@ -461,7 +463,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.5 — Balance UX (PRD §4.3.1 complete) ✅
 
-**Status:** Complete — branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211). Evolution: [`2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
+**Status:** Complete — branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211). Evolution: [`2026-06-03-admin-wallet-balance-ux.md`](../archive/evolution/2026-06-03-admin-wallet-balance-ux.md).
 
 **Spec:** [`admin-wallet-balance-ux.md`](./admin-wallet-balance-ux.md) — UX copy, view-model contracts, test plan, mempool sync amendment.
 
@@ -477,7 +479,7 @@ Sliced in two steps (both ship under R1.1): (a) `PsbtSigner` port + `MnemonicPsb
 
 #### R1.6 — Addresses UX (PRD §4.3.2 complete) ✅
 
-**Status:** Complete — branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+**Status:** Complete — branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212). Evolution: [`2026-06-03-admin-wallet-addresses-ux.md`](../archive/evolution/2026-06-03-admin-wallet-addresses-ux.md).
 
 **Spec:** [`admin-wallet-addresses-ux.md`](./admin-wallet-addresses-ux.md) — UX copy, wireframes, view-model contracts, and test plan.
 

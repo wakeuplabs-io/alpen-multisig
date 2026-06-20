@@ -14,6 +14,7 @@ export type StartChallengeInput = {
 export type AuthChallenge = {
 	challengeId: string
 	challengeHex: string
+	challengeMessage: string
 	nonceHex: string
 	domain: string
 	role: AuthRole

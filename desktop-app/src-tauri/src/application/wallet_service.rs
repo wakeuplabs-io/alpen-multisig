@@ -1,7 +1,6 @@
 use crate::application::psbt_signer::PsbtSigner;
 use crate::infrastructure::admin_wallet::AdminWalletError;
-use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
-use crate::infrastructure::hw_wallet::ledger;
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
 use crate::infrastructure::node_config_store::NodeConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -294,7 +293,7 @@ impl WalletService {
     }
 
     /// The network this wallet was created for.
-    pub(crate) fn network(&self) -> bdk_wallet::bitcoin::Network {
+    pub fn network(&self) -> bdk_wallet::bitcoin::Network {
         self.network
     }
 
@@ -537,41 +536,37 @@ impl WalletService {
                         "hardware signer metadata missing from session".to_string(),
                     )
                 })?;
-            if hw.device_type != HwDeviceType::Ledger {
-                return Err(AdminWalletError::WalletCreation(
-                    "Trezor Admin Wallet PSBT signing is not implemented yet".to_string(),
-                ));
-            }
             eprintln!(
-                "[ledger] signing commit PSBT on device (fp=0x{:08X})…",
+                "[{}] signing commit PSBT on device (fp=0x{:08X})…",
+                hw.device_type.as_str(),
                 hw.master_fingerprint
             );
+            // One seam for every device: the signer carries the concrete on-device
+            // operation (wired by device type), driven here on a blocking thread with
+            // the shared 180s timeout / rejection mapping. Mnemonic and Ledger behavior
+            // is unchanged; Trezor now routes to its taproot path instead of erroring.
+            let device_sign = hw.device_sign();
             let account_xpub = hw.account_xpub.clone();
             let master_fingerprint = hw.master_fingerprint;
             let network = hw.network;
-            let mut psbt_for_ledger = psbt.clone();
+            let device_label = hw.device_type.as_str();
+            let mut psbt_for_device = psbt.clone();
             let sign_result = tokio::time::timeout(
                 std::time::Duration::from_secs(180),
                 tokio::task::spawn_blocking(move || {
-                    ledger::sign_admin_wallet_psbt(
-                        &mut psbt_for_ledger,
-                        &account_xpub,
-                        master_fingerprint,
-                        network,
-                    )
-                    .map(|()| psbt_for_ledger)
+                    device_sign(&mut psbt_for_device, &account_xpub, master_fingerprint, network)
+                        .map(|()| psbt_for_device)
                 }),
             )
             .await
             .map_err(|_| {
-                AdminWalletError::WalletCreation(
-                    "Ledger did not respond within 180 seconds. Check Speculos/device and approve the transaction."
-                        .to_string(),
-                )
+                AdminWalletError::WalletCreation(format!(
+                    "{device_label} did not respond within 180 seconds. Check the device/emulator and approve the transaction."
+                ))
             })?
-            .map_err(|e| AdminWalletError::WalletCreation(format!("ledger sign task failed: {e}")))?;
+            .map_err(|e| AdminWalletError::WalletCreation(format!("{device_label} sign task failed: {e}")))?;
             psbt = sign_result.map_err(AdminWalletError::WalletCreation)?;
-            eprintln!("[ledger] commit PSBT signed on device");
+            eprintln!("[{device_label}] commit PSBT signed on device");
         } else {
             eprintln!("[admin-wallet] signing commit PSBT in software (mnemonic / BDK) — no Ledger prompt");
             let mut wallet = self.wallet.lock().await;

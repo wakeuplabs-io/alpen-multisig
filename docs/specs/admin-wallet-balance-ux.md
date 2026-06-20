@@ -1,7 +1,7 @@
 # Spec: Admin Wallet - Balance UX (R1.5)
 
 > **Status:** Complete — branch `feature/admin-wallet-balance-ux`, PR [#211](https://github.com/wakeuplabs-io/alpen-multisig/pull/211).
-> Evolution: [`docs/evolution/2026-06-03-admin-wallet-balance-ux.md`](../evolution/2026-06-03-admin-wallet-balance-ux.md).
+> Evolution: [`docs/archive/evolution/2026-06-03-admin-wallet-balance-ux.md`](../archive/evolution/2026-06-03-admin-wallet-balance-ux.md).
 
 Implements **Release 1, step R1.5** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
 Source of truth: **PRD §4.3.1**.

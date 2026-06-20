@@ -57,6 +57,9 @@ export function WalletSessionControl({
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
 					receiveAddress={panel.receiveAddress}
+					receiveIndex={panel.receiveIndex}
+					hwDeviceType={panel.hwDeviceType}
+					network={panel.network}
 					isAddressesLoading={panel.isAddressesLoading}
 					addressRows={panel.addressRows}
 					addressRowsLoading={panel.addressRowsLoading}

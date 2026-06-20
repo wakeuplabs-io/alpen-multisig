@@ -154,7 +154,7 @@ then broadcast.
 
 ### Step 1 — Connect as Signer 1
 
-1. On the connect screen, choose the seed‑phrase option (labeled **"Mnemonic" / words**) and paste
+1. On the connect screen, choose the seed‑phrase option (labeled **"Palabras" / words**) and paste
    **Signer 1**'s phrase.
 2. Confirm to connect.
 3. On **Select authority**, wait until **Strata Administrator** shows an **Available** badge (the

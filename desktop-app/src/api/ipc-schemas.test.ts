@@ -32,6 +32,7 @@ import { authChallengeSchema, authSessionSchema } from './ipc-schemas.ts'
 const challenge = {
 	challengeId: 'c1',
 	challengeHex: 'aa',
+	challengeMessage: 'Strata Session Authentication v1\nRole: strata_administrator\nChallenge: aa',
 	nonceHex: 'bb',
 	domain: 'alpen-multisig',
 	role: 'strata_administrator',
@@ -104,7 +105,11 @@ const actionVk = decodedActionSchema.safeParse({
 assert.equal(actionVk.success, true)
 
 // orchestrator-auth raw schemas (snake_case from Tauri)
-const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({ challenge_id: 'c1', challenge_hex: 'aa' })
+const rawChallenge = rawOrchestratorAuthChallengeSchema.safeParse({
+	challenge_id: 'c1',
+	challenge_hex: 'aa',
+	challenge_message: 'Sign this message',
+})
 assert.equal(rawChallenge.success, true)
 
 const rawSession = rawOrchestratorAuthSessionSchema.safeParse({

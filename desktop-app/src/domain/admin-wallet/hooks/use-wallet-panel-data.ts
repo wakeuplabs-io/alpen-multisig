@@ -18,10 +18,16 @@ export type WalletPanelData = {
 	toggle: () => void
 	/** True when the session can view but not sign (HW connected without signing capability). */
 	isWatchOnly: boolean
+	/** Connected HW device (verify-on-device dispatch), or null for software / no signer. */
+	hwDeviceType: 'trezor' | 'ledger' | null
+	/** Active session network token, for verify-on-device coin-path selection. */
+	network: string
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
+	/** External index of the current receive address (for the verify-on-device path). */
+	receiveIndex: number | null
 	isAddressesLoading: boolean
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
@@ -48,7 +54,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const unconfirmedTxsHook = useUnconfirmedTxs()
-	const { canSign } = useAdminWalletCapability()
+	const { canSign, deviceType: hwDeviceType, network } = useAdminWalletCapability()
 
 	// All refresh callbacks below are referentially stable (each is a `useCallback(…, [])`
 	// or depends only on other stable callbacks), so the effect/useCallback deps stay
@@ -91,10 +97,13 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		close,
 		toggle: () => (isOpen ? close() : open()),
 		isWatchOnly: !canSign,
+		hwDeviceType,
+		network,
 		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
 		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
 		isBalanceLoading: balanceHook.isLoading,
 		receiveAddress: receiveAddressHook.address,
+		receiveIndex: receiveAddressHook.index,
 		isAddressesLoading: receiveAddressHook.isLoading,
 		addressRows: addressesWithBalanceHook.data,
 		addressRowsLoading: addressesWithBalanceHook.isLoading,

@@ -16,6 +16,15 @@ This folder contains the product-scope definition derived from the client PRDs (
 3. **Later slices** depend on upstream Alpen work (missing update types, missing authority definitions). Risks and dependencies are surfaced at the end of the story map.
 4. **Non-functional items** live in their own document because they carry no end-user behavior.
 
+## Capability status (where to look)
+
+| Area | Document |
+|------|----------|
+| Admin Wallet / PRD §4 | [`../specs/admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
+| Integration test pass rates by authority | [`../external/integration-test-report.md`](../external/integration-test-report.md) |
+| Upstream Alpen crate gaps | [`../2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) |
+| Deferred backlog | [`../assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) |
+
 ## Principles applied
 
 - **Story mapping over product spec.** The map expresses scope as activities and slices, not as a static feature list.

@@ -1,5 +1,10 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { HwAddressEntry, SignSighashResult, WalletAccountInfo, WalletAdapter } from './types'
+import type { HwAddressEntry, SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter } from './types'
+
+type SignatureResult = {
+	publicKeyHex: string
+	signatureHex: string
+}
 
 export type MnemonicAdapterOptions = {
 	mnemonic: string
@@ -54,11 +59,25 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 			selectedAddress = null
 		},
 
-		async signSighash(sighashHex: string): Promise<SignSighashResult> {
+		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
 			if (!publicKeyHex) {
 				throw new Error('Connect the mnemonic wallet first.')
 			}
-			const result = await tauriCall<{ publicKeyHex: string; signatureHex: string }>('sign_with_mnemonic_path', {
+			if (!context) {
+				const result = await tauriCall<SignatureResult>('sign_message_with_mnemonic_path', {
+					mnemonic: opts.mnemonic,
+					passphrase: opts.passphrase,
+					derivationPath,
+					message: sighashHex,
+				})
+				if (!result.ok) throw new Error(result.error)
+				return {
+					publicKeyHex: result.data.publicKeyHex,
+					signatureHex: result.data.signatureHex,
+					signatureFormat: 'bitcoin-message',
+				}
+			}
+			const result = await tauriCall<SignatureResult>('sign_with_mnemonic_path', {
 				mnemonic: opts.mnemonic,
 				passphrase: opts.passphrase,
 				derivationPath,

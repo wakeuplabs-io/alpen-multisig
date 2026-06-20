@@ -1,7 +1,9 @@
 # Deferred backlog — post-assessment
 
+> **Current — SSOT:** Open user-story and NFR backlog after Waves 1–3. For P-ID closure status, use [`action-plan-progress.md`](./action-plan-progress.md). See [`assessment/README.md`](./README.md).
+
 **Created:** 2026-05-20  
-**Source:** [action-plan-2026-05-14.md](action-plan-2026-05-14.md) — items not addressed in Waves 1–3.  
+**Source:** [action-plan-2026-05-14.md](archive/action-plan-2026-05-14.md) — items not addressed in Waves 1–3.  
 **Status:** Assessment closed. Items below are captured as User Stories or Non-Functional Requirements for future implementation planning. No Wave 4 is scheduled; pick up individual items as standalone PRs or group them into a new wave as needed.
 
 ---
@@ -10,15 +12,23 @@
 
 ### US-H5 — Manual coordinator-down fallback
 
+**Status:** Partial.
+
 **As a** signer, **I want to** be able to aggregate signatures and broadcast the commit/reveal transaction manually when the orchestrator is unavailable, **so that** a coordinator outage never permanently blocks an approved proposal from being enacted.
 
-**Acceptance criteria:**
-- Signer can export the aggregated `actionHex` + collected `signatureHex` list from the UI as a portable artifact.
-- Signer can construct and broadcast the commit/reveal pair using any Bitcoin RPC endpoint without the orchestrator being online.
-- When the orchestrator comes back, the signer can report broadcast progress (txids) to reconcile state.
-- Offline path is documented in the operations runbook with a step-by-step procedure.
+**Already shipped:**
+- `/manual` UI route and `proposals_broadcast_manual` Tauri command.
+- [manual-execution-flow.md](../specs/manual-execution-flow.md) spec for coordinator-down broadcast.
 
-**Source:** PRD §2.3; [wave2-human-decisions-pending.md](wave2-human-decisions-pending.md) §3; P-052.  
+**Acceptance criteria (remaining):**
+- Signer can export the aggregated `actionHex` + collected `signatureHex` list from the UI as a portable artifact.
+- Offline path is documented in the operations runbook with a step-by-step procedure.
+- When the orchestrator comes back, the signer can report broadcast progress (txids) to reconcile state.
+
+**Acceptance criteria (met):**
+- Signer can construct and broadcast the commit/reveal pair using any Bitcoin RPC endpoint without the orchestrator being online (via manual flow).
+
+**Source:** PRD §2.3; [wave2-human-decisions-pending.md](archive/wave2-human-decisions-pending.md) §3; P-052.  
 **Priority:** High.
 
 ---
@@ -88,16 +98,16 @@
 
 ### NFR-PERSIST — Persistent proposal storage
 
-**Description:** The orchestrator must store proposals in a durable, append-friendly store so that a process restart does not lose state.
+**Status:** Done.
 
-**Requirement:**
-- `orchestrator-be` supports a Postgres backend (via `sqlx` or equivalent) behind the `ProposalRepository` trait.
-- In-memory backend remains available for local dev/testing.
-- Migration scripts are versioned under `orchestrator-be/migrations/`.
-- `docker-compose.yml` (or equivalent) includes a Postgres service for local stack.
+**Implemented:**
+- `orchestrator-be` Postgres backend (`postgres_repo.rs`) behind the `ProposalRepository` trait when `DATABASE_URL` is set.
+- In-memory backend remains available for local dev/testing (`memory_repo.rs`).
+- Versioned migrations under `orchestrator-be/migrations/`.
+- Postgres service in `staging/docker-compose.yml` for the local stack.
 
 **Source:** P-031.  
-**Priority:** Medium.
+**Priority:** Medium (closed).
 
 ---
 

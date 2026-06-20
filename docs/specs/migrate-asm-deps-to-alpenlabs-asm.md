@@ -160,7 +160,7 @@ Dependency direction is preserved: `action_codec.rs` and `signing.rs` depend on 
 | File | Change |
 |---|---|
 | `docs/architecture/adrs/001-alpen-crate-dependencies.md` | Rewrite "Crate inventory" and "Pinning strategy" sections to reflect the new sources and the SSZ format. Add a note on the `alpenlabs/asm` tag schemes (`v0.1.0-rc*` and `v0.1-alpha.*` coexist, pre-stable). |
-| `docs/deliverable/crate-inventory.md` | Update the "in use" table with new sources + SSZ note. |
+| `docs/2-discovery/crate-inventory.md` | Update the "in use" table with new sources + SSZ note. |
 | `docs/external/research-assessment.md` §1 | Add re-validation note after migration (see crate-inventory for pins). |
 | `docs/2-discovery/08-alpen-crate-prd-coverage.md` | Update source paths. Add the same re-validation note. |
 | `docs/2-discovery/11-asm-repo-migration.md` | **New file.** Covers: what changed in `Cargo.toml`, timeline of the upstream split and SSZ migration, verification that signatures remain on-chain-compatible, confirmation that PRD gaps remain open upstream, bump procedure for future rev/tag updates. |

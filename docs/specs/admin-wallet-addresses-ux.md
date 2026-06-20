@@ -1,7 +1,7 @@
 # Spec: Admin Wallet - Addresses UX (R1.6)
 
 > **Status:** Complete — branch `feature/admin-wallet-addresses-ux`, PR [#212](https://github.com/wakeuplabs-io/alpen-multisig/pull/212).
-> Evolution: [`docs/evolution/2026-06-03-admin-wallet-addresses-ux.md`](../evolution/2026-06-03-admin-wallet-addresses-ux.md).
+> Evolution: [`docs/archive/evolution/2026-06-03-admin-wallet-addresses-ux.md`](../archive/evolution/2026-06-03-admin-wallet-addresses-ux.md).
 > Manual regtest verified (per-address confirmed + unconfirmed sub-line).
 
 Implements **Release 1, step R1.6** of the [Admin Wallet implementation plan](./admin-wallet-implementation-plan.md).
@@ -287,7 +287,7 @@ cargo test --workspace
 ## Release 1 closure
 
 - `docs/specs/admin-wallet-implementation-plan.md` — R1.6 ✅; PRD status in `admin-wallet-prd-compliance.md`.
-- `docs/evolution/2026-06-03-admin-wallet-addresses-ux.md` — evolution record.
+- `docs/archive/evolution/2026-06-03-admin-wallet-addresses-ux.md` — evolution record.
 - **Next program increment:** Phase 4 (Send BTC happy path).
 
 ## Links

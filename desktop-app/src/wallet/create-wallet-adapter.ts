@@ -1,13 +1,12 @@
 import type { WalletAdapter, WalletVendor, WalletAdapterOptions } from './types'
-import { createLedgerAdapter } from './ledger-adapter'
+import { createHwAdapter } from './hw-adapter'
 import { createMnemonicAdapter } from './mnemonic-adapter'
 import { createMockAdapter } from './mock-adapter'
-import { createTrezorAdapter } from './trezor-adapter'
 
 export function createWalletAdapter(vendor: WalletVendor, opts: WalletAdapterOptions = {}): WalletAdapter {
 	if (vendor === 'mock') return createMockAdapter()
-	if (vendor === 'ledger') return createLedgerAdapter()
-	if (vendor === 'trezor') return createTrezorAdapter(opts.passphrase)
+	if (vendor === 'ledger') return createHwAdapter('ledger')
+	if (vendor === 'trezor') return createHwAdapter('trezor', opts.passphrase)
 	// mnemonic
 	if (!opts.mnemonic?.trim()) throw new Error('A BIP39 mnemonic is required for the mnemonic wallet.')
 	return createMnemonicAdapter({
