@@ -3,10 +3,12 @@ import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
+import { BroadcastStepper } from '@/domain/broadcast-proposal/components/broadcast-stepper'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useSession } from '@/hooks/use-session'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -78,13 +80,7 @@ export function CancelProposalBroadcastScreen() {
 			}
 		>
 			<div className="mx-auto w-full max-w-190">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
-					onClick={() => navigate(`/proposals/${actionId}/cancel`)}
-				>
-					← Back to cancel proposal
-				</button>
+				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Broadcast cancel tx
@@ -92,6 +88,10 @@ export function CancelProposalBroadcastScreen() {
 				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 					Cancel signatures have reached quorum. Review the commit details, then broadcast to remove the queued update.
 				</p>
+
+				<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-6 py-4 shadow-sm">
+					<BroadcastStepper phase={phase} />
+				</div>
 
 				<div className="mt-6 space-y-4">
 					{isLoading && (

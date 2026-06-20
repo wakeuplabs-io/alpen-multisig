@@ -8,6 +8,7 @@ import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-p
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -73,13 +74,7 @@ export function CancelProposalScreen() {
 			}
 		>
 			<div className="mx-auto w-full max-w-190">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
-					onClick={() => navigate(`/proposals/${actionId}`)}
-				>
-					← Back to proposal
-				</button>
+				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Cancel proposal
