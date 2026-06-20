@@ -13,8 +13,13 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 	await ta.waitForDisplayed({ timeout: 90000 })
 	await ta.setValue(mnemonic)
 
-	await $('button[data-testid="e2e-connect-palabras"]').click()
-	await $('button[data-testid="e2e-connect-with-words"]').click()
+	const connectMnemonic = await $('button[data-testid="e2e-connect-mnemonic"]')
+	await connectMnemonic.waitForClickable({ timeout: 30000 })
+	await connectMnemonic.click()
+
+	const connectWithWords = await $('button[data-testid="e2e-connect-with-words"]')
+	await connectWithWords.waitForClickable({ timeout: 30000 })
+	await connectWithWords.click()
 
 	await $('//h1[contains(.,"Select authority")]').waitForDisplayed({ timeout: 60000 })
 	// Membership check disables Continue until ASM confirms the signer; wait for Strata Admin.

@@ -12,9 +12,19 @@ import { formatSatPerVb } from '@/domain/fee-selection/model/fee-rate'
 import { SendFeeRateControl } from './send-fee-rate-control'
 import { SendResultCard } from './send-result-card'
 
+import type { HwDeviceType } from '../model/hw-device'
+
+const DEVICE_LABEL: Record<HwDeviceType, string> = {
+	trezor: 'Trezor',
+	ledger: 'Ledger',
+}
+
 export type SendFormProps = {
 	/** Watch-only sessions see the form disabled ("Hardware wallet required to sign"). */
 	isWatchOnly: boolean
+	/** Connected HW device, or null for the software (mnemonic) signer. Drives the
+	 * "Confirm on your device" pending experience (PRD §4.3.5.5). */
+	deviceType?: HwDeviceType | null
 	/** Returns to the panel root (also wired to the Done button on success). */
 	onBack(): void
 	/** Called after a successful send so the panel re-syncs and re-reads. */
@@ -42,7 +52,7 @@ function SummaryRow({ label, value, strong = false }: { label: string; value: st
  * On submit failure the field values are retained for retry or back-out
  * (PRD §4.3.5.5.1) — submission state lives in `useSend`, fields in `useSendForm`.
  */
-export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
+export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendFormProps) {
 	const {
 		address,
 		setAddress,
@@ -100,6 +110,7 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 				? SEND_INSUFFICIENT_FUNDS_COPY
 				: formatAdminWalletError(estimate.error).body
 			: null)
+	const isHardware = deviceType != null
 	const canApplyMax = destination.status === 'valid' && fee.status === 'ready' && !isSubmitting
 	const canConfirm = canConfirmSend({
 		isDestinationValid: destination.status === 'valid',
@@ -243,9 +254,23 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 				</div>
 			)}
 
+			{isSubmitting && isHardware && (
+				<div
+					className="rounded-lg border border-[#ddd6fe] bg-[#faf9ff] px-3 py-2"
+					data-testid="e2e-wallet-send-confirm-on-device"
+				>
+					<p className="m-0 text-[12px] font-medium text-[#7c6cf0]">Confirm on your {DEVICE_LABEL[deviceType]}</p>
+					<p className="m-0 mt-0.5 text-[11px] leading-[1.45] text-[#6b7280]">
+						Review the amount and destination on the device screen and approve. The prompt times out after about 3
+						minutes; rejecting on the device cancels the send and broadcasts nothing.
+					</p>
+				</div>
+			)}
+
 			{state.status === 'error' && (
 				<p className="m-0 text-label text-[#ef4444]" data-testid="e2e-wallet-send-error">
 					{formatAdminWalletError(state.error).body}
+					{isHardware && ' You can adjust and try again, or go back.'}
 				</p>
 			)}
 
@@ -259,7 +284,7 @@ export function SendForm({ isWatchOnly, onBack, onAfterSend }: SendFormProps) {
 						canConfirm ? 'bg-[#111827] text-white hover:bg-[#1f2937]' : 'cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]'
 					}`}
 				>
-					{isSubmitting ? 'Sending…' : 'Confirm'}
+					{isSubmitting ? (isHardware ? 'Confirm on your device…' : 'Sending…') : 'Confirm'}
 				</button>
 				<button
 					type="button"

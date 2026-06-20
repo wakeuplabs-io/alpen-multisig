@@ -22,6 +22,7 @@ pub struct StartAuthChallengeRequest {
 pub struct AuthChallengeResponse {
     pub challenge_id: String,
     pub challenge_hex: String,
+    pub challenge_message: String,
     pub issued_at_unix_ms: u64,
     pub expires_at_unix_ms: u64,
 }
@@ -50,17 +51,20 @@ pub async fn auth_challenge(
     let expires_at_unix_ms = now + state.auth_challenge_ttl_ms;
     let challenge_id = auth_crypto::random_hex(16);
     let nonce_hex = auth_crypto::random_hex(32);
+    let wire = authority_wire(body.authority);
     let challenge_hex = hex::encode(auth_crypto::create_challenge_digest(
-        authority_wire(body.authority),
+        wire,
         &nonce_hex,
         now,
         expires_at_unix_ms,
         &challenge_id,
     ));
+    let challenge_message = auth_crypto::render_challenge_message(wire, &challenge_hex);
 
     let challenge = PendingAuthChallenge {
         authority: body.authority,
         challenge_hex: challenge_hex.clone(),
+        challenge_message: challenge_message.clone(),
         expires_at_unix_ms,
         consumed: false,
     };
@@ -73,6 +77,7 @@ pub async fn auth_challenge(
     Ok(Json(AuthChallengeResponse {
         challenge_id,
         challenge_hex,
+        challenge_message,
         issued_at_unix_ms: now,
         expires_at_unix_ms,
     }))
@@ -104,13 +109,12 @@ pub async fn auth_verify(
 
         if body.signature_format == SIG_FORMAT_BITCOIN_MESSAGE {
             auth_crypto::verify_bitcoin_message_signature(
-                &challenge.challenge_hex,
+                &challenge.challenge_message,
                 &body.signer_pubkey,
                 &body.signature_hex,
             )
             .map_err(|_| AppError::Unauthorized)?;
         } else {
-            // raw-ecdsa and p2wpkh-tx-binding both use plain ECDSA on the raw challenge digest.
             auth_crypto::verify_signature(
                 &challenge.challenge_hex,
                 &body.signer_pubkey,

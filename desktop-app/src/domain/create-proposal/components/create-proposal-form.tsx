@@ -1,3 +1,5 @@
+import { NavigationGuardModal } from '@/components/navigation-guard-modal'
+import { useNavigationGuard } from '@/hooks/use-navigation-guard'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
@@ -209,8 +211,11 @@ export function CreateProposalForm({
 		}
 	}
 
+	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
+
 	return (
 		<FormProvider {...form}>
+			<NavigationGuardModal blocker={blocker} />
 			<div className="w-full max-w-[760px]">
 				<div className="mb-6">
 					{isPreviewMode ? (

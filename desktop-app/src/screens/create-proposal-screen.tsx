@@ -4,6 +4,7 @@ import { useCreateProposal } from '@/domain/create-proposal/hooks/use-create-pro
 import { useSession } from '@/hooks/use-session'
 import { authorityFromRole } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -55,6 +56,7 @@ export function CreateProposalScreen() {
 			}
 		>
 			<div className="mx-auto flex w-full max-w-[760px] flex-col gap-5">
+				<Breadcrumbs />
 				<CreateProposalForm
 					authorityLabel={authorityLabel}
 					authority={authority}

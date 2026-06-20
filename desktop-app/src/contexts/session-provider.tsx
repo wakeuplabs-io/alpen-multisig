@@ -40,6 +40,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 		: '--:--'
 	const sessionWarning = activeExpiresAtMs !== null && min < 5
 
+	const signOrchestratorChallenge = useCallback(async () => {
+		const challengeResult = await orchestratorAuthStart({
+			baseUrl: getOrchestratorBaseUrl(),
+			authority: authorityFromRole(selectedRole),
+		})
+		if (!challengeResult.ok) {
+			throw new Error(challengeResult.error)
+		}
+
+		setSigningStep({
+			challengeMessage: challengeResult.data.challengeMessage,
+			step: 1,
+			totalSteps: 1,
+		})
+
+		const signature = await adapter.signSighash(challengeResult.data.challengeMessage)
+		const completeResult = await orchestratorAuthComplete({
+			baseUrl: getOrchestratorBaseUrl(),
+			challengeId: challengeResult.data.challengeId,
+			signerPubkey: signature.publicKeyHex,
+			signatureHex: signature.signatureHex,
+			signatureFormat: signature.signatureFormat,
+		})
+		if (!completeResult.ok) {
+			throw new Error(completeResult.error)
+		}
+
+		setIsOrchestratorSessionActive(true)
+		setOrchestratorExpiresAtMs(completeResult.data.expiresAtUnixMs)
+	}, [adapter, selectedRole])
+
 	const ensureOrchestratorSession = useCallback(async () => {
 		const expectedAuthority = authorityFromRole(selectedRole)
 		const currentSession = await orchestratorAuthGetSession()
@@ -53,26 +84,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			await orchestratorAuthLogout(getOrchestratorBaseUrl())
 		}
 
-		const challengeResult = await orchestratorAuthStart({
-			baseUrl: getOrchestratorBaseUrl(),
-			authority: authorityFromRole(selectedRole),
-		})
-		if (!challengeResult.ok) {
-			throw new Error(challengeResult.error)
+		try {
+			await signOrchestratorChallenge()
+		} finally {
+			setSigningStep(null)
 		}
+	}, [selectedRole, signOrchestratorChallenge])
 
-		const signature = await adapter.signSighash(challengeResult.data.challengeHex)
-		const completeResult = await orchestratorAuthComplete({
-			baseUrl: getOrchestratorBaseUrl(),
-			challengeId: challengeResult.data.challengeId,
-			signerPubkey: signature.publicKeyHex,
-			signatureHex: signature.signatureHex,
-			signatureFormat: signature.signatureFormat,
-		})
-		if (!completeResult.ok) {
-			throw new Error(completeResult.error)
+	const extendOrchestratorSession = useCallback(async () => {
+		try {
+			await orchestratorAuthLogout(getOrchestratorBaseUrl())
+			await signOrchestratorChallenge()
+		} finally {
+			setSigningStep(null)
 		}
-	}, [adapter, selectedRole])
+	}, [signOrchestratorChallenge])
 
 	/** Normal flow: admin wallet init + orchestrator auth (1 hardware-wallet signature). */
 	const connectOrchestratorSession = useCallback(async () => {
@@ -90,8 +116,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (!challengeResult.ok) {
 				throw new Error(challengeResult.error)
 			}
-			setSigningStep({ challengeHex: challengeResult.data.challengeHex, step: 1, totalSteps: 1 })
-			const signature = await adapter.signSighash(challengeResult.data.challengeHex)
+			setSigningStep({
+				challengeMessage: challengeResult.data.challengeMessage,
+				step: 1,
+				totalSteps: 1,
+			})
+			const signature = await adapter.signSighash(challengeResult.data.challengeMessage)
 			const completeResult = await orchestratorAuthComplete({
 				baseUrl: getOrchestratorBaseUrl(),
 				challengeId: challengeResult.data.challengeId,
@@ -112,9 +142,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	/** Manual/offline flow: on-chain membership auth + admin wallet init (1 hardware-wallet signature). */
 	const connectOnChainSession = useCallback(async () => {
 		try {
-			await authenticate((challengeHex: string) => {
-				setSigningStep({ challengeHex, step: 1, totalSteps: 1 })
-				return adapter.signSighash(challengeHex)
+			await authenticate((challengeMessage: string) => {
+				setSigningStep({ challengeMessage, step: 1, totalSteps: 1 })
+				return adapter.signSighash(challengeMessage)
 			})
 			const adminWalletInit = await initAdminWalletForAdapter(adapter, walletSessionInitWatchOnly, walletSessionInit)
 			if (!adminWalletInit.ok) {
@@ -144,6 +174,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			connectOnChainSession,
 			disconnectSession,
 			ensureOrchestratorSession,
+			extendOrchestratorSession,
 			session,
 			isAuthenticated,
 			isOrchestratorSessionActive,
@@ -165,6 +196,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			connectOnChainSession,
 			disconnectSession,
 			ensureOrchestratorSession,
+			extendOrchestratorSession,
 			session,
 			isAuthenticated,
 			isOrchestratorSessionActive,

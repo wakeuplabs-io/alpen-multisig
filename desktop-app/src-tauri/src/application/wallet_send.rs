@@ -480,6 +480,8 @@ mod tests {
     use std::sync::RwLock as StdRwLock;
 
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    /// Arbitrary dummy BIP-32 master fingerprint for test injection — no real device needed.
+    const TEST_FINGERPRINT: u32 = 0xDEAD_BEEF;
 
     /// Deterministic regtest P2WPKH destination (derived, so the checksum is
     /// always valid — hardcoded literals have bitten before).
@@ -519,6 +521,25 @@ mod tests {
             Arc::new(MnemonicPsbtSigner::new()),
             test_node_config(),
         )
+    }
+
+    /// Service whose session signer is a hardware signer with an **injected** on-device
+    /// signing stub — exercises the `sign_and_finalize_psbt` HW dispatch with no device.
+    fn hw_signing_service(
+        wallet: bdk_wallet::Wallet,
+        device_type: crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType,
+        device_sign: crate::infrastructure::hw_wallet::hw_psbt_signer::DeviceSignFn,
+    ) -> WalletService {
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
+        let network = wallet.network();
+        let signer = Arc::new(HwPsbtSigner::with_device_sign(
+            TEST_FINGERPRINT,
+            device_type,
+            "tpubTEST".to_string(),
+            network,
+            device_sign,
+        ));
+        WalletService::with_signer(wallet, signer, test_node_config())
     }
 
     fn mock_chain(mocks: &[Arc<MockBroadcaster>]) -> Vec<Arc<dyn TxBroadcaster>> {
@@ -1101,6 +1122,90 @@ mod tests {
         assert_eq!(tx.output[0].script_pubkey, dest_spk(&dest_p2wpkh_regtest()));
         assert_eq!(result.amount_sats, tx.output[0].value.to_sat());
         assert_eq!(result.amount_sats + result.fee_sats, 100_000);
+    }
+
+    // ── send_to_address — hardware signer dispatch (Phase 8, no device) ──────
+
+    use crate::infrastructure::hw_wallet::hw_psbt_signer::{DeviceSignFn, HwDeviceType};
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// Phase 8: a failing on-device signer (e.g. user rejection) maps to `SignFailed`
+    /// and broadcasts nothing — for **both** Trezor and Ledger. Proves the dispatch
+    /// reaches the device-sign seam for Trezor (the previous hard-error is gone) and
+    /// mirrors the §4.3.5.5.1 reject path.
+    #[tokio::test]
+    async fn hw_signer_failure_maps_to_sign_failed_and_broadcasts_nothing() {
+        for device_type in [HwDeviceType::Trezor, HwDeviceType::Ledger] {
+            let invoked = Arc::new(AtomicBool::new(false));
+            let flag = Arc::clone(&invoked);
+            let stub: DeviceSignFn = Arc::new(move |_psbt, _xpub, _fp, _net| {
+                flag.store(true, Ordering::SeqCst);
+                Err("Request rejected on device".to_string())
+            });
+            let svc = hw_signing_service(funded_wallet(), device_type, stub);
+            let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+            let result = svc
+                .send_to_address(
+                    &send_input(&dest_p2wpkh_regtest(), 30_000),
+                    rate_5_sat_vb(),
+                    &mock_chain(&[Arc::clone(&mock)]),
+                )
+                .await;
+
+            match result {
+                Err(SendError::SignFailed { message }) => {
+                    assert!(
+                        message.contains("Request rejected on device"),
+                        "{device_type:?}: on-device rejection must surface, got: {message}"
+                    );
+                    assert!(
+                        !message.contains("not implemented"),
+                        "{device_type:?}: Trezor must no longer hard-error as not implemented"
+                    );
+                }
+                other => panic!("{device_type:?}: expected SignFailed, got: {other:?}"),
+            }
+            assert!(
+                invoked.load(Ordering::SeqCst),
+                "{device_type:?}: dispatch must reach the device-sign seam"
+            );
+            assert!(
+                mock.sent_single().is_empty(),
+                "{device_type:?}: nothing may be broadcast when signing fails"
+            );
+        }
+    }
+
+    /// Phase 8: dispatch consults only the session signer's wired operation — no other
+    /// authority key is touched, and the seam passes the session's account xpub +
+    /// fingerprint + network straight through to the device operation.
+    #[tokio::test]
+    async fn hw_dispatch_passes_session_context_to_device_only() {
+        let seen: Arc<std::sync::Mutex<Option<(String, u32)>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let sink = Arc::clone(&seen);
+        let stub: DeviceSignFn = Arc::new(move |_psbt, xpub, fp, _net| {
+            *sink.lock().unwrap() = Some((xpub.to_string(), fp));
+            Err("declined".to_string())
+        });
+        let svc = hw_signing_service(funded_wallet(), HwDeviceType::Trezor, stub);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let _ = svc
+            .send_to_address(
+                &send_input(&dest_p2wpkh_regtest(), 30_000),
+                rate_5_sat_vb(),
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        let captured = seen.lock().unwrap().clone();
+        assert_eq!(
+            captured,
+            Some(("tpubTEST".to_string(), 0xDEAD_BEEF)),
+            "the device operation must receive exactly the session's xpub + fingerprint"
+        );
     }
 
     // ── send_to_address — broadcast chain ───────────────────────────────────

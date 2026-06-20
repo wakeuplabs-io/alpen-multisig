@@ -48,7 +48,7 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 - **Requirement:** Store at minimum three maps: `actions_by_seqno`, `action_by_id`, `sigs_by_id`. Data must be durable and recoverable after restart.
 - **Source:** Backend PRD §Data model.
 - **Needed by:** Slice 0.
-- **Disposition:** Covered as DoD on US-E1. Walking skeleton uses the existing in-memory repository (`orchestrator-be/src/infrastructure/memory_repo.rs`); durable/recoverable storage is deferred beyond the skeleton.
+- **Disposition:** **Implemented.** Postgres when `DATABASE_URL` is set (`orchestrator-be/src/infrastructure/postgres_repo.rs`); in-memory fallback for local dev (`memory_repo.rs`). See [architecture/overview.md](../architecture/overview.md) and [operations/runbook.md](../operations/runbook.md).
 
 ### NF-7 · Idempotent proposal creation
 - **Concern:** API contract.

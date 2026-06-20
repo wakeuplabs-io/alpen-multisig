@@ -5,7 +5,7 @@
 > 1. **Wire format migrated from Borsh to SSZ** for `MultisigAction` and every nested admin type (upstream PR `alpenlabs/asm#8`, 2026-03-25). The `sighash_payload` bytes are hand-coded and byte-identical across both versions — every sighash / signature claim in this document still holds. References to "Borsh" below should be read as "SSZ" in the current workspace. See [`11-asm-repo-migration.md`](./11-asm-repo-migration.md).
 > 2. **Crate layout changed.** The ASM subprotocols crate was renamed `strata-asm-subprotocols-admin` → `strata-asm-proto-administration` and lives at `alpenlabs/asm` (rev `a8559d3`) instead of `alpenlabs/alpen`. See [`08-alpen-crate-prd-coverage.md`](./08-alpen-crate-prd-coverage.md) §4 and [`11-asm-repo-migration.md`](./11-asm-repo-migration.md).
 >
-> The backend stack references below ("Axum + Postgres") describe the *target* PRD architecture. The walking skeleton runs on Axum + in-memory repo today; Postgres is deferred (see [`docs/3-stories/non-functional-items.md`](../3-stories/non-functional-items.md) §NF-6).
+> The backend stack references below ("Axum + Postgres") describe the PRD target architecture. **Today:** `orchestrator-be` uses Postgres when `DATABASE_URL` is set and an in-memory repository for local dev without it — see NF-6 in [`non-functional-items.md`](../3-stories/non-functional-items.md) and [`architecture/overview.md`](../architecture/overview.md).
 
 ## Overview
 

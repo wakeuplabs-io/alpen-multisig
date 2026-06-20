@@ -7,7 +7,7 @@
 > [`11-asm-repo-migration.md`](./11-asm-repo-migration.md) §"Wire format compatibility",
 > [`10-asm-bitcoin-state-model.md`](./10-asm-bitcoin-state-model.md) §8 (sighash formula),
 > [`16-poc5-trezor-findings.md`](./16-poc5-trezor-findings.md) §§2, 4, 5, 11,
-> [`docs/deliverable/research.md`](../deliverable/research.md) §1, §2.2, §3.5,
+> [`external/research-assessment.md`](../external/research-assessment.md) §1–§2,
 > and [`ADR-001`](../architecture/adrs/001-alpen-crate-dependencies.md) §"Wire format" / §"Crate inventory".
 > Earlier statements that "the bytes signers sign are byte-identical across the Borsh→SSZ migration" remain
 > true for the `308211f` → `a8559d3` window but **do not** hold for `a8559d3` → `a53b6a8`. See §A.
@@ -313,7 +313,7 @@ pub fn sign_ecdsa_bip137(message_hash: &[u8; 32], secret_key: &SecretKey) -> [u8
 
 ### B.3 Closing the POC-5 "BIP-137 vs SPS-65" gap
 
-The gap previously documented in [`docs/deliverable/research.md` §2.2](../deliverable/research.md#22-signing-format-gap--bip-137-vs-raw-ecdsa) — "the Alpen ASM expects bare ECDSA over the raw SPS-65 sighash. Both Trezor and Ledger apply the BIP-137 prefix before hashing — these are incompatible. Recommendation: Add BIP-137 support to the crate asm." — is **closed by this PR**.
+The gap previously documented in [`external/research-assessment.md`](../external/research-assessment.md) §2 (BIP-137 vs SPS-65) — "the Alpen ASM expects bare ECDSA over the raw SPS-65 sighash. Both Trezor and Ledger apply the BIP-137 prefix before hashing — these are incompatible. Recommendation: Add BIP-137 support to the crate asm." — is **closed by this PR**.
 
 Concretely: the recommendation has been *exceeded*. Alpen did not bolt BIP-137 onto the side; they replaced the digest construction entirely with `signed_msg_hash`, which is the BIP-137 prefix. From our POC-5 implementation options table ([`16-poc5-trezor-findings.md`](./16-poc5-trezor-findings.md) §11), option **A (software admin signing)** and option **B (Trezor PSBT binding)** become equivalent and option **C (BIP-137 message sign)** becomes the recommended primary path. Options D (custom Ledger app) and E (protocol change) are no longer needed.
 
@@ -748,7 +748,7 @@ Risk level legend: C = critical (silent on-chain rejection or wrong signed data)
 | `docs/2-discovery/10-asm-bitcoin-state-model.md` | §8.1 sighash formula `SHA256(SHA256("strata/admin/<type_name>") ‖ seqno_be ‖ payload)` | **Y** | Replace the formula with the BSM construction. Note that hardware wallets now sign the rendered string directly. | (doc) | L |
 | `docs/2-discovery/16-poc5-trezor-findings.md` | §§2, 4, 5, 11 (BIP-137 vs SPS-65 incompatibility) | **Y** | Add a "2026-05-13" revision note: PR #82 closes the gap; option C in §11 is now the primary recommended path. | (doc) | L |
 | `docs/2-discovery/17-cancel-action.md` | "Cancel as a signed payload" section, "Files to change" table | **Y** | Replace `CancelAction { target_id: UpdateId }` with `CancelAction { target_id: UpdateId, update: UpdateAction }`. Note that on HEAD the handler enforces `queued.action() == cancel.update()` and returns `CancelUpdateMismatch` otherwise. | (doc) | L |
-| `docs/deliverable/research.md` | §1 (Borsh→SSZ portability claim), §2.2 (BIP-137 vs SPS-65 gap), §3.5 (sighash formula) | **Y** | Add a 2026-05-13 amendment: signatures are no longer byte-portable across the upstream bump; BIP-137 / signMessage is now the canonical digest; §3.5 formula replaced. | (doc) | L |
+| [`external/research-assessment.md`](../external/research-assessment.md) | §1 (Borsh→SSZ portability claim), §2 (BIP-137 vs SPS-65 gap), sighash formula | **Y** | Add a 2026-05-13 amendment: signatures are no longer byte-portable across the upstream bump; BIP-137 / signMessage is now the canonical digest; §3.5 formula replaced. | (doc) | L |
 
 ---
 

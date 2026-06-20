@@ -1,10 +1,21 @@
+import type { HwDeviceType } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
 import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
+import { buildAdminIdVerifyPath } from '../model/build-verify-path'
+import { VerifyOnDeviceButton } from './verify-on-device-button'
+
+/** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.2). */
+export type AdminIdVerifyContext = {
+	deviceType: HwDeviceType
+	network: string
+}
 
 export type AdminIdRowProps = {
 	/** Canonical BIP-84 auth address (wallet.addressSample), or undefined when unknown. */
 	adminId: string | undefined
+	/** When set, renders a "Verify on device" affordance for the Admin ID (P2WPKH). */
+	verify?: AdminIdVerifyContext
 }
 
 /**
@@ -13,7 +24,7 @@ export type AdminIdRowProps = {
  * NOT a fundable address — and carries an explicit "do not send funds" caption,
  * since the Admin ID must never receive BTC or sign transactions.
  */
-export function AdminIdRow({ adminId }: AdminIdRowProps) {
+export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const label = (
 		<span className="inline-flex items-center gap-1.5 text-mono-sm font-medium uppercase tracking-[0.08em] text-accent">
 			<ShieldCheckMutedIcon width={13} height={13} className="text-accent" />
@@ -55,6 +66,15 @@ export function AdminIdRow({ adminId }: AdminIdRowProps) {
 				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-[#d97706]" />
 				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>
+			{verify && (
+				<VerifyOnDeviceButton
+					deviceType={verify.deviceType}
+					network={verify.network}
+					derivationPath={buildAdminIdVerifyPath(verify.network)}
+					scriptType="p2wpkh"
+					subject="Admin ID"
+				/>
+			)}
 		</div>
 	)
 }

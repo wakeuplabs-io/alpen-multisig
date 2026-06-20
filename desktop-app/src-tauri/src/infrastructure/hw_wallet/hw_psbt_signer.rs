@@ -1,8 +1,20 @@
 use std::any::Any;
+use std::sync::Arc;
 
 use crate::application::psbt_signer::PsbtSigner;
+use crate::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
+use crate::infrastructure::signing::SignatureResult;
 use bdk_wallet::bitcoin::psbt::Psbt;
 use bdk_wallet::bitcoin::Network;
+
+/// On-device PSBT signing operation, parameterized by the wallet's account xpub,
+/// master fingerprint, and network. Wired to the concrete device adapter at
+/// construction (by [`HwDeviceType`]); injectable in tests via [`HwPsbtSigner::with_device_sign`].
+///
+/// Runs on a blocking thread (the adapters open their own device session), so it is
+/// `Send + Sync` and takes `&mut Psbt`.
+pub type DeviceSignFn =
+    Arc<dyn Fn(&mut Psbt, &str, u32, Network) -> Result<(), String> + Send + Sync>;
 
 /// Hardware wallet PSBT signer — re-opens device by fingerprint at sign time.
 /// Allowed on any network (mainnet, testnet, regtest).
@@ -11,6 +23,7 @@ pub struct HwPsbtSigner {
     pub device_type: HwDeviceType,
     pub account_xpub: String,
     pub network: Network,
+    device_sign: DeviceSignFn,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +39,74 @@ impl HwDeviceType {
             HwDeviceType::Ledger => "ledger",
         }
     }
+
+    /// The concrete adapter PSBT-signing function for this device.
+    fn device_sign_fn(self) -> DeviceSignFn {
+        match self {
+            HwDeviceType::Trezor => Arc::new(trezor::sign_admin_wallet_psbt),
+            HwDeviceType::Ledger => Arc::new(ledger::sign_admin_wallet_psbt),
+        }
+    }
+
+    pub fn connect(
+        self,
+        derivation_path: Option<String>,
+        passphrase: &str,
+    ) -> Result<HwWalletInfo, String> {
+        match self {
+            HwDeviceType::Trezor => trezor::connect(derivation_path, passphrase),
+            HwDeviceType::Ledger => ledger::connect(derivation_path),
+        }
+    }
+
+    pub fn sign_sps65(
+        self,
+        message: &str,
+        derivation_path: &str,
+        passphrase: &str,
+    ) -> Result<SignatureResult, String> {
+        match self {
+            HwDeviceType::Trezor => {
+                trezor::sign_admin_sps65_binding(message, derivation_path, passphrase)
+            }
+            HwDeviceType::Ledger => ledger::sign_admin_sps65_binding(message, derivation_path),
+        }
+    }
+
+    pub fn get_account_xpub(
+        self,
+        path: &str,
+        passphrase: &str,
+        network: Network,
+    ) -> Result<String, String> {
+        match self {
+            HwDeviceType::Trezor => trezor::get_account_xpub(path, passphrase, network),
+            HwDeviceType::Ledger => ledger::get_account_xpub(path),
+        }
+    }
+
+    pub fn get_master_fingerprint(self, passphrase: &str) -> Result<u32, String> {
+        match self {
+            HwDeviceType::Trezor => trezor::get_master_fingerprint(passphrase),
+            HwDeviceType::Ledger => ledger::get_master_fingerprint(),
+        }
+    }
+
+    pub fn verify_address(
+        self,
+        derivation_path: String,
+        script: AddressScriptType,
+        network: Network,
+    ) -> Result<(), String> {
+        match self {
+            HwDeviceType::Trezor => {
+                trezor::verify_address_on_device(derivation_path, script, network)
+            }
+            HwDeviceType::Ledger => {
+                ledger::verify_address_on_device(derivation_path, script, network)
+            }
+        }
+    }
 }
 
 impl HwPsbtSigner {
@@ -35,11 +116,39 @@ impl HwPsbtSigner {
         account_xpub: String,
         network: Network,
     ) -> Self {
+        let device_sign = device_type.device_sign_fn();
         Self {
             master_fingerprint,
             device_type,
             account_xpub,
             network,
+            device_sign,
+        }
+    }
+
+    /// The wired on-device signing operation (clone of the `Arc`), driven by
+    /// [`WalletService::sign_and_finalize_psbt`] on a blocking thread.
+    pub(crate) fn device_sign(&self) -> DeviceSignFn {
+        Arc::clone(&self.device_sign)
+    }
+
+    /// Test-only constructor injecting a stub signing operation, so the dispatch
+    /// seam and the "no broadcast on sign failure" guard can be exercised without
+    /// a physical/emulated device.
+    #[cfg(test)]
+    pub(crate) fn with_device_sign(
+        master_fingerprint: u32,
+        device_type: HwDeviceType,
+        account_xpub: String,
+        network: Network,
+        device_sign: DeviceSignFn,
+    ) -> Self {
+        Self {
+            master_fingerprint,
+            device_type,
+            account_xpub,
+            network,
+            device_sign,
         }
     }
 }

@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { AuthSessionProvider } from '@/contexts/auth-session-provider'
 import { SessionProvider } from '@/contexts/session-provider'
@@ -15,6 +15,7 @@ import { SignScreen } from '@/screens/sign-screen'
 import { WalletConnectScreen } from '@/screens/wallet-connect-screen'
 import { BlockPayoutsScreen } from '@/screens/block-payouts-screen'
 import { ManualProposalScreen } from '@/screens/manual-proposal-screen'
+import { SessionExpiryModal } from '@/components/session-expiry-modal'
 
 function RequireAuth({ children }: { children: ReactElement }) {
 	const { isAuthenticated, isOrchestratorSessionActive, isLoading } = useSession()
@@ -27,101 +28,111 @@ function RequireAuth({ children }: { children: ReactElement }) {
 	return children
 }
 
-export default function App() {
+function AppLayout() {
 	return (
-		<BrowserRouter>
-			<AuthSessionProvider>
-				<WalletSessionProvider>
-					<SessionProvider>
-						<Routes>
-							<Route path="/" element={<WalletConnectScreen />} />
-							<Route
-								path="/proposals"
-								element={
-									<RequireAuth>
-										<ProposalsDashboardScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId"
-								element={
-									<RequireAuth>
-										<ProposalDetailScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/create"
-								element={
-									<RequireAuth>
-										<CreateProposalScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/dev/proposal"
-								element={
-									<RequireAuth>
-										<CreateProposalScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId/sign"
-								element={
-									<RequireAuth>
-										<SignScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId/broadcast"
-								element={
-									<RequireAuth>
-										<BroadcastProposalScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId/cancel"
-								element={
-									<RequireAuth>
-										<CancelProposalScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId/cancel/sign"
-								element={
-									<RequireAuth>
-										<CancelProposalSignScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/proposals/:actionId/cancel/broadcast"
-								element={
-									<RequireAuth>
-										<CancelProposalBroadcastScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route
-								path="/dev/sign"
-								element={
-									<RequireAuth>
-										<SignScreen />
-									</RequireAuth>
-								}
-							/>
-							<Route path="/manual" element={<ManualProposalScreen />} />
-							<Route path="/block-payouts" element={<BlockPayoutsScreen />} />
-							<Route path="*" element={<Navigate to="/" replace />} />
-						</Routes>
-					</SessionProvider>
-				</WalletSessionProvider>
-			</AuthSessionProvider>
-		</BrowserRouter>
+		<AuthSessionProvider>
+			<WalletSessionProvider>
+				<SessionProvider>
+					<SessionExpiryModal />
+					<Outlet />
+				</SessionProvider>
+			</WalletSessionProvider>
+		</AuthSessionProvider>
 	)
+}
+
+const router = createBrowserRouter([
+	{
+		element: <AppLayout />,
+		children: [
+			{ path: '/', element: <WalletConnectScreen /> },
+			{
+				path: '/proposals',
+				element: (
+					<RequireAuth>
+						<ProposalsDashboardScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId',
+				element: (
+					<RequireAuth>
+						<ProposalDetailScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/create',
+				element: (
+					<RequireAuth>
+						<CreateProposalScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/dev/proposal',
+				element: (
+					<RequireAuth>
+						<CreateProposalScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId/sign',
+				element: (
+					<RequireAuth>
+						<SignScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId/broadcast',
+				element: (
+					<RequireAuth>
+						<BroadcastProposalScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId/cancel',
+				element: (
+					<RequireAuth>
+						<CancelProposalScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId/cancel/sign',
+				element: (
+					<RequireAuth>
+						<CancelProposalSignScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/proposals/:actionId/cancel/broadcast',
+				element: (
+					<RequireAuth>
+						<CancelProposalBroadcastScreen />
+					</RequireAuth>
+				),
+			},
+			{
+				path: '/dev/sign',
+				element: (
+					<RequireAuth>
+						<SignScreen />
+					</RequireAuth>
+				),
+			},
+			{ path: '/manual', element: <ManualProposalScreen /> },
+			{ path: '/block-payouts', element: <BlockPayoutsScreen /> },
+			{ path: '*', element: <Navigate to="/" replace /> },
+		],
+	},
+])
+
+export default function App() {
+	return <RouterProvider router={router} />
 }

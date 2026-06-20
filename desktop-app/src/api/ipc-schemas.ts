@@ -43,7 +43,14 @@ export const proposalSchema = z
 		status: proposalStatusSchema,
 		requiredSignatures: z.number(),
 		actionHex: z.string(),
-		actionType: z.enum(['multisig_update', 'vk_update', 'operator_set_update', 'cancel', 'unknown']),
+		actionType: z.enum([
+			'multisig_update',
+			'vk_update',
+			'operator_set_update',
+			'sequencer_key_update',
+			'cancel',
+			'unknown',
+		]),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),
@@ -69,6 +76,7 @@ export const authRoleSchema = z.nativeEnum(AuthRole)
 export const authChallengeSchema = z.object({
 	challengeId: z.string(),
 	challengeHex: z.string(),
+	challengeMessage: z.string(),
 	nonceHex: z.string(),
 	domain: z.string(),
 	role: authRoleSchema,
@@ -136,6 +144,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 export const rawOrchestratorAuthChallengeSchema = z.object({
 	challenge_id: z.string(),
 	challenge_hex: z.string(),
+	challenge_message: z.string(),
 })
 
 export const rawOrchestratorAuthSessionSchema = z.object({
@@ -178,22 +187,36 @@ export function normalizeCapabilitySignerKind(raw: string): z.infer<typeof signe
 	return 'none'
 }
 
+/** Specific connected HW device for verify-on-device dispatch, or null for software/none. */
+export const hwDeviceTypeSchema = z.enum(['trezor', 'ledger'])
+
+/** Normalizes the backend device token to the verify-dispatch union (null when not HW). */
+export function normalizeHwDeviceType(raw: string | null | undefined): 'trezor' | 'ledger' | null {
+	return raw === 'trezor' || raw === 'ledger' ? raw : null
+}
+
 export const adminWalletCapabilitySchema = z.union([
 	z
 		.object({
 			canSign: z.boolean(),
 			signerKind: z.string(),
 			reason: z.string().nullish(),
+			deviceType: z.string().nullish(),
+			network: z.string().nullish(),
 		})
 		.transform((d) => ({
 			canSign: d.canSign,
 			signerKind: normalizeCapabilitySignerKind(d.signerKind),
 			reason: d.reason ?? undefined,
+			deviceType: normalizeHwDeviceType(d.deviceType),
+			network: d.network ?? 'regtest',
 		})),
 	z.boolean().transform((b) => ({
 		canSign: b,
 		signerKind: 'none' as const,
 		reason: undefined,
+		deviceType: null,
+		network: 'regtest',
 	})),
 ])
 

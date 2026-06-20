@@ -3,7 +3,7 @@ import type { AuthRole, AuthSession } from '@/api/authentication'
 import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVendor } from '@/wallet/types'
 
 export type SigningStepInfo = {
-	challengeHex: string
+	challengeMessage: string
 	step: number
 	totalSteps: number
 }
@@ -16,6 +16,7 @@ export type SessionContextValue = {
 	connectOnChainSession: () => Promise<void>
 	disconnectSession: () => Promise<void>
 	ensureOrchestratorSession: () => Promise<void>
+	extendOrchestratorSession: () => Promise<void>
 	session: AuthSession | null
 	isAuthenticated: boolean
 	isOrchestratorSessionActive: boolean

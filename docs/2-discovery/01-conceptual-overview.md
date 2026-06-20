@@ -1,5 +1,7 @@
 # Alpen & Strata — Conceptual Overview
 
+> **Status: Reference / Phase 1 historical.** On-chain and protocol background from early discovery. Off-chain coordination: Postgres when `DATABASE_URL` is set; in-memory fallback for local dev — see [`architecture/overview.md`](../architecture/overview.md) and NF-6 in [`non-functional-items.md`](../3-stories/non-functional-items.md).
+
 ## 1. What is Strata?
 
 Strata is a **bridging protocol for Bitcoin** developed by Alpen Labs. It is designed as a neutral, open-source public good — infrastructure that any Layer 2 can use to connect securely to Bitcoin.

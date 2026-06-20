@@ -5,6 +5,7 @@ import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
+import { BroadcastStepper } from '@/domain/broadcast-proposal/components/broadcast-stepper'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
@@ -16,6 +17,7 @@ import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 
@@ -114,13 +116,7 @@ export function BroadcastProposalScreen() {
 			}
 		>
 			<div className="mx-auto w-full max-w-190">
-				<button
-					type="button"
-					className="inline-flex items-center gap-1.5 text-body text-[#6b7280] transition hover:text-[#111827]"
-					onClick={() => navigate('/proposals')}
-				>
-					← Back to proposals
-				</button>
+				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Broadcast proposal
@@ -128,6 +124,10 @@ export function BroadcastProposalScreen() {
 				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
 					Quorum has been reached. Review the commit details, then broadcast via the commit/reveal flow.
 				</p>
+
+				<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-6 py-4 shadow-sm">
+					<BroadcastStepper phase={phase} />
+				</div>
 
 				<div className="mt-6 space-y-4">
 					<BroadcastFundingSignerBanner backendSignerKind={rawSignerKind} connectVendor={adapter.vendor} />

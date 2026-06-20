@@ -64,9 +64,6 @@ test-key rejection logic is removed — superseded by the mnemonic guard.
   orchestrator coordination contract.
 - Any UI/UX change. The wallet panel, Send flow, and broadcast screen are
   untouched at the API surface they consume.
-- Retroactive edits to historical adversarial assessment snapshots under
-  `docs/assessment/2026-05-13-adversarial/` and `docs/assessment/2026-05-14-adversarial/`
-  (these are point-in-time records and must not be rewritten).
 
 ## Technical Design
 
@@ -265,7 +262,7 @@ Forward-looking docs (must be cleaned):
   Admin Wallet-derived commit internal key.
 - `docs/specs/secret-custody-wave2.md`
 - `docs/specs/admin-wallet-regtest-commit-funding.md`
-- `docs/security/threat-model.md`
+- `docs/operations/threat-model.md`
 - `docs/operations/runbook.md`
 - `desktop-app/e2e-webdriver/README.md`
 
@@ -274,14 +271,6 @@ CI / infra recipes:
 - `.github/workflows/*` — every workflow that exports the retired vars.
 - `scripts/` — regtest setup/runner scripts.
 - `staging/docker-compose.yml`
-
-Carve-out (must **not** be edited):
-
-- `docs/assessment/2026-05-13-adversarial/**`
-- `docs/assessment/2026-05-14-adversarial/**`
-
-These are immutable point-in-time records. The "done when" `grep` gate excludes
-them.
 
 ## Test Cases
 
@@ -347,8 +336,7 @@ directly — they are covered through the public surface.
     gate (CI-grade), not a unit test:
     - `grep -r OPERATOR_SECRET_KEY_HEX` returns zero hits.
     - `grep -r ALLOW_DEV_OPERATOR_KEY` returns zero hits.
-    Both excluding `docs/assessment/2026-05-13-adversarial/` and
-    `docs/assessment/2026-05-14-adversarial/`.
+    Both excluding historical assessment snapshots (removed when stale).
     Suggested implementation: a short shell guard in the existing
     pre-commit/CI workflow.
 
@@ -417,11 +405,7 @@ fallback (hex bundle export) defined in
   stable abstraction across the mnemonic-to-HW transition. Phase 7 must not
   alter the field's type or downstream signatures. If it must, this contract
   has been violated and the Phase 7 spec should call that out explicitly.
-- **Immutable assessment folders:** `docs/assessment/2026-05-13-adversarial/`
-  and `docs/assessment/2026-05-14-adversarial/` are point-in-time records and
-  must **not** be retroactively edited. The "done when" `grep` gate excludes
-  them.
-- **Single mnemonic source of truth:** After Phase 3.5 there is exactly one
+- **Phase 7 forward-compat:** `BroadcastEnv.commit_reveal_keypair` is the
   secret source for all signing material in the desktop process
   (`ADMIN_WALLET_REGTEST_MNEMONIC`). The previous failure mode — two unrelated
   hot keys drifting between env recipes — is structurally impossible. Phase 3.7

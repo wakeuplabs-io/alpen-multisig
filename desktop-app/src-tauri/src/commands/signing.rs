@@ -43,6 +43,22 @@ pub(crate) fn list_mnemonic_addresses(
 }
 
 #[tauri::command]
+pub(crate) fn sign_message_with_mnemonic_path(
+    mnemonic: String,
+    passphrase: Option<String>,
+    derivation_path: String,
+    message: String,
+) -> Result<signing::SignatureResult, String> {
+    dev_secrets::ensure_dev_mnemonic_signing_allowed()?;
+    signing::sign_message_with_mnemonic_path(
+        &mnemonic,
+        passphrase.as_deref().unwrap_or(""),
+        &derivation_path,
+        &message,
+    )
+}
+
+#[tauri::command]
 pub(crate) fn sign_with_mnemonic_path(
     mnemonic: String,
     passphrase: Option<String>,
