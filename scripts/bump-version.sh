@@ -36,6 +36,10 @@ bump_cargo desktop-app/src-tauri/Cargo.toml
 bump_json_field desktop-app/package.json
 bump_json_field desktop-app/src-tauri/tauri.conf.json
 
+echo "  syncing root package-lock.json …"
+npm install --prefix "$REPO_ROOT" --package-lock-only --silent
+echo "  updated package-lock.json"
+
 echo ""
 echo "Done. Next steps:"
 echo "  1. Review: git diff"
