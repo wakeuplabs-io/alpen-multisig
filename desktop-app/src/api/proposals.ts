@@ -15,7 +15,13 @@ export type BroadcastStatus =
 
 export type ProposalKind = 'update' | 'cancel'
 
-export type ActionType = 'multisig_update' | 'vk_update' | 'operator_set_update' | 'cancel' | 'unknown'
+export type ActionType =
+	| 'multisig_update'
+	| 'vk_update'
+	| 'operator_set_update'
+	| 'sequencer_key_update'
+	| 'cancel'
+	| 'unknown'
 
 export type CancelProposalSummary = {
 	actionId: string
