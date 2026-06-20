@@ -183,7 +183,10 @@ Plus a free function `broadcast_single_with_fallback(broadcasters, tx_hex) -> Re
 - `admin_wallet_bump_fee(input: { txid, fee_rate_sat_per_kvb }, wallet_session, pending_reveals, node_config, btc_rpc) -> Result<BumpFeeResultDto, String>`
   Builds the broadcaster chain exactly like `commands/proposals.rs` (`ElectrumBroadcaster::new(cfg.electrum_url())`, `NodeBroadcaster::new(btc_rpc)`); validates the rate with `FeeRate::new` against the live min-relay. Errors serialize tagged `{ "type", "message" }` like `serialize_wallet_error`.
 
-`PendingReveals` already lives in Tauri managed state (R1.0.1); the commands read it through a read-only `pending_commit_to_reveal()` accessor (commit txid → reveal txid map, no lifecycle change).
+`PendingReveals` lives in Tauri managed state (R1.0.1) and is **persisted to disk** via
+[`pending_reveals_store.rs`](../../desktop-app/src-tauri/src/infrastructure/pending_reveals_store.rs)
+(`pending-reveals.json` under the app data dir). Commands read it through a read-only
+`pending_commit_to_reveal()` accessor (commit txid → reveal txid map).
 
 ### Frontend — React
 

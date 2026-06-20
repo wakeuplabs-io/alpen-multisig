@@ -4,7 +4,7 @@
 > **Audience:** Executive / stakeholder summary
 > **Scope:** Consolidated high-level findings from Phase 1 (Protocol Research & Architecture) on the current readiness of the upstream protocol the project depends on.
 
-This note records, at an executive level, the conditions observed in the upstream protocol and its supporting libraries during Phase 1. It is intentionally free of implementation detail; the underlying technical evidence is available in the rest of this folder, in [`docs/external/research-assessment.md`](../external/research-assessment.md), and in [`docs/deliverable/crate-inventory.md`](../deliverable/crate-inventory.md).
+This note records, at an executive level, the conditions observed in the upstream protocol and its supporting libraries during Phase 1. It is intentionally free of implementation detail; the underlying technical evidence is available in the rest of this folder, in [`docs/external/research-assessment.md`](../external/research-assessment.md), and in [`crate-inventory.md`](./crate-inventory.md).
 
 ## Findings
 

@@ -7,6 +7,10 @@ use rand::RngCore;
 
 const AUTH_DOMAIN: &str = "alpen-multisig/orchestrator/v1";
 
+pub(crate) fn render_challenge_message(role_label: &str, challenge_hex: &str) -> String {
+    format!("Strata Session Authentication v1\nRole: {role_label}\nChallenge: {challenge_hex}")
+}
+
 pub(crate) fn create_challenge_digest(
     authority_wire: &str,
     nonce_hex: &str,
@@ -52,7 +56,7 @@ pub(crate) fn verify_signature(
 }
 
 pub(crate) fn verify_bitcoin_message_signature(
-    challenge_digest_hex: &str,
+    challenge_message: &str,
     signer_pubkey_hex: &str,
     signature_hex: &str,
 ) -> Result<(), String> {
@@ -71,7 +75,7 @@ pub(crate) fn verify_bitcoin_message_signature(
     let recoverable = RecoverableSignature::from_compact(&signature_bytes[..64], recid)
         .map_err(|e| format!("invalid recoverable signature: {e}"))?;
 
-    let message_hash = signed_msg_hash(challenge_digest_hex);
+    let message_hash = signed_msg_hash(challenge_message);
     let message = Message::from_digest_slice(message_hash.as_ref())
         .map_err(|e| format!("invalid signed message digest: {e}"))?;
     let recovered = Secp256k1::new()
@@ -93,6 +97,59 @@ pub(crate) fn verify_bitcoin_message_signature(
 mod tests {
     use super::*;
     use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+
+    /// Builds the 65-byte `[compact64 || recid]` bitcoin-message signature the
+    /// signing clients emit.
+    fn sign_bitcoin_message(message: &str, sk: &SecretKey) -> String {
+        let message_hash = signed_msg_hash(message);
+        let secp_msg = Message::from_digest_slice(message_hash.as_ref()).expect("32-byte digest");
+        let sig = Secp256k1::new().sign_ecdsa_recoverable(&secp_msg, sk);
+        let (recid, compact) = sig.serialize_compact();
+        let mut sig_bytes = [0u8; 65];
+        sig_bytes[..64].copy_from_slice(&compact);
+        sig_bytes[64] = recid.to_i32() as u8;
+        hex::encode(sig_bytes)
+    }
+
+    #[test]
+    fn render_challenge_message_format_is_stable() {
+        // The exact string is a signing contract: the wallet displays and signs
+        // it, and the verifier re-hashes the same bytes. Pin it so a format
+        // change (a space, a newline, the version label) fails loudly here
+        // instead of silently breaking authentication in production.
+        assert_eq!(
+            render_challenge_message("strata_administrator", "deadbeef"),
+            "Strata Session Authentication v1\nRole: strata_administrator\nChallenge: deadbeef"
+        );
+    }
+
+    #[test]
+    fn bitcoin_message_signature_round_trips() {
+        let sk = SecretKey::from_slice(&[7u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
+        let message = render_challenge_message("strata_administrator", "aa");
+        let signature_hex = sign_bitcoin_message(&message, &sk);
+
+        verify_bitcoin_message_signature(&message, &hex::encode(pk.serialize()), &signature_hex)
+            .expect("round-trip bitcoin-message signature must verify");
+    }
+
+    #[test]
+    fn bitcoin_message_signature_rejects_tampered_message() {
+        let sk = SecretKey::from_slice(&[9u8; 32]).expect("valid key");
+        let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
+        let signed = render_challenge_message("strata_administrator", "aa");
+        let signature_hex = sign_bitcoin_message(&signed, &sk);
+
+        let tampered = render_challenge_message("strata_administrator", "bb");
+        let err = verify_bitcoin_message_signature(
+            &tampered,
+            &hex::encode(pk.serialize()),
+            &signature_hex,
+        )
+        .unwrap_err();
+        assert!(err.contains("mismatch"), "unexpected error: {err}");
+    }
 
     #[test]
     fn challenge_digest_is_deterministic() {

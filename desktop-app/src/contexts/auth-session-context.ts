@@ -9,7 +9,7 @@ export type AuthSessionValue = {
 	selectedRole: AuthRole
 	setSelectedRole: (role: AuthRole) => void
 	refreshSession: () => Promise<void>
-	authenticate: (signChallenge: (challengeHex: string) => Promise<SignSighashResult>) => Promise<void>
+	authenticate: (signChallenge: (challengeMessage: string) => Promise<SignSighashResult>) => Promise<void>
 	logout: () => Promise<void>
 }
 

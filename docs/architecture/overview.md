@@ -2,6 +2,15 @@
 
 This document defines the baseline architecture for the Alpen Multisig application. It serves as the reference for all implementation decisions going forward.
 
+### Documentation SSOT
+
+| Topic | SSOT | Do not use for current architecture |
+|-------|------|-------------------------------------|
+| System design | This document + [`adrs/`](./adrs/) | [`archive/poc-specs/`](../archive/poc-specs/) (historical POC) |
+| Accepted decisions | [`adrs/`](./adrs/) | [`2-discovery/`](../2-discovery/) notes, dated assessments |
+
+Full internal map and conflict rules: [`docs/README.md`](../README.md).
+
 ## System Context
 
 Alpen Multisig is a desktop application that enables authorized signers to manage on-chain governance of the Strata bridge and Alpen rollup. The system coordinates signature collection off-chain, constructs Bitcoin transactions embedding governance payloads (SPS-50/51/65), and broadcasts them for the ASM (Administration State Machine) to process deterministically.
@@ -216,7 +225,7 @@ desktop-app/src-tauri/src/
     ├── action_codec.rs      # Domain Action ⇄ Strata MultisigAction SSZ codec
     ├── signing.rs           # compute_sighash/sign_sighash/verify_threshold
     ├── orchestrator_client.rs  # HttpOrchestratorClient (reqwest impl of the trait)
-    └── hw_wallet/           # Trezor integration + Ledger placeholder module
+    └── hw_wallet/           # Trezor + Ledger device protocols (PSBT signing, address verify), HwPsbtSigner seam
 ```
 
 **Strata crate isolation:** `infrastructure/action_codec.rs` is the single module in the desktop app that imports `strata_asm_params`, `strata_asm_txs_admin`, and `strata_crypto`. All other layers (`domain/`, `application/`, commands, UI) talk in client-owned domain types (`Authority`, `Action`, `MultisigUpdate`, `CompressedPubKey`). A codec test asserts byte-level borsh compatibility with the direct Strata call, guaranteeing the SPS-65 signed form stays identical.
@@ -338,33 +347,36 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 
 | Layer | Stack |
 |-------|-------|
-| Backend | Rust, Axum 0.7, Tokio, Postgres (planned), `serde`, `tracing`, `tower-http` |
+| Backend | Rust, Axum 0.7, Tokio, Postgres (production via `DATABASE_URL`) or in-memory (local dev), `serde`, `tracing`, `tower-http` |
 | Desktop Shell | Tauri 2, Rust, reqwest 0.12 (backend proxy), `strata-asm-txs-admin`, `strata-crypto` |
 | Frontend | React 18, TypeScript 5, Vite 5, TailwindCSS 3, react-router-dom 6, `@tauri-apps/api`, ESLint 9, Prettier 3 |
 | Signing | ECDSA (secp256k1 0.29.1), SSZ-encoded `MultisigAction`, SPS-65 tagged sighash |
-| HW Wallet | Trezor PoC integrated via Tauri commands; Ledger path still placeholder |
+| HW Wallet | Trezor and Ledger via Rust-native adapters (Tauri commands) |
 | Protocol | SPS-50/51/65, SSZ serialization, `strata-asm-txs-admin`, `strata-l1-txfmt` |
 | E2E Tests | Rust nightly, pinned Alpen/Strata crates (with test-utils features) |
 | CI | GitHub Actions: 2 parallel jobs (Rust lint/build/test, frontend lint/format/build). See [ADR-004](adrs/004-ci-pipeline-strategy.md) |
 
 ## Current State
 
-**Implemented:**
-- Domain types and API surface definition (backend + frontend)
-- Backend: Axum router, working handlers (create/get/list/approve proposals), domain models, error mapping, in-memory repository (24 tests)
-- Desktop application layer: `proposals.rs` with `create_update_action`, `approve_action`, `get_update_action` via `OrchestratorClient` trait (7 tests)
-- Desktop `lib.rs` exposing `application` and `signing` modules publicly for e2e test consumption
-- Tauri IPC layer: hardware-wallet and signing commands wired (`get_trezor_info`, `verify_address_on_device`, `sign_with_trezor`, `compute_sighash`, `verify_threshold`)
-- Signing library (POC-3): `compute_sighash`, `sign_sighash`, `verify_threshold` — production functions with 10 tests
-- Frontend wallet-connect and sign-screen PoC flow with session context + wallet adapter abstraction
-- E2E tests: admin subprotocol flow (key gen → tx construction → signature verification) + propose-sign coordination flow (desktop → HTTP → orchestrator)
-- CI pipeline: GitHub Actions with 2 parallel jobs — Rust (lint/build/test + e2e), frontend (lint/format/build) (ADR-004)
-- Workspace dependency centralization with ADR-001 (Alpen crates pinned to rev `308211f`)
-- Protocol documentation and POC findings (POC-1 discovery, POC-2, POC-3 signing spec, POC-4 specs)
+> **Client-facing snapshot:** [`docs/external/architecture-overview.md`](../external/architecture-overview.md)
 
-**Pending implementation:**
-- Backend: persistence layer (Postgres), signer verification against ASM signer set, proposal lifecycle enforcement (expiry, cancel, quorum detection)
-- Desktop: full proposal creation/signing UX, authority/action selection UX, broadcast flow
-- Tauri: proposal command surface for create/get/approve and end-to-end orchestration integration
-- Bitcoin tx construction: SPS-50 OP_RETURN + SPS-51 witness envelope building (currently only in e2e-tests)
-- Payout flows: manual + automatic `block_payout` construction
+**Implemented (high level):**
+- **Orchestrator:** `/api/v1` proposal CRUD, signature collection, explicit `pending → approved` transition, broadcast claim/PATCH coordination, Postgres persistence when `DATABASE_URL` is set (in-memory fallback for local dev). See [ADR-006](adrs/006-backend-coordination-boundary.md).
+- **Desktop:** Tauri executes commit/reveal locally; orchestrator mirrors broadcast metadata. Governance proposals, manual proposal flow (`/manual`), block payouts, and Admin Wallet (send/receive, fee bump, HW signing) are in production paths on regtest/testnet.
+- **Signing:** SPS-65 sighash, threshold verification, HW wallet adapters (Trezor/Ledger).
+- **CI / release:** GitHub Actions (ADR-004), signed releases, Tier-1 reproducible builds.
+
+**Open / deferred (see specs and [`deferred-backlog.md`](../assessment/deferred-backlog.md)):**
+- Security Council and some PRD update types blocked on upstream Alpen crates.
+- Payout Administrator full product line (partial `block_payout` coverage).
+- Shared Send UX unifying wallet Send and governance broadcast (Phase 9).
+- US-H5 manual-fallback export/reconcile polish when orchestrator is down.
+
+## Capability status (where to look)
+
+| Area | Document |
+|------|----------|
+| Admin Wallet / PRD §4 | [`admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
+| Integration test pass rates by authority | [`external/integration-test-report.md`](../external/integration-test-report.md) |
+| Upstream Alpen crate gaps | [`2-discovery/08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) |
+| Deferred user stories & NFRs | [`assessment/deferred-backlog.md`](../assessment/deferred-backlog.md) |

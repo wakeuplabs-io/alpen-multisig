@@ -4,7 +4,9 @@ use std::str::FromStr;
 use bip39::Mnemonic;
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{DerivationPath, Xpriv};
+use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey, SECP256K1};
+use bitcoin::sign_message::signed_msg_hash;
 use ssz::Decode;
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_asm_txs_admin::signing_message::SigningMessage;
@@ -158,6 +160,28 @@ pub fn sign_with_mnemonic_path(
     Ok(SignatureResult {
         public_key_hex: hex::encode(public_key.serialize()),
         signature_hex: hex::encode(sig.serialize_compact()),
+    })
+}
+
+pub fn sign_message_with_mnemonic_path(
+    mnemonic: &str,
+    passphrase: &str,
+    derivation_path: &str,
+    message: &str,
+) -> Result<SignatureResult, String> {
+    let secret_key = derive_secret_key_from_mnemonic_path(mnemonic, passphrase, derivation_path)?;
+    let msg_hash = signed_msg_hash(message);
+    let secp_msg = Message::from_digest(msg_hash.to_byte_array());
+    let sig = SECP256K1.sign_ecdsa_recoverable(&secp_msg, &secret_key);
+    let (recid, compact) = sig.serialize_compact();
+    let mut out = [0u8; 65];
+    out[..64].copy_from_slice(&compact);
+    out[64] = recid.to_i32() as u8;
+    let public_key = PublicKey::from_secret_key(SECP256K1, &secret_key);
+
+    Ok(SignatureResult {
+        public_key_hex: hex::encode(public_key.serialize()),
+        signature_hex: hex::encode(out),
     })
 }
 

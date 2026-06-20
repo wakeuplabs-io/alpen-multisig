@@ -3,7 +3,7 @@ import type { AuthRole, AuthSession } from '@/api/authentication'
 import type { WalletAccountInfo, WalletAdapter, WalletAdapterOptions, WalletVendor } from '@/wallet/types'
 
 export type SigningStepInfo = {
-	challengeHex: string
+	challengeMessage: string
 	step: number
 	totalSteps: number
 }

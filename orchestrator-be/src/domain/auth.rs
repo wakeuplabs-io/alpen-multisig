@@ -4,6 +4,7 @@ use crate::domain::authority::Authority;
 pub struct PendingAuthChallenge {
     pub authority: Authority,
     pub challenge_hex: String,
+    pub challenge_message: String,
     pub expires_at_unix_ms: u64,
     pub consumed: bool,
 }

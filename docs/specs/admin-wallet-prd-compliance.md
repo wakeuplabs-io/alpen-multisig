@@ -95,7 +95,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
 | 5.3.3.2.3 | Quorum “Send” UX like wallet Send | **PARTIAL** | Broadcast screens exist | Wallet Send §4.3.5 not built; Phase 9 shared UX |
-| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default from node) | **PASS** | Phase 4, `FeeRateSelector`, `fee_rates_estimate` IPC | M1+M2+M3 complete; presets (Slow/Medium/Fast) + Custom; Electrum-first broadcast with node fallback |
+| US-H4 | Manual sat/vB on governance broadcast (0.1 steps, max 10 000; default **Medium** preset) | **PASS** | Phase 4, `FeeRateSelector`, `fee_rates_estimate` IPC | M1+M2+M3 complete; presets (Slow/Medium/Fast) + Custom; Electrum-first broadcast with node fallback. Wallet Send §4.3.5.3 uses **Fast** default — see [`admin-wallet-send-btc-implementation.md`](./admin-wallet-send-btc-implementation.md) D4 |
 | 5.3 (fees) | Pending-update Send fee via wallet-send pattern (§4.3.5.3) | **DEFER** | Phase 6 / Phase 9 shared Send | — |
 | Broadcast commit | Funded from Admin Wallet | **PASS** | Phase 3.6+, `WalletService` | — |
 | Broadcast commit sign | HW or regtest mnemonic PSBT | **PASS** | R1.1 `PsbtSigner` | Reveal: ephemeral in-app (SPS-50), not HW — protocol constraint |
@@ -151,7 +151,7 @@ The implementation plan previously stated post-Foundation reveal key at `m/86'/0
 
 The plan previously excluded Electrum and deferred indexer backends to a separate program. **Current plan:** Electrum is **in scope** as Release 2.
 
-Legacy feature roadmaps under `docs/feature/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
+Legacy feature roadmaps under `docs/archive/features/admin-wallet-*` may still mention `COMMIT_FUNDING` or `ADMIN_WALLET_REGTEST_MNEMONIC`; those env vars were removed in Phase 3.6 / 3.7c. Treat this matrix + implementation plan as authoritative for compliance status.
 
 ---
 

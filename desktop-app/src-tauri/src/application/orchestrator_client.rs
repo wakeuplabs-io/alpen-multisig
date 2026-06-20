@@ -52,6 +52,7 @@ pub struct StartOrchestratorAuthRequest {
 pub struct OrchestratorAuthChallenge {
     pub challenge_id: String,
     pub challenge_hex: String,
+    pub challenge_message: String,
     pub issued_at_unix_ms: u64,
     pub expires_at_unix_ms: u64,
 }
