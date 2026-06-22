@@ -28,9 +28,9 @@ and bundles three artifacts under `target/release/bundle/`:
 
 | Artifact | Path |
 |----------|------|
-| Debian package | `target/release/bundle/deb/Alpen Multisig_<version>_amd64.deb` |
-| RPM package | `target/release/bundle/rpm/Alpen Multisig-<version>-1.x86_64.rpm` |
-| AppImage | `target/release/bundle/appimage/Alpen Multisig_<version>_amd64.AppImage` |
+| Debian package | `target/release/bundle/deb/Strata Multisig_<version>_amd64.deb` |
+| RPM package | `target/release/bundle/rpm/Strata Multisig-<version>-1.x86_64.rpm` |
+| AppImage | `target/release/bundle/appimage/Strata Multisig_<version>_amd64.AppImage` |
 
 The AppImage step downloads `linuxdeploy` helpers on first run, so the initial build needs
 network access.
@@ -40,14 +40,14 @@ network access.
 **AppImage (no install, double-click or one command):**
 
 ```bash
-chmod +x "Alpen Multisig_<version>_amd64.AppImage"
-"./Alpen Multisig_<version>_amd64.AppImage"
+chmod +x "Strata Multisig_<version>_amd64.AppImage"
+"./Strata Multisig_<version>_amd64.AppImage"
 ```
 
 **Debian package:**
 
 ```bash
-sudo apt install "./Alpen Multisig_<version>_amd64.deb"
+sudo apt install "./Strata Multisig_<version>_amd64.deb"
 # launches from the app menu, or:
 desktop-app
 ```
@@ -57,17 +57,28 @@ The app expects the orchestrator backend on `http://localhost:3000` (see the
 
 ## Icons
 
-Bundle icons are generated from the Alpen mark and committed under
-`desktop-app/src-tauri/icons/`. The source is `desktop-app/src-tauri/icon-source.svg`
-(the `AlpenMark` polygon on a white background). To regenerate after a brand change:
+Bundle icons are generated from the Strata mark (`desktop-app/src/assets/strata-icon.png`),
+composited on a white 1024×1024 canvas as `desktop-app/src-tauri/icon-source.png`, and
+committed under `desktop-app/src-tauri/icons/`. To regenerate after a brand change:
 
 ```bash
-cd desktop-app/src-tauri
-inkscape "$(pwd)/icon-source.svg" --export-type=png \
-  --export-filename="$(pwd)/icon-source.png" -w 1024 -h 1024
-cd ..
+python3 - <<'PY'
+from PIL import Image
+
+src = Image.open("desktop-app/src/assets/strata-icon.png").convert("RGBA")
+size = 1024
+padding = int(size * 0.18)
+max_w = size - 2 * padding
+max_h = size - 2 * padding
+scale = min(max_w / src.width, max_h / src.height)
+new_size = (int(src.width * scale), int(src.height * scale))
+logo = src.resize(new_size, Image.Resampling.LANCZOS)
+canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+canvas.paste(logo, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), logo)
+canvas.convert("RGB").save("desktop-app/src-tauri/icon-source.png")
+PY
+cd desktop-app
 npm run tauri icon src-tauri/icon-source.png
-rm src-tauri/icon-source.png
 # tauri icon also emits android/ and ios/ sets — remove them, this is a desktop-only app
 rm -rf src-tauri/icons/android src-tauri/icons/ios
 ```
