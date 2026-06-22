@@ -73,11 +73,12 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             // subprotocol, which stores it in `sequencer_predicate` (distinct from
             // `checkpoint_predicate` which OlStfVk updates).
             let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
-            let expected = PredicateKey::new(
-                PredicateTypeId::Bip340Schnorr,
-                update.pub_key().0.to_vec(),
-            );
-            Ok(predicate_keys_match(&expected, checkpoint.sequencer_predicate()))
+            let expected =
+                PredicateKey::new(PredicateTypeId::Bip340Schnorr, update.pub_key().0.to_vec());
+            Ok(predicate_keys_match(
+                &expected,
+                checkpoint.sequencer_predicate(),
+            ))
         }
         MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
