@@ -1,6 +1,6 @@
 [package]
 name = 'desktop-app'
-version = "0.2.2"
+version = "0.2.3"
 description = 'Alpen Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
 license = 'MIT OR Apache-2.0'
