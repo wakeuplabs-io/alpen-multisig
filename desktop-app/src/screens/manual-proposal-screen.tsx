@@ -360,6 +360,7 @@ export function ManualProposalScreen() {
 					receiveIndex={receiveAddressHook.index}
 					hwDeviceType={hwDeviceType}
 					network={walletNetwork}
+					adminIdDerivationPath={wallet.derivationPath}
 					isAddressesLoading={receiveAddressHook.isLoading}
 					addressRows={addressesWithBalanceHook.data}
 					addressRowsLoading={addressesWithBalanceHook.isLoading}

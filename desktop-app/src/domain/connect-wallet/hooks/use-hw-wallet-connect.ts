@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { verifyAddressOnDevice } from '@/api/admin-wallet'
 import type { HwDeviceType } from '@/api/admin-wallet'
+import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
 
 /** The connected device kind for verify dispatch, or null for software vendors. */
 function hwDeviceType(vendor: WalletAdapter['vendor']): HwDeviceType | null {
 	return vendor === 'trezor' || vendor === 'ledger' ? vendor : null
-}
-
-/** Infers the network token from an Admin ID derivation path's coin type (0' → mainnet, else regtest). */
-function networkFromPath(derivationPath: string): string {
-	return /\/0'\/73'/.test(derivationPath) || /\/0h\/73h/.test(derivationPath) ? 'bitcoin' : 'regtest'
 }
 
 type Params = {

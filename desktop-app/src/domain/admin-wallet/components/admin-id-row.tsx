@@ -2,13 +2,19 @@ import type { HwDeviceType } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
 import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
-import { buildAdminIdVerifyPath } from '../model/build-verify-path'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 
 /** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.2). */
 export type AdminIdVerifyContext = {
 	deviceType: HwDeviceType
 	network: string
+	/**
+	 * Connect-returned Admin ID path (BIP-84). Verifying against this exact path keeps the
+	 * device showing the same key/coin it derived at connect — Trezor uses coin type 0',
+	 * Ledger 1' on test nets — so app and device match (and the Trezor emulator, which
+	 * rejects m/84'/1'/73', stays happy).
+	 */
+	derivationPath: string
 }
 
 export type AdminIdRowProps = {
@@ -70,7 +76,7 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 				<VerifyOnDeviceButton
 					deviceType={verify.deviceType}
 					network={verify.network}
-					derivationPath={buildAdminIdVerifyPath(verify.network)}
+					derivationPath={verify.derivationPath}
 					scriptType="p2wpkh"
 					subject="Admin ID"
 				/>

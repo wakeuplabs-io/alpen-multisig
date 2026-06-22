@@ -158,6 +158,7 @@ jobs:
           npm run test:model-fee-rate --workspace desktop-app
           npm run test:model-build-receive-qr-value --workspace desktop-app
           npm run test:model-build-verify-path --workspace desktop-app
+          npm run test:model-network-from-path --workspace desktop-app
           npm run test:model-admin-id-presentation --workspace desktop-app
           npm run test:architecture --workspace desktop-app
 

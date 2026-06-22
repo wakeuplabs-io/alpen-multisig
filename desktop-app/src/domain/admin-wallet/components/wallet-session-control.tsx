@@ -60,6 +60,7 @@ export function WalletSessionControl({
 					receiveIndex={panel.receiveIndex}
 					hwDeviceType={panel.hwDeviceType}
 					network={panel.network}
+					adminIdDerivationPath={panel.adminIdDerivationPath}
 					isAddressesLoading={panel.isAddressesLoading}
 					addressRows={panel.addressRows}
 					addressRowsLoading={panel.addressRowsLoading}

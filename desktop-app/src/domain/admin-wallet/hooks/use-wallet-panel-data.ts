@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { AdminWalletError } from '@/api/admin-wallet'
+import { useSession } from '@/hooks/use-session'
 import { useWalletPanelState } from './use-wallet-panel-state'
 import { useAdminWalletBalance } from './use-admin-wallet-balance'
 import { useAdminWalletReceiveAddress } from './use-admin-wallet-receive-address'
@@ -22,6 +23,12 @@ export type WalletPanelData = {
 	hwDeviceType: 'trezor' | 'ledger' | null
 	/** Active session network token, for verify-on-device coin-path selection. */
 	network: string
+	/**
+	 * Connect-returned Admin ID derivation path (BIP-84). Used as the authoritative
+	 * verify-on-device path so the device shows the same key/coin it derived at connect
+	 * (Trezor coin type 0', Ledger 1' on test nets). Undefined for software signers.
+	 */
+	adminIdDerivationPath: string | undefined
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
@@ -55,6 +62,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const unconfirmedTxsHook = useUnconfirmedTxs()
 	const { canSign, deviceType: hwDeviceType, network } = useAdminWalletCapability()
+	const { wallet } = useSession()
 
 	// All refresh callbacks below are referentially stable (each is a `useCallback(…, [])`
 	// or depends only on other stable callbacks), so the effect/useCallback deps stay
@@ -99,6 +107,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		isWatchOnly: !canSign,
 		hwDeviceType,
 		network,
+		adminIdDerivationPath: wallet?.derivationPath,
 		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
 		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
 		isBalanceLoading: balanceHook.isLoading,
