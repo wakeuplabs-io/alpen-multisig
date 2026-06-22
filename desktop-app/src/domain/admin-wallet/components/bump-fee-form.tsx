@@ -66,7 +66,7 @@ export function BumpFeeForm({
 				data-testid="e2e-wallet-bump-success"
 			>
 				<p className="m-0 text-label font-medium text-[#047857]">
-					{state.result.method === 'cpfp' ? 'Acceleration broadcast (CPFP child)' : 'Replacement broadcast'}
+					{state.result.method === 'cpfp' ? 'Acceleration sent (CPFP child)' : 'Replacement sent'}
 				</p>
 				{state.result.method === 'cpfp' && (
 					<p className="m-0 mt-0.5 text-mono-sm text-[#065f46]">
@@ -192,7 +192,7 @@ export function BumpFeeForm({
 						canConfirm ? 'bg-[#111827] text-white hover:bg-[#1f2937]' : 'cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]'
 					}`}
 				>
-					{isSubmitting ? 'Broadcasting…' : 'Confirm bump'}
+					{isSubmitting ? 'Sending…' : 'Confirm bump'}
 				</button>
 				<button
 					type="button"

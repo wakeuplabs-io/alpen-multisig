@@ -26,7 +26,7 @@ export function PastTransactionsList({ txs, onRebroadcast, onCopyRawTx }: Props)
 					</svg>
 				</div>
 				<p className="m-0 font-display text-heading text-[#0a0a0a]">No past transactions</p>
-				<p className="m-0 mt-1.5 text-body-sm text-[#6b7280]">Broadcast transactions will appear here.</p>
+				<p className="m-0 mt-1.5 text-body-sm text-[#6b7280]">Sent transactions will appear here.</p>
 			</div>
 		)
 	}

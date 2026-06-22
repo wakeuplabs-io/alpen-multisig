@@ -134,7 +134,7 @@ export function BroadcastDetailsCard({
 				<div>
 					<SectionLabel>Reveal TX</SectionLabel>
 					<p className="text-body-sm text-[#6b7280]">
-						Signed locally and broadcast in the same package as the commit — no separate confirmation wait.
+						Signed locally and sent in the same package as the commit — no separate confirmation wait.
 					</p>
 				</div>
 
@@ -228,13 +228,13 @@ export function BroadcastDetailsCard({
 					{phase === 'awaiting-device'
 						? 'Approve on device…'
 						: isBroadcasting
-							? 'Broadcasting…'
-							: 'Confirm & Broadcast'}
+							? 'Sending…'
+							: 'Confirm & Send'}
 				</button>
 				{targetQueued === false && (
 					<p className="mt-2 text-center text-label text-[#b91c1c]">
 						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
-						cancel can no longer be broadcast.
+						cancel can no longer be sent.
 					</p>
 				)}
 				{!canSign && (

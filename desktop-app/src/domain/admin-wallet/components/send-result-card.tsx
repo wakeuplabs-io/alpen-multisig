@@ -13,7 +13,7 @@ export function SendResultCard({ result, onDone }: SendResultCardProps) {
 	return (
 		<div className="rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-3 py-2.5" data-testid="e2e-wallet-send-success">
 			<p className="m-0 text-label font-medium text-[#047857]">
-				{result.drained ? 'Sent — wallet drained' : 'Transaction broadcast'}
+				{result.drained ? 'Sent — wallet drained' : 'Transaction sent'}
 			</p>
 			<p className="m-0 mt-0.5 text-mono-sm text-[#065f46]">
 				{result.amountSats.toLocaleString()} sats ({formatBtcFromSats(result.amountSats)} BTC) · fee{' '}

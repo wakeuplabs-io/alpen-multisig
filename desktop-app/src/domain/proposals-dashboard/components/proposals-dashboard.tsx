@@ -78,7 +78,7 @@ export function ProposalsDashboard({
 						Proposals
 					</h1>
 					<p className="m-0 mt-1 text-body-sm leading-normal text-[#6b7280]">
-						Proposals you can sign, broadcast, or review under {authorityLabel}.
+						Proposals you can sign, send, or review under {authorityLabel}.
 					</p>
 				</div>
 				<div className="flex shrink-0 items-center gap-2">
@@ -562,7 +562,7 @@ function ProposalCard({
 				</div>
 			) : broadcastInProgress ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-body font-medium text-[#6b7280]">Broadcast in progress</p>
+					<p className="m-0 text-body font-medium text-[#6b7280]">Send in progress</p>
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
