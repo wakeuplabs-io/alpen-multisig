@@ -13,7 +13,7 @@ use strata_asm_proto_checkpoint::state::CheckpointState;
 use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
-use strata_predicate::PredicateKey;
+use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
@@ -66,6 +66,19 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             let target = UpdateAction::EeStfVk(update.clone());
             let still_queued = admin.queued().iter().any(|q| q.action() == &target);
             Ok(ee_stf_vk_enacted(alpen.last_seqno(), seq_no, still_queued))
+        }
+        MultisigAction::Update(UpdateAction::Sequencer(update)) => {
+            // SequencerUpdate carries a Buf32 (raw 32-byte key). The ASM handler wraps it as
+            // PredicateKey::new(Bip340Schnorr, key_bytes) and relays it to the checkpoint
+            // subprotocol, which stores it in `sequencer_predicate` (distinct from
+            // `checkpoint_predicate` which OlStfVk updates).
+            let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
+            let expected =
+                PredicateKey::new(PredicateTypeId::Bip340Schnorr, update.pub_key().0.to_vec());
+            Ok(predicate_keys_match(
+                &expected,
+                checkpoint.sequencer_predicate(),
+            ))
         }
         MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
@@ -459,5 +472,17 @@ mod tests {
         assert!(!ee_stf_vk_enacted(2, 3, false));
         assert!(!ee_stf_vk_enacted(3, 3, true));
         assert!(ee_stf_vk_enacted(3, 3, false));
+    }
+
+    /// `UpdateAction::Sequencer` enactment is detected by comparing the proposed key
+    /// (wrapped as `Bip340Schnorr` predicate) against `checkpoint.sequencer_predicate()`.
+    #[test]
+    fn sequencer_predicate_keys_match_detects_enactment() {
+        let key_bytes = [0x03u8; 32];
+        let matching = PredicateKey::new(PredicateTypeId::Bip340Schnorr, key_bytes.to_vec());
+        let different = PredicateKey::new(PredicateTypeId::Bip340Schnorr, vec![0x04u8; 32]);
+
+        assert!(predicate_keys_match(&matching, &matching));
+        assert!(!predicate_keys_match(&matching, &different));
     }
 }
