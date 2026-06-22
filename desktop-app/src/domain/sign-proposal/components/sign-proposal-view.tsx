@@ -1,6 +1,8 @@
 import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
+import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {
@@ -10,6 +12,8 @@ type SignProposalViewProps = {
 	proposalTitle: string
 	decodedAction: DecodedAction | null
 	sighashHex: string
+	/** What the connected device displays for this signature (Ledger hash / Trezor text). */
+	deviceDisplay: DeviceSigningDisplay
 	signResult: SignSighashResult | null
 	isSigning: boolean
 	error: string | null
@@ -124,6 +128,7 @@ export function SignProposalView({
 	proposalTitle,
 	decodedAction,
 	sighashHex,
+	deviceDisplay,
 	signResult,
 	isSigning,
 	error,
@@ -176,13 +181,16 @@ export function SignProposalView({
 					<div className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-accent-border bg-accent-surface text-accent">
 						<UsbSessionDefaultIcon width={13} height={13} className="text-accent" />
 					</div>
-					<div>
+					<div className="min-w-0 flex-1">
 						<p className="m-0 text-body font-medium text-[#111827]">Connect your {label} and confirm on device</p>
-						<p className="m-0 mt-1 text-label text-[#6b7280]">
-							The sighash above appears on the device screen. Verify it matches before approving.
-						</p>
+						<p className="m-0 mt-1 text-label text-[#6b7280]">Review the action details above before approving.</p>
 					</div>
 				</div>
+				{deviceDisplay.kind !== 'none' && (
+					<div className="mt-3">
+						<DeviceSigningHint display={deviceDisplay} />
+					</div>
+				)}
 			</div>
 
 			<div className="mt-5 flex justify-end">

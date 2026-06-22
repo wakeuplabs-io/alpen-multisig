@@ -13,7 +13,10 @@ import {
 import { computeSighash } from '@/api/signing'
 import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
+import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
@@ -52,6 +55,15 @@ export function CancelProposalSignScreen() {
 	const [sighashHex, setSighashHex] = useState('')
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 	const [alreadySigned, setAlreadySigned] = useState(false)
+
+	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
+		cancelActionHex ? cancelSeqNo : null,
+		cancelActionHex ? cancelActionHex.replace(/^0x/i, '') : null,
+	)
+	const deviceDisplay = deviceSigningDisplay(adapter.vendor, {
+		message: deviceMessage,
+		messageHash: deviceMessageHash,
+	})
 
 	useEffect(() => {
 		let mounted = true
@@ -289,6 +301,11 @@ export function CancelProposalSignScreen() {
 							<code className="mt-1.5 block break-all font-mono text-label leading-5 text-[#374151]">
 								{sighashHex || '—'}
 							</code>
+							{deviceDisplay.kind !== 'none' && (
+								<div className="mt-3">
+									<DeviceSigningHint display={deviceDisplay} />
+								</div>
+							)}
 						</div>
 
 						{/* Sign error */}
