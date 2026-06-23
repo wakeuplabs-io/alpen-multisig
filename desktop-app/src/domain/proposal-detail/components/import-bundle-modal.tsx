@@ -130,9 +130,9 @@ function parseBundleJson(
 
 const BROADCAST_LABELS: Record<BroadcastStatus, string> = {
 	idle: 'Idle',
-	commit_broadcasted: 'Commit broadcasted',
+	commit_broadcasted: 'Commit sent',
 	commit_confirmed: 'Commit confirmed',
-	reveal_broadcasted: 'Reveal broadcasted',
+	reveal_broadcasted: 'Reveal sent',
 	reveal_confirmed: 'Reveal confirmed',
 	failed: 'Failed',
 }

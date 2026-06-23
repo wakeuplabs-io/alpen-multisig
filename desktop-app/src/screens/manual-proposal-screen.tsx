@@ -23,7 +23,7 @@ import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 
-const STEP_LABELS = ['Import', 'Sign & Collect', 'Broadcast']
+const STEP_LABELS = ['Import', 'Sign & Collect', 'Send']
 
 type LocationState = { prefill?: ManualBundleJson }
 
@@ -178,7 +178,7 @@ export function ManualProposalScreen() {
 								{/* Confirming */}
 								{manual.broadcastPhase === 'confirming' && manual.broadcastBundle && (
 									<div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
-										<h2 className="m-0 mb-4 text-body-lg font-semibold text-[#111827]">Confirm broadcast</h2>
+										<h2 className="m-0 mb-4 text-body-lg font-semibold text-[#111827]">Confirm send</h2>
 										{feeState.status === 'ready' && (
 											<div className="mb-4">
 												<FeeRateSelector
@@ -224,7 +224,7 @@ export function ManualProposalScreen() {
 												className="flex-1 rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 												onClick={() => void manual.handleConfirmBroadcast()}
 											>
-												Confirm & broadcast
+												Confirm & send
 											</button>
 										</div>
 									</div>
@@ -233,7 +233,7 @@ export function ManualProposalScreen() {
 								{/* Broadcasting */}
 								{manual.broadcastPhase === 'broadcasting' && (
 									<div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-5 shadow-sm">
-										<p className="m-0 text-body-sm font-medium text-[#1d4ed8]">Broadcasting commit + reveal…</p>
+										<p className="m-0 text-body-sm font-medium text-[#1d4ed8]">Sending commit + reveal…</p>
 										<p className="m-0 mt-1 text-label text-[#3b82f6]">This may take a moment. Do not close the app.</p>
 									</div>
 								)}
@@ -242,7 +242,7 @@ export function ManualProposalScreen() {
 								{manual.broadcastPhase === 'done' && manual.importData && (
 									<div className="space-y-4">
 										<div className="rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-4 shadow-sm">
-											<p className="m-0 text-body-sm font-semibold text-[#065f46]">✓ Broadcast successful</p>
+											<p className="m-0 text-body-sm font-semibold text-[#065f46]">✓ Send successful</p>
 										</div>
 
 										<div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
@@ -328,7 +328,7 @@ export function ManualProposalScreen() {
 								{manual.broadcastPhase === 'error' && (
 									<div className="space-y-3">
 										<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-											<p className="m-0 text-body-sm font-medium text-[#dc2626]">Broadcast failed</p>
+											<p className="m-0 text-body-sm font-medium text-[#dc2626]">Send failed</p>
 											{manual.broadcastError && (
 												<p className="m-0 mt-1 text-label text-[#991b1b]">{manual.broadcastError}</p>
 											)}
