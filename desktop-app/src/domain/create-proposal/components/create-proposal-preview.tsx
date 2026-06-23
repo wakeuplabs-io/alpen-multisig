@@ -257,7 +257,8 @@ export function CreateProposalPreview({
 				<div>
 					<p className="m-0 font-semibold text-[#111827]">Confirm on device</p>
 					<p className="m-0 mt-1 text-body text-[#6b7280]">
-						The sighash above will appear on the device screen. Verify it matches before approving.
+						Your device shows the message it signs, not this sighash — Ledger displays its SHA-256 ("Message hash"),
+						Trezor the message text. Confirm that on the device before approving.
 					</p>
 				</div>
 			</div>

@@ -1,5 +1,8 @@
 import { CopyButton } from '@/components/copy-button'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
 import type { SigningStepInfo } from '@/contexts/session-context'
+import { useDeviceMessageDisplay } from '@/hooks/use-device-message-display'
+import type { WalletVendor } from '@/wallet/types'
 
 type Props = {
 	authorityLabel: string
@@ -10,6 +13,7 @@ type Props = {
 	authError: string | null
 	authOkMessage: string | null
 	signingStep: SigningStepInfo | null
+	walletVendor: WalletVendor
 	onBackToAuthority: () => void
 	onAuthenticate: () => void
 	onManualProposal: () => void
@@ -24,10 +28,12 @@ export function AuthenticateSessionPhase({
 	authError,
 	authOkMessage,
 	signingStep,
+	walletVendor,
 	onBackToAuthority,
 	onAuthenticate,
 	onManualProposal,
 }: Props) {
+	const deviceDisplay = useDeviceMessageDisplay(walletVendor, signingStep?.challengeMessage ?? null)
 	const authenticateButtonClassName = isAuthenticating
 		? 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#a3a3a3] px-5 py-2 text-body font-medium text-white'
 		: 'inline-flex items-center justify-center rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-5 py-2 text-body font-medium text-white transition hover:bg-[#2a2a2a]'
@@ -101,16 +107,22 @@ export function AuthenticateSessionPhase({
 			</div>
 
 			{signingStep && (
-				<div className="mt-4 rounded-lg border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
-					<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#059669]">
+				<div className="mt-4">
+					<p className="m-0 mb-2 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#059669]">
 						Signing on device — step {signingStep.step} of {signingStep.totalSteps}
 					</p>
-					<p className="m-0 mt-1 text-[0.75rem] text-[#6b7280]">
-						Confirm this message on your {adapterLabel} — it must match exactly:
-					</p>
-					<pre className="m-0 mt-2 whitespace-pre-wrap break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
-						{signingStep.challengeMessage}
-					</pre>
+					{deviceDisplay.kind === 'none' ? (
+						<div className="rounded-lg border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+							<p className="m-0 text-[0.75rem] text-[#6b7280]">
+								Confirm this message on your {adapterLabel} — it must match exactly:
+							</p>
+							<pre className="m-0 mt-2 whitespace-pre-wrap break-all font-mono text-[0.72rem] leading-[1.6] text-[#111827]">
+								{signingStep.challengeMessage}
+							</pre>
+						</div>
+					) : (
+						<DeviceSigningHint display={deviceDisplay} />
+					)}
 				</div>
 			)}
 
