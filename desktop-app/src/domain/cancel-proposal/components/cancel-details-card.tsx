@@ -72,7 +72,7 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 						onClick={onBroadcast}
 					>
-						Broadcast cancel tx
+						Send cancel tx
 					</button>
 				) : alreadySigned ? (
 					<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
