@@ -2,6 +2,7 @@ import { TrashIcon, UndoIcon } from '@/assets/icons'
 import { useState } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { normalizeSignerKey, type CreateProposalFormValues } from '../model/create-proposal.schema'
+import { validateSignerKeyInput } from '../model/validators/types'
 import { fieldErrorClass, numberInputClass } from '../model/create-proposal-form-styles'
 import { LabelWithTooltip } from './create-proposal-form-primitives'
 
@@ -17,9 +18,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 		control,
 		formState: { errors },
 		setValue,
+		getValues,
 	} = useFormContext<CreateProposalFormValues>()
 
 	const [newSignerInput, setNewSignerInput] = useState('')
+	const [newSignerError, setNewSignerError] = useState<string | null>(null)
 
 	const keysToAddArray = useFieldArray({ control, name: 'keysToAdd' })
 	const keysToRemoveArray = useFieldArray({ control, name: 'keysToRemove' })
@@ -67,6 +70,20 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 	function handleAddSigner() {
 		const trimmed = newSignerInput.trim()
 		if (!trimmed) return
+
+		const latestKeysToAdd = getValues('keysToAdd') ?? []
+		const latestKeysToRemove = getValues('keysToRemove') ?? []
+		const error = validateSignerKeyInput({
+			key: trimmed,
+			currentSigners,
+			existingKeysToAdd: latestKeysToAdd,
+			keysToRemove: latestKeysToRemove,
+		})
+		if (error) {
+			setNewSignerError(error)
+			return
+		}
+
 		const emptyIdx = keysToAdd.findIndex((r) => r.value.trim() === '')
 		if (emptyIdx !== -1) {
 			setValue(`keysToAdd.${emptyIdx}.value`, trimmed, { shouldValidate: true })
@@ -74,6 +91,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 			keysToAddArray.append({ value: trimmed })
 		}
 		setNewSignerInput('')
+		setNewSignerError(null)
 	}
 
 	const hasNoSigners = currentSigners.length === 0 && visibleAddedSigners.length === 0
@@ -174,10 +192,17 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 					<input
 						type="text"
 						data-testid="e2e-new-signer-pubkey-input"
-						className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2 font-mono text-body-sm text-[#111827] placeholder:text-[#9ca3af] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
+						className={`min-w-0 flex-1 rounded-lg border px-3 py-2 font-mono text-body-sm text-[#111827] placeholder:text-[#9ca3af] focus:outline-none focus:ring-1 ${
+							newSignerError
+								? 'border-[#dc2626] focus:border-[#dc2626] focus:ring-[#dc2626]'
+								: 'border-[#e5e7eb] focus:border-[#d97706] focus:ring-[#d97706]'
+						}`}
 						placeholder="02… or 03… (33-byte hex)"
 						value={newSignerInput}
-						onChange={(e) => setNewSignerInput(e.target.value)}
+						onChange={(e) => {
+							setNewSignerInput(e.target.value)
+							if (newSignerError) setNewSignerError(null)
+						}}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault()
@@ -195,6 +220,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						+ Add
 					</button>
 				</div>
+				{newSignerError && <p className={fieldErrorClass}>{newSignerError}</p>}
 			</div>
 
 			<div className="max-w-40">
