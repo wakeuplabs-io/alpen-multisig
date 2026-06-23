@@ -9,6 +9,13 @@ pub(crate) fn compute_sighash(
     signing::compute_sighash(seqno, &action_hex)
 }
 
+/// Reports whether mnemonic / raw-key signing over IPC is enabled (debug build, or
+/// release with ALLOW_DEV_MNEMONIC_SIGNING=1). Lets the UI hide the Mnemonic option when off.
+#[tauri::command]
+pub(crate) fn dev_mnemonic_signing_enabled() -> bool {
+    dev_secrets::dev_mnemonic_signing_ipc_enabled()
+}
+
 #[tauri::command]
 pub(crate) fn verify_threshold(
     public_keys_hex: Vec<String>,

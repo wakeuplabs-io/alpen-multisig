@@ -9,6 +9,7 @@ import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
+import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mnemonic-signing-enabled'
 import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/types'
 
 type Props = {
@@ -47,6 +48,7 @@ export function HwWalletConnect({
 	authoritySelection,
 }: Props) {
 	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
+	const mnemonicEnabled = useMnemonicSigningEnabled()
 	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
 
 	const [shouldAutoConnect, setShouldAutoConnect] = useState(false)
@@ -106,6 +108,7 @@ export function HwWalletConnect({
 					onConnectMnemonic={handleConnectMnemonic}
 					walletVendor={walletVendor}
 					onSelectWalletMethod={onSelectWalletMethod}
+					mnemonicEnabled={mnemonicEnabled}
 				/>
 			)}
 			{state.phase === 'selected' &&
