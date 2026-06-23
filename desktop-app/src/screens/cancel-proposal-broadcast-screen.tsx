@@ -83,10 +83,10 @@ export function CancelProposalBroadcastScreen() {
 				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
-					Broadcast cancel tx
+					Send cancel tx
 				</h1>
 				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-					Cancel signatures have reached quorum. Review the commit details, then broadcast to remove the queued update.
+					Cancel signatures have reached quorum. Review the commit details, then send to remove the queued update.
 				</p>
 
 				<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-6 py-4 shadow-sm">
