@@ -15,6 +15,7 @@ type Props = {
 	onConnectTrezor?: (passphrase?: string) => void
 	walletVendor: WalletVendor
 	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
+	mnemonicEnabled: boolean
 }
 
 export function ConnectPhase({
@@ -26,6 +27,7 @@ export function ConnectPhase({
 	onConnectTrezor,
 	walletVendor,
 	onSelectWalletMethod,
+	mnemonicEnabled,
 }: Props) {
 	const isDetecting = loading && connectViewState !== 'success'
 	const isSuccess = connectViewState === 'success'
@@ -140,27 +142,31 @@ export function ConnectPhase({
 					>
 						Ledger
 					</button>
-					<button
-						type="button"
-						data-testid="e2e-connect-mnemonic"
-						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
-							walletVendor === 'mnemonic'
-								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
-								: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
-						}`}
-						onClick={handleUseMnemonic}
-					>
-						Mnemonic
-					</button>
+					{mnemonicEnabled && (
+						<button
+							type="button"
+							data-testid="e2e-connect-mnemonic"
+							className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
+								walletVendor === 'mnemonic'
+									? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
+									: 'border-[#d1d5db] bg-white text-[#374151] hover:bg-[#f3f4f6]'
+							}`}
+							onClick={handleUseMnemonic}
+						>
+							Mnemonic
+						</button>
+					)}
 				</div>
-				<textarea
-					data-testid="e2e-connect-mnemonic-textarea"
-					className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
-					rows={2}
-					placeholder="seed words..."
-					value={mnemonicInput}
-					onChange={(event) => setMnemonicInput(event.target.value)}
-				/>
+				{mnemonicEnabled && (
+					<textarea
+						data-testid="e2e-connect-mnemonic-textarea"
+						className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
+						rows={2}
+						placeholder="seed words..."
+						value={mnemonicInput}
+						onChange={(event) => setMnemonicInput(event.target.value)}
+					/>
+				)}
 				{walletVendor === 'trezor' && (
 					<div className="mt-2">
 						<label className="text-mono-sm font-medium text-[#9ca3af]" htmlFor="trezor-passphrase">
