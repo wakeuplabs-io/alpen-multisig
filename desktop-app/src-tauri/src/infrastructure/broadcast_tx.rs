@@ -160,6 +160,23 @@ pub fn derive_commit_address(
     Ok((address, reveal_script, taproot_spend_info))
 }
 
+/// Renders `address` as the **hardware wallet will display it**, so the signer can match the
+/// app's "COMMIT TX PREVIEW" against the on-device address character-for-character (issue #382).
+///
+/// Ledger and Trezor have no regtest app: on `Regtest` they render addresses with the testnet
+/// HRP (`tb1…`) rather than `bcrt1…`. We re-encode the commit address with the testnet HRP in
+/// that case. The witness program is unchanged — only the human-readable prefix and checksum
+/// differ — and the actual funded/broadcast transaction still uses the real regtest address.
+/// On testnet/signet/mainnet the app and device already agree, so the address is returned as-is.
+pub fn device_facing_commit_address(address: &Address, network: Network) -> String {
+    if network == Network::Regtest {
+        if let Ok(testnet_addr) = Address::from_script(&address.script_pubkey(), Network::Testnet) {
+            return testnet_addr.to_string();
+        }
+    }
+    address.to_string()
+}
+
 /// Build the fully-signed reveal transaction spending the commit UTXO.
 #[allow(clippy::too_many_arguments)]
 pub fn build_reveal_tx(
@@ -267,6 +284,40 @@ mod build_reveal_tx_tests {
     fn make_test_envelope_keypair() -> UntweakedKeypair {
         let secp = Secp256k1::new();
         UntweakedKeypair::new(&secp, &mut thread_rng())
+    }
+
+    #[test]
+    fn device_facing_commit_address_reencodes_regtest_to_testnet_hrp() {
+        const PAYLOAD: &[u8] = &[0x61u8; 128];
+        let keypair = make_test_envelope_keypair();
+        let (regtest_addr, _, _) =
+            derive_commit_address(&keypair, PAYLOAD, Network::Regtest).unwrap();
+
+        let shown = device_facing_commit_address(&regtest_addr, Network::Regtest);
+        assert!(
+            shown.starts_with("tb1p"),
+            "regtest taproot commit must be shown with the testnet HRP the device renders, got {shown}"
+        );
+
+        // Same witness program — only the HRP differs from the real regtest address.
+        let testnet_addr =
+            Address::from_script(&regtest_addr.script_pubkey(), Network::Testnet).unwrap();
+        assert_eq!(shown, testnet_addr.to_string());
+        assert_ne!(shown, regtest_addr.to_string());
+    }
+
+    #[test]
+    fn device_facing_commit_address_leaves_non_regtest_untouched() {
+        const PAYLOAD: &[u8] = &[0x61u8; 128];
+        let keypair = make_test_envelope_keypair();
+        for network in [Network::Testnet, Network::Signet, Network::Bitcoin] {
+            let (addr, _, _) = derive_commit_address(&keypair, PAYLOAD, network).unwrap();
+            assert_eq!(
+                device_facing_commit_address(&addr, network),
+                addr.to_string(),
+                "app and device already agree on {network:?}; address must be unchanged"
+            );
+        }
     }
 
     fn make_test_change_spk(network: Network) -> ScriptBuf {
