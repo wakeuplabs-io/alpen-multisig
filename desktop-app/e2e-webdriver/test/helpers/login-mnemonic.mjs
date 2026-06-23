@@ -11,7 +11,26 @@ export const DEMO_MNEMONIC_COSIGN = 'multiply toss magic exclude crawl obey gard
 export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 	const ta = await $('textarea[data-testid="e2e-connect-mnemonic-textarea"]')
 	await ta.waitForDisplayed({ timeout: 90000 })
-	await ta.setValue(mnemonic)
+	// The textarea ships pre-filled with a dev default (DEMO_MNEMONIC) and now mounts only
+	// after an async capability check (useMnemonicSigningEnabled). On that late controlled-input
+	// mount, WDIO setValue can concatenate onto the existing value instead of replacing it,
+	// producing a duplicated/invalid mnemonic. Clear deterministically, type, and verify the
+	// field holds exactly the requested words before continuing.
+	const selectAllKey = process.platform === 'darwin' ? 'Meta' : 'Control'
+	await browser.waitUntil(
+		async () => {
+			await ta.click()
+			await browser.keys([selectAllKey, 'a'])
+			await browser.keys('Backspace')
+			await ta.addValue(mnemonic)
+			return (await ta.getValue()) === mnemonic
+		},
+		{
+			timeout: 15000,
+			interval: 500,
+			timeoutMsg: 'mnemonic textarea did not hold the expected words after entry',
+		},
+	)
 
 	const connectMnemonic = await $('button[data-testid="e2e-connect-mnemonic"]')
 	await connectMnemonic.waitForClickable({ timeout: 30000 })
