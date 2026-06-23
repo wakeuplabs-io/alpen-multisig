@@ -139,6 +139,7 @@ export function HwWalletConnect({
 						authError={authoritySelection.authError}
 						authOkMessage={authoritySelection.authOkMessage}
 						signingStep={authoritySelection.signingStep}
+						walletVendor={walletVendor}
 						onBackToAuthority={authoritySelection.onBackToAuthority}
 						onAuthenticate={authoritySelection.onAuthenticate}
 						onManualProposal={authoritySelection.onManualProposal}

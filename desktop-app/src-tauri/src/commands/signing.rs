@@ -16,6 +16,15 @@ pub(crate) fn dev_mnemonic_signing_enabled() -> bool {
     dev_secrets::dev_mnemonic_signing_ipc_enabled()
 }
 
+/// Canonical human-readable SPS-65 signing message for an action — the exact string the
+/// device signs. Used by the UI to show what the connected device displays (Trezor renders
+/// this text; Ledger renders its SHA-256 as the "Message hash"), instead of the BIP-137
+/// sighash which never appears on-device.
+#[tauri::command]
+pub(crate) fn render_signing_message(seqno: u64, action_hex: String) -> Result<String, String> {
+    signing::render_signing_message(seqno, &action_hex)
+}
+
 #[tauri::command]
 pub(crate) fn verify_threshold(
     public_keys_hex: Vec<String>,

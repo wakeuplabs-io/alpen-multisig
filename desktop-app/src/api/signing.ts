@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { ApiResult } from '@/types'
 import { tauriCall } from './tauri-bridge'
 import { decodedActionSchema, sighashResultSchema, signatureResultSchema, verifyResultSchema } from './ipc-schemas'
@@ -29,6 +30,15 @@ export function decodeActionHex(actionHex: string): Promise<ApiResult<DecodedAct
 
 export function computeSighash(seqno: number, actionHex: string): Promise<ApiResult<SighashResult>> {
 	return tauriCall('compute_sighash', { seqno, actionHex }, sighashResultSchema)
+}
+
+/**
+ * Canonical SPS-65 signing message (the exact text the device signs) for an action.
+ * Used to show what the connected device displays: Trezor renders this text; Ledger
+ * renders its SHA-256 ("Message hash"). The BIP-137 sighash never appears on-device.
+ */
+export function renderSigningMessage(seqno: number, actionHex: string): Promise<ApiResult<string>> {
+	return tauriCall('render_signing_message', { seqno, actionHex }, z.string())
 }
 
 export function verifyThreshold(

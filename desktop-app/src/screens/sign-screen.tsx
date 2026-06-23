@@ -9,6 +9,8 @@ import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signi
 import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
+import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -66,6 +68,15 @@ export function SignScreen() {
 		}
 		return proposal.actionHex.startsWith('0x') ? proposal.actionHex.slice(2) : proposal.actionHex
 	}, [proposal])
+
+	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
+		proposal?.seqNo ?? null,
+		decodedActionHex || null,
+	)
+	const deviceDisplay = deviceSigningDisplay(adapter.vendor, {
+		message: deviceMessage,
+		messageHash: deviceMessageHash,
+	})
 
 	useEffect(() => {
 		let mounted = true
@@ -340,6 +351,7 @@ export function SignScreen() {
 							proposalTitle={proposalTitle}
 							decodedAction={decodedAction}
 							sighashHex={sighashHex}
+							deviceDisplay={deviceDisplay}
 							signResult={signResult}
 							isSigning={isSigning}
 							error={signError}
