@@ -117,7 +117,7 @@ export function ProposalDetailScreen() {
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Proposal detail
 				</h1>
-				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">Review signatures, action payload, and broadcast status.</p>
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">Review signatures, action payload, and send status.</p>
 
 				<div className="mt-6">
 					{isLoading && (

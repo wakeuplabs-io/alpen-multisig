@@ -7,7 +7,7 @@ export function formatCanSignReason(reason: string | undefined): string | undefi
 		case 'watch-only-no-signer':
 			return 'Hardware wallet required to sign'
 		case 'no-session':
-			return 'Connect your admin wallet session to broadcast'
+			return 'Connect your admin wallet session to send'
 		case 'not-allowed-on-network':
 			return 'Signing is not allowed on this network'
 		default:

@@ -10,7 +10,7 @@ const SEGMENT_LABELS: Record<string, string> = {
 	proposals: 'Proposals',
 	create: 'Create',
 	sign: 'Sign',
-	broadcast: 'Broadcast',
+	broadcast: 'Send',
 	cancel: 'Cancel',
 	manual: 'Manual',
 	'block-payouts': 'Block Payouts',

@@ -4,7 +4,7 @@ type StepDef = { label: string; short: string }
 
 const STEPS: StepDef[] = [
 	{ label: 'Fee Selection', short: 'Fee' },
-	{ label: 'Broadcast', short: 'Broadcast' },
+	{ label: 'Send', short: 'Send' },
 	{ label: 'Confirmed', short: 'Done' },
 ]
 

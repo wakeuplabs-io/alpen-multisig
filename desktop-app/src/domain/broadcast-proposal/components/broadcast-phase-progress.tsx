@@ -14,8 +14,8 @@ type Step = { label: string; detail: string }
 
 const STEPS: Step[] = [
 	{ label: 'Commit', detail: 'Funds the reveal output (signed locally)' },
-	{ label: 'Reveal', detail: 'Carries the action — broadcast with the commit' },
-	{ label: 'Broadcasted', detail: 'Confirmed on Bitcoin — awaiting ASM enactment' },
+	{ label: 'Reveal', detail: 'Carries the action — sent with the commit' },
+	{ label: 'Sent', detail: 'Confirmed on Bitcoin — awaiting ASM enactment' },
 ]
 
 /** Commit (0) + Reveal (1) are broadcast together as one package. */
@@ -92,12 +92,12 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 							? 'Proposal enacted'
 							: 'Reveal confirmed — awaiting enactment'
 						: isError
-							? 'Broadcast failed'
+							? 'Send failed'
 							: isAwaitingDevice
 								? 'Waiting for device…'
 								: isAwaitingConfirmation
 									? 'Submitted — awaiting confirmation…'
-									: 'Broadcasting…'}
+									: 'Sending…'}
 				</h3>
 			</div>
 
@@ -160,13 +160,13 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 						</div>
 						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
 							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
-								<p className="m-0 text-body-sm font-medium text-[#111827]">Broadcast manually</p>
+								<p className="m-0 text-body-sm font-medium text-[#111827]">Send manually</p>
 								<p className="m-0 text-label text-[#6b7280]">
-									Broadcast the commit first, then the reveal, via any Bitcoin node (
+									Send the commit first, then the reveal, via any Bitcoin node (
 									<code className="font-mono text-mono-sm">sendrawtransaction</code>).
 								</p>
-								<TxidRow label="Commit TX (broadcast first)" txid={error.commitTxHex} />
-								<TxidRow label="Reveal TX (broadcast second)" txid={error.revealTxHex} />
+								<TxidRow label="Commit TX (send first)" txid={error.commitTxHex} />
+								<TxidRow label="Reveal TX (send second)" txid={error.revealTxHex} />
 							</div>
 						)}
 					</div>

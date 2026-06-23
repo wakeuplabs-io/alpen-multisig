@@ -119,10 +119,10 @@ export function BroadcastProposalScreen() {
 				<Breadcrumbs />
 
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
-					Broadcast proposal
+					Send proposal
 				</h1>
 				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-					Quorum has been reached. Review the commit details, then broadcast via the commit/reveal flow.
+					Quorum has been reached. Review the commit details, then send via the commit/reveal flow.
 				</p>
 
 				<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-6 py-4 shadow-sm">

@@ -139,8 +139,8 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 			}
 		case 'BroadcastFailed':
 			return {
-				title: 'Broadcast failed',
-				body: `The transaction was signed but could not be broadcast. ${err.message}`,
+				title: 'Send failed',
+				body: `The transaction was signed but could not be sent. ${err.message}`,
 				severity: 'warning',
 			}
 		// Phase 6 — Send (PRD §4.3.5)
