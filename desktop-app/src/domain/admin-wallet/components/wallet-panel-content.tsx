@@ -2,6 +2,7 @@ import type { WalletPanelSection } from '@/domain/admin-wallet/hooks/use-wallet-
 import type { AdminWalletError } from '@/domain/admin-wallet/model/types'
 import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
+import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import { DisabledWalletCard } from './disabled-wallet-card'
 import { AdminIdRow } from './admin-id-row'
 import { WalletBalance } from './wallet-balance'
@@ -25,6 +26,8 @@ export type WalletPanelContentProps = {
 	hwDeviceType: 'trezor' | 'ledger' | null
 	/** Active session network token (verify-on-device coin path). */
 	network: string
+	/** Connect-returned Admin ID derivation path (authoritative verify-on-device path). */
+	adminIdDerivationPath: string | undefined
 	isAddressesLoading: boolean
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
@@ -54,6 +57,7 @@ export function WalletPanelContent({
 	receiveIndex,
 	hwDeviceType,
 	network,
+	adminIdDerivationPath,
 	isAddressesLoading,
 	addressRows,
 	addressRowsLoading,
@@ -108,7 +112,18 @@ export function WalletPanelContent({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
 			<div className="mb-4">
-				<AdminIdRow adminId={adminId} verify={hwDeviceType ? { deviceType: hwDeviceType, network } : undefined} />
+				<AdminIdRow
+					adminId={adminId}
+					verify={
+						hwDeviceType && adminIdDerivationPath
+							? {
+									deviceType: hwDeviceType,
+									network: networkFromPath(adminIdDerivationPath),
+									derivationPath: adminIdDerivationPath,
+								}
+							: undefined
+					}
+				/>
 			</div>
 
 			<WalletBalance

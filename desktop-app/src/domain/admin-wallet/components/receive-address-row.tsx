@@ -112,6 +112,12 @@ export function ReceiveAddressRow({ address, isLoading, verify }: ReceiveAddress
 							scriptType="p2tr"
 							subject="receive address"
 						/>
+						{verify.network !== 'bitcoin' && verify.network !== 'mainnet' && (
+							<p className="mt-1.5 text-mono-sm leading-[1.45] text-[#9ca3af]">
+								On test networks your device shows this address with a <span className="font-mono">tb1…</span> prefix —
+								the characters after the prefix must match exactly.
+							</p>
+						)}
 					</div>
 				)}
 			</div>
