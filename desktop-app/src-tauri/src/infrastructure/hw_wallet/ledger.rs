@@ -332,6 +332,20 @@ fn parse_path(path: &str) -> Result<DerivationPath, String> {
     DerivationPath::from_str(path).map_err(|e| format!("invalid derivation path: {e}"))
 }
 
+/// HRP for a connect address sample, derived from the path's coin type so the app value
+/// matches what the device renders: coin type `1'` (test nets) → `tb`; otherwise `bc`.
+/// The Ledger has no regtest app, so coin type `1'` shows as testnet (`tb`), not `bcrt`.
+fn hrp_from_path(path: &DerivationPath) -> KnownHrp {
+    if matches!(
+        path.into_iter().nth(1),
+        Some(ChildNumber::Hardened { index: 1 })
+    ) {
+        KnownHrp::Testnets
+    } else {
+        KnownHrp::Mainnet
+    }
+}
+
 fn map_ledger_error(op: &str, raw: &str) -> String {
     if raw.contains("InsNotSupported") || raw.contains("ClaNotSupported") {
         "Bitcoin app not responding — open the Bitcoin app (v2.1.0+) on your Ledger and try again"
@@ -408,7 +422,7 @@ where
 
     let pubkey_hex = hex::encode(leaf_xpub.public_key.serialize());
     let compressed = bitcoin::CompressedPublicKey(leaf_xpub.public_key);
-    let address = bitcoin::Address::p2wpkh(&compressed, KnownHrp::Mainnet);
+    let address = bitcoin::Address::p2wpkh(&compressed, hrp_from_path(&path));
 
     Ok(HwWalletInfo {
         device_label: "Ledger".to_string(),
@@ -773,50 +787,156 @@ fn sign_admin_wallet_psbt_unlocked(
     }
 }
 
-/// Confirms the address at `derivation_path` on the Ledger screen.
-///
-/// Displays the extended public key at the full path (`display = true`) so the signer
-/// can confirm the derivation on-device before trusting it. The `script` argument is
-/// accepted for dispatch parity with the Trezor adapter; the Ledger `get_extended_pubkey`
-/// call is script-type agnostic (the path itself encodes BIP-86 vs BIP-84).
-pub fn verify_address_on_device(
-    derivation_path: String,
-    _script: AddressScriptType,
-    _network: bitcoin::Network,
-) -> Result<(), String> {
-    with_ledger_device(|| verify_address_on_device_unlocked(&derivation_path))
+/// Ledger descriptor template for a single-sig address script type. These are
+/// **standard** wallet policies (`tr`/`wpkh`) that `get_wallet_address` accepts with a
+/// zero HMAC — no `register_wallet` round trip is needed.
+fn address_template(script: AddressScriptType) -> &'static str {
+    match script {
+        AddressScriptType::Taproot => "tr(@0/**)",
+        AddressScriptType::WitnessPubkeyHash => "wpkh(@0/**)",
+    }
 }
 
-fn verify_address_on_device_unlocked(derivation_path: &str) -> Result<(), String> {
+/// Splits a full verify path (e.g. `m/86'/1'/73'/0/3`) into the hardened account prefix
+/// (`m/86'/1'/73'`), its origin string (`86'/1'/73'`), and the `change`/`address_index`
+/// from the trailing 2-level unhardened suffix. Mirrors the split in [`get_info_with`].
+fn split_verify_path(path: &DerivationPath) -> Result<(DerivationPath, String, bool, u32), String> {
+    let steps: Vec<ChildNumber> = path.into_iter().copied().collect();
+    let split = steps
+        .iter()
+        .rposition(|c| c.is_hardened())
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    let suffix = &steps[split..];
+    if suffix.len() != 2 {
+        return Err(format!(
+            "Ledger verify-address requires a path ending in change/index (e.g. .../0/0), got {path}"
+        ));
+    }
+    let normal = |c: &ChildNumber| -> Result<u32, String> {
+        match c {
+            ChildNumber::Normal { index } => Ok(*index),
+            ChildNumber::Hardened { .. } => Err(format!(
+                "Ledger verify-address change/index must be non-hardened, got {path}"
+            )),
+        }
+    };
+    let change_val = normal(&suffix[0])?;
+    if change_val > 1 {
+        return Err(format!(
+            "Ledger verify-address change must be 0 (receive) or 1 (change), got {change_val}"
+        ));
+    }
+    let address_index = normal(&suffix[1])?;
+    let account_steps = &steps[..split];
+    let account_path = DerivationPath::from(account_steps.to_vec());
+    let account_origin = account_steps
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join("/");
+    Ok((account_path, account_origin, change_val == 1, address_index))
+}
+
+/// Builds a standard single-sig Ledger wallet policy from an account xpub, its origin
+/// path, and a descriptor template — used by verify-on-device for both `tr` and `wpkh`.
+fn build_single_sig_policy(
+    account_xpub: &str,
+    account_origin: &str,
+    master_fingerprint: u32,
+    template: &str,
+) -> Result<ledger_bitcoin_client::wallet::WalletPolicy, String> {
+    use ledger_bitcoin_client::wallet::{Version, WalletPolicy, WalletPubKey};
+    use std::str::FromStr;
+
+    let fingerprint = bitcoin::bip32::Fingerprint::from(master_fingerprint.to_le_bytes());
+    let key_str = format!("[{fingerprint}/{account_origin}]{account_xpub}");
+    let key = WalletPubKey::from_str(&key_str)
+        .map_err(|e| format!("invalid wallet pubkey for Ledger verify policy: {e}"))?;
+    Ok(WalletPolicy::new(
+        LEDGER_ADMIN_WALLET_POLICY_NAME.to_string(),
+        Version::V2,
+        template.to_string(),
+        vec![key],
+    ))
+}
+
+/// Renders the address at `derivation_path` on the Ledger screen via `get_wallet_address`
+/// (`display = true`) using a standard single-sig policy for `script`, so the signer
+/// compares an actual **address** (not the extended public key).
+async fn verify_address_with<T>(
+    client: &BitcoinClient<T>,
+    derivation_path: &str,
+    script: AddressScriptType,
+) -> Result<(), String>
+where
+    T: async_client::Transport + Sync,
+    T::Error: std::fmt::Debug,
+{
+    let path = parse_path(derivation_path)?;
+    let (account_path, account_origin, change, address_index) = split_verify_path(&path)?;
+
+    let account_xpub = client
+        .get_extended_pubkey(&account_path, false)
+        .await
+        .map_err(|e| map_ledger_error("get_extended_pubkey", &format!("{e:?}")))?
+        .to_string();
+    let fp = client
+        .get_master_fingerprint()
+        .await
+        .map_err(|e| map_ledger_error("get_master_fingerprint", &format!("{e:?}")))?;
+    let master_fingerprint = u32::from_le_bytes(fp.to_bytes());
+
+    let policy = build_single_sig_policy(
+        &account_xpub,
+        &account_origin,
+        master_fingerprint,
+        address_template(script),
+    )?;
+
+    client
+        .get_wallet_address(&policy, None, change, address_index, true)
+        .await
+        .map(|_| ())
+        .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
+}
+
+/// Confirms the address at `derivation_path` on the Ledger screen.
+///
+/// `network` is accepted for dispatch parity with the Trezor adapter but is intentionally
+/// unused: the device renders the address with the HRP of the path's coin type (its own
+/// Bitcoin/Testnet app), which cannot be forced to regtest. The path itself encodes
+/// BIP-86 vs BIP-84, and `script` selects the matching `tr`/`wpkh` policy template.
+pub fn verify_address_on_device(
+    derivation_path: String,
+    script: AddressScriptType,
+    _network: bitcoin::Network,
+) -> Result<(), String> {
+    with_ledger_device(|| verify_address_on_device_unlocked(&derivation_path, script))
+}
+
+fn verify_address_on_device_unlocked(
+    derivation_path: &str,
+    script: AddressScriptType,
+) -> Result<(), String> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("tokio runtime: {e}"))?;
-    let path = parse_path(derivation_path)?;
 
     if let Ok(url) = std::env::var("LEDGER_SPECULOS_URL") {
         rt.block_on(async {
             let client = bitcoin_client_for_speculos(&url)
                 .await
                 .map_err(|e| e.to_string())?;
-            client
-                .get_extended_pubkey(&path, true)
-                .await
-                .map(|_| ())
-                .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
+            verify_address_with(&client, derivation_path, script).await
         })
     } else {
         let hidapi = HidApi::new().map_err(|e| format!("HidApi init failed: {e}"))?;
         let transport = TransportNativeHID::new(&hidapi)
             .map_err(|e| format!("Ledger not found or locked: {e}"))?;
         let client = BitcoinClient::new(HidTransport(transport));
-        rt.block_on(async {
-            client
-                .get_extended_pubkey(&path, true)
-                .await
-                .map(|_| ())
-                .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
-        })
+        rt.block_on(verify_address_with(&client, derivation_path, script))
     }
 }
 
@@ -865,5 +985,60 @@ mod policy_name_tests {
         assert!(LEDGER_ADMIN_WALLET_POLICY_NAME.is_empty());
         assert!(LEDGER_REGISTER_FALLBACK_POLICY_NAME.is_ascii());
         assert!(!LEDGER_REGISTER_FALLBACK_POLICY_NAME.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod verify_helper_tests {
+    use super::*;
+    use bitcoin::address::KnownHrp;
+
+    #[test]
+    fn address_template_maps_script_to_descriptor() {
+        assert_eq!(address_template(AddressScriptType::Taproot), "tr(@0/**)");
+        assert_eq!(
+            address_template(AddressScriptType::WitnessPubkeyHash),
+            "wpkh(@0/**)"
+        );
+    }
+
+    #[test]
+    fn split_verify_path_extracts_account_origin_change_index() {
+        let path = parse_path("m/86'/1'/73'/0/3").unwrap();
+        let (_account_path, origin, change, index) = split_verify_path(&path).unwrap();
+        assert_eq!(origin, "86'/1'/73'");
+        assert!(!change);
+        assert_eq!(index, 3);
+
+        let change_path = parse_path("m/84'/0'/73'/1/0").unwrap();
+        let (_, origin, change, index) = split_verify_path(&change_path).unwrap();
+        assert_eq!(origin, "84'/0'/73'");
+        assert!(change);
+        assert_eq!(index, 0);
+    }
+
+    #[test]
+    fn split_verify_path_rejects_wrong_suffix_length() {
+        // Account path with no change/index suffix.
+        assert!(split_verify_path(&parse_path("m/86'/1'/73'").unwrap()).is_err());
+        // Three trailing unhardened levels.
+        assert!(split_verify_path(&parse_path("m/86'/1'/73'/0/0/0").unwrap()).is_err());
+    }
+
+    #[test]
+    fn split_verify_path_rejects_out_of_range_change() {
+        assert!(split_verify_path(&parse_path("m/86'/1'/73'/2/0").unwrap()).is_err());
+    }
+
+    #[test]
+    fn hrp_from_path_follows_coin_type() {
+        assert_eq!(
+            hrp_from_path(&parse_path("m/84'/1'/73'/0/0").unwrap()),
+            KnownHrp::Testnets
+        );
+        assert_eq!(
+            hrp_from_path(&parse_path("m/84'/0'/73'/0/0").unwrap()),
+            KnownHrp::Mainnet
+        );
     }
 }
