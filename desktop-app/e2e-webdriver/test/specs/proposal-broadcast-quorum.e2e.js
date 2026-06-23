@@ -33,7 +33,7 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 		await broadcastBtn.waitForClickable({ timeout: 30000 })
 		await broadcastBtn.click()
 
-		await $('//h1[contains(.,"Broadcast proposal")]').waitForDisplayed({ timeout: 60000 })
+		await $('//h1[contains(.,"Send proposal")]').waitForDisplayed({ timeout: 60000 })
 
 		// Wait for the admin wallet address to render so we can read it for funding.
 		const addressEl = await $('//span[@data-testid="e2e-admin-wallet-funding-address"]')
