@@ -1,14 +1,6 @@
-import { useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useState } from 'react'
 
 export type WalletPanelSection = 'addresses' | 'receive' | 'transactions' | 'send'
-
-const VALID_SECTIONS: ReadonlySet<string> = new Set<WalletPanelSection>([
-	'addresses',
-	'receive',
-	'transactions',
-	'send',
-])
 
 type UseWalletPanelStateReturn = {
 	isOpen: boolean
@@ -19,53 +11,25 @@ type UseWalletPanelStateReturn = {
 }
 
 export function useWalletPanelState(): UseWalletPanelStateReturn {
-	const [params, setSearchParams] = useSearchParams()
+	const [isOpen, setIsOpen] = useState(false)
+	const [expandedSection, setExpandedSectionState] = useState<WalletPanelSection | null>(null)
 
-	const isOpen = params.get('wallet') === 'open'
-
-	const rawSection = params.get('walletSection')
-	const expandedSection: WalletPanelSection | null =
-		rawSection !== null && VALID_SECTIONS.has(rawSection) ? (rawSection as WalletPanelSection) : null
-
-	const open = useCallback(
-		(section?: WalletPanelSection) => {
-			setSearchParams((prev) => {
-				const next = new URLSearchParams(prev)
-				next.set('wallet', 'open')
-				if (section != null) {
-					next.set('walletSection', section)
-				} else {
-					next.delete('walletSection')
-				}
-				return next
-			})
-		},
-		[setSearchParams],
-	)
+	const open = useCallback((section?: WalletPanelSection) => {
+		setIsOpen(true)
+		setExpandedSectionState(section ?? null)
+	}, [])
 
 	const close = useCallback(() => {
-		setSearchParams((prev) => {
-			const next = new URLSearchParams(prev)
-			next.delete('wallet')
-			next.delete('walletSection')
-			return next
-		})
-	}, [setSearchParams])
+		setIsOpen(false)
+		setExpandedSectionState(null)
+	}, [])
 
 	const setExpandedSection = useCallback(
 		(section: WalletPanelSection | null) => {
 			if (!isOpen) return
-			setSearchParams((prev) => {
-				const next = new URLSearchParams(prev)
-				if (section != null) {
-					next.set('walletSection', section)
-				} else {
-					next.delete('walletSection')
-				}
-				return next
-			})
+			setExpandedSectionState(section)
 		},
-		[isOpen, setSearchParams],
+		[isOpen],
 	)
 
 	return { isOpen, expandedSection, open, close, setExpandedSection }
