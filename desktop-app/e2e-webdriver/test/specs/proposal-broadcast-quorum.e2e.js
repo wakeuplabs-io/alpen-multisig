@@ -68,11 +68,11 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 
 		// Gate 1: Phase progress renders Commit → Reveal → Enactment steps. After submit the
 		// command returns within seconds, so the heading may already read "Submitted — awaiting
-		// confirmation…" (decoupled submit/confirm) instead of "Broadcasting…".
-		const phaseProgress = await $('//h3[contains(.,"Broadcasting") or contains(.,"awaiting confirmation")]')
+		// confirmation…" (decoupled submit/confirm) instead of "Sending…".
+		const phaseProgress = await $('//h3[contains(.,"Sending") or contains(.,"awaiting confirmation")]')
 		await phaseProgress.waitForDisplayed({
 			timeout: 30000,
-			timeoutMsg: 'Phase progress should show the broadcasting/awaiting-confirmation heading after Confirm & Broadcast',
+			timeoutMsg: 'Phase progress should show the sending/awaiting-confirmation heading after Confirm & Send',
 		})
 
 		const commitStep = await $('//p[contains(text(),"Commit")]')
@@ -87,11 +87,11 @@ describe('Alpen Multisig proposal — broadcast after quorum', () => {
 			timeoutMsg: 'Phase progress should render Reveal step',
 		})
 
-		// Step 3 reads "Broadcasted" while broadcasting and "Awaiting block" once submitted.
-		const broadcastedStep = await $('//p[contains(text(),"Broadcasted") or contains(text(),"Awaiting block")]')
+		// Step 3 reads "Sent" while sending and "Awaiting block" once submitted.
+		const broadcastedStep = await $('//p[contains(text(),"Sent") or contains(text(),"Awaiting block")]')
 		await broadcastedStep.waitForDisplayed({
 			timeout: 10000,
-			timeoutMsg: 'Phase progress should render the Broadcasted / Awaiting block step',
+			timeoutMsg: 'Phase progress should render the Sent / Awaiting block step',
 		})
 
 		// Gate 2: No device prompt affordance appears (mnemonic signer returns instantly)

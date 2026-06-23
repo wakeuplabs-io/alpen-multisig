@@ -225,11 +225,7 @@ export function BroadcastDetailsCard({
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					{phase === 'awaiting-device'
-						? 'Approve on device…'
-						: isBroadcasting
-							? 'Sending…'
-							: 'Confirm & Send'}
+					{phase === 'awaiting-device' ? 'Approve on device…' : isBroadcasting ? 'Sending…' : 'Confirm & Send'}
 				</button>
 				{targetQueued === false && (
 					<p className="mt-2 text-center text-label text-[#b91c1c]">
