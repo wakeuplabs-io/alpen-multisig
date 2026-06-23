@@ -11,8 +11,33 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  verify-version:
+    name: Verify manifest versions match the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Check versioned files against the release tag
+        run: |
+          # Derive the expected version from the git tag (v0.2.0 -> 0.2.0).
+          # workflow_dispatch runs carry no tag, so there is nothing to verify
+          # against — skip with a warning, mirroring the rest of the workflow
+          # which degrades to 0.0.0-dev when no tag is present.
+          TAG="${GITHUB_REF_NAME:-}"
+          EXPECTED="${TAG#v}"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ -z "$EXPECTED" ]; then
+            echo "::warning::No tag (workflow_dispatch) — skipping version verification."
+            exit 0
+          fi
+          ./scripts/check-version.sh "$EXPECTED"
+
   pre-release-checks:
     name: Pre-release security & license checks
+    needs: [verify-version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
