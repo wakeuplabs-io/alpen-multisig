@@ -1,6 +1,7 @@
 //! Hardware wallet Tauri commands — unified by vendor dispatch.
 
 use bdk_wallet::bitcoin::Network;
+use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::network_env::network_from_env;
@@ -24,16 +25,6 @@ fn parse_verify_network(network: Option<&str>) -> Network {
         "bitcoin" | "mainnet" => Network::Bitcoin,
         "signet" => Network::Signet,
         _ => Network::Regtest,
-    }
-}
-
-/// BIP-86 Admin Wallet account path by network.
-///
-/// Mainnet uses coin type `0'`, everything else uses coin type `1'`.
-fn admin_wallet_xpub_path(network: Network) -> &'static str {
-    match network {
-        Network::Bitcoin => "m/86'/0'/73'",
-        _ => "m/86'/1'/73'",
     }
 }
 
@@ -89,7 +80,7 @@ pub async fn hw_wallet_get_xpub(
 ) -> Result<String, String> {
     let device = parse_device_kind(&vendor)?;
     let network = network_from_env().map_err(|e| e.to_string())?;
-    let path = admin_wallet_xpub_path(network).to_string();
+    let path = admin_wallet_account_path(device, network).to_string();
     let pp = passphrase.unwrap_or_default();
     tokio::task::spawn_blocking(move || device.get_account_xpub(&path, &pp, network))
         .await
@@ -126,7 +117,7 @@ pub async fn verify_address_on_device(
 #[cfg(test)]
 mod tests {
     use super::{
-        admin_wallet_xpub_path, parse_device_kind, parse_verify_network, AddressScriptType,
+        admin_wallet_account_path, parse_device_kind, parse_verify_network, AddressScriptType,
         HwDeviceType, Network,
     };
 
@@ -158,14 +149,41 @@ mod tests {
     }
 
     #[test]
-    fn admin_wallet_xpub_path_uses_testnet_coin_type_off_mainnet() {
-        assert_eq!(admin_wallet_xpub_path(Network::Regtest), "m/86'/1'/73'");
-        assert_eq!(admin_wallet_xpub_path(Network::Testnet), "m/86'/1'/73'");
-        assert_eq!(admin_wallet_xpub_path(Network::Signet), "m/86'/1'/73'");
+    fn admin_wallet_account_path_ledger_uses_testnet_coin_type_off_mainnet() {
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Regtest),
+            "m/86'/1'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Testnet),
+            "m/86'/1'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Signet),
+            "m/86'/1'/73'"
+        );
     }
 
     #[test]
-    fn admin_wallet_xpub_path_uses_mainnet_coin_type_on_bitcoin() {
-        assert_eq!(admin_wallet_xpub_path(Network::Bitcoin), "m/86'/0'/73'");
+    fn admin_wallet_account_path_uses_mainnet_coin_type_on_bitcoin() {
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Bitcoin),
+            "m/86'/0'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Trezor, Network::Bitcoin),
+            "m/86'/0'/73'"
+        );
+    }
+
+    #[test]
+    fn admin_wallet_account_path_trezor_always_uses_mainnet_coin_type() {
+        // Trezor only accepts/derives the BIP-86 account at coin type 0' on every network.
+        for net in [Network::Regtest, Network::Testnet, Network::Signet] {
+            assert_eq!(
+                admin_wallet_account_path(HwDeviceType::Trezor, net),
+                "m/86'/0'/73'"
+            );
+        }
     }
 }

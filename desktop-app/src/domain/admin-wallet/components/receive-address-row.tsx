@@ -3,14 +3,21 @@ import { QrCode } from '@/components/qr-code'
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy'
 import { CopyClipboardIcon, CheckEmeraldIcon } from '@/assets/icons'
 import { buildReceiveQrValue } from '../model/build-receive-qr-value'
-import { buildReceiveVerifyPath } from '../model/build-verify-path'
+import { receiveVerifyPathFromAccount } from '../model/build-verify-path'
+import { networkFromPath } from '../model/network-from-path'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 
 /** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.3.4.2). */
 export type ReceiveVerifyContext = {
 	deviceType: HwDeviceType
-	network: string
+	/** Connect-returned BIP-86 account path (device-specific coin type), e.g. m/86'/1'/73'. */
+	accountPath: string
 	index: number
+	/**
+	 * Device-accurate verification value: the receive address re-encoded with the HRP the
+	 * device shows (tb1… / bc1…). Absent on mainnet, where it equals the funding address.
+	 */
+	verifyAddress?: string
 }
 
 export type ReceiveAddressRowProps = {
@@ -107,16 +114,24 @@ export function ReceiveAddressRow({ address, isLoading, verify }: ReceiveAddress
 					<div className="w-full">
 						<VerifyOnDeviceButton
 							deviceType={verify.deviceType}
-							network={verify.network}
-							derivationPath={buildReceiveVerifyPath(verify.network, verify.index)}
+							network={networkFromPath(verify.accountPath)}
+							derivationPath={receiveVerifyPathFromAccount(verify.accountPath, verify.index)}
 							scriptType="p2tr"
 							subject="receive address"
 						/>
-						{verify.network !== 'bitcoin' && verify.network !== 'mainnet' && (
-							<p className="mt-1.5 text-mono-sm leading-[1.45] text-[#9ca3af]">
-								On test networks your device shows this address with a <span className="font-mono">tb1…</span> prefix —
-								the characters after the prefix must match exactly.
-							</p>
+						{verify.verifyAddress && verify.verifyAddress !== address && (
+							<div className="mt-2 rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2">
+								<p className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">
+									On your device, confirm this exact address
+								</p>
+								<p className="mt-1 break-all font-mono text-label leading-[1.45] text-[#374151]">
+									{verify.verifyAddress}
+								</p>
+								<p className="mt-1 text-mono-sm leading-[1.45] text-[#9ca3af]">
+									The prefix differs from the funding address above (the device firmware has no regtest coin); the
+									characters after the prefix must match exactly.
+								</p>
+							</div>
 						)}
 					</div>
 				)}
