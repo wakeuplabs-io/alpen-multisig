@@ -15,6 +15,7 @@ use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
 };
+use desktop_app::infrastructure::admin_wallet::EnvelopeKeyCache;
 use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
 use desktop_app::infrastructure::broadcast_env;
 use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
@@ -258,6 +259,7 @@ mod wallet_session_state_tests {
     use super::proposals_broadcast;
     use desktop_app::application::pending_reveals::PendingReveals;
     use desktop_app::application::wallet_session::WalletSession;
+    use desktop_app::infrastructure::admin_wallet::EnvelopeKeyCache;
     use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
     /// REGRESSION: proposals_broadcast must take WalletSession (not Arc<WalletService>).
@@ -271,8 +273,9 @@ mod wallet_session_state_tests {
             s: tauri::State<'_, WalletSession>,
             nc: tauri::State<'_, NodeConfigState>,
             p: tauri::State<'_, PendingReveals>,
+            ec: tauri::State<'_, EnvelopeKeyCache>,
         ) {
-            let _ = proposals_broadcast(input, s, nc, p);
+            let _ = proposals_broadcast(input, s, nc, p, ec);
         }
     }
 }
@@ -778,6 +781,7 @@ pub async fn proposals_prepare_broadcast(
     input: BroadcastInput,
     wallet_session: tauri::State<'_, WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
+    envelope_cache: tauri::State<'_, EnvelopeKeyCache>,
 ) -> Result<PrepareBroadcastDto, String> {
     let client = build_client(input.base_url)?;
     let cfg = node_config
@@ -798,6 +802,7 @@ pub async fn proposals_prepare_broadcast(
             env.network,
             &input.action_id,
             fee_rate,
+            &envelope_cache,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -816,6 +821,7 @@ pub async fn proposals_broadcast(
     wallet_session: tauri::State<'_, WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
     pending: tauri::State<'_, PendingReveals>,
+    envelope_cache: tauri::State<'_, EnvelopeKeyCache>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
@@ -858,6 +864,7 @@ pub async fn proposals_broadcast(
         &commit_funding,
         reveal_change_spk,
         &pending,
+        &envelope_cache,
     )
     .await
     .map_err(map_broadcast_error)?;
@@ -948,6 +955,7 @@ pub async fn proposals_prepare_broadcast_manual(
     input: BroadcastManualInput,
     wallet_session: tauri::State<'_, WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
+    envelope_cache: tauri::State<'_, EnvelopeKeyCache>,
 ) -> Result<PrepareBroadcastDto, String> {
     let cfg = node_config
         .0
@@ -978,6 +986,7 @@ pub async fn proposals_prepare_broadcast_manual(
             &input.authority,
             &signatures,
             fee_rate,
+            &envelope_cache,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -999,6 +1008,7 @@ pub async fn proposals_broadcast_manual(
     wallet_session: tauri::State<'_, WalletSession>,
     node_config: tauri::State<'_, NodeConfigState>,
     pending: tauri::State<'_, PendingReveals>,
+    envelope_cache: tauri::State<'_, EnvelopeKeyCache>,
 ) -> Result<BroadcastResultDto, String> {
     let wallet_service = wallet_session
         .current_or_fallback()
@@ -1053,6 +1063,7 @@ pub async fn proposals_broadcast_manual(
         &commit_funding,
         reveal_change_spk,
         &pending,
+        &envelope_cache,
     )
     .await
     .map_err(map_broadcast_error)?;

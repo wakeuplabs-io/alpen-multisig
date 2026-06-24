@@ -57,7 +57,7 @@ pub enum BroadcastError {
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
 use crate::domain::fee_rate::FeeRate;
-use crate::infrastructure::admin_wallet::ephemeral_envelope_key::generate_ephemeral_envelope_keypair;
+use crate::infrastructure::admin_wallet::EnvelopeKeyCache;
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
 ///
@@ -68,6 +68,7 @@ pub async fn prepare_broadcast_bundle(
     network: Network,
     action_id: &str,
     fee_rate: FeeRate,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let proposal = client.get_proposal(action_id).await?;
 
@@ -95,7 +96,7 @@ pub async fn prepare_broadcast_bundle(
     )
     .map_err(BroadcastError::Setup)?;
 
-    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let envelope_keypair = envelope_cache.get_or_generate(&payload);
     let (commit_address, _, _) =
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
@@ -104,7 +105,7 @@ pub async fn prepare_broadcast_bundle(
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
-        commit_address.to_string(),
+        broadcast_tx::device_facing_commit_address(&commit_address, network),
         commit_amount_sats,
         estimated_fee_sats,
     ))
@@ -198,6 +199,7 @@ pub async fn submit_commit_then_reveal(
     commit_funding: &dyn CommitFunding,
     reveal_change_spk: ScriptBuf,
     pending: &PendingReveals,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, String), BroadcastError> {
     let proposal = client.claim_broadcast(action_id).await.map_err(|e| {
         if let OrchestratorError::Backend {
@@ -235,7 +237,9 @@ pub async fn submit_commit_then_reveal(
     )
     .map_err(BroadcastError::Setup)?;
 
-    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    // Reuse the ephemeral keypair derived for this exact payload during the preview, so the
+    // commit address the signer confirmed on device matches what we actually fund (issue #382).
+    let envelope_keypair = envelope_cache.get_or_generate(&payload);
     let (commit_address, reveal_script, taproot_spend_info) =
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
@@ -277,6 +281,7 @@ pub async fn submit_commit_then_reveal(
 
         // Step 3: DROP ephemeral keypair — both txs are signed, key no longer needed.
         let _ = envelope_keypair;
+        envelope_cache.evict(&payload);
 
         // Step 4: Serialize both transactions.
         let commit_txid = commit_tx.compute_txid().to_string();
@@ -410,6 +415,7 @@ pub async fn broadcast_commit_then_reveal(
     commit_funding: &dyn CommitFunding,
     reveal_change_spk: ScriptBuf,
     pending: &PendingReveals,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, String), BroadcastError> {
     let (commit_txid, reveal_txid) = submit_commit_then_reveal(
         client,
@@ -422,6 +428,7 @@ pub async fn broadcast_commit_then_reveal(
         commit_funding,
         reveal_change_spk,
         pending,
+        envelope_cache,
     )
     .await?;
 
@@ -467,6 +474,7 @@ async fn wait_for_confirmation(
 /// Assemble commit/reveal fee estimate for a manual proposal (no orchestrator fetch).
 ///
 /// `authority` is the wire-format string (e.g. `"strata_admin"`).
+#[allow(clippy::too_many_arguments)]
 pub async fn prepare_broadcast_manual(
     asm_rpc_url: &str,
     network: Network,
@@ -475,6 +483,7 @@ pub async fn prepare_broadcast_manual(
     authority: &str,
     signatures: &[Signature],
     fee_rate: FeeRate,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let auth = crate::domain::authority::Authority::from_wire(authority)
         .map_err(|e| BroadcastError::Setup(e.to_string()))?;
@@ -502,7 +511,7 @@ pub async fn prepare_broadcast_manual(
     )
     .map_err(BroadcastError::Setup)?;
 
-    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    let envelope_keypair = envelope_cache.get_or_generate(&payload);
     let (commit_address, _, _) =
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
@@ -511,7 +520,7 @@ pub async fn prepare_broadcast_manual(
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
-        commit_address.to_string(),
+        broadcast_tx::device_facing_commit_address(&commit_address, network),
         commit_amount_sats,
         estimated_fee_sats,
     ))
@@ -537,6 +546,7 @@ pub async fn broadcast_manual(
     commit_funding: &dyn CommitFunding,
     reveal_change_spk: ScriptBuf,
     pending: &PendingReveals,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, String), BroadcastError> {
     let auth = crate::domain::authority::Authority::from_wire(authority)
         .map_err(|e| BroadcastError::Setup(e.to_string()))?;
@@ -564,7 +574,9 @@ pub async fn broadcast_manual(
     )
     .map_err(BroadcastError::Setup)?;
 
-    let envelope_keypair = generate_ephemeral_envelope_keypair();
+    // Reuse the preview's ephemeral keypair for this payload so the on-device commit address
+    // matches the app's "COMMIT TX PREVIEW" (issue #382).
+    let envelope_keypair = envelope_cache.get_or_generate(&payload);
     let (commit_address, reveal_script, taproot_spend_info) =
         broadcast_tx::derive_commit_address(&envelope_keypair, &payload, network)
             .map_err(BroadcastError::Setup)?;
@@ -607,6 +619,7 @@ pub async fn broadcast_manual(
         .map_err(BroadcastError::Setup)?;
 
         let _ = envelope_keypair;
+        envelope_cache.evict(&payload);
 
         let commit_txid = commit_tx.compute_txid().to_string();
         let reveal_txid = reveal_tx.compute_txid().to_string();
@@ -742,8 +755,17 @@ pub async fn prepare_broadcast_local(
     network: Network,
     action_id: &str,
     fee_rate: FeeRate,
+    envelope_cache: &EnvelopeKeyCache,
 ) -> Result<(String, u64, u64), BroadcastError> {
-    prepare_broadcast_bundle(client, asm_rpc_url, network, action_id, fee_rate).await
+    prepare_broadcast_bundle(
+        client,
+        asm_rpc_url,
+        network,
+        action_id,
+        fee_rate,
+        envelope_cache,
+    )
+    .await
 }
 
 /// Re-broadcast a stored reveal transaction for a given action_id.
@@ -1395,17 +1417,24 @@ mod tests {
 
     struct SpyCommitFunding {
         build_signed_commit_called: Mutex<bool>,
+        captured_commit_address: Mutex<Option<String>>,
     }
 
     impl SpyCommitFunding {
         fn new(_txid: &str) -> Self {
             Self {
                 build_signed_commit_called: Mutex::new(false),
+                captured_commit_address: Mutex::new(None),
             }
         }
 
         fn was_called(&self) -> bool {
             *self.build_signed_commit_called.lock().unwrap()
+        }
+
+        /// The exact commit address string the broadcast funded (the real, on-network address).
+        fn funded_commit_address(&self) -> Option<String> {
+            self.captured_commit_address.lock().unwrap().clone()
         }
     }
 
@@ -1419,6 +1448,7 @@ mod tests {
         ) -> Result<bitcoin::Transaction, crate::application::commit_funding::CommitFundingError>
         {
             *self.build_signed_commit_called.lock().unwrap() = true;
+            *self.captured_commit_address.lock().unwrap() = Some(commit_address.to_string());
             use bitcoin::{
                 absolute::LockTime, transaction::Version, Address, Transaction, TxIn, TxOut,
             };
@@ -1719,6 +1749,7 @@ mod tests {
             &spy,
             reveal_change_spk,
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1759,6 +1790,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1797,6 +1829,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1833,6 +1866,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1881,6 +1915,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1915,6 +1950,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -1930,6 +1966,69 @@ mod tests {
         assert!(
             pending.lock().unwrap().get("action-submit-only").is_some(),
             "PendingReveals entry must be present after submit (awaiting confirmation)"
+        );
+    }
+
+    /// REGRESSION (issue #382): the commit address shown in the broadcast preview must equal
+    /// the commit address actually funded/signed. Before the shared `EnvelopeKeyCache`, the
+    /// preview and the broadcast each minted their own random ephemeral keypair, so the address
+    /// the signer confirmed on a hardware wallet never matched the app — defeating on-device
+    /// verification. With one cache across both calls (same payload → same keypair), the two
+    /// addresses are identical (modulo the regtest→testnet HRP the device renders).
+    #[tokio::test]
+    async fn preview_and_broadcast_commit_address_match() {
+        use bitcoin::{Address, Network, ScriptBuf};
+        use std::str::FromStr;
+        use strata_l1_txfmt::MagicBytes;
+
+        let cache = crate::infrastructure::admin_wallet::EnvelopeKeyCache::default();
+        let mock_client = MockOrchestratorClientLargeAction::new();
+        let fee_rate = crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000);
+
+        // 1. Preview — what the UI shows as "COMMIT TX PREVIEW" (device-facing HRP).
+        let (preview_address, _, _) = prepare_broadcast_bundle(
+            &mock_client,
+            "mock://asm-membership",
+            Network::Regtest,
+            "action-match",
+            fee_rate,
+            &cache,
+        )
+        .await
+        .expect("preview ok");
+
+        // 2. Broadcast — the spy captures the real regtest address actually funded/signed.
+        let spy = SpyCommitFunding::new("ignored");
+        let pending = crate::application::pending_reveals::new();
+        submit_commit_then_reveal(
+            &mock_client,
+            &ok_broadcasters(),
+            "mock://asm-membership",
+            MagicBytes::new([0x62, 0x74, 0x00, 0x00]),
+            Network::Regtest,
+            "action-match",
+            fee_rate,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+            &cache,
+        )
+        .await
+        .expect("broadcast ok");
+
+        let funded = spy.funded_commit_address().expect("commit was funded");
+        let funded_addr = Address::from_str(&funded).unwrap().assume_checked();
+
+        // The funded address is the real regtest (bcrt1) address; rendering it the way the
+        // device would must reproduce the preview string exactly.
+        assert_eq!(
+            broadcast_tx::device_facing_commit_address(&funded_addr, Network::Regtest),
+            preview_address,
+            "preview and broadcast must derive the same commit address"
+        );
+        assert!(
+            funded.starts_with("bcrt1p") && preview_address.starts_with("tb1p"),
+            "sanity: funded is regtest, preview is the testnet HRP the device shows"
         );
     }
 
@@ -1961,6 +2060,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
@@ -2088,6 +2188,7 @@ mod tests {
             &spy,
             ScriptBuf::new(),
             &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
         )
         .await;
 
