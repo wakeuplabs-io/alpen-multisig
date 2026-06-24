@@ -13,6 +13,7 @@ fn main() {
         .setup(|app| {
             use desktop_app::application::fee_estimation::FeeCacheState;
             use desktop_app::application::wallet_session::WalletSession;
+            use desktop_app::infrastructure::admin_wallet::EnvelopeKeyCache;
             use desktop_app::infrastructure::node_config_store::{
                 load_node_config, NodeConfigState,
             };
@@ -31,6 +32,9 @@ fn main() {
             // Fee cache (M2): survives across fee_rates_estimate calls; estimators
             // are rebuilt per call from the current node config.
             app.manage(FeeCacheState::default());
+            // Ephemeral envelope keypairs cached per payload so the commit address the signer
+            // confirms on a hardware wallet matches the app preview (issue #382).
+            app.manage(EnvelopeKeyCache::default());
             Ok(())
         })
         .run(tauri::generate_context!())
