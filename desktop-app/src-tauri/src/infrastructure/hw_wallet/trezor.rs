@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use bitcoin::address::KnownHrp;
-use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
+use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::Network;
 use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
@@ -479,6 +479,37 @@ fn trezor_coin_network(network: Network) -> Network {
     }
 }
 
+/// Trezor validates every BIP-86 path's coin type against the SLIP-44 id of the coin it
+/// signs under: a `Testnet` coin requires coin type `1'`, a `Bitcoin` coin requires `0'`.
+/// A mismatch is rejected on-device with `Forbidden key path` (`Failure_DataError`).
+///
+/// The Admin Wallet account path is device-specific (Trezor uses coin type `0'` on *every*
+/// network — see `admin_wallet_account_path`), so the signing coin must follow the path's
+/// coin type, not the session network, or the commit funding broadcast fails to sign.
+fn trezor_coin_for_path(path: &DerivationPath) -> Option<Network> {
+    match path.into_iter().nth(1) {
+        Some(ChildNumber::Hardened { index: 0 }) => Some(Network::Bitcoin),
+        Some(ChildNumber::Hardened { .. }) => Some(Network::Testnet),
+        _ => None,
+    }
+}
+
+/// Picks the Trezor coin to sign under from the wallet-owned input paths in `psbt`, keeping
+/// the path↔coin invariant the device enforces. Falls back to the session network's coin when
+/// no wallet origin is present (should not happen for an Admin Wallet PSBT).
+fn trezor_signing_coin(
+    psbt: &bitcoin::psbt::Psbt,
+    expected_fp: Fingerprint,
+    network: Network,
+) -> Network {
+    psbt.inputs
+        .iter()
+        .flat_map(|input| input.tap_key_origins.values())
+        .find(|(_, (fp, _))| *fp == expected_fp)
+        .and_then(|(_, (_, path))| trezor_coin_for_path(path))
+        .unwrap_or_else(|| trezor_coin_network(network))
+}
+
 /// Drives the Trezor `SignTx` flow for a taproot key-path spend, collecting the
 /// signatures and applying them to `psbt`. trezor-client 0.1.5's built-in flow
 /// classifies P2TR inputs as `EXTERNAL` (won't sign), so we ack each request
@@ -491,7 +522,9 @@ fn sign_taproot_psbt(
 ) -> Result<(), String> {
     use protos::tx_request::RequestType;
 
-    let coin_net = trezor_coin_network(network);
+    // The coin must match the coin type embedded in the wallet path, not the session network,
+    // or Trezor rejects the spend with "Forbidden key path" (see `trezor_signing_coin`).
+    let coin_net = trezor_signing_coin(psbt, expected_fp, network);
     let mut signatures: Vec<(usize, Vec<u8>)> = Vec::new();
     let mut progress = resolve(
         trezor
@@ -566,6 +599,23 @@ mod tests {
         assert_eq!(trezor_coin_network(Network::Testnet), Network::Testnet);
         assert_eq!(trezor_coin_network(Network::Regtest), Network::Testnet);
         assert_eq!(trezor_coin_network(Network::Signet), Network::Testnet);
+    }
+
+    #[test]
+    fn trezor_coin_for_path_follows_account_coin_type() {
+        // Coin type 0' (Trezor Admin Wallet on every network) must sign under the Bitcoin coin;
+        // coin type 1' (Ledger-style test nets) under Testnet. Mismatching the path's coin type
+        // is what triggers the on-device "Forbidden key path" rejection on the broadcast.
+        assert_eq!(
+            trezor_coin_for_path(&parse_path("m/86'/0'/73'/0/0").unwrap()),
+            Some(Network::Bitcoin)
+        );
+        assert_eq!(
+            trezor_coin_for_path(&parse_path("m/86'/1'/73'/0/0").unwrap()),
+            Some(Network::Testnet)
+        );
+        // No coin-type level → no opinion, caller falls back to the session network.
+        assert_eq!(trezor_coin_for_path(&parse_path("m/86'").unwrap()), None);
     }
 
     #[test]
