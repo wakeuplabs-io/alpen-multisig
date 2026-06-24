@@ -203,6 +203,7 @@ export const adminWalletCapabilitySchema = z.union([
 			reason: z.string().nullish(),
 			deviceType: z.string().nullish(),
 			network: z.string().nullish(),
+			adminWalletAccountPath: z.string().nullish(),
 		})
 		.transform((d) => ({
 			canSign: d.canSign,
@@ -210,6 +211,7 @@ export const adminWalletCapabilitySchema = z.union([
 			reason: d.reason ?? undefined,
 			deviceType: normalizeHwDeviceType(d.deviceType),
 			network: d.network ?? 'regtest',
+			adminWalletAccountPath: d.adminWalletAccountPath ?? null,
 		})),
 	z.boolean().transform((b) => ({
 		canSign: b,
@@ -217,6 +219,7 @@ export const adminWalletCapabilitySchema = z.union([
 		reason: undefined,
 		deviceType: null,
 		network: 'regtest',
+		adminWalletAccountPath: null,
 	})),
 ])
 

@@ -6,6 +6,8 @@ import { parseAdminWalletError } from './parse-admin-wallet-error'
 type UseAdminWalletReceiveAddressReturn = {
 	address: string | null
 	index: number | null
+	/** Device-accurate address (device-HRP) for verify-on-device; null for software sessions. */
+	verifyAddress: string | null
 	isLoading: boolean
 	error: AdminWalletError | null
 	refresh: () => void
@@ -39,6 +41,7 @@ export function useAdminWalletReceiveAddress(): UseAdminWalletReceiveAddressRetu
 	return {
 		address: data?.address ?? null,
 		index: data?.index ?? null,
+		verifyAddress: data?.verifyAddress ?? null,
 		isLoading,
 		error,
 		refresh,

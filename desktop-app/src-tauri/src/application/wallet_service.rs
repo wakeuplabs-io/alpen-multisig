@@ -69,6 +69,12 @@ pub struct AddressDto {
     pub index: u32,
     pub address: String,
     pub is_used: bool,
+    /// Device-accurate verification value: the same address re-encoded with the HRP the
+    /// connected hardware device shows (`tb1…` on a Testnet app, `bc1…` on a Bitcoin app),
+    /// so the signer compares identical strings on-device. Filled by the receive-address
+    /// command for HW sessions; `None` for software sessions and address listings.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_address: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -692,6 +698,7 @@ impl WalletService {
                     index,
                     address: info.address.to_string(),
                     is_used,
+                    verify_address: None,
                 }
             })
             .collect();
@@ -757,6 +764,7 @@ impl WalletService {
             index: info.index,
             address: info.address.to_string(),
             is_used: false,
+            verify_address: None,
         })
     }
 

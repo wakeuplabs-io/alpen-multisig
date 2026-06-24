@@ -22,12 +22,14 @@ export type WalletPanelContentProps = {
 	receiveAddress: string | null
 	/** External index of the current receive address (verify-on-device path). */
 	receiveIndex: number | null
+	/** Device-accurate receive address (device-HRP) for the verify-on-device comparison. */
+	receiveVerifyAddress: string | null
 	/** Connected HW device (verify-on-device affordances), or null for software / no signer. */
 	hwDeviceType: 'trezor' | 'ledger' | null
-	/** Active session network token (verify-on-device coin path). */
-	network: string
 	/** Connect-returned Admin ID derivation path (authoritative verify-on-device path). */
 	adminIdDerivationPath: string | undefined
+	/** Connect-returned BIP-86 Admin Wallet account path (receive verify-on-device path). */
+	adminWalletAccountPath: string | null
 	isAddressesLoading: boolean
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
@@ -55,9 +57,10 @@ export function WalletPanelContent({
 	isBalanceLoading,
 	receiveAddress,
 	receiveIndex,
+	receiveVerifyAddress,
 	hwDeviceType,
-	network,
 	adminIdDerivationPath,
+	adminWalletAccountPath,
 	isAddressesLoading,
 	addressRows,
 	addressRowsLoading,
@@ -155,8 +158,13 @@ export function WalletPanelContent({
 					address={receiveAddress ?? ''}
 					isLoading={isAddressesLoading}
 					verify={
-						hwDeviceType && receiveIndex !== null
-							? { deviceType: hwDeviceType, network, index: receiveIndex }
+						hwDeviceType && receiveIndex !== null && adminWalletAccountPath
+							? {
+									deviceType: hwDeviceType,
+									accountPath: adminWalletAccountPath,
+									index: receiveIndex,
+									verifyAddress: receiveVerifyAddress ?? undefined,
+								}
 							: undefined
 					}
 				/>

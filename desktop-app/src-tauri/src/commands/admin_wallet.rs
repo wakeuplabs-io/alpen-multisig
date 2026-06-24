@@ -12,9 +12,13 @@ use desktop_app::application::wallet_transactions::{
     bump_error_code, BumpFeeError, BumpFeeResultDto, UnconfirmedTxDto,
 };
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
+use desktop_app::infrastructure::admin_wallet::wallet::{
+    admin_wallet_account_path, render_address_with_hrp,
+};
 use desktop_app::infrastructure::admin_wallet::AdminWalletError;
 use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
 use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
+use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
@@ -93,6 +97,19 @@ pub struct AdminWalletSignStatus {
     /// Active session network token (`regtest` | `testnet` | `signet` | `bitcoin`), so the
     /// verify-on-device call uses the right coin path.
     pub network: String,
+    /// BIP-86 account derivation path actually used for this device/network (e.g. `m/86'/0'/73'`
+    /// for Trezor, `m/86'/1'/73'` for Ledger on test nets), so the FE builds a receive verify
+    /// path the device can render. `None` for software / no signer.
+    pub admin_wallet_account_path: Option<String>,
+}
+
+/// Maps the internal signer label to a [`HwDeviceType`], or `None` for software/no signer.
+fn hw_device_kind(raw: &str) -> Option<HwDeviceType> {
+    match raw {
+        "trezor" => Some(HwDeviceType::Trezor),
+        "ledger" => Some(HwDeviceType::Ledger),
+        _ => None,
+    }
 }
 
 /// Maps internal signer labels to the FE capability DTO (`hardware` | `mnemonic` | `none`).
@@ -136,6 +153,12 @@ pub async fn admin_wallet_can_sign(
         .unwrap_or_else(|| "regtest".to_string());
     let raw_kind = current.as_ref().map(|svc| svc.signer_kind());
     let device_type = raw_kind.as_deref().and_then(hw_device_type);
+    let admin_wallet_account_path = current.as_ref().and_then(|svc| {
+        raw_kind
+            .as_deref()
+            .and_then(hw_device_kind)
+            .map(|device| admin_wallet_account_path(device, svc.network()).to_string())
+    });
     let (signer_kind, reason) = if can_sign {
         match raw_kind {
             Some(kind) => (capability_signer_kind(&kind).to_string(), None),
@@ -153,6 +176,7 @@ pub async fn admin_wallet_can_sign(
         reason,
         device_type,
         network,
+        admin_wallet_account_path,
     })
 }
 
@@ -256,9 +280,34 @@ pub async fn admin_wallet_next_receive_address(
     let svc = wallet_session
         .current_or_fallback()
         .map_err(serialize_wallet_error)?;
-    svc.next_receive_address()
+    let mut dto = svc
+        .next_receive_address()
         .await
-        .map_err(serialize_wallet_error)
+        .map_err(serialize_wallet_error)?;
+    // For HW sessions, attach a device-accurate verification value: the same receive address
+    // re-encoded with the HRP the device firmware shows (`bc1…` Bitcoin app, `tb1…` Testnet
+    // app), so the on-device comparison is character-for-character exact.
+    if let Some(device) = hw_device_kind(&svc.signer_kind()) {
+        dto.verify_address = device_verify_address(&dto.address, device, svc.network());
+    }
+    Ok(dto)
+}
+
+/// Re-encodes the receive `address` with the HRP the connected device renders for its coin
+/// type. Returns `None` if the address cannot be parsed (defensive — never blocks the flow).
+fn device_verify_address(
+    address: &str,
+    device: HwDeviceType,
+    network: bdk_wallet::bitcoin::Network,
+) -> Option<String> {
+    use bdk_wallet::bitcoin::{Address, Network};
+    let hrp_network = match (device, network) {
+        (HwDeviceType::Trezor, _) => Network::Bitcoin,
+        (HwDeviceType::Ledger, Network::Bitcoin) => Network::Bitcoin,
+        (HwDeviceType::Ledger, _) => Network::Testnet,
+    };
+    let parsed = address.parse::<Address<_>>().ok()?.assume_checked();
+    Some(render_address_with_hrp(&parsed, hrp_network))
 }
 
 #[tauri::command]
