@@ -1,6 +1,8 @@
 use crate::application::psbt_signer::MnemonicPsbtSigner;
 use crate::application::wallet_service::WalletService;
-use crate::infrastructure::admin_wallet::wallet::load_watch_only_admin_wallet;
+use crate::infrastructure::admin_wallet::wallet::{
+    admin_wallet_account_origin, admin_wallet_account_origin_path, load_watch_only_admin_wallet,
+};
 use crate::infrastructure::admin_wallet::{load_admin_wallet, AdminWalletError};
 use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
 use crate::infrastructure::node_config_store::NodeConfig;
@@ -75,7 +77,12 @@ impl WalletSession {
         network: bdk_wallet::bitcoin::Network,
         node_config: Arc<RwLock<NodeConfig>>,
     ) -> Result<SessionState, AdminWalletError> {
-        let wallet = load_watch_only_admin_wallet(account_xpub, network, None)?;
+        let wallet = load_watch_only_admin_wallet(
+            account_xpub,
+            network,
+            None,
+            admin_wallet_account_origin_path(network),
+        )?;
         // HW path: attach HwPsbtSigner when master_fingerprint is provided (slice b).
         // For now (slice a), this creates a watch-only session with no signer.
         let wallet = Arc::new(WalletService::new_watch_only(wallet, node_config));
@@ -92,7 +99,12 @@ impl WalletSession {
         network: Option<&str>,
     ) -> Result<(), AdminWalletError> {
         let net = parse_network(network);
-        let wallet = load_watch_only_admin_wallet(account_xpub, net, Some(master_fingerprint))?;
+        let wallet = load_watch_only_admin_wallet(
+            account_xpub,
+            net,
+            Some(master_fingerprint),
+            admin_wallet_account_origin(device_type, net),
+        )?;
         let signer = Arc::new(HwPsbtSigner::new(
             master_fingerprint,
             device_type,

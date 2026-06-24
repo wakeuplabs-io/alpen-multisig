@@ -53,7 +53,7 @@ export function ManualProposalScreen() {
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const unconfirmedTxsHook = useUnconfirmedTxs()
-	const { canSign, deviceType: hwDeviceType, network: walletNetwork } = useAdminWalletCapability()
+	const { canSign, deviceType: hwDeviceType, adminWalletAccountPath } = useAdminWalletCapability()
 
 	const walletDisabledError =
 		balanceHook.error?.type === 'Disabled' || balanceHook.error?.type === 'RegtestGuardViolation'
@@ -358,9 +358,10 @@ export function ManualProposalScreen() {
 					isBalanceLoading={balanceHook.isLoading}
 					receiveAddress={receiveAddressHook.address}
 					receiveIndex={receiveAddressHook.index}
+					receiveVerifyAddress={receiveAddressHook.verifyAddress}
 					hwDeviceType={hwDeviceType}
-					network={walletNetwork}
 					adminIdDerivationPath={wallet.derivationPath}
+					adminWalletAccountPath={adminWalletAccountPath}
 					isAddressesLoading={receiveAddressHook.isLoading}
 					addressRows={addressesWithBalanceHook.data}
 					addressRowsLoading={addressesWithBalanceHook.isLoading}

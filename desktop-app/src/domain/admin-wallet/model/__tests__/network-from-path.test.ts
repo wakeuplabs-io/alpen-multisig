@@ -13,4 +13,9 @@ assert.equal(networkFromPath("m/84'/1'/73'/0/0"), 'regtest', "coin type 1' → r
 assert.equal(networkFromPath('m/84h/1h/73h/0/0'), 'regtest', 'coin type 1h → regtest')
 assert.equal(networkFromPath("m/86'/1'/73'/0/5"), 'regtest', "taproot coin type 1' → regtest")
 
+// Bare account paths (no change/index suffix) — the receive verify path is now built from the
+// connect-returned account path, so networkFromPath is also called on the bare account path.
+assert.equal(networkFromPath("m/86'/0'/73'"), 'bitcoin', "bare account coin type 0' → bitcoin")
+assert.equal(networkFromPath("m/86'/1'/73'"), 'regtest', "bare account coin type 1' → regtest")
+
 console.log('network-from-path: all assertions passed')
