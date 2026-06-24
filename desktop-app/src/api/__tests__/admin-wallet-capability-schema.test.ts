@@ -70,6 +70,23 @@ assert.equal(legacyFalseResult.signerKind, 'none')
 assert.equal(legacyFalseResult.reason, undefined)
 console.log('degrades legacy bare-bool false OK')
 
+// ── Behavior 3b: adminWalletAccountPath (device-specific BIP-86 account path) ─
+
+const withAccountPath = adminWalletCapabilitySchema.parse({
+	canSign: true,
+	signerKind: 'trezor',
+	adminWalletAccountPath: "m/86'/0'/73'",
+})
+assert.equal(withAccountPath.adminWalletAccountPath, "m/86'/0'/73'")
+console.log('parses adminWalletAccountPath OK')
+
+// Absent (software session) → null
+const noAccountPath = adminWalletCapabilitySchema.parse({ canSign: true, signerKind: 'mnemonic' })
+assert.equal(noAccountPath.adminWalletAccountPath, null)
+// Legacy bare-bool → null
+assert.equal(adminWalletCapabilitySchema.parse(true).adminWalletAccountPath, null)
+console.log('defaults adminWalletAccountPath to null OK')
+
 // ── Behavior 4: Invalid signerKind rejected ──────────────────────────────────
 
 try {

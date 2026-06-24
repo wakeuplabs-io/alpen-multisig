@@ -32,6 +32,12 @@ export type AddressDto = {
 	index: number
 	address: string
 	isUsed: boolean
+	/**
+	 * Device-accurate verification value for HW sessions: the same address re-encoded with the
+	 * HRP the connected device shows (tb1… on a Testnet app, bc1… on a Bitcoin app), so the
+	 * on-device comparison is exact. Absent for software sessions and address listings.
+	 */
+	verifyAddress?: string
 }
 
 // Progress of an in-flight Electrum sync, counted in sync items (scripts, txids, outpoints).
@@ -268,6 +274,12 @@ export type AdminWalletCapability = {
 	deviceType: HwDeviceType | null
 	/** Active session network token (regtest | testnet | signet | bitcoin). */
 	network: string
+	/**
+	 * BIP-86 account derivation path used for this device/network (e.g. m/86'/0'/73' for Trezor,
+	 * m/86'/1'/73' for Ledger on test nets). The receive verify-on-device path is built from this
+	 * so it matches the device's coin type. Null for software / no signer.
+	 */
+	adminWalletAccountPath: string | null
 }
 
 export function getAdminWalletCanSign(): Promise<ApiResult<AdminWalletCapability>> {

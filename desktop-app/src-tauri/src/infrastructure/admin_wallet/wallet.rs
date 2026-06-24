@@ -2,6 +2,8 @@ use bdk_wallet::bitcoin::bip32::{DerivationPath, Fingerprint, Xpriv, Xpub};
 use bdk_wallet::bitcoin::secp256k1::Secp256k1;
 use bdk_wallet::bitcoin::{Address, Network};
 use bip39::Mnemonic;
+
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use serde::Serialize;
 use std::str::FromStr;
 use thiserror::Error;
@@ -61,12 +63,45 @@ pub fn load_admin_wallet(
     Ok(wallet)
 }
 
-/// BIP-86 account origin path segment for Admin Wallet (`m/86'/{coin}'/73'`).
-fn admin_wallet_account_origin_path(network: Network) -> &'static str {
+/// BIP-86 account origin path segment for Admin Wallet (`86'/{coin}'/73'`), network-based.
+/// Used as the default for software/watch-only callers that have no hardware device.
+pub fn admin_wallet_account_origin_path(network: Network) -> &'static str {
     match network {
         Network::Bitcoin => "86'/0'/73'",
         _ => "86'/1'/73'",
     }
+}
+
+/// BIP-86 Admin Wallet account derivation path for a hardware device + network.
+///
+/// This is the single source of truth for the device-specific coin type: Trezor only
+/// accepts/derives the BIP-86 account at coin type `0'` (mainnet-style) on every network,
+/// while Ledger uses `0'` on mainnet and `1'` on test networks (matching its Bitcoin/Testnet
+/// apps). The xpub export path, the descriptor origin and the verify-on-device path must all
+/// agree with this, or the displayed address and HW PSBT signing diverge.
+pub fn admin_wallet_account_path(device: HwDeviceType, network: Network) -> &'static str {
+    match (device, network) {
+        (HwDeviceType::Trezor, _) => "m/86'/0'/73'",
+        (HwDeviceType::Ledger, Network::Bitcoin) => "m/86'/0'/73'",
+        (HwDeviceType::Ledger, _) => "m/86'/1'/73'",
+    }
+}
+
+/// Descriptor origin segment (no leading `m/`) for a hardware device + network.
+pub fn admin_wallet_account_origin(device: HwDeviceType, network: Network) -> &'static str {
+    admin_wallet_account_path(device, network)
+        .strip_prefix("m/")
+        .expect("account path always starts with m/")
+}
+
+/// Re-encodes `address` with the human-readable prefix of `hrp_network`, preserving the
+/// witness program. Used to show a *device-accurate* verification value: a regtest receive
+/// address (`bcrt1…`) is rendered as the device's firmware shows it (`tb1…` on the Testnet
+/// app, `bc1…` on the Bitcoin app) so the signer compares identical strings on-device.
+pub fn render_address_with_hrp(address: &Address, hrp_network: Network) -> String {
+    Address::from_script(address.script_pubkey().as_script(), hrp_network)
+        .map(|a| a.to_string())
+        .unwrap_or_else(|_| address.to_string())
 }
 
 /// Load a BIP-86 taproot watch-only wallet from an account-level xpub string.
@@ -76,6 +111,7 @@ pub fn load_watch_only_admin_wallet(
     account_xpub: &str,
     network: Network,
     master_fingerprint: Option<u32>,
+    account_origin: &str,
 ) -> Result<bdk_wallet::Wallet, AdminWalletError> {
     let mut xpub =
         Xpub::from_str(account_xpub).map_err(|e| AdminWalletError::Descriptor(e.to_string()))?;
@@ -88,12 +124,7 @@ pub fn load_watch_only_admin_wallet(
     let account_key = match master_fingerprint {
         Some(fp) => {
             let fingerprint = Fingerprint::from(fp.to_le_bytes());
-            format!(
-                "[{}/{}]{}",
-                fingerprint,
-                admin_wallet_account_origin_path(network),
-                xpub
-            )
+            format!("[{}/{}]{}", fingerprint, account_origin, xpub)
         }
         None => xpub.to_string(),
     };
@@ -125,7 +156,12 @@ mod tests {
             .expect("mnemonic wallet must succeed");
         let xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
             .expect("xpub derivation must succeed");
-        let result = load_watch_only_admin_wallet(&xpub, Network::Regtest, None);
+        let result = load_watch_only_admin_wallet(
+            &xpub,
+            Network::Regtest,
+            None,
+            admin_wallet_account_origin_path(Network::Regtest),
+        );
         assert!(result.is_ok(), "Expected Ok but got: {:?}", result.err());
         let _ = wallet;
     }
@@ -164,8 +200,13 @@ mod tests {
         // external[0] from mnemonic wallet (TEST_MNEMONIC) — same seed, Regtest network.
         let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
             .expect("mnemonic wallet must succeed");
-        let watch_wallet = load_watch_only_admin_wallet(TEST_ACCOUNT_XPUB, Network::Regtest, None)
-            .expect("watch-only wallet must succeed");
+        let watch_wallet = load_watch_only_admin_wallet(
+            TEST_ACCOUNT_XPUB,
+            Network::Regtest,
+            None,
+            admin_wallet_account_origin_path(Network::Regtest),
+        )
+        .expect("watch-only wallet must succeed");
         assert_eq!(
             get_external_address(&mnemonic_wallet),
             get_external_address(&watch_wallet),
@@ -180,8 +221,13 @@ mod tests {
             .expect("mnemonic wallet must succeed");
         let xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
             .expect("xpub derivation must succeed");
-        let watch_wallet = load_watch_only_admin_wallet(&xpub, Network::Regtest, None)
-            .expect("watch-only wallet must succeed");
+        let watch_wallet = load_watch_only_admin_wallet(
+            &xpub,
+            Network::Regtest,
+            None,
+            admin_wallet_account_origin_path(Network::Regtest),
+        )
+        .expect("watch-only wallet must succeed");
         assert_eq!(
             get_external_address(&mnemonic_wallet),
             get_external_address(&watch_wallet),
@@ -191,7 +237,12 @@ mod tests {
 
     #[test]
     fn load_watch_only_admin_wallet_returns_error_for_malformed_xpub() {
-        let result = load_watch_only_admin_wallet("not-a-valid-xpub", Network::Regtest, None);
+        let result = load_watch_only_admin_wallet(
+            "not-a-valid-xpub",
+            Network::Regtest,
+            None,
+            admin_wallet_account_origin_path(Network::Regtest),
+        );
         assert!(result.is_err(), "Expected Err for malformed xpub");
     }
 
@@ -206,8 +257,13 @@ mod tests {
             mainnet_xpub.starts_with("xpub"),
             "precondition: expected a mainnet xpub, got: {mainnet_xpub}"
         );
-        let watch_wallet = load_watch_only_admin_wallet(&mainnet_xpub, Network::Regtest, None)
-            .expect("watch-only must accept a mainnet xpub on regtest");
+        let watch_wallet = load_watch_only_admin_wallet(
+            &mainnet_xpub,
+            Network::Regtest,
+            None,
+            admin_wallet_account_origin_path(Network::Regtest),
+        )
+        .expect("watch-only must accept a mainnet xpub on regtest");
         let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
             .expect("mnemonic wallet must succeed");
         assert_eq!(
@@ -245,5 +301,81 @@ mod tests {
             "Expected P2TR regtest address (bcrt1p...) but got: {}",
             addr_str
         );
+    }
+
+    #[test]
+    fn admin_wallet_account_path_and_origin_are_device_aware() {
+        // Trezor: coin 0' on every network; Ledger: coin 1' on test nets, 0' on mainnet.
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Trezor, Network::Regtest),
+            "m/86'/0'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Regtest),
+            "m/86'/1'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_path(HwDeviceType::Ledger, Network::Bitcoin),
+            "m/86'/0'/73'"
+        );
+        // The origin segment is the path without the leading `m/`.
+        assert_eq!(
+            admin_wallet_account_origin(HwDeviceType::Trezor, Network::Regtest),
+            "86'/0'/73'"
+        );
+        assert_eq!(
+            admin_wallet_account_origin(HwDeviceType::Ledger, Network::Regtest),
+            "86'/1'/73'"
+        );
+    }
+
+    #[test]
+    fn watch_only_with_fingerprint_embeds_supplied_origin_without_changing_address() {
+        // The origin is BIP-380 metadata for HW PSBT signing; it must NOT alter the derived
+        // address (which depends only on the xpub key material + /0/index). A Trezor session
+        // (origin 86'/0'/73') on regtest must still produce the same address as the mnemonic
+        // wallet derived at m/86'/0'/73'.
+        let xpub = derive_account_xpub_from_mnemonic(TEST_MNEMONIC, Network::Regtest)
+            .expect("xpub derivation must succeed");
+        let mnemonic_wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
+            .expect("mnemonic wallet must succeed");
+        let trezor_wallet = load_watch_only_admin_wallet(
+            &xpub,
+            Network::Regtest,
+            Some(0x1234_5678),
+            admin_wallet_account_origin(HwDeviceType::Trezor, Network::Regtest),
+        )
+        .expect("watch-only with fingerprint must succeed");
+        assert_eq!(
+            get_external_address(&mnemonic_wallet),
+            get_external_address(&trezor_wallet),
+            "embedding an origin must not change the derived address"
+        );
+    }
+
+    #[test]
+    fn render_address_with_hrp_swaps_prefix_preserving_witness_program() {
+        // A regtest receive address (bcrt1p…) re-encoded for the device's firmware app:
+        // Testnet → tb1p… (Ledger), Bitcoin → bc1p… (Trezor). Only the HRP changes; the
+        // witness program (everything after the separator) stays identical.
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest)
+            .expect("wallet creation must succeed");
+        let addr = get_external_address(&wallet);
+        let regtest = addr.to_string();
+        assert!(regtest.starts_with("bcrt1p"), "precondition: {regtest}");
+
+        let testnet = render_address_with_hrp(&addr, Network::Testnet);
+        let mainnet = render_address_with_hrp(&addr, Network::Bitcoin);
+        assert!(testnet.starts_with("tb1p"), "expected tb1p…, got {testnet}");
+        assert!(mainnet.starts_with("bc1p"), "expected bc1p…, got {mainnet}");
+
+        // Witness version + program are identical across HRPs; only the HRP and the trailing
+        // 6-char bech32 checksum (which is computed over the HRP) differ.
+        let body = |s: &str| {
+            let data = s.rsplit_once('1').expect("bech32 separator").1;
+            data[..data.len() - 6].to_string()
+        };
+        assert_eq!(body(&regtest), body(&testnet));
+        assert_eq!(body(&regtest), body(&mainnet));
     }
 }

@@ -29,12 +29,19 @@ export type WalletPanelData = {
 	 * (Trezor coin type 0', Ledger 1' on test nets). Undefined for software signers.
 	 */
 	adminIdDerivationPath: string | undefined
+	/**
+	 * Connect-returned BIP-86 Admin Wallet account path (device-specific coin type). Used to build
+	 * the receive verify-on-device path so it matches the device's key. Null for software signers.
+	 */
+	adminWalletAccountPath: string | null
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
 	/** External index of the current receive address (for the verify-on-device path). */
 	receiveIndex: number | null
+	/** Device-accurate receive address (device-HRP) for the verify-on-device comparison. */
+	receiveVerifyAddress: string | null
 	isAddressesLoading: boolean
 	addressRows: AddressWithBalanceView[] | null
 	addressRowsLoading: boolean
@@ -61,7 +68,7 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 	const syncHook = useAdminWalletSync()
 	const addressesWithBalanceHook = useAddressesWithBalance()
 	const unconfirmedTxsHook = useUnconfirmedTxs()
-	const { canSign, deviceType: hwDeviceType, network } = useAdminWalletCapability()
+	const { canSign, deviceType: hwDeviceType, network, adminWalletAccountPath } = useAdminWalletCapability()
 	const { wallet } = useSession()
 
 	// All refresh callbacks below are referentially stable (each is a `useCallback(…, [])`
@@ -108,11 +115,13 @@ export function useWalletPanelData(showDisabledError: boolean = true): WalletPan
 		hwDeviceType,
 		network,
 		adminIdDerivationPath: wallet?.derivationPath,
+		adminWalletAccountPath,
 		confirmedBalanceSats: balanceHook.data?.confirmedSats ?? 0,
 		unconfirmedBalanceSats: balanceHook.data?.unconfirmedSats ?? 0,
 		isBalanceLoading: balanceHook.isLoading,
 		receiveAddress: receiveAddressHook.address,
 		receiveIndex: receiveAddressHook.index,
+		receiveVerifyAddress: receiveAddressHook.verifyAddress,
 		isAddressesLoading: receiveAddressHook.isLoading,
 		addressRows: addressesWithBalanceHook.data,
 		addressRowsLoading: addressesWithBalanceHook.isLoading,
