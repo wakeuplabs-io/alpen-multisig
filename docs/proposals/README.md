@@ -6,4 +6,4 @@ Internal staging area for scope proposals and estimates before they are approved
 | Document | Topic |
 |---|---|
 | [Block Payouts — Implementation Estimate](./block-payouts-estimate.md) | End-to-end Payout Administrator flow ([PRD §6](../0-prd/05-prd-payout-admin-block-payouts-update.md)) — the numbers |
-| [Block Payouts — Iteration Plan](./block-payouts-iteration-plan.md) | Working doc: per-iteration reasoning and scope notes for team discussion |
+| [Block Payouts — Estimation Session Prep](./block-payouts-iteration-plan.md) | Facilitation material: per-iteration critical considerations and probes for the estimation session |
