@@ -78,6 +78,7 @@ When documents disagree, use this order:
 | `specs/` | Per-feature contracts — see [`specs/README.md`](./specs/README.md) |
 | `assessment/` | Backlog SSOT, [`audits/`](./assessment/audits/), [`archive/`](./assessment/archive/) — see [`assessment/README.md`](./assessment/README.md) |
 | `operations/` | Runbook, threat model, delivery plan — see [`operations/README.md`](./operations/README.md) |
+| `proposals/` | Internal scope proposals and estimates pending approval — **not SSOT** — see [`proposals/README.md`](./proposals/README.md) |
 | `archive/` | Historical delivery records, evolution, POC specs — **not SSOT** |
 | `external/` | Client deliverables (canonical for delivery) |
 
