@@ -21,7 +21,7 @@ function StatusBadge({ row }: { row: UnconfirmedTxView }) {
 	if (row.isGovernanceCommit) {
 		return (
 			<span className="flex-none rounded-full bg-[#eef2ff] px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-[#4f46e5]">
-				Governance
+				Proposal
 			</span>
 		)
 	}
@@ -50,6 +50,7 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 	const isBumpDisabled = isWatchOnly || !row.canBump
 	const lastSeenLabel = row.lastSeenIso !== null ? relativeTime(row.lastSeenIso, new Date()) : null
 	const feeNoun = row.usesPackageStats ? 'Package fee' : 'Fee'
+	const feeSummary = `${feeNoun} ${row.feeLabel} · ${row.feeRateLabel}${lastSeenLabel !== null ? ` · ${lastSeenLabel}` : ''}`
 
 	return (
 		<div className="py-2.5" data-testid={`e2e-wallet-tx-row-${row.txid}`}>
@@ -63,9 +64,8 @@ export function UnconfirmedTxRow({ row, isWatchOnly, isBumpOpen, onToggleBump }:
 			<div className="mt-1 flex items-center justify-between gap-2">
 				<span className="flex min-w-0 items-center gap-1.5 text-mono-sm text-[#6b7280]">
 					<StatusBadge row={row} />
-					<span className="truncate">
-						{feeNoun} {row.feeLabel} · {row.feeRateLabel}
-						{lastSeenLabel !== null ? ` · ${lastSeenLabel}` : ''}
+					<span className="truncate" title={feeSummary}>
+						{feeSummary}
 					</span>
 				</span>
 				<button

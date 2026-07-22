@@ -72,7 +72,7 @@ export function ReceiveAddressRow({ address, isLoading, verify }: ReceiveAddress
 					aria-live="polite"
 					className={`text-mono-sm font-medium transition-opacity ${copied ? 'text-[#059669] opacity-100' : 'text-[#9ca3af] opacity-100'}`}
 				>
-					{copied ? 'Copied!' : 'Tap to copy'}
+					{copied ? 'Copied!' : ''}
 				</span>
 			</div>
 
