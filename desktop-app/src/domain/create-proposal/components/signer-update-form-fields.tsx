@@ -107,7 +107,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						))}
 					</div>
 				) : (
-					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
+					<div className="rounded-xl border border-[#e5e7eb] p-3">
 						<div className="flex flex-col gap-2">
 							{currentSigners.map((signer) => {
 								const isPendingRemoval = removedSet.has(normalizeSignerKey(signer))
@@ -116,13 +116,9 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										key={signer}
 										className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2"
 									>
-										{isPendingRemoval ? (
-											<span className="shrink-0 text-body-sm font-medium text-[#dc2626]">–</span>
-										) : (
-											<span className="h-3.5 w-3.5 shrink-0 rounded-full border border-[#d1d5db]" />
-										)}
+										{isPendingRemoval && <span className="shrink-0 text-body-sm font-medium text-[#111827]">–</span>}
 										<span
-											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#111827] line-through' : 'text-[#374151]'}`}
 										>
 											{signer}
 										</span>
@@ -157,9 +153,6 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										<div
 											className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
 										>
-											<span
-												className={`h-3.5 w-3.5 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
-											/>
 											<span
 												className={`min-w-0 flex-1 break-all font-mono text-body-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
 												data-testid="e2e-added-signer-value"
