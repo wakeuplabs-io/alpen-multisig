@@ -47,7 +47,7 @@ export function WalletSessionControl({
 			<WalletPanel isOpen={panel.isOpen} onClose={panel.close} panelId={WALLET_PANEL_ID}>
 				<WalletPanelHeader
 					onClose={panel.close}
-					subtitle={`Session · ${sessionTimeLabel} · ${signerLabel}`}
+					subtitle={`Session · ${sessionTimeLabel}`}
 					isWatchOnly={panel.isWatchOnly}
 				/>
 				<WalletPanelContent
