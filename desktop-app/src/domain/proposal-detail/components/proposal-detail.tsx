@@ -132,12 +132,6 @@ export function ProposalDetail({
 	const [showImportModal, setShowImportModal] = useState(false)
 	const title = deriveProposalTitle(proposal, decodedData)
 
-	const signaturesJson = JSON.stringify(
-		proposal.signatures.map((s) => ({ signerPubkey: s.signerPubkey, signatureHex: s.signatureHex })),
-		null,
-		2,
-	)
-
 	function handleCopyBundle() {
 		void writeClipboard(JSON.stringify(proposal, null, 2)).then(() => {
 			setBundleCopied(true)
@@ -190,12 +184,6 @@ export function ProposalDetail({
 						<p className="m-0 mt-3 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
 							<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
 							Quorum reached — ready to send
-							<span
-								className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
-								title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
-							>
-								?
-							</span>
 						</p>
 					)}
 				</div>
@@ -292,7 +280,6 @@ export function ProposalDetail({
 					<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
 						Approvals · {collectedSignatures} of {requiredSignatures}
 					</p>
-					{proposal.signatures.length > 0 && <CopyButton text={signaturesJson} label="Copy signatures" />}
 				</div>
 				<div className="divide-y divide-[#f3f4f6]">
 					{/* Signed rows — from proposal.signatures */}
@@ -347,10 +334,12 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Commit TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
+								<span
+									className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]"
+									title={proposal.commitTxid}
+								>
 									{proposal.commitTxid}
 								</span>
-								<CopyButton text={proposal.commitTxid} />
 							</div>
 						</div>
 					)}
@@ -358,10 +347,12 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Reveal TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
+								<span
+									className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]"
+									title={proposal.revealTxid}
+								>
 									{proposal.revealTxid}
 								</span>
-								<CopyButton text={proposal.revealTxid} />
 							</div>
 						</div>
 					)}
