@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { LogOutMutedIcon } from '@/assets/icons'
 import { ManualImportForm } from '@/domain/manual-proposal/components/manual-import-form'
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
@@ -29,6 +29,7 @@ type LocationState = { prefill?: ManualBundleJson }
 
 export function ManualProposalScreen() {
 	const location = useLocation()
+	const navigate = useNavigate()
 	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const prefill = (location.state as LocationState | null)?.prefill ?? null
 	// `null` until presets load: the broadcast step stays blocked so we never fall back to a silent default rate.
@@ -106,6 +107,14 @@ export function ManualProposalScreen() {
 				}
 			>
 				<div className="mx-auto w-full max-w-190">
+					<button
+						type="button"
+						className="mb-3 inline-flex items-center gap-1 text-body text-[#666] transition hover:text-[#0a0a0a]"
+						onClick={() => navigate(-1)}
+					>
+						<span aria-hidden="true">←</span>
+						Back
+					</button>
 					<h1 className="m-0 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 						Manual execution
 					</h1>
