@@ -30,6 +30,10 @@ jobs:
               - 'e2e-tests/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
+              # Root npm manifest/lockfile drive `npm ci` and the `npm audit` gate,
+              # so dependency-only changes must still run the frontend job.
+              - 'package.json'
+              - 'package-lock.json'
               - '.github/**'
 
   rust:
