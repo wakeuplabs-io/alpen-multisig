@@ -514,12 +514,6 @@ function ProposalCard({
 					<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
 						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
 						Quorum reached — ready to send
-						<span
-							className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
-							title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
-						>
-							?
-						</span>
 					</p>
 					<div className="flex shrink-0 items-center gap-2">
 						{signButton}
