@@ -76,7 +76,7 @@ export function AuthenticateSessionPhase({
 				</p>
 				<div className="mt-3 grid gap-3">
 					<div>
-						<p className="m-0 text-label text-[#9ca3af]">Authority</p>
+						<p className="m-0 text-label text-[#9ca3af]">Multisig</p>
 						<p className="m-0 mt-1 text-body font-medium text-[#111827]">{authorityLabel}</p>
 					</div>
 					<div>

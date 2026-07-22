@@ -59,11 +59,11 @@ export function AuthoritySelectionPhase({
 			</div>
 
 			<h1 className="m-0 font-display text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
-				Select authority
+				Select multisig
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Choose which governance authority you are acting as. Alpen will verify that your selected address is a
-				registered signer before advancing.
+				Choose which multisig you are acting as. The application will verify that your selected Admin ID is a registered
+				signer before advancing.
 			</p>
 
 			<div className="mt-5 space-y-3">
@@ -149,9 +149,9 @@ export function AuthoritySelectionPhase({
 			<ScreenBottomBar
 				left={
 					<>
-						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Authority</p>
+						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Multisig</p>
 						<p className="m-0 mt-1 text-body text-[#334155]">
-							{selectedOption ? selectedOption.label : 'Select an authority from the list above'}
+							{selectedOption ? selectedOption.label : 'Select a multisig from the list above'}
 						</p>
 					</>
 				}
