@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useState, useMemo, useCallback } from 'react'
 import type {
 	PendingBlockPayoutTx,
@@ -154,7 +155,7 @@ export function useBlockPayouts(): BlockPayoutsHook {
 		(txId: string) => {
 			const tx = rawPending.find((t) => t.id === txId)
 			if (!tx) return
-			void navigator.clipboard.writeText(tx.signatures.join('\n'))
+			void writeClipboard(tx.signatures.join('\n'))
 			showToast('Signatures copied to clipboard.')
 		},
 		[rawPending, showToast],
@@ -171,7 +172,7 @@ export function useBlockPayouts(): BlockPayoutsHook {
 		(txId: string) => {
 			const tx = pastTxs.find((t) => t.id === txId)
 			if (!tx) return
-			void navigator.clipboard.writeText(tx.rawTx)
+			void writeClipboard(tx.rawTx)
 			showToast('Transaction copied to clipboard.')
 		},
 		[pastTxs, showToast],

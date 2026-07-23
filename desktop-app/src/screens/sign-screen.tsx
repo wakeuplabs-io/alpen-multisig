@@ -10,8 +10,10 @@ import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { useCurrentThreshold } from '@/domain/sign-proposal/hooks/use-current-threshold'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { deviceCopy } from '@/lib/device-copy'
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -73,6 +75,10 @@ export function SignScreen() {
 	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
 		proposal?.seqNo ?? null,
 		decodedActionHex || null,
+	)
+	const currentThreshold = useCurrentThreshold(
+		authorityFromRole(selectedRole),
+		decodedAction?.kind === 'multisig_update',
 	)
 	const deviceDisplay = deviceSigningDisplay(adapter.vendor, {
 		message: deviceMessage,
@@ -215,7 +221,7 @@ export function SignScreen() {
 			return
 		}
 		try {
-			await navigator.clipboard.writeText(sighashHex)
+			await writeClipboard(sighashHex)
 			setCopyFeedbackVisible(true)
 			setTimeout(() => setCopyFeedbackVisible(false), 450)
 		} catch (error) {
@@ -350,6 +356,7 @@ export function SignScreen() {
 							proposalTitle={proposalTitle}
 							decodedAction={decodedAction}
 							sighashHex={sighashHex}
+							currentThreshold={currentThreshold}
 							deviceDisplay={deviceDisplay}
 							signResult={signResult}
 							isSigning={isSigning}

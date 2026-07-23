@@ -1,8 +1,8 @@
+import { CopyButton } from '@/components/copy-button'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
-import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
-import { useState } from 'react'
+import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import {
 	countSignersAfterUpdate,
 	normalizeSignerKey,
@@ -29,26 +29,6 @@ type Props = {
 	currentSigners: string[]
 	currentThreshold: number
 	createdProposal: Proposal | null
-}
-
-function CopyButton({ text }: { text: string }) {
-	const [copied, setCopied] = useState(false)
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 1500)
-		})
-	}
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="flex shrink-0 items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-white px-3 py-1.5 text-label font-medium text-[#374151] hover:bg-[#f9fafb]"
-		>
-			<CopyClipboardIcon width={13} height={13} />
-			{copied ? 'Copied!' : 'Copy'}
-		</button>
-	)
 }
 
 export function CreateProposalPreview({

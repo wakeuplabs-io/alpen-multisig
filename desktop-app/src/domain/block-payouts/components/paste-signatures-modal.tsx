@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
 import type { PasteResult } from '../hooks/use-block-payouts'
 
@@ -29,7 +30,7 @@ export function PasteSignaturesModal({ txId, onSubmit, onClose }: Props) {
 	const errorMessage = result && !result.ok ? buildErrorMessage(result.invalidSignatures) : null
 
 	function handleCopyError() {
-		if (errorMessage) void navigator.clipboard.writeText(errorMessage)
+		if (errorMessage) void writeClipboard(errorMessage)
 	}
 
 	return (
