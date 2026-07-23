@@ -4,6 +4,7 @@ import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { deviceCopy } from '@/lib/device-copy'
+import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {
@@ -13,6 +14,9 @@ type SignProposalViewProps = {
 	proposalTitle: string
 	decodedAction: DecodedAction | null
 	sighashHex: string
+	/** On-chain threshold for this authority, or null while unknown — decides whether
+	 * the proposal's threshold counts as a change (#423). */
+	currentThreshold: number | null
 	/** What the connected device displays for this signature (Ledger hash / Trezor text). */
 	deviceDisplay: DeviceSigningDisplay
 	signResult: SignSighashResult | null
@@ -32,25 +36,34 @@ function shortenHex(hex: string) {
 	return `${cleanHex.slice(0, 20)}...${cleanHex.slice(-20)}`
 }
 
-function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'multisig_update' }> }) {
+function MultisigUpdateDetails({
+	action,
+	currentThreshold,
+}: {
+	action: Extract<DecodedAction, { kind: 'multisig_update' }>
+	currentThreshold: number | null
+}) {
+	const changes = multisigUpdateChanges(action, currentThreshold)
 	return (
 		<div className="mt-5">
 			<p className="m-0 text-mono-sm font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
 				Multisig configuration change
 			</p>
 			<div className="mt-2 grid gap-3">
-				<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2.5">
-					<span className="text-label text-[#6b7280]">New threshold</span>
-					<span className="font-mono text-body-sm font-semibold text-[#111827]">{action.newThreshold}</span>
-				</div>
+				{changes.showThreshold && (
+					<div className="flex items-center justify-between rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2.5">
+						<span className="text-label text-[#6b7280]">New threshold</span>
+						<span className="font-mono text-body-sm font-semibold text-[#111827]">{changes.newThreshold}</span>
+					</div>
+				)}
 
-				{action.addKeys.length > 0 && (
+				{changes.addKeys.length > 0 && (
 					<div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#16a34a]">
-							Members to add · {action.addKeys.length}
+							Members to add · {changes.addKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
-							{action.addKeys.map((key) => (
+							{changes.addKeys.map((key) => (
 								<li key={key}>
 									<code className="block break-all font-mono text-mono-sm leading-5 text-[#166534]">{key}</code>
 								</li>
@@ -59,13 +72,13 @@ function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { ki
 					</div>
 				)}
 
-				{action.removeKeys.length > 0 && (
+				{changes.removeKeys.length > 0 && (
 					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#dc2626]">
-							Members to remove · {action.removeKeys.length}
+							Members to remove · {changes.removeKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
-							{action.removeKeys.map((key) => (
+							{changes.removeKeys.map((key) => (
 								<li key={key}>
 									<code className="block break-all font-mono text-mono-sm leading-5 text-[#991b1b]">{key}</code>
 								</li>
@@ -74,8 +87,14 @@ function MultisigUpdateDetails({ action }: { action: Extract<DecodedAction, { ki
 					</div>
 				)}
 
-				{action.addKeys.length === 0 && action.removeKeys.length === 0 && (
+				{changes.showThreshold && changes.addKeys.length === 0 && changes.removeKeys.length === 0 && (
 					<p className="m-0 text-label text-[#9ca3af]">Threshold-only change — no members added or removed.</p>
+				)}
+
+				{!changes.hasAnyChange && (
+					<p className="m-0 text-label text-[#9ca3af]">
+						This proposal does not change the signer set or the threshold.
+					</p>
 				)}
 			</div>
 		</div>
@@ -116,6 +135,7 @@ export function SignProposalView({
 	proposalTitle,
 	decodedAction,
 	sighashHex,
+	currentThreshold,
 	deviceDisplay,
 	signResult,
 	isSigning,
@@ -138,7 +158,7 @@ export function SignProposalView({
 			</div>
 
 			{decodedAction === null ? null : decodedAction.kind === 'multisig_update' ? (
-				<MultisigUpdateDetails action={decodedAction} />
+				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
 			) : (

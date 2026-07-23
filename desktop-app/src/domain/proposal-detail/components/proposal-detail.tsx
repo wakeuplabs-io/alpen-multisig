@@ -1,3 +1,4 @@
+import { CopyButton } from '@/components/copy-button'
 import { useState } from 'react'
 import type { Proposal, ProposalStatus } from '@/api/proposals'
 import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
@@ -24,28 +25,6 @@ type Props = {
 	onBroadcast: () => void
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
 	onManualExecute?: () => void
-}
-
-function CopyButton({ text, label }: { text: string; label?: string }) {
-	const [copied, setCopied] = useState(false)
-
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		})
-	}
-
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-		>
-			<CopyClipboardIcon width={12} height={12} />
-			{copied ? 'Copied!' : (label ?? 'Copy')}
-		</button>
-	)
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -296,14 +275,7 @@ export function ProposalDetail({
 										YOU
 									</span>
 								)}
-								<button
-									type="button"
-									title="Copy signature"
-									className="shrink-0 rounded-md p-1 text-[#9ca3af] transition hover:text-[#6b7280]"
-									onClick={() => void navigator.clipboard.writeText(sig.signatureHex)}
-								>
-									<CopyClipboardIcon width={13} height={13} />
-								</button>
+								<CopyButton text={sig.signatureHex} variant="icon" />
 								<span className="shrink-0 text-label text-[#6b7280]">Signed</span>
 							</div>
 						)

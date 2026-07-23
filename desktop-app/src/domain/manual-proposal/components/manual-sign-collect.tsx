@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
 import type { ActionType, Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/assets/icons'
@@ -72,7 +73,7 @@ export function ManualSignCollect({
 	}
 
 	function handleCopyBundle() {
-		void navigator.clipboard.writeText(JSON.stringify(bundle, null, 2)).then(() => {
+		void writeClipboard(JSON.stringify(bundle, null, 2)).then(() => {
 			setBundleCopied(true)
 			setTimeout(() => setBundleCopied(false), 2000)
 		})

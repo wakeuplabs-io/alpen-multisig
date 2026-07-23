@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { CopyClipboardIcon } from '@/assets/icons'
+import { CopyButton } from '@/components/copy-button'
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
@@ -20,28 +19,6 @@ const STEPS: Step[] = [
 
 /** Commit (0) + Reveal (1) are broadcast together as one package. */
 const BROADCAST_GROUP_LAST_INDEX = 1
-
-function CopyButton({ text }: { text: string }) {
-	const [copied, setCopied] = useState(false)
-
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		})
-	}
-
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-		>
-			<CopyClipboardIcon width={12} height={12} />
-			{copied ? 'Copied!' : 'Copy'}
-		</button>
-	)
-}
 
 function TxidRow({ label, txid }: { label: string; txid: string }) {
 	return (

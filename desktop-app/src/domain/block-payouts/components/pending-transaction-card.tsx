@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import type { PendingBlockPayoutTx } from '../model/block-payouts.types'
 import { ConflictingInputIcon } from './conflicting-input-icon'
 
@@ -40,7 +41,7 @@ export function PendingTransactionCard({ tx, onSign, onPasteSignatures, onExport
 	const hasQuorum = tx.signaturesReceived >= tx.signaturesRequired
 
 	function handleCopyId() {
-		void navigator.clipboard.writeText(tx.id)
+		void writeClipboard(tx.id)
 	}
 
 	return (
