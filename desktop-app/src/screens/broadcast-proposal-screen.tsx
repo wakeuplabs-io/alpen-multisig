@@ -145,6 +145,7 @@ export function BroadcastProposalScreen() {
 						<BroadcastDetailsCard
 							bundle={bundle}
 							proposal={proposal}
+							walletVendor={adapter.vendor}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 							canSign={canSign}

@@ -165,6 +165,7 @@ jobs:
           npm run test:model-network-from-path --workspace desktop-app
           npm run test:model-admin-id-presentation --workspace desktop-app
           npm run test:lib-device-signing-display --workspace desktop-app
+          npm run test:lib-device-copy --workspace desktop-app
           npm run test:architecture --workspace desktop-app
 
       - name: Wallet adapter + connect-path contract tests

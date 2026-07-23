@@ -3,6 +3,7 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { deviceCopy } from '@/lib/device-copy'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
 
 type SignProposalViewProps = {
@@ -21,19 +22,6 @@ type SignProposalViewProps = {
 	walletVendor: WalletVendor
 	onCopySighash: () => void
 	onSign: () => void
-}
-
-function vendorLabel(vendor: WalletVendor): string {
-	switch (vendor) {
-		case 'trezor':
-			return 'Trezor'
-		case 'ledger':
-			return 'Ledger'
-		case 'mnemonic':
-			return 'Software Wallet'
-		case 'mock':
-			return 'Mock'
-	}
 }
 
 function shortenHex(hex: string) {
@@ -137,7 +125,7 @@ export function SignProposalView({
 	onCopySighash,
 	onSign,
 }: SignProposalViewProps) {
-	const label = vendorLabel(walletVendor)
+	const { label, isHardware } = deviceCopy(walletVendor)
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-bg-surface p-4">
@@ -182,7 +170,9 @@ export function SignProposalView({
 						<UsbSessionDefaultIcon width={13} height={13} className="text-accent" />
 					</div>
 					<div className="min-w-0 flex-1">
-						<p className="m-0 text-body font-medium text-[#111827]">Connect your {label} and confirm on device</p>
+						<p className="m-0 text-body font-medium text-[#111827]">
+							{isHardware ? `Connect your ${label} and confirm on device` : `Sign with your ${label}`}
+						</p>
 						<p className="m-0 mt-1 text-label text-[#6b7280]">Review the action details above before approving.</p>
 					</div>
 				</div>

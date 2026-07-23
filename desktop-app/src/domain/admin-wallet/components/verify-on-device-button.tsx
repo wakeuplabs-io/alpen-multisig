@@ -1,6 +1,7 @@
 import type { HwDeviceType, VerifyScriptType } from '../model/hw-device'
 import { ShieldCheckMutedIcon, CheckEmeraldIcon, AlertTriangleIcon } from '@/assets/icons'
 import { useVerifyOnDevice } from '../hooks/use-verify-on-device'
+import { deviceCopy } from '@/lib/device-copy'
 
 export type VerifyOnDeviceButtonProps = {
 	deviceType: HwDeviceType
@@ -9,11 +10,6 @@ export type VerifyOnDeviceButtonProps = {
 	scriptType: VerifyScriptType
 	/** Short label of what is being verified (e.g. 'receive address', 'Admin ID'). */
 	subject: string
-}
-
-const DEVICE_LABEL: Record<HwDeviceType, string> = {
-	trezor: 'Trezor',
-	ledger: 'Ledger',
 }
 
 /**
@@ -49,7 +45,7 @@ export function VerifyOnDeviceButton({
 				}`}
 			>
 				<ShieldCheckMutedIcon width={12} height={12} />
-				{isVerifying ? `Confirm on your ${DEVICE_LABEL[deviceType]}…` : 'Verify on device'}
+				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : 'Verify on device'}
 			</button>
 
 			{state.status === 'verified' && (
@@ -59,7 +55,7 @@ export function VerifyOnDeviceButton({
 				>
 					<CheckEmeraldIcon width={12} height={12} className="mt-px shrink-0" />
 					<span>
-						Confirmed the {subject} on your {DEVICE_LABEL[deviceType]}.
+						Confirmed the {subject} on your {deviceCopy(deviceType).label}.
 					</span>
 				</p>
 			)}

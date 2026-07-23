@@ -8,6 +8,7 @@ import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
+import type { WalletVendor } from '@/wallet/types'
 
 type AdminWalletInfoView = {
 	address: string
@@ -26,6 +27,8 @@ type Props = {
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
 	phase?: BroadcastPhase
+	/** Signer connected in this session — drives the device-specific broadcast prompt. */
+	walletVendor: WalletVendor
 	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
 	feeSelector?: ReactNode
 }
@@ -73,6 +76,7 @@ export function BroadcastDetailsCard({
 	syncError,
 	phase,
 	feeSelector,
+	walletVendor,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -83,7 +87,7 @@ export function BroadcastDetailsCard({
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 			{phase === 'awaiting-device' && (
 				<div className="border-b border-[#f3f4f6] p-6">
-					<BroadcastDevicePrompt />
+					<BroadcastDevicePrompt walletVendor={walletVendor} />
 				</div>
 			)}
 			{proposal && (
