@@ -1,4 +1,6 @@
 import type { Proposal } from '@/api/proposals'
+import type { WalletVendor } from '@/wallet/types'
+import { deviceCopy } from '@/lib/device-copy'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
 import { useState } from 'react'
 import {
@@ -22,6 +24,8 @@ type Props = {
 	newSequencerKeyHex: string
 	sighashHex: string | null
 	authorityLabel: string
+	/** Signer connected in this session — drives the device-specific confirmation copy. */
+	walletVendor: WalletVendor
 	currentSigners: string[]
 	currentThreshold: number
 	createdProposal: Proposal | null
@@ -61,10 +65,12 @@ export function CreateProposalPreview({
 	newSequencerKeyHex,
 	sighashHex,
 	authorityLabel,
+	walletVendor,
 	currentSigners,
 	currentThreshold,
 	createdProposal,
 }: Props) {
+	const signerCopy = deviceCopy(walletVendor)
 	const actionTypeLabel =
 		actionType === 'signer_update'
 			? 'Signer update'
@@ -255,11 +261,10 @@ export function CreateProposalPreview({
 					<UsbTridentIcon width={24} height={24} className="text-[#c2773b]" />
 				</div>
 				<div>
-					<p className="m-0 font-semibold text-[#111827]">Confirm on device</p>
-					<p className="m-0 mt-1 text-body text-[#6b7280]">
-						Your device shows the message it signs, not this sighash — Ledger displays its SHA-256 ("Message hash"),
-						Trezor the message text. Confirm that on the device before approving.
+					<p className="m-0 font-semibold text-[#111827]">
+						{signerCopy.isHardware ? 'Confirm on device' : 'Confirm before signing'}
 					</p>
+					<p className="m-0 mt-1 text-body text-[#6b7280]">{signerCopy.verifyHint}</p>
 				</div>
 			</div>
 		</div>

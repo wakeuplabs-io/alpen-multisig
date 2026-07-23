@@ -17,7 +17,7 @@ import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-se
 export function CancelProposalBroadcastScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
@@ -121,6 +121,7 @@ export function CancelProposalBroadcastScreen() {
 						<BroadcastDetailsCard
 							bundle={bundle}
 							proposal={proposal}
+							walletVendor={adapter.vendor}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 							targetQueued={targetQueued}

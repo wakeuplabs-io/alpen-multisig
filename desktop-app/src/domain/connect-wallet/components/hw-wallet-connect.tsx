@@ -7,6 +7,7 @@ import { AuthenticateSessionPhase } from '@/domain/connect-wallet/components/aut
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { ConnectPhase } from '@/domain/connect-wallet/components/connect-phase'
 import { SelectedPhase } from '@/domain/connect-wallet/components/selected-phase'
+import { deviceCopy } from '@/lib/device-copy'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
 import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mnemonic-signing-enabled'
@@ -132,7 +133,7 @@ export function HwWalletConnect({
 				authoritySelection.step === 'authenticate-session' && (
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
-						adapterLabel={walletVendor.charAt(0).toUpperCase() + walletVendor.slice(1)}
+						adapterLabel={deviceCopy(walletVendor).label}
 						signerAddress={state.selectedEntry.address}
 						compressedPublicKey={state.selectedEntry.publicKeyHex}
 						isAuthenticating={authoritySelection.isAuthenticating}
@@ -149,6 +150,7 @@ export function HwWalletConnect({
 				<SelectedPhase
 					account={state.account}
 					selectedEntry={state.selectedEntry}
+					walletVendor={walletVendor}
 					isVerifyingAddress={state.isVerifyingAddress}
 					verifyMessage={state.verifyMessage}
 					onVerifyOnDevice={() => void actions.verifyOnDevice()}

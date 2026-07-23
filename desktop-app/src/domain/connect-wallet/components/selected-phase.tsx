@@ -1,7 +1,11 @@
-import type { HwAddressEntry, WalletAccountInfo } from '@/wallet/types'
+import type { HwAddressEntry, WalletAccountInfo, WalletVendor } from '@/wallet/types'
+import { deviceCopy } from '@/lib/device-copy'
+
 type Props = {
 	account: WalletAccountInfo
 	selectedEntry: HwAddressEntry
+	/** Signer being connected — drives the device-specific verification copy. */
+	walletVendor: WalletVendor
 	isVerifyingAddress: boolean
 	verifyMessage: string | null
 	onVerifyOnDevice: () => void
@@ -10,6 +14,7 @@ type Props = {
 export function SelectedPhase({
 	account: _account,
 	selectedEntry: _selectedEntry,
+	walletVendor,
 	isVerifyingAddress,
 	verifyMessage,
 	onVerifyOnDevice,
@@ -26,9 +31,7 @@ export function SelectedPhase({
 				</button>
 			</div>
 			{isVerifyingAddress && (
-				<p className="mt-4 text-[0.85rem] text-[#666]">
-					Check your Trezor screen and confirm the selected path/public key shown by the device.
-				</p>
+				<p className="mt-4 text-[0.85rem] text-[#666]">{deviceCopy(walletVendor).verifyOnDeviceHint}</p>
 			)}
 			{verifyMessage && (
 				<p

@@ -11,6 +11,7 @@ import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { deviceCopy } from '@/lib/device-copy'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -259,9 +260,7 @@ export function SignScreen() {
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Sign proposal
 				</h1>
-				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-					Review the payload, then confirm on your Trezor. Nothing is sent until you sign.
-				</p>
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{deviceCopy(adapter.vendor).reviewPrompt}</p>
 
 				{isLoading ? (
 					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-body text-[#6b7280]">

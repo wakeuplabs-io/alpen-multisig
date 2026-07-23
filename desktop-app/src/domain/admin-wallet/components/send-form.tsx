@@ -13,11 +13,7 @@ import { SendFeeRateControl } from './send-fee-rate-control'
 import { SendResultCard } from './send-result-card'
 
 import type { HwDeviceType } from '../model/hw-device'
-
-const DEVICE_LABEL: Record<HwDeviceType, string> = {
-	trezor: 'Trezor',
-	ledger: 'Ledger',
-}
+import { deviceCopy } from '@/lib/device-copy'
 
 export type SendFormProps = {
 	/** Watch-only sessions see the form disabled ("Hardware wallet required to sign"). */
@@ -259,7 +255,7 @@ export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendF
 					className="rounded-lg border border-[#ddd6fe] bg-[#faf9ff] px-3 py-2"
 					data-testid="e2e-wallet-send-confirm-on-device"
 				>
-					<p className="m-0 text-[12px] font-medium text-[#7c6cf0]">Confirm on your {DEVICE_LABEL[deviceType]}</p>
+					<p className="m-0 text-[12px] font-medium text-[#7c6cf0]">Confirm on your {deviceCopy(deviceType).label}</p>
 					<p className="m-0 mt-0.5 text-[11px] leading-[1.45] text-[#6b7280]">
 						Review the amount and destination on the device screen and approve. The prompt times out after about 3
 						minutes; rejecting on the device cancels the send and broadcasts nothing.
