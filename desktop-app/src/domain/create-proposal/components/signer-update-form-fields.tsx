@@ -154,6 +154,12 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 											className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
 										>
 											<span
+												className="shrink-0 rounded bg-[#f3f4f6] px-1.5 py-0.5 text-mono-sm font-semibold uppercase tracking-wider text-[#6b7280]"
+												data-testid="e2e-added-signer-new-tag"
+											>
+												New
+											</span>
+											<span
 												className={`min-w-0 flex-1 break-all font-mono text-body-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
 												data-testid="e2e-added-signer-value"
 											>
