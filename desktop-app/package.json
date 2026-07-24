@@ -19,6 +19,7 @@
     "test:get-account-xpub": "tsx src/wallet/__tests__/get-account-xpub.test.ts",
     "test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
     "test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
+    "test:model-balance-denomination": "tsx src/domain/admin-wallet/model/__tests__/balance-denomination.test.ts",
     "test:model-format-signed-sats": "tsx src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts",
     "test:model-format-unconfirmed-balance-line": "tsx src/domain/admin-wallet/model/__tests__/format-unconfirmed-balance-line.test.ts",
     "test:model-trunc-address": "tsx src/domain/admin-wallet/model/__tests__/trunc-address.test.ts",
