@@ -14,6 +14,8 @@
     "validate": "cargo fmt --check && npm run format:check --workspace desktop-app && cargo build --workspace --all-targets && cargo clippy --workspace --all-targets -- -D warnings"
   },
   "overrides": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.1",
+    "eslint": "^10.8.0",
+    "postcss": ">=8.5.18"
   }
 }

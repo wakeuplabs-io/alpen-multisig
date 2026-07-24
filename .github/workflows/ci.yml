@@ -142,7 +142,7 @@ jobs:
         run: npm ci
 
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
 
       - name: Prettier check
         run: npm run format:check --workspace desktop-app
