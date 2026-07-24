@@ -10,7 +10,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
-import { openWalletPanel, readReceiveAddress } from '../helpers/wallet-panel.mjs'
+import { openWalletPanel, readReceiveAddress, waitForWalletSyncDone } from '../helpers/wallet-panel.mjs'
 
 const BTC_ADDRESS_RE = /^(tb1|bcrt1|[123mn])[a-zA-HJ-NP-Z0-9]{25,62}$/
 
@@ -68,8 +68,12 @@ describe('Alpen Multisig — clipboard copy', () => {
 
 		await openWalletPanel()
 
-		const address = await readReceiveAddress()
-		expect(address).toMatch(BTC_ADDRESS_RE)
+		// The panel paints a cached receive address first and advances to the next unused
+		// one once the background sync lands (earlier specs consume addresses by funding
+		// them). Let the sync settle so the row is not mid-rotation when we click.
+		await waitForWalletSyncDone()
+
+		expect(await readReceiveAddress()).toMatch(BTC_ADDRESS_RE)
 
 		// A sentinel proves the assertion below is not passing on stale clipboard content.
 		const sentinel = `SENTINEL-${Date.now()}`
@@ -87,8 +91,14 @@ describe('Alpen Multisig — clipboard copy', () => {
 			timeoutMsg: 'the copy button never reached the system clipboard',
 		})
 
-		// The receive card copies a BIP-21 URI (bitcoin:<address>?...), so the address
-		// must be present in — not necessarily equal to — the clipboard contents.
-		expect(readSystemClipboard()).toContain(address)
+		// The card copies the bare address it is rendering at click time — deliberately not
+		// a BIP-21 URI (see build-receive-qr-value.ts). Compare against the address read
+		// back from the row instead of a snapshot taken earlier: a sync that rotates the
+		// receive address mid-test would otherwise fail the run on a stale expectation.
+		await browser.waitUntil(async () => readSystemClipboard() === (await readReceiveAddress()), {
+			timeout: 10000,
+			interval: 250,
+			timeoutMsg: 'clipboard should hold the receive address the row is showing',
+		})
 	})
 })
