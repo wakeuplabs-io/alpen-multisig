@@ -29,7 +29,8 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		reviewPrompt: 'Review the payload, then approve it on your Trezor. Nothing is submitted until you approve there.',
 		verifyHint:
 			'Your Trezor shows the message it signs, not this sighash — it renders the message text. Compare that text on the device before approving.',
-		verifyOnDeviceHint: 'Check your Trezor screen and confirm the selected path and public key shown by the device.',
+		verifyOnDeviceHint:
+			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
 	},
@@ -39,7 +40,8 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		reviewPrompt: 'Review the payload, then approve it on your Ledger. Nothing is submitted until you approve there.',
 		verifyHint:
 			'Your Ledger shows the message it signs, not this sighash — it renders the SHA-256 “Message hash”. Compare that value on the device before approving.',
-		verifyOnDeviceHint: 'Check your Ledger screen and confirm the selected path and public key shown by the device.',
+		verifyOnDeviceHint:
+			'Check your Ledger screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Ledger first registers the Admin Wallet policy, then shows the commit transaction. Press right on every screen until the app is done.',
 	},
@@ -50,7 +52,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		verifyHint:
 			'Your software wallet signs the message locally — there is no device screen to compare this sighash against.',
 		verifyOnDeviceHint:
-			'Your software wallet has no device screen — the path and public key shown here are the ones it will use.',
+			'Your software wallet has no device screen — the Admin ID shown here is the public key it will use.',
 		broadcastHint:
 			'The commit transaction is signed locally by your software wallet — no device confirmation is asked.',
 	},

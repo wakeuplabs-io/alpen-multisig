@@ -10,6 +10,7 @@ import { feeSats } from '@/domain/fee-selection/model/fee-rate'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
+import { truncateAdminId } from '@/lib/admin-id'
 import { DownloadButton } from '@/components/download-button'
 import { SessionChip } from '@/components/session-chip'
 import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
@@ -71,11 +72,7 @@ export function ManualProposalScreen() {
 		return <Navigate to="/" replace />
 	}
 
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: wallet.publicKeyHex
-			? `${wallet.publicKeyHex.slice(0, 10)}…${wallet.publicKeyHex.slice(-6)}`
-			: 'Unknown'
+	const signerLabel = wallet.publicKeyHex ? truncateAdminId(wallet.publicKeyHex) : 'Unknown'
 
 	const stepIndex = manual.step === 'import' ? 0 : manual.step === 'sign-collect' ? 1 : 2
 
@@ -361,7 +358,7 @@ export function ManualProposalScreen() {
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
-					adminId={wallet.addressSample}
+					adminId={wallet.publicKeyHex}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}

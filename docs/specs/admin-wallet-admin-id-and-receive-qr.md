@@ -109,6 +109,48 @@ All new code lives in existing locations and respects the dependency-direction r
 
 Dependency direction is preserved: components depend on pure model helpers and shared primitives; model helpers depend on nothing React/transport. The Admin ID reaches the panel by **prop drilling an existing value** (`addressSample`), not by adding a data dependency to `useWalletPanelData`.
 
+---
+
+## Update — feedback 2026-07-01 (#408, #409, #410, #412)
+
+Alpen corrected a requirement that this spec encoded from the pre-update PRD: **the Admin ID
+*is* the signer's compressed public key**, not the BIP-84 address derived from it. Everything
+below supersedes the "canonical BIP-84 auth address" framing used above.
+
+### What changed
+
+- **#408 / #412 — the Admin ID is the compressed public key everywhere.** The address rendering
+  and the separate "Compressed public key" block on the authenticate-session screen are gone; a
+  single `Admin ID` field carries the key. Same value in the wallet panel (`AdminIdRow`), the
+  session chip and the offline/manual screen. Presentation rules moved to `src/lib/admin-id.ts`
+  (shared by the connect flow and the Admin Wallet) and `isDisplayableAdminId` now validates a
+  compressed pubkey (33 bytes, `02`/`03`, optional `0x`) instead of "any non-placeholder string".
+  The safety caption changed accordingly: the Admin ID is a public key, **not** a payment address.
+- **#410 — order of the sign-in flow.** The Admin ID is now shown on the *multisig selection*
+  step (`ConnectAdminIdCard`), rendered while the canonical signer-set membership check is still
+  running. The signer verifies the identity the app derived before the app judges it.
+- The BIP-84 derivation itself is unchanged (`m/84'/…/73'/0/0`); only what the UI presents changed.
+
+### Device capability (#409) — the signer cannot see the raw key on the device
+
+Alpen asked for a button that displays the Admin ID **on the hardware signer's screen**.
+Neither supported device can render a raw compressed public key:
+
+| Device | What the API can display | Evidence |
+|---|---|---|
+| Trezor | `GetAddress` with `show_display = true` → an **address**; `GetPublicKey` with `show_display = true` → an **xpub** (base58 extended key, not the 33-byte hex) | `src-tauri/src/infrastructure/hw_wallet/trezor.rs` (`get_xpub`, `verify_address`) |
+| Ledger | `get_wallet_address(..., display = true)` → an **address** via a wallet policy; `get_extended_pubkey(path, display = true)` → an **xpub** | `src-tauri/src/infrastructure/hw_wallet/ledger.rs` (`verify_address_with`), `ledger_bitcoin_client` 0.6.2 |
+
+**Decision:** keep the existing verify-on-device affordance, which shows the **P2WPKH address
+derived from the same key and path**, and state that explicitly in the UI copy
+(`adminIdVerifyCaption` in `src/lib/admin-id.ts`, plus the per-vendor `verifyOnDeviceHint`).
+Confirming that address proves the device holds the key behind the displayed Admin ID; claiming
+the device "shows the Admin ID" would be false. Showing the xpub instead was rejected: it is a
+different value from the one on screen, so it cannot be compared visually.
+
+This is an app-level constraint imposed by the device firmware/APIs — it cannot be lifted from
+our side. Revisit if a vendor adds a pubkey-display screen.
+
 ## Out-of-scope follow-ups (tracked for the matrix)
 - §4.2 + §4.3.4.2 HW verify → **Phase 8**.
 - On merge, update [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md): §4.1 **FAIL → PASS**, §4.3.4.1 QR + click-to-copy **FAIL/PARTIAL → PASS** (HW-verify rows remain Phase 8).

@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { CreateProposalFormValues } from '../create-proposal.schema'
 import { normalizeSignerKey } from '../create-proposal.schema'
+import { compressedPubKeyHexPattern } from '@/lib/pubkey'
 
 export type ActionValidatorContext = {
 	data: CreateProposalFormValues
@@ -10,7 +11,7 @@ export type ActionValidatorContext = {
 
 export type ActionValidator = (context: ActionValidatorContext) => void
 
-export const compressedPubKeyHexPattern = /^(?:0x)?(?:02|03)[0-9a-fA-F]{64}$/
+export { compressedPubKeyHexPattern }
 export const EVEN_PUBKEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/
 export const U32_MAX = 4_294_967_295
 

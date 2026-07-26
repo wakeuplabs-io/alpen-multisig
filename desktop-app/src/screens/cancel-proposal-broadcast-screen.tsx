@@ -66,7 +66,7 @@ export function CancelProposalBroadcastScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						addressSample={wallet.addressSample}
+						adminId={wallet.publicKeyHex}
 					/>
 					<button
 						type="button"

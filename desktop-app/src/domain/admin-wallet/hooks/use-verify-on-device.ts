@@ -3,7 +3,10 @@ import { verifyAddressOnDevice } from '@/api/admin-wallet'
 import type { HwDeviceType, VerifyScriptType } from '@/api/admin-wallet'
 
 export type VerifyOnDeviceState =
-	{ status: 'idle' } | { status: 'verifying' } | { status: 'verified' } | { status: 'failed'; message: string }
+	| { status: 'idle' }
+	| { status: 'verifying' }
+	| { status: 'verified' }
+	| { status: 'failed'; message: string }
 
 type Params = {
 	deviceType: HwDeviceType
