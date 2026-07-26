@@ -10,6 +10,12 @@ export type VerifyOnDeviceButtonProps = {
 	scriptType: VerifyScriptType
 	/** Short label of what is being verified (e.g. 'receive address', 'Admin ID'). */
 	subject: string
+	/**
+	 * Optional always-visible note explaining what the device actually renders.
+	 * Needed for the Admin ID, where the device shows the address derived from
+	 * the same key and path rather than the raw public key (see issue #409).
+	 */
+	caption?: string
 }
 
 /**
@@ -23,6 +29,7 @@ export function VerifyOnDeviceButton({
 	derivationPath,
 	scriptType,
 	subject,
+	caption,
 }: VerifyOnDeviceButtonProps) {
 	const { state, verify } = useVerifyOnDevice({ deviceType, network })
 	const isVerifying = state.status === 'verifying'
@@ -47,6 +54,8 @@ export function VerifyOnDeviceButton({
 				<ShieldCheckMutedIcon width={12} height={12} />
 				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : 'Verify on device'}
 			</button>
+
+			{caption && <p className="mt-1.5 text-[11px] leading-[1.45] text-[#6b7280]">{caption}</p>}
 
 			{state.status === 'verified' && (
 				<p

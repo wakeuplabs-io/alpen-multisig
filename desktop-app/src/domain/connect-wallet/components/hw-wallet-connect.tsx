@@ -120,6 +120,7 @@ export function HwWalletConnect({
 					<AuthoritySelectionPhase
 						selectedAuthorityId={authoritySelection.selectedAuthorityId}
 						options={resolvedOptions}
+						adminId={state.selectedEntry.publicKeyHex}
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
@@ -134,7 +135,6 @@ export function HwWalletConnect({
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
 						adapterLabel={deviceCopy(walletVendor).label}
-						signerAddress={state.selectedEntry.address}
 						compressedPublicKey={state.selectedEntry.publicKeyHex}
 						isAuthenticating={authoritySelection.isAuthenticating}
 						authError={authoritySelection.authError}

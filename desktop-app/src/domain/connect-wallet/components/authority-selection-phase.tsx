@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { AuthRole } from '@/types'
 import { AuthorityShieldIcon, AuthorityLayersIcon, AuthorityServerIcon } from '@/assets/icons'
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
+import { ConnectAdminIdCard } from '@/domain/connect-wallet/components/connect-admin-id-card'
 
 export type AuthorityOption = {
 	id: string
@@ -16,6 +17,8 @@ export type AuthorityOption = {
 type Props = {
 	selectedAuthorityId: string | null
 	options: AuthorityOption[]
+	/** Admin ID derived at connect — shown before the membership check runs (#410). */
+	adminId: string | undefined
 	isChecking?: boolean
 	onSelectAuthority: (authorityId: string) => void
 	onContinueToAuthenticate: () => void
@@ -31,6 +34,7 @@ const AUTHORITY_ICONS: Record<string, ReactNode> = {
 export function AuthoritySelectionPhase({
 	selectedAuthorityId,
 	options,
+	adminId,
 	isChecking = false,
 	onSelectAuthority,
 	onContinueToAuthenticate,
@@ -62,9 +66,13 @@ export function AuthoritySelectionPhase({
 				Select multisig
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Choose which multisig you are acting as. The application will verify that your selected Admin ID is a registered
-				signer before advancing.
+				This is the Admin ID your signer derived. Check it first, then choose which multisig you are acting as — the
+				application verifies that this Admin ID is a registered signer before advancing.
 			</p>
+
+			<div className="mt-5">
+				<ConnectAdminIdCard adminId={adminId} />
+			</div>
 
 			<div className="mt-5 space-y-3">
 				{options.map((option) => {

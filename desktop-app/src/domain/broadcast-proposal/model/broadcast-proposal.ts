@@ -1,7 +1,14 @@
 import type { BroadcastStatus } from '@/api/proposals'
 
 export type BroadcastPhase =
-	'idle' | 'preparing' | 'confirming' | 'awaiting-device' | 'broadcasting' | 'awaiting-confirmation' | 'done' | 'error'
+	| 'idle'
+	| 'preparing'
+	| 'confirming'
+	| 'awaiting-device'
+	| 'broadcasting'
+	| 'awaiting-confirmation'
+	| 'done'
+	| 'error'
 
 /**
  * Resolve the post-submit phase from the authoritative broadcast/proposal status.

@@ -49,7 +49,7 @@ export function CreateProposalScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						addressSample={wallet.addressSample}
+						adminId={wallet.publicKeyHex}
 					/>
 					<button
 						type="button"

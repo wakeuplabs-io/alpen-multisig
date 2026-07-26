@@ -2,6 +2,7 @@ import type { HwDeviceType } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
 import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
+import { adminIdVerifyCaption } from '@/lib/admin-id'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 
 /** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.2). */
@@ -18,17 +19,17 @@ export type AdminIdVerifyContext = {
 }
 
 export type AdminIdRowProps = {
-	/** Canonical BIP-84 auth address (wallet.addressSample), or undefined when unknown. */
+	/** The Admin ID: the signer's compressed public key (#408), or undefined when unknown. */
 	adminId: string | undefined
 	/** When set, renders a "Verify on device" affordance for the Admin ID (P2WPKH). */
 	verify?: AdminIdVerifyContext
 }
 
 /**
- * Admin ID card (PRD §4.1): shows the signer's authentication identity in full
- * so it can be visually verified, with copy-to-clipboard. Styled as identity —
- * NOT a fundable address — and carries an explicit "do not send funds" caption,
- * since the Admin ID must never receive BTC or sign transactions.
+ * Admin ID card (PRD §4.1, corrected by issue #408): shows the signer's
+ * authentication identity — the compressed public key — in full so it can be
+ * visually verified, with copy-to-clipboard. It is an identity, NOT an address:
+ * it must never receive BTC or sign Bitcoin transactions.
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const label = (
@@ -79,6 +80,7 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 					derivationPath={verify.derivationPath}
 					scriptType="p2wpkh"
 					subject="Admin ID"
+					caption={adminIdVerifyCaption(verify.deviceType)}
 				/>
 			)}
 		</div>

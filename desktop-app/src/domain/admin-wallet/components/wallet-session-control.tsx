@@ -1,23 +1,21 @@
 import { SessionChip } from '@/components/session-chip'
+import { truncateAdminId } from '@/lib/admin-id'
 import type { WalletPanelData } from '../hooks/use-wallet-panel-data'
 import { WalletPanel, WALLET_PANEL_ID } from './wallet-panel'
 import { WalletPanelHeader } from './wallet-panel-header'
 import { WalletPanelContent } from './wallet-panel-content'
 
-const SIGNER_LABEL_PREFIX = 10
-const SIGNER_LABEL_SUFFIX = 8
-
-function formatSignerLabel(addressSample: string | undefined): string {
-	if (!addressSample) return 'Unknown'
-	return `${addressSample.slice(0, SIGNER_LABEL_PREFIX)}…${addressSample.slice(-SIGNER_LABEL_SUFFIX)}`
+function formatSignerLabel(adminId: string | undefined): string {
+	if (!adminId) return 'Unknown'
+	return truncateAdminId(adminId)
 }
 
 export type WalletSessionControlProps = {
 	panel: WalletPanelData
 	sessionTimeLabel: string
 	sessionWarning: boolean
-	/** Truncated signer address shown in the chip and panel subtitle. */
-	addressSample: string | undefined
+	/** Admin ID — the signer's compressed public key (#408); truncated in the chip. */
+	adminId: string | undefined
 }
 
 /**
@@ -26,13 +24,8 @@ export type WalletSessionControlProps = {
  * header flow). Place inside `ScreenShell`'s `headerContent` alongside the
  * authority badge and disconnect button.
  */
-export function WalletSessionControl({
-	panel,
-	sessionTimeLabel,
-	sessionWarning,
-	addressSample,
-}: WalletSessionControlProps) {
-	const signerLabel = formatSignerLabel(addressSample)
+export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, adminId }: WalletSessionControlProps) {
+	const signerLabel = formatSignerLabel(adminId)
 
 	return (
 		<>
@@ -52,7 +45,7 @@ export function WalletSessionControl({
 				/>
 				<WalletPanelContent
 					disabledError={panel.disabledError}
-					adminId={addressSample}
+					adminId={adminId}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
