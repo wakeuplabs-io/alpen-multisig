@@ -16,6 +16,11 @@ export type AdminIdVerifyContext = {
 	 * rejects m/84'/1'/73', stays happy).
 	 */
 	derivationPath: string
+	/**
+	 * Address the device will render for this key and path — the only thing a hardware
+	 * signer can display (#409). Shown next to the key so the comparison is possible at all.
+	 */
+	address: string | undefined
 }
 
 export type AdminIdRowProps = {
@@ -74,14 +79,31 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>
 			{verify && (
-				<VerifyOnDeviceButton
-					deviceType={verify.deviceType}
-					network={verify.network}
-					derivationPath={verify.derivationPath}
-					scriptType="p2wpkh"
-					subject="Admin ID"
-					caption={adminIdVerifyCaption(verify.deviceType)}
-				/>
+				<>
+					{verify.address && (
+						<div className="mt-3 rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2">
+							<p className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Address on device</p>
+							<p
+								className="mt-1 break-all font-mono text-label leading-[1.45] text-[#374151]"
+								data-testid="e2e-wallet-admin-id-verify-address"
+							>
+								{verify.address}
+							</p>
+							<p className="mt-1 text-mono-sm leading-[1.45] text-[#9ca3af]">
+								{adminIdVerifyCaption(verify.deviceType)} Compare this address, character for character, with the one on
+								the device screen.
+							</p>
+						</div>
+					)}
+					<VerifyOnDeviceButton
+						deviceType={verify.deviceType}
+						network={verify.network}
+						derivationPath={verify.derivationPath}
+						scriptType="p2wpkh"
+						subject="Admin ID"
+						expectedAddress={verify.address}
+					/>
+				</>
 			)}
 		</div>
 	)

@@ -248,6 +248,7 @@ export function SignScreen() {
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
 						adminId={wallet.publicKeyHex}
+						adminIdAddress={wallet.addressSample}
 					/>
 					<button
 						type="button"

@@ -142,14 +142,34 @@ Neither supported device can render a raw compressed public key:
 | Ledger | `get_wallet_address(..., display = true)` → an **address** via a wallet policy; `get_extended_pubkey(path, display = true)` → an **xpub** | `src-tauri/src/infrastructure/hw_wallet/ledger.rs` (`verify_address_with`), `ledger_bitcoin_client` 0.6.2 |
 
 **Decision:** keep the existing verify-on-device affordance, which shows the **P2WPKH address
-derived from the same key and path**, and state that explicitly in the UI copy
-(`adminIdVerifyCaption` in `src/lib/admin-id.ts`, plus the per-vendor `verifyOnDeviceHint`).
-Confirming that address proves the device holds the key behind the displayed Admin ID; claiming
-the device "shows the Admin ID" would be false. Showing the xpub instead was rejected: it is a
-different value from the one on screen, so it cannot be compared visually.
+derived from the same key and path**, and make that comparison actually possible. Confirming that
+address proves the device holds the key behind the displayed Admin ID — `address = bech32(hash160(pubkey))`
+is a deterministic function of that exact key. Claiming the device "shows the Admin ID" would be
+false. Showing the xpub instead was rejected: it is a different value from the one on screen, so it
+cannot be compared visually.
 
 This is an app-level constraint imposed by the device firmware/APIs — it cannot be lifted from
 our side. Revisit if a vendor adds a pubkey-display screen.
+
+### How the verification works in the UI
+
+For **hardware sessions only** (`AdminIdRow` renders this block only when a `verify` context exists):
+
+1. Under the Admin ID key, the panel shows an **"Address on device"** block with the address derived
+   from that key (`wallet.addressSample`), plus the per-vendor note from `adminIdVerifyCaption`
+   (`src/lib/admin-id.ts`). Without it the signer would have a hex on screen and a `bc1q…` on the
+   device, with nothing to compare.
+2. `verify_address_on_device` now **returns the exact string the device rendered** — Trezor's
+   `GetAddress` and Ledger's `get_wallet_address` both already produce it; it used to be discarded.
+3. `useVerifyOnDevice` compares it against the expected address (`matchesDeviceAddress` — trims and
+   lowercases, since bech32 is case-insensitive per BIP-173) and lands on a dedicated **`mismatch`**
+   state, surfaced as a security alarm rather than a transport error.
+
+`wallet.addressSample` is device-accurate for the Admin ID without re-encoding: the adapters derive
+it with the HRP of the path's own coin type (`trezor.rs` → `KnownHrp::Mainnet` for coin `0'`;
+`ledger.rs` → `hrp_from_path`, `Testnets` for coin `1'`), which is exactly what each device renders.
+This is unlike the *receive* address, which comes from BDK on the real network (`bcrt1…`) and must be
+re-encoded by `device_verify_address` (`src-tauri/src/commands/admin_wallet.rs`).
 
 ## Out-of-scope follow-ups (tracked for the matrix)
 - §4.2 + §4.3.4.2 HW verify → **Phase 8**.

@@ -14,8 +14,10 @@ import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
 	disabledError: AdminWalletError | null
-	/** Canonical BIP-84 Admin ID (auth address) shown at the top of the panel (PRD §4.1). */
+	/** Admin ID — the signer's compressed public key — shown at the top of the panel (PRD §4.1, #408). */
 	adminId: string | undefined
+	/** Address derived from the Admin ID key: what a hardware signer renders when verifying (#409). */
+	adminIdAddress: string | undefined
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	isBalanceLoading: boolean
@@ -52,6 +54,7 @@ export type WalletPanelContentProps = {
 export function WalletPanelContent({
 	disabledError,
 	adminId,
+	adminIdAddress,
 	confirmedBalanceSats,
 	unconfirmedBalanceSats,
 	isBalanceLoading,
@@ -123,6 +126,7 @@ export function WalletPanelContent({
 									deviceType: hwDeviceType,
 									network: networkFromPath(adminIdDerivationPath),
 									derivationPath: adminIdDerivationPath,
+									address: adminIdAddress,
 								}
 							: undefined
 					}

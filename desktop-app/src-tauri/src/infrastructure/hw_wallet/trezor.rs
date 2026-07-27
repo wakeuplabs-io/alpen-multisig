@@ -197,7 +197,7 @@ pub fn verify_address_on_device(
     derivation_path: String,
     script: AddressScriptType,
     network: Network,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let path = parse_path(&derivation_path)?;
     let mut trezor = open_trezor()?;
     let coin =
@@ -216,9 +216,9 @@ pub fn verify_address_on_device(
         .map_err(|e: trezor_client::Error| {
             format!("Trezor verify_address at {derivation_path} failed: {e}")
         })?;
-    resolve(resp, "")?;
-
-    Ok(())
+    // The device confirmed: return the exact address it rendered so the caller can
+    // compare it against what the app shows (#412).
+    resolve(resp, "")
 }
 
 /// Returns the BIP-86 (Taproot) account xpub for the given derivation path.

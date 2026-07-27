@@ -99,13 +99,16 @@ pub async fn hw_wallet_get_fingerprint(
         .map_err(|e| e.to_string())?
 }
 
+/// Renders the address at `derivation_path` on the connected device and returns the
+/// exact string it displayed, so the UI can compare it with the address it shows for
+/// the same key and path (#412 — hardware signers cannot render a raw public key).
 #[tauri::command]
 pub async fn verify_address_on_device(
     derivation_path: String,
     device_type: String,
     script_type: String,
     network: Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let device = parse_device_kind(&device_type)?;
     let script = AddressScriptType::parse(&script_type)?;
     let net = parse_verify_network(network.as_deref());

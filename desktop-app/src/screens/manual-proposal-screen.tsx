@@ -359,6 +359,7 @@ export function ManualProposalScreen() {
 				<WalletPanelContent
 					disabledError={walletDisabledError}
 					adminId={wallet.publicKeyHex}
+					adminIdAddress={wallet.addressSample}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}

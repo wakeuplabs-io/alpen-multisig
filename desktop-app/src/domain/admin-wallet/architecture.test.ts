@@ -320,6 +320,18 @@ if (connectAdminIdCard.includes('QrCode')) {
 if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId} />')) {
 	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
 }
+// #409/#412: a hardware signer can only render an address, so the row must show the address
+// derived from the Admin ID key and hand it to the verify button for comparison — otherwise
+// the signer has nothing on screen to compare the device against.
+if (!adminIdRow.includes('e2e-wallet-admin-id-verify-address')) {
+	rule9Violations.push('admin-id-row.tsx: must show the address the device renders for the Admin ID (#409)')
+}
+if (!adminIdRow.includes('expectedAddress={verify.address}')) {
+	rule9Violations.push('admin-id-row.tsx: must pass the expected address to VerifyOnDeviceButton (#412)')
+}
+if (!panelContentForAdminId.includes('address: adminIdAddress')) {
+	rule9Violations.push('wallet-panel-content.tsx: must thread the Admin ID address into the verify context')
+}
 // Both Admin ID surfaces read the same audited literals.
 if (!connectAdminIdCard.includes("from '@/lib/admin-id'")) {
 	rule9Violations.push('connect-admin-id-card.tsx: must read the Admin ID literals from @/lib/admin-id')
