@@ -41,6 +41,17 @@ export function adminIdVerifyCaption(vendor: WalletVendor): string {
 	return `Your ${deviceCopy(vendor).label} shows the address derived from this key and path — hardware signers cannot display a raw public key.`
 }
 
+/**
+ * True when the address the device rendered is the one the app expects for the same
+ * key and path. Bech32 is case-insensitive (BIP-173) and devices may pad the string,
+ * so both sides are trimmed and lowercased before comparing.
+ */
+export function matchesDeviceAddress(expected: string, shownOnDevice: string): boolean {
+	const normalize = (value: string) => value.trim().toLowerCase()
+	const left = normalize(expected)
+	return left.length > 0 && left === normalize(shownOnDevice)
+}
+
 /** Truncated Admin ID for chips and dense rows (`0279…a41c`). */
 export function truncateAdminId(value: string, prefix = 10, suffix = 8): string {
 	if (value.length <= prefix + suffix + 1) return value

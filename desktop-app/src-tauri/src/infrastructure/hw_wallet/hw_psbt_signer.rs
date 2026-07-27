@@ -92,12 +92,14 @@ impl HwDeviceType {
         }
     }
 
+    /// Renders the address at `derivation_path` on the device and returns the exact
+    /// string the device displayed, so the caller can compare it with what the app shows.
     pub fn verify_address(
         self,
         derivation_path: String,
         script: AddressScriptType,
         network: Network,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         match self {
             HwDeviceType::Trezor => {
                 trezor::verify_address_on_device(derivation_path, script, network)

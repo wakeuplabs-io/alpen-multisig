@@ -16,6 +16,8 @@ export type WalletSessionControlProps = {
 	sessionWarning: boolean
 	/** Admin ID — the signer's compressed public key (#408); truncated in the chip. */
 	adminId: string | undefined
+	/** Address derived from the Admin ID key — what a hardware signer can display (#409). */
+	adminIdAddress: string | undefined
 }
 
 /**
@@ -24,7 +26,13 @@ export type WalletSessionControlProps = {
  * header flow). Place inside `ScreenShell`'s `headerContent` alongside the
  * authority badge and disconnect button.
  */
-export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, adminId }: WalletSessionControlProps) {
+export function WalletSessionControl({
+	panel,
+	sessionTimeLabel,
+	sessionWarning,
+	adminId,
+	adminIdAddress,
+}: WalletSessionControlProps) {
 	const signerLabel = formatSignerLabel(adminId)
 
 	return (
@@ -46,6 +54,7 @@ export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, 
 				<WalletPanelContent
 					disabledError={panel.disabledError}
 					adminId={adminId}
+					adminIdAddress={adminIdAddress}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}

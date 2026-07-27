@@ -296,11 +296,11 @@ export type VerifyAddressOnDeviceInput = {
 
 /**
  * Asks the connected hardware device to display the address at derivationPath so
- * the signer can compare it on-screen. Resolves on confirm; ApiResult error on
- * mismatch surfacing, device rejection, or timeout.
+ * the signer can compare it on-screen. Resolves with the exact address the device
+ * rendered; ApiResult error on device rejection or timeout.
  */
-export function verifyAddressOnDevice(input: VerifyAddressOnDeviceInput): Promise<ApiResult<null>> {
-	return tauriCall<null>('verify_address_on_device', {
+export function verifyAddressOnDevice(input: VerifyAddressOnDeviceInput): Promise<ApiResult<string>> {
+	return tauriCall<string>('verify_address_on_device', {
 		derivationPath: input.derivationPath,
 		deviceType: input.deviceType,
 		scriptType: input.scriptType,

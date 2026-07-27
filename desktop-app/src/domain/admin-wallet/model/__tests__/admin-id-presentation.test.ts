@@ -11,7 +11,7 @@ import {
 	ADMIN_ID_LABEL,
 	ADMIN_ID_SAFETY_CAPTION,
 } from '../admin-id-presentation.ts'
-import { adminIdVerifyCaption } from '../../../../lib/admin-id.ts'
+import { adminIdVerifyCaption, matchesDeviceAddress } from '../../../../lib/admin-id.ts'
 
 const PUBKEY = '02f8b7d1a1b9f0f4e8f1c2d3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8'
 
@@ -52,6 +52,20 @@ assert.ok(trezorCaption.includes('Trezor'), 'names the connected device')
 assert.ok(!trezorCaption.includes('Ledger'), 'never names the other vendor')
 assert.ok(adminIdVerifyCaption('ledger').includes('Ledger'))
 assert.ok(trezorCaption.includes('cannot display a raw public key'), 'states the device limitation')
+
+// The device-address comparison backs the only verification a hardware signer can offer.
+const ADDR = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'
+assert.equal(matchesDeviceAddress(ADDR, ADDR), true, 'identical → match')
+assert.equal(matchesDeviceAddress(ADDR, ADDR.toUpperCase()), true, 'bech32 is case-insensitive')
+assert.equal(matchesDeviceAddress(ADDR, ` ${ADDR}\n`), true, 'device padding is tolerated')
+assert.equal(
+	matchesDeviceAddress(ADDR, 'tb1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'),
+	false,
+	'different HRP → no match (wrong device app)',
+)
+assert.equal(matchesDeviceAddress(ADDR, `${ADDR.slice(0, -1)}x`), false, 'one character off → no match')
+assert.equal(matchesDeviceAddress('', ADDR), false, 'no expected address → never a match')
+assert.equal(matchesDeviceAddress(ADDR, ''), false, 'device returned nothing → no match')
 
 // Copy literals are owned by the shared module (single audited source — architecture Rule 9).
 assert.equal(ADMIN_ID_LABEL, 'Admin ID')
