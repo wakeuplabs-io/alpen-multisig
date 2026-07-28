@@ -59,7 +59,7 @@ export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: Wal
 					className="mt-1.5 flex items-center gap-1.5 font-mono text-label text-[#6b7280]"
 					data-testid="e2e-wallet-balance-unconfirmed"
 				>
-					<span className="h-1.5 w-1.5 flex-none rounded-full bg-[#d97706]" aria-hidden="true" />
+					<span className="h-1.5 w-1.5 flex-none rounded-full bg-emphasis-soft" aria-hidden="true" />
 					{unconfirmedLine}
 				</div>
 			)}

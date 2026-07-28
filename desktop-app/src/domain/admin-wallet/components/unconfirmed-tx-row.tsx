@@ -34,7 +34,7 @@ function StatusBadge({ row }: { row: UnconfirmedTxView }) {
 	}
 	if (row.bumpDisabledReason === 'cpfp-stats-unavailable') {
 		return (
-			<span className="flex-none rounded-full bg-[#fef3c7] px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-[#92400e]">
+			<span className="flex-none rounded-full bg-highlight-surface-alt px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-[0.04em] text-emphasis">
 				Sync required
 			</span>
 		)
