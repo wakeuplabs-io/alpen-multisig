@@ -6,7 +6,7 @@ import {
 	AlertTriangleIcon,
 	CheckCircleEmeraldIcon,
 	ChevronRightMutedIcon,
-	ClockAmberIcon,
+	ClockIcon,
 	FileTextMutedIcon,
 	SendIcon,
 	SignaturePenMutedIcon,
@@ -216,7 +216,7 @@ function PendingTab({
 		return (
 			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-10 text-center">
 				<div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-bg-base">
-					<ClockAmberIcon width={18} height={18} className="block text-[#9ca3af]" />
+					<ClockIcon width={18} height={18} className="block text-[#9ca3af]" />
 				</div>
 				<p className="m-0 text-body-sm font-medium text-[#374151]">No pending proposals</p>
 				<p className="m-0 mt-1 text-label text-[#9ca3af]">
@@ -232,7 +232,7 @@ function PendingTab({
 				<ProposalGroup
 					title="Pending"
 					count={pending.length}
-					groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
+					groupIcon={<ClockIcon width={14} height={14} className="block text-[#6b7280]" />}
 					proposals={pending}
 					signerPubkey={signerPubkey}
 					onSignProposal={onSignProposal}

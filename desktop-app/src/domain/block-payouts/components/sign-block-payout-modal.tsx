@@ -40,14 +40,14 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 				</div>
 
 				{/* Warning */}
-				<div className="flex items-start gap-2.5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+				<div className="flex items-start gap-2.5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 					<svg
 						width={15}
 						height={15}
 						viewBox="0 0 24 24"
 						fill="none"
 						aria-hidden
-						className="mt-0.5 shrink-0 text-[#d97706]"
+						className="mt-0.5 shrink-0 text-emphasis-soft"
 					>
 						<path
 							d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
@@ -58,7 +58,7 @@ export function SignBlockPayoutModal({ tx, onSign, onClose }: Props) {
 						<path d="M12 9v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 						<circle cx="12" cy="17" r="1" fill="currentColor" />
 					</svg>
-					<p className="m-0 text-body-sm text-[#92400e]">
+					<p className="m-0 text-body-sm text-emphasis">
 						You are about to sign this <strong>block_payouts</strong> transaction. This action cannot be undone.
 					</p>
 				</div>

@@ -100,9 +100,9 @@ export function ManualSignCollect({
 			)}
 
 			{signError && (
-				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-body-sm font-medium text-[#dc2626]">Signing failed</p>
-					<p className="m-0 mt-0.5 text-label text-[#991b1b]">{signError}</p>
+				<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+					<p className="m-0 text-body-sm font-medium text-danger">Signing failed</p>
+					<p className="m-0 mt-0.5 text-label text-danger-deep">{signError}</p>
 				</div>
 			)}
 

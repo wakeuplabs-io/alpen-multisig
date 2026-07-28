@@ -36,7 +36,10 @@ const MODE_OPTIONS: ModeOption[] = [
 function NodeStatusDot({ reachable }: { reachable: boolean | null }) {
 	if (reachable === null) return null
 	return (
-		<span className={`inline-block h-2 w-2 rounded-full ${reachable ? 'bg-emerald-500' : 'bg-red-400'}`} aria-hidden />
+		<span
+			className={`inline-block h-2 w-2 rounded-full ${reachable ? 'bg-emerald-500' : 'bg-emphasis-soft'}`}
+			aria-hidden
+		/>
 	)
 }
 
@@ -245,7 +248,7 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 						)}
 
 						{draft.mode === 'trusted' && (
-							<div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-label text-amber-800">
+							<div className="flex items-start gap-2 rounded-xl border border-accent-border bg-highlight-surface p-3 text-label text-emphasis">
 								<svg viewBox="0 0 24 24" fill="none" width={14} height={14} className="mt-0.5 shrink-0" aria-hidden>
 									<path d="M12 4L3 19h18L12 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
 									<path d="M12 10v4M12 16.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -258,7 +261,7 @@ export function NodeConfigModal({ isOpen, config, localNodeStatus, isSaving, onS
 						)}
 
 						{localUnreachable && (
-							<div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-label text-amber-800">
+							<div className="flex items-start gap-2 rounded-xl border border-accent-border bg-highlight-surface p-3 text-label text-emphasis">
 								<svg viewBox="0 0 24 24" fill="none" width={14} height={14} className="mt-0.5 shrink-0" aria-hidden>
 									<path d="M12 4L3 19h18L12 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
 									<path d="M12 10v4M12 16.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

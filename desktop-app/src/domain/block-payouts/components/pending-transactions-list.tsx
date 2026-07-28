@@ -46,20 +46,20 @@ export function PendingTransactionsList({
 	return (
 		<div className="flex flex-col gap-3">
 			{hasConflicts && (
-				<div className="flex items-start gap-2.5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+				<div className="flex items-start gap-2.5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 					<svg
 						width={16}
 						height={16}
 						viewBox="0 0 24 24"
 						fill="none"
 						aria-hidden
-						className="mt-0.5 shrink-0 text-[#d97706]"
+						className="mt-0.5 shrink-0 text-emphasis-soft"
 					>
 						<circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
 						<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 						<circle cx="12" cy="16" r="1" fill="currentColor" />
 					</svg>
-					<p className="m-0 text-body-sm text-[#92400e]">
+					<p className="m-0 text-body-sm text-emphasis">
 						Some pending transactions share inputs. See the <span className="font-medium">ⓘ icons</span> for details.
 					</p>
 				</div>
