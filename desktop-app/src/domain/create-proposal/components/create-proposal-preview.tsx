@@ -149,7 +149,7 @@ export function CreateProposalPreview({
 							<div className="flex flex-col gap-1">
 								{operatorIndicesToRemove.map((idx, i) => (
 									<div key={i} className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2">
-										<span className="shrink-0 text-label font-medium text-[#dc2626]">–</span>
+										<span className="shrink-0 text-label font-medium text-emphasis-soft">–</span>
 										<span className="text-body text-[#374151]">Index {idx}</span>
 									</div>
 								))}
@@ -216,7 +216,7 @@ export function CreateProposalPreview({
 						New Verification Key
 					</p>
 					<div className="flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-4 py-3">
-						<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-label font-medium text-[#92400e]">
+						<span className="shrink-0 self-start rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-label font-medium text-emphasis">
 							{VK_PREDICATE_TYPE_LABELS[vkTypeId]}
 						</span>
 						{newVkHex.trim().length > 0 && (
@@ -236,9 +236,9 @@ export function CreateProposalPreview({
 				</div>
 			</div>
 
-			<div className="flex items-start gap-4 rounded-xl border border-[#d97706] bg-[#fffbeb] p-4">
+			<div className="flex items-start gap-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
 				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white">
-					<UsbTridentIcon width={24} height={24} className="text-[#c2773b]" />
+					<UsbTridentIcon width={24} height={24} className="text-emphasis-soft" />
 				</div>
 				<div>
 					<p className="m-0 font-semibold text-[#111827]">

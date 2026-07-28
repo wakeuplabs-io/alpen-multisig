@@ -10,4 +10,4 @@ export const monoInputClass =
 export const numberInputClass =
 	'mt-1.5 w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-body text-[#111827] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent'
 
-export const fieldErrorClass = 'mt-1 text-label text-[#b91c1c]'
+export const fieldErrorClass = 'mt-1 text-label text-danger-strong'
