@@ -166,6 +166,7 @@ jobs:
           npm run test:model-admin-id-presentation --workspace desktop-app
           npm run test:lib-device-signing-display --workspace desktop-app
           npm run test:lib-device-copy --workspace desktop-app
+          npm run test:color-tokens --workspace desktop-app
           npm run test:model-multisig-update-changes --workspace desktop-app
           npm run test:hooks-use-clipboard-copy --workspace desktop-app
           npm run test:model-balance-denomination --workspace desktop-app
