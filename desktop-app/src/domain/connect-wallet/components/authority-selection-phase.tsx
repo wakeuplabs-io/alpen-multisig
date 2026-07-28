@@ -87,7 +87,7 @@ export function AuthoritySelectionPhase({
 								: 'border-[#e5e7eb] bg-white text-[#6b7280]'
 
 					const iconBgClass = isSelected
-						? 'bg-accent-surface text-accent'
+						? 'bg-accent-surface text-emphasis'
 						: isDisabled
 							? 'bg-[#f3f4f6] text-[#d1d5db]'
 							: 'bg-[#f3f4f6] text-[#9ca3af]'

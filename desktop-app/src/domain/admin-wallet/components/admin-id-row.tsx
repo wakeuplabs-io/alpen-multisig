@@ -38,8 +38,8 @@ export type AdminIdRowProps = {
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const label = (
-		<span className="inline-flex items-center gap-1.5 text-mono-sm font-medium uppercase tracking-[0.08em] text-accent">
-			<ShieldCheckMutedIcon width={13} height={13} className="text-accent" />
+		<span className="inline-flex items-center gap-1.5 text-mono-sm font-medium uppercase tracking-[0.08em] text-emphasis">
+			<ShieldCheckMutedIcon width={13} height={13} className="text-emphasis-soft" />
 			{ADMIN_ID_LABEL}
 		</span>
 	)

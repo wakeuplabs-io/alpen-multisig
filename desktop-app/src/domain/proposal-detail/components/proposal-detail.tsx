@@ -255,7 +255,7 @@ export function ProposalDetail({
 								</span>
 								<span className="flex-1 font-mono text-label text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
 								{isMe && (
-									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-accent-hover">
+									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
 										YOU
 									</span>
 								)}

@@ -45,7 +45,7 @@ export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: Wal
 					onClick={() => setDenomination(alternateDenomination)}
 					title={`Show balance in ${alternateDenomination}`}
 					aria-label={`Balance shown in ${shown.unit}. Show in ${alternateDenomination}`}
-					className="ml-2 cursor-pointer bg-transparent p-0 font-sans text-body-sm font-medium text-accent underline decoration-dotted underline-offset-4 transition hover:text-accent-hover"
+					className="ml-2 cursor-pointer bg-transparent p-0 font-sans text-body-sm font-medium text-emphasis-soft underline decoration-dotted underline-offset-4 transition hover:text-emphasis"
 					data-testid="e2e-wallet-balance-unit"
 				>
 					{shown.unit}
