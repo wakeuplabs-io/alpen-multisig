@@ -259,11 +259,11 @@ export function CancelProposalSignScreen() {
 				)}
 
 				{loadError && (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body text-danger-deep">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-danger-deep bg-white px-3 py-1.5 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 							onClick={() => navigate(`/proposals/${actionId}/cancel`)}
 						>
 							Back to cancel
@@ -272,8 +272,8 @@ export function CancelProposalSignScreen() {
 				)}
 
 				{!isLoading && alreadySigned && (
-					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#92400e]">You have already signed this cancel proposal.</p>
+					<div className="mt-5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-emphasis">You have already signed this cancel proposal.</p>
 					</div>
 				)}
 
@@ -305,8 +305,8 @@ export function CancelProposalSignScreen() {
 
 						{/* Sign error */}
 						{signError && (
-							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-body text-[#991b1b]">{signError}</p>
+							<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+								<p className="m-0 text-body text-danger-deep">{signError}</p>
 							</div>
 						)}
 

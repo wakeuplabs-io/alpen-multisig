@@ -181,7 +181,7 @@ export function BroadcastDetailsCard({
 									<span className="flex shrink-0 flex-col items-end">
 										<span
 											className={`text-body-sm font-semibold ${
-												adminWalletInfo.balanceSats === 0 ? 'text-[#dc2626]' : 'text-[#111827]'
+												adminWalletInfo.balanceSats === 0 ? 'text-danger' : 'text-[#111827]'
 											}`}
 										>
 											{adminWalletInfo.balanceSats.toLocaleString()} sats
@@ -202,7 +202,7 @@ export function BroadcastDetailsCard({
 								</div>
 								{syncError != null ? (
 									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
-										<span className="text-label text-[#ef4444]">
+										<span className="text-label text-danger">
 											Sync error: {'message' in syncError ? syncError.message : syncError.type}
 										</span>
 									</div>
@@ -232,7 +232,7 @@ export function BroadcastDetailsCard({
 					{phase === 'awaiting-device' ? 'Approve on device…' : isBroadcasting ? 'Sending…' : 'Confirm & Send'}
 				</button>
 				{targetQueued === false && (
-					<p className="mt-2 text-center text-label text-[#b91c1c]">
+					<p className="mt-2 text-center text-label text-danger-strong">
 						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
 						cancel can no longer be sent.
 					</p>

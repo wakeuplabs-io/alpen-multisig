@@ -193,9 +193,9 @@ export function FeeRateSelector({ presets, selection, onSelectPreset, onSetCusto
 			)}
 
 			{presets.source === 'fallback' && (
-				<div className="flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2.5">
-					<AlertTriangleIcon width={14} height={14} className="mt-0.5 shrink-0 text-[#d97706]" />
-					<p className="m-0 text-label leading-relaxed text-[#92400e]">
+				<div className="flex items-start gap-2 rounded-lg border border-accent-border bg-highlight-surface px-3 py-2.5">
+					<AlertTriangleIcon width={14} height={14} className="mt-0.5 shrink-0 text-emphasis-soft" />
+					<p className="m-0 text-label leading-relaxed text-emphasis">
 						Live fee estimates are unavailable — these rates are a static fallback from the minimum relay fee. Review
 						before broadcasting.
 					</p>

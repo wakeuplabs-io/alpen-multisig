@@ -20,9 +20,9 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 	const sigsJson = JSON.stringify(cancelProposal.signatures, null, 2)
 
 	return (
-		<div className="overflow-hidden rounded-xl border border-[#fde68a] bg-[#fffbeb] shadow-sm">
-			<div className="border-b border-[#fde68a] px-6 py-4">
-				<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#92400e]">Cancel proposal</p>
+		<div className="overflow-hidden rounded-xl border border-accent-border bg-highlight-surface shadow-sm">
+			<div className="border-b border-accent-border px-6 py-4">
+				<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-emphasis">Cancel proposal</p>
 			</div>
 			<div className="px-6 py-5 space-y-4">
 				{/* Sig progress */}
@@ -36,10 +36,10 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 							{cancelProposal.signatures.length > 0 && <CopyButton text={sigsJson} label="Copy sigs" />}
 						</div>
 					</div>
-					<div className="h-1.5 rounded-full bg-[#fde68a]">
+					<div className="h-1.5 rounded-full bg-[#e5e7eb]">
 						<div
 							className="h-1.5 rounded-full transition-all"
-							style={{ width: `${progress}%`, background: hasQuorum ? '#0f9d7a' : '#d97706' }}
+							style={{ width: `${progress}%`, background: hasQuorum ? '#0f9d7a' : '#111827' }}
 						/>
 					</div>
 				</div>

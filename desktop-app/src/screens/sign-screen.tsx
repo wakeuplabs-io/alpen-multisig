@@ -270,11 +270,11 @@ export function SignScreen() {
 				) : null}
 
 				{loadError ? (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body text-danger-deep">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-danger-deep bg-white px-3 py-1.5 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 							onClick={() => navigate('/proposals')}
 						>
 							Back to proposals
@@ -283,23 +283,23 @@ export function SignScreen() {
 				) : null}
 
 				{!isLoading && proposal !== null && proposal.status !== 'pending' ? (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#991b1b]">
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-danger-deep">
 							This proposal is no longer pending and cannot be signed.
 						</p>
 					</div>
 				) : null}
 
 				{!isLoading && signerAlreadySigned ? (
-					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#92400e]">
+					<div className="mt-5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-emphasis">
 							You already signed this proposal. Additional signatures from the same signer are not allowed.
 						</p>
 					</div>
 				) : null}
 
 				{!isLoading && proposal !== null && proposal.status === 'pending' && (
-					<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5">
+					<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-2.5">
 						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
 					</div>
 				)}

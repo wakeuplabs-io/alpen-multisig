@@ -20,12 +20,12 @@ export function ActivationCountdown({ activationHeight, currentHeight }: Props) 
 	const timeLabel = blocksRemaining !== null ? formatDuration(blocksRemaining * AVG_BLOCK_SECONDS) : null
 
 	return (
-		<div className="inline-flex items-center gap-1.5 text-body-sm text-[#d97706]">
+		<div className="inline-flex items-center gap-1.5 text-body-sm text-emphasis-soft">
 			<span aria-hidden="true">⏱</span>
 			<span>
 				Activation in block <span className="font-mono font-medium">{activationHeight.toLocaleString()}</span>
 				{currentHeight != null && (
-					<span className="text-[#b45309]">
+					<span className="text-emphasis-soft">
 						{' '}
 						· current block <span className="font-mono font-medium">{currentHeight.toLocaleString()}</span>
 					</span>
