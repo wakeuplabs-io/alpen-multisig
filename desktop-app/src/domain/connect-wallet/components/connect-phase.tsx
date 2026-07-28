@@ -182,7 +182,7 @@ export function ConnectPhase({
 						/>
 					</div>
 				)}
-				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-[#dc2626]">{mnemonicError}</p>}
+				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}
 
 				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
 					<>
@@ -195,7 +195,7 @@ export function ConnectPhase({
 						>
 							{debugLoading ? 'Deriving address…' : 'Show compressed pubkey / address (debug)'}
 						</button>
-						{debugError !== null && <p className="m-0 mt-1 text-label text-[#dc2626]">{debugError}</p>}
+						{debugError !== null && <p className="m-0 mt-1 text-label text-danger">{debugError}</p>}
 						{debugEntry !== null && (
 							<div className="mt-2 rounded-md border border-[#e5e7eb] bg-white p-2 text-mono-sm text-[#374151]">
 								<p className="m-0 break-all">
@@ -285,7 +285,7 @@ export function ConnectPhase({
 					: 'Your keys never leave the device. Alpen only receives signatures.'}
 			</p>
 
-			{error && <p className="mt-3 text-body-sm text-[#dc2626]">{error}</p>}
+			{error && <p className="mt-3 text-body-sm text-danger">{error}</p>}
 		</>
 	)
 }

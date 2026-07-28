@@ -55,11 +55,11 @@ export function PasteSignaturesModal({ txId, onSubmit, onClose }: Props) {
 				/>
 
 				{errorMessage && (
-					<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<pre className="m-0 whitespace-pre-wrap font-mono text-label text-[#991b1b]">{errorMessage}</pre>
+					<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<pre className="m-0 whitespace-pre-wrap font-mono text-label text-danger-deep">{errorMessage}</pre>
 						<button
 							type="button"
-							className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-[#fca5a5] bg-white px-3 py-1 text-label font-medium text-[#b91c1c] transition hover:bg-[#fef2f2]"
+							className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-danger-border-soft bg-white px-3 py-1 text-label font-medium text-danger-strong transition hover:bg-danger-surface"
 							onClick={handleCopyError}
 						>
 							<svg width={12} height={12} viewBox="0 0 24 24" fill="none" aria-hidden>

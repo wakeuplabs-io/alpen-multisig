@@ -7,7 +7,7 @@ export function ConflictingInputIcon() {
 		<span className="relative inline-flex items-center">
 			<button
 				type="button"
-				className="inline-flex items-center justify-center rounded-full text-[#d97706] transition hover:text-[#b45309] focus:outline-none"
+				className="inline-flex items-center justify-center rounded-full text-emphasis-soft transition hover:text-emphasis-soft focus:outline-none"
 				onMouseEnter={() => setVisible(true)}
 				onMouseLeave={() => setVisible(false)}
 				onFocus={() => setVisible(true)}
@@ -22,12 +22,12 @@ export function ConflictingInputIcon() {
 			</button>
 			{visible && (
 				<span
-					className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-label leading-[1.5] text-[#92400e] shadow-sm"
+					className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-lg border border-accent-border bg-highlight-surface px-3 py-2 text-label leading-[1.5] text-emphasis shadow-sm"
 					role="tooltip"
 				>
 					This input is included in multiple Pending transactions.
 					<span
-						className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-[#fde68a]"
+						className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-accent-border"
 						aria-hidden="true"
 					/>
 				</span>

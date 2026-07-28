@@ -20,7 +20,13 @@ export type StatusStyle = {
  * terminal negative outcome.
  */
 export const PROPOSAL_STATUS_STYLE: Record<DisplayStatus, StatusStyle> = {
-	pending: { bg: '#fffbeb', text: '#111827', border: '#f0cfa0', dot: '#111827', label: 'Pending' },
+	pending: {
+		bg: 'var(--color-highlight-surface)',
+		text: 'var(--color-emphasis)',
+		border: 'var(--color-accent-border)',
+		dot: 'var(--color-emphasis)',
+		label: 'Pending',
+	},
 	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
 	awaiting_enactment: {
 		bg: '#f0fdf9',
@@ -30,6 +36,12 @@ export const PROPOSAL_STATUS_STYLE: Record<DisplayStatus, StatusStyle> = {
 		label: 'Awaiting enactment',
 	},
 	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
+	canceled: {
+		bg: 'var(--color-danger-surface)',
+		text: 'var(--color-danger)',
+		border: 'var(--color-danger-border)',
+		dot: 'var(--color-danger)',
+		label: 'Canceled',
+	},
 	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
 }

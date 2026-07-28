@@ -186,8 +186,8 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 				{step === 2 && (
 					<>
 						{invalidReports.length > 0 && (
-							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-body-sm font-medium text-[#991b1b]">
+							<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+								<p className="m-0 text-body-sm font-medium text-danger-deep">
 									{invalidReports.length} report{invalidReports.length !== 1 ? 's' : ''} ignored (invalid proof or
 									missing fields)
 								</p>
@@ -195,8 +195,8 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						)}
 
 						{exceedsLimit && (
-							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-body-sm font-medium text-[#991b1b]">
+							<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+								<p className="m-0 text-body-sm font-medium text-danger-deep">
 									Your transaction exceeds the size limit, please remove one or more inputs to reduce its size.
 								</p>
 							</div>
@@ -224,7 +224,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 											<button
 												type="button"
 												aria-label="Remove input"
-												className="shrink-0 rounded-md p-1 text-[#9ca3af] transition hover:bg-[#fef2f2] hover:text-[#dc2626]"
+												className="shrink-0 rounded-md p-1 text-[#9ca3af] transition hover:bg-danger-surface hover:text-danger"
 												onClick={() => handleRemoveInput(input.outpoint)}
 											>
 												<svg width={13} height={13} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -324,20 +324,20 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 						</div>
 
 						{insufficientBalance && (
-							<div className="flex items-start gap-2.5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
+							<div className="flex items-start gap-2.5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
 								<svg
 									width={14}
 									height={14}
 									viewBox="0 0 24 24"
 									fill="none"
 									aria-hidden
-									className="mt-0.5 shrink-0 text-[#dc2626]"
+									className="mt-0.5 shrink-0 text-danger"
 								>
 									<circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
 									<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 									<circle cx="12" cy="16" r="1" fill="currentColor" />
 								</svg>
-								<p className="m-0 text-body-sm text-[#991b1b]">
+								<p className="m-0 text-body-sm text-danger-deep">
 									Admin Wallet balance is insufficient to cover the estimated fee. Lower the fee rate or fund the
 									wallet.
 								</p>
@@ -389,7 +389,7 @@ export function CreateBlockPayoutModal({ walletBalanceSats, onConfirm, onClose }
 								<path d="M12 8v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 								<circle cx="12" cy="16" r="1" fill="currentColor" />
 							</svg>
-							<p className="m-0 text-body-sm text-[#92400e]">
+							<p className="m-0 text-body-sm text-emphasis">
 								Clicking <strong>Confirm</strong> will create this transaction and add your signature to it.
 							</p>
 						</div>

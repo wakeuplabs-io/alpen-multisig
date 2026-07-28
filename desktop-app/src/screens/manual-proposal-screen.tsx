@@ -326,10 +326,10 @@ export function ManualProposalScreen() {
 								{/* Error */}
 								{manual.broadcastPhase === 'error' && (
 									<div className="space-y-3">
-										<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-											<p className="m-0 text-body-sm font-medium text-[#dc2626]">Send failed</p>
+										<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+											<p className="m-0 text-body-sm font-medium text-danger">Send failed</p>
 											{manual.broadcastError && (
-												<p className="m-0 mt-1 text-label text-[#991b1b]">{manual.broadcastError}</p>
+												<p className="m-0 mt-1 text-label text-danger-deep">{manual.broadcastError}</p>
 											)}
 										</div>
 										<button

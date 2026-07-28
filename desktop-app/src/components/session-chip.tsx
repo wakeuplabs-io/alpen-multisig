@@ -19,7 +19,7 @@ export function SessionChip({ timeLabel, signerLabel, warning, onActivate, isAct
 	const baseClasses =
 		'inline-flex items-center gap-2 rounded-full border px-3 py-1.25 text-label whitespace-nowrap flex-none transition'
 	const palette = warning
-		? 'border-[#fde68a] bg-[#fffbeb] text-[#d97706]'
+		? 'border-accent-border bg-highlight-surface text-emphasis-soft'
 		: 'border-[#e5e7eb] bg-bg-base text-[#111827]'
 	const interactiveClasses = onActivate
 		? `${isActive ? 'ring-2 ring-accent ring-offset-1' : 'hover:border-[#a3a3a3] hover:bg-bg-surface'} cursor-pointer`
@@ -33,15 +33,13 @@ export function SessionChip({ timeLabel, signerLabel, warning, onActivate, isAct
 				<ClockSessionDefaultIcon width={12} height={12} className="block shrink-0" />
 			)}
 			<span className="font-mono text-mono-sm font-medium">Session · {timeLabel}</span>
-			<span className="h-3 w-px" style={{ background: warning ? '#fde68a' : '#e5e7eb' }} aria-hidden="true" />
+			<span className="h-3 w-px bg-[#e5e7eb]" aria-hidden="true" />
 			{warning ? (
 				<UsbSessionWarningIcon width={12} height={12} className="block shrink-0" />
 			) : (
 				<UsbSessionDefaultIcon width={12} height={12} className="block shrink-0" />
 			)}
-			<span className="font-mono text-mono-sm" style={{ color: warning ? '#d97706' : '#6b7280' }}>
-				{signerLabel}
-			</span>
+			<span className="font-mono text-mono-sm text-[#6b7280]">{signerLabel}</span>
 		</>
 	)
 

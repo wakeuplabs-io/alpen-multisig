@@ -28,7 +28,7 @@ export function PendingExpiryCountdown({ expiresAtMs }: Props) {
 
 	if (timeLeftMs <= 0) {
 		return (
-			<span className="inline-flex items-center gap-1 text-label font-medium text-[#dc2626]">
+			<span className="inline-flex items-center gap-1 text-label font-medium text-emphasis-soft">
 				<span aria-hidden="true">⏱</span>
 				Expired
 			</span>
@@ -38,11 +38,14 @@ export function PendingExpiryCountdown({ expiresAtMs }: Props) {
 	const isUrgent = timeLeftMs < 60 * 60 * 1000
 	const isWarning = timeLeftMs < 24 * 60 * 60 * 1000
 
-	const color = isUrgent ? '#dc2626' : '#d97706'
+	// Running out of time is a status, not a failure (#416): urgency is carried by
+	// the ⚠ and the wording, and shown as a darker neutral rather than red.
 	const label = isWarning ? `⚠ Expiring soon — ${formatTimeLeft(timeLeftMs)}` : formatTimeLeft(timeLeftMs)
 
 	return (
-		<span className="inline-flex items-center gap-1 text-label font-medium" style={{ color }}>
+		<span
+			className={`inline-flex items-center gap-1 text-label font-medium ${isUrgent ? 'text-emphasis' : 'text-emphasis-soft'}`}
+		>
 			<span aria-hidden="true">⏱</span>
 			{label}
 		</span>

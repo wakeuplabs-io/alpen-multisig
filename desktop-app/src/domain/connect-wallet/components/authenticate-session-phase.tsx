@@ -125,7 +125,7 @@ export function AuthenticateSessionPhase({
 			)}
 
 			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
-			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
+			{authError && <p className="mt-3 text-[0.85rem] text-danger-strong">{authError}</p>}
 
 			<div className="mt-4">
 				<button
