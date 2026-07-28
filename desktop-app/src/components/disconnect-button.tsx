@@ -4,7 +4,8 @@ import { LogOutIcon } from '@/assets/icons'
  * Header "Disconnect" control, shared by every authenticated screen.
  *
  * The markup used to be copied byte for byte into 11 screens, each carrying a
- * red hover (`hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]`).
+ * red hover — border, fill and text all in the danger family. (Spelling those
+ * classes out here would make Tailwind emit them again; it scans comments too.)
  * Ending a session is not an error, so the hover is neutral now (#416), and the
  * single definition keeps the 11 call sites from drifting apart again.
  */
