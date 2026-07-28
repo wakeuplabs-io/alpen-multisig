@@ -140,13 +140,11 @@ export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendF
 					aria-invalid={destinationError !== null}
 					data-testid="e2e-wallet-send-address-input"
 					className={`mt-1 w-full rounded-lg border bg-white px-2.5 py-2 font-mono text-label text-[#111827] transition focus:outline-none disabled:bg-[#f9fafb] disabled:text-[#9ca3af] ${
-						destinationError !== null
-							? 'border-[#ef4444] focus:border-[#ef4444]'
-							: 'border-[#e5e7eb] focus:border-[#111827]'
+						destinationError !== null ? 'border-danger focus:border-danger' : 'border-[#e5e7eb] focus:border-[#111827]'
 					}`}
 				/>
 				{destinationError !== null && (
-					<p className="m-0 mt-1 text-label text-[#ef4444]" data-testid="e2e-wallet-send-address-error">
+					<p className="m-0 mt-1 text-label text-danger" data-testid="e2e-wallet-send-address-error">
 						{destinationError}
 					</p>
 				)}
@@ -158,7 +156,7 @@ export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendF
 				</label>
 				<div
 					className={`mt-1 flex items-center overflow-hidden rounded-lg border bg-white transition focus-within:border-[#111827] ${
-						amountError !== null ? 'border-[#ef4444]' : 'border-[#e5e7eb]'
+						amountError !== null ? 'border-danger' : 'border-[#e5e7eb]'
 					}`}
 				>
 					<input
@@ -192,7 +190,7 @@ export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendF
 					<span className="pr-2.5 text-label text-[#9ca3af]">sats</span>
 				</div>
 				{amountError !== null ? (
-					<p className="m-0 mt-1 text-label text-[#ef4444]" data-testid="e2e-wallet-send-amount-error">
+					<p className="m-0 mt-1 text-label text-danger" data-testid="e2e-wallet-send-amount-error">
 						{amountError}
 					</p>
 				) : (
@@ -264,7 +262,7 @@ export function SendForm({ isWatchOnly, deviceType, onBack, onAfterSend }: SendF
 			)}
 
 			{state.status === 'error' && (
-				<p className="m-0 text-label text-[#ef4444]" data-testid="e2e-wallet-send-error">
+				<p className="m-0 text-label text-danger" data-testid="e2e-wallet-send-error">
 					{formatAdminWalletError(state.error).body}
 					{isHardware && ' You can adjust and try again, or go back.'}
 				</p>

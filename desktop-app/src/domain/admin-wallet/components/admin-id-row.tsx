@@ -74,8 +74,8 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 			>
 				{value}
 			</p>
-			<p className="mt-2 inline-flex items-start gap-1.5 text-mono-sm leading-[1.45] text-[#b45309]">
-				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-[#d97706]" />
+			<p className="mt-2 inline-flex items-start gap-1.5 text-mono-sm leading-[1.45] text-emphasis-soft">
+				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-emphasis-soft" />
 				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>
 			{verify && (

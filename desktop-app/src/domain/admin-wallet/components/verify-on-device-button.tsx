@@ -72,17 +72,17 @@ export function VerifyOnDeviceButton({
 			{state.status === 'mismatch' && (
 				<div
 					aria-live="assertive"
-					className="mt-1.5 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2"
+					className="mt-1.5 rounded-lg border border-danger-border bg-danger-surface px-3 py-2"
 					data-testid="e2e-wallet-verify-on-device-mismatch"
 				>
-					<p className="inline-flex items-start gap-1.5 text-[11px] font-medium leading-[1.45] text-[#b91c1c]">
-						<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-[#dc2626]" />
+					<p className="inline-flex items-start gap-1.5 text-[11px] font-medium leading-[1.45] text-danger-strong">
+						<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-danger" />
 						<span>
 							Your {deviceCopy(deviceType).label} showed a different {subject}. Do not use this signer until you find
 							out why.
 						</span>
 					</p>
-					<p className="mt-1.5 break-all font-mono text-[11px] leading-[1.45] text-[#7f1d1d]">{state.address}</p>
+					<p className="mt-1.5 break-all font-mono text-[11px] leading-[1.45] text-danger-deep">{state.address}</p>
 					<p className="mt-1 text-[11px] leading-[1.45] text-[#9ca3af]">
 						On a Ledger this also happens when the wrong Bitcoin app is open (mainnet vs testnet) — check that first.
 					</p>
@@ -92,9 +92,9 @@ export function VerifyOnDeviceButton({
 			{state.status === 'failed' && (
 				<p
 					aria-live="polite"
-					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-[#b45309]"
+					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-danger-strong"
 				>
-					<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-[#d97706]" />
+					<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-danger" />
 					<span>
 						Could not verify the {subject}: {state.message}
 					</span>

@@ -160,7 +160,7 @@ export function BumpFeeForm({
 			</p>
 
 			{state.status === 'error' && (
-				<p className="m-0 mt-1.5 text-label text-[#ef4444]" data-testid="e2e-wallet-bump-error">
+				<p className="m-0 mt-1.5 text-label text-danger" data-testid="e2e-wallet-bump-error">
 					{formatAdminWalletError(state.error).body}
 				</p>
 			)}

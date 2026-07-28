@@ -152,9 +152,9 @@ export function SendFeeRateControl({
 			)}
 
 			{presets.source === 'fallback' && (
-				<div className="flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-2.5 py-2">
-					<AlertTriangleIcon width={13} height={13} className="mt-0.5 shrink-0 text-[#d97706]" />
-					<p className="m-0 text-mono-sm leading-relaxed text-[#92400e]">
+				<div className="flex items-start gap-2 rounded-lg border border-accent-border bg-highlight-surface px-2.5 py-2">
+					<AlertTriangleIcon width={13} height={13} className="mt-0.5 shrink-0 text-emphasis-soft" />
+					<p className="m-0 text-mono-sm leading-relaxed text-emphasis">
 						Live fee estimates are unavailable — these rates are a static fallback. Review before sending.
 					</p>
 				</div>
