@@ -370,7 +370,7 @@ export function CreateProposalForm({
 					)}
 
 					{error && !isPreviewMode && (
-						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-body text-[#991b1b]">
+						<div className="mt-6 rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
 							{error}
 						</div>
 					)}
@@ -388,7 +388,7 @@ export function CreateProposalForm({
 									</button>
 								) : (
 									<>
-										{error && <p className="mr-auto text-body text-[#b91c1c]">{error}</p>}
+										{error && <p className="mr-auto text-body text-danger-strong">{error}</p>}
 										<button
 											type="submit"
 											data-testid="e2e-create-proposal-sign-submit"
@@ -431,7 +431,7 @@ export function CreateProposalForm({
 					<div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
 						<p className="m-0 text-heading font-semibold text-[#111827]">Session expired</p>
 						<p className="m-0 mt-2 text-body text-[#6b7280]">{SESSION_EXPIRED_REAUTH_MESSAGE}</p>
-						{reauthError && <p className="m-0 mt-3 text-body text-[#b91c1c]">{reauthError}</p>}
+						{reauthError && <p className="m-0 mt-3 text-body text-danger-strong">{reauthError}</p>}
 						<div className="mt-6 flex items-center justify-end gap-3">
 							<button
 								type="button"

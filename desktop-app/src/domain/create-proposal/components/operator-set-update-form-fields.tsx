@@ -86,7 +86,7 @@ export function OperatorSetUpdateFormFields({ isLoadingConfig, currentOperators,
 						))}
 					</div>
 				) : (
-					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
+					<div className="rounded-xl border border-accent-border bg-highlight-surface p-3">
 						<div className="flex flex-col gap-2">
 							{currentOperators.map((pubkey, idx) => {
 								const isPendingRemoval = pendingRemovalSet.has(String(idx))
@@ -96,12 +96,12 @@ export function OperatorSetUpdateFormFields({ isLoadingConfig, currentOperators,
 										className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3"
 									>
 										<span
-											className={`shrink-0 text-label font-medium tabular-nums ${isPendingRemoval ? 'text-[#dc2626]' : 'text-[#9ca3af]'}`}
+											className={`shrink-0 text-label font-medium tabular-nums ${isPendingRemoval ? 'text-emphasis-soft' : 'text-[#9ca3af]'}`}
 										>
 											#{idx}
 										</span>
 										<span
-											className={`min-w-0 flex-1 break-all font-mono text-label ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+											className={`min-w-0 flex-1 break-all font-mono text-label ${isPendingRemoval ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
 										>
 											{pubkey}
 										</span>
@@ -117,7 +117,7 @@ export function OperatorSetUpdateFormFields({ isLoadingConfig, currentOperators,
 										) : (
 											<button
 												type="button"
-												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												className="shrink-0 text-emphasis-soft hover:text-emphasis"
 												onClick={() => handleRemoveCurrent(idx)}
 												aria-label="Remove operator"
 											>
@@ -133,21 +133,21 @@ export function OperatorSetUpdateFormFields({ isLoadingConfig, currentOperators,
 								return (
 									<div key={index} className="flex flex-col gap-1">
 										<div
-											className={`flex items-center gap-3 rounded-lg border bg-white px-4 py-3 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
+											className={`flex items-center gap-3 rounded-lg border bg-white px-4 py-3 ${itemError ? 'border-danger' : 'border-[#e5e7eb]'}`}
 										>
 											<span
-												className={`shrink-0 text-label font-medium ${itemError ? 'text-[#dc2626]' : 'text-[#d97706]'}`}
+												className={`shrink-0 text-label font-medium ${itemError ? 'text-danger' : 'text-emphasis-soft'}`}
 											>
 												+new
 											</span>
 											<span
-												className={`min-w-0 flex-1 break-all font-mono text-label ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
+												className={`min-w-0 flex-1 break-all font-mono text-label ${itemError ? 'text-danger' : 'text-[#374151]'}`}
 											>
 												{value}
 											</span>
 											<button
 												type="button"
-												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												className="shrink-0 text-emphasis-soft hover:text-emphasis"
 												onClick={() => handleRemoveAdded(index)}
 												aria-label="Remove added operator"
 											>

@@ -52,12 +52,12 @@ export function ActionTypeCard({
 			onClick={onClick}
 			className={`rounded-xl border-2 p-4 text-left transition-colors ${
 				selected
-					? 'border-[#d97706] bg-[#fffbeb]'
-					: 'border-[#e5e7eb] bg-white hover:border-[#fbbf24] hover:bg-[#fffdf5]'
+					? 'border-accent-border bg-highlight-surface'
+					: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
 			}`}
 		>
-			<p className={`m-0 text-body font-semibold ${selected ? 'text-[#92400e]' : 'text-[#111827]'}`}>{title}</p>
-			<p className={`m-0 mt-1 text-label ${selected ? 'text-[#b45309]' : 'text-[#6b7280]'}`}>{description}</p>
+			<p className="m-0 text-body font-semibold text-emphasis">{title}</p>
+			<p className="m-0 mt-1 text-label text-emphasis-soft">{description}</p>
 		</button>
 	)
 }
