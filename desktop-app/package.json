@@ -49,6 +49,7 @@
     "test:lib-device-signing-display": "tsx src/lib/__tests__/device-signing-display.test.ts",
     "test:lib-device-copy": "tsx src/lib/__tests__/device-copy.test.ts",
     "test:color-tokens": "tsx src/lib/__tests__/color-tokens.test.ts",
+    "test:proposal-send-state": "tsx src/lib/__tests__/proposal-send-state.test.ts",
     "test:model-multisig-update-changes": "tsx src/domain/sign-proposal/model/__tests__/multisig-update-changes.test.ts",
     "test:hooks-use-clipboard-copy": "tsx src/hooks/__tests__/use-clipboard-copy.test.ts",
     "test:architecture": "tsx src/domain/admin-wallet/architecture.test.ts",
