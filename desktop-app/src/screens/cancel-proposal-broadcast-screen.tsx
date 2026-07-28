@@ -99,14 +99,14 @@ export function CancelProposalBroadcastScreen() {
 					)}
 
 					{cancelResolveError !== null && (
-						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-body text-[#991b1b]">{cancelResolveError.message}</p>
+						<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+							<p className="m-0 text-body text-danger-deep">{cancelResolveError.message}</p>
 						</div>
 					)}
 
 					{targetQueuedError !== null && (
-						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-body text-[#991b1b]">
+						<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+							<p className="m-0 text-body text-danger-deep">
 								Could not verify the target action's queue status: {targetQueuedError}
 							</p>
 						</div>

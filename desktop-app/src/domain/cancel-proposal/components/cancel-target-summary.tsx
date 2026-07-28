@@ -63,9 +63,9 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 									<td className="px-6 py-3">
 										{row.inBefore ? (
 											<span
-												className={`font-mono leading-relaxed ${row.isRemoved ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+												className={`font-mono leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
 											>
-												{row.isRemoved && <span className="mr-1 text-[#dc2626]">−</span>}
+												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
 												{truncatePubkey(row.pubkey)}
 											</span>
 										) : (

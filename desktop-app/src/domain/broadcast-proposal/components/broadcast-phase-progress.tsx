@@ -132,8 +132,8 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 				{isError && error && (
 					<div className="space-y-3">
-						<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-body-sm text-[#b91c1c]">{error.message}</p>
+						<div className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3">
+							<p className="m-0 text-body-sm text-danger-strong">{error.message}</p>
 						</div>
 						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
 							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">

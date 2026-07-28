@@ -73,14 +73,16 @@ function MultisigUpdateDetails({
 				)}
 
 				{changes.removeKeys.length > 0 && (
-					<div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] p-3">
-						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#dc2626]">
+					<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
+						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-emphasis">
 							Members to remove · {changes.removeKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.removeKeys.map((key) => (
 								<li key={key}>
-									<code className="block break-all font-mono text-mono-sm leading-5 text-[#991b1b]">{key}</code>
+									<code className="block break-all font-mono text-mono-sm leading-5 text-emphasis-soft line-through">
+										{key}
+									</code>
 								</li>
 							))}
 						</ul>
@@ -106,7 +108,7 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 		<div className="mt-5">
 			<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">New verification key</p>
 			<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2.5">
-				<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-[11px] font-medium text-[#92400e]">
+				<span className="shrink-0 self-start rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-[11px] font-medium text-emphasis">
 					{vkPredicateLabelFromTypeId(action.typeId)}
 				</span>
 				{action.conditionHex.length > 0 && (
@@ -217,8 +219,8 @@ export function SignProposalView({
 			</div>
 
 			{error ? (
-				<div className="mt-4 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2">
-					<p className="m-0 text-label text-[#991b1b]">{error}</p>
+				<div className="mt-4 rounded-lg border border-danger-border bg-danger-surface px-3 py-2">
+					<p className="m-0 text-label text-danger-deep">{error}</p>
 				</div>
 			) : null}
 

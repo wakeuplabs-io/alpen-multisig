@@ -23,7 +23,9 @@ export function BroadcastFundingSignerBanner({ backendSignerKind, connectVendor 
 		<div
 			className={[
 				'rounded-lg border px-4 py-3 text-body-sm',
-				mismatch ? 'border-[#fcd34d] bg-[#fffbeb] text-[#92400e]' : 'border-[#e5e7eb] bg-[#f9fafb] text-[#374151]',
+				mismatch
+					? 'border-danger-border bg-danger-surface text-danger-deep'
+					: 'border-[#e5e7eb] bg-[#f9fafb] text-[#374151]',
 			].join(' ')}
 		>
 			<p className="m-0 font-medium text-[#111827]">
@@ -38,7 +40,7 @@ export function BroadcastFundingSignerBanner({ backendSignerKind, connectVendor 
 				</p>
 			) : null}
 			{mismatch && (
-				<p className="m-0 mt-2 text-[#b45309]">
+				<p className="m-0 mt-2 text-danger-deep">
 					You connected {deviceCopy(connectVendor).label} in the UI, but the Admin Wallet session is not hardware-bound.
 					Disconnect, choose <strong>{deviceCopy(connectVendor).label}</strong> (not Mnemonic), connect, authenticate
 					again, then retry broadcast.

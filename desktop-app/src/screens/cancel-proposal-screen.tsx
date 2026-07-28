@@ -87,11 +87,11 @@ export function CancelProposalScreen() {
 					)}
 
 					{error && (
-						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-body text-[#991b1b]">{error}</p>
+						<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+							<p className="m-0 text-body text-danger-deep">{error}</p>
 							<button
 								type="button"
-								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+								className="mt-2 rounded-md border border-danger-deep bg-white px-3 py-1 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 								onClick={reload}
 							>
 								Retry
@@ -103,8 +103,8 @@ export function CancelProposalScreen() {
 						<>
 							{/* Target already enacted — cancellation no longer possible */}
 							{proposal.status === 'enacted' && (
-								<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-									<p className="m-0 text-body font-medium text-[#991b1b]">
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+									<p className="m-0 text-body font-medium text-danger-deep">
 										This proposal has already been enacted. Cancellation is no longer possible.
 									</p>
 								</div>
@@ -112,7 +112,7 @@ export function CancelProposalScreen() {
 
 							{/* Activation countdown */}
 							{proposal.activationHeight !== null && proposal.status === 'approved' && (
-								<div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+								<div className="rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<ActivationCountdown
 										activationHeight={proposal.activationHeight}
 										currentHeight={currentBlockHeight}
