@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Paginator } from '@/components/paginator'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
-import type { Proposal, ProposalStatus } from '@/api/proposals'
+import type { Proposal } from '@/api/proposals'
 import {
 	AlertTriangleIcon,
 	CheckCircleEmeraldIcon,
@@ -14,6 +14,7 @@ import {
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
@@ -104,11 +105,11 @@ export function ProposalsDashboard({
 			</div>
 
 			{error ? (
-				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-body text-[#991b1b]">{error}</p>
+				<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+					<p className="m-0 text-body text-danger-deep">{error}</p>
 					<button
 						type="button"
-						className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+						className="mt-2 rounded-md border border-danger-deep bg-white px-3 py-1 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 						onClick={onRetry}
 					>
 						Retry
@@ -485,16 +486,16 @@ function ProposalCard({
 						className="h-1.75 rounded-full transition-all"
 						style={{
 							width: `${signaturesProgress}%`,
-							background: hasQuorum ? '#0f9d7a' : '#d97706',
+							background: hasQuorum ? '#0f9d7a' : '#111827',
 						}}
 					/>
 				</div>
 
 				{proposal.cancelProposal !== null && (
-					<div className="mt-3 flex items-center gap-2 rounded-lg border border-[#fde68a] bg-[#fefce8] px-3 py-2">
-						<AlertTriangleIcon width={13} height={13} className="shrink-0 text-[#d97706]" />
+					<div className="mt-3 flex items-center gap-2 rounded-lg border border-accent-border bg-highlight-surface px-3 py-2">
+						<AlertTriangleIcon width={13} height={13} className="shrink-0 text-emphasis-soft" />
 						<p className="m-0 flex-1 text-label text-[#6b7280]">
-							<span className="font-semibold text-[#d97706]">
+							<span className="font-semibold text-emphasis-soft">
 								{proposal.cancelProposal.signatures.length} of {proposal.cancelProposal.requiredSignatures}
 							</span>{' '}
 							cancellation signature{proposal.cancelProposal.signatures.length === 1 ? '' : 's'} collected
@@ -543,7 +544,7 @@ function ProposalCard({
 						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
 							<button
 								type="button"
-								className="shrink-0 rounded-xl border border-[#dc2626] bg-white px-3 py-1.5 text-body-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+								className="shrink-0 rounded-xl border border-danger bg-white px-3 py-1.5 text-body-sm font-medium text-danger transition hover:bg-danger-surface"
 								onClick={(e) => {
 									e.stopPropagation()
 									onCancelProposal(proposal.actionId)
@@ -584,25 +585,8 @@ function buildProposalTitle(proposal: Proposal): string {
 	return `Proposal #${proposal.seqNo} - ${inferProposalTypeLabel(proposal)}`
 }
 
-type DisplayStatus = ProposalStatus | 'awaiting_enactment'
-
-const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
-	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-	awaiting_enactment: {
-		bg: '#f0fdf9',
-		text: '#0f766e',
-		border: '#99f6e4',
-		dot: '#0f9d7a',
-		label: 'Awaiting enactment',
-	},
-	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-}
-
 function StatusBadge({ status }: { status: DisplayStatus }) {
-	const s = STATUS_CONFIG[status]
+	const s = PROPOSAL_STATUS_STYLE[status]
 	return (
 		<span
 			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"
