@@ -1,6 +1,6 @@
 import { CopyButton } from '@/components/copy-button'
 import { useState } from 'react'
-import type { Proposal, ProposalStatus } from '@/api/proposals'
+import type { Proposal } from '@/api/proposals'
 import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import {
 	CheckCircleEmeraldIcon,
@@ -16,6 +16,7 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
 
 type Props = {
 	proposal: Proposal
@@ -31,25 +32,8 @@ function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-type DisplayStatus = ProposalStatus | 'awaiting_enactment'
-
-const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
-	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-	awaiting_enactment: {
-		bg: '#f0fdf9',
-		text: '#0f766e',
-		border: '#99f6e4',
-		dot: '#0f9d7a',
-		label: 'Awaiting enactment',
-	},
-	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-}
-
 function StatusBadge({ status }: { status: DisplayStatus }) {
-	const s = STATUS_CONFIG[status]
+	const s = PROPOSAL_STATUS_STYLE[status]
 	return (
 		<span
 			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"
@@ -153,7 +137,7 @@ export function ProposalDetail({
 								className="h-1.5 rounded-full transition-all"
 								style={{
 									width: `${signaturesProgress}%`,
-									background: hasQuorum || isTerminal ? '#0f9d7a' : '#d97706',
+									background: hasQuorum || isTerminal ? '#0f9d7a' : '#111827',
 								}}
 							/>
 						</div>
@@ -191,9 +175,9 @@ export function ProposalDetail({
 									<td className="px-4 py-2.5 align-top">
 										{row.inBefore ? (
 											<span
-												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
 											>
-												{row.isRemoved && <span className="mr-1 text-[#dc2626]">−</span>}
+												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
 												{row.pubkey}
 											</span>
 										) : (

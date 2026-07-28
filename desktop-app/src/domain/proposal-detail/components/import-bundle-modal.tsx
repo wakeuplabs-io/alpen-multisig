@@ -245,14 +245,14 @@ export function ImportBundleModal({
 				/>
 
 				{parseResult !== null && !parseResult.ok && (
-					<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-label font-medium text-[#dc2626]">{parseResult.error}</p>
+					<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-label font-medium text-danger">{parseResult.error}</p>
 					</div>
 				)}
 
 				{verifyState.status === 'error' && (
-					<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-label font-medium text-[#dc2626]">Bitcoin check failed: {verifyState.message}</p>
+					<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-label font-medium text-danger">Bitcoin check failed: {verifyState.message}</p>
 					</div>
 				)}
 

@@ -125,11 +125,11 @@ export function ProposalDetailScreen() {
 					)}
 
 					{error && (
-						<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-							<p className="m-0 text-body text-[#991b1b]">{error}</p>
+						<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+							<p className="m-0 text-body text-danger-deep">{error}</p>
 							<button
 								type="button"
-								className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+								className="mt-2 rounded-md border border-danger-deep bg-white px-3 py-1 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 								onClick={reload}
 							>
 								Retry
@@ -165,14 +165,14 @@ export function ProposalDetailScreen() {
 
 							{/* Expiry countdown for pending proposals */}
 							{proposal.status === 'pending' && (
-								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+								<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
 								</div>
 							)}
 
 							{/* Activation countdown */}
 							{proposal.activationHeight !== null && proposal.status === 'approved' && (
-								<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
+								<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<ActivationCountdown
 										activationHeight={proposal.activationHeight}
 										currentHeight={currentBlockHeight}
@@ -182,14 +182,14 @@ export function ProposalDetailScreen() {
 
 							{/* In-progress cancel banner */}
 							{proposal.cancelProposal !== null && (
-								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-									<p className="m-0 text-body-sm text-[#d97706]">
+								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+									<p className="m-0 text-body-sm text-emphasis-soft">
 										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
 										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
 									</p>
 									<button
 										type="button"
-										className="shrink-0 text-body-sm font-medium text-[#d97706] transition hover:text-[#b45309]"
+										className="shrink-0 text-body-sm font-medium text-emphasis-soft transition hover:text-emphasis"
 										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
 									>
 										View cancel →
@@ -204,7 +204,7 @@ export function ProposalDetailScreen() {
 								proposal.cancelProposal === null && (
 									<button
 										type="button"
-										className="mt-4 w-full rounded-xl border border-[#dc2626] bg-white px-4 py-2.5 text-body font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+										className="mt-4 w-full rounded-xl border border-danger bg-white px-4 py-2.5 text-body font-medium text-danger transition hover:bg-danger-surface"
 										onClick={() => navigate(`/proposals/${actionId}/cancel`, { state: { signerPubkey } })}
 									>
 										Cancel this proposal
