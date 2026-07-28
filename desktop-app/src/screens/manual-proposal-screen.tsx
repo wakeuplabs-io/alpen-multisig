@@ -1,5 +1,4 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { LogOutMutedIcon } from '@/assets/icons'
 import { ManualImportForm } from '@/domain/manual-proposal/components/manual-import-form'
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
 import { useManualProposal } from '@/domain/manual-proposal/hooks/use-manual-proposal'
@@ -13,6 +12,7 @@ import { CopyButton } from '@/components/copy-button'
 import { truncateAdminId } from '@/lib/admin-id'
 import { DownloadButton } from '@/components/download-button'
 import { SessionChip } from '@/components/session-chip'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
 import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
 import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
@@ -92,14 +92,7 @@ export function ManualProposalScreen() {
 							isActive={isOpen}
 							panelId="wallet-slide-dialog"
 						/>
-						<button
-							type="button"
-							className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-							onClick={() => void handleBack()}
-						>
-							<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-							Disconnect
-						</button>
+						<DisconnectButton onClick={() => void handleBack()} />
 					</>
 				}
 			>

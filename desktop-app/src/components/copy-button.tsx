@@ -41,7 +41,7 @@ export function CopyButton({
 				copied
 					? 'border-[#6ee7b7] bg-[#ecfdf5] text-[#065f46]'
 					: error !== null
-						? 'border-[#fca5a5] bg-[#fef2f2] text-[#991b1b]'
+						? 'border-danger-border-soft bg-danger-surface text-danger-deep'
 						: 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#d1d5db] hover:text-[#111827]'
 			}`}
 		>

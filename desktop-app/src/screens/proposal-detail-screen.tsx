@@ -1,7 +1,7 @@
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
-import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
+import { ShieldAccentIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
@@ -12,6 +12,7 @@ import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-d
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -101,14 +102,7 @@ export function ProposalDetailScreen() {
 						adminId={wallet.publicKeyHex}
 						adminIdAddress={wallet.addressSample}
 					/>
-					<button
-						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-						onClick={() => void handleBack()}
-					>
-						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-						Disconnect
-					</button>
+					<DisconnectButton onClick={() => void handleBack()} />
 				</>
 			}
 		>
