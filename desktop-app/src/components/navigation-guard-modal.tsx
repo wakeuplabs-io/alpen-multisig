@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { Blocker } from 'react-router-dom'
 import { AccessibleDialog } from '@/components/accessible-dialog'
+import { Button } from '@/components/button'
 
 type Props = {
 	blocker: Blocker
@@ -30,13 +31,9 @@ export function NavigationGuardModal({
 				>
 					Stay
 				</button>
-				<button
-					type="button"
-					className="rounded-lg border border-[#dc2626] bg-[#dc2626] px-4 py-2 text-body-sm font-medium text-white transition hover:bg-[#b91c1c]"
-					onClick={() => blocker.proceed?.()}
-				>
+				<Button variant="destructive" size="sm" onClick={() => blocker.proceed?.()}>
 					Leave
-				</button>
+				</Button>
 			</div>
 		</AccessibleDialog>
 	)

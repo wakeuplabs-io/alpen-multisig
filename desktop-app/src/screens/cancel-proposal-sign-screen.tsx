@@ -11,13 +11,14 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
-import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
+import { ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
 import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -239,14 +240,7 @@ export function CancelProposalSignScreen() {
 						adminId={wallet.publicKeyHex}
 						adminIdAddress={wallet.addressSample}
 					/>
-					<button
-						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-						onClick={() => void handleBack()}
-					>
-						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-						Disconnect
-					</button>
+					<DisconnectButton onClick={() => void handleBack()} />
 				</>
 			}
 		>

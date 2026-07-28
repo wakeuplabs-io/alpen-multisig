@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { useNavigate } from 'react-router-dom'
-import { LogOutMutedIcon, LogOutRedIcon } from '@/assets/icons'
+import {} from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
@@ -192,27 +193,7 @@ export function WalletConnectScreen() {
 				centerContent={!showTopBarDisconnect}
 				headerContent={
 					<>
-						{showTopBarDisconnect ? (
-							<button
-								type="button"
-								className="group/disconnect inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-								onClick={() => void handleHeaderDisconnect()}
-							>
-								<span className="relative inline-flex h-3 w-3 shrink-0">
-									<LogOutMutedIcon
-										width={12}
-										height={12}
-										className="absolute left-0 top-0 transition-opacity group-hover/disconnect:opacity-0"
-									/>
-									<LogOutRedIcon
-										width={12}
-										height={12}
-										className="absolute left-0 top-0 opacity-0 transition-opacity group-hover/disconnect:opacity-100"
-									/>
-								</span>
-								Disconnect
-							</button>
-						) : null}
+						{showTopBarDisconnect ? <DisconnectButton onClick={() => void handleHeaderDisconnect()} /> : null}
 						<NetworkStatusPill
 							mode={nodeConfig?.mode ?? 'local'}
 							localNodeStatus={localNodeStatus}
