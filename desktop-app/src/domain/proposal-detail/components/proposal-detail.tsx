@@ -17,6 +17,7 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
 
 type Props = {
 	proposal: Proposal
@@ -84,6 +85,7 @@ export function ProposalDetail({
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
+	const sendState = proposalSendState(proposal)
 
 	const displayStatus: DisplayStatus =
 		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
@@ -318,7 +320,17 @@ export function ProposalDetail({
 			{/* ── Action buttons ── */}
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex-1">
-					{hasQuorum && (
+					{sendState.kind === 'failed' && (
+						<div
+							className="mb-2 rounded-xl border border-danger-border bg-danger-surface px-4 py-3"
+							data-testid="e2e-detail-broadcast-failed"
+						>
+							<p className="m-0 text-body-sm font-medium text-danger-deep">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-danger-deep">{proposal.broadcastError ?? sendState.detail}</p>
+						</div>
+					)}
+
+					{showsSendButton(sendState) && (
 						<button
 							type="button"
 							data-testid="e2e-detail-broadcast-button"
@@ -326,8 +338,20 @@ export function ProposalDetail({
 							onClick={onBroadcast}
 						>
 							<SendIcon width={14} height={14} />
-							Send
+							{sendButtonLabel(sendState)}
 						</button>
+					)}
+
+					{/* Once the bundle is on its way there is nothing to press — say where it
+					    is instead, so a signer can tell whether it still needs sending (#432). */}
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
+						<div
+							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
+							data-testid="e2e-detail-broadcast-stage"
+						>
+							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+						</div>
 					)}
 
 					{canSign && (

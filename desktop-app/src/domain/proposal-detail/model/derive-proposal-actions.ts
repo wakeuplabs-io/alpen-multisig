@@ -37,7 +37,15 @@ export function deriveProposalActions(proposal: ProposalActionInput, signerPubke
 		proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
 
 	const canSign = !isTerminal && !broadcastStarted && signerPubkey !== null && !alreadySigned
-	const canBroadcast = hasQuorum && proposal.status === 'approved' && !broadcastStarted
+
+	// `failed` re-opens sending on purpose. The backend accepts a re-broadcast from
+	// `Idle | Failed` and rejects every other state with a conflict, so hiding the
+	// button after a failure would strand the user in a state the API can recover
+	// from (#432).
+	const canBroadcast =
+		hasQuorum &&
+		proposal.status === 'approved' &&
+		(proposal.broadcastStatus === 'idle' || proposal.broadcastStatus === 'failed')
 
 	return { isTerminal, hasQuorum, broadcastStarted, alreadySigned, canSign, canBroadcast }
 }

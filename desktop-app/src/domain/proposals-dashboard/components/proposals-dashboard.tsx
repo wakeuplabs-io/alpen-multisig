@@ -15,6 +15,7 @@ import {
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
@@ -419,8 +420,8 @@ function ProposalCard({
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
 	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
-	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
-	const awaitingEnactment = proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+	const sendState = proposalSendState(proposal)
+	const awaitingEnactment = sendState.kind === 'confirmed'
 
 	const signButton = canSign ? (
 		<button
@@ -512,10 +513,16 @@ function ProposalCard({
 
 			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
-					<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
-						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
-						Quorum reached — ready to send
-					</p>
+					{sendState.kind === 'failed' ? (
+						<p className="m-0 text-body font-medium text-danger-deep">
+							{sendState.label} — {sendState.detail}
+						</p>
+					) : (
+						<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
+							<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
+							Quorum reached — ready to send
+						</p>
+					)}
 					<div className="flex shrink-0 items-center gap-2">
 						{signButton}
 						<button
@@ -528,7 +535,7 @@ function ProposalCard({
 							data-testid="e2e-proposal-broadcast-button"
 						>
 							<SendIcon width={14} height={14} />
-							Send
+							{sendButtonLabel(sendState)}
 						</button>
 					</div>
 				</div>
@@ -536,7 +543,9 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<div className="flex items-start justify-between gap-3">
 						<div>
-							<p className="m-0 text-body font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
+							<p className="m-0 text-body font-medium text-[#0f9d7a]">
+								{sendState.kind === 'confirmed' ? sendState.label : ''}
+							</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">
 								Refresh the dashboard after the confirmation delay to see enacted status.
 							</p>
@@ -555,9 +564,10 @@ function ProposalCard({
 						)}
 					</div>
 				</div>
-			) : broadcastInProgress ? (
+			) : sendState.kind === 'in-flight' ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-body font-medium text-[#6b7280]">Send in progress</p>
+					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
