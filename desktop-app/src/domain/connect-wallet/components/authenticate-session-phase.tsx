@@ -1,5 +1,6 @@
 import { CopyButton } from '@/components/copy-button'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { ADMIN_ID_LABEL } from '@/lib/admin-id'
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { useDeviceMessageDisplay } from '@/hooks/use-device-message-display'
 import type { WalletVendor } from '@/wallet/types'
@@ -7,7 +8,7 @@ import type { WalletVendor } from '@/wallet/types'
 type Props = {
 	authorityLabel: string
 	adapterLabel: string
-	signerAddress: string
+	/** The Admin ID: the signer's compressed public key (#408). */
 	compressedPublicKey: string
 	isAuthenticating: boolean
 	authError: string | null
@@ -22,7 +23,6 @@ type Props = {
 export function AuthenticateSessionPhase({
 	authorityLabel,
 	adapterLabel,
-	signerAddress,
 	compressedPublicKey,
 	isAuthenticating,
 	authError,
@@ -66,7 +66,7 @@ export function AuthenticateSessionPhase({
 				Authenticate session
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Your {adapterLabel} will sign an authentication challenge to prove control of this address. This requires{' '}
+				Your {adapterLabel} will sign an authentication challenge to prove control of this Admin ID. This requires{' '}
 				<strong className="font-medium text-[#374151]">1 signature</strong> for the coordination backend.
 			</p>
 
@@ -76,20 +76,18 @@ export function AuthenticateSessionPhase({
 				</p>
 				<div className="mt-3 grid gap-3">
 					<div>
-						<p className="m-0 text-label text-[#9ca3af]">Authority</p>
+						<p className="m-0 text-label text-[#9ca3af]">Multisig</p>
 						<p className="m-0 mt-1 text-body font-medium text-[#111827]">{authorityLabel}</p>
 					</div>
 					<div>
-						<p className="m-0 text-label text-[#9ca3af]">Admin ID</p>
+						<p className="m-0 text-label text-[#9ca3af]">{ADMIN_ID_LABEL}</p>
 						<div className="mt-1 flex items-start justify-between gap-2">
-							<p className="m-0 min-w-0 break-all font-mono text-label text-[#111827]">{signerAddress}</p>
-							<CopyButton text={signerAddress} variant="icon" />
-						</div>
-					</div>
-					<div>
-						<p className="m-0 text-label text-[#9ca3af]">Compressed public key</p>
-						<div className="mt-1 flex items-start justify-between gap-2">
-							<p className="m-0 min-w-0 break-all font-mono text-label text-[#111827]">{compressedPublicKey}</p>
+							<p
+								className="m-0 min-w-0 break-all font-mono text-label text-[#111827]"
+								data-testid="e2e-authenticate-admin-id-value"
+							>
+								{compressedPublicKey}
+							</p>
 							<CopyButton text={compressedPublicKey} variant="icon" />
 						</div>
 					</div>
@@ -127,7 +125,7 @@ export function AuthenticateSessionPhase({
 			)}
 
 			{authOkMessage && <p className="mt-4 text-[0.85rem] text-[#166534]">{authOkMessage}</p>}
-			{authError && <p className="mt-3 text-[0.85rem] text-[#b91c1c]">{authError}</p>}
+			{authError && <p className="mt-3 text-[0.85rem] text-danger-strong">{authError}</p>}
 
 			<div className="mt-4">
 				<button

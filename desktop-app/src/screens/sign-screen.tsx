@@ -6,13 +6,17 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
-import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
+import { ShieldAccentIcon } from '@/assets/icons'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { useCurrentThreshold } from '@/domain/sign-proposal/hooks/use-current-threshold'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { deviceCopy } from '@/lib/device-copy'
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -72,6 +76,10 @@ export function SignScreen() {
 	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
 		proposal?.seqNo ?? null,
 		decodedActionHex || null,
+	)
+	const currentThreshold = useCurrentThreshold(
+		authorityFromRole(selectedRole),
+		decodedAction?.kind === 'multisig_update',
 	)
 	const deviceDisplay = deviceSigningDisplay(adapter.vendor, {
 		message: deviceMessage,
@@ -214,7 +222,7 @@ export function SignScreen() {
 			return
 		}
 		try {
-			await navigator.clipboard.writeText(sighashHex)
+			await writeClipboard(sighashHex)
 			setCopyFeedbackVisible(true)
 			setTimeout(() => setCopyFeedbackVisible(false), 450)
 		} catch (error) {
@@ -240,16 +248,10 @@ export function SignScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						addressSample={wallet.addressSample}
+						adminId={wallet.publicKeyHex}
+						adminIdAddress={wallet.addressSample}
 					/>
-					<button
-						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-						onClick={() => void handleBack()}
-					>
-						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-						Disconnect
-					</button>
+					<DisconnectButton onClick={() => void handleBack()} />
 				</>
 			}
 		>
@@ -259,9 +261,7 @@ export function SignScreen() {
 				<h1 className="m-0 mt-3 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 					Sign proposal
 				</h1>
-				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-					Review the payload, then confirm on your Trezor. Nothing is sent until you sign.
-				</p>
+				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{deviceCopy(adapter.vendor).reviewPrompt}</p>
 
 				{isLoading ? (
 					<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-body text-[#6b7280]">
@@ -270,11 +270,11 @@ export function SignScreen() {
 				) : null}
 
 				{loadError ? (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body text-danger-deep">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-danger-deep bg-white px-3 py-1.5 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 							onClick={() => navigate('/proposals')}
 						>
 							Back to proposals
@@ -283,23 +283,23 @@ export function SignScreen() {
 				) : null}
 
 				{!isLoading && proposal !== null && proposal.status !== 'pending' ? (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#991b1b]">
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-danger-deep">
 							This proposal is no longer pending and cannot be signed.
 						</p>
 					</div>
 				) : null}
 
 				{!isLoading && signerAlreadySigned ? (
-					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#92400e]">
+					<div className="mt-5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-emphasis">
 							You already signed this proposal. Additional signatures from the same signer are not allowed.
 						</p>
 					</div>
 				) : null}
 
 				{!isLoading && proposal !== null && proposal.status === 'pending' && (
-					<div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5">
+					<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-2.5">
 						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
 					</div>
 				)}
@@ -351,6 +351,7 @@ export function SignScreen() {
 							proposalTitle={proposalTitle}
 							decodedAction={decodedAction}
 							sighashHex={sighashHex}
+							currentThreshold={currentThreshold}
 							deviceDisplay={deviceDisplay}
 							signResult={signResult}
 							isSigning={isSigning}

@@ -19,7 +19,7 @@ When an employee signs the `SHA256SUMS` file using their personal PGP key, they 
 Each participating employee requires:
 
 - A personal PGP key pair (private key kept secure, public key shared with the team)
-- Access to the Alpen Multisig GitHub repository (to commit the public key)
+- Access to the Strata Multisig GitHub repository (to commit the public key)
 - GitHub Secrets access configured by the development team
 
 ### Step 1 — Generate PGP Key Pair

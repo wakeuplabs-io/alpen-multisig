@@ -57,7 +57,7 @@ export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 				</div>
 			</div>
 
-			{error && <p className="text-label text-[#dc2626]">{error}</p>}
+			{error && <p className="text-label text-danger">{error}</p>}
 		</div>
 	)
 }

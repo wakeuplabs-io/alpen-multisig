@@ -4,7 +4,7 @@
  */
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 
-describe('Alpen Multisig wallet smoke', () => {
+describe('Strata Multisig wallet smoke', () => {
 	it('connects with mnemonic and reaches /proposals', async () => {
 		await loginMnemonicToProposals(DEMO_MNEMONIC)
 	})

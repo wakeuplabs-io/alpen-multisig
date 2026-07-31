@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Alpen Multisig application supports hardware wallets that provide the following capabilities required by the Strata/Alpen protocol:
+The Strata Multisig application supports hardware wallets that provide the following capabilities required by the Strata/Alpen protocol:
 
 - **Taproot key derivation** — BIP-86 compliant derivation path `m/86'/0'/73'/0/n`
 - **Raw ECDSA signing** — secp256k1 signatures over SPS-65 sighash (no Bitcoin message prefix)

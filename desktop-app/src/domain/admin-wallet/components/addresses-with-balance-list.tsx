@@ -62,7 +62,7 @@ export function AddressesWithBalanceList({
 					)}
 
 					{error !== null && rows === null && !isLoading && (
-						<div className="py-3 text-label text-[#ef4444]">{formatAdminWalletError(error).body}</div>
+						<div className="py-3 text-label text-danger">{formatAdminWalletError(error).body}</div>
 					)}
 
 					{rows !== null && rows.length === 0 && !isLoading && error === null && (

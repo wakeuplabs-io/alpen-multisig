@@ -15,6 +15,7 @@ import { getAdminWalletCanSign, walletSessionInit, walletSessionInitWatchOnly } 
 import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
 import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
 import type { WalletAdapter } from '@/wallet/types'
+import { deviceCopy } from '@/lib/device-copy'
 
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 import { deriveBroadcastError, phaseForBroadcastStatus } from '../model/broadcast-proposal'
@@ -243,7 +244,7 @@ export function useBroadcastProposal(
 				if (parsed?.success && parsed.data.signerKind !== 'hardware') {
 					setError(
 						deriveBroadcastError(
-							'Admin Wallet is not bound to your hardware device. Disconnect, connect with Ledger (not Mnemonic), authenticate, then try again.',
+							`Admin Wallet is not bound to your hardware device. Disconnect, connect with ${deviceCopy(adapter.vendor).label} (not Mnemonic), authenticate, then try again.`,
 						),
 					)
 					setPhase('error')

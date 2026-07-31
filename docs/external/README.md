@@ -1,6 +1,6 @@
-# Alpen Multisig — External Documentation
+# Strata Multisig — External Documentation
 
-This directory contains client-facing deliverables for the Alpen Multisig application. These documents are intended for delivery to Alpen Labs and describe the delivered scope: architecture, API, setup, operations, and quality artifacts for the current release line.
+This directory contains client-facing deliverables for the Strata Multisig application. These documents are intended for delivery to Alpen Labs and describe the delivered scope: architecture, API, setup, operations, and quality artifacts for the current release line.
 
 ## Document Index
 
@@ -19,6 +19,7 @@ This directory contains client-facing deliverables for the Alpen Multisig applic
 | [Architecture Overview](./architecture-overview.md) | System design, components, and data flow | Proposal §Technical Approach |
 | [API Reference](./api-reference.md) | Backend API endpoints and authentication | Backend PRD §3-§4 |
 | [Protocol Research and Integration Assessment](./research-assessment.md) | Protocol integration, update types, and technical assessment | Proposal §Deliverables |
+| [Proposal Lifecycle States](./proposal-lifecycle-states.md) | Every proposal and broadcast state, what each means, and when the Send button appears | Issue #432 |
 
 ### Build and Release
 

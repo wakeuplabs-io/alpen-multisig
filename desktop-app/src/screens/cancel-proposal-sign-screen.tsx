@@ -11,13 +11,14 @@ import {
 	type Proposal,
 } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
-import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
+import { ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
 import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import type { SignSighashResult } from '@/wallet/types'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -236,16 +237,10 @@ export function CancelProposalSignScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						addressSample={wallet.addressSample}
+						adminId={wallet.publicKeyHex}
+						adminIdAddress={wallet.addressSample}
 					/>
-					<button
-						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-						onClick={() => void handleBack()}
-					>
-						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-						Disconnect
-					</button>
+					<DisconnectButton onClick={() => void handleBack()} />
 				</>
 			}
 		>
@@ -264,11 +259,11 @@ export function CancelProposalSignScreen() {
 				)}
 
 				{loadError && (
-					<div className="mt-5 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-						<p className="m-0 text-body text-[#991b1b]">{loadError}</p>
+					<div className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+						<p className="m-0 text-body text-danger-deep">{loadError}</p>
 						<button
 							type="button"
-							className="mt-3 inline-flex items-center rounded-md border border-[#991b1b] bg-white px-3 py-1.5 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+							className="mt-3 inline-flex items-center rounded-md border border-danger-deep bg-white px-3 py-1.5 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 							onClick={() => navigate(`/proposals/${actionId}/cancel`)}
 						>
 							Back to cancel
@@ -277,8 +272,8 @@ export function CancelProposalSignScreen() {
 				)}
 
 				{!isLoading && alreadySigned && (
-					<div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3">
-						<p className="m-0 text-body font-medium text-[#92400e]">You have already signed this cancel proposal.</p>
+					<div className="mt-5 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+						<p className="m-0 text-body font-medium text-emphasis">You have already signed this cancel proposal.</p>
 					</div>
 				)}
 
@@ -310,8 +305,8 @@ export function CancelProposalSignScreen() {
 
 						{/* Sign error */}
 						{signError && (
-							<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-								<p className="m-0 text-body text-[#991b1b]">{signError}</p>
+							<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+								<p className="m-0 text-body text-danger-deep">{signError}</p>
 							</div>
 						)}
 

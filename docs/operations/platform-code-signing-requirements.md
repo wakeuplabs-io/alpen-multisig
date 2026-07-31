@@ -6,7 +6,7 @@
 
 Platform code signing is a security mechanism used by operating systems to verify the identity of the software publisher and ensure that applications have not been tampered with since they were signed. When properly signed, users see the trusted publisher's name and can install applications without security warnings.
 
-This document outlines the platform code signing requirements for distributing the Alpen Multisig application on macOS and Windows.
+This document outlines the platform code signing requirements for distributing the Strata Multisig application on macOS and Windows.
 
 ## macOS — Apple Developer ID
 

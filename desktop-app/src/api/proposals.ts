@@ -6,22 +6,12 @@ import { z } from 'zod'
 export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired'
 
 export type BroadcastStatus =
-	| 'idle'
-	| 'commit_broadcasted'
-	| 'commit_confirmed'
-	| 'reveal_broadcasted'
-	| 'reveal_confirmed'
-	| 'failed'
+	'idle' | 'commit_broadcasted' | 'commit_confirmed' | 'reveal_broadcasted' | 'reveal_confirmed' | 'failed'
 
 export type ProposalKind = 'update' | 'cancel'
 
 export type ActionType =
-	| 'multisig_update'
-	| 'vk_update'
-	| 'operator_set_update'
-	| 'sequencer_key_update'
-	| 'cancel'
-	| 'unknown'
+	'multisig_update' | 'vk_update' | 'operator_set_update' | 'sequencer_key_update' | 'cancel' | 'unknown'
 
 export type CancelProposalSummary = {
 	actionId: string

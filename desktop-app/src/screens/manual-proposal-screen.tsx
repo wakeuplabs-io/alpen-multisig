@@ -1,5 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom'
-import { LogOutMutedIcon } from '@/assets/icons'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ManualImportForm } from '@/domain/manual-proposal/components/manual-import-form'
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
 import { useManualProposal } from '@/domain/manual-proposal/hooks/use-manual-proposal'
@@ -10,8 +9,10 @@ import { feeSats } from '@/domain/fee-selection/model/fee-rate'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
+import { truncateAdminId } from '@/lib/admin-id'
 import { DownloadButton } from '@/components/download-button'
 import { SessionChip } from '@/components/session-chip'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { useWalletPanelState } from '@/domain/admin-wallet/hooks/use-wallet-panel-state'
 import { useAdminWalletBalance } from '@/domain/admin-wallet/hooks/use-admin-wallet-balance'
 import { useAdminWalletReceiveAddress } from '@/domain/admin-wallet/hooks/use-admin-wallet-receive-address'
@@ -29,6 +30,7 @@ type LocationState = { prefill?: ManualBundleJson }
 
 export function ManualProposalScreen() {
 	const location = useLocation()
+	const navigate = useNavigate()
 	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const prefill = (location.state as LocationState | null)?.prefill ?? null
 	// `null` until presets load: the broadcast step stays blocked so we never fall back to a silent default rate.
@@ -70,11 +72,7 @@ export function ManualProposalScreen() {
 		return <Navigate to="/" replace />
 	}
 
-	const signerLabel = wallet.addressSample
-		? `${wallet.addressSample.slice(0, 10)}…${wallet.addressSample.slice(-8)}`
-		: wallet.publicKeyHex
-			? `${wallet.publicKeyHex.slice(0, 10)}…${wallet.publicKeyHex.slice(-6)}`
-			: 'Unknown'
+	const signerLabel = wallet.publicKeyHex ? truncateAdminId(wallet.publicKeyHex) : 'Unknown'
 
 	const stepIndex = manual.step === 'import' ? 0 : manual.step === 'sign-collect' ? 1 : 2
 
@@ -94,18 +92,19 @@ export function ManualProposalScreen() {
 							isActive={isOpen}
 							panelId="wallet-slide-dialog"
 						/>
-						<button
-							type="button"
-							className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-							onClick={() => void handleBack()}
-						>
-							<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-							Disconnect
-						</button>
+						<DisconnectButton onClick={() => void handleBack()} />
 					</>
 				}
 			>
 				<div className="mx-auto w-full max-w-190">
+					<button
+						type="button"
+						className="mb-3 inline-flex items-center gap-1 text-body text-[#666] transition hover:text-[#0a0a0a]"
+						onClick={() => navigate(-1)}
+					>
+						<span aria-hidden="true">←</span>
+						Back
+					</button>
 					<h1 className="m-0 font-display text-[44px] leading-[1.05] tracking-[-0.01em] text-[#0a0a0a]">
 						Manual execution
 					</h1>
@@ -327,10 +326,10 @@ export function ManualProposalScreen() {
 								{/* Error */}
 								{manual.broadcastPhase === 'error' && (
 									<div className="space-y-3">
-										<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-											<p className="m-0 text-body-sm font-medium text-[#dc2626]">Send failed</p>
+										<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+											<p className="m-0 text-body-sm font-medium text-danger">Send failed</p>
 											{manual.broadcastError && (
-												<p className="m-0 mt-1 text-label text-[#991b1b]">{manual.broadcastError}</p>
+												<p className="m-0 mt-1 text-label text-danger-deep">{manual.broadcastError}</p>
 											)}
 										</div>
 										<button
@@ -352,7 +351,8 @@ export function ManualProposalScreen() {
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
-					adminId={wallet.addressSample}
+					adminId={wallet.publicKeyHex}
+					adminIdAddress={wallet.addressSample}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					isBalanceLoading={balanceHook.isLoading}

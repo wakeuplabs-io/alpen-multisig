@@ -1,6 +1,8 @@
+import { CopyButton } from '@/components/copy-button'
 import type { Proposal } from '@/api/proposals'
-import { CheckCircleEmeraldIcon, CopyClipboardIcon, UsbTridentIcon } from '@/assets/icons'
-import { useState } from 'react'
+import type { WalletVendor } from '@/wallet/types'
+import { deviceCopy } from '@/lib/device-copy'
+import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import {
 	countSignersAfterUpdate,
 	normalizeSignerKey,
@@ -22,29 +24,11 @@ type Props = {
 	newSequencerKeyHex: string
 	sighashHex: string | null
 	authorityLabel: string
+	/** Signer connected in this session — drives the device-specific confirmation copy. */
+	walletVendor: WalletVendor
 	currentSigners: string[]
 	currentThreshold: number
 	createdProposal: Proposal | null
-}
-
-function CopyButton({ text }: { text: string }) {
-	const [copied, setCopied] = useState(false)
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 1500)
-		})
-	}
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="flex shrink-0 items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-white px-3 py-1.5 text-label font-medium text-[#374151] hover:bg-[#f9fafb]"
-		>
-			<CopyClipboardIcon width={13} height={13} />
-			{copied ? 'Copied!' : 'Copy'}
-		</button>
-	)
 }
 
 export function CreateProposalPreview({
@@ -61,10 +45,12 @@ export function CreateProposalPreview({
 	newSequencerKeyHex,
 	sighashHex,
 	authorityLabel,
+	walletVendor,
 	currentSigners,
 	currentThreshold,
 	createdProposal,
 }: Props) {
+	const signerCopy = deviceCopy(walletVendor)
 	const actionTypeLabel =
 		actionType === 'signer_update'
 			? 'Signer update'
@@ -163,7 +149,7 @@ export function CreateProposalPreview({
 							<div className="flex flex-col gap-1">
 								{operatorIndicesToRemove.map((idx, i) => (
 									<div key={i} className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2">
-										<span className="shrink-0 text-label font-medium text-[#dc2626]">–</span>
+										<span className="shrink-0 text-label font-medium text-emphasis-soft">–</span>
 										<span className="text-body text-[#374151]">Index {idx}</span>
 									</div>
 								))}
@@ -230,7 +216,7 @@ export function CreateProposalPreview({
 						New Verification Key
 					</p>
 					<div className="flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-4 py-3">
-						<span className="shrink-0 self-start rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-label font-medium text-[#92400e]">
+						<span className="shrink-0 self-start rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-label font-medium text-emphasis">
 							{VK_PREDICATE_TYPE_LABELS[vkTypeId]}
 						</span>
 						{newVkHex.trim().length > 0 && (
@@ -250,16 +236,15 @@ export function CreateProposalPreview({
 				</div>
 			</div>
 
-			<div className="flex items-start gap-4 rounded-xl border border-[#d97706] bg-[#fffbeb] p-4">
+			<div className="flex items-start gap-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
 				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white">
-					<UsbTridentIcon width={24} height={24} className="text-[#c2773b]" />
+					<UsbTridentIcon width={24} height={24} className="text-emphasis-soft" />
 				</div>
 				<div>
-					<p className="m-0 font-semibold text-[#111827]">Confirm on device</p>
-					<p className="m-0 mt-1 text-body text-[#6b7280]">
-						Your device shows the message it signs, not this sighash — Ledger displays its SHA-256 ("Message hash"),
-						Trezor the message text. Confirm that on the device before approving.
+					<p className="m-0 font-semibold text-[#111827]">
+						{signerCopy.isHardware ? 'Confirm on device' : 'Confirm before signing'}
 					</p>
+					<p className="m-0 mt-1 text-body text-[#6b7280]">{signerCopy.verifyHint}</p>
 				</div>
 			</div>
 		</div>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { AuthRole } from '@/types'
 import { AuthorityShieldIcon, AuthorityLayersIcon, AuthorityServerIcon } from '@/assets/icons'
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
+import { ConnectAdminIdCard } from '@/domain/connect-wallet/components/connect-admin-id-card'
 
 export type AuthorityOption = {
 	id: string
@@ -16,6 +17,8 @@ export type AuthorityOption = {
 type Props = {
 	selectedAuthorityId: string | null
 	options: AuthorityOption[]
+	/** Admin ID derived at connect — shown before the membership check runs (#410). */
+	adminId: string | undefined
 	isChecking?: boolean
 	onSelectAuthority: (authorityId: string) => void
 	onContinueToAuthenticate: () => void
@@ -31,6 +34,7 @@ const AUTHORITY_ICONS: Record<string, ReactNode> = {
 export function AuthoritySelectionPhase({
 	selectedAuthorityId,
 	options,
+	adminId,
 	isChecking = false,
 	onSelectAuthority,
 	onContinueToAuthenticate,
@@ -59,12 +63,16 @@ export function AuthoritySelectionPhase({
 			</div>
 
 			<h1 className="m-0 font-display text-[2.15rem] font-normal leading-[1.1] tracking-[-0.01em] text-[#0a0a0a]">
-				Select authority
+				Select multisig
 			</h1>
 			<p className="mb-0 mt-3 text-[0.88rem] leading-[1.55] text-[#6b7280]">
-				Choose which governance authority you are acting as. Alpen will verify that your selected address is a
-				registered signer before advancing.
+				This is the Admin ID your signer derived. Check it first, then choose which multisig you are acting as — the
+				application verifies that this Admin ID is a registered signer before advancing.
 			</p>
+
+			<div className="mt-5">
+				<ConnectAdminIdCard adminId={adminId} />
+			</div>
 
 			<div className="mt-5 space-y-3">
 				{options.map((option) => {
@@ -79,7 +87,7 @@ export function AuthoritySelectionPhase({
 								: 'border-[#e5e7eb] bg-white text-[#6b7280]'
 
 					const iconBgClass = isSelected
-						? 'bg-accent-surface text-accent'
+						? 'bg-accent-surface text-emphasis'
 						: isDisabled
 							? 'bg-[#f3f4f6] text-[#d1d5db]'
 							: 'bg-[#f3f4f6] text-[#9ca3af]'
@@ -149,9 +157,9 @@ export function AuthoritySelectionPhase({
 			<ScreenBottomBar
 				left={
 					<>
-						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Authority</p>
+						<p className="m-0 text-[0.65rem] font-medium uppercase tracking-[0.14em] text-[#9ca3af]">Multisig</p>
 						<p className="m-0 mt-1 text-body text-[#334155]">
-							{selectedOption ? selectedOption.label : 'Select an authority from the list above'}
+							{selectedOption ? selectedOption.label : 'Select a multisig from the list above'}
 						</p>
 					</>
 				}

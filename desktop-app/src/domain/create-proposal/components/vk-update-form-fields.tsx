@@ -81,9 +81,9 @@ export function VkUpdateFormFields({ currentVk, isLoadingCurrentVk }: Props) {
 						Could not load current VK from chain.
 					</div>
 				) : (
-					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
+					<div className="rounded-xl border border-accent-border bg-highlight-surface p-3">
 						<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3">
-							<span className="shrink-0 rounded-md bg-[#fef3c7] px-2 py-0.5 font-mono text-label font-medium text-[#92400e]">
+							<span className="shrink-0 rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-label font-medium text-emphasis">
 								{currentVk.typeName}
 							</span>
 							{currentVk.conditionHex.length > 0 && (
@@ -113,13 +113,11 @@ export function VkUpdateFormFields({ currentVk, isLoadingCurrentVk }: Props) {
 								onClick={() => handleTypeSelect(type)}
 								className={`rounded-xl border px-4 py-3 text-left transition-colors ${
 									isSelected
-										? 'border-[#d97706] bg-[#fffbeb]'
-										: 'border-[#e5e7eb] bg-white hover:border-[#d97706] hover:bg-[#fffbeb]/40'
+										? 'border-accent-border bg-highlight-surface'
+										: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
 								}`}
 							>
-								<p className={`font-mono text-body font-semibold ${isSelected ? 'text-[#92400e]' : 'text-[#111827]'}`}>
-									{m.label}
-								</p>
+								<p className="font-mono text-body font-semibold text-emphasis">{m.label}</p>
 								<p className="mt-0.5 text-label text-[#6b7280]">{m.description}</p>
 							</button>
 						)

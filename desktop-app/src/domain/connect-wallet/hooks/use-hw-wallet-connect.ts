@@ -65,6 +65,9 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 			onConnected({
 				...info,
 				addressSample: canonicalEntry.address,
+				// The Admin ID is this key (#408); keep it on the session under an explicit field
+				// so screens never have to fall back to xpubOrFingerprint.
+				publicKeyHex: canonicalEntry.publicKeyHex,
 				xpubOrFingerprint: canonicalEntry.publicKeyHex,
 			})
 			setConnectViewState('success')

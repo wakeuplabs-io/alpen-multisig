@@ -18,7 +18,7 @@ const VARIANT: Record<ButtonVariant, string> = {
 	secondary:
 		'rounded-xl border border-[#111827] bg-transparent text-[#0a0a0a] hover:bg-bg-surface hover:border-accent-border',
 	ghost: 'rounded-lg bg-transparent font-normal text-accent hover:text-accent-hover hover:underline',
-	destructive: 'rounded-xl border border-[#dc2626] bg-[#dc2626] text-white hover:bg-[#b91c1c]',
+	destructive: 'rounded-xl border border-danger bg-danger text-white hover:bg-danger-strong',
 }
 
 const SIZE: Record<ButtonSize, string> = {

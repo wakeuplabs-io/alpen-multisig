@@ -109,6 +109,68 @@ All new code lives in existing locations and respects the dependency-direction r
 
 Dependency direction is preserved: components depend on pure model helpers and shared primitives; model helpers depend on nothing React/transport. The Admin ID reaches the panel by **prop drilling an existing value** (`addressSample`), not by adding a data dependency to `useWalletPanelData`.
 
+---
+
+## Update — feedback 2026-07-01 (#408, #409, #410, #412)
+
+Alpen corrected a requirement that this spec encoded from the pre-update PRD: **the Admin ID
+*is* the signer's compressed public key**, not the BIP-84 address derived from it. Everything
+below supersedes the "canonical BIP-84 auth address" framing used above.
+
+### What changed
+
+- **#408 / #412 — the Admin ID is the compressed public key everywhere.** The address rendering
+  and the separate "Compressed public key" block on the authenticate-session screen are gone; a
+  single `Admin ID` field carries the key. Same value in the wallet panel (`AdminIdRow`), the
+  session chip and the offline/manual screen. Presentation rules moved to `src/lib/admin-id.ts`
+  (shared by the connect flow and the Admin Wallet) and `isDisplayableAdminId` now validates a
+  compressed pubkey (33 bytes, `02`/`03`, optional `0x`) instead of "any non-placeholder string".
+  The safety caption changed accordingly: the Admin ID is a public key, **not** a payment address.
+- **#410 — order of the sign-in flow.** The Admin ID is now shown on the *multisig selection*
+  step (`ConnectAdminIdCard`), rendered while the canonical signer-set membership check is still
+  running. The signer verifies the identity the app derived before the app judges it.
+- The BIP-84 derivation itself is unchanged (`m/84'/…/73'/0/0`); only what the UI presents changed.
+
+### Device capability (#409) — the signer cannot see the raw key on the device
+
+Alpen asked for a button that displays the Admin ID **on the hardware signer's screen**.
+Neither supported device can render a raw compressed public key:
+
+| Device | What the API can display | Evidence |
+|---|---|---|
+| Trezor | `GetAddress` with `show_display = true` → an **address**; `GetPublicKey` with `show_display = true` → an **xpub** (base58 extended key, not the 33-byte hex) | `src-tauri/src/infrastructure/hw_wallet/trezor.rs` (`get_xpub`, `verify_address`) |
+| Ledger | `get_wallet_address(..., display = true)` → an **address** via a wallet policy; `get_extended_pubkey(path, display = true)` → an **xpub** | `src-tauri/src/infrastructure/hw_wallet/ledger.rs` (`verify_address_with`), `ledger_bitcoin_client` 0.6.2 |
+
+**Decision:** keep the existing verify-on-device affordance, which shows the **P2WPKH address
+derived from the same key and path**, and make that comparison actually possible. Confirming that
+address proves the device holds the key behind the displayed Admin ID — `address = bech32(hash160(pubkey))`
+is a deterministic function of that exact key. Claiming the device "shows the Admin ID" would be
+false. Showing the xpub instead was rejected: it is a different value from the one on screen, so it
+cannot be compared visually.
+
+This is an app-level constraint imposed by the device firmware/APIs — it cannot be lifted from
+our side. Revisit if a vendor adds a pubkey-display screen.
+
+### How the verification works in the UI
+
+For **hardware sessions only** (`AdminIdRow` renders this block only when a `verify` context exists):
+
+1. Under the Admin ID key, the panel shows an **"Address on device"** block with the address derived
+   from that key (`wallet.addressSample`), plus the per-vendor note from `adminIdVerifyCaption`
+   (`src/lib/admin-id.ts`). Without it the signer would have a hex on screen and a `bc1q…` on the
+   device, with nothing to compare.
+2. `verify_address_on_device` now **returns the exact string the device rendered** — Trezor's
+   `GetAddress` and Ledger's `get_wallet_address` both already produce it; it used to be discarded.
+3. `useVerifyOnDevice` compares it against the expected address (`matchesDeviceAddress` — trims and
+   lowercases, since bech32 is case-insensitive per BIP-173) and lands on a dedicated **`mismatch`**
+   state, surfaced as a security alarm rather than a transport error.
+
+`wallet.addressSample` is device-accurate for the Admin ID without re-encoding: the adapters derive
+it with the HRP of the path's own coin type (`trezor.rs` → `KnownHrp::Mainnet` for coin `0'`;
+`ledger.rs` → `hrp_from_path`, `Testnets` for coin `1'`), which is exactly what each device renders.
+This is unlike the *receive* address, which comes from BDK on the real network (`bcrt1…`) and must be
+re-encoded by `device_verify_address` (`src-tauri/src/commands/admin_wallet.rs`).
+
 ## Out-of-scope follow-ups (tracked for the matrix)
 - §4.2 + §4.3.4.2 HW verify → **Phase 8**.
 - On merge, update [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md): §4.1 **FAIL → PASS**, §4.3.4.1 QR + click-to-copy **FAIL/PARTIAL → PASS** (HW-verify rows remain Phase 8).

@@ -1,8 +1,8 @@
-# Alpen Multisig
+# Strata Multisig
 
 **Desktop multisig client and off-chain coordination backend for Alpen/Strata governance.**
 
-Alpen Multisig lets authorized signers prepare governance payloads, collect signatures off-chain, and broadcast Bitcoin transactions that the Alpen State Machine (ASM) processes deterministically. It targets the administrative multisigs defined by the Strata and Alpen protocols — the Alpen Administrator, Strata Administrator, Sequencer Manager, Security Council, and Payout Administrator — with a focus on signer safety, explicit confirmation, and high-signal feedback.
+Strata Multisig lets authorized signers prepare governance payloads, collect signatures off-chain, and broadcast Bitcoin transactions that the Alpen State Machine (ASM) processes deterministically. It targets the administrative multisigs defined by the Strata and Alpen protocols — the Alpen Administrator, Strata Administrator, Sequencer Manager, Security Council, and Payout Administrator — with a focus on signer safety, explicit confirmation, and high-signal feedback.
 
 ---
 

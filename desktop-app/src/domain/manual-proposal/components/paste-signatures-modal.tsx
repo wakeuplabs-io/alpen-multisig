@@ -114,7 +114,7 @@ export function PasteSignaturesModal({ existingSignatures, knownSigners, onImpor
 					{errorRows.length > 0 && (
 						<div className="mt-3 space-y-1">
 							{errorRows.map((r, i) => (
-								<p key={i} className="m-0 text-label text-[#dc2626]">
+								<p key={i} className="m-0 text-label text-danger">
 									{r.error}
 								</p>
 							))}
@@ -123,7 +123,7 @@ export function PasteSignaturesModal({ existingSignatures, knownSigners, onImpor
 
 					{/* Duplicates notice */}
 					{duplicateCount > 0 && (
-						<p className="mt-2 m-0 text-label text-[#d97706]">
+						<p className="mt-2 m-0 text-label text-emphasis-soft">
 							{duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''} skipped (already signed).
 						</p>
 					)}
@@ -137,7 +137,7 @@ export function PasteSignaturesModal({ existingSignatures, knownSigners, onImpor
 									<div key={i} className="flex items-center gap-3 px-3 py-2">
 										<span className="flex-1 font-mono text-mono-sm text-[#374151]">{truncate(r.sig.signerPubkey)}</span>
 										{isUnknown && (
-											<span className="rounded-full border border-[#fde68a] bg-[#fffbeb] px-1.5 py-0.5 text-[10px] text-[#d97706]">
+											<span className="rounded-full border border-accent-border bg-highlight-surface px-1.5 py-0.5 text-[10px] text-emphasis-soft">
 												unknown signer
 											</span>
 										)}
@@ -150,7 +150,7 @@ export function PasteSignaturesModal({ existingSignatures, knownSigners, onImpor
 
 					{/* Unknown signer warning */}
 					{unknownWarnings.length > 0 && (
-						<p className="mt-2 m-0 text-label text-[#d97706]">
+						<p className="mt-2 m-0 text-label text-emphasis-soft">
 							⚠ {unknownWarnings.length} pubkey{unknownWarnings.length > 1 ? 's' : ''} not in the known signer set —
 							verify before importing.
 						</p>

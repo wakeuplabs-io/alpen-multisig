@@ -40,7 +40,7 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 	await connectWithWords.waitForClickable({ timeout: 30000 })
 	await connectWithWords.click()
 
-	await $('//h1[contains(.,"Select authority")]').waitForDisplayed({ timeout: 60000 })
+	await $('//h1[contains(.,"Select multisig")]').waitForDisplayed({ timeout: 60000 })
 	// Membership check disables Continue until ASM confirms the signer; wait for Strata Admin.
 	await browser.waitUntil(
 		async () => {

@@ -27,6 +27,34 @@
 	--color-bg-surface: #faf6f2;
 	--color-bg-elevated: #ffffff;
 	--color-bg-cream: #ffeac1;
+
+	/* ── Semantic color roles (#416) ─────────────────────────────────────────
+	 * Red — and warm red-adjacent tones that read as red — is reserved for
+	 * ERRORS. Emphasis, selection, novelty and neutral status use `emphasis`.
+	 * The beige/cream fill the client accepted lives on as `highlight-surface`.
+	 * This file is the only place a red/amber hex may appear; every call site
+	 * goes through a token (enforced by src/lib/__tests__/color-tokens.test.ts).
+	 * ─────────────────────────────────────────────────────────────────────── */
+
+	/* Danger — validation failures, failed operations, mismatch alarms,
+	 * destructive actions. Nothing else. */
+	--color-danger: #dc2626;
+	--color-danger-strong: #b91c1c;
+	--color-danger-deep: #991b1b;
+	--color-danger-surface: #fef2f2;
+	--color-danger-border: #fecaca;
+	--color-danger-border-soft: #fca5a5;
+
+	/* Emphasis — what used to lean on warm amber-brown text purely to stand
+	 * out: selected cards, emphasised labels, mono chips, "look here" copy. */
+	--color-emphasis: #111827;
+	--color-emphasis-soft: #6b7280;
+
+	/* Highlight — the accepted beige surface. Paired with `accent-border`
+	 * (the brand terracotta border) and neutral text, a selected surface keeps
+	 * its affordance without reading as an alarm. */
+	--color-highlight-surface: #fffbeb;
+	--color-highlight-surface-alt: #fef3c7;
 }
 
 :root {
@@ -54,9 +82,11 @@
 	--color-text-disabled: #d1d5db;
 
 	/* ── Proposal statuses ─────────────────── */
-	--color-pending: #d97706;
+	/* Pending is a neutral status, not an alarm (#416): the beige fill stays,
+	 * the text and border go neutral. */
+	--color-pending: #111827;
 	--color-pending-bg: #fffbeb;
-	--color-pending-border: #fde68a;
+	--color-pending-border: #f0cfa0;
 
 	--color-approved: #2563eb;
 	--color-approved-bg: #eff6ff;

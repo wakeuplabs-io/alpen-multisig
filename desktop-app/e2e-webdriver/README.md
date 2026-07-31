@@ -1,6 +1,6 @@
 # Desktop WebDriver smoke (Tauri)
 
-End-to-end UI tests for the **Alpen Multisig** Tauri app using [WebdriverIO](https://webdriver.io/) and [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/), aligned with the upstream [webdriver-example](https://github.com/tauri-apps/webdriver-example/tree/main/v2/webdriver/webdriverio).
+End-to-end UI tests for the **Strata Multisig** Tauri app using [WebdriverIO](https://webdriver.io/) and [`tauri-driver`](https://v2.tauri.app/develop/tests/webdriver/), aligned with the upstream [webdriver-example](https://github.com/tauri-apps/webdriver-example/tree/main/v2/webdriver/webdriverio).
 
 **Platform:** Linux (and Windows) per [Tauri WebDriver](https://v2.tauri.app/develop/tests/webdriver/). macOS desktop WebDriver is not supported by this stack.
 

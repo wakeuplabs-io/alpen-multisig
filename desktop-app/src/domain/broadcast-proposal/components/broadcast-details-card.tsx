@@ -8,6 +8,7 @@ import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
+import type { WalletVendor } from '@/wallet/types'
 
 type AdminWalletInfoView = {
 	address: string
@@ -26,6 +27,8 @@ type Props = {
 	lastSyncedAt?: string | null
 	syncError?: AdminWalletError | null
 	phase?: BroadcastPhase
+	/** Signer connected in this session — drives the device-specific broadcast prompt. */
+	walletVendor: WalletVendor
 	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
 	feeSelector?: ReactNode
 }
@@ -73,6 +76,7 @@ export function BroadcastDetailsCard({
 	syncError,
 	phase,
 	feeSelector,
+	walletVendor,
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
@@ -83,7 +87,7 @@ export function BroadcastDetailsCard({
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 			{phase === 'awaiting-device' && (
 				<div className="border-b border-[#f3f4f6] p-6">
-					<BroadcastDevicePrompt />
+					<BroadcastDevicePrompt walletVendor={walletVendor} />
 				</div>
 			)}
 			{proposal && (
@@ -177,7 +181,7 @@ export function BroadcastDetailsCard({
 									<span className="flex shrink-0 flex-col items-end">
 										<span
 											className={`text-body-sm font-semibold ${
-												adminWalletInfo.balanceSats === 0 ? 'text-[#dc2626]' : 'text-[#111827]'
+												adminWalletInfo.balanceSats === 0 ? 'text-danger' : 'text-[#111827]'
 											}`}
 										>
 											{adminWalletInfo.balanceSats.toLocaleString()} sats
@@ -198,7 +202,7 @@ export function BroadcastDetailsCard({
 								</div>
 								{syncError != null ? (
 									<div className="border-t border-[#eef0f2] bg-white px-3 py-1.5">
-										<span className="text-label text-[#ef4444]">
+										<span className="text-label text-danger">
 											Sync error: {'message' in syncError ? syncError.message : syncError.type}
 										</span>
 									</div>
@@ -228,7 +232,7 @@ export function BroadcastDetailsCard({
 					{phase === 'awaiting-device' ? 'Approve on device…' : isBroadcasting ? 'Sending…' : 'Confirm & Send'}
 				</button>
 				{targetQueued === false && (
-					<p className="mt-2 text-center text-label text-[#b91c1c]">
+					<p className="mt-2 text-center text-label text-danger-strong">
 						The action targeted by this cancel is no longer queued on the ASM (it was already enacted or removed) — this
 						cancel can no longer be sent.
 					</p>

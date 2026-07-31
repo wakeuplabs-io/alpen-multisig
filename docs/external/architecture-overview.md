@@ -2,7 +2,7 @@
 
 ## System Context
 
-The Alpen Multisig application is a cross-platform desktop tool that enables authorized signers to manage on-chain governance of the Strata bridge and Alpen rollup. The system coordinates signature collection off-chain, constructs Bitcoin transactions embedding governance payloads (SPS-50/51/65), and broadcasts them for the ASM (Administration State Machine) to process deterministically.
+The Strata Multisig application is a cross-platform desktop tool that enables authorized signers to manage on-chain governance of the Strata bridge and Alpen rollup. The system coordinates signature collection off-chain, constructs Bitcoin transactions embedding governance payloads (SPS-50/51/65), and broadcasts them for the ASM (Administration State Machine) to process deterministically.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐

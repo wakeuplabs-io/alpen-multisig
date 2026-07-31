@@ -3,6 +3,8 @@ import { useNavigationGuard } from '@/hooks/use-navigation-guard'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
+import type { WalletVendor } from '@/wallet/types'
+import { deviceCopy } from '@/lib/device-copy'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
@@ -24,6 +26,8 @@ import { VkUpdateFormFields } from './vk-update-form-fields'
 type Props = {
 	authorityLabel: string
 	authority: string
+	/** Signer connected in this session — drives the device-specific signing copy. */
+	walletVendor: WalletVendor
 	multisigConfig: MultisigConfigSnapshot | null
 	multisigConfigVersion: number
 	isLoadingConfig: boolean
@@ -59,6 +63,7 @@ const defaultFormValues: CreateProposalFormValues = {
 export function CreateProposalForm({
 	authorityLabel,
 	authority,
+	walletVendor,
 	multisigConfig,
 	multisigConfigVersion,
 	isLoadingConfig,
@@ -234,10 +239,13 @@ export function CreateProposalForm({
 							<h1 className="m-0 font-display text-[2rem] font-normal leading-[1.15] text-[#0a0a0a]">
 								Review &amp; Sign
 							</h1>
-							<p className="m-0 mt-2 text-body text-[#6b7280]">
-								You are signing the proposal you just drafted. Review the payload, then confirm on your Trezor. Nothing
-								is sent until you sign.
-							</p>
+							{/* Once the signature is in, the preview below owns the "submitted" message —
+							    keeping the pre-signature prompt here would contradict it (#422). */}
+							{createdProposal === null && (
+								<p className="m-0 mt-2 text-body text-[#6b7280]">
+									You are signing the proposal you just drafted. {deviceCopy(walletVendor).reviewPrompt}
+								</p>
+							)}
 						</>
 					) : (
 						<>
@@ -281,6 +289,7 @@ export function CreateProposalForm({
 							newSequencerKeyHex={previewData.newSequencerKeyHex}
 							sighashHex={previewSighashHex}
 							authorityLabel={authorityLabel}
+							walletVendor={walletVendor}
 							currentSigners={multisigConfig?.signers ?? []}
 							currentThreshold={multisigConfig?.threshold ?? 0}
 							createdProposal={createdProposal}
@@ -361,7 +370,7 @@ export function CreateProposalForm({
 					)}
 
 					{error && !isPreviewMode && (
-						<div className="mt-6 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-body text-[#991b1b]">
+						<div className="mt-6 rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
 							{error}
 						</div>
 					)}
@@ -379,7 +388,7 @@ export function CreateProposalForm({
 									</button>
 								) : (
 									<>
-										{error && <p className="mr-auto text-body text-[#b91c1c]">{error}</p>}
+										{error && <p className="mr-auto text-body text-danger-strong">{error}</p>}
 										<button
 											type="submit"
 											data-testid="e2e-create-proposal-sign-submit"
@@ -422,7 +431,7 @@ export function CreateProposalForm({
 					<div className="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
 						<p className="m-0 text-heading font-semibold text-[#111827]">Session expired</p>
 						<p className="m-0 mt-2 text-body text-[#6b7280]">{SESSION_EXPIRED_REAUTH_MESSAGE}</p>
-						{reauthError && <p className="m-0 mt-3 text-body text-[#b91c1c]">{reauthError}</p>}
+						{reauthError && <p className="m-0 mt-3 text-body text-danger-strong">{reauthError}</p>}
 						<div className="mt-6 flex items-center justify-end gap-3">
 							<button
 								type="button"

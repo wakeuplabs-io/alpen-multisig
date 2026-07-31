@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { Paginator } from '@/components/paginator'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
-import type { Proposal, ProposalStatus } from '@/api/proposals'
+import type { Proposal } from '@/api/proposals'
 import {
 	AlertTriangleIcon,
 	CheckCircleEmeraldIcon,
 	ChevronRightMutedIcon,
-	ClockAmberIcon,
+	ClockIcon,
 	FileTextMutedIcon,
 	SendIcon,
 	SignaturePenMutedIcon,
@@ -14,6 +14,8 @@ import {
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
@@ -104,11 +106,11 @@ export function ProposalsDashboard({
 			</div>
 
 			{error ? (
-				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-body text-[#991b1b]">{error}</p>
+				<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+					<p className="m-0 text-body text-danger-deep">{error}</p>
 					<button
 						type="button"
-						className="mt-2 rounded-md border border-[#991b1b] bg-white px-3 py-1 text-label font-medium text-[#991b1b] transition hover:bg-[#fef2f2]"
+						className="mt-2 rounded-md border border-danger-deep bg-white px-3 py-1 text-label font-medium text-danger-deep transition hover:bg-danger-surface"
 						onClick={onRetry}
 					>
 						Retry
@@ -215,7 +217,7 @@ function PendingTab({
 		return (
 			<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-10 text-center">
 				<div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-bg-base">
-					<ClockAmberIcon width={18} height={18} className="block text-[#9ca3af]" />
+					<ClockIcon width={18} height={18} className="block text-[#9ca3af]" />
 				</div>
 				<p className="m-0 text-body-sm font-medium text-[#374151]">No pending proposals</p>
 				<p className="m-0 mt-1 text-label text-[#9ca3af]">
@@ -231,7 +233,7 @@ function PendingTab({
 				<ProposalGroup
 					title="Pending"
 					count={pending.length}
-					groupIcon={<ClockAmberIcon width={14} height={14} className="block" />}
+					groupIcon={<ClockIcon width={14} height={14} className="block text-[#6b7280]" />}
 					proposals={pending}
 					signerPubkey={signerPubkey}
 					onSignProposal={onSignProposal}
@@ -418,8 +420,8 @@ function ProposalCard({
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
 	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
-	const broadcastInProgress = proposal.status === 'approved' && proposal.broadcastStatus !== 'idle'
-	const awaitingEnactment = proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+	const sendState = proposalSendState(proposal)
+	const awaitingEnactment = sendState.kind === 'confirmed'
 
 	const signButton = canSign ? (
 		<button
@@ -485,16 +487,16 @@ function ProposalCard({
 						className="h-1.75 rounded-full transition-all"
 						style={{
 							width: `${signaturesProgress}%`,
-							background: hasQuorum ? '#0f9d7a' : '#d97706',
+							background: hasQuorum ? '#0f9d7a' : '#111827',
 						}}
 					/>
 				</div>
 
 				{proposal.cancelProposal !== null && (
-					<div className="mt-3 flex items-center gap-2 rounded-lg border border-[#fde68a] bg-[#fefce8] px-3 py-2">
-						<AlertTriangleIcon width={13} height={13} className="shrink-0 text-[#d97706]" />
+					<div className="mt-3 flex items-center gap-2 rounded-lg border border-accent-border bg-highlight-surface px-3 py-2">
+						<AlertTriangleIcon width={13} height={13} className="shrink-0 text-emphasis-soft" />
 						<p className="m-0 flex-1 text-label text-[#6b7280]">
-							<span className="font-semibold text-[#d97706]">
+							<span className="font-semibold text-emphasis-soft">
 								{proposal.cancelProposal.signatures.length} of {proposal.cancelProposal.requiredSignatures}
 							</span>{' '}
 							cancellation signature{proposal.cancelProposal.signatures.length === 1 ? '' : 's'} collected
@@ -511,16 +513,16 @@ function ProposalCard({
 
 			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
-					<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
-						<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
-						Quorum reached — ready to send
-						<span
-							className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
-							title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
-						>
-							?
-						</span>
-					</p>
+					{sendState.kind === 'failed' ? (
+						<p className="m-0 text-body font-medium text-danger-deep">
+							{sendState.label} — {sendState.detail}
+						</p>
+					) : (
+						<p className="m-0 inline-flex items-center gap-1.5 text-body font-medium text-[#0f9d7a]">
+							<CheckCircleEmeraldIcon width={15} height={15} className="block shrink-0" />
+							Quorum reached — ready to send
+						</p>
+					)}
 					<div className="flex shrink-0 items-center gap-2">
 						{signButton}
 						<button
@@ -533,7 +535,7 @@ function ProposalCard({
 							data-testid="e2e-proposal-broadcast-button"
 						>
 							<SendIcon width={14} height={14} />
-							Send
+							{sendButtonLabel(sendState)}
 						</button>
 					</div>
 				</div>
@@ -541,7 +543,9 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<div className="flex items-start justify-between gap-3">
 						<div>
-							<p className="m-0 text-body font-medium text-[#0f9d7a]">Reveal confirmed — awaiting ASM enactment</p>
+							<p className="m-0 text-body font-medium text-[#0f9d7a]">
+								{sendState.kind === 'confirmed' ? sendState.label : ''}
+							</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">
 								Refresh the dashboard after the confirmation delay to see enacted status.
 							</p>
@@ -549,7 +553,7 @@ function ProposalCard({
 						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
 							<button
 								type="button"
-								className="shrink-0 rounded-xl border border-[#dc2626] bg-white px-3 py-1.5 text-body-sm font-medium text-[#dc2626] transition hover:bg-[#fef2f2]"
+								className="shrink-0 rounded-xl border border-danger bg-white px-3 py-1.5 text-body-sm font-medium text-danger transition hover:bg-danger-surface"
 								onClick={(e) => {
 									e.stopPropagation()
 									onCancelProposal(proposal.actionId)
@@ -560,9 +564,10 @@ function ProposalCard({
 						)}
 					</div>
 				</div>
-			) : broadcastInProgress ? (
+			) : sendState.kind === 'in-flight' ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
-					<p className="m-0 text-body font-medium text-[#6b7280]">Send in progress</p>
+					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
@@ -590,25 +595,8 @@ function buildProposalTitle(proposal: Proposal): string {
 	return `Proposal #${proposal.seqNo} - ${inferProposalTypeLabel(proposal)}`
 }
 
-type DisplayStatus = ProposalStatus | 'awaiting_enactment'
-
-const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
-	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-	awaiting_enactment: {
-		bg: '#f0fdf9',
-		text: '#0f766e',
-		border: '#99f6e4',
-		dot: '#0f9d7a',
-		label: 'Awaiting enactment',
-	},
-	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-}
-
 function StatusBadge({ status }: { status: DisplayStatus }) {
-	const s = STATUS_CONFIG[status]
+	const s = PROPOSAL_STATUS_STYLE[status]
 	return (
 		<span
 			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"

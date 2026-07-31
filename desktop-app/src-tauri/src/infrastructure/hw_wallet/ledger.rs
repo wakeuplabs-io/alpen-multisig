@@ -868,7 +868,7 @@ async fn verify_address_with<T>(
     client: &BitcoinClient<T>,
     derivation_path: &str,
     script: AddressScriptType,
-) -> Result<(), String>
+) -> Result<String, String>
 where
     T: async_client::Transport + Sync,
     T::Error: std::fmt::Debug,
@@ -897,7 +897,9 @@ where
     client
         .get_wallet_address(&policy, None, change, address_index, true)
         .await
-        .map(|_| ())
+        // Return the exact string the device rendered so the caller can compare it
+        // against what the app shows (#412). The device already applied its own HRP.
+        .map(|address| address.assume_checked().to_string())
         .map_err(|e| map_ledger_error("verify_address", &format!("{e:?}")))
 }
 
@@ -911,14 +913,14 @@ pub fn verify_address_on_device(
     derivation_path: String,
     script: AddressScriptType,
     _network: bitcoin::Network,
-) -> Result<(), String> {
+) -> Result<String, String> {
     with_ledger_device(|| verify_address_on_device_unlocked(&derivation_path, script))
 }
 
 fn verify_address_on_device_unlocked(
     derivation_path: &str,
     script: AddressScriptType,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

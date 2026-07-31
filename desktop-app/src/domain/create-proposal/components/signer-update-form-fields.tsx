@@ -107,7 +107,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						))}
 					</div>
 				) : (
-					<div className="rounded-xl border border-[#d97706] bg-[#fffbeb] p-3">
+					<div className="rounded-xl border border-[#e5e7eb] p-3">
 						<div className="flex flex-col gap-2">
 							{currentSigners.map((signer) => {
 								const isPendingRemoval = removedSet.has(normalizeSignerKey(signer))
@@ -116,13 +116,9 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										key={signer}
 										className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2"
 									>
-										{isPendingRemoval ? (
-											<span className="shrink-0 text-body-sm font-medium text-[#dc2626]">–</span>
-										) : (
-											<span className="h-3.5 w-3.5 shrink-0 rounded-full border border-[#d1d5db]" />
-										)}
+										{isPendingRemoval && <span className="shrink-0 text-body-sm font-medium text-[#111827]">–</span>}
 										<span
-											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#111827] line-through' : 'text-[#374151]'}`}
 										>
 											{signer}
 										</span>
@@ -138,7 +134,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										) : (
 											<button
 												type="button"
-												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												className="shrink-0 text-emphasis-soft hover:text-emphasis"
 												onClick={() => handleRemoveCurrent(signer)}
 												aria-label="Remove signer"
 											>
@@ -155,20 +151,23 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								return (
 									<div key={index} className="flex flex-col gap-1">
 										<div
-											className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${itemError ? 'border-[#dc2626]' : 'border-[#e5e7eb]'}`}
+											className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${itemError ? 'border-danger' : 'border-[#e5e7eb]'}`}
 										>
 											<span
-												className={`h-3.5 w-3.5 shrink-0 rounded-full border ${itemError ? 'border-[#dc2626]' : 'border-[#d97706]'}`}
-											/>
+												className="shrink-0 rounded bg-[#f3f4f6] px-1.5 py-0.5 text-mono-sm font-semibold uppercase tracking-wider text-[#6b7280]"
+												data-testid="e2e-added-signer-new-tag"
+											>
+												New
+											</span>
 											<span
-												className={`min-w-0 flex-1 break-all font-mono text-body-sm ${itemError ? 'text-[#dc2626]' : 'text-[#374151]'}`}
+												className={`min-w-0 flex-1 break-all font-mono text-body-sm ${itemError ? 'text-danger' : 'text-[#374151]'}`}
 												data-testid="e2e-added-signer-value"
 											>
 												{value}
 											</span>
 											<button
 												type="button"
-												className="shrink-0 text-[#c2773b] hover:text-[#92400e]"
+												className="shrink-0 text-emphasis-soft hover:text-emphasis"
 												onClick={() => handleRemoveAdded(index)}
 												aria-label="Remove added signer"
 											>
@@ -194,8 +193,8 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						data-testid="e2e-new-signer-pubkey-input"
 						className={`min-w-0 flex-1 rounded-lg border px-3 py-2 font-mono text-body-sm text-[#111827] placeholder:text-[#9ca3af] focus:outline-none focus:ring-1 ${
 							newSignerError
-								? 'border-[#dc2626] focus:border-[#dc2626] focus:ring-[#dc2626]'
-								: 'border-[#e5e7eb] focus:border-[#d97706] focus:ring-[#d97706]'
+								? 'border-danger focus:border-danger focus:ring-danger'
+								: 'border-[#e5e7eb] focus:border-accent focus:ring-accent'
 						}`}
 						placeholder="02… or 03… (33-byte hex)"
 						value={newSignerInput}

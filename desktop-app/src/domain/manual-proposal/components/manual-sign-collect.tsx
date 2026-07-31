@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
 import type { ActionType, Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/assets/icons'
@@ -72,7 +73,7 @@ export function ManualSignCollect({
 	}
 
 	function handleCopyBundle() {
-		void navigator.clipboard.writeText(JSON.stringify(bundle, null, 2)).then(() => {
+		void writeClipboard(JSON.stringify(bundle, null, 2)).then(() => {
 			setBundleCopied(true)
 			setTimeout(() => setBundleCopied(false), 2000)
 		})
@@ -99,9 +100,9 @@ export function ManualSignCollect({
 			)}
 
 			{signError && (
-				<div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
-					<p className="m-0 text-body-sm font-medium text-[#dc2626]">Signing failed</p>
-					<p className="m-0 mt-0.5 text-label text-[#991b1b]">{signError}</p>
+				<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
+					<p className="m-0 text-body-sm font-medium text-danger">Signing failed</p>
+					<p className="m-0 mt-0.5 text-label text-danger-deep">{signError}</p>
 				</div>
 			)}
 

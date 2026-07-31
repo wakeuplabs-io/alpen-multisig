@@ -262,8 +262,21 @@ const adminIdPresentationPath = path.join(modelDir, 'admin-id-presentation.ts')
 const receiveRowPath = path.join(componentsDir, 'receive-address-row.tsx')
 const sessionControlPath = path.join(componentsDir, 'wallet-session-control.tsx')
 
+const sharedAdminIdPath = path.join(domainRoot, '..', '..', 'lib', 'admin-id.ts')
+const connectAdminIdCardPath = path.join(domainRoot, '..', 'connect-wallet', 'components', 'connect-admin-id-card.tsx')
+const authoritySelectionPath = path.join(
+	domainRoot,
+	'..',
+	'connect-wallet',
+	'components',
+	'authority-selection-phase.tsx',
+)
+
 const adminIdRow = fs.readFileSync(adminIdRowPath, 'utf8')
 const adminIdPresentation = fs.readFileSync(adminIdPresentationPath, 'utf8')
+const sharedAdminId = fs.readFileSync(sharedAdminIdPath, 'utf8')
+const connectAdminIdCard = fs.readFileSync(connectAdminIdCardPath, 'utf8')
+const authoritySelection = fs.readFileSync(authoritySelectionPath, 'utf8')
 const receiveRow = fs.readFileSync(receiveRowPath, 'utf8')
 const sessionControl = fs.readFileSync(sessionControlPath, 'utf8')
 const panelContentForAdminId = fs.readFileSync(walletPanelContentPath, 'utf8')
@@ -276,12 +289,20 @@ if (!panelContentForAdminId.includes('AdminIdRow')) {
 if (!panelContentForAdminId.includes('adminId={adminId}')) {
 	rule9Violations.push('wallet-panel-content.tsx: must forward adminId to AdminIdRow')
 }
-if (!sessionControl.includes('adminId={addressSample}')) {
-	rule9Violations.push('wallet-session-control.tsx: must pass the session addressSample as adminId')
+if (!sessionControl.includes('adminId={adminId}')) {
+	rule9Violations.push('wallet-session-control.tsx: must pass the session Admin ID into the panel content')
 }
-// Safety caption is a single audited literal (mirrors the §4.3.5 send-copy pattern).
-if (!adminIdPresentation.includes('never send funds to this address.')) {
-	rule9Violations.push('admin-id-presentation.ts: must own the Admin ID safety caption literal')
+// #408: the Admin ID is the compressed public key — the panel must never be fed an address.
+if (sessionControl.includes('addressSample')) {
+	rule9Violations.push('wallet-session-control.tsx: must not surface addressSample as the Admin ID (#408)')
+}
+// Safety caption is a single audited literal, owned by the shared module the connect
+// flow and the wallet panel both read (mirrors the §4.3.5 send-copy pattern).
+if (!adminIdPresentation.includes("from '@/lib/admin-id'")) {
+	rule9Violations.push('admin-id-presentation.ts: must re-export the shared Admin ID literals from @/lib/admin-id')
+}
+if (!sharedAdminId.includes('it is a public key, not a payment address.')) {
+	rule9Violations.push('lib/admin-id.ts: must own the Admin ID safety caption literal')
 }
 // §4.3.4.1: the receive row renders a real QR code.
 if (!receiveRow.includes('QrCode')) {
@@ -290,6 +311,30 @@ if (!receiveRow.includes('QrCode')) {
 // Signer safety: the Admin ID is auth-only and must NOT present a scannable QR.
 if (adminIdRow.includes('QrCode')) {
 	rule9Violations.push('admin-id-row.tsx: must NOT render a QR for the Admin ID (auth-only, never fundable)')
+}
+if (connectAdminIdCard.includes('QrCode')) {
+	rule9Violations.push('connect-admin-id-card.tsx: must NOT render a QR for the Admin ID (auth-only, never fundable)')
+}
+// #410: the signer sees the Admin ID on the multisig-selection step, i.e. before the
+// canonical signer-set membership check has resolved.
+if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId} />')) {
+	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
+}
+// #409/#412: a hardware signer can only render an address, so the row must show the address
+// derived from the Admin ID key and hand it to the verify button for comparison — otherwise
+// the signer has nothing on screen to compare the device against.
+if (!adminIdRow.includes('e2e-wallet-admin-id-verify-address')) {
+	rule9Violations.push('admin-id-row.tsx: must show the address the device renders for the Admin ID (#409)')
+}
+if (!adminIdRow.includes('expectedAddress={verify.address}')) {
+	rule9Violations.push('admin-id-row.tsx: must pass the expected address to VerifyOnDeviceButton (#412)')
+}
+if (!panelContentForAdminId.includes('address: adminIdAddress')) {
+	rule9Violations.push('wallet-panel-content.tsx: must thread the Admin ID address into the verify context')
+}
+// Both Admin ID surfaces read the same audited literals.
+if (!connectAdminIdCard.includes("from '@/lib/admin-id'")) {
+	rule9Violations.push('connect-admin-id-card.tsx: must read the Admin ID literals from @/lib/admin-id')
 }
 
 assert.equal(

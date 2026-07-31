@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
-import { LogOutMutedIcon, ShieldAccentIcon } from '@/assets/icons'
+import { ShieldAccentIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
@@ -18,6 +18,7 @@ import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-se
 import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 
@@ -102,16 +103,10 @@ export function BroadcastProposalScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						addressSample={wallet.addressSample}
+						adminId={wallet.publicKeyHex}
+						adminIdAddress={wallet.addressSample}
 					/>
-					<button
-						type="button"
-						className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-1.25 text-label font-medium text-[#6b7280] transition hover:border-[#fca5a5] hover:bg-[#fef2f2] hover:text-[#b91c1c]"
-						onClick={() => void handleBack()}
-					>
-						<LogOutMutedIcon width={12} height={12} className="block shrink-0" />
-						Disconnect
-					</button>
+					<DisconnectButton onClick={() => void handleBack()} />
 				</>
 			}
 		>
@@ -145,6 +140,7 @@ export function BroadcastProposalScreen() {
 						<BroadcastDetailsCard
 							bundle={bundle}
 							proposal={proposal}
+							walletVendor={adapter.vendor}
 							onBroadcast={() => void broadcast()}
 							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
 							canSign={canSign}

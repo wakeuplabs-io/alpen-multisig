@@ -42,16 +42,16 @@ export function SessionExpiryModal() {
 			isOpen={shouldShow}
 			onClose={handleDismiss}
 			title="Session expiring soon"
-			panelClassName="relative w-full max-w-md rounded-xl border border-[#fde68a] bg-white p-6 shadow-lg"
+			panelClassName="relative w-full max-w-md rounded-xl border border-accent-border bg-white p-6 shadow-lg"
 		>
 			<p className="m-0 mt-2 text-body-sm text-[#6b7280]">
-				Your session expires in <span className="font-semibold text-[#d97706]">{sessionTimeLabel}</span>. Extend it to
-				avoid losing your current work.
+				Your session expires in <span className="font-semibold text-emphasis-soft">{sessionTimeLabel}</span>. Extend it
+				to avoid losing your current work.
 			</p>
 
 			{extendError && (
-				<div className="mt-3 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2">
-					<p className="m-0 text-label text-[#991b1b]">{extendError}</p>
+				<div className="mt-3 rounded-lg border border-danger-border bg-danger-surface px-3 py-2">
+					<p className="m-0 text-label text-danger-deep">{extendError}</p>
 				</div>
 			)}
 

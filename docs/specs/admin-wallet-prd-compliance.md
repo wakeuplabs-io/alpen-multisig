@@ -67,8 +67,8 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 4.1 | See Admin ID, copy to clipboard | **PASS** | Phase 7 — `AdminIdRow`; [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) | Full Admin ID shown + copy at top of wallet panel; auth-only safety caption ("never send funds here"); no QR on Admin ID by design |
-| 4.2 | View Admin ID on HW to verify | **FAIL** | — | Phase 8 (HW device adapters) |
+| 4.1 | See Admin ID, copy to clipboard | **PASS** | Phase 7 — `AdminIdRow`; [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) | Admin ID = **compressed public key** (feedback #408, supersedes the address rendering); shown in full + copy at top of wallet panel and on the multisig-selection step (#410); auth-only caption; no QR on Admin ID by design |
+| 4.2 | View Admin ID on HW to verify | **PARTIAL** | `VerifyOnDeviceButton` + "Address on device" block (`AdminIdRow`) | The device confirms the key **indirectly** — Trezor and Ledger cannot render a raw compressed public key, only addresses (or an xpub). The panel shows the P2WPKH address derived from the same key and path so the signer can compare it against the device screen, and the app checks that the address the device returned matches (mismatch = security alarm). See [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) §Device capability (#409) |
 
 ### PRD §4.3 — Admin Wallet management
 

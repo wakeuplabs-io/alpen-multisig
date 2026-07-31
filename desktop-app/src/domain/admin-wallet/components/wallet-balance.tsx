@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import { formatBtcFromSats } from '@/domain/admin-wallet/model/format-btc-from-sats'
+import {
+	denominateSats,
+	formatDenominatedBalance,
+	toggleDenomination,
+	type Denomination,
+} from '@/domain/admin-wallet/model/balance-denomination'
 import { formatUnconfirmedBalanceLine } from '@/domain/admin-wallet/model/format-unconfirmed-balance-line'
 
 export type WalletBalanceProps = {
@@ -9,7 +14,7 @@ export type WalletBalanceProps = {
 }
 
 export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: WalletBalanceProps) {
-	const [showSats, setShowSats] = useState(false)
+	const [denomination, setDenomination] = useState<Denomination>('BTC')
 
 	if (isLoading) {
 		return (
@@ -21,10 +26,9 @@ export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: Wal
 		)
 	}
 
-	const btcStr = `${formatBtcFromSats(confirmedSats)} BTC`
-	const satsStr = `${confirmedSats.toLocaleString()} sats`
-	const primary = showSats ? satsStr : btcStr
-	const secondary = showSats ? btcStr : satsStr
+	const alternateDenomination = toggleDenomination(denomination)
+	const shown = denominateSats(confirmedSats, denomination)
+	const alternate = denominateSats(confirmedSats, alternateDenomination)
 	const unconfirmedLine = formatUnconfirmedBalanceLine(unconfirmedSats)
 
 	return (
@@ -34,34 +38,33 @@ export function WalletBalance({ confirmedSats, unconfirmedSats, isLoading }: Wal
 					className="font-display text-[34px] font-normal leading-none text-[#111827]"
 					data-testid="e2e-wallet-balance-primary"
 				>
-					{showSats ? confirmedSats.toLocaleString() : formatBtcFromSats(confirmedSats)}
+					{shown.amount}
 				</span>
-				<span className="ml-2 font-sans text-body-sm font-medium text-accent" data-testid="e2e-wallet-balance-unit">
-					{showSats ? 'sats' : 'BTC'}
-				</span>
+				<button
+					type="button"
+					onClick={() => setDenomination(alternateDenomination)}
+					title={`Show balance in ${alternateDenomination}`}
+					aria-label={`Balance shown in ${shown.unit}. Show in ${alternateDenomination}`}
+					className="ml-2 cursor-pointer bg-transparent p-0 font-sans text-body-sm font-medium text-emphasis-soft underline decoration-dotted underline-offset-4 transition hover:text-emphasis"
+					data-testid="e2e-wallet-balance-unit"
+				>
+					{shown.unit}
+				</button>
 			</div>
 			<div className="mt-2 font-mono text-label text-[#9ca3af]" data-testid="e2e-wallet-balance-secondary">
-				{secondary}
+				{formatDenominatedBalance(alternate)}
 			</div>
 			{unconfirmedLine !== null && (
 				<div
 					className="mt-1.5 flex items-center gap-1.5 font-mono text-label text-[#6b7280]"
 					data-testid="e2e-wallet-balance-unconfirmed"
 				>
-					<span className="h-1.5 w-1.5 flex-none rounded-full bg-[#d97706]" aria-hidden="true" />
+					<span className="h-1.5 w-1.5 flex-none rounded-full bg-emphasis-soft" aria-hidden="true" />
 					{unconfirmedLine}
 				</div>
 			)}
-			<button
-				type="button"
-				onClick={() => setShowSats((prev) => !prev)}
-				aria-pressed={showSats}
-				className="mt-3 cursor-pointer bg-transparent p-0 text-label text-accent underline underline-offset-2 transition hover:text-accent-hover"
-			>
-				Show {showSats ? 'BTC' : 'sats'}
-			</button>
 			<span className="sr-only">
-				Primary balance: {primary}
+				Primary balance: {formatDenominatedBalance(shown)}
 				{unconfirmedLine !== null ? `. Unconfirmed: ${unconfirmedLine}` : ''}
 			</span>
 		</div>

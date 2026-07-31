@@ -79,18 +79,15 @@ export function ShieldAccentIcon({ width = 24, height = 24, ...rest }: IconProps
 	)
 }
 
-export function LogOutMutedIcon({ width = 24, height = 24, ...rest }: IconProps) {
+/**
+ * Log-out glyph that inherits `currentColor`, so the surrounding button owns
+ * the color. Replaces the former muted/red pair that cross-faded on hover —
+ * disconnecting is not an error, so it no longer turns red (#416).
+ */
+export function LogOutIcon({ width = 24, height = 24, ...rest }: IconProps) {
 	return (
 		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
-			<path d="M10 17H5V7h5M15 12H9M13 8l4 4-4 4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" />
-		</svg>
-	)
-}
-
-export function LogOutRedIcon({ width = 24, height = 24, ...rest }: IconProps) {
-	return (
-		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
-			<path d="M10 17H5V7h5M15 12H9M13 8l4 4-4 4" stroke="#b91c1c" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M10 17H5V7h5M15 12H9M13 8l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 		</svg>
 	)
 }
@@ -107,8 +104,8 @@ export function ClockSessionDefaultIcon({ width = 24, height = 24, ...rest }: Ic
 export function ClockSessionWarningIcon({ width = 24, height = 24, ...rest }: IconProps) {
 	return (
 		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
-			<circle cx="12" cy="12" r="8" stroke="#d97706" strokeWidth="1.5" />
-			<path d="M12 8v4l3 2" stroke="#d97706" strokeWidth="1.5" />
+			<circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
+			<path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="1.5" />
 		</svg>
 	)
 }
@@ -119,7 +116,7 @@ export function UsbSessionDefaultIcon({ width = 24, height = 24, className, ...r
 }
 
 export function UsbSessionWarningIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
-	const merged = ['text-[#d97706]', className].filter(Boolean).join(' ')
+	const merged = ['text-emphasis-soft', className].filter(Boolean).join(' ')
 	return <UsbTridentIcon width={width} height={height} className={merged} {...rest} />
 }
 
@@ -132,11 +129,11 @@ export function CheckCircleEmeraldIcon({ width = 24, height = 24, ...rest }: Ico
 	)
 }
 
-export function ClockAmberIcon({ width = 24, height = 24, ...rest }: IconProps) {
+export function ClockIcon({ width = 24, height = 24, ...rest }: IconProps) {
 	return (
 		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} aria-hidden {...rest}>
-			<circle cx="12" cy="12" r="8" stroke="#d97706" strokeWidth="1.5" />
-			<path d="M12 8v4l3 2" stroke="#d97706" strokeWidth="1.5" />
+			<circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
+			<path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="1.5" />
 		</svg>
 	)
 }

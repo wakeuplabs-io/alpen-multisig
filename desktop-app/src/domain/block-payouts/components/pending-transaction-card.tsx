@@ -1,3 +1,4 @@
+import { writeClipboard } from '@/api/tauri-bridge'
 import type { PendingBlockPayoutTx } from '../model/block-payouts.types'
 import { ConflictingInputIcon } from './conflicting-input-icon'
 
@@ -40,7 +41,7 @@ export function PendingTransactionCard({ tx, onSign, onPasteSignatures, onExport
 	const hasQuorum = tx.signaturesReceived >= tx.signaturesRequired
 
 	function handleCopyId() {
-		void navigator.clipboard.writeText(tx.id)
+		void writeClipboard(tx.id)
 	}
 
 	return (
@@ -73,12 +74,9 @@ export function PendingTransactionCard({ tx, onSign, onPasteSignatures, onExport
 
 				{/* Expiry badge */}
 				<span
-					className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-mono-sm font-medium"
-					style={
-						urgent
-							? { background: '#fef2f2', color: '#dc2626', borderColor: '#fecaca' }
-							: { background: '#f9fafb', color: '#6b7280', borderColor: '#e5e7eb' }
-					}
+					className={`inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-2 py-0.5 text-mono-sm font-medium ${
+						urgent ? 'text-emphasis' : 'text-[#6b7280]'
+					}`}
 				>
 					<svg width={11} height={11} viewBox="0 0 24 24" fill="none" aria-hidden>
 						<circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
@@ -99,7 +97,7 @@ export function PendingTransactionCard({ tx, onSign, onPasteSignatures, onExport
 				<div className="h-1.5 rounded-full bg-[#ebedf0]">
 					<div
 						className="h-1.5 rounded-full transition-all"
-						style={{ width: `${progress}%`, background: hasQuorum ? '#0f9d7a' : '#d97706' }}
+						style={{ width: `${progress}%`, background: hasQuorum ? '#0f9d7a' : '#6b7280' }}
 					/>
 				</div>
 			</div>

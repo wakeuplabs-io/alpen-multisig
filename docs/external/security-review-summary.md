@@ -4,7 +4,7 @@
 
 ## Overview
 
-This document summarizes the security review conducted on the Alpen Multisig application, focusing on the signing integration layer and authentication flow. The review covered code analysis, threat modeling, and validation of security controls.
+This document summarizes the security review conducted on the Strata Multisig application, focusing on the signing integration layer and authentication flow. The review covered code analysis, threat modeling, and validation of security controls.
 
 ## Review Scope
 
@@ -182,7 +182,7 @@ This document summarizes the security review conducted on the Alpen Multisig app
 
 ## Conclusion
 
-The Alpen Multisig application implements strong security controls for signing operations and authentication. The hardware wallet integration ensures private keys never leave the secure device boundary, and the protocol compliance layer guarantees correct cryptographic operations.
+The Strata Multisig application implements strong security controls for signing operations and authentication. The hardware wallet integration ensures private keys never leave the secure device boundary, and the protocol compliance layer guarantees correct cryptographic operations.
 
 The main areas for improvement are rate limiting, audit logging, and external audit. These should be addressed before production deployment to ensure robust security posture.
 

@@ -1,4 +1,4 @@
-# Alpen Multisig — Non-Functional Items
+# Strata Multisig — Non-Functional Items
 
 Requirements extracted from `0-prd/` and `2-discovery/` that do **not** belong in the story map because they carry no direct end-user behavior. These items become specs (architecture + infra + ops) rather than user stories. Do **not** write them as "As a developer, I want…" stories.
 

@@ -33,7 +33,7 @@ import {
 const FUND_AMOUNT_BTC = '0.01'
 const BTC_ADDRESS_RE = /^(tb1|bcrt1|[123mn])[a-zA-HJ-NP-Z0-9]{25,62}$/
 
-describe('Alpen Multisig — Admin Wallet panel', () => {
+describe('Strata Multisig — Admin Wallet panel', () => {
 	it('funds, syncs, and validates confirmed and unconfirmed balances', async function () {
 		this.timeout(300000)
 

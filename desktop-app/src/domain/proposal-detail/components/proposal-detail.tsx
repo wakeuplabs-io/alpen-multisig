@@ -1,5 +1,6 @@
+import { CopyButton } from '@/components/copy-button'
 import { useState } from 'react'
-import type { Proposal, ProposalStatus } from '@/api/proposals'
+import type { Proposal } from '@/api/proposals'
 import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import {
 	CheckCircleEmeraldIcon,
@@ -15,6 +16,8 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
 
 type Props = {
 	proposal: Proposal
@@ -26,51 +29,12 @@ type Props = {
 	onManualExecute?: () => void
 }
 
-function CopyButton({ text, label }: { text: string; label?: string }) {
-	const [copied, setCopied] = useState(false)
-
-	function handleCopy() {
-		void navigator.clipboard.writeText(text).then(() => {
-			setCopied(true)
-			setTimeout(() => setCopied(false), 2000)
-		})
-	}
-
-	return (
-		<button
-			type="button"
-			onClick={handleCopy}
-			className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
-		>
-			<CopyClipboardIcon width={12} height={12} />
-			{copied ? 'Copied!' : (label ?? 'Copy')}
-		</button>
-	)
-}
-
 function SectionLabel({ children }: { children: string }) {
 	return <p className="mb-2 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{children}</p>
 }
 
-type DisplayStatus = ProposalStatus | 'awaiting_enactment'
-
-const STATUS_CONFIG: Record<DisplayStatus, { bg: string; text: string; border: string; dot: string; label: string }> = {
-	pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', label: 'Pending' },
-	approved: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', dot: '#2563eb', label: 'Approved' },
-	awaiting_enactment: {
-		bg: '#f0fdf9',
-		text: '#0f766e',
-		border: '#99f6e4',
-		dot: '#0f9d7a',
-		label: 'Awaiting enactment',
-	},
-	enacted: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', label: 'Enacted' },
-	canceled: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#dc2626', label: 'Canceled' },
-	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
-}
-
 function StatusBadge({ status }: { status: DisplayStatus }) {
-	const s = STATUS_CONFIG[status]
+	const s = PROPOSAL_STATUS_STYLE[status]
 	return (
 		<span
 			className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap"
@@ -121,6 +85,7 @@ export function ProposalDetail({
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
+	const sendState = proposalSendState(proposal)
 
 	const displayStatus: DisplayStatus =
 		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
@@ -131,12 +96,6 @@ export function ProposalDetail({
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)
 	const [showImportModal, setShowImportModal] = useState(false)
 	const title = deriveProposalTitle(proposal, decodedData)
-
-	const signaturesJson = JSON.stringify(
-		proposal.signatures.map((s) => ({ signerPubkey: s.signerPubkey, signatureHex: s.signatureHex })),
-		null,
-		2,
-	)
 
 	function handleCopyBundle() {
 		void writeClipboard(JSON.stringify(proposal, null, 2)).then(() => {
@@ -180,7 +139,7 @@ export function ProposalDetail({
 								className="h-1.5 rounded-full transition-all"
 								style={{
 									width: `${signaturesProgress}%`,
-									background: hasQuorum || isTerminal ? '#0f9d7a' : '#d97706',
+									background: hasQuorum || isTerminal ? '#0f9d7a' : '#111827',
 								}}
 							/>
 						</div>
@@ -190,12 +149,6 @@ export function ProposalDetail({
 						<p className="m-0 mt-3 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
 							<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
 							Quorum reached — ready to send
-							<span
-								className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#d1d5db] text-[10px] font-semibold leading-none text-[#9ca3af]"
-								title="Open: activation timing. Unclear whether the 2016-block delay begins at tx confirmation, at quorum, or at the end of the 7-day pending window. Not yet implemented."
-							>
-								?
-							</span>
 						</p>
 					)}
 				</div>
@@ -224,9 +177,9 @@ export function ProposalDetail({
 									<td className="px-4 py-2.5 align-top">
 										{row.inBefore ? (
 											<span
-												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-[#dc2626] line-through' : 'text-[#374151]'}`}
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
 											>
-												{row.isRemoved && <span className="mr-1 text-[#dc2626]">−</span>}
+												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
 												{row.pubkey}
 											</span>
 										) : (
@@ -292,7 +245,6 @@ export function ProposalDetail({
 					<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
 						Approvals · {collectedSignatures} of {requiredSignatures}
 					</p>
-					{proposal.signatures.length > 0 && <CopyButton text={signaturesJson} label="Copy signatures" />}
 				</div>
 				<div className="divide-y divide-[#f3f4f6]">
 					{/* Signed rows — from proposal.signatures */}
@@ -305,18 +257,11 @@ export function ProposalDetail({
 								</span>
 								<span className="flex-1 font-mono text-label text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
 								{isMe && (
-									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-accent-hover">
+									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
 										YOU
 									</span>
 								)}
-								<button
-									type="button"
-									title="Copy signature"
-									className="shrink-0 rounded-md p-1 text-[#9ca3af] transition hover:text-[#6b7280]"
-									onClick={() => void navigator.clipboard.writeText(sig.signatureHex)}
-								>
-									<CopyClipboardIcon width={13} height={13} />
-								</button>
+								<CopyButton text={sig.signatureHex} variant="icon" />
 								<span className="shrink-0 text-label text-[#6b7280]">Signed</span>
 							</div>
 						)
@@ -347,10 +292,12 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Commit TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
+								<span
+									className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]"
+									title={proposal.commitTxid}
+								>
 									{proposal.commitTxid}
 								</span>
-								<CopyButton text={proposal.commitTxid} />
 							</div>
 						</div>
 					)}
@@ -358,10 +305,12 @@ export function ProposalDetail({
 						<div>
 							<SectionLabel>Reveal TXID</SectionLabel>
 							<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-								<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
+								<span
+									className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]"
+									title={proposal.revealTxid}
+								>
 									{proposal.revealTxid}
 								</span>
-								<CopyButton text={proposal.revealTxid} />
 							</div>
 						</div>
 					)}
@@ -371,7 +320,17 @@ export function ProposalDetail({
 			{/* ── Action buttons ── */}
 			<div className="flex items-center justify-between gap-3">
 				<div className="flex-1">
-					{hasQuorum && (
+					{sendState.kind === 'failed' && (
+						<div
+							className="mb-2 rounded-xl border border-danger-border bg-danger-surface px-4 py-3"
+							data-testid="e2e-detail-broadcast-failed"
+						>
+							<p className="m-0 text-body-sm font-medium text-danger-deep">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-danger-deep">{proposal.broadcastError ?? sendState.detail}</p>
+						</div>
+					)}
+
+					{showsSendButton(sendState) && (
 						<button
 							type="button"
 							data-testid="e2e-detail-broadcast-button"
@@ -379,8 +338,20 @@ export function ProposalDetail({
 							onClick={onBroadcast}
 						>
 							<SendIcon width={14} height={14} />
-							Send
+							{sendButtonLabel(sendState)}
 						</button>
+					)}
+
+					{/* Once the bundle is on its way there is nothing to press — say where it
+					    is instead, so a signer can tell whether it still needs sending (#432). */}
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
+						<div
+							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
+							data-testid="e2e-detail-broadcast-stage"
+						>
+							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+						</div>
 					)}
 
 					{canSign && (
