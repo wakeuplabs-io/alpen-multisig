@@ -281,8 +281,8 @@ export function ConnectPhase({
 			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-label text-[#9ca3af]">
 				<ShieldCheckMutedIcon width={16} height={16} className="block shrink-0" />
 				{walletVendor === 'mnemonic'
-					? 'Your seed words are used locally to derive keys. Alpen only receives signatures.'
-					: 'Your keys never leave the device. Alpen only receives signatures.'}
+					? 'Your seed words are used locally to derive keys. Strata Multisig only receives signatures.'
+					: 'Your keys never leave the device. Strata Multisig only receives signatures.'}
 			</p>
 
 			{error && <p className="mt-3 text-body-sm text-danger">{error}</p>}

@@ -4,7 +4,7 @@
  */
 import { DEMO_MNEMONIC_COSIGN, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 
-describe('Alpen Multisig proposal — co-sign with second mnemonic', () => {
+describe('Strata Multisig proposal — co-sign with second mnemonic', () => {
 	it('opens first pending Sign flow and submits second signature', async function () {
 		this.timeout(180000)
 

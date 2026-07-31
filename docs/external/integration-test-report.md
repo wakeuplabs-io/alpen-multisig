@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Alpen Multisig application includes a comprehensive integration test suite that validates the complete signing and proposal flow across all supported update types and multisig roles. The tests exercise real cryptographic operations, protocol encoding, and end-to-end coordination between the desktop application and orchestrator backend.
+The Strata Multisig application includes a comprehensive integration test suite that validates the complete signing and proposal flow across all supported update types and multisig roles. The tests exercise real cryptographic operations, protocol encoding, and end-to-end coordination between the desktop application and orchestrator backend.
 
 ## Test Environment
 

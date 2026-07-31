@@ -2,7 +2,7 @@
 
 **Status:** Accepted (superseded in parts on 2026-04-17 — see "Revision history")
 **Date:** 2026-04-08, updated 2026-04-17
-**Context:** Alpen Multisig depends on several Rust crates from the Alpen ecosystem that are not published to crates.io.
+**Context:** Strata Multisig depends on several Rust crates from the Alpen ecosystem that are not published to crates.io.
 
 ## Decision
 

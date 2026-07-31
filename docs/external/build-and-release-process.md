@@ -4,7 +4,7 @@
 
 ## Overview
 
-This document describes the build, packaging, signing, and distribution process for the Alpen Multisig desktop application. The release pipeline produces trustworthy, installable binaries for all supported platforms with cryptographic verification capabilities.
+This document describes the build, packaging, signing, and distribution process for the Strata Multisig desktop application. The release pipeline produces trustworthy, installable binaries for all supported platforms with cryptographic verification capabilities.
 
 ## Supported Platforms
 
@@ -70,18 +70,18 @@ See [Release Signing](./release-signing.md) for details on the signing approach 
 
 **Debian/Ubuntu:**
 ```bash
-sudo dpkg -i alpen-multisig_*.deb
+sudo dpkg -i Strata.Multisig_*_amd64.deb
 ```
 
 **RPM-based:**
 ```bash
-sudo rpm -i alpen-multisig-*.rpm
+sudo rpm -i Strata.Multisig-*.x86_64.rpm
 ```
 
 **AppImage:**
 ```bash
-chmod +x alpen-multisig-*.AppImage
-./alpen-multisig-*.AppImage
+chmod +x Strata.Multisig_*_amd64.AppImage
+./Strata.Multisig_*_amd64.AppImage
 ```
 
 ### macOS

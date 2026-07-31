@@ -59,7 +59,7 @@ async function seedClipboard(value) {
 	throw new Error('no clipboard writer available (install wl-clipboard or xclip)')
 }
 
-describe('Alpen Multisig — clipboard copy', () => {
+describe('Strata Multisig — clipboard copy', () => {
 	it('puts the receive address on the system clipboard', async function () {
 		this.timeout(300000)
 
