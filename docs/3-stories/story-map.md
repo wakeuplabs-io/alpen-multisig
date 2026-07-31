@@ -1,4 +1,4 @@
-# Alpen Multisig — Story Map
+# Strata Multisig — Story Map
 
 Qualified user stories derived from `0-prd/` (client requirements) and shaped by `2-discovery/` findings. Follows Jeff Patton's Story Mapping: the **backbone** (user activities, left→right) expresses what the product does; **slices** (top→bottom) express release increments. The walking skeleton (Slice 0) is the thinnest end-to-end path proving the system works.
 

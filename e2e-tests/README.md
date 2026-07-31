@@ -1,4 +1,4 @@
-# E2E Tests — Alpen Multisig
+# E2E Tests — Strata Multisig
 
 End-to-end integration tests that exercise the moving parts of the multisig stack against real Alpen/Strata crates and a real orchestrator process.
 

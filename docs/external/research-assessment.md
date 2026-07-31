@@ -1,6 +1,6 @@
 # Protocol Research and Integration Assessment
 
-This document provides a comprehensive technical assessment of the Alpen Multisig system, covering protocol integration, hardware wallet compatibility, and system architecture.
+This document provides a comprehensive technical assessment of the Strata Multisig system, covering protocol integration, hardware wallet compatibility, and system architecture.
 
 ## 1. Alpen Protocol Integration Assessment
 

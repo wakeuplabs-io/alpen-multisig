@@ -20,11 +20,11 @@ Choose the appropriate installer for your platform:
 
 | Platform | File | Installation Method |
 |----------|------|---------------------|
-| **Debian/Ubuntu** | `alpen-multisig_*.deb` | Double-click or `dpkg -i` |
-| **Fedora/RHEL** | `alpen-multisig_*.rpm` | Double-click or `rpm -i` |
-| **Linux (Universal)** | `alpen-multisig-*.AppImage` | `chmod +x` then run |
-| **macOS** | `alpen-multisig-*.dmg` | Drag to Applications |
-| **Windows** | `alpen-multisig-*.exe` | Double-click to launch |
+| **Debian/Ubuntu** | `Strata.Multisig_*_amd64.deb` | Double-click or `dpkg -i` |
+| **Fedora/RHEL** | `Strata.Multisig-*.x86_64.rpm` | Double-click or `rpm -i` |
+| **Linux (Universal)** | `Strata.Multisig_*_amd64.AppImage` | `chmod +x` then run |
+| **macOS (Apple Silicon)** | `Strata.Multisig_*_aarch64.dmg` | Drag to Applications |
+| **Windows** | `desktop-app-x86_64-windows.exe` | Double-click to launch (portable executable, no installer) |
 
 ## Installation
 
@@ -37,7 +37,7 @@ Choose the appropriate installer for your platform:
 
 **Command Line:**
 ```bash
-sudo dpkg -i alpen-multisig_*.deb
+sudo dpkg -i Strata.Multisig_*_amd64.deb
 ```
 
 ### Linux (Fedora/RHEL)
@@ -49,7 +49,7 @@ sudo dpkg -i alpen-multisig_*.deb
 
 **Command Line:**
 ```bash
-sudo rpm -i alpen-multisig-*.rpm
+sudo rpm -i Strata.Multisig-*.x86_64.rpm
 ```
 
 ### Linux (AppImage)
@@ -57,21 +57,20 @@ sudo rpm -i alpen-multisig-*.rpm
 The AppImage is a portable, universal Linux format that works on any distribution.
 
 ```bash
-# Download the AppImage
-wget https://github.com/wakeuplabs-io/alpen-multisig/releases/latest/download/alpen-multisig-*.AppImage
+# Download the AppImage from the releases page, then:
 
 # Make it executable
-chmod +x alpen-multisig-*.AppImage
+chmod +x Strata.Multisig_*_amd64.AppImage
 
 # Run the application
-./alpen-multisig-*.AppImage
+./Strata.Multisig_*_amd64.AppImage
 ```
 
 ### macOS
 
 1. Download the `.dmg` file
 2. Open the `.dmg` file
-3. Drag the Alpen Multisig application to your Applications folder
+3. Drag the Strata Multisig application to your Applications folder
 4. Launch from Applications or Spotlight
 
 **Note:** On first launch, you may need to right-click the application and select "Open" to bypass Gatekeeper security.
@@ -91,7 +90,7 @@ chmod +x alpen-multisig-*.AppImage
 
 1. Connect your supported hardware wallet (Trezor or Ledger) to your computer via USB
 2. Unlock your hardware wallet
-3. Launch the Alpen Multisig application
+3. Launch the Strata Multisig application
 4. The application will detect your hardware wallet automatically
 
 ### Step 2: Select Your Address

@@ -6,7 +6,7 @@ import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemon
 
 const NEW_SIGNER = '03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c'
 
-describe('Alpen Multisig proposal — add signer', () => {
+describe('Strata Multisig proposal — add signer', () => {
 	it('drafts signer update, previews, and collects creator signature', async function () {
 		this.timeout(180000)
 		await loginMnemonicToProposals(DEMO_MNEMONIC)

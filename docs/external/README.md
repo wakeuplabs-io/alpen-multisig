@@ -1,6 +1,6 @@
-# Alpen Multisig — External Documentation
+# Strata Multisig — External Documentation
 
-This directory contains client-facing deliverables for the Alpen Multisig application. These documents are intended for delivery to Alpen Labs and describe the delivered scope: architecture, API, setup, operations, and quality artifacts for the current release line.
+This directory contains client-facing deliverables for the Strata Multisig application. These documents are intended for delivery to Alpen Labs and describe the delivered scope: architecture, API, setup, operations, and quality artifacts for the current release line.
 
 ## Document Index
 

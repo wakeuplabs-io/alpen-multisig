@@ -26,7 +26,7 @@ import {
 
 const FUND_AMOUNT_BTC = '0.01'
 
-describe('Alpen Multisig — Wallet Panel (PRD §4.3.3)', () => {
+describe('Strata Multisig — Wallet Panel (PRD §4.3.3)', () => {
 	it('opens wallet panel and shows confirmed balance', async function () {
 		this.timeout(300000)
 

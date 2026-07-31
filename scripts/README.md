@@ -1,6 +1,6 @@
 # Scripts
 
-Helper scripts for development and testing of the Alpen Multisig project.
+Helper scripts for development and testing of the Strata Multisig project.
 
 ## Table of Contents
 

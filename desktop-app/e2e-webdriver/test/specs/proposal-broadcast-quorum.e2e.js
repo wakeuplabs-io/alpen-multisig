@@ -16,7 +16,7 @@ import {
 	waitForWalletSyncDone,
 } from '../helpers/wallet-panel.mjs'
 
-describe('Alpen Multisig proposal — broadcast after quorum', () => {
+describe('Strata Multisig proposal — broadcast after quorum', () => {
 	it('prepares artifacts and confirms onchain broadcast', async function () {
 		this.timeout(300000)
 
