@@ -1,6 +1,6 @@
 # Local Dev Smoke Test Guide
 
-> **Who this is for:** anyone — even with zero experience — who wants to try the Alpen Multisig
+> **Who this is for:** anyone — even with zero experience — who wants to try the Strata Multisig
 > app **end-to-end on their own machine**. You do **not** need to know Bitcoin, Rust, or the
 > Strata protocol, and **you don't build anything** — you download the ready‑made app from GitHub
 > and run a few simple commands to start a private test network for it to talk to.
@@ -38,7 +38,7 @@ This document is the single detailed walkthrough for trying the app locally.
 ## 1. Install the tools (once)
 
 You need a **Linux** or **macOS** machine with a graphical desktop. (On Windows, run the network
-commands inside **WSL2**; the app itself has a native Windows installer.)
+commands inside **WSL2**; the app itself ships as a native Windows executable.)
 
 The test network runs in Docker — that's the only heavy tool. Install each item below, then run
 its **Verify** line; if it prints a version, you're good.
@@ -122,11 +122,11 @@ Under **Assets**, download the file for your system, then open it:
 
 | Your system | Download | Open it |
 |---|---|---|
-| **Linux (AppImage)** | `Alpen.Multisig_*_amd64.AppImage` | `chmod +x Alpen.Multisig_*_amd64.AppImage` then `./Alpen.Multisig_*_amd64.AppImage` |
-| **Linux (Ubuntu/Debian)** | `Alpen.Multisig_*_amd64.deb` | `sudo apt install ./Alpen.Multisig_*_amd64.deb`, then launch **Alpen Multisig** from your apps menu |
-| **Linux (Fedora/RHEL)** | `Alpen.Multisig-*.x86_64.rpm` | `sudo dnf install ./Alpen.Multisig-*.x86_64.rpm`, then launch **Alpen Multisig** |
-| **macOS (Apple Silicon)** | `Alpen.Multisig_*_aarch64.dmg` | Open the `.dmg`, drag the app to **Applications**, then open it. First time: right‑click the app → **Open** to get past the security prompt. |
-| **Windows** | `desktop-app-*-windows.exe` | Run the installer, then launch **Alpen Multisig**. |
+| **Linux (AppImage)** | `Strata.Multisig_*_amd64.AppImage` | `chmod +x Strata.Multisig_*_amd64.AppImage` then `./Strata.Multisig_*_amd64.AppImage` |
+| **Linux (Ubuntu/Debian)** | `Strata.Multisig_*_amd64.deb` | `sudo apt install ./Strata.Multisig_*_amd64.deb`, then launch **Strata Multisig** from your apps menu |
+| **Linux (Fedora/RHEL)** | `Strata.Multisig-*.x86_64.rpm` | `sudo dnf install ./Strata.Multisig-*.x86_64.rpm`, then launch **Strata Multisig** |
+| **macOS (Apple Silicon)** | `Strata.Multisig_*_aarch64.dmg` | Open the `.dmg`, drag the app to **Applications**, then open it. First time: right‑click the app → **Open** to get past the security prompt. |
+| **Windows** | `desktop-app-x86_64-windows.exe` | Run the downloaded `.exe` directly — it is a portable executable, there is no installer yet. |
 
 **What you should see:** the app opens on the welcome / connect screen. It already points at the
 local test network you started — no configuration needed.
@@ -137,10 +137,38 @@ local test network you started — no configuration needed.
 > If the app ever can't reach the network, open **Settings → Node** and confirm the connection
 > mode is **Local** (the default).
 
-> **Note for Mnemonic users:** to enable Mnemonic usage the app has to be opened from the terminal
-> and setting up the following env variable: `ALLOW_DEV_MNEMONIC_SIGNING=1`
+> **⚠️ Important — this walkthrough needs Mnemonic mode.** The **Mnemonic** option on the connect
+> screen is a **development-only** feature. It is **hidden** when you open the app the normal way
+> (apps menu, Finder, file manager, double‑click). It only appears when the app is started **from a
+> terminal** with `ALLOW_DEV_MNEMONIC_SIGNING=1` set. If you don't see a **Mnemonic** tab on the
+> connect screen, close the app and relaunch it with the command for your system:
 >
-> Example command for MacOS users: `ALLOW_DEV_MNEMONIC_SIGNING=1 "/Applications/Strata Multisig.app/Contents/MacOS/desktop-app"`
+> **Linux (AppImage):**
+>
+> ```bash
+> ALLOW_DEV_MNEMONIC_SIGNING=1 ./Strata.Multisig_*_amd64.AppImage
+> ```
+>
+> **Linux (`.deb` / `.rpm` install):**
+>
+> ```bash
+> ALLOW_DEV_MNEMONIC_SIGNING=1 desktop-app
+> ```
+>
+> **macOS:**
+>
+> ```bash
+> ALLOW_DEV_MNEMONIC_SIGNING=1 "/Applications/Strata Multisig.app/Contents/MacOS/desktop-app"
+> ```
+>
+> **Windows (PowerShell):**
+>
+> ```powershell
+> $env:ALLOW_DEV_MNEMONIC_SIGNING = "1"; .\desktop-app-x86_64-windows.exe
+> ```
+>
+> Never set this flag on a machine that handles real funds — it exposes seed‑phrase signing, which
+> is intended only for local testing.
 
 ---
 
@@ -160,7 +188,8 @@ then broadcast.
 ### Step 1 — Connect as Signer 1
 
 1. On the connect screen, choose the seed‑phrase option (labeled **"Mnemonic" / words**) and paste
-   **Signer 1**'s phrase.
+   **Signer 1**'s phrase. Don't see that option? The app wasn't started from a terminal with
+   `ALLOW_DEV_MNEMONIC_SIGNING=1` — see the note at the end of [section 4](#4-download-and-open-the-app).
 2. Confirm to connect.
 3. On **Select authority**, wait until **Strata Administrator** shows an **Available** badge (the
    app is checking your signer on‑chain — a few seconds). Select it and click **Continue**.
@@ -248,7 +277,8 @@ was committed and revealed on your local network.
 | `asm submodule not populated` / `MISSING` | Run `git submodule update --init asm`. If it's a permission error, set up GitHub SSH access. |
 | **"port already in use"** on startup | Something else uses a needed port (`18443`, `60401`, `8080`, `3000`, `3001`, `5432`). Find it with `lsof -i :3000` (swap the port) and stop it — or clear a previous run with `./scripts/local-stack.sh --stop`. |
 | A service shows `🔄 starting` or `❌` | Wait a minute and re‑run `--status`. Still failing? View logs: `docker compose -f staging/docker-compose.local.yml logs <service>` (e.g. `asm`). |
-| AppImage won't start (Linux) | Make it executable: `chmod +x Alpen.Multisig_*_amd64.AppImage`, then run `./Alpen.Multisig_*_amd64.AppImage`. |
+| AppImage won't start (Linux) | Make it executable: `chmod +x Strata.Multisig_*_amd64.AppImage`, then run `./Strata.Multisig_*_amd64.AppImage`. |
+| **Mnemonic** option missing on the connect screen | The app was launched from the apps menu / file manager. Close it and relaunch from a terminal with `ALLOW_DEV_MNEMONIC_SIGNING=1` (commands at the end of [section 4](#4-download-and-open-the-app)). |
 | macOS: *"app can't be opened"* | Right‑click the app → **Open** the first time to get past the security prompt. |
 | **Strata Administrator** never turns **Available** at login | The network needs a block: `./scripts/local-stack.sh --mine 1`, then retry the login. |
 | Wallet balance stays **0** after funding | Mine a block so the funding confirms (`--mine 1`), then click **Sync** again and wait. |
@@ -275,6 +305,9 @@ On **macOS**, if the app won't open due to missing developer tools, run `xcode-s
 
 **Get the app:** <https://github.com/wakeuplabs-io/alpen-multisig/releases/latest> (download the
 asset for your system).
+
+**Enable the Mnemonic option (development only):** launch the app from a terminal with
+`ALLOW_DEV_MNEMONIC_SIGNING=1` — see [section 4](#4-download-and-open-the-app).
 
 **Test seed phrases (local network only):**
 
