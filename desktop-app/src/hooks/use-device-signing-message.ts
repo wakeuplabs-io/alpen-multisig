@@ -19,9 +19,12 @@ export function useDeviceSigningMessage(seqno: number | null, actionHex: string 
 	const [messageHash, setMessageHash] = useState<string | null>(null)
 
 	useEffect(() => {
+		// Clear before resolving, always: while the new action's message is in flight the previous
+		// one is no longer what the device will show, and a signer comparing against it would be
+		// verifying the wrong action. Callers must not have to remember to null their own source.
+		setMessage(null)
+		setMessageHash(null)
 		if (seqno === null || !actionHex) {
-			setMessage(null)
-			setMessageHash(null)
 			return
 		}
 		let cancelled = false

@@ -10,6 +10,8 @@ import {
 	SendIcon,
 	SignaturePenMutedIcon,
 } from '@/assets/icons'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
+import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
@@ -23,6 +25,11 @@ type Props = {
 	proposal: Proposal
 	signerPubkey: string | null
 	decodedData: DecodedProposalData
+	/**
+	 * What the connected device shows for this action. Rendered next to the Sign button, because
+	 * the signer compares it while the device is prompting — not a screen away (#402).
+	 */
+	deviceDisplay?: DeviceSigningDisplay
 	onSign: () => void
 	onBroadcast: () => void
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
@@ -74,6 +81,7 @@ export function ProposalDetail({
 	proposal,
 	signerPubkey,
 	decodedData,
+	deviceDisplay,
 	onSign,
 	onBroadcast,
 	onPasteSignatures,
@@ -353,6 +361,8 @@ export function ProposalDetail({
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
 						</div>
 					)}
+
+					{canSign && deviceDisplay !== undefined && <DeviceSigningHint display={deviceDisplay} />}
 
 					{canSign && (
 						<button
