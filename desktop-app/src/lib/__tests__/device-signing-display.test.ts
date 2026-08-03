@@ -8,7 +8,7 @@ const messageHash = 'ee020aa4a02d55a674aee20764aaa760d463559e7858c91f14f'
 
 // Ledger → both values: the device shows either the message text or the SHA-256
 // "Message hash" depending on model and Bitcoin app version, and the app cannot
-// tell which in advance (#402 — Alpen saw the full text on a Nano X).
+// tell which in advance (#402 — a Nano X was observed rendering the full text).
 // The hash is upper-cased to match the device, which prints it with "%02X".
 assert.deepEqual(deviceSigningDisplay('ledger', { message, messageHash }), {
 	kind: 'hash-and-text',
