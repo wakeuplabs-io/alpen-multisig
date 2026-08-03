@@ -223,9 +223,12 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			}
 			await assertValidSessionForProposalCreation()
 			const actionHex = await buildActionHex(formData)
+			// The sighash is not shown and not carried: signing recomputes it. This call stays as a
+			// pre-flight check, so a draft that cannot be signed fails here instead of after the
+			// signer has already reviewed it and reached for their device.
 			const sighashResult = await computeSighash(seqNo, actionHex)
 			if (!sighashResult.ok) throw new Error(sighashResult.error)
-			return { seqNo, actionHex, sighashHex: sighashResult.data.sighashHex }
+			return { seqNo, actionHex }
 		} catch (err) {
 			if (isSessionExpiredReauthError(err)) {
 				throw err

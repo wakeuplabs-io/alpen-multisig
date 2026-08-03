@@ -48,7 +48,6 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 
 	// Step 2
 	const [decodedData, setDecodedData] = useState<DecodedProposalData>({
-		sighashHex: null,
 		signerSetChange: null,
 		allSigners: [],
 		isLoading: false,
@@ -93,7 +92,6 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 
 				setDecodedData((prev) => ({
 					...prev,
-					sighashHex: importData.sighashHex,
 					isLoading: false,
 					allSigners: configRes.ok ? configRes.data.signers : [],
 					signerSetChange: (() => {
@@ -407,7 +405,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		setImportErrors({})
 		setIsValidating(false)
 		setImportData(null)
-		setDecodedData({ sighashHex: null, signerSetChange: null, allSigners: [], isLoading: false })
+		setDecodedData({ signerSetChange: null, allSigners: [], isLoading: false })
 		setLocalSignatures([])
 		setRequiredSignatures(null)
 		setIsSigning(false)

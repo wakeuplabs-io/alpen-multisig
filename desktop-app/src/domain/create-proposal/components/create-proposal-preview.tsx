@@ -24,7 +24,6 @@ type Props = {
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
 	newSequencerKeyHex: string
-	sighashHex: string | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
 	authorityLabel: string
@@ -47,7 +46,6 @@ export function CreateProposalPreview({
 	operatorsToAdd,
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
-	sighashHex,
 	deviceDisplay,
 	authorityLabel,
 	walletVendor,
@@ -230,16 +228,6 @@ export function CreateProposalPreview({
 					</div>
 				</div>
 			)}
-
-			<div>
-				<p className="m-0 mb-2 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
-					SPS-65 Sighash (32 bytes)
-				</p>
-				<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-4 py-3">
-					<span className="min-w-0 flex-1 break-all font-mono text-body text-[#111827]">{sighashHex ?? '—'}</span>
-					{sighashHex && <CopyButton text={sighashHex} />}
-				</div>
-			</div>
 
 			<div className="rounded-xl border border-accent-border bg-highlight-surface p-4">
 				<div className="flex items-start gap-4">

@@ -290,18 +290,10 @@ export function CancelProposalSignScreen() {
 							</p>
 						</div>
 
-						{/* Sighash */}
-						<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-							<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Sighash to sign</p>
-							<code className="mt-1.5 block break-all font-mono text-label leading-5 text-[#374151]">
-								{sighashHex || '—'}
-							</code>
-							{deviceDisplay.kind !== 'none' && (
-								<div className="mt-3">
-									<DeviceSigningHint display={deviceDisplay} />
-								</div>
-							)}
-						</div>
+						{/* What the device will render for this signature. Shown only while there is something
+						    to sign, and next to the button, because the comparison happens with the device
+						    already prompting. The hint carries its own card, so it needs no wrapper. */}
+						{!alreadySigned && !signResult && <DeviceSigningHint display={deviceDisplay} />}
 
 						{/* Sign error */}
 						{signError && (
