@@ -15,11 +15,13 @@ assert.doesNotMatch(trezor.verifyHint, /Ledger/)
 assert.doesNotMatch(trezor.broadcastHint, /Ledger/)
 assert.doesNotMatch(trezor.verifyOnDeviceHint, /Ledger/)
 
-// Ledger → named as Ledger, and pointed at the "Message hash" it renders.
+// Ledger → named as Ledger, and pointed at BOTH values, since the device shows either the
+// message text or the SHA-256 "Message hash" depending on model / app version (#402).
 const ledger = deviceCopy('ledger')
 assert.equal(ledger.label, 'Ledger')
 assert.equal(ledger.isHardware, true)
 assert.match(ledger.verifyHint, /Message hash/)
+assert.match(ledger.verifyHint, /message text/)
 assert.doesNotMatch(ledger.verifyHint, /Trezor/)
 assert.doesNotMatch(ledger.broadcastHint, /Trezor/)
 assert.doesNotMatch(ledger.verifyOnDeviceHint, /Trezor/)
@@ -49,5 +51,16 @@ for (const vendor of vendors) {
 
 // A vendor never borrows another vendor's label.
 assert.doesNotMatch(deviceCopy('mnemonic').reviewPrompt, HARDWARE_NAME)
+
+// No signer-facing copy ever mentions the sighash: no device displays it, so naming it in a
+// comparison instruction points the signer at a value they can never see (#402).
+for (const vendor of vendors) {
+	for (const [field, text] of Object.entries(deviceCopy(vendor))) {
+		if (typeof text !== 'string') {
+			continue
+		}
+		assert.doesNotMatch(text, /sighash/i, `${vendor}.${field} must not mention the sighash`)
+	}
+}
 
 console.log('device-copy: all assertions passed')

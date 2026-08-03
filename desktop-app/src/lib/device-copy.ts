@@ -14,7 +14,7 @@ export type DeviceCopy = {
 	isHardware: boolean
 	/** Subtitle above a payload awaiting approval, before anything is submitted. */
 	reviewPrompt: string
-	/** What to compare on the signer's screen instead of the sighash. */
+	/** What the signer compares on the device screen — or why there is nothing to compare. */
 	verifyHint: string
 	/** Guidance while the app asks the signer to verify a derivation path / public key. */
 	verifyOnDeviceHint: string
@@ -28,7 +28,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		isHardware: true,
 		reviewPrompt: 'Review the payload, then approve it on your Trezor. Nothing is submitted until you approve there.',
 		verifyHint:
-			'Your Trezor shows the message it signs, not this sighash — it renders the message text. Compare that text on the device before approving.',
+			'Your Trezor renders the message text it signs. Compare that text on the device, character for character, before approving.',
 		verifyOnDeviceHint:
 			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
@@ -39,7 +39,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		isHardware: true,
 		reviewPrompt: 'Review the payload, then approve it on your Ledger. Nothing is submitted until you approve there.',
 		verifyHint:
-			'Your Ledger shows the message it signs, not this sighash — it renders the SHA-256 “Message hash”. Compare that value on the device before approving.',
+			'Depending on the model and Bitcoin app version, your Ledger renders either the message text or its SHA-256 “Message hash”. Compare whichever one appears on the device before approving.',
 		verifyOnDeviceHint:
 			'Check your Ledger screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
@@ -50,7 +50,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		isHardware: false,
 		reviewPrompt: 'Review the payload, then sign it with your software wallet. Nothing is submitted until you sign.',
 		verifyHint:
-			'Your software wallet signs the message locally — there is no device screen to compare this sighash against.',
+			'Your software wallet signs the message locally — there is no device screen to compare the message against.',
 		verifyOnDeviceHint:
 			'Your software wallet has no device screen — the Admin ID shown here is the public key it will use.',
 		broadcastHint:
@@ -60,7 +60,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		label: 'Mock',
 		isHardware: false,
 		reviewPrompt: 'Review the payload, then sign it with the mock signer. Nothing is submitted until you sign.',
-		verifyHint: 'The mock signer signs locally — there is no device screen to compare this sighash against.',
+		verifyHint: 'The mock signer signs locally — there is no device screen to compare the message against.',
 		verifyOnDeviceHint:
 			'The mock signer has no device screen — the path and public key shown here are the ones it will use.',
 		broadcastHint: 'The commit transaction is signed locally by the mock signer — no device confirmation is asked.',
