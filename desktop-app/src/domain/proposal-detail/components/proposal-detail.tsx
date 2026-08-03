@@ -234,19 +234,6 @@ export function ProposalDetail({
 				</div>
 			)}
 
-			{/* ── SPS-65 sighash ── */}
-			{decodedData.sighashHex !== null && (
-				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm p-6 py-5">
-					<SectionLabel>SPS-65 Sighash</SectionLabel>
-					<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-						<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
-							{decodedData.sighashHex}
-						</span>
-						<CopyButton text={decodedData.sighashHex} />
-					</div>
-				</div>
-			)}
-
 			{/* ── Approvals ── */}
 			<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 				<div className="flex items-center justify-between border-b border-[#f3f4f6] px-6 py-4">

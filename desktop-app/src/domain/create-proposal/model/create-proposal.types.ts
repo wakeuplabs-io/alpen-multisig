@@ -8,12 +8,11 @@ export type MultisigConfigSnapshot = {
 }
 
 /**
- * What a validated draft resolves to before signing. The sighash alone is not enough for the
- * review step: no device ever renders it, so `seqNo` and `actionHex` travel with it to let the
- * UI resolve the values the device actually shows (canonical message and its SHA-256).
+ * What a validated draft resolves to before signing: exactly what the review step needs to
+ * resolve the values the device actually shows (canonical message and its SHA-256). The sighash
+ * is deliberately absent — no device renders it, and signing recomputes it (#402).
  */
 export type ProposalPreview = {
 	seqNo: number
 	actionHex: string
-	sighashHex: string
 }

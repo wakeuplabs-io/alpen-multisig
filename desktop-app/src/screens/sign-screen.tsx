@@ -13,7 +13,6 @@ import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useCurrentThreshold } from '@/domain/sign-proposal/hooks/use-current-threshold'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { deviceCopy } from '@/lib/device-copy'
-import { writeClipboard } from '@/api/tauri-bridge'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -42,7 +41,6 @@ export function SignScreen() {
 	const [loadError, setLoadError] = useState<string | null>(null)
 	const [signError, setSignError] = useState<string | null>(null)
 	const [signResult, setSignResult] = useState<SignSighashResult | null>(null)
-	const [copyFeedbackVisible, setCopyFeedbackVisible] = useState(false)
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 	const [decodedAction, setDecodedAction] = useState<DecodedAction | null>(null)
 	const [showQuorumPrompt, setShowQuorumPrompt] = useState(false)
@@ -216,20 +214,6 @@ export function SignScreen() {
 		}
 	}
 
-	async function handleCopySighash() {
-		if (sighashHex.length === 0) {
-			setSignError('No sighash available to copy.')
-			return
-		}
-		try {
-			await writeClipboard(sighashHex)
-			setCopyFeedbackVisible(true)
-			setTimeout(() => setCopyFeedbackVisible(false), 450)
-		} catch (error) {
-			setSignError(`Unable to copy sighash: ${String(error)}`)
-		}
-	}
-
 	if (wallet === null) {
 		return <Navigate to="/" replace />
 	}
@@ -350,15 +334,12 @@ export function SignScreen() {
 							proposalTypeLabel={proposalTypeLabel}
 							proposalTitle={proposalTitle}
 							decodedAction={decodedAction}
-							sighashHex={sighashHex}
 							currentThreshold={currentThreshold}
 							deviceDisplay={deviceDisplay}
 							signResult={signResult}
 							isSigning={isSigning}
 							error={signError}
-							copyFeedbackVisible={copyFeedbackVisible}
 							walletVendor={adapter.vendor}
-							onCopySighash={() => void handleCopySighash()}
 							onSign={() => void handleSignWithHw()}
 						/>
 					</div>

@@ -300,7 +300,6 @@ export function CreateProposalForm({
 								.map((r) => r.value.trim())
 								.filter((v) => v.length > 0)}
 							newSequencerKeyHex={previewData.newSequencerKeyHex}
-							sighashHex={preview?.sighashHex ?? null}
 							deviceDisplay={deviceDisplay}
 							authorityLabel={authorityLabel}
 							walletVendor={walletVendor}

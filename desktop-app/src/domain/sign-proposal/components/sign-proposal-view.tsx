@@ -1,4 +1,4 @@
-import { CopyClipboardIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
+import { PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
@@ -13,7 +13,6 @@ type SignProposalViewProps = {
 	proposalTypeLabel: string
 	proposalTitle: string
 	decodedAction: DecodedAction | null
-	sighashHex: string
 	/** On-chain threshold for this authority, or null while unknown — decides whether
 	 * the proposal's threshold counts as a change (#423). */
 	currentThreshold: number | null
@@ -22,9 +21,7 @@ type SignProposalViewProps = {
 	signResult: SignSighashResult | null
 	isSigning: boolean
 	error: string | null
-	copyFeedbackVisible: boolean
 	walletVendor: WalletVendor
-	onCopySighash: () => void
 	onSign: () => void
 }
 
@@ -136,15 +133,12 @@ export function SignProposalView({
 	proposalTypeLabel,
 	proposalTitle,
 	decodedAction,
-	sighashHex,
 	currentThreshold,
 	deviceDisplay,
 	signResult,
 	isSigning,
 	error,
-	copyFeedbackVisible,
 	walletVendor,
-	onCopySighash,
 	onSign,
 }: SignProposalViewProps) {
 	const { label, isHardware } = deviceCopy(walletVendor)
@@ -166,25 +160,6 @@ export function SignProposalView({
 			) : (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
 			)}
-
-			<div className="mt-5">
-				<p className="m-0 text-mono-sm font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
-					SPS-65 Sighash (32 bytes)
-				</p>
-				<div className="mt-2 flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2.5">
-					<code className="block min-w-0 flex-1 break-all font-mono text-label leading-5 text-[#334155]">
-						{sighashHex}
-					</code>
-					<button
-						type="button"
-						className="group inline-flex items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-white px-2 py-1 text-mono-sm font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#374151]"
-						onClick={onCopySighash}
-					>
-						<CopyClipboardIcon width={14} height={14} className={copyFeedbackVisible ? 'copy-address-feedback' : ''} />
-						Copy
-					</button>
-				</div>
-			</div>
 
 			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-bg-surface p-3.5">
 				<div className="flex items-start gap-2.5">
