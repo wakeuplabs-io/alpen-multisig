@@ -9,7 +9,7 @@ import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signi
 import { ShieldAccentIcon } from '@/assets/icons'
 import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding'
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
-import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useCurrentThreshold } from '@/domain/sign-proposal/hooks/use-current-threshold'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { deviceCopy } from '@/lib/device-copy'
