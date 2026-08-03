@@ -11,6 +11,7 @@ This directory contains client-facing deliverables for the Strata Multisig appli
 | [Setup Guide](./setup-guide.md) | Installation, first-run setup, and configuration | PRD §1.4 |
 | [Local Dev Smoke Test Guide](./local-dev-smoke-test-guide.md) | Beginner-friendly, end-to-end walkthrough to run the full app from source and complete a governance action on a local regtest network | PRD §1.4 |
 | [Hardware Wallet Compatibility Matrix](./hardware-wallet-matrix.md) | Supported devices and requirements | PRD §3.2 |
+| [Verifying What You Sign](./verifying-what-you-sign.md) | What each hardware signer displays, the canonical message format, and how to check the SHA-256 yourself | Issue #402 |
 
 ### Architecture and Design
 
