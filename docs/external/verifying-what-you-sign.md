@@ -1,12 +1,12 @@
 # Verifying what you sign
 
-Agreed in [#402](https://github.com/wakeuplabs-io/alpen-multisig/issues/402) so a signer can confirm,
-without trusting the application, that the message their hardware signer is about to sign is the
-governance action they intended.
+Written for [#402](https://github.com/wakeuplabs-io/alpen-multisig/issues/402) so a signer can
+confirm, without trusting the application, that the message their hardware signer is about to sign is
+the governance action they intended.
 
-> **For Alpen review.** SPS-65 has no public specification we could reference, so the message format
-> below is documented from the ASM source at the revision this release pins
-> (`e0461f8f520e9be814541d1f76fb961fd847e4ae`). Please confirm it before it is treated as canonical.
+> **Pending review.** SPS-65 has no public specification to reference, so the message format below is
+> documented from the ASM source at the revision this release pins
+> (`e0461f8f520e9be814541d1f76fb961fd847e4ae`). Confirm it before treating it as canonical.
 
 ## The short version
 
