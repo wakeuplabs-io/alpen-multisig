@@ -4,8 +4,9 @@ import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-si
 import type { WalletVendor } from '@/wallet/types'
 
 /**
- * Resolves what the connected device displays for a message it signs: Ledger shows
- * `sha256(message)` ("Message hash"); Trezor shows the message text; software signers show
+ * Resolves what the connected device displays for a message it signs: Ledger renders either
+ * the message text or its SHA-256 ("Message hash") depending on the model and Bitcoin app
+ * version, so both are resolved; Trezor shows the message text; software signers show
  * nothing. Use when the message string is already known (e.g. the session-auth challenge).
  */
 export function useDeviceMessageDisplay(vendor: WalletVendor, message: string | null): DeviceSigningDisplay {

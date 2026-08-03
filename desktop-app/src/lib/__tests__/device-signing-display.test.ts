@@ -6,11 +6,15 @@ import { deviceSigningDisplay } from '../device-signing-display.ts'
 const message = 'Strata ASM Administration v1\nAction: ...'
 const messageHash = 'ee020aa4a02d55a674aee20764aaa760d463559e7858c91f14f'
 
-// Ledger → the SHA-256 "Message hash" it renders.
+// Ledger → both values: the device shows either the message text or the SHA-256
+// "Message hash" depending on model and Bitcoin app version, and the app cannot
+// tell which in advance (#402 — Alpen saw the full text on a Nano X).
+// The hash is upper-cased to match the device, which prints it with "%02X".
 assert.deepEqual(deviceSigningDisplay('ledger', { message, messageHash }), {
-	kind: 'hash',
+	kind: 'hash-and-text',
 	deviceLabel: 'Ledger',
-	value: messageHash,
+	hash: messageHash.toUpperCase(),
+	text: message,
 })
 
 // Trezor → the message text it renders.
@@ -25,7 +29,9 @@ assert.deepEqual(deviceSigningDisplay('mnemonic', { message, messageHash }), { k
 assert.deepEqual(deviceSigningDisplay('mock', { message, messageHash }), { kind: 'none' })
 
 // Values still resolving → degrade to none rather than render a partial prompt.
+// Ledger needs both values, so either one missing degrades.
 assert.deepEqual(deviceSigningDisplay('ledger', { message, messageHash: null }), { kind: 'none' })
+assert.deepEqual(deviceSigningDisplay('ledger', { message: null, messageHash }), { kind: 'none' })
 assert.deepEqual(deviceSigningDisplay('trezor', { message: null, messageHash }), { kind: 'none' })
 
 console.log('device-signing-display: all assertions passed')
