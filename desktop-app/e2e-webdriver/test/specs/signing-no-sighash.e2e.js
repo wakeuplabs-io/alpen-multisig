@@ -31,7 +31,9 @@ describe('Strata Multisig signing — no SPS-65 sighash on screen', () => {
 
 		const title = await $('input[data-testid="e2e-create-proposal-title"]')
 		await title.waitForDisplayed({ timeout: 30000 })
-		await title.setValue(`E2E no-sighash ${Date.now()}`)
+		// The title must not contain the word this spec searches for, or the assertion finds its
+		// own fixture and fails on a screen that is perfectly clean.
+		await title.setValue(`E2E device value ${Date.now()}`)
 
 		const pubkeyIn = await $('input[data-testid="e2e-new-signer-pubkey-input"]')
 		await pubkeyIn.waitForDisplayed({ timeout: 60000 })
@@ -50,8 +52,9 @@ describe('Strata Multisig signing — no SPS-65 sighash on screen', () => {
 		await $('//h1[contains(.,"Review")]').waitForDisplayed({ timeout: 60000 })
 
 		const body = await $('body').getText()
-		if (/sighash/i.test(body)) {
-			throw new Error('the review step still mentions the sighash')
+		const offending = body.split('\n').filter((line) => /sighash/i.test(line))
+		if (offending.length > 0) {
+			throw new Error(`the review step still mentions the sighash: ${JSON.stringify(offending)}`)
 		}
 
 		// A mnemonic signer has no device screen, so there is nothing to compare and the hint
