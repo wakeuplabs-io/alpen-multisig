@@ -2,6 +2,7 @@ import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
 import type { ActionType, Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/assets/icons'
+import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { ManualImportData, ManualSignature } from '@/domain/manual-proposal/model/manual-proposal.types'
@@ -11,6 +12,8 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 type Props = {
 	importData: ManualImportData
 	decodedData: DecodedProposalData
+	/** What the connected device shows for this action — nothing for software signers. */
+	deviceDisplay: DeviceSigningDisplay
 	localSignatures: ManualSignature[]
 	requiredSignatures: number | null
 	hasQuorum: boolean
@@ -31,6 +34,7 @@ function derivedActionType(actionHex: string): ActionType {
 export function ManualSignCollect({
 	importData,
 	decodedData,
+	deviceDisplay,
 	localSignatures,
 	requiredSignatures,
 	hasQuorum,
@@ -110,6 +114,7 @@ export function ManualSignCollect({
 				proposal={syntheticProposal}
 				signerPubkey={signerPubkey}
 				decodedData={decodedData}
+				deviceDisplay={deviceDisplay}
 				onSign={isSigning ? () => {} : onSign}
 				onBroadcast={onBroadcast}
 				onPasteSignatures={onPasteSignatures}

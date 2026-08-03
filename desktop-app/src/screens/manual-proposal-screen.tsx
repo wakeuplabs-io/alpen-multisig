@@ -150,6 +150,7 @@ export function ManualProposalScreen() {
 								<ManualSignCollect
 									importData={manual.importData}
 									decodedData={manual.decodedData}
+									deviceDisplay={manual.deviceDisplay}
 									localSignatures={manual.localSignatures}
 									requiredSignatures={manual.requiredSignatures}
 									hasQuorum={manual.hasQuorum}
