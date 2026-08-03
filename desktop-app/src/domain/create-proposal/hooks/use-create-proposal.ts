@@ -13,7 +13,7 @@ import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
-import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
+import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
 
@@ -40,7 +40,7 @@ export type UseCreateProposalReturn = {
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
-	computeProposalPreview: (data: CreateProposalFormValues) => Promise<string | null>
+	computeProposalPreview: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	submitCreateProposal: (data: CreateProposalFormValues) => Promise<void>
 }
 
@@ -214,7 +214,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		}
 	}
 
-	async function computeProposalPreview(formData: CreateProposalFormValues): Promise<string | null> {
+	async function computeProposalPreview(formData: CreateProposalFormValues): Promise<ProposalPreview | null> {
 		setError(null)
 		try {
 			const seqNo = Number(formData.seqNo.trim())
@@ -225,7 +225,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			const actionHex = await buildActionHex(formData)
 			const sighashResult = await computeSighash(seqNo, actionHex)
 			if (!sighashResult.ok) throw new Error(sighashResult.error)
-			return sighashResult.data.sighashHex
+			return { seqNo, actionHex, sighashHex: sighashResult.data.sighashHex }
 		} catch (err) {
 			if (isSessionExpiredReauthError(err)) {
 				throw err
