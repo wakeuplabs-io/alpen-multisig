@@ -20,6 +20,17 @@ export type DeviceCopy = {
 	verifyOnDeviceHint: string
 	/** What the signer is asked to approve when broadcasting the commit transaction. */
 	broadcastHint: string
+	/**
+	 * Label and hint for handing passphrase entry to the device keypad (#448). Present only
+	 * for vendors that can take a passphrase on the device — Ledger unlocks a passphrase
+	 * wallet by PIN on the device itself, and software signers have no device at all.
+	 */
+	passphraseOnDevice?: {
+		label: string
+		hint: string
+		/** Shown instead, when the connected model has no keypad for it (Trezor One). */
+		unsupportedHint: string
+	}
 }
 
 const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
@@ -33,6 +44,12 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
+		passphraseOnDevice: {
+			label: 'Enter passphrase on Trezor',
+			hint: 'If your Trezor has a passphrase enabled, it asks for it on its own keypad — the words are never typed on this computer. Leave it empty on the device to open your standard wallet.',
+			unsupportedHint:
+				'This Trezor model cannot take a passphrase on its own keypad. Connecting opens your standard wallet.',
+		},
 	},
 	ledger: {
 		label: 'Ledger',

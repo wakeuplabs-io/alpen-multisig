@@ -15,21 +15,22 @@ type SignatureResult = {
 	signatureHex: string
 }
 
-export function createHwAdapter(vendor: WalletVendor, passphrase?: string): WalletAdapter {
+/**
+ * No passphrase crosses this boundary. A Trezor passphrase is entered on the device
+ * keypad, so there is nothing here to hold or forward (#448).
+ */
+export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 	let publicKeyHex: string | null = null
 	let currentDerivationPath = ''
-	const pp = passphrase ?? ''
 
 	return {
 		vendor,
 		supportsSighashSigning: true,
-		passphrase: pp || undefined,
 
 		async connect(): Promise<WalletAccountInfo> {
 			const result = await tauriCall<HwWalletInfo>('hw_wallet_connect', {
 				vendor,
 				derivationPath: null,
-				passphrase: pp,
 			})
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data
@@ -48,6 +49,9 @@ export function createHwAdapter(vendor: WalletVendor, passphrase?: string): Wall
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 			currentDerivationPath = ''
+			// Drop the device session too, or the next person on this machine reaches the
+			// hidden wallet without re-entering the passphrase on the device.
+			await tauriCall<null>('hw_wallet_end_session', {})
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {
@@ -57,7 +61,6 @@ export function createHwAdapter(vendor: WalletVendor, passphrase?: string): Wall
 					vendor,
 					challengeMessage: sighashHex,
 					derivationPath: currentDerivationPath,
-					passphrase: pp,
 				})
 				if (!result.ok) throw new Error(result.error)
 				return {
@@ -71,7 +74,6 @@ export function createHwAdapter(vendor: WalletVendor, passphrase?: string): Wall
 				seqno: context.seqno,
 				actionHex: context.actionHex,
 				derivationPath: currentDerivationPath,
-				passphrase: pp,
 			})
 			if (!result.ok) throw new Error(result.error)
 			return {
@@ -82,19 +84,13 @@ export function createHwAdapter(vendor: WalletVendor, passphrase?: string): Wall
 		},
 
 		async getAccountXpub(): Promise<string> {
-			const result = await tauriCall<string>('hw_wallet_get_xpub', {
-				vendor,
-				passphrase: pp,
-			})
+			const result = await tauriCall<string>('hw_wallet_get_xpub', { vendor })
 			if (!result.ok) throw new Error(result.error)
 			return result.data
 		},
 
 		async getMasterFingerprint(): Promise<number> {
-			const result = await tauriCall<number>('hw_wallet_get_fingerprint', {
-				vendor,
-				passphrase: pp,
-			})
+			const result = await tauriCall<number>('hw_wallet_get_fingerprint', { vendor })
 			if (!result.ok) throw new Error(result.error)
 			if (result.data === 0) {
 				throw new Error(`${vendor} returned an invalid master fingerprint`)

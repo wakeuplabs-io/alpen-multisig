@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { tauriCall } from '@/api/tauri-bridge'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
+import { useDevicePassphraseEntry } from '@/domain/connect-wallet/hooks/use-device-passphrase-entry'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+import { deviceCopy } from '@/lib/device-copy'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
 import type { HwAddressEntry, WalletVendor } from '@/wallet/types'
 
@@ -12,9 +14,9 @@ type Props = {
 	error: string | null
 	onConnect: () => void
 	onConnectMnemonic?: (mnemonic: string) => void
-	onConnectTrezor?: (passphrase?: string) => void
+	onConnectTrezor?: () => void
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	mnemonicEnabled: boolean
 }
 
@@ -36,10 +38,11 @@ export function ConnectPhase({
 	const [debugEntry, setDebugEntry] = useState<HwAddressEntry | null>(null)
 	const [debugLoading, setDebugLoading] = useState(false)
 	const [debugError, setDebugError] = useState<string | null>(null)
-	const [trezorPassphrase, setTrezorPassphrase] = useState('')
+	const passphraseEntry = useDevicePassphraseEntry(walletVendor)
+	const passphraseCopy = deviceCopy(walletVendor).passphraseOnDevice
 
 	function handleUseTrezor() {
-		onSelectWalletMethod('trezor', undefined, trezorPassphrase || undefined)
+		onSelectWalletMethod('trezor')
 		setMnemonicError(null)
 	}
 
@@ -167,20 +170,27 @@ export function ConnectPhase({
 						onChange={(event) => setMnemonicInput(event.target.value)}
 					/>
 				)}
-				{walletVendor === 'trezor' && (
-					<div className="mt-2">
-						<label className="text-mono-sm font-medium text-[#9ca3af]" htmlFor="trezor-passphrase">
-							Passphrase (optional)
-						</label>
-						<input
-							id="trezor-passphrase"
-							type="password"
-							className="mt-1 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
-							placeholder="Leave empty for default wallet"
-							value={trezorPassphrase}
-							onChange={(event) => setTrezorPassphrase(event.target.value)}
-						/>
+				{passphraseCopy && passphraseEntry.supported === true && (
+					<div className="mt-3" data-testid="e2e-passphrase-on-device">
+						<button
+							type="button"
+							data-testid="e2e-passphrase-on-device-button"
+							className="w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label font-medium text-[#374151] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
+							onClick={() => onConnectTrezor?.()}
+							disabled={loading || isSuccess}
+						>
+							{passphraseCopy.label}
+						</button>
+						<p className="m-0 mt-1.5 text-label leading-[1.5] text-[#6b7280]">{passphraseCopy.hint}</p>
 					</div>
+				)}
+				{passphraseCopy && passphraseEntry.supported === false && (
+					<p
+						className="m-0 mt-3 text-label leading-[1.5] text-[#6b7280]"
+						data-testid="e2e-passphrase-on-device-unsupported"
+					>
+						{passphraseCopy.unsupportedHint}
+					</p>
 				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}
 
@@ -257,7 +267,7 @@ export function ConnectPhase({
 					walletVendor === 'mnemonic' && onConnectMnemonic
 						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
 						: walletVendor === 'trezor' && onConnectTrezor
-							? () => onConnectTrezor(trezorPassphrase || undefined)
+							? () => onConnectTrezor()
 							: onConnect
 				}
 				disabled={loading || isSuccess}

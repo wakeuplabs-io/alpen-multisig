@@ -3,6 +3,10 @@ export type WalletVendor = 'mock' | 'ledger' | 'trezor' | 'mnemonic'
 export type WalletAdapterOptions = {
 	/** Required when vendor is 'mnemonic'. */
 	mnemonic?: string
+	/**
+	 * BIP39 passphrase for the software wallet only. Hardware vendors never take one:
+	 * a Trezor passphrase is entered on the device keypad, never on this machine (#448).
+	 */
 	passphrase?: string
 	derivationPath?: string
 }
@@ -42,7 +46,6 @@ export type SigningContext = {
 export type WalletAdapter = {
 	readonly vendor: WalletVendor
 	readonly supportsSighashSigning: boolean
-	readonly passphrase?: string
 	connect(): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
