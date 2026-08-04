@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::{Mutex, OnceLock};
 
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
@@ -11,9 +12,88 @@ use crate::infrastructure::signing::SignatureResult;
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
 const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
 
+/// The device session id from the last successful `Initialize`.
+///
+/// Every Trezor operation opens its own transport (`open_trezor`), so without this the
+/// device would treat each one as a fresh session and re-derive the seed — which means
+/// re-prompting for the passphrase on the device keypad on *every* call. Resuming the
+/// session keeps the firmware's cached seed (`APP_COMMON_SEED`) alive, so the signer
+/// enters the passphrase once per connection.
+///
+/// A process-wide `static` rather than Tauri managed state, following the precedent of
+/// `LEDGER_DEVICE_LOCK` in `ledger.rs`: managed state would have to be threaded through
+/// six commands and would break their `spawn_blocking(move || ...)` bodies.
+static TREZOR_SESSION: OnceLock<Mutex<Option<Vec<u8>>>> = OnceLock::new();
+
+fn session_store() -> &'static Mutex<Option<Vec<u8>>> {
+    TREZOR_SESSION.get_or_init(|| Mutex::new(None))
+}
+
+/// What the device did with the session we asked it to resume.
+///
+/// The firmware never *fails* an `Initialize` carrying an unknown session id: it silently
+/// starts a fresh, empty session and returns a different id (`cache_codec.py:91-128`). The
+/// only way to tell the two apart is to compare the id it returned against the one we sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionOutcome {
+    /// We asked for nothing; this is a new session.
+    Started,
+    /// The device resumed the session we asked for — its seed cache is still warm.
+    Resumed,
+    /// We asked to resume and got a *different* session back. The passphrase cache is
+    /// empty, so the device will prompt again before it derives any key.
+    Lost,
+}
+
+/// Pure classification of an `Initialize` round-trip. Split out from `open_trezor` so the
+/// silent-downgrade rule is testable without a device.
+fn session_outcome(requested: Option<&[u8]>, returned: &[u8]) -> SessionOutcome {
+    match requested {
+        None => SessionOutcome::Started,
+        Some(asked) if asked == returned => SessionOutcome::Resumed,
+        Some(_) => SessionOutcome::Lost,
+    }
+}
+
+/// The session id the device reported, if it sent one. Empty ids are treated as absent:
+/// the firmware uses 32-byte ids, and an empty value carries no session to resume.
+fn reported_session_id(trezor: &Trezor) -> Option<Vec<u8>> {
+    let id = trezor.features()?.session_id();
+    (!id.is_empty()).then(|| id.to_vec())
+}
+
+/// Drops the remembered session, so the next operation starts a clean one and the device
+/// asks for the passphrase again. Call this when the signer disconnects the wallet.
+pub fn forget_session() {
+    if let Ok(mut slot) = session_store().lock() {
+        *slot = None;
+    }
+}
+
+/// Records the session the device just handed back.
+///
+/// `Lost` is not an error: the signer simply re-enters the passphrase on the device before
+/// the next key is derived, so there is no way to end up on the standard wallet without
+/// the device saying so. It is worth logging because a session that keeps getting lost
+/// means the passphrase prompt keeps coming back, which reads as a bug from the signer's
+/// side. (`_MAX_SESSIONS_COUNT = 10` in the firmware, so another client can evict ours.)
+fn remember_session(requested: Option<&[u8]>, trezor: &Trezor) {
+    let Some(returned) = reported_session_id(trezor) else {
+        return;
+    };
+    if session_outcome(requested, &returned) == SessionOutcome::Lost {
+        eprintln!("trezor: device session was not resumed; the passphrase will be requested again");
+    }
+    if let Ok(mut slot) = session_store().lock() {
+        *slot = Some(returned);
+    }
+}
+
 fn open_trezor() -> Result<Trezor, String> {
     let mut attempts = Vec::with_capacity(2);
     let mut saw_invalid_protocol = false;
+    let requested = session_store().lock().ok().and_then(|slot| slot.clone());
+
     for debug in [false, true] {
         let mut trezor = match trezor_client::unique(debug) {
             Ok(device) => device,
@@ -23,8 +103,11 @@ fn open_trezor() -> Result<Trezor, String> {
             }
         };
 
-        match trezor.init_device(None) {
-            Ok(_) => return Ok(trezor),
+        match trezor.init_device(requested.clone()) {
+            Ok(_) => {
+                remember_session(requested.as_deref(), &trezor);
+                return Ok(trezor);
+            }
             Err(e) => {
                 if e.to_string().contains("Failure_InvalidProtocol") {
                     saw_invalid_protocol = true;
@@ -33,6 +116,10 @@ fn open_trezor() -> Result<Trezor, String> {
             }
         }
     }
+
+    // Both transports failed: the device is gone or unhealthy, so whatever session we were
+    // holding is stale. Drop it rather than replaying it once the device comes back.
+    forget_session();
 
     let mut hint = "Ensure trezord/emulator are healthy, then reconnect the device.".to_string();
     if saw_invalid_protocol {
@@ -592,6 +679,32 @@ pub fn sign_admin_wallet_psbt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_without_a_request_is_a_fresh_start() {
+        assert_eq!(session_outcome(None, &[1, 2, 3]), SessionOutcome::Started);
+    }
+
+    #[test]
+    fn session_is_resumed_only_when_the_device_echoes_the_same_id() {
+        let id = [7u8; 32];
+        assert_eq!(session_outcome(Some(&id), &id), SessionOutcome::Resumed);
+    }
+
+    /// The firmware answers an unknown session id with a *new* empty session instead of an
+    /// error, so a resumed session and a silently restarted one look identical apart from
+    /// the id. Comparing the ids is the only signal there is.
+    #[test]
+    fn a_different_id_means_the_session_was_lost_not_resumed() {
+        let asked = [7u8; 32];
+        let got = [9u8; 32];
+        assert_eq!(session_outcome(Some(&asked), &got), SessionOutcome::Lost);
+        // A truncated echo is not a resume either.
+        assert_eq!(
+            session_outcome(Some(&asked), &asked[..16]),
+            SessionOutcome::Lost
+        );
+    }
 
     #[test]
     fn trezor_coin_network_maps_regtest_and_signet_to_testnet() {
