@@ -6,7 +6,7 @@ use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::Network;
 use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
-use super::{AddressScriptType, HwWalletInfo};
+use super::{AddressScriptType, HwDeviceCapabilities, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
@@ -135,6 +135,40 @@ fn open_trezor() -> Result<Trezor, String> {
         hint,
         attempts.join(" | ")
     ))
+}
+
+/// Whether the device advertises passphrase entry on its own keypad.
+///
+/// `Capability_PassphraseEntry` is the only reliable signal: Trezor One (T1B1) never lists
+/// it and answers `PassphraseAck.on_device` with
+/// `Failure_DataError: "This firmware is incapable of passphrase entry on the device"`,
+/// while every Model T / Safe device lists it. `Features.model` is a free-form per-model
+/// string and must not be used for this decision.
+///
+/// Pure over the raw capability values so it is testable without a device.
+fn has_passphrase_entry(capability_values: &[i32]) -> bool {
+    capability_values.contains(&(protos::features::Capability::Capability_PassphraseEntry as i32))
+}
+
+/// Reads the connected Trezor's model and passphrase-entry capability.
+///
+/// Runs on `Initialize` alone — no key derivation, so it never triggers a passphrase or PIN
+/// prompt, and the connect screen can call it before the signer commits to connecting.
+pub fn device_capabilities() -> Result<HwDeviceCapabilities, String> {
+    let trezor = open_trezor()?;
+    let features = trezor
+        .features()
+        .ok_or_else(|| "Trezor did not report its features".to_string())?;
+    Ok(HwDeviceCapabilities {
+        model: Some(features.model().to_string()),
+        supports_passphrase_entry: has_passphrase_entry(
+            &features
+                .capabilities
+                .iter()
+                .map(|c| c.value())
+                .collect::<Vec<i32>>(),
+        ),
+    })
 }
 
 fn parse_path(path: &str) -> Result<DerivationPath, String> {
@@ -703,6 +737,21 @@ mod tests {
             session_outcome(Some(&asked), &asked[..16]),
             SessionOutcome::Lost
         );
+    }
+
+    /// Trezor One never advertises `Capability_PassphraseEntry` and answers an on-device
+    /// PassphraseAck with `Failure_DataError`, so offering it there would be a dead end.
+    #[test]
+    fn passphrase_entry_is_detected_from_the_capability_not_the_model() {
+        let entry = protos::features::Capability::Capability_PassphraseEntry as i32;
+        let bitcoin = protos::features::Capability::Capability_Bitcoin as i32;
+        let u2f = protos::features::Capability::Capability_U2F as i32;
+
+        // Model T / Safe 3 / Safe 5 list it alongside the coin capabilities.
+        assert!(has_passphrase_entry(&[bitcoin, entry, u2f]));
+        // Trezor One reports coin capabilities only.
+        assert!(!has_passphrase_entry(&[bitcoin, u2f]));
+        assert!(!has_passphrase_entry(&[]));
     }
 
     #[test]
