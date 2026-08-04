@@ -29,7 +29,7 @@ export type DeviceCopy = {
 		label: string
 		hint: string
 		/** Shown instead, when the connected model has no keypad for it (Trezor One). */
-		unsupportedHint: string
+		unsupportedHint: (model: string | null) => string
 	}
 }
 
@@ -47,8 +47,10 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		passphraseOnDevice: {
 			label: 'Enter passphrase on Trezor',
 			hint: 'If your Trezor has a passphrase enabled, it asks for it on its own keypad — the words are never typed on this computer. Leave it empty on the device to open your standard wallet.',
-			unsupportedHint:
-				'This Trezor model cannot take a passphrase on its own keypad. Connecting opens your standard wallet.',
+			// Says what actually happens rather than promising a fallback: with no keypad and no
+			// host field, a device with its passphrase switched on cannot connect here at all.
+			unsupportedHint: (model) =>
+				`This Trezor${model === null ? '' : ` (${model})`} cannot take a passphrase on its own keypad, and Strata Multisig never asks for one on this computer. Connecting opens your standard wallet; if the device has a passphrase enabled, turn it off there first.`,
 		},
 	},
 	ledger: {

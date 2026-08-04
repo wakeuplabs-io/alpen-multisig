@@ -44,6 +44,9 @@ export function ConnectPhase({
 	function handleUseTrezor() {
 		onSelectWalletMethod('trezor')
 		setMnemonicError(null)
+		// The signer has usually plugged the Trezor in by now, even if it was absent when this
+		// screen first read the device.
+		passphraseEntry.recheck()
 	}
 
 	function handleUseLedger() {
@@ -171,7 +174,7 @@ export function ConnectPhase({
 						onChange={(event) => setMnemonicInput(event.target.value)}
 					/>
 				)}
-				{passphraseCopy && passphraseEntry.supported === true && (
+				{passphraseCopy && passphraseEntry.supported !== false && (
 					<div className="mt-3" data-testid="e2e-passphrase-on-device">
 						<button
 							type="button"
@@ -190,7 +193,7 @@ export function ConnectPhase({
 						className="m-0 mt-3 text-label leading-[1.5] text-[#6b7280]"
 						data-testid="e2e-passphrase-on-device-unsupported"
 					>
-						{passphraseCopy.unsupportedHint}
+						{passphraseCopy.unsupportedHint(passphraseEntry.model)}
 					</p>
 				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}

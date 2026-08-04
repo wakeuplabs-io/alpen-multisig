@@ -84,6 +84,17 @@ assert.match(trezor.passphraseOnDevice.label, /Trezor/)
 // The whole point of the button is that the secret is not typed here — the hint has to say
 // where it *is* typed, or the signer cannot tell this apart from the field it replaced.
 assert.match(trezor.passphraseOnDevice.hint, /keypad/)
-assert.match(trezor.passphraseOnDevice.unsupportedHint, /standard wallet/)
+// A model with no keypad has no fallback here: the app never asks for a passphrase on the
+// host, so the hint must send the signer to the device rather than promise it will just work.
+const unsupported = trezor.passphraseOnDevice.unsupportedHint('Safe 3')
+assert.match(unsupported, /Safe 3/, 'the hint names the model the device reported')
+assert.match(unsupported, /turn it off there/, 'the hint says what to do, not just what failed')
+assert.doesNotMatch(
+	trezor.passphraseOnDevice.unsupportedHint(null),
+	/\(\)|\(null\)/,
+	'an unknown model must not leave an empty parenthetical',
+)
+// copyStrings cannot reach inside a function, so the sighash rule is applied here by hand.
+assert.doesNotMatch(unsupported, /sighash/i)
 
 console.log('device-copy: all assertions passed')

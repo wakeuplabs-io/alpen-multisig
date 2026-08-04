@@ -3,7 +3,6 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
-use desktop_app::infrastructure::hw_wallet::trezor;
 use desktop_app::infrastructure::hw_wallet::{
     AddressScriptType, HwDeviceCapabilities, HwWalletInfo,
 };
@@ -97,18 +96,6 @@ pub async fn hw_wallet_capabilities(vendor: String) -> Result<HwDeviceCapabiliti
     tokio::task::spawn_blocking(move || device.capabilities())
         .await
         .map_err(|e| e.to_string())?
-}
-
-/// Forgets the Trezor device session, so the next operation starts a clean one and the
-/// device asks for the passphrase again.
-///
-/// Called when the signer disconnects the wallet: a session left behind would let the next
-/// person on this machine reach the hidden wallet without re-entering the passphrase. Ledger
-/// has no equivalent — it holds no host-visible session.
-#[tauri::command]
-pub async fn hw_wallet_end_session() -> Result<(), String> {
-    trezor::forget_session();
-    Ok(())
 }
 
 /// Renders the address at `derivation_path` on the connected device and returns the

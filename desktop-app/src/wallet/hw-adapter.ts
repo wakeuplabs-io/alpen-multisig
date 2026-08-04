@@ -49,9 +49,9 @@ export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 		async disconnect(): Promise<void> {
 			publicKeyHex = null
 			currentDerivationPath = ''
-			// Drop the device session too, or the next person on this machine reaches the
-			// hidden wallet without re-entering the passphrase on the device.
-			await tauriCall<null>('hw_wallet_end_session', {})
+			// The device session is not ended here on purpose. Callers fire disconnect without
+			// awaiting it, so ending it from this side could land after the next connect and
+			// wipe that session instead. `connect` starts a clean session itself.
 		},
 
 		async signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult> {

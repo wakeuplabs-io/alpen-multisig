@@ -39,6 +39,9 @@ const walletConnectScreen = read('screens/wallet-connect-screen.tsx')
 const createWalletAdapter = read('wallet/create-wallet-adapter.ts')
 const hwWalletCommands = readDesktop('src-tauri/src/commands/hw_wallet.rs')
 const trezorAdapter = readDesktop('src-tauri/src/infrastructure/hw_wallet/trezor.rs')
+const walletTypes = read('wallet/types.ts')
+const hwDispatch = readDesktop('src-tauri/src/infrastructure/hw_wallet/hw_psbt_signer.rs')
+const hwWalletMod = readDesktop('src-tauri/src/infrastructure/hw_wallet/mod.rs')
 
 // The hardware adapter is the only place that talks to the device commands. Not one of its
 // IPC payloads may carry a passphrase — that is the wire the secret would travel on.
@@ -63,18 +66,41 @@ assert.ok(
 	'the connect screen must not build a Trezor adapter around a passphrase',
 )
 assert.ok(
-	!/createHwAdapter\('(trezor|ledger)', /.test(createWalletAdapter),
+	!/createHwAdapter\(\s*'(trezor|ledger)'\s*,/.test(createWalletAdapter),
 	'hardware adapters take no passphrase argument',
 )
 
+// The adapter contract itself. `WalletAdapter.passphrase` used to expose the held secret to
+// anything holding an adapter; `WalletAdapterOptions.passphrase` survives for the software
+// wallet, where it is a BIP39 passphrase that never leaves the host by design.
+assert.ok(
+	!/WalletAdapter\s*=\s*\{[^}]*passphrase/s.test(code(walletTypes)),
+	'a connected adapter must not carry a passphrase',
+)
+
+// The Rust dispatch layer between the commands and the device adapters. It may still talk
+// *about* passphrase entry — `supports_passphrase_entry` is how the UI knows to offer it —
+// but nothing may carry the secret itself.
+const CARRIES_A_PASSPHRASE = /\bpassphrase\s*:\s*(&\s*str|String|Option\s*<)/
+for (const [name, source] of [
+	['hw_psbt_signer', hwDispatch],
+	['hw_wallet/mod', hwWalletMod],
+	['commands/hw_wallet', hwWalletCommands],
+	['trezor', trezorAdapter],
+] as const) {
+	assert.ok(!CARRIES_A_PASSPHRASE.test(code(source)), `${name} must not thread a passphrase to the device`)
+}
+
 // The Rust side: the IPC commands must not accept one, and the device handler must ask the
 // device to prompt rather than answering with a host-supplied string.
-assert.ok(!/passphrase: Option<String>/.test(hwWalletCommands), 'no hardware IPC command may accept a passphrase')
 assert.ok(!/ack_passphrase/.test(code(trezorAdapter)), 'the Trezor adapter must never send a passphrase to the device')
 assert.ok(/\.ack\(true\)/.test(code(trezorAdapter)), 'the Trezor adapter must ask the device to prompt on its keypad')
 
-// The session must be droppable, or a hidden wallet stays reachable after disconnect.
-assert.ok(/hw_wallet_end_session/.test(hwAdapter), 'disconnect must end the device session')
-assert.ok(/pub fn forget_session/.test(trezorAdapter), 'the Trezor adapter must expose session invalidation')
+// Connecting must start its own device session. Without this a session opened under one
+// passphrase would be inherited by the next connection, which the signer never authorised.
+assert.ok(
+	/pub fn connect\([^)]*\)[^{]*\{[^}]*forget_session\(\)/s.test(code(trezorAdapter)),
+	'connect must start a clean device session',
+)
 
 console.log('no-host-passphrase: all assertions passed')
