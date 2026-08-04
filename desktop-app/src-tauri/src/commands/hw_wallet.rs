@@ -3,6 +3,7 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
+use desktop_app::infrastructure::hw_wallet::trezor;
 use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::network_env::network_from_env;
 use desktop_app::infrastructure::signing::{self, SignatureResult};
@@ -32,11 +33,9 @@ fn parse_verify_network(network: Option<&str>) -> Network {
 pub async fn hw_wallet_connect(
     vendor: String,
     derivation_path: Option<String>,
-    passphrase: Option<String>,
 ) -> Result<HwWalletInfo, String> {
     let device = parse_device_kind(&vendor)?;
-    let pp = passphrase.unwrap_or_default();
-    tokio::task::spawn_blocking(move || device.connect(derivation_path, &pp))
+    tokio::task::spawn_blocking(move || device.connect(derivation_path))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -47,12 +46,10 @@ pub async fn hw_wallet_sign(
     seqno: u64,
     action_hex: String,
     derivation_path: String,
-    passphrase: Option<String>,
 ) -> Result<SignatureResult, String> {
     let device = parse_device_kind(&vendor)?;
     let message = signing::render_signing_message(seqno, &action_hex)?;
-    let pp = passphrase.unwrap_or_default();
-    tokio::task::spawn_blocking(move || device.sign_sps65(&message, &derivation_path, &pp))
+    tokio::task::spawn_blocking(move || device.sign_sps65(&message, &derivation_path))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -62,41 +59,41 @@ pub async fn hw_wallet_sign_challenge(
     vendor: String,
     challenge_message: String,
     derivation_path: String,
-    passphrase: Option<String>,
 ) -> Result<SignatureResult, String> {
     let device = parse_device_kind(&vendor)?;
-    let pp = passphrase.unwrap_or_default();
-    tokio::task::spawn_blocking(move || {
-        device.sign_sps65(&challenge_message, &derivation_path, &pp)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || device.sign_sps65(&challenge_message, &derivation_path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn hw_wallet_get_xpub(
-    vendor: String,
-    passphrase: Option<String>,
-) -> Result<String, String> {
+pub async fn hw_wallet_get_xpub(vendor: String) -> Result<String, String> {
     let device = parse_device_kind(&vendor)?;
     let network = network_from_env().map_err(|e| e.to_string())?;
     let path = admin_wallet_account_path(device, network).to_string();
-    let pp = passphrase.unwrap_or_default();
-    tokio::task::spawn_blocking(move || device.get_account_xpub(&path, &pp, network))
+    tokio::task::spawn_blocking(move || device.get_account_xpub(&path, network))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn hw_wallet_get_fingerprint(
-    vendor: String,
-    passphrase: Option<String>,
-) -> Result<u32, String> {
+pub async fn hw_wallet_get_fingerprint(vendor: String) -> Result<u32, String> {
     let device = parse_device_kind(&vendor)?;
-    let pp = passphrase.unwrap_or_default();
-    tokio::task::spawn_blocking(move || device.get_master_fingerprint(&pp))
+    tokio::task::spawn_blocking(move || device.get_master_fingerprint())
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Forgets the Trezor device session, so the next operation starts a clean one and the
+/// device asks for the passphrase again.
+///
+/// Called when the signer disconnects the wallet: a session left behind would let the next
+/// person on this machine reach the hidden wallet without re-entering the passphrase. Ledger
+/// has no equivalent — it holds no host-visible session.
+#[tauri::command]
+pub async fn hw_wallet_end_session() -> Result<(), String> {
+    trezor::forget_session();
+    Ok(())
 }
 
 /// Renders the address at `derivation_path` on the connected device and returns the
