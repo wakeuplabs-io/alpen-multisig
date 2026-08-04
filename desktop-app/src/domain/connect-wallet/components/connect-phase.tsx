@@ -124,6 +124,7 @@ export function ConnectPhase({
 				<div className="mt-2 flex items-center gap-2">
 					<button
 						type="button"
+						data-testid="e2e-connect-trezor"
 						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'trezor'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'

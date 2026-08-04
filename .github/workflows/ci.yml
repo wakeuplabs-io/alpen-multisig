@@ -177,6 +177,7 @@ jobs:
         run: |
           npm run test:canonical-connect-paths --workspace desktop-app
           npm run test:get-account-xpub --workspace desktop-app
+          npm run test:no-host-passphrase --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app

@@ -6,6 +6,23 @@ import type { WalletVendor } from '../../wallet/types.ts'
 
 const HARDWARE_NAME = /Trezor|Ledger/
 
+/**
+ * Every signer-facing string in a DeviceCopy, including the ones nested inside
+ * `passphraseOnDevice`. Flattening matters: a nested block that the sweeps below skipped
+ * would be exactly where a stray vendor name or a sighash reference survives.
+ */
+function copyStrings(copy: object, prefix = ''): [string, string][] {
+	return Object.entries(copy).flatMap(([field, value]) => {
+		if (typeof value === 'string') {
+			return [[`${prefix}${field}`, value] as [string, string]]
+		}
+		if (value !== null && typeof value === 'object') {
+			return copyStrings(value, `${prefix}${field}.`)
+		}
+		return []
+	})
+}
+
 // Trezor → named as Trezor, and pointed at the message text it renders.
 const trezor = deviceCopy('trezor')
 assert.equal(trezor.label, 'Trezor')
@@ -30,12 +47,10 @@ assert.doesNotMatch(ledger.verifyOnDeviceHint, /Trezor/)
 for (const vendor of ['mnemonic', 'mock'] as const) {
 	const copy = deviceCopy(vendor)
 	assert.equal(copy.isHardware, false, `${vendor} must not claim a device screen`)
-	for (const [field, text] of Object.entries(copy)) {
-		if (typeof text !== 'string') {
-			continue
-		}
+	for (const [field, text] of copyStrings(copy)) {
 		assert.doesNotMatch(text, HARDWARE_NAME, `${vendor}.${field} must not name a hardware vendor`)
 	}
+	assert.equal(copy.passphraseOnDevice, undefined, `${vendor} has no device keypad to offer`)
 }
 
 // Every vendor names itself in the review prompt — guards against a hardcoded device
@@ -55,12 +70,20 @@ assert.doesNotMatch(deviceCopy('mnemonic').reviewPrompt, HARDWARE_NAME)
 // No signer-facing copy ever mentions the sighash: no device displays it, so naming it in a
 // comparison instruction points the signer at a value they can never see (#402).
 for (const vendor of vendors) {
-	for (const [field, text] of Object.entries(deviceCopy(vendor))) {
-		if (typeof text !== 'string') {
-			continue
-		}
+	for (const [field, text] of copyStrings(deviceCopy(vendor))) {
 		assert.doesNotMatch(text, /sighash/i, `${vendor}.${field} must not mention the sighash`)
 	}
 }
+
+// On-device passphrase entry is a Trezor-only affordance (#448): Ledger unlocks a passphrase
+// wallet by PIN on the device itself, and software signers have no device at all. Offering it
+// anywhere else would promise a keypad that is not there.
+assert.equal(ledger.passphraseOnDevice, undefined, 'Ledger must not offer host-driven passphrase entry')
+assert.ok(trezor.passphraseOnDevice, 'Trezor must offer on-device passphrase entry')
+assert.match(trezor.passphraseOnDevice.label, /Trezor/)
+// The whole point of the button is that the secret is not typed here — the hint has to say
+// where it *is* typed, or the signer cannot tell this apart from the field it replaced.
+assert.match(trezor.passphraseOnDevice.hint, /keypad/)
+assert.match(trezor.passphraseOnDevice.unsupportedHint, /standard wallet/)
 
 console.log('device-copy: all assertions passed')
