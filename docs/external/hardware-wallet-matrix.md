@@ -42,6 +42,51 @@ The Strata Multisig application supports hardware wallets that provide the follo
 - On-device verification of addresses and transaction details
 - Raw ECDSA signing for SPS-65 protocol compliance
 
+## Passphrases and hidden wallets
+
+A Trezor passphrase unlocks a *hidden wallet*: a completely separate set of keys derived from
+the same seed. It is the one secret in the Trezor flow that a host machine could plausibly
+observe, so **Strata Multisig never asks for it on the computer.**
+
+**How it works**
+
+1. Enable the passphrase in your Trezor's own settings (Trezor Suite, or `trezorctl set
+   passphrase enabled`). The app cannot turn it on for you, and does not change your device's
+   configuration.
+2. On the connect screen, choose Trezor and press **Enter passphrase on Trezor**.
+3. The device asks for the passphrase on its own keypad. Type it there. Leaving it empty opens
+   your standard wallet.
+4. The app keeps the device session open for the rest of your connection, so you are asked
+   once — not again for the account key, the fingerprint, or each signature.
+
+Pressing **Disconnect** ends that session. The next connection asks again, so a wallet left
+open cannot be picked up by whoever uses the machine next.
+
+**What the app never does**
+
+- It never displays a passphrase field. There is nothing to type on the computer, so a
+  keylogger on the host has nothing to capture.
+- It never sends a passphrase to the device. It asks the device to prompt, and the device
+  answers with keys, never with the secret.
+
+**Model support**
+
+On-device passphrase entry needs a device keypad, reported by the device as
+`Capability_PassphraseEntry`. Every supported model has it (Model T, Safe 3, Safe 5). The
+button is hidden on devices that do not, so it is never offered where it cannot work. Trezor
+One has no such keypad — and is not supported by this app for other reasons (no Taproot).
+
+**If the passphrase prompt comes back mid-session**
+
+The device session can be dropped by the firmware — for example if another wallet application
+opens enough sessions to evict it, or the device is unplugged. The device simply asks again.
+Enter the same passphrase and continue: a different passphrase silently opens a *different*
+wallet, whose keys are not in your multisig.
+
+**Ledger** has no equivalent. A Ledger passphrase is attached to a separate PIN and is entered
+when unlocking the device itself, before the app sees anything, so there is nothing here to
+offer.
+
 ## Signing Format
 
 The application uses **raw ECDSA** over the SPS-65 sighash, which differs from standard Bitcoin message signing (BIP-137). This is required because the Strata/Alpen protocol expects bare ECDSA signatures without the Bitcoin-specific prefix.
