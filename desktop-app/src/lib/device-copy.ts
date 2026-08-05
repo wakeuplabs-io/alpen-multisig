@@ -20,6 +20,18 @@ export type DeviceCopy = {
 	verifyOnDeviceHint: string
 	/** What the signer is asked to approve when broadcasting the commit transaction. */
 	broadcastHint: string
+	/**
+	 * Shown while the app is connecting, for vendors that ask for a passphrase on the device
+	 * (#448). Ledger unlocks a passphrase wallet by PIN before the app sees anything, and
+	 * software signers have no device at all.
+	 *
+	 * It belongs to the connecting state, not to the idle screen. That is the moment the
+	 * device is holding up its keypad while the app can only say "Detecting device…", and the
+	 * moment the signer is looking at the wrong screen waiting for something to happen. Before
+	 * connecting there is nothing to act on, and the screen already promises twice over that
+	 * no password is typed here.
+	 */
+	passphraseOnDevice?: string
 }
 
 const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
@@ -33,6 +45,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
+		passphraseOnDevice: 'If your Trezor asks for your passphrase, enter it on the device.',
 	},
 	ledger: {
 		label: 'Ledger',

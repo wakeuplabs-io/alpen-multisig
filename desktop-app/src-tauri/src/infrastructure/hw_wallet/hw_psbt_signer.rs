@@ -48,13 +48,9 @@ impl HwDeviceType {
         }
     }
 
-    pub fn connect(
-        self,
-        derivation_path: Option<String>,
-        passphrase: &str,
-    ) -> Result<HwWalletInfo, String> {
+    pub fn connect(self, derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
         match self {
-            HwDeviceType::Trezor => trezor::connect(derivation_path, passphrase),
+            HwDeviceType::Trezor => trezor::connect(derivation_path),
             HwDeviceType::Ledger => ledger::connect(derivation_path),
         }
     }
@@ -63,31 +59,23 @@ impl HwDeviceType {
         self,
         message: &str,
         derivation_path: &str,
-        passphrase: &str,
     ) -> Result<SignatureResult, String> {
         match self {
-            HwDeviceType::Trezor => {
-                trezor::sign_admin_sps65_binding(message, derivation_path, passphrase)
-            }
+            HwDeviceType::Trezor => trezor::sign_admin_sps65_binding(message, derivation_path),
             HwDeviceType::Ledger => ledger::sign_admin_sps65_binding(message, derivation_path),
         }
     }
 
-    pub fn get_account_xpub(
-        self,
-        path: &str,
-        passphrase: &str,
-        network: Network,
-    ) -> Result<String, String> {
+    pub fn get_account_xpub(self, path: &str, network: Network) -> Result<String, String> {
         match self {
-            HwDeviceType::Trezor => trezor::get_account_xpub(path, passphrase, network),
+            HwDeviceType::Trezor => trezor::get_account_xpub(path, network),
             HwDeviceType::Ledger => ledger::get_account_xpub(path),
         }
     }
 
-    pub fn get_master_fingerprint(self, passphrase: &str) -> Result<u32, String> {
+    pub fn get_master_fingerprint(self) -> Result<u32, String> {
         match self {
-            HwDeviceType::Trezor => trezor::get_master_fingerprint(passphrase),
+            HwDeviceType::Trezor => trezor::get_master_fingerprint(),
             HwDeviceType::Ledger => ledger::get_master_fingerprint(),
         }
     }

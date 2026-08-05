@@ -172,9 +172,9 @@ export function WalletConnectScreen() {
 		await disconnectSession()
 	}
 
-	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) {
+	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) {
 		if (method === 'trezor') {
-			selectAdapter('trezor', { passphrase })
+			selectAdapter('trezor')
 			return
 		}
 		if (method === 'ledger') {
