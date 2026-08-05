@@ -3,9 +3,7 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
-use desktop_app::infrastructure::hw_wallet::{
-    AddressScriptType, HwDeviceCapabilities, HwWalletInfo,
-};
+use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::network_env::network_from_env;
 use desktop_app::infrastructure::signing::{self, SignatureResult};
 
@@ -81,19 +79,6 @@ pub async fn hw_wallet_get_xpub(vendor: String) -> Result<String, String> {
 pub async fn hw_wallet_get_fingerprint(vendor: String) -> Result<u32, String> {
     let device = parse_device_kind(&vendor)?;
     tokio::task::spawn_blocking(move || device.get_master_fingerprint())
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-/// Reports what the connected device can do, before any key is derived.
-///
-/// The connect screen calls this to decide whether to offer on-device passphrase entry:
-/// a Trezor One has no keypad for it and rejects the request, so the affordance must not
-/// be shown there. Reads `Features` only — no seed derivation, no prompt on the device.
-#[tauri::command]
-pub async fn hw_wallet_capabilities(vendor: String) -> Result<HwDeviceCapabilities, String> {
-    let device = parse_device_kind(&vendor)?;
-    tokio::task::spawn_blocking(move || device.capabilities())
         .await
         .map_err(|e| e.to_string())?
 }

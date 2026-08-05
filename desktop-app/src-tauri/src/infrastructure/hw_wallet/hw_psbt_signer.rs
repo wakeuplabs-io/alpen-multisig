@@ -2,9 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::application::psbt_signer::PsbtSigner;
-use crate::infrastructure::hw_wallet::{
-    ledger, trezor, AddressScriptType, HwDeviceCapabilities, HwWalletInfo,
-};
+use crate::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 use bdk_wallet::bitcoin::psbt::Psbt;
 use bdk_wallet::bitcoin::Network;
@@ -72,18 +70,6 @@ impl HwDeviceType {
         match self {
             HwDeviceType::Trezor => trezor::get_account_xpub(path, network),
             HwDeviceType::Ledger => ledger::get_account_xpub(path),
-        }
-    }
-
-    /// What the connected device can do. Ledger has no host-visible passphrase entry: its
-    /// passphrase is a separate wallet unlocked by PIN on the device itself.
-    pub fn capabilities(self) -> Result<HwDeviceCapabilities, String> {
-        match self {
-            HwDeviceType::Trezor => trezor::device_capabilities(),
-            HwDeviceType::Ledger => Ok(HwDeviceCapabilities {
-                model: None,
-                supports_passphrase_entry: false,
-            }),
         }
     }
 

@@ -76,25 +76,14 @@ for (const vendor of vendors) {
 }
 
 // On-device passphrase entry is a Trezor-only affordance (#448): Ledger unlocks a passphrase
-// wallet by PIN on the device itself, and software signers have no device at all. Offering it
+// wallet by PIN on the device itself, and software signers have no device at all. Describing it
 // anywhere else would promise a keypad that is not there.
-assert.equal(ledger.passphraseOnDevice, undefined, 'Ledger must not offer host-driven passphrase entry')
-assert.ok(trezor.passphraseOnDevice, 'Trezor must offer on-device passphrase entry')
-assert.match(trezor.passphraseOnDevice.label, /Trezor/)
-// The whole point of the button is that the secret is not typed here — the hint has to say
-// where it *is* typed, or the signer cannot tell this apart from the field it replaced.
+assert.equal(ledger.passphraseOnDevice, undefined, 'Ledger must not describe on-device passphrase entry')
+assert.ok(trezor.passphraseOnDevice, 'Trezor must say where its passphrase is entered')
+// The signer is being told where the secret is typed, replacing a field they used to type it
+// into. Naming the device and denying this machine is the entire content of the message.
+assert.match(trezor.passphraseOnDevice.hint, /Trezor/)
 assert.match(trezor.passphraseOnDevice.hint, /keypad/)
-// A model with no keypad has no fallback here: the app never asks for a passphrase on the
-// host, so the hint must send the signer to the device rather than promise it will just work.
-const unsupported = trezor.passphraseOnDevice.unsupportedHint('Safe 3')
-assert.match(unsupported, /Safe 3/, 'the hint names the model the device reported')
-assert.match(unsupported, /turn it off there/, 'the hint says what to do, not just what failed')
-assert.doesNotMatch(
-	trezor.passphraseOnDevice.unsupportedHint(null),
-	/\(\)|\(null\)/,
-	'an unknown model must not leave an empty parenthetical',
-)
-// copyStrings cannot reach inside a function, so the sighash rule is applied here by hand.
-assert.doesNotMatch(unsupported, /sighash/i)
+assert.match(trezor.passphraseOnDevice.hint, /never on this computer/)
 
 console.log('device-copy: all assertions passed')

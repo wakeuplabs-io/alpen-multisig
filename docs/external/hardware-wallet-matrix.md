@@ -53,11 +53,14 @@ observe, so **Strata Multisig never asks for it on the computer.**
 1. Enable the passphrase in your Trezor's own settings (Trezor Suite, or `trezorctl set
    passphrase enabled`). The app cannot turn it on for you, and does not change your device's
    configuration.
-2. On the connect screen, choose Trezor and press **Enter passphrase on Trezor**.
+2. On the connect screen, choose Trezor and press **Connect wallet**.
 3. The device asks for the passphrase on its own keypad. Type it there. Leaving it empty opens
    your standard wallet.
 4. The app keeps the device session open for the rest of your connection, so you are asked
    once — not again for the account key, the fingerprint, or each signature.
+
+There is no separate button for this, and no setting in the app to turn it on. Whether the
+prompt appears is decided entirely by your device: connecting is what triggers it.
 
 Pressing **Disconnect** ends that session. The next connection asks again, so a wallet left
 open cannot be picked up by whoever uses the machine next.
@@ -71,10 +74,10 @@ open cannot be picked up by whoever uses the machine next.
 
 **Model support**
 
-On-device passphrase entry needs a device keypad, reported by the device as
-`Capability_PassphraseEntry`. Every supported model has it (Model T, Safe 3, Safe 5). The
-button is hidden on devices that do not, so it is never offered where it cannot work. Trezor
-One has no such keypad — and is not supported by this app for other reasons (no Taproot).
+On-device passphrase entry needs a device keypad. Every supported model has one (Model T,
+Safe 3, Safe 5). Trezor One does not — and is not supported by this app for other reasons (no
+Taproot); if one is connected with a passphrase enabled, the app says so rather than failing
+with a protocol error.
 
 **If the passphrase prompt comes back mid-session**
 

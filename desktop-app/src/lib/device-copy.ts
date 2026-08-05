@@ -21,15 +21,17 @@ export type DeviceCopy = {
 	/** What the signer is asked to approve when broadcasting the commit transaction. */
 	broadcastHint: string
 	/**
-	 * Label and hint for handing passphrase entry to the device keypad (#448). Present only
-	 * for vendors that can take a passphrase on the device — Ledger unlocks a passphrase
-	 * wallet by PIN on the device itself, and software signers have no device at all.
+	 * Where the passphrase is entered (#448). Present only for vendors that take one on the
+	 * device — Ledger unlocks a passphrase wallet by PIN on the device itself, and software
+	 * signers have no device at all.
+	 *
+	 * Deliberately not a button. Connecting is what triggers the device prompt, so a second
+	 * control next to "Connect wallet" would run the same handler while implying the two open
+	 * different wallets. This states where the secret is typed; the device does the asking.
 	 */
 	passphraseOnDevice?: {
-		label: string
+		title: string
 		hint: string
-		/** Shown instead, when the connected model has no keypad for it (Trezor One). */
-		unsupportedHint: (model: string | null) => string
 	}
 }
 
@@ -45,12 +47,8 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
 		passphraseOnDevice: {
-			label: 'Enter passphrase on Trezor',
-			hint: 'If your Trezor has a passphrase enabled, it asks for it on its own keypad — the words are never typed on this computer. Leave it empty on the device to open your standard wallet.',
-			// Says what actually happens rather than promising a fallback: with no keypad and no
-			// host field, a device with its passphrase switched on cannot connect here at all.
-			unsupportedHint: (model) =>
-				`This Trezor${model === null ? '' : ` (${model})`} cannot take a passphrase on its own keypad, and Strata Multisig never asks for one on this computer. Connecting opens your standard wallet; if the device has a passphrase enabled, turn it off there first.`,
+			title: 'Passphrase',
+			hint: 'Entered on your Trezor, never on this computer. If the device has a passphrase enabled it asks for it on its own keypad when you connect; leaving it empty there opens your standard wallet.',
 		},
 	},
 	ledger: {

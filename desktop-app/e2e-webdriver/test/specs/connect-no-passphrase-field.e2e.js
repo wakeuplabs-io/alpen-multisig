@@ -6,10 +6,9 @@
  * Trezor keypad instead. This spec is the guard that the field does not come back: it selects
  * the Trezor connection method on the real binary and asserts there is nowhere to type it.
  *
- * The on-device button itself is not asserted here — it renders only once a device reports
- * `Capability_PassphraseEntry`, which needs a Trezor (or the emulator, `scripts/trezor-up.sh`)
- * and is covered by manual QA. The absence of the field is exactly the half that needs no
- * hardware, and it is the half that carries the security claim.
+ * What replaces the field is copy, not a control: connecting is what makes the device prompt,
+ * so a second button beside "Connect wallet" would run the same handler while implying the two
+ * open different wallets. This spec pins that too — one connect action, not two.
  *
  * Requires the app binary only — it never leaves the connect screen. See README.md.
  */
@@ -37,5 +36,13 @@ describe('Strata Multisig connect — no passphrase typed on the host', () => {
 		// The screen still has to be usable — a blank Trezor branch would pass the checks above.
 		const connectButton = await $('button[data-testid="e2e-connect-with-words"]')
 		await connectButton.waitForDisplayed({ timeout: 30000 })
+
+		// And it has to say where the passphrase *is* entered, as text rather than a rival CTA.
+		const passphraseBlock = await $('[data-testid="e2e-passphrase-on-device"]')
+		await passphraseBlock.waitForDisplayed({ timeout: 30000 })
+		const buttonsInBlock = await passphraseBlock.$$('button')
+		if (buttonsInBlock.length > 0) {
+			throw new Error('the passphrase block renders a button; connecting is the only action on this screen')
+		}
 	})
 })

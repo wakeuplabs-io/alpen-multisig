@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { tauriCall } from '@/api/tauri-bridge'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
-import { useDevicePassphraseEntry } from '@/domain/connect-wallet/hooks/use-device-passphrase-entry'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { deviceCopy } from '@/lib/device-copy'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
@@ -38,15 +37,11 @@ export function ConnectPhase({
 	const [debugEntry, setDebugEntry] = useState<HwAddressEntry | null>(null)
 	const [debugLoading, setDebugLoading] = useState(false)
 	const [debugError, setDebugError] = useState<string | null>(null)
-	const passphraseEntry = useDevicePassphraseEntry(walletVendor)
 	const passphraseCopy = deviceCopy(walletVendor).passphraseOnDevice
 
 	function handleUseTrezor() {
 		onSelectWalletMethod('trezor')
 		setMnemonicError(null)
-		// The signer has usually plugged the Trezor in by now, even if it was absent when this
-		// screen first read the device.
-		passphraseEntry.recheck()
 	}
 
 	function handleUseLedger() {
@@ -174,27 +169,11 @@ export function ConnectPhase({
 						onChange={(event) => setMnemonicInput(event.target.value)}
 					/>
 				)}
-				{passphraseCopy && passphraseEntry.supported !== false && (
+				{passphraseCopy && (
 					<div className="mt-3" data-testid="e2e-passphrase-on-device">
-						<button
-							type="button"
-							data-testid="e2e-passphrase-on-device-button"
-							className="w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label font-medium text-[#374151] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-60"
-							onClick={() => onConnectTrezor?.()}
-							disabled={loading || isSuccess}
-						>
-							{passphraseCopy.label}
-						</button>
-						<p className="m-0 mt-1.5 text-label leading-[1.5] text-[#6b7280]">{passphraseCopy.hint}</p>
+						<p className="m-0 text-mono-sm font-medium text-[#9ca3af]">{passphraseCopy.title}</p>
+						<p className="m-0 mt-1 text-label leading-[1.5] text-[#6b7280]">{passphraseCopy.hint}</p>
 					</div>
-				)}
-				{passphraseCopy && passphraseEntry.supported === false && (
-					<p
-						className="m-0 mt-3 text-label leading-[1.5] text-[#6b7280]"
-						data-testid="e2e-passphrase-on-device-unsupported"
-					>
-						{passphraseCopy.unsupportedHint(passphraseEntry.model)}
-					</p>
 				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}
 

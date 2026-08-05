@@ -44,21 +44,6 @@ pub struct HwWalletInfo {
     pub key_label: Option<String>,
 }
 
-/// What a connected device can do, read before any key is derived.
-///
-/// The connect screen needs this to decide whether to offer on-device passphrase entry:
-/// asking a device without a keypad (Trezor One) to prompt on its own screen fails with
-/// `Failure_DataError`, so the affordance must not be offered there. `Initialize` never
-/// touches the seed, so reading this costs nothing and prompts for nothing.
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct HwDeviceCapabilities {
-    /// The device's own model string (`"1"`, `"T"`, `"Safe 3"`, `"Safe 5"`), for display.
-    pub model: Option<String>,
-    /// The device can take a passphrase on its own keypad.
-    pub supports_passphrase_entry: bool,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HwAddressEntry {

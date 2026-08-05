@@ -59,6 +59,16 @@ assert.ok(
 	'the connect screen must not label a passphrase field',
 )
 
+// The passphrase block is copy, not a control. A button beside "Connect wallet" would run the
+// same handler -- connecting is what makes the device prompt -- while implying the two open
+// different wallets, which is the inference a signer should never be invited to make.
+const passphraseBlock = connectPhase.slice(
+	connectPhase.indexOf('e2e-passphrase-on-device'),
+	connectPhase.indexOf('{mnemonicError'),
+)
+assert.ok(passphraseBlock.length > 0, 'the connect screen must still say where the passphrase is entered')
+assert.ok(!/<button|onClick=/.test(passphraseBlock), 'the passphrase block must be copy, not a second connect button')
+
 // The wallet-method callbacks used to thread the secret from the screen down to the adapter.
 assert.ok(!/passphrase/i.test(code(hwWalletConnect)), 'the connect flow must not pass a passphrase down')
 assert.ok(
