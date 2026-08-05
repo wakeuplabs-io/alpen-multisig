@@ -6,9 +6,11 @@
  * Trezor keypad instead. This spec is the guard that the field does not come back: it selects
  * the Trezor connection method on the real binary and asserts there is nowhere to type it.
  *
- * What replaces the field is copy, not a control: connecting is what makes the device prompt,
- * so a second button beside "Connect wallet" would run the same handler while implying the two
- * open different wallets. This spec pins that too — one connect action, not two.
+ * Nothing replaces it on the idle screen: connecting is what makes the device prompt, so the
+ * message about the passphrase belongs to the connecting state and is not asserted here (it needs
+ * a device to reach). What this spec pins is that the connection method box offers exactly one
+ * way to connect — a second button there would run the same handler while implying the two open
+ * different wallets.
  *
  * Requires the app binary only — it never leaves the connect screen. See README.md.
  */
@@ -37,12 +39,17 @@ describe('Strata Multisig connect — no passphrase typed on the host', () => {
 		const connectButton = await $('button[data-testid="e2e-connect-with-words"]')
 		await connectButton.waitForDisplayed({ timeout: 30000 })
 
-		// And it has to say where the passphrase *is* entered, as text rather than a rival CTA.
-		const passphraseBlock = await $('[data-testid="e2e-passphrase-on-device"]')
-		await passphraseBlock.waitForDisplayed({ timeout: 30000 })
-		const buttonsInBlock = await passphraseBlock.$$('button')
-		if (buttonsInBlock.length > 0) {
-			throw new Error('the passphrase block renders a button; connecting is the only action on this screen')
+		// Nothing about the passphrase belongs on the idle screen — it is said while connecting.
+		const idleMessage = await $$('[data-testid="e2e-passphrase-on-device"]')
+		if (idleMessage.length > 0) {
+			throw new Error('the passphrase message renders before connecting, where there is nothing to act on')
+		}
+
+		// The connection method box offers the vendor chips and nothing that connects on its own.
+		const methodBox = await $('button[data-testid="e2e-connect-trezor"]').parentElement()
+		const chips = await methodBox.$$('button')
+		if (chips.length > 3) {
+			throw new Error(`connection method box has ${chips.length} buttons; only the vendor chips belong there`)
 		}
 	})
 })

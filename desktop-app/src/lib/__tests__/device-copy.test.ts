@@ -80,10 +80,12 @@ for (const vendor of vendors) {
 // anywhere else would promise a keypad that is not there.
 assert.equal(ledger.passphraseOnDevice, undefined, 'Ledger must not describe on-device passphrase entry')
 assert.ok(trezor.passphraseOnDevice, 'Trezor must say where its passphrase is entered')
-// The signer is being told where the secret is typed, replacing a field they used to type it
-// into. Naming the device and denying this machine is the entire content of the message.
-assert.match(trezor.passphraseOnDevice.hint, /Trezor/)
-assert.match(trezor.passphraseOnDevice.hint, /keypad/)
-assert.match(trezor.passphraseOnDevice.hint, /never on this computer/)
+// This renders while the app is connecting and the device may already be waiting on its keypad.
+// It has to name the device and point the signer at it — that is the whole job of the line, and
+// it is why the message lives in the connecting state rather than on the idle screen.
+assert.match(trezor.passphraseOnDevice, /Trezor/)
+assert.match(trezor.passphraseOnDevice, /on the device/)
+// One line, not a paragraph: it sits under "Looking for a Trezor on USB." in a status box.
+assert.ok(trezor.passphraseOnDevice.length < 90, 'the connecting line must stay a single short sentence')
 
 console.log('device-copy: all assertions passed')

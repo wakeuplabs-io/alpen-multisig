@@ -169,12 +169,6 @@ export function ConnectPhase({
 						onChange={(event) => setMnemonicInput(event.target.value)}
 					/>
 				)}
-				{passphraseCopy && (
-					<div className="mt-3" data-testid="e2e-passphrase-on-device">
-						<p className="m-0 text-mono-sm font-medium text-[#9ca3af]">{passphraseCopy.title}</p>
-						<p className="m-0 mt-1 text-label leading-[1.5] text-[#6b7280]">{passphraseCopy.hint}</p>
-					</div>
-				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}
 
 				{walletVendor === 'mnemonic' && import.meta.env.DEV && (
@@ -222,6 +216,13 @@ export function ConnectPhase({
 						<div className="mt-0.5 text-label text-[#6b7280]">
 							{walletVendor === 'ledger' ? 'Looking for a Ledger on USB.' : 'Looking for a Trezor on USB.'}
 						</div>
+						{/* The device may already be holding up its keypad while this still says
+						    "Detecting" — say so here, or the signer waits on the wrong screen. */}
+						{passphraseCopy && (
+							<div className="mt-0.5 text-label text-[#6b7280]" data-testid="e2e-passphrase-on-device">
+								{passphraseCopy}
+							</div>
+						)}
 					</div>
 				</div>
 			)}

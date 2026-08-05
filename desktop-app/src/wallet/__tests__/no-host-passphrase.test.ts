@@ -59,15 +59,26 @@ assert.ok(
 	'the connect screen must not label a passphrase field',
 )
 
-// The passphrase block is copy, not a control. A button beside "Connect wallet" would run the
+// The passphrase message is copy, not a control. A button beside "Connect wallet" would run the
 // same handler -- connecting is what makes the device prompt -- while implying the two open
 // different wallets, which is the inference a signer should never be invited to make.
-const passphraseBlock = connectPhase.slice(
-	connectPhase.indexOf('e2e-passphrase-on-device'),
-	connectPhase.indexOf('{mnemonicError'),
+assert.ok(
+	connectPhase.includes('e2e-passphrase-on-device'),
+	'the connect screen must still tell the signer where the passphrase is entered',
 )
-assert.ok(passphraseBlock.length > 0, 'the connect screen must still say where the passphrase is entered')
-assert.ok(!/<button|onClick=/.test(passphraseBlock), 'the passphrase block must be copy, not a second connect button')
+// Exactly one control may start a Trezor connection. Counting the invocations catches a second
+// CTA wherever it is added, which slicing the file around the message could not.
+// Matches a call adjacent to the name -- `onConnectTrezor()` or `onConnectTrezor?.()` -- and
+// not the ternary guard `onConnectTrezor\n ? () => ...`, which reads as a call if whitespace is
+// allowed in between.
+const connectInvocations = code(connectPhase).match(/onConnectTrezor(\?\.)?\(\)/g) ?? []
+assert.equal(connectInvocations.length, 1, 'exactly one control may trigger a Trezor connection')
+
+const messageLine = code(connectPhase)
+	.split('\n')
+	.find((line) => line.includes('e2e-passphrase-on-device'))
+assert.ok(messageLine !== undefined, 'the passphrase message must carry its test id')
+assert.ok(!/<button|onClick=/.test(messageLine), 'the passphrase message must be copy, not a button')
 
 // The wallet-method callbacks used to thread the secret from the screen down to the adapter.
 assert.ok(!/passphrase/i.test(code(hwWalletConnect)), 'the connect flow must not pass a passphrase down')

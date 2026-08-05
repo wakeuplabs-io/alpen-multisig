@@ -21,18 +21,17 @@ export type DeviceCopy = {
 	/** What the signer is asked to approve when broadcasting the commit transaction. */
 	broadcastHint: string
 	/**
-	 * Where the passphrase is entered (#448). Present only for vendors that take one on the
-	 * device — Ledger unlocks a passphrase wallet by PIN on the device itself, and software
-	 * signers have no device at all.
+	 * Shown while the app is connecting, for vendors that ask for a passphrase on the device
+	 * (#448). Ledger unlocks a passphrase wallet by PIN before the app sees anything, and
+	 * software signers have no device at all.
 	 *
-	 * Deliberately not a button. Connecting is what triggers the device prompt, so a second
-	 * control next to "Connect wallet" would run the same handler while implying the two open
-	 * different wallets. This states where the secret is typed; the device does the asking.
+	 * It belongs to the connecting state, not to the idle screen. That is the moment the
+	 * device is holding up its keypad while the app can only say "Detecting device…", and the
+	 * moment the signer is looking at the wrong screen waiting for something to happen. Before
+	 * connecting there is nothing to act on, and the screen already promises twice over that
+	 * no password is typed here.
 	 */
-	passphraseOnDevice?: {
-		title: string
-		hint: string
-	}
+	passphraseOnDevice?: string
 }
 
 const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
@@ -46,10 +45,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
-		passphraseOnDevice: {
-			title: 'Passphrase',
-			hint: 'Entered on your Trezor, never on this computer. If the device has a passphrase enabled it asks for it on its own keypad when you connect; leaving it empty there opens your standard wallet.',
-		},
+		passphraseOnDevice: 'If your Trezor asks for your passphrase, enter it on the device.',
 	},
 	ledger: {
 		label: 'Ledger',
