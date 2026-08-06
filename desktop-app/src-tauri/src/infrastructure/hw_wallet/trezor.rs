@@ -12,18 +12,52 @@ use crate::infrastructure::signing::SignatureResult;
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
 const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
 
-/// The device session id from the last successful `Initialize`.
+/// Which wallet behind the seed the signer asked for.
 ///
-/// Every Trezor operation opens its own transport (`open_trezor`), so without this the
-/// device would treat each one as a fresh session and re-derive the seed — which means
+/// One Trezor seed backs unlimited wallets: the standard one, plus a distinct wallet per
+/// passphrase. The passphrase is a per-session parameter rather than device state, so the
+/// wallet is chosen on every connection by how the host answers `PassphraseRequest` —
+/// there is no "current wallet" the device remembers between sessions.
+///
+/// Neither answer sends a secret from this machine: [`Standard`](Self::Standard) sends an
+/// empty string, which is the absence of one, and [`Hidden`](Self::Hidden) hands entry to
+/// the device keypad. Verified on the emulator in `issues/evidence/G5-B0-PROTOCOL.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WalletKind {
+    /// The wallet derived from the seed alone.
+    #[default]
+    Standard,
+    /// A wallet derived from the seed plus a passphrase typed on the device.
+    Hidden,
+}
+
+/// The device session, and which wallet it belongs to.
+///
+/// Every Trezor operation opens its own transport (`open_trezor`), so without the session id
+/// the device would treat each one as a fresh session and re-derive the seed — which means
 /// re-prompting for the passphrase on the device keypad on *every* call. Resuming the
-/// session keeps the firmware's cached seed (`APP_COMMON_SEED`) alive, so the signer
-/// enters the passphrase once per connection.
+/// session keeps the firmware's cached seed (`APP_COMMON_SEED`) alive, so the signer enters
+/// the passphrase once per connection.
 ///
+/// The kind is stored *with* the id rather than beside it because they are one fact — which
+/// wallet we are talking to — and they must never disagree. If the firmware evicts our
+/// session mid-flow ([`SessionOutcome::Lost`]), the next `PassphraseRequest` has to receive
+/// the same answer as the first, or a later operation would silently run against the other
+/// wallet.
+#[derive(Debug, Default, Clone)]
+struct SessionState {
+    /// The id from the last successful `Initialize`, if the device reported a usable one.
+    id: Option<Vec<u8>>,
+    /// The wallet the signer chose on the connection this session belongs to.
+    kind: WalletKind,
+}
+
 /// A process-wide `static` rather than Tauri managed state, following the precedent of
 /// `LEDGER_DEVICE_LOCK` in `ledger.rs`: managed state would have to be threaded through
-/// six commands and would break their `spawn_blocking(move || ...)` bodies.
-static TREZOR_SESSION: OnceLock<Mutex<Option<Vec<u8>>>> = OnceLock::new();
+/// six commands and would break their `spawn_blocking(move || ...)` bodies. It also has to
+/// reach `sign_taproot_psbt`, which runs behind a `DeviceSignFn` with no parameter path
+/// back to the UI.
+static TREZOR_SESSION: OnceLock<Mutex<SessionState>> = OnceLock::new();
 
 /// `trezor_client::unique()` claims the USB device, so two overlapping operations fight over
 /// it: the loser reports a confusing "init failed on both transport modes" and, worse, both
@@ -56,13 +90,13 @@ impl std::ops::DerefMut for TrezorDevice {
 }
 
 /// The session slot. A poisoned lock is recovered rather than swallowed: dropping the write
-/// silently would leave a stale session id in place, and `forget_session` reporting success
+/// silently would leave a stale session id in place, and `start_session` reporting success
 /// without forgetting anything is the one outcome that must not happen.
-fn session_store() -> &'static Mutex<Option<Vec<u8>>> {
-    TREZOR_SESSION.get_or_init(|| Mutex::new(None))
+fn session_store() -> &'static Mutex<SessionState> {
+    TREZOR_SESSION.get_or_init(|| Mutex::new(SessionState::default()))
 }
 
-fn session_slot() -> std::sync::MutexGuard<'static, Option<Vec<u8>>> {
+fn session_slot() -> std::sync::MutexGuard<'static, SessionState> {
     session_store().lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -104,10 +138,21 @@ fn reported_session_id(trezor: &Trezor) -> Option<Vec<u8>> {
     (id.len() == SESSION_ID_LEN).then(|| id.to_vec())
 }
 
-/// Drops the remembered session, so the next operation starts a clean one and the device
-/// asks for the passphrase again.
-fn forget_session() {
-    *session_slot() = None;
+/// Begins a connection for `kind`: drops the remembered session so the next operation starts
+/// a clean one and the device asks for the passphrase again, and records which wallet every
+/// `PassphraseRequest` from here on should be answered for.
+///
+/// Both writes happen under one lock acquisition. Split into two, a connect could publish the
+/// new kind while the previous session id was still readable, and an operation racing between
+/// them would resume the old wallet's session under the new wallet's answer.
+fn start_session(kind: WalletKind) {
+    *session_slot() = SessionState { id: None, kind };
+}
+
+/// The wallet the current connection is for. Defaults to [`WalletKind::Standard`], so an
+/// operation arriving before any connect gets the wallet that needs no secret.
+fn current_wallet_kind() -> WalletKind {
+    session_slot().kind
 }
 
 /// Records the session the device just handed back.
@@ -124,7 +169,9 @@ fn remember_session(requested: Option<&[u8]>, trezor: &Trezor) {
     if session_outcome(requested, &returned) == SessionOutcome::Lost {
         eprintln!("trezor: device session was not resumed; the passphrase will be requested again");
     }
-    *session_slot() = Some(returned);
+    // Only the id changes: the wallet kind belongs to the connection, and a re-derivation
+    // after a lost session must be answered for the same wallet the signer chose.
+    session_slot().id = Some(returned);
 }
 
 fn open_trezor() -> Result<TrezorDevice, String> {
@@ -135,7 +182,7 @@ fn open_trezor() -> Result<TrezorDevice, String> {
 
     let mut attempts = Vec::with_capacity(2);
     let mut saw_invalid_protocol = false;
-    let requested = session_slot().clone();
+    let requested = session_slot().id.clone();
 
     for debug in [false, true] {
         let mut trezor = match trezor_client::unique(debug) {
@@ -270,19 +317,25 @@ wallet, or connect a Trezor model with on-device passphrase entry."
 
 /// Drive a TrezorResponse to completion, handling ButtonRequests and PassphraseRequests.
 ///
-/// The passphrase is always entered on the device keypad (`ack(true)`), never sent from
-/// the host, so a keylogger on this machine cannot capture the secret that unlocks the
-/// hidden wallet. `PassphraseAck.on_device` is what asks the firmware to prompt on its own
-/// screen, and it must not carry a passphrase alongside it or the device answers
-/// `DataError`.
+/// A `PassphraseRequest` is answered for the wallet the signer chose on this connection
+/// ([`current_wallet_kind`]), and **neither answer carries a secret typed on this machine**:
+///
+/// - [`WalletKind::Standard`] → `ack_passphrase("")`. The empty string is the absence of a
+///   passphrase, and it is what opens the wallet derived from the seed alone. It is sent
+///   explicitly rather than as `ack(false)`, which sets no field at all.
+/// - [`WalletKind::Hidden`] → `ack(true)`, which asks the firmware to prompt on its own
+///   screen. It must not carry a passphrase alongside it or the device answers `DataError`.
+///
+/// So a keylogger on this machine has nothing to capture in either branch, while the signer
+/// still chooses which wallet to open — the two answers produce two different wallets from
+/// one seed (measured in `issues/evidence/G5-B0-PROTOCOL.md`).
 ///
 /// This deliberately does not consult `PassphraseRequest::on_device()`: that field was
 /// deprecated in firmware 2.3.0 (`reserved 1` in messages-common.proto) and modern devices
 /// never set it, so branching on it would silently mean "always ask the host".
 ///
-/// Devices without a keypad (Trezor One / T1B1) reject `on_device` with
-/// `Failure_DataError`; the connect screen only offers on-device entry to models reporting
-/// `Capability_PassphraseEntry`.
+/// Devices without a keypad (Trezor One / T1B1) reject `on_device` with `Failure_DataError`,
+/// which [`describe_failure`] turns into an actionable message.
 fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> Result<T, String> {
     loop {
         match response {
@@ -295,16 +348,29 @@ fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> R
                 return Err("PIN entry not supported in this build.".to_string());
             }
             TrezorResponse::PassphraseRequest(req) => {
-                response = req
-                    .ack(true)
-                    .map_err(|e| format!("PassphraseAck failed: {e}"))?;
+                response = match current_wallet_kind() {
+                    WalletKind::Standard => req.ack_passphrase(String::new()),
+                    WalletKind::Hidden => req.ack(true),
+                }
+                .map_err(|e| format!("PassphraseAck failed: {e}"))?;
             }
         }
     }
 }
 
+/// The message shown when a hidden wallet is asked for on a device that has the passphrase
+/// switched off. Without this the connection would succeed against the *standard* wallet and
+/// report success: the firmware simply never emits `PassphraseRequest`, so nothing the host
+/// sends can produce a prompt (case 4 in `issues/evidence/G5-B0-PROTOCOL.md`).
+const PASSPHRASE_DISABLED_ON_DEVICE: &str =
+    "This Trezor has the passphrase switched off, so it cannot open a hidden wallet. Enable \
+Passphrase in the device's own settings and connect again, or use the standard wallet.";
+
 /// Connect: read the P2WPKH Admin ID address at the BIP-84 derivation path.
-pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
+///
+/// `kind` selects which wallet behind the seed to open, and holds for every later operation
+/// on this connection — see [`SessionState`].
+pub fn connect(derivation_path: Option<String>, kind: WalletKind) -> Result<HwWalletInfo, String> {
     let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
     let path = parse_path(&path_str)?;
 
@@ -312,9 +378,21 @@ pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> 
     // once per connect and a session from an earlier one is never inherited. Doing it here
     // rather than on disconnect keeps it ordered: disconnect is fire-and-forget from the UI
     // and could otherwise land *after* the next connect and wipe the session it just made.
-    forget_session();
+    start_session(kind);
 
     let mut trezor = open_trezor()?;
+
+    // Refuse a hidden wallet the device cannot give us, rather than silently handing back the
+    // standard one. Checked against `has_passphrase_protection` too: the firmware omits the
+    // field entirely while the device is locked, and absent must not read as "switched off".
+    if kind == WalletKind::Hidden {
+        let features = trezor
+            .features()
+            .ok_or("Trezor returned no device features.".to_string())?;
+        if features.has_passphrase_protection() && !features.passphrase_protection() {
+            return Err(PASSPHRASE_DISABLED_ON_DEVICE.to_string());
+        }
+    }
 
     let xpub = resolve(
         get_xpub(
@@ -746,6 +824,49 @@ pub fn sign_admin_wallet_psbt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The default must be the wallet that needs no secret. An operation reaching `resolve`
+    /// before any connect — or after a panic wiped the intent — has to answer for the
+    /// standard wallet, never open a hidden one the signer did not ask for.
+    #[test]
+    fn a_session_with_no_connect_yet_is_for_the_standard_wallet() {
+        assert_eq!(SessionState::default().kind, WalletKind::Standard);
+        assert_eq!(WalletKind::default(), WalletKind::Standard);
+    }
+
+    /// Both halves of the session transition, in one test on purpose: they share the
+    /// process-wide [`TREZOR_SESSION`], and `cargo test` runs test fns on parallel threads,
+    /// so splitting them would let one clobber the other's state.
+    #[test]
+    fn a_connect_publishes_its_wallet_and_keeps_it_across_a_new_session_id() {
+        // Connecting must publish the requested wallet and drop the previous session id in
+        // the same step. A stale id alongside a new kind is the silent-wrong-wallet case: the
+        // device would resume the old wallet's warm seed cache and never prompt, so the signer
+        // would get the previous wallet while the app reported the new one.
+        for kind in [WalletKind::Hidden, WalletKind::Standard] {
+            session_slot().id = Some(vec![7u8; SESSION_ID_LEN]);
+
+            start_session(kind);
+
+            assert_eq!(current_wallet_kind(), kind);
+            assert_eq!(
+                session_slot().id,
+                None,
+                "a stale session id survived {kind:?}"
+            );
+        }
+
+        // A session lost mid-flow makes the device prompt again, and that prompt has to be
+        // answered for the wallet the signer chose — so storing the replacement id must leave
+        // the kind alone.
+        start_session(WalletKind::Hidden);
+        session_slot().id = Some(vec![9u8; SESSION_ID_LEN]);
+        assert_eq!(current_wallet_kind(), WalletKind::Hidden);
+
+        // Leave the slot as a fresh standard session, so nothing later in this process
+        // inherits a hidden-wallet intent from a test.
+        start_session(WalletKind::Standard);
+    }
 
     #[test]
     fn session_without_a_request_is_a_fresh_start() {
