@@ -6,11 +6,14 @@
  * Trezor keypad instead. This spec is the guard that the field does not come back: it selects
  * the Trezor connection method on the real binary and asserts there is nowhere to type it.
  *
- * Nothing replaces it on the idle screen: connecting is what makes the device prompt, so the
- * message about the passphrase belongs to the connecting state and is not asserted here (it needs
- * a device to reach). What this spec pins is that the connection method box offers exactly one
- * way to connect — a second button there would run the same handler while implying the two open
- * different wallets.
+ * The message about *where* the passphrase is entered belongs to the connecting state, not the
+ * idle screen, and needs a device to reach, so it is asserted absent here rather than present.
+ *
+ * The screen does offer a second action — "Enter passphrase on Trezor" — because one seed backs
+ * the standard wallet plus a distinct wallet per passphrase, and the host picks which by how it
+ * answers PassphraseRequest. That button opens a hidden wallet; it does not collect anything
+ * here, which is what the password-input assertions below pin down. It lives beside the connect
+ * CTA and not in the connection-method box, which stays "which device".
  *
  * Requires the app binary only — it never leaves the connect screen. See README.md.
  */
@@ -50,6 +53,17 @@ describe('Strata Multisig connect — no passphrase typed on the host', () => {
 		const chips = await methodBox.$$('button')
 		if (chips.length > 3) {
 			throw new Error(`connection method box has ${chips.length} buttons; only the vendor chips belong there`)
+		}
+
+		// The hidden-wallet action is offered, and it is an action — not an input. A signer who
+		// wants the passphrase wallet has to have somewhere to say so, or the app silently
+		// decides for them, which is the defect this pair of assertions brackets.
+		const hiddenWallet = await $('button[data-testid="e2e-connect-hidden-wallet"]')
+		await hiddenWallet.waitForDisplayed({ timeout: 30000 })
+
+		const hiddenWalletInputs = await $$('[data-testid="e2e-connect-hidden-wallet"] input')
+		if (hiddenWalletInputs.length > 0) {
+			throw new Error('the hidden-wallet action collects input on the host; it must only ask the device')
 		}
 	})
 })

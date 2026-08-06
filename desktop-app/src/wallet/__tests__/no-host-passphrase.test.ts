@@ -5,6 +5,13 @@
 // enters it on the device keypad instead, so there must be nowhere in the app for a
 // host-side passphrase to appear.
 //
+// What that does *not* forbid is choosing which wallet to open. The passphrase is a
+// per-session parameter rather than device state, so the host selects the wallet on every
+// connection by how it answers PassphraseRequest — an empty string opens the standard wallet,
+// deferring to the keypad opens a hidden one. An earlier revision of this file banned the
+// empty-string answer and allowed only one connect control, which removed the choice rather
+// than the secret; those assertions were replaced, not relaxed.
+//
 // This is a source-contract test, like canonical-connect-paths: the paths it guards have no
 // runtime seam to assert against, and the failure it prevents is a field or a payload key
 // quietly coming back.
@@ -59,20 +66,24 @@ assert.ok(
 	'the connect screen must not label a passphrase field',
 )
 
-// The passphrase message is copy, not a control. A button beside "Connect wallet" would run the
-// same handler -- connecting is what makes the device prompt -- while implying the two open
-// different wallets, which is the inference a signer should never be invited to make.
 assert.ok(
 	connectPhase.includes('e2e-passphrase-on-device'),
 	'the connect screen must still tell the signer where the passphrase is entered',
 )
-// Exactly one control may start a Trezor connection. Counting the invocations catches a second
-// CTA wherever it is added, which slicing the file around the message could not.
-// Matches a call adjacent to the name -- `onConnectTrezor()` or `onConnectTrezor?.()` -- and
-// not the ternary guard `onConnectTrezor\n ? () => ...`, which reads as a call if whitespace is
-// allowed in between.
-const connectInvocations = code(connectPhase).match(/onConnectTrezor(\?\.)?\(\)/g) ?? []
-assert.equal(connectInvocations.length, 1, 'exactly one control may trigger a Trezor connection')
+
+// Two controls start a Trezor connection, and they must open *different* wallets. One seed backs
+// the standard wallet plus a distinct wallet per passphrase, and the host picks which by how it
+// answers PassphraseRequest, so the choice is real (issues/evidence/G5-B0-PROTOCOL.md).
+//
+// What this guards is the earlier defect, not the second button: two CTAs wired to the same
+// argument would be the rival-CTA problem for real, promising a choice the app does not make.
+// So the kinds are counted rather than the calls.
+const connectKinds = code(connectPhase).match(/onConnectTrezor\(\s*'(standard|hidden)'\s*\)/g) ?? []
+assert.equal(connectKinds.length, 2, 'the connect screen must offer exactly two Trezor wallet choices')
+assert.equal(new Set(connectKinds).size, 2, 'the two Trezor controls must open different wallets')
+
+// A bare call would leave the wallet to the default and make the two controls identical again.
+assert.ok(!/onConnectTrezor(\?\.)?\(\s*\)/.test(code(connectPhase)), 'a Trezor control must name the wallet it opens')
 
 const messageLine = code(connectPhase)
 	.split('\n')
@@ -112,16 +123,33 @@ for (const [name, source] of [
 	assert.ok(!CARRIES_A_PASSPHRASE.test(code(source)), `${name} must not thread a passphrase to the device`)
 }
 
-// The Rust side: the IPC commands must not accept one, and the device handler must ask the
-// device to prompt rather than answering with a host-supplied string.
-assert.ok(!/ack_passphrase/.test(code(trezorAdapter)), 'the Trezor adapter must never send a passphrase to the device')
+// The Rust side. Both answers to PassphraseRequest must be present, because they are what makes
+// the two controls above mean different things:
+//
+//   Standard -> ack_passphrase("")   an empty string is the absence of a passphrase
+//   Hidden   -> ack(true)            the device prompts on its own keypad
+//
+// Neither carries a secret from this machine, which is the property this file exists to protect.
 assert.ok(/\.ack\(true\)/.test(code(trezorAdapter)), 'the Trezor adapter must ask the device to prompt on its keypad')
-
-// Connecting must start its own device session. Without this a session opened under one
-// passphrase would be inherited by the next connection, which the signer never authorised.
 assert.ok(
-	/pub fn connect\([^)]*\)[^{]*\{[^}]*forget_session\(\)/s.test(code(trezorAdapter)),
-	'connect must start a clean device session',
+	/ack_passphrase\(String::new\(\)\)/.test(code(trezorAdapter)),
+	'the Trezor adapter must answer with an empty passphrase to open the standard wallet',
+)
+
+// The empty string is the *only* passphrase this app may send. Anything else -- a variable, a
+// literal, a parameter -- is a host-supplied secret, which is the whole defect.
+const ackArguments = code(trezorAdapter).match(/ack_passphrase\(([^)]*\)?[^)]*)\)/g) ?? []
+for (const call of ackArguments) {
+	assert.equal(call, 'ack_passphrase(String::new())', `the Trezor adapter must not send a passphrase: ${call}`)
+}
+
+// Connecting must start its own device session, for the wallet it was asked for. Without this a
+// session opened under one passphrase would be inherited by the next connection, which the signer
+// never authorised -- and the kind must travel with it, or a later operation on a lost session
+// would be answered for the other wallet.
+assert.ok(
+	/pub fn connect\([^)]*\)[^{]*\{[^}]*start_session\(kind\)/s.test(code(trezorAdapter)),
+	'connect must start a clean device session for the wallet it was asked for',
 )
 
 console.log('no-host-passphrase: all assertions passed')

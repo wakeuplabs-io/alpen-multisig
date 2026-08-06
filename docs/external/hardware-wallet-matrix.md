@@ -48,19 +48,27 @@ A Trezor passphrase unlocks a *hidden wallet*: a completely separate set of keys
 the same seed. It is the one secret in the Trezor flow that a host machine could plausibly
 observe, so **Strata Multisig never asks for it on the computer.**
 
-**How it works**
+**Choosing which wallet to open**
 
-1. Enable the passphrase in your Trezor's own settings (Trezor Suite, or `trezorctl set
-   passphrase enabled`). The app cannot turn it on for you, and does not change your device's
-   configuration.
-2. On the connect screen, choose Trezor and press **Connect wallet**.
-3. The device asks for the passphrase on its own keypad. Type it there. Leaving it empty opens
-   your standard wallet.
+One seed backs your standard wallet plus a separate wallet for every passphrase, and the
+device does not remember which one you last used — the choice is made fresh on each
+connection. The connect screen offers both:
+
+| Action | Opens | Keypad |
+|---|---|---|
+| **Connect wallet** | your standard wallet, derived from the seed alone | no |
+| **Enter passphrase on Trezor** | the hidden wallet for the passphrase you type | yes |
+
+1. To use a hidden wallet, first enable the passphrase in your Trezor's own settings (Trezor
+   Suite, or `trezorctl set passphrase enabled`). The app cannot turn it on for you, and does
+   not change your device's configuration.
+2. On the connect screen, choose Trezor, then press whichever of the two actions you want.
+3. For a hidden wallet the device asks on its own keypad. Type the passphrase there.
 4. The app keeps the device session open for the rest of your connection, so you are asked
    once — not again for the account key, the fingerprint, or each signature.
 
-There is no separate button for this, and no setting in the app to turn it on. Whether the
-prompt appears is decided entirely by your device: connecting is what triggers it.
+If you press **Enter passphrase on Trezor** on a device that has the passphrase switched off,
+the app stops and says so. It does not quietly connect you to the standard wallet instead.
 
 Pressing **Disconnect** ends that session. The next connection asks again, so a wallet left
 open cannot be picked up by whoever uses the machine next.
@@ -69,8 +77,9 @@ open cannot be picked up by whoever uses the machine next.
 
 - It never displays a passphrase field. There is nothing to type on the computer, so a
   keylogger on the host has nothing to capture.
-- It never sends a passphrase to the device. It asks the device to prompt, and the device
-  answers with keys, never with the secret.
+- It never sends a passphrase to the device. For the standard wallet it sends an empty
+  string — the absence of a passphrase — and for a hidden wallet it asks the device to prompt.
+  The device answers with keys, never with the secret.
 
 **Model support**
 
@@ -78,6 +87,12 @@ On-device passphrase entry needs a device keypad. Every supported model has one 
 Safe 3, Safe 5). Trezor One does not — and is not supported by this app for other reasons (no
 Taproot); if one is connected with a passphrase enabled, the app says so rather than failing
 with a protocol error.
+
+**If your Trezor is set to "always enter passphrase on device"**
+
+That device setting makes the firmware prompt on its keypad for every connection, whichever
+action you press — it does not consult the app at all. Both actions then behave the same way,
+and you choose the wallet by what you type: leave it empty for your standard wallet.
 
 **If the passphrase prompt comes back mid-session**
 
