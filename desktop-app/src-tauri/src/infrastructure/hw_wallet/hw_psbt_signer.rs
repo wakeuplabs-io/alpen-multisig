@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::application::psbt_signer::PsbtSigner;
+use crate::infrastructure::hw_wallet::trezor::WalletKind;
 use crate::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 use bdk_wallet::bitcoin::psbt::Psbt;
@@ -48,9 +49,15 @@ impl HwDeviceType {
         }
     }
 
-    pub fn connect(self, derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
+    /// `kind` is Trezor-only. A Ledger's passphrase is a separate wallet unlocked by PIN on
+    /// the device itself, with nothing for the host to select, so it ignores the argument.
+    pub fn connect(
+        self,
+        derivation_path: Option<String>,
+        kind: WalletKind,
+    ) -> Result<HwWalletInfo, String> {
         match self {
-            HwDeviceType::Trezor => trezor::connect(derivation_path),
+            HwDeviceType::Trezor => trezor::connect(derivation_path, kind),
             HwDeviceType::Ledger => ledger::connect(derivation_path),
         }
     }

@@ -3,6 +3,7 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
+use desktop_app::infrastructure::hw_wallet::trezor::WalletKind;
 use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::network_env::network_from_env;
 use desktop_app::infrastructure::signing::{self, SignatureResult};
@@ -14,6 +15,24 @@ fn parse_device_kind(token: &str) -> Result<HwDeviceType, String> {
         "ledger" => Ok(HwDeviceType::Ledger),
         other => Err(format!(
             "unknown device type '{other}' (expected trezor or ledger)"
+        )),
+    }
+}
+
+/// Parses the wallet-kind IPC token. Absent means the standard wallet: the one that needs no
+/// passphrase, so an older or malformed caller can never be routed to a hidden wallet by
+/// accident.
+fn parse_wallet_kind(token: Option<&str>) -> Result<WalletKind, String> {
+    match token
+        .unwrap_or("standard")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "standard" => Ok(WalletKind::Standard),
+        "hidden" => Ok(WalletKind::Hidden),
+        other => Err(format!(
+            "unknown wallet kind '{other}' (expected standard or hidden)"
         )),
     }
 }
@@ -32,9 +51,11 @@ fn parse_verify_network(network: Option<&str>) -> Network {
 pub async fn hw_wallet_connect(
     vendor: String,
     derivation_path: Option<String>,
+    wallet_kind: Option<String>,
 ) -> Result<HwWalletInfo, String> {
     let device = parse_device_kind(&vendor)?;
-    tokio::task::spawn_blocking(move || device.connect(derivation_path))
+    let kind = parse_wallet_kind(wallet_kind.as_deref())?;
+    tokio::task::spawn_blocking(move || device.connect(derivation_path, kind))
         .await
         .map_err(|e| e.to_string())?
 }
