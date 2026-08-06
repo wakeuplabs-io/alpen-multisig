@@ -1,5 +1,12 @@
 import { tauriCall } from '@/api/tauri-bridge'
-import type { SignSighashResult, SigningContext, WalletAccountInfo, WalletAdapter, WalletVendor } from './types'
+import type {
+	SignSighashResult,
+	SigningContext,
+	WalletAccountInfo,
+	WalletAdapter,
+	WalletKind,
+	WalletVendor,
+} from './types'
 
 type HwWalletInfo = {
 	deviceLabel: string
@@ -17,7 +24,9 @@ type SignatureResult = {
 
 /**
  * No passphrase crosses this boundary. A Trezor passphrase is entered on the device
- * keypad, so there is nothing here to hold or forward (#448).
+ * keypad, so there is nothing here to hold or forward (#448). `kind` selects *which* wallet
+ * behind the seed to open, which is a choice, not a secret: 'standard' needs no passphrase
+ * at all and 'hidden' defers entry to the device.
  */
 export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 	let publicKeyHex: string | null = null
@@ -27,10 +36,11 @@ export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 		vendor,
 		supportsSighashSigning: true,
 
-		async connect(): Promise<WalletAccountInfo> {
+		async connect(kind: WalletKind = 'standard'): Promise<WalletAccountInfo> {
 			const result = await tauriCall<HwWalletInfo>('hw_wallet_connect', {
 				vendor,
 				derivationPath: null,
+				walletKind: kind,
 			})
 			if (!result.ok) throw new Error(result.error)
 			const info = result.data

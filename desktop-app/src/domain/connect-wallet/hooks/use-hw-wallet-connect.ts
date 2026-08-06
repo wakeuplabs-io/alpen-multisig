@@ -4,7 +4,7 @@ import type { HwDeviceType } from '@/api/admin-wallet'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { matchesDeviceAddress } from '@/lib/admin-id'
-import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
+import type { WalletAccountInfo, WalletAdapter, WalletKind } from '@/wallet/types'
 
 /** The connected device kind for verify dispatch, or null for software vendors. */
 function hwDeviceType(vendor: WalletAdapter['vendor']): HwDeviceType | null {
@@ -19,7 +19,8 @@ type Params = {
 type HookResult = {
 	state: HwWalletConnectState
 	actions: {
-		connect: () => Promise<void>
+		/** Defaults to the standard wallet: the one that needs no passphrase. */
+		connect: (kind?: WalletKind) => Promise<void>
 		goBackToConnect: () => void
 		verifyOnDevice: () => Promise<void>
 		disconnect: () => void
@@ -45,13 +46,13 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		}
 	}, [])
 
-	async function connect() {
+	async function connect(kind: WalletKind = 'standard') {
 		setLoading(true)
 		setConnectViewState('loading')
 		setError(null)
 
 		try {
-			const info = await adapter.connect()
+			const info = await adapter.connect(kind)
 			const publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? ''
 			const canonicalEntry = {
 				index: 0,

@@ -32,6 +32,15 @@ export type DeviceCopy = {
 	 * no password is typed here.
 	 */
 	passphraseOnDevice?: string
+	/**
+	 * Label for the second connect action, on vendors where one seed backs more than one
+	 * wallet (#448). Present only for Trezor: a Ledger has nothing for the host to select,
+	 * and software signers take their passphrase in the mnemonic form.
+	 *
+	 * Names the device, because that is the whole point of the action — the passphrase is
+	 * typed there and never here.
+	 */
+	hiddenWallet?: string
 }
 
 const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
@@ -46,6 +55,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
 		passphraseOnDevice: 'If your Trezor asks for your passphrase, enter it on the device.',
+		hiddenWallet: 'Enter passphrase on Trezor',
 	},
 	ledger: {
 		label: 'Ledger',
