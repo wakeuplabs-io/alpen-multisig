@@ -15,6 +15,8 @@
 		"test:e2e:admin-wallet-panel": "wdio run wdio.conf.js --spec ./test/specs/admin-wallet-panel.e2e.js",
 		"test:e2e:signing-no-sighash": "wdio run wdio.conf.js --spec ./test/specs/signing-no-sighash.e2e.js",
 		"test:e2e:connect-no-passphrase-field": "wdio run wdio.conf.js --spec ./test/specs/connect-no-passphrase-field.e2e.js",
+		"qa:trezor-wallet-choice": "wdio run wdio.conf.js --spec ./test/specs/g5-wallet-choice.qa.js",
+		"qa:trezor-hidden-refused": "wdio run wdio.conf.js --spec ./test/specs/g5-refusal.qa.js",
 		"test:e2e:clipboard-copy": "wdio run wdio.conf.js --spec ./test/specs/clipboard-copy.e2e.js",
 		"test:e2e:fee-bump": "wdio run wdio.conf.js --spec ./test/specs/fee-bump.e2e.js",
 		"format": "prettier --write \"./**/*.{js,mjs}\""
