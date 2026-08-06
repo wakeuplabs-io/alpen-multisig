@@ -43,10 +43,18 @@ export type SigningContext = {
 	actionHex: string
 }
 
+/**
+ * Which wallet behind a Trezor seed to open. One seed backs the standard wallet plus a
+ * distinct wallet per passphrase, and the choice is made per connection — the device does
+ * not remember one. 'hidden' hands entry to the device keypad; neither value carries a
+ * secret from this machine.
+ */
+export type WalletKind = 'standard' | 'hidden'
+
 export type WalletAdapter = {
 	readonly vendor: WalletVendor
 	readonly supportsSighashSigning: boolean
-	connect(): Promise<WalletAccountInfo>
+	connect(kind?: WalletKind): Promise<WalletAccountInfo>
 	disconnect(): Promise<void>
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
 	getAccountXpub?(): Promise<string>

@@ -11,7 +11,7 @@ import { deviceCopy } from '@/lib/device-copy'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
 import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mnemonic-signing-enabled'
-import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/types'
+import type { WalletAccountInfo, WalletAdapter, WalletKind, WalletVendor } from '@/wallet/types'
 
 type Props = {
 	adapter: WalletAdapter
@@ -52,25 +52,28 @@ export function HwWalletConnect({
 	const mnemonicEnabled = useMnemonicSigningEnabled()
 	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
 
-	const [shouldAutoConnect, setShouldAutoConnect] = useState(false)
+	// Holds the wallet the pending auto-connect is for, or null when none is queued. It carries
+	// the kind rather than a bare flag because selecting the vendor swaps the adapter through
+	// context asynchronously, so the choice has to survive until the adapter is in place.
+	const [pendingConnect, setPendingConnect] = useState<WalletKind | null>(null)
 	const connectRef = useRef(actions.connect)
 	useEffect(() => {
 		connectRef.current = actions.connect
 	})
 	useEffect(() => {
-		if (!shouldAutoConnect) return
-		setShouldAutoConnect(false)
-		void connectRef.current()
-	}, [shouldAutoConnect])
+		if (pendingConnect === null) return
+		setPendingConnect(null)
+		void connectRef.current(pendingConnect)
+	}, [pendingConnect])
 
-	function handleConnectTrezor() {
+	function handleConnectTrezor(kind: WalletKind = 'standard') {
 		onSelectWalletMethod('trezor')
-		setShouldAutoConnect(true)
+		setPendingConnect(kind)
 	}
 
 	function handleConnectMnemonic(mnemonic: string) {
 		onSelectWalletMethod('mnemonic', mnemonic)
-		setShouldAutoConnect(true)
+		setPendingConnect('standard')
 	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null

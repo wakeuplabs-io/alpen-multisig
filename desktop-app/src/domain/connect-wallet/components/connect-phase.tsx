@@ -5,7 +5,7 @@ import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { deviceCopy } from '@/lib/device-copy'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
-import type { HwAddressEntry, WalletVendor } from '@/wallet/types'
+import type { HwAddressEntry, WalletKind, WalletVendor } from '@/wallet/types'
 
 type Props = {
 	loading: boolean
@@ -13,7 +13,8 @@ type Props = {
 	error: string | null
 	onConnect: () => void
 	onConnectMnemonic?: (mnemonic: string) => void
-	onConnectTrezor?: () => void
+	/** Takes the wallet to open, because one Trezor seed backs more than one. */
+	onConnectTrezor?: (kind: WalletKind) => void
 	walletVendor: WalletVendor
 	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	mnemonicEnabled: boolean
@@ -38,6 +39,7 @@ export function ConnectPhase({
 	const [debugLoading, setDebugLoading] = useState(false)
 	const [debugError, setDebugError] = useState<string | null>(null)
 	const passphraseCopy = deviceCopy(walletVendor).passphraseOnDevice
+	const hiddenWalletCopy = deviceCopy(walletVendor).hiddenWallet
 
 	function handleUseTrezor() {
 		onSelectWalletMethod('trezor')
@@ -251,7 +253,7 @@ export function ConnectPhase({
 					walletVendor === 'mnemonic' && onConnectMnemonic
 						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
 						: walletVendor === 'trezor' && onConnectTrezor
-							? () => onConnectTrezor()
+							? () => onConnectTrezor('standard')
 							: onConnect
 				}
 				disabled={loading || isSuccess}
@@ -270,6 +272,24 @@ export function ConnectPhase({
 					</>
 				)}
 			</button>
+
+			{/*
+			  The second wallet behind the same seed. Deliberately a separate action rather than a
+			  setting: the button above opens the wallet derived from the seed alone, this one asks
+			  the Trezor for a passphrase on its own keypad and opens the wallet that passphrase
+			  derives. Kept out of the vendor chip row above — that row is "which device".
+			*/}
+			{walletVendor === 'trezor' && onConnectTrezor && (
+				<button
+					type="button"
+					data-testid="e2e-connect-hidden-wallet"
+					className="mt-2 w-full rounded-lg border border-[#d1d5db] bg-white px-4 py-2.5 text-body-sm font-medium text-[#374151] transition hover:bg-[#f3f4f6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+					onClick={() => onConnectTrezor('hidden')}
+					disabled={loading || isSuccess}
+				>
+					{hiddenWalletCopy}
+				</button>
+			)}
 
 			{/* Security note */}
 			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-label text-[#9ca3af]">
