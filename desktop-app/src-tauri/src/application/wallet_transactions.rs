@@ -215,6 +215,25 @@ impl PackageStats {
     }
 }
 
+/// F-006: does the package `commit + reveal + child` fall short of `requested` once the
+/// child is measured as it will be broadcast? Returns the realized rate when it does.
+///
+/// A 10% tolerance is allowed: the child is itself RBF-bumpable, so landing slightly under
+/// is recoverable, while refusing outright would strand a bump over a rounding sliver.
+fn package_rate_shortfall(
+    package: PackageStats,
+    child_fee_sats: u64,
+    child_vsize_vbytes: u64,
+    requested: FeeRate,
+) -> Option<u64> {
+    let realized = fee_rate_sat_per_kvb(
+        package.fee_sats + child_fee_sats,
+        package.vsize_vbytes + child_vsize_vbytes,
+    );
+    let min_acceptable = requested.sat_per_kvb().saturating_mul(90) / 100;
+    (realized < min_acceptable).then_some(realized)
+}
+
 /// vsize of a built-but-unsigned child once its witnesses are attached.
 fn signed_child_vsize(unsigned: &bdk_wallet::bitcoin::Transaction, satisfaction_wu: u64) -> u64 {
     (unsigned.weight() + bdk_wallet::bitcoin::Weight::from_wu(SEGWIT_MARKER_WU + satisfaction_wu))
@@ -237,15 +256,20 @@ impl CpfpChildInputs {
     }
 }
 
-/// Chooses what the CPFP child spends: the `anchor` is mandatory and comes first,
-/// then the largest `spare` coins until they cover the child fee **plus** a non-dust
-/// drain output.
+/// Chooses what the CPFP child spends: the `anchor` is mandatory, then as few `spare`
+/// coins as it takes to cover the child fee **plus** a non-dust drain output.
 ///
 /// Selecting explicitly is the fix for #431: with `fee_absolute` and no recipient the
 /// effective rate is zero, so BDK's branch-and-bound stops as soon as the mandatory
 /// input covers the fee alone. When the leftover then falls under the dust limit the
 /// change is dropped, the child is left with no output, and coin selection reports
 /// insufficient funds on a wallet that is not short of funds at all.
+///
+/// **Smallest coin that closes the gap**, not largest-first: every bump parks its inputs
+/// behind an unconfirmed child, and an evicted child is not noticed by the sync path, so
+/// a bump that swept the biggest coin would strand most of the balance. When no single
+/// coin closes the gap the largest is taken to advance as far as possible, and the pass
+/// repeats.
 ///
 /// Fee and size chase each other — a coin added to pay the fee makes the child bigger,
 /// which raises the fee — so sizing and selection alternate. Every pass that does not
@@ -260,13 +284,11 @@ fn select_cpfp_child_inputs(
     rate: FeeRate,
 ) -> Result<CpfpChildInputs, BumpFeeError> {
     let dust_threshold = drain_script.minimal_non_dust().to_sat();
-    // Largest first, ties broken by outpoint so the selection is deterministic.
-    // Unconfirmed coins are eligible: the child is a mempool transaction anyway, and
-    // refusing them is what strands a funded wallet.
+    // Ascending, ties broken by outpoint so the selection is deterministic.
     spare.sort_by(|a, b| {
-        b.txout
+        a.txout
             .value
-            .cmp(&a.txout.value)
+            .cmp(&b.txout.value)
             .then_with(|| a.outpoint.txid.cmp(&b.outpoint.txid))
             .then_with(|| a.outpoint.vout.cmp(&b.outpoint.vout))
     });
@@ -276,29 +298,33 @@ fn select_cpfp_child_inputs(
         let child_vsize = cpfp_child_vsize(utxos.len() as u64, drain_script, satisfaction);
         package.required_child_fee(rate, child_vsize)
     };
-    let total_of = |utxos: &[bdk_wallet::LocalOutput]| -> u64 { utxos.iter().map(sats).sum() };
 
+    let available: u64 = sats(&anchor) + spare.iter().map(sats).sum::<u64>();
     let mut utxos = vec![anchor];
+    let mut total = sats(&utxos[0]);
     let fee_sats = loop {
         let fee = fee_for(&utxos)?;
         let needed = fee + dust_threshold;
-        let mut total = total_of(&utxos);
         if total >= needed {
             break fee;
         }
-        while total < needed {
-            let next =
-                spare
-                    .get(utxos.len() - 1)
-                    .ok_or_else(|| BumpFeeError::InsufficientFunds {
-                        message: format!(
-                            "the CPFP child needs {needed} sats (fee plus a non-dust output) \
-                         but only {total} sats are spendable"
-                        ),
-                    })?;
-            total += sats(next);
-            utxos.push(next.clone());
+        if spare.is_empty() {
+            return Err(BumpFeeError::InsufficientFunds {
+                message: format!(
+                    "the CPFP child needs {needed} sats (fee plus a non-dust output) but the \
+                     wallet holds only {available} sats in coins it can spend here"
+                ),
+            });
         }
+        // The smallest coin that closes the gap on its own; failing that, the largest.
+        let gap = needed - total;
+        let pick = spare
+            .iter()
+            .position(|utxo| sats(utxo) >= gap)
+            .unwrap_or(spare.len() - 1);
+        let next = spare.remove(pick);
+        total += sats(&next);
+        utxos.push(next);
     };
     Ok(CpfpChildInputs { utxos, fee_sats })
 }
@@ -467,7 +493,13 @@ impl WalletService {
         let (psbt, package) = match pending_commit_to_reveal.get(txid) {
             Some(reveal_txid) => {
                 let (psbt, package) = self
-                    .build_cpfp_child_psbt(txid, parsed_txid, reveal_txid, new_rate)
+                    .build_cpfp_child_psbt(
+                        txid,
+                        parsed_txid,
+                        reveal_txid,
+                        new_rate,
+                        pending_commit_to_reveal,
+                    )
                     .await?;
                 (psbt, Some(package))
             }
@@ -497,6 +529,18 @@ impl WalletService {
                 })?
         };
         let vsize_vbytes = tx.vsize() as u64;
+
+        // F-006: the realized package rate, measured on the *signed* child — the only size
+        // the network will ever see. Checked here rather than against the estimate, so the
+        // guard compares against reality instead of re-deriving the arithmetic that priced
+        // the fee, and it runs before the broadcast so a short package is never published.
+        if let Some(p) = package {
+            if let Some(realized) = package_rate_shortfall(p, fee_sats, vsize_vbytes, new_rate) {
+                return Err(BumpFeeError::FeeRateTooLow {
+                    required_sat_per_kvb: realized,
+                });
+            }
+        }
 
         // 6. Broadcast: Electrum first, node RPC fallback.
         let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
@@ -550,12 +594,16 @@ impl WalletService {
 
     /// CPFP path: child PSBT spending the reveal's wallet-owned change output with
     /// an absolute fee that lifts the `commit+reveal+child` package to `new_rate`.
+    ///
+    /// `pending_commit_to_reveal` is read to keep other pending packages' anchors out of
+    /// the funding pool — spending one would leave that bundle impossible to accelerate.
     async fn build_cpfp_child_psbt(
         &self,
         txid: &str,
         commit_txid: bdk_wallet::bitcoin::Txid,
         reveal_txid: &str,
         new_rate: FeeRate,
+        pending_commit_to_reveal: &HashMap<String, String>,
     ) -> Result<(bdk_wallet::bitcoin::Psbt, PackageStats), BumpFeeError> {
         use bdk_wallet::bitcoin::{Amount, OutPoint};
         use bdk_wallet::chain::ChainPosition;
@@ -637,9 +685,48 @@ impl WalletService {
             bdk_wallet::KeychainKind::Internal => internal_wu,
         };
 
+        // What the child may spend besides the anchor. Three exclusions, each load-bearing:
+        //
+        // - **Immature coinbase.** `manually_selected_only` skips BDK's `filter_utxos`, and
+        //   with it the maturity check, so nothing downstream would stop the child from
+        //   spending a coinbase the node will reject as `premature-spend-of-coinbase`. The
+        //   wallet's own balance already excludes these, so spending them would also mean
+        //   spending money the UI says the operator does not have.
+        // - **Unconfirmed coins from outside this package.** Their parents would join the
+        //   child's mempool ancestor set, which `governance_package_stats` does not account
+        //   for, so the package rate reported to the user would be higher than the one a
+        //   miner computes. The commit's and reveal's own outputs are exempt: those two are
+        //   already inside the accounted package, which is what keeps the #431 case working
+        //   on a fully unconfirmed wallet.
+        // - **Other pending packages' anchors** would leave those bundles impossible to
+        //   accelerate, reporting "the reveal change is already spent" with no child to
+        //   bump. Redundant while the rule above holds — a pending package's anchor is by
+        //   definition unconfirmed and outside this package, so it is already excluded —
+        //   and kept as the safety net for the day that rule is relaxed.
+        let tip_height = wallet.latest_checkpoint().height();
+        let other_anchors: std::collections::HashSet<bdk_wallet::bitcoin::Txid> =
+            pending_commit_to_reveal
+                .values()
+                .filter_map(|reveal| reveal.parse::<bdk_wallet::bitcoin::Txid>().ok())
+                .filter(|txid| *txid != reveal_parsed)
+                .collect();
         let spare: Vec<bdk_wallet::LocalOutput> = wallet
             .list_unspent()
             .filter(|utxo| utxo.outpoint != anchor)
+            .filter(|utxo| !other_anchors.contains(&utxo.outpoint.txid))
+            .filter(|utxo| match &utxo.chain_position {
+                ChainPosition::Confirmed { anchor, .. } => {
+                    let is_coinbase = wallet
+                        .get_tx(utxo.outpoint.txid)
+                        .is_some_and(|tx| tx.tx_node.tx.is_coinbase());
+                    !is_coinbase
+                        || tip_height.saturating_sub(anchor.block_id.height) + 1
+                            >= bdk_wallet::bitcoin::constants::COINBASE_MATURITY
+                }
+                ChainPosition::Unconfirmed { .. } => {
+                    utxo.outpoint.txid == commit_txid || utxo.outpoint.txid == reveal_parsed
+                }
+            })
             .collect();
         let child = select_cpfp_child_inputs(
             anchor_utxo,
@@ -664,22 +751,19 @@ impl WalletService {
         builder.fee_absolute(Amount::from_sat(child_fee));
         let psbt = builder.finish().map_err(map_create_tx_error)?;
 
-        // F-006: Verify the *realized* package rate meets the requested one. The child
-        // is measured signed — `unsigned_tx` carries no witnesses and would understate
-        // it, validating a package rate the network never sees.
-        let child_vsize = signed_child_vsize(&psbt.unsigned_tx, child.satisfaction_wu(witness_wu));
-        let actual_package_vsize = package.vsize_vbytes + child_vsize;
-        let actual_package_fee = package.fee_sats + child_fee;
-        let actual_package_rate = fee_rate_sat_per_kvb(actual_package_fee, actual_package_vsize);
-        let requested_rate_sat_per_kvb = new_rate.sat_per_kvb();
-        // Allow 10% tolerance: actual rate >= 90% of requested rate
-        let min_acceptable_rate = requested_rate_sat_per_kvb.saturating_mul(90) / 100;
-        if actual_package_rate < min_acceptable_rate {
-            return Err(BumpFeeError::FeeRateTooLow {
-                required_sat_per_kvb: fee_rate_sat_per_kvb(
-                    package.fee_sats + child_fee,
-                    actual_package_vsize,
-                ),
+        // Sanity check on the arithmetic above: the child BDK built must be the one that
+        // was priced. This is not F-006 — it cannot fail unless the builder starts adding
+        // or dropping inputs behind our back, and F-006 itself is enforced on the *signed*
+        // child in `bump_fee`, which is the size the network charges for.
+        let modelled = cpfp_child_vsize(
+            child.utxos.len() as u64,
+            &psbt.unsigned_tx.output[0].script_pubkey,
+            child.satisfaction_wu(witness_wu),
+        );
+        let built = signed_child_vsize(&psbt.unsigned_tx, child.satisfaction_wu(witness_wu));
+        if built > modelled {
+            return Err(BumpFeeError::BuildFailed {
+                message: format!("the child was priced for {modelled} vB but built to {built} vB"),
             });
         }
 
@@ -699,7 +783,7 @@ mod tests {
     };
     use bdk_wallet::chain::BlockId;
     use bdk_wallet::test_utils::{
-        insert_checkpoint, insert_seen_at, insert_tx, receive_output,
+        insert_anchor, insert_checkpoint, insert_seen_at, insert_tx, receive_output,
         receive_output_in_latest_block, ReceiveTo,
     };
     use std::sync::RwLock as StdRwLock;
@@ -741,10 +825,15 @@ mod tests {
     /// Spends every wallet UTXO except `keep` to an external script, leaving the
     /// CPFP anchor as the only spendable coin.
     fn spend_all_except(wallet: &mut bdk_wallet::Wallet, keep: OutPoint) {
+        spend_all_except_any(wallet, &[keep]);
+    }
+
+    /// `spend_all_except` for scenarios that must preserve more than one coin.
+    fn spend_all_except_any(wallet: &mut bdk_wallet::Wallet, keep: &[OutPoint]) {
         let others: Vec<OutPoint> = wallet
             .list_unspent()
             .map(|utxo| utxo.outpoint)
-            .filter(|outpoint| *outpoint != keep)
+            .filter(|outpoint| !keep.contains(outpoint))
             .collect();
         assert!(!others.is_empty(), "nothing to spend away");
         let mut builder = wallet.build_tx();
@@ -870,6 +959,11 @@ mod tests {
         insert_tx(wallet, reveal.clone());
         insert_seen_at(wallet, reveal.compute_txid(), seen_at + 1);
         (commit, reveal)
+    }
+
+    /// `pending_map` when the commit txid is already a string in hand.
+    fn pending_map_from(commit_txid: &str, reveal: &Transaction) -> HashMap<String, String> {
+        [(commit_txid.to_string(), reveal.compute_txid().to_string())].into()
     }
 
     fn pending_map(commit: &Transaction, reveal: &Transaction) -> HashMap<String, String> {
@@ -1604,13 +1698,251 @@ mod tests {
         assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
     }
 
+    /// Builds a dust-window package on a wallet stripped of every coin but the anchor,
+    /// then hands the caller the wallet to plant exactly one funding candidate on.
+    /// Returns `(wallet, commit_txid, reveal)`.
+    fn dust_window_wallet_with_no_spare_funds() -> (bdk_wallet::Wallet, String, Transaction) {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package_with_change(
+            &mut wallet,
+            4_000_000_100,
+            crate::domain::fee_constants::COMMIT_DUST_SATS,
+        );
+        spend_all_except(
+            &mut wallet,
+            OutPoint {
+                txid: reveal.compute_txid(),
+                vout: 1,
+            },
+        );
+        (wallet, commit.compute_txid().to_string(), reveal)
+    }
+
+    /// An unconfirmed transaction paying the wallet, standing in for another pending
+    /// package's reveal. Planted rather than built, so the fixture does not depend on
+    /// BDK's randomised coin selection.
+    fn insert_foreign_reveal_paying_wallet(
+        wallet: &mut bdk_wallet::Wallet,
+        value: u64,
+    ) -> Transaction {
+        let change_script = wallet
+            .reveal_next_address(bdk_wallet::KeychainKind::Internal)
+            .address
+            .script_pubkey();
+        let reveal = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_byte_array([0x77; 32]),
+                    vout: 0,
+                },
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                ..Default::default()
+            }],
+            output: vec![
+                TxOut {
+                    value: Amount::ZERO,
+                    script_pubkey: ScriptBuf::new_op_return(b"sps50-action"),
+                },
+                TxOut {
+                    value: Amount::from_sat(value),
+                    script_pubkey: change_script,
+                },
+            ],
+        };
+        insert_tx(wallet, reveal.clone());
+        insert_seen_at(wallet, reveal.compute_txid(), 4_000_000_600);
+        reveal
+    }
+
+    /// A coinbase paying the wallet, confirmed at the tip and therefore immature.
+    fn insert_immature_coinbase(wallet: &mut bdk_wallet::Wallet, value: u64) {
+        let script = wallet
+            .reveal_next_address(bdk_wallet::KeychainKind::External)
+            .address
+            .script_pubkey();
+        let coinbase = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::from_bytes(vec![0x51; 8]),
+                sequence: Sequence::MAX,
+                ..Default::default()
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(value),
+                script_pubkey: script,
+            }],
+        };
+        assert!(coinbase.is_coinbase(), "fixture must be a coinbase");
+        let height = wallet.latest_checkpoint().height();
+        insert_tx(wallet, coinbase.clone());
+        insert_anchor(
+            wallet,
+            coinbase.compute_txid(),
+            bdk_wallet::chain::ConfirmationBlockTime {
+                block_id: BlockId {
+                    height,
+                    hash: BlockHash::all_zeros(),
+                },
+                confirmation_time: 0,
+            },
+        );
+    }
+
+    /// S1 (audit): `manually_selected_only` bypasses BDK's maturity filter, so nothing
+    /// downstream would stop the child from spending an immature coinbase. The node
+    /// rejects such a transaction as `premature-spend-of-coinbase` — after the user has
+    /// already signed it — and the wallet's own balance does not even count the money.
+    #[tokio::test]
+    async fn cpfp_child_never_funds_itself_from_an_immature_coinbase() {
+        let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
+        insert_immature_coinbase(&mut wallet, 5_000_000);
+        assert_eq!(
+            wallet.balance().immature.to_sat(),
+            5_000_000,
+            "fixture must leave the coinbase immature"
+        );
+        let pending = pending_map_from(&commit_txid, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            "an immature coinbase is not spendable funding, got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// S3 (audit): an unconfirmed coin from outside the package would drag its own parent
+    /// into the child's mempool ancestor set, which `governance_package_stats` does not
+    /// account for — so the package rate shown to the user would be higher than the one a
+    /// miner computes. In-package unconfirmed coins stay eligible; that is what keeps the
+    /// #431 case working on a fully unconfirmed wallet.
+    #[tokio::test]
+    async fn cpfp_child_never_funds_itself_from_an_unrelated_unconfirmed_coin() {
+        let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
+        receive_output(&mut wallet, 5_000_000, ReceiveTo::Mempool(4_000_000_500));
+        let pending = pending_map_from(&commit_txid, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            "unaccounted unconfirmed ancestors must not fund the child, got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// S4 (audit): spending another pending package's anchor would leave that bundle
+    /// impossible to accelerate — `get_utxo` would return `None` and the user would be
+    /// told "the reveal change is already spent", pointing at a child that does not exist.
+    #[tokio::test]
+    async fn cpfp_child_never_funds_itself_from_another_pending_packages_anchor() {
+        let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
+        // The other bundle's reveal, planted directly rather than built through
+        // `build_tx`: BDK's coin selection is randomised, so letting it pick the funding
+        // for a second package makes the fixture flaky.
+        let other_reveal = insert_foreign_reveal_paying_wallet(&mut wallet, 20_000);
+        let mut pending = pending_map_from(&commit_txid, &reveal);
+        pending.insert(
+            "0000000000000000000000000000000000000000000000000000000000000001".to_string(),
+            other_reveal.compute_txid().to_string(),
+        );
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            "another bundle's anchor is not funding, got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// The funding coin is the smallest one that closes the gap, not the largest one
+    /// available. Every bump parks its inputs behind an unconfirmed child, and an evicted
+    /// child is not noticed by the sync path, so sweeping the big coin would put most of
+    /// the balance behind a transaction that may quietly vanish.
+    #[tokio::test]
+    async fn cpfp_child_funds_itself_from_the_smallest_sufficient_coin() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package_with_change(
+            &mut wallet,
+            4_000_000_100,
+            crate::domain::fee_constants::COMMIT_DUST_SATS,
+        );
+        let commit_txid = commit.compute_txid().to_string();
+        // Added after the package, so the commit cannot have consumed them.
+        let small = receive_output_in_latest_block(&mut wallet, 5_000);
+        let big = receive_output_in_latest_block(&mut wallet, 5_000_000);
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        svc.bump_fee(
+            &commit_txid,
+            higher_rate(),
+            &pending,
+            &mock_chain(&[Arc::clone(&mock)]),
+        )
+        .await
+        .expect("cpfp bump must succeed");
+
+        let child = only_broadcast_tx(&mock);
+        let spends = |outpoint: OutPoint| {
+            child
+                .input
+                .iter()
+                .any(|input| input.previous_output == outpoint)
+        };
+        assert!(
+            spends(small),
+            "the 5_000-sat coin is the smallest that closes the gap"
+        );
+        assert!(
+            !spends(big),
+            "the 5_000_000-sat coin must be left alone, not swept behind the child"
+        );
+    }
+
     /// F-007: when the reveal pays several wallet-owned outputs the anchor is the
-    /// largest one — extra funding inputs must not change that choice.
+    /// largest one. Sized so the anchor covers fee and output on its own, which makes
+    /// the input count the tell: picking the small output instead would force a second
+    /// input to make up the difference.
     #[tokio::test]
     async fn f007_cpfp_anchors_on_the_largest_reveal_change_output() {
         let mut wallet = funded_wallet();
         let (commit, reveal) =
-            insert_governance_package_with_changes(&mut wallet, 4_000_000_100, &[900, 1_700]);
+            insert_governance_package_with_changes(&mut wallet, 4_000_000_100, &[900, 20_000]);
         let commit_txid = commit.compute_txid().to_string();
         let reveal_txid = reveal.compute_txid();
         let pending = pending_map(&commit, &reveal);
@@ -1636,10 +1968,12 @@ mod tests {
                     }
             })
         };
-        assert!(spends(2), "F-007: the 1_700-sat output is the anchor");
-        assert!(
-            !spends(1),
-            "F-007: the smaller 900-sat output must not be picked as anchor"
+        assert!(spends(2), "F-007: the 20_000-sat output is the anchor");
+        assert_eq!(
+            child.input.len(),
+            1,
+            "F-007: the largest output funds the child on its own; a second input means \
+             the smaller one was anchored instead"
         );
     }
 
@@ -1918,6 +2252,39 @@ mod tests {
                 "child of {child_vsize} vB"
             );
         }
+    }
+
+    /// F-006's decision, exercised directly. The integrated path cannot reach the
+    /// shortfall branch — the fee is priced from an upper-bound size model, so the
+    /// realized rate is always at or above the request — which leaves this the only
+    /// place the threshold arithmetic is actually pinned.
+    #[test]
+    fn package_rate_shortfall_flags_only_packages_under_the_tolerance() {
+        let rate = FeeRate::new(5_000, 1_000).expect("valid rate");
+        let package = sample_package(); // 470 sats over 270 vB
+                                        // Exactly on target: 5 sat/vB over 270 + 111 vB.
+        assert_eq!(
+            package_rate_shortfall(package, 1_435, 111, rate),
+            None,
+            "a package that meets the request must pass"
+        );
+        // The exact edge of the 10% tolerance, one sat either side of it.
+        assert_eq!(
+            package_rate_shortfall(package, 1_245, 111, rate),
+            None,
+            "the 10% tolerance must be honoured, not rounded away"
+        );
+        assert_eq!(
+            package_rate_shortfall(package, 1_244, 111, rate),
+            Some(4_499),
+            "one sat below the tolerance is a shortfall"
+        );
+        // Under the tolerance: the child pays its relay floor and nothing more.
+        assert_eq!(
+            package_rate_shortfall(package, 111, 111, rate),
+            Some(fee_rate_sat_per_kvb(470 + 111, 270 + 111)),
+            "a short package must be reported with its realized rate"
+        );
     }
 
     #[test]
