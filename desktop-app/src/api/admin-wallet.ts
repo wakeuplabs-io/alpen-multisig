@@ -80,6 +80,7 @@ export type AdminWalletError =
 	| { type: 'FeeRateTooLow'; message: string }
 	| { type: 'InvalidFeeRate'; message: string }
 	| { type: 'InsufficientFunds'; message: string }
+	| { type: 'CpfpFundingUnavailable'; message: string }
 	| { type: 'BuildFailed'; message: string }
 	| { type: 'SignFailed'; message: string }
 	| { type: 'BroadcastFailed'; message: string }

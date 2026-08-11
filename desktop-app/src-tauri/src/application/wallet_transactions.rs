@@ -112,6 +112,12 @@ pub enum BumpFeeError {
     FeeRateTooLow { required_sat_per_kvb: u64 },
     #[error("insufficient funds to pay the increased fee: {message}")]
     InsufficientFunds { message: String },
+    /// The wallet holds funds, but none the CPFP child is allowed to spend: immature
+    /// coinbase, unconfirmed coins from outside this package, and other pending
+    /// packages' anchors are all excluded. Distinct from `InsufficientFunds` because
+    /// telling the operator their balance is too small would be false.
+    #[error("no eligible coins to fund the acceleration: {message}")]
+    CpfpFundingUnavailable { message: String },
     #[error("failed to build the replacement transaction: {message}")]
     BuildFailed { message: String },
     #[error("failed to sign the replacement transaction: {message}")]
@@ -136,6 +142,7 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
         BumpFeeError::FeeTooLow { .. } => "FeeTooLow",
         BumpFeeError::FeeRateTooLow { .. } => "FeeRateTooLow",
         BumpFeeError::InsufficientFunds { .. } => "InsufficientFunds",
+        BumpFeeError::CpfpFundingUnavailable { .. } => "CpfpFundingUnavailable",
         BumpFeeError::InvalidFeeRate(_) => "InvalidFeeRate",
         BumpFeeError::BuildFailed { .. } => "BuildFailed",
         BumpFeeError::SignFailed { .. } => "SignFailed",
@@ -728,6 +735,12 @@ impl WalletService {
                 }
             })
             .collect();
+        // Everything the child may spend, against everything the wallet holds. When they
+        // differ the operator is looking at a balance the acceleration cannot touch, and
+        // saying "your balance is too small" would be false — that is a separate error.
+        let eligible_sats: u64 = sats(&anchor_utxo) + spare.iter().map(sats).sum::<u64>();
+        let wallet_total_sats = wallet.balance().total().to_sat();
+
         let child = select_cpfp_child_inputs(
             anchor_utxo,
             spare,
@@ -735,7 +748,19 @@ impl WalletService {
             witness_wu,
             package,
             new_rate,
-        )?;
+        )
+        .map_err(|e| match e {
+            BumpFeeError::InsufficientFunds { message } if wallet_total_sats > eligible_sats => {
+                BumpFeeError::CpfpFundingUnavailable {
+                    message: format!(
+                        "{message}. The rest of the balance cannot fund this acceleration: \
+                         newly mined coins, unconfirmed coins from other transactions, and \
+                         coins reserved by other pending proposals are all excluded"
+                    ),
+                }
+            }
+            other => other,
+        })?;
         let child_fee = child.fee_sats;
 
         // Selecting explicitly keeps BDK's coin selection out of the picture, so the
@@ -1819,7 +1844,7 @@ mod tests {
             .await;
 
         assert!(
-            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            matches!(result, Err(BumpFeeError::CpfpFundingUnavailable { .. })),
             "an immature coinbase is not spendable funding, got: {result:?}"
         );
         assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
@@ -1848,7 +1873,7 @@ mod tests {
             .await;
 
         assert!(
-            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            matches!(result, Err(BumpFeeError::CpfpFundingUnavailable { .. })),
             "unaccounted unconfirmed ancestors must not fund the child, got: {result:?}"
         );
         assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
@@ -1882,7 +1907,7 @@ mod tests {
             .await;
 
         assert!(
-            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            matches!(result, Err(BumpFeeError::CpfpFundingUnavailable { .. })),
             "another bundle's anchor is not funding, got: {result:?}"
         );
         assert!(mock.sent_single().is_empty(), "nothing may be broadcast");

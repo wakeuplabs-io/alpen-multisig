@@ -12,7 +12,17 @@ import {
 	parseSatPerVb,
 } from '@/domain/fee-selection/model/fee-rate'
 
-/** Backend estimate for the CPFP child: 1 P2TR input + 1 P2TR output. */
+/**
+ * Size of the common CPFP child: one P2TR input (the reveal's change) and one P2TR
+ * output. The backend no longer carries this as a constant — it sizes the child from the
+ * wallet descriptor — but the figure is the same whenever the anchor funds the child on
+ * its own, which is the ordinary case.
+ *
+ * When the anchor cannot cover fee and output the backend pulls in another coin, and the
+ * real child is a full input larger (#431). The estimate below is then low, and the
+ * confirmed result reports the true figure. Treated as an estimate on purpose: the exact
+ * number depends on a coin selection the UI does not run.
+ */
 const CPFP_CHILD_VSIZE_EST_VBYTES = 111
 
 export type BumpFeeFormProps = {
