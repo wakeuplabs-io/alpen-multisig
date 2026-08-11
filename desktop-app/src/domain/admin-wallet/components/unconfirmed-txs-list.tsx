@@ -4,6 +4,7 @@ import type { UnconfirmedTxView } from '@/domain/admin-wallet/model/view-models'
 import {
 	FALLBACK_MAX_SAT_PER_KVB,
 	FALLBACK_MIN_RELAY_SAT_PER_KVB,
+	effectiveMaxBumpRate,
 	minBumpRateSatPerKvb,
 	suggestedBumpRateSatPerKvb,
 } from '@/domain/admin-wallet/model/bump-fee-rate'
@@ -114,6 +115,7 @@ export function UnconfirmedTxsList({
 						<div className="divide-y divide-[#f3f4f6]" data-testid="e2e-wallet-transactions-list">
 							{rows.map((row) => {
 								const minBump = minBumpRateSatPerKvb(row.currentFeeRateSatPerKvb, minRelaySatPerKvb)
+								const rowMax = effectiveMaxBumpRate(maxSatPerKvb, row.maxBumpRateSatPerKvb)
 								return (
 									<div key={row.txid}>
 										<UnconfirmedTxRow
@@ -128,8 +130,8 @@ export function UnconfirmedTxsList({
 												currentFeeRateLabel={row.feeRateLabel}
 												currentFeeSats={row.currentFeeSats}
 												minBumpSatPerKvb={minBump}
-												suggestedSatPerKvb={suggestedBumpRateSatPerKvb(fastPresetSatPerKvb, minBump)}
-												maxSatPerKvb={maxSatPerKvb}
+												suggestedSatPerKvb={Math.min(rowMax, suggestedBumpRateSatPerKvb(fastPresetSatPerKvb, minBump))}
+												maxSatPerKvb={rowMax}
 												vsizeVbytes={row.vsizeVbytes}
 												targetTxid={row.txid}
 												state={bumpHook.state}

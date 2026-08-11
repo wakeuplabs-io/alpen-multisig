@@ -19,7 +19,7 @@ use serde::Serialize;
 
 use crate::application::tx_broadcaster::{broadcast_single_with_fallback, TxBroadcaster};
 use crate::application::wallet_service::WalletService;
-use crate::domain::fee_rate::FeeRate;
+use crate::domain::fee_rate::{FeeRate, MAX_BROADCAST_SAT_PER_KVB};
 use crate::infrastructure::admin_wallet::AdminWalletError;
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
@@ -63,6 +63,11 @@ pub struct UnconfirmedTxDto {
     pub package_vsize_vbytes: Option<u64>,
     /// Effective package rate in sat/kvB — the floor a CPFP bump must exceed.
     pub package_fee_rate_sat_per_kvb: Option<u64>,
+    /// Highest package rate this row can be bumped to, in sat/kvB. `Some` only for CPFP
+    /// rows: the child pays the package's shortfall out of its own vsize, so the package
+    /// rate tops out well below the 10,000 sat/vB an operator may ask for (#431). `None`
+    /// for RBF rows, where the general ceiling is the only limit.
+    pub max_bump_rate_sat_per_kvb: Option<u64>,
     /// Mempool last-seen, unix seconds. `None` when the indexer gave no timestamp.
     pub last_seen_secs: Option<u64>,
 }
@@ -110,6 +115,18 @@ pub enum BumpFeeError {
     FeeTooLow { required_fee_sats: u64 },
     #[error("replacement fee rate too low: at least {required_sat_per_kvb} sat/kvB is required")]
     FeeRateTooLow { required_sat_per_kvb: u64 },
+    /// The requested package rate would price the CPFP child above what a node accepts
+    /// for a single transaction. Distinct from `InvalidFeeRate`, which guards the rate
+    /// the operator typed: this one is about what that rate costs the child (#431).
+    #[error(
+        "this rate needs {child_sat_per_kvb} sat/kvB on the child transaction alone, over the \
+         {MAX_BROADCAST_SAT_PER_KVB} sat/kvB a node accepts — this package tops out at \
+         {max_sat_per_kvb} sat/kvB"
+    )]
+    FeeRateTooHigh {
+        max_sat_per_kvb: u64,
+        child_sat_per_kvb: u64,
+    },
     #[error("insufficient funds to pay the increased fee: {message}")]
     InsufficientFunds { message: String },
     /// The wallet holds funds, but none the CPFP child is allowed to spend: immature
@@ -141,6 +158,7 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
         BumpFeeError::CpfpOutputUnavailable { .. } => "CpfpOutputUnavailable",
         BumpFeeError::FeeTooLow { .. } => "FeeTooLow",
         BumpFeeError::FeeRateTooLow { .. } => "FeeRateTooLow",
+        BumpFeeError::FeeRateTooHigh { .. } => "FeeRateTooHigh",
         BumpFeeError::InsufficientFunds { .. } => "InsufficientFunds",
         BumpFeeError::CpfpFundingUnavailable { .. } => "CpfpFundingUnavailable",
         BumpFeeError::InvalidFeeRate(_) => "InvalidFeeRate",
@@ -200,7 +218,8 @@ impl PackageStats {
     /// Absolute child fee needed so `(package_fee + child_fee) / (package_vsize +
     /// child_vsize)` reaches `rate`, for a child of `child_vsize_vbytes`. Errors when
     /// the result would not even pay the child's own 1 sat/vB relay floor — i.e. the
-    /// package already meets the rate.
+    /// package already meets the rate — or when it would push the child past what a
+    /// node accepts for a single transaction.
     fn required_child_fee(
         self,
         rate: FeeRate,
@@ -218,7 +237,33 @@ impl PackageStats {
                 ),
             });
         }
+        // …and no more than a node will take for one transaction. The child pays the
+        // whole package's shortfall out of its own vsize, so its individual rate runs
+        // `(package + child) / child` times the requested package rate — roughly 3x in
+        // the ordinary commit+reveal case. Left unchecked the operator gets rust-bitcoin's
+        // `AbsurdFeeRate` at signing time, quoted in sat/kwu (#431).
+        let child_sat_per_kvb = fee_rate_sat_per_kvb(child_fee, child_vsize_vbytes);
+        if child_sat_per_kvb > MAX_BROADCAST_SAT_PER_KVB {
+            return Err(BumpFeeError::FeeRateTooHigh {
+                max_sat_per_kvb: self.max_package_rate_sat_per_kvb(child_vsize_vbytes),
+                child_sat_per_kvb,
+            });
+        }
         Ok(child_fee)
+    }
+
+    /// Highest package rate a child of `child_vsize_vbytes` can carry without exceeding
+    /// [`MAX_BROADCAST_SAT_PER_KVB`] on its own.
+    ///
+    /// Inverts `required_child_fee`: with `child_fee = CAP · C / 1000` the package rate is
+    /// `(child_fee + package_fee) · 1000 / (P + C)`, i.e. `(CAP · C + F · 1000) / (P + C)`.
+    /// Floored, so the figure handed to the UI is always one the bump can actually honour.
+    fn max_package_rate_sat_per_kvb(self, child_vsize_vbytes: u64) -> u64 {
+        let total_vsize = (self.vsize_vbytes + child_vsize_vbytes).max(1);
+        MAX_BROADCAST_SAT_PER_KVB
+            .saturating_mul(child_vsize_vbytes)
+            .saturating_add(self.fee_sats.saturating_mul(1_000))
+            / total_vsize
     }
 }
 
@@ -340,6 +385,50 @@ fn sats(utxo: &bdk_wallet::LocalOutput) -> u64 {
     utxo.txout.value.to_sat()
 }
 
+/// The reveal output a CPFP child anchors on: the wallet-owned output of largest value
+/// (F-007 — deterministic, and never a dust output while a bigger one is mine).
+///
+/// Shared by the listing (which prices the bump ceiling) and the build (which spends it),
+/// so the figure the operator is offered is measured against the coin the bump will use.
+fn reveal_anchor_vout(
+    wallet: &bdk_wallet::Wallet,
+    reveal_tx: &bdk_wallet::bitcoin::Transaction,
+) -> Option<usize> {
+    reveal_tx
+        .output
+        .iter()
+        .enumerate()
+        .filter(|(_, out)| wallet.is_mine(out.script_pubkey.clone()))
+        .max_by_key(|(_, out)| out.value)
+        .map(|(idx, _)| idx)
+}
+
+/// Highest package rate this governance package can be bumped to (#431), or `None` when
+/// the reveal or the descriptor cannot be read.
+///
+/// Sized for the ordinary child — the anchor alone funds it — which is the shape the UI
+/// quotes. When the fee forces a second coin in, the child grows and its ceiling rises
+/// with it, so the figure below is the conservative one. The anchor's script stands in
+/// for the child's change script: both are wallet outputs of the same type, so they
+/// weigh the same.
+fn max_cpfp_package_rate_sat_per_kvb(
+    wallet: &bdk_wallet::Wallet,
+    reveal_txid: &str,
+    package: PackageStats,
+) -> Option<u64> {
+    let reveal_txid: bdk_wallet::bitcoin::Txid = reveal_txid.parse().ok()?;
+    let reveal = wallet.get_tx(reveal_txid)?;
+    let reveal_tx = reveal.tx_node.tx.as_ref();
+    let anchor_script = &reveal_tx.output[reveal_anchor_vout(wallet, reveal_tx)?].script_pubkey;
+    let satisfaction_wu = wallet
+        .public_descriptor(bdk_wallet::KeychainKind::Internal)
+        .max_weight_to_satisfy()
+        .ok()?
+        .to_wu();
+    let child_vsize = cpfp_child_vsize(1, anchor_script, satisfaction_wu);
+    Some(package.max_package_rate_sat_per_kvb(child_vsize))
+}
+
 /// Package fee/vsize for a governance commit, from the wallet graph. `None` when
 /// the reveal (or either fee) is not yet known — the row then falls back to the
 /// commit's own numbers and the bump errors with a clear message.
@@ -443,6 +532,11 @@ impl WalletService {
                     package_vsize_vbytes: package.map(|p| p.vsize_vbytes),
                     package_fee_rate_sat_per_kvb: package
                         .map(|p| fee_rate_sat_per_kvb(p.fee_sats, p.vsize_vbytes)),
+                    max_bump_rate_sat_per_kvb: package.zip(pending_reveal).and_then(
+                        |(p, reveal_txid)| {
+                            max_cpfp_package_rate_sat_per_kvb(&wallet, reveal_txid, p)
+                        },
+                    ),
                     txid,
                     sent_sats: sent.to_sat(),
                     received_sats: received.to_sat(),
@@ -643,19 +737,10 @@ impl WalletService {
         })?;
         let reveal_tx = bdk_wallet::bitcoin::Transaction::clone(&reveal.tx_node.tx);
 
-        // F-007: Select the largest wallet-owned output for deterministic anchor selection.
-        // When multiple outputs are mine, picking the largest ensures consistent behavior
-        // and avoids edge cases where a small dust output is selected first.
-        let vout = reveal_tx
-            .output
-            .iter()
-            .enumerate()
-            .filter(|(_, out)| wallet.is_mine(out.script_pubkey.clone()))
-            .max_by_key(|(_, out)| out.value)
-            .map(|(idx, _)| idx)
-            .ok_or_else(|| {
-                unavailable("the reveal pays no change back to the admin wallet".to_string())
-            })?;
+        // F-007: the largest wallet-owned output, same criterion the listing prices against.
+        let vout = reveal_anchor_vout(&wallet, &reveal_tx).ok_or_else(|| {
+            unavailable("the reveal pays no change back to the admin wallet".to_string())
+        })?;
         let anchor = OutPoint {
             txid: reveal_parsed,
             vout: vout as u32,
@@ -1060,6 +1145,10 @@ mod tests {
         assert!(!row.is_governance_commit);
         assert_eq!(row.bump_method, Some(BumpMethod::Rbf));
         assert_eq!(row.package_fee_sats, None);
+        assert_eq!(
+            row.max_bump_rate_sat_per_kvb, None,
+            "an RBF row pays its own rate — only the general ceiling applies"
+        );
         assert_eq!(row.last_seen_secs, Some(4_000_000_100));
     }
 
@@ -1109,6 +1198,18 @@ mod tests {
             row.package_fee_rate_sat_per_kvb,
             Some(fee_rate_sat_per_kvb(commit_fee + reveal_fee, package_vsize))
         );
+        // #431: the row carries the ceiling its own child can honour, priced for the
+        // ordinary 111 vB child.
+        assert_eq!(
+            row.max_bump_rate_sat_per_kvb,
+            Some(
+                PackageStats {
+                    fee_sats: commit_fee + reveal_fee,
+                    vsize_vbytes: package_vsize,
+                }
+                .max_package_rate_sat_per_kvb(111)
+            )
+        );
     }
 
     #[tokio::test]
@@ -1139,6 +1240,10 @@ mod tests {
         assert_eq!(row.package_fee_sats, None);
         assert_eq!(row.package_vsize_vbytes, None);
         assert_eq!(row.package_fee_rate_sat_per_kvb, None);
+        assert_eq!(
+            row.max_bump_rate_sat_per_kvb, None,
+            "without package stats there is no ceiling to quote"
+        );
     }
 
     #[tokio::test]
@@ -1505,6 +1610,102 @@ mod tests {
             }
             other => panic!("expected FeeRateTooLow, got: {other:?}"),
         }
+    }
+
+    /// #431: the PRD ceiling is not reachable on a CPFP row — the child would have to pay
+    /// three times the requested rate. The operator must be told so before anything is
+    /// signed, instead of meeting rust-bitcoin's `AbsurdFeeRate` at the signing step.
+    #[tokio::test]
+    async fn bump_fee_governance_at_the_prd_ceiling_returns_fee_rate_too_high_without_broadcasting()
+    {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package(&mut wallet, 4_000_000_100);
+        let commit_txid = commit.compute_txid().to_string();
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+        let prd_ceiling = FeeRate::new(MAX_BROADCAST_SAT_PER_KVB, 1_000).expect("valid rate");
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                prd_ceiling,
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        match result {
+            Err(BumpFeeError::FeeRateTooHigh {
+                max_sat_per_kvb,
+                child_sat_per_kvb,
+            }) => {
+                assert!(
+                    child_sat_per_kvb > MAX_BROADCAST_SAT_PER_KVB,
+                    "the rejection must quote a child rate over the ceiling, got {child_sat_per_kvb}"
+                );
+                assert!(
+                    max_sat_per_kvb < MAX_BROADCAST_SAT_PER_KVB,
+                    "the package ceiling {max_sat_per_kvb} must sit below the requested rate"
+                );
+            }
+            other => panic!("expected FeeRateTooHigh, got: {other:?}"),
+        }
+        assert!(
+            mock.sent_single().is_empty(),
+            "nothing may reach the network once the rate is refused"
+        );
+    }
+
+    /// The ceiling the listing advertises must be one the bump honours: the two size the
+    /// child from the same model, so a bump at exactly `maxBumpRateSatPerKvb` succeeds.
+    ///
+    /// Funded far above the usual fixture on purpose — at the ceiling the child pays
+    /// 10,000 sat/vB of its own, so the anchor has to carry over a million sats. A wallet
+    /// that cannot afford it hits `InsufficientFunds` first, which is a different (and
+    /// correct) refusal and would say nothing about the ceiling.
+    #[tokio::test]
+    async fn bump_fee_at_the_advertised_ceiling_succeeds() {
+        let mut wallet = funded_wallet_with(&[3_000_000]);
+        let (commit, reveal) =
+            insert_governance_package_with_change(&mut wallet, 4_000_000_100, 2_000_000);
+        let commit_txid = commit.compute_txid().to_string();
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let rows = svc
+            .list_unconfirmed_sent_txs(&pending)
+            .await
+            .expect("list ok");
+        let row = rows
+            .iter()
+            .find(|row| row.txid == commit_txid)
+            .expect("the commit must be listed");
+        let advertised = row
+            .max_bump_rate_sat_per_kvb
+            .expect("a CPFP row must carry its ceiling");
+        assert!(
+            advertised < MAX_BROADCAST_SAT_PER_KVB,
+            "the ceiling {advertised} must be below the general one to be worth advertising"
+        );
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                FeeRate::new(advertised, 1_000).expect("valid rate"),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await
+            .expect("a bump at the advertised ceiling must succeed");
+
+        assert_eq!(result.method, BumpMethod::Cpfp);
+        assert_eq!(
+            mock.sent_single().len(),
+            1,
+            "the child must reach the network"
+        );
     }
 
     #[tokio::test]
@@ -2205,6 +2406,7 @@ mod tests {
             package_fee_sats: Some(470),
             package_vsize_vbytes: Some(270),
             package_fee_rate_sat_per_kvb: Some(1_741),
+            max_bump_rate_sat_per_kvb: Some(2_916_000),
             last_seen_secs: Some(1),
         };
         let json = serde_json::to_value(&dto).expect("serialize");
@@ -2217,6 +2419,7 @@ mod tests {
         assert_eq!(json["packageFeeSats"], 470);
         assert_eq!(json["packageVsizeVbytes"], 270);
         assert_eq!(json["packageFeeRateSatPerKvb"], 1_741);
+        assert_eq!(json["maxBumpRateSatPerKvb"], 2_916_000);
         assert_eq!(json["lastSeenSecs"], 1);
         assert_eq!(json["vsizeVbytes"], 10);
     }
@@ -2324,6 +2527,74 @@ mod tests {
                 assert_eq!(required_sat_per_kvb, 1_525);
             }
             other => panic!("expected FeeRateTooLow, got: {other:?}"),
+        }
+    }
+
+    /// The package from the #431 report: commit + reveal of 311 vB paying 556 sats,
+    /// accelerated by the 150 vB child the wallet built for it.
+    fn reported_package() -> PackageStats {
+        PackageStats {
+            fee_sats: 556,
+            vsize_vbytes: 311,
+        }
+    }
+
+    #[test]
+    fn max_package_rate_is_the_rate_whose_child_lands_exactly_on_the_broadcast_ceiling() {
+        // The reported case: (10_000_000·150 + 556·1000) / 461 → 3255.0 sat/vB, a third
+        // of the 10,000 sat/vB the operator was offered.
+        assert_eq!(
+            reported_package().max_package_rate_sat_per_kvb(150),
+            3_255_002
+        );
+        // And the ordinary 111 vB child on the test package.
+        assert_eq!(
+            sample_package().max_package_rate_sat_per_kvb(111),
+            2_914_619
+        );
+    }
+
+    #[test]
+    fn required_child_fee_at_the_package_ceiling_is_accepted_and_one_step_over_is_not() {
+        let package = reported_package();
+        let ceiling = package.max_package_rate_sat_per_kvb(150);
+
+        let fee = package
+            .required_child_fee(FeeRate::new(ceiling, 1_000).expect("valid rate"), 150)
+            .expect("the ceiling itself must be reachable");
+        assert_eq!(
+            fee_rate_sat_per_kvb(fee, 150),
+            MAX_BROADCAST_SAT_PER_KVB,
+            "the ceiling must put the child exactly on the broadcast limit, not under it"
+        );
+
+        assert!(
+            matches!(
+                package
+                    .required_child_fee(FeeRate::new(ceiling + 1, 1_000).expect("valid rate"), 150),
+                Err(BumpFeeError::FeeRateTooHigh { .. })
+            ),
+            "one sat/kvB over the ceiling must be rejected"
+        );
+    }
+
+    /// #431: the rate the UI used to offer — the PRD's 10,000 sat/vB — priced the child
+    /// at ~30,730 sat/vB, which `Psbt::extract_tx` refused as an "absurdly high fee rate
+    /// of 7699471" (sat/kwu) at signing time. It must now fail early, in the package's
+    /// own terms.
+    #[test]
+    fn required_child_fee_over_the_child_broadcast_ceiling_is_rejected_with_the_package_ceiling() {
+        let rate = FeeRate::new(10_000_000, 1_000).expect("valid rate");
+        match reported_package().required_child_fee(rate, 150) {
+            Err(BumpFeeError::FeeRateTooHigh {
+                max_sat_per_kvb,
+                child_sat_per_kvb,
+            }) => {
+                assert_eq!(max_sat_per_kvb, 3_255_002);
+                // 4_609_444 sats over 150 vB — the child fee the report screenshot showed.
+                assert_eq!(child_sat_per_kvb, 30_729_627);
+            }
+            other => panic!("expected FeeRateTooHigh, got: {other:?}"),
         }
     }
 
