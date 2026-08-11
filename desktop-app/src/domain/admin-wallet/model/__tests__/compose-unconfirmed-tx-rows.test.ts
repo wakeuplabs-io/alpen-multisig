@@ -19,6 +19,7 @@ function makeTx(overrides: Partial<UnconfirmedTxDto> = {}): UnconfirmedTxDto {
 		packageFeeSats: null,
 		packageVsizeVbytes: null,
 		packageFeeRateSatPerKvb: null,
+		maxBumpRateSatPerKvb: null,
 		lastSeenSecs: 1_700_000_000,
 		...overrides,
 	}
@@ -31,6 +32,7 @@ function makeGovernanceTx(overrides: Partial<UnconfirmedTxDto> = {}): Unconfirme
 		packageFeeSats: 471,
 		packageVsizeVbytes: 270,
 		packageFeeRateSatPerKvb: 1_745,
+		maxBumpRateSatPerKvb: 2_914_622,
 		...overrides,
 	})
 }
@@ -95,7 +97,10 @@ function makeGovernanceTx(overrides: Partial<UnconfirmedTxDto> = {}): Unconfirme
 	assert.equal(row.feeRateLabel, '1.0 sat/vB')
 	assert.equal(row.currentFeeRateSatPerKvb, 1_000)
 	assert.equal(row.vsizeVbytes, 141)
-	assert.equal(row.canBump, true, 'CPFP is still offered; the bump reports the missing reveal')
+	// F-009 (PR #290) turned this around: without package stats the reveal is not in the
+	// graph yet, so the bump is held back until a sync loads it rather than failing later.
+	assert.equal(row.canBump, false, 'a CPFP row cannot be bumped until its package stats load')
+	assert.equal(row.bumpDisabledReason, 'cpfp-stats-unavailable')
 	console.log('compose: governance fallback OK')
 }
 
@@ -125,6 +130,17 @@ function makeGovernanceTx(overrides: Partial<UnconfirmedTxDto> = {}): Unconfirme
 	assert.equal(rows[0].txid, 'b'.repeat(64))
 	assert.equal(rows[1].txid, 'c'.repeat(64))
 	console.log('compose: order preserved OK')
+}
+
+// ── #431: the per-row bump ceiling reaches the form ──────────────────────────
+
+{
+	const [cpfp] = composeUnconfirmedTxRows([makeGovernanceTx()])
+	assert.equal(cpfp.maxBumpRateSatPerKvb, 2_914_622, 'a CPFP row carries the ceiling its child can honour')
+
+	const [rbf] = composeUnconfirmedTxRows([makeTx()])
+	assert.equal(rbf.maxBumpRateSatPerKvb, null, 'an RBF row keeps the general ceiling')
+	console.log('compose: per-row bump ceiling OK')
 }
 
 console.log('compose-unconfirmed-tx-rows: all tests passed.')

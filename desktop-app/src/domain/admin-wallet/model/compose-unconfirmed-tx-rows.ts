@@ -29,6 +29,8 @@ export type UnconfirmedTxView = {
 	currentFeeSats: number | null
 	/** vsize the bump rate applies to — the package vsize for CPFP rows. */
 	vsizeVbytes: number
+	/** Highest rate this row can be bumped to; null when only the general ceiling applies. */
+	maxBumpRateSatPerKvb: number | null
 }
 
 /** Maps unconfirmed-tx DTOs to display rows. Order is preserved (backend sorts newest-first). */
@@ -64,6 +66,7 @@ export function composeUnconfirmedTxRows(txs: UnconfirmedTxDto[]): UnconfirmedTx
 			currentFeeRateSatPerKvb: effectiveRate,
 			currentFeeSats: effectiveFeeSats,
 			vsizeVbytes: effectiveVsize,
+			maxBumpRateSatPerKvb: tx.maxBumpRateSatPerKvb,
 		}
 	})
 }

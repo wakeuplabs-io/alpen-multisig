@@ -113,6 +113,12 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: `The new rate must exceed what the transaction already pays. ${err.message}`,
 				severity: 'warning',
 			}
+		case 'FeeRateTooHigh':
+			return {
+				title: 'Rate too high for this package',
+				body: `The child transaction would pay more than a node accepts. ${err.message}`,
+				severity: 'warning',
+			}
 		case 'InvalidFeeRate':
 			return {
 				title: 'Invalid fee rate',

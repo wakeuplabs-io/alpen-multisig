@@ -103,6 +103,10 @@ export function BumpFeeForm({
 
 	const parsed = parseSatPerVb(rateInput)
 	const isSubmitting = state.status === 'submitting'
+	// The package already pays so much that no child could raise it further without going
+	// over what a node accepts for one transaction (#431). Worth saying out loud — otherwise
+	// the form is a greyed-out button with no explanation.
+	const hasNoHeadroom = maxSatPerKvb < minBumpSatPerKvb
 	const canConfirm = !isSubmitting && isValidBumpRate(parsed, minBumpSatPerKvb, maxSatPerKvb)
 	const estimatedFee = parsed !== null ? estimatedCostSats(method, parsed, vsizeVbytes, currentFeeSats) : null
 	const estimateNoun = method === 'cpfp' ? 'child fee' : 'new fee'
@@ -161,6 +165,12 @@ export function BumpFeeForm({
 			{method === 'cpfp' && (
 				<p className="m-0 mt-1.5 text-mono-sm text-[#6b7280]">
 					Accelerates via a child transaction (CPFP) — the new rate applies to the whole commit+reveal package.
+				</p>
+			)}
+
+			{hasNoHeadroom && (
+				<p className="m-0 mt-1.5 text-label text-danger" data-testid="e2e-wallet-bump-no-headroom">
+					This package cannot be accelerated further — the child transaction would pay more than a node accepts.
 				</p>
 			)}
 

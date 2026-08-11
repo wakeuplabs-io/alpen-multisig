@@ -82,6 +82,7 @@ const bumpVariants: AdminWalletError[] = [
 	{ type: 'CpfpOutputUnavailable', message: 'x' },
 	{ type: 'FeeTooLow', message: 'x' },
 	{ type: 'FeeRateTooLow', message: 'x' },
+	{ type: 'FeeRateTooHigh', message: 'x' },
 	{ type: 'InvalidFeeRate', message: 'x' },
 	{ type: 'InsufficientFunds', message: 'x' },
 	{ type: 'CpfpFundingUnavailable', message: 'x' },
@@ -102,6 +103,15 @@ const cpfpUnavailable = formatAdminWalletError({
 })
 assert.ok(/reveal/i.test(cpfpUnavailable.body), 'CPFP copy must explain the reveal-change dependency')
 assert.ok(cpfpUnavailable.body.includes('already spent'), 'CPFP copy must carry the backend detail')
+
+// #431: the ceiling refusal must read as a rate problem the operator can fix, and carry the
+// package's own limit — not rust-bitcoin's "absurdly high fee rate" quoted in sat/kwu.
+const rateTooHigh = formatAdminWalletError({
+	type: 'FeeRateTooHigh',
+	message: 'this package tops out at 3255002 sat/kvB',
+})
+assert.ok(rateTooHigh.body.includes('3255002 sat/kvB'), 'the ceiling copy must carry the backend limit')
+assert.ok(!/absurd/i.test(rateTooHigh.body), 'the ceiling copy must not leak the library wording')
 
 // #431: the whole point of this variant is that it must NOT claim the balance is short.
 // That claim is what sent the original bug report down the wrong path.

@@ -78,6 +78,7 @@ export type AdminWalletError =
 	| { type: 'CpfpOutputUnavailable'; message: string }
 	| { type: 'FeeTooLow'; message: string }
 	| { type: 'FeeRateTooLow'; message: string }
+	| { type: 'FeeRateTooHigh'; message: string }
 	| { type: 'InvalidFeeRate'; message: string }
 	| { type: 'InsufficientFunds'; message: string }
 	| { type: 'CpfpFundingUnavailable'; message: string }
@@ -152,6 +153,10 @@ export type UnconfirmedTxDto = {
 	packageFeeSats: number | null
 	packageVsizeVbytes: number | null
 	packageFeeRateSatPerKvb: number | null
+	// Highest rate this row can be bumped to. Set only for CPFP rows: the child pays the
+	// package's shortfall out of its own vsize, so the package rate tops out well below the
+	// general 10,000 sat/vB ceiling (#431). Null for RBF rows.
+	maxBumpRateSatPerKvb: number | null
 	lastSeenSecs: number | null
 }
 
