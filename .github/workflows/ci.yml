@@ -171,6 +171,7 @@ jobs:
           npm run test:model-multisig-update-changes --workspace desktop-app
           npm run test:hooks-use-clipboard-copy --workspace desktop-app
           npm run test:model-balance-denomination --workspace desktop-app
+          npm run test:model-format-admin-wallet-error --workspace desktop-app
           npm run test:architecture --workspace desktop-app
 
       - name: Wallet adapter + connect-path contract tests

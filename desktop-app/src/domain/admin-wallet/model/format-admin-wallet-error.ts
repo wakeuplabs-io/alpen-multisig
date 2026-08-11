@@ -125,6 +125,12 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: 'The wallet balance cannot cover this transaction and its fee.',
 				severity: 'warning',
 			}
+		case 'CpfpFundingUnavailable':
+			return {
+				title: 'No coins available to accelerate',
+				body: `The balance shown includes coins this acceleration cannot spend. ${err.message}`,
+				severity: 'warning',
+			}
 		case 'BuildFailed':
 			return {
 				title: 'Could not build replacement',
