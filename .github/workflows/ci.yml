@@ -181,6 +181,7 @@ jobs:
           npm run test:canonical-connect-paths --workspace desktop-app
           npm run test:get-account-xpub --workspace desktop-app
           npm run test:no-host-passphrase --workspace desktop-app
+          npm run test:connect-phase-mnemonic-gate --workspace desktop-app
 
       - name: Build
         run: npm run build --workspace desktop-app

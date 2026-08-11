@@ -9,13 +9,21 @@ export const DEMO_MNEMONIC_COSIGN = 'multiply toss magic exclude crawl obey gard
  * @param {string} [mnemonic]
  */
 export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
+	// The mnemonic method must be picked first: the textarea only mounts once mnemonic is the
+	// selected method (#461 — seed words no longer sit beside a hardware selection). The chip
+	// itself appears only after an async capability check (useMnemonicSigningEnabled), so the
+	// long wait belongs here now.
+	const connectMnemonic = await $('button[data-testid="e2e-connect-mnemonic"]')
+	await connectMnemonic.waitForClickable({ timeout: 90000 })
+	await connectMnemonic.click()
+
 	const ta = await $('textarea[data-testid="e2e-connect-mnemonic-textarea"]')
-	await ta.waitForDisplayed({ timeout: 90000 })
-	// The textarea ships pre-filled with a dev default (DEMO_MNEMONIC) and now mounts only
-	// after an async capability check (useMnemonicSigningEnabled). On that late controlled-input
-	// mount, WDIO setValue can concatenate onto the existing value instead of replacing it,
-	// producing a duplicated/invalid mnemonic. Clear deterministically, type, and verify the
-	// field holds exactly the requested words before continuing.
+	await ta.waitForDisplayed({ timeout: 30000 })
+	// The textarea ships pre-filled with a dev default (DEMO_MNEMONIC) and mounts late, on the
+	// method selection above. On that late controlled-input mount, WDIO setValue can concatenate
+	// onto the existing value instead of replacing it, producing a duplicated/invalid mnemonic.
+	// Clear deterministically, type, and verify the field holds exactly the requested words
+	// before continuing.
 	const selectAllKey = process.platform === 'darwin' ? 'Meta' : 'Control'
 	await browser.waitUntil(
 		async () => {
@@ -32,7 +40,8 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 		},
 	)
 
-	const connectMnemonic = await $('button[data-testid="e2e-connect-mnemonic"]')
+	// Press the chip again: it is what hands the words to the session, and the first press
+	// carried the pre-filled default rather than the words typed above.
 	await connectMnemonic.waitForClickable({ timeout: 30000 })
 	await connectMnemonic.click()
 

@@ -161,7 +161,12 @@ export function ConnectPhase({
 						</button>
 					)}
 				</div>
-				{mnemonicEnabled && (
+				{/*
+				  Seed words belong to the mnemonic method, not beside it. Left visible while a device
+				  is selected, the box reads as a second thing the signer might have to fill in on the
+				  very screen where they choose which keys sign — a mnemonic *replaces* the device.
+				*/}
+				{mnemonicEnabled && walletVendor === 'mnemonic' && (
 					<textarea
 						data-testid="e2e-connect-mnemonic-textarea"
 						className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
