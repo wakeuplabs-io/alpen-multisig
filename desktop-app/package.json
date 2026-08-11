@@ -18,6 +18,7 @@
 		"test:canonical-connect-paths": "tsx src/domain/connect-wallet/canonical-connect-paths.test.ts",
 		"test:get-account-xpub": "tsx src/wallet/__tests__/get-account-xpub.test.ts",
 		"test:no-host-passphrase": "tsx src/wallet/__tests__/no-host-passphrase.test.ts",
+		"test:connect-phase-mnemonic-gate": "tsx src/domain/connect-wallet/components/__tests__/connect-phase-mnemonic-gate.test.tsx",
 		"test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
 		"test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
 		"test:model-balance-denomination": "tsx src/domain/admin-wallet/model/__tests__/balance-denomination.test.ts",
