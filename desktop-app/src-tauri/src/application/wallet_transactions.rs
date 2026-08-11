@@ -151,11 +151,36 @@ pub(crate) fn fee_rate_sat_per_kvb(fee_sats: u64, vsize_vbytes: u64) -> u64 {
     fee_sats.saturating_mul(1_000).div_ceil(vsize_vbytes.max(1))
 }
 
-/// Conservative vsize of the CPFP child: 1 P2TR keypath input (~57.5 vB) +
-/// 1 P2TR output (43 vB) + tx overhead (~10.5 vB). If BDK must add an extra
-/// wallet input to fund the fee, the realized package rate lands slightly below
-/// the requested one — acceptable for an accelerator (the child is RBF-bumpable).
-const CPFP_CHILD_VSIZE_EST_VBYTES: u64 = 111;
+/// Non-witness skeleton weight of a transaction: version (4) + locktime (4) +
+/// the input and output count varints (1 each — the child never gets near 253).
+const TX_HEADER_WU: u64 = 4 * (4 + 4 + 1 + 1);
+/// Segwit marker + flag, paid once as soon as any input carries a witness.
+const SEGWIT_MARKER_WU: u64 = 2;
+/// Per-input skeleton weight: outpoint (36) + empty scriptSig varint (1) + sequence (4).
+const TX_INPUT_BASE_WU: u64 = 4 * (36 + 1 + 4);
+
+/// vsize of the *signed* CPFP child: `input_count` inputs whose combined
+/// satisfaction (witness) weight is `satisfaction_wu`, plus the single drain output.
+///
+/// The satisfaction weight comes from the wallet descriptor, so the estimate follows
+/// the actual signing path instead of a magic constant (#431/F-006): for the BIP-86
+/// `tr()` admin descriptor this yields the historical 111 vB at one input, and grows
+/// by a full input whenever the fee forces another coin in.
+fn cpfp_child_vsize(
+    input_count: u64,
+    drain_script: &bdk_wallet::bitcoin::Script,
+    satisfaction_wu: u64,
+) -> u64 {
+    let output_wu = 4 * (8 + 1 + drain_script.len() as u64);
+    bdk_wallet::bitcoin::Weight::from_wu(
+        TX_HEADER_WU
+            + SEGWIT_MARKER_WU
+            + input_count * TX_INPUT_BASE_WU
+            + output_wu
+            + satisfaction_wu,
+    )
+    .to_vbytes_ceil()
+}
 
 /// Known fee + vsize of the unconfirmed `commit → reveal` pair.
 #[derive(Debug, Clone, Copy)]
@@ -166,13 +191,18 @@ struct PackageStats {
 
 impl PackageStats {
     /// Absolute child fee needed so `(package_fee + child_fee) / (package_vsize +
-    /// child_vsize)` reaches `rate`. Errors when the result would not even pay the
-    /// child's own 1 sat/vB relay floor — i.e. the package already meets the rate.
-    fn required_child_fee(self, rate: FeeRate) -> Result<u64, BumpFeeError> {
-        let total_vsize = self.vsize_vbytes + CPFP_CHILD_VSIZE_EST_VBYTES;
+    /// child_vsize)` reaches `rate`, for a child of `child_vsize_vbytes`. Errors when
+    /// the result would not even pay the child's own 1 sat/vB relay floor — i.e. the
+    /// package already meets the rate.
+    fn required_child_fee(
+        self,
+        rate: FeeRate,
+        child_vsize_vbytes: u64,
+    ) -> Result<u64, BumpFeeError> {
+        let total_vsize = self.vsize_vbytes + child_vsize_vbytes;
         let child_fee = rate.fee_sats(total_vsize).saturating_sub(self.fee_sats);
         // The child must pay at least its own min-relay share (1 sat/vB).
-        let child_floor = CPFP_CHILD_VSIZE_EST_VBYTES;
+        let child_floor = child_vsize_vbytes;
         if child_fee < child_floor {
             return Err(BumpFeeError::FeeRateTooLow {
                 required_sat_per_kvb: fee_rate_sat_per_kvb(
@@ -183,6 +213,98 @@ impl PackageStats {
         }
         Ok(child_fee)
     }
+}
+
+/// vsize of a built-but-unsigned child once its witnesses are attached.
+fn signed_child_vsize(unsigned: &bdk_wallet::bitcoin::Transaction, satisfaction_wu: u64) -> u64 {
+    (unsigned.weight() + bdk_wallet::bitcoin::Weight::from_wu(SEGWIT_MARKER_WU + satisfaction_wu))
+        .to_vbytes_ceil()
+}
+
+/// The coins a CPFP child spends and the absolute fee they must carry.
+struct CpfpChildInputs {
+    utxos: Vec<bdk_wallet::LocalOutput>,
+    fee_sats: u64,
+}
+
+impl CpfpChildInputs {
+    /// Combined witness weight of the selection, from the wallet descriptors.
+    fn satisfaction_wu(&self, witness_wu: impl Fn(bdk_wallet::KeychainKind) -> u64) -> u64 {
+        self.utxos
+            .iter()
+            .map(|utxo| witness_wu(utxo.keychain))
+            .sum()
+    }
+}
+
+/// Chooses what the CPFP child spends: the `anchor` is mandatory and comes first,
+/// then the largest `spare` coins until they cover the child fee **plus** a non-dust
+/// drain output.
+///
+/// Selecting explicitly is the fix for #431: with `fee_absolute` and no recipient the
+/// effective rate is zero, so BDK's branch-and-bound stops as soon as the mandatory
+/// input covers the fee alone. When the leftover then falls under the dust limit the
+/// change is dropped, the child is left with no output, and coin selection reports
+/// insufficient funds on a wallet that is not short of funds at all.
+///
+/// Fee and size chase each other — a coin added to pay the fee makes the child bigger,
+/// which raises the fee — so sizing and selection alternate. Every pass that does not
+/// settle consumes at least one spare coin, so the loop is bounded by `spare.len()`:
+/// once the spares run out the pass reports insufficient funds.
+fn select_cpfp_child_inputs(
+    anchor: bdk_wallet::LocalOutput,
+    mut spare: Vec<bdk_wallet::LocalOutput>,
+    drain_script: &bdk_wallet::bitcoin::Script,
+    witness_wu: impl Fn(bdk_wallet::KeychainKind) -> u64,
+    package: PackageStats,
+    rate: FeeRate,
+) -> Result<CpfpChildInputs, BumpFeeError> {
+    let dust_threshold = drain_script.minimal_non_dust().to_sat();
+    // Largest first, ties broken by outpoint so the selection is deterministic.
+    // Unconfirmed coins are eligible: the child is a mempool transaction anyway, and
+    // refusing them is what strands a funded wallet.
+    spare.sort_by(|a, b| {
+        b.txout
+            .value
+            .cmp(&a.txout.value)
+            .then_with(|| a.outpoint.txid.cmp(&b.outpoint.txid))
+            .then_with(|| a.outpoint.vout.cmp(&b.outpoint.vout))
+    });
+
+    let fee_for = |utxos: &[bdk_wallet::LocalOutput]| -> Result<u64, BumpFeeError> {
+        let satisfaction: u64 = utxos.iter().map(|utxo| witness_wu(utxo.keychain)).sum();
+        let child_vsize = cpfp_child_vsize(utxos.len() as u64, drain_script, satisfaction);
+        package.required_child_fee(rate, child_vsize)
+    };
+    let total_of = |utxos: &[bdk_wallet::LocalOutput]| -> u64 { utxos.iter().map(sats).sum() };
+
+    let mut utxos = vec![anchor];
+    let fee_sats = loop {
+        let fee = fee_for(&utxos)?;
+        let needed = fee + dust_threshold;
+        let mut total = total_of(&utxos);
+        if total >= needed {
+            break fee;
+        }
+        while total < needed {
+            let next =
+                spare
+                    .get(utxos.len() - 1)
+                    .ok_or_else(|| BumpFeeError::InsufficientFunds {
+                        message: format!(
+                            "the CPFP child needs {needed} sats (fee plus a non-dust output) \
+                         but only {total} sats are spendable"
+                        ),
+                    })?;
+            total += sats(next);
+            utxos.push(next.clone());
+        }
+    };
+    Ok(CpfpChildInputs { utxos, fee_sats })
+}
+
+fn sats(utxo: &bdk_wallet::LocalOutput) -> u64 {
+    utxo.txout.value.to_sat()
 }
 
 /// Package fee/vsize for a governance commit, from the wallet graph. `None` when
@@ -483,35 +605,69 @@ impl WalletService {
             txid: reveal_parsed,
             vout: vout as u32,
         };
-        if wallet.get_utxo(anchor).is_none() {
-            return Err(unavailable(
+        let anchor_utxo = wallet.get_utxo(anchor).ok_or_else(|| {
+            unavailable(
                 "the reveal change is already spent — bump the existing child transaction instead"
                     .to_string(),
-            ));
-        }
+            )
+        })?;
 
         let package = governance_package_stats(&wallet, &commit_tx, reveal_txid)
             .ok_or_else(|| unavailable("the package fee is not known to the wallet".to_string()))?;
-        let child_fee = package.required_child_fee(new_rate)?;
 
         let drain_script = wallet
             .reveal_next_address(bdk_wallet::KeychainKind::Internal)
             .address
             .script_pubkey();
+
+        // Witness cost per keychain, straight from the descriptor.
+        let satisfaction_wu = |keychain| -> Result<u64, BumpFeeError> {
+            wallet
+                .public_descriptor(keychain)
+                .max_weight_to_satisfy()
+                .map(|weight| weight.to_wu())
+                .map_err(|e| BumpFeeError::BuildFailed {
+                    message: format!("cannot size the CPFP child: {e}"),
+                })
+        };
+        let external_wu = satisfaction_wu(bdk_wallet::KeychainKind::External)?;
+        let internal_wu = satisfaction_wu(bdk_wallet::KeychainKind::Internal)?;
+        let witness_wu = |keychain| match keychain {
+            bdk_wallet::KeychainKind::External => external_wu,
+            bdk_wallet::KeychainKind::Internal => internal_wu,
+        };
+
+        let spare: Vec<bdk_wallet::LocalOutput> = wallet
+            .list_unspent()
+            .filter(|utxo| utxo.outpoint != anchor)
+            .collect();
+        let child = select_cpfp_child_inputs(
+            anchor_utxo,
+            spare,
+            &drain_script,
+            witness_wu,
+            package,
+            new_rate,
+        )?;
+        let child_fee = child.fee_sats;
+
+        // Selecting explicitly keeps BDK's coin selection out of the picture, so the
+        // child is exactly the transaction that was sized and priced above.
         let mut builder = wallet.build_tx();
-        builder
-            .add_utxo(anchor)
-            .map_err(|e| unavailable(e.to_string()))?;
+        builder.manually_selected_only();
+        for utxo in &child.utxos {
+            builder
+                .add_utxo(utxo.outpoint)
+                .map_err(|e| unavailable(e.to_string()))?;
+        }
         builder.drain_to(drain_script);
         builder.fee_absolute(Amount::from_sat(child_fee));
         let psbt = builder.finish().map_err(map_create_tx_error)?;
 
-        // F-006: Verify actual package rate meets requested rate.
-        // If BDK added extra inputs to fund the fee, the realized package rate may be
-        // lower than requested. We allow a small epsilon (10%) tolerance since the child
-        // is RBF-bumpable if needed.
-        let child_tx = psbt.unsigned_tx.clone();
-        let child_vsize = child_tx.vsize() as u64;
+        // F-006: Verify the *realized* package rate meets the requested one. The child
+        // is measured signed — `unsigned_tx` carries no witnesses and would understate
+        // it, validating a package rate the network never sees.
+        let child_vsize = signed_child_vsize(&psbt.unsigned_tx, child.satisfaction_wu(witness_wu));
         let actual_package_vsize = package.vsize_vbytes + child_vsize;
         let actual_package_fee = package.fee_sats + child_fee;
         let actual_package_rate = fee_rate_sat_per_kvb(actual_package_fee, actual_package_vsize);
@@ -561,8 +717,8 @@ mod tests {
         ))
     }
 
-    /// Admin wallet with one confirmed 100_000-sat UTXO at external index 0.
-    fn funded_wallet() -> bdk_wallet::Wallet {
+    /// Admin wallet with one confirmed UTXO per requested amount.
+    fn funded_wallet_with(amounts: &[u64]) -> bdk_wallet::Wallet {
         let mut wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
         insert_checkpoint(
             &mut wallet,
@@ -571,8 +727,42 @@ mod tests {
                 hash: BlockHash::all_zeros(),
             },
         );
-        receive_output_in_latest_block(&mut wallet, 100_000);
+        for amount in amounts {
+            receive_output_in_latest_block(&mut wallet, *amount);
+        }
         wallet
+    }
+
+    /// Admin wallet with one confirmed 100_000-sat UTXO at external index 0.
+    fn funded_wallet() -> bdk_wallet::Wallet {
+        funded_wallet_with(&[100_000])
+    }
+
+    /// Spends every wallet UTXO except `keep` to an external script, leaving the
+    /// CPFP anchor as the only spendable coin.
+    fn spend_all_except(wallet: &mut bdk_wallet::Wallet, keep: OutPoint) {
+        let others: Vec<OutPoint> = wallet
+            .list_unspent()
+            .map(|utxo| utxo.outpoint)
+            .filter(|outpoint| *outpoint != keep)
+            .collect();
+        assert!(!others.is_empty(), "nothing to spend away");
+        let mut builder = wallet.build_tx();
+        for outpoint in others {
+            builder.add_utxo(outpoint).expect("utxo must be unspent");
+        }
+        builder.manually_selected_only();
+        builder.drain_to(external_script());
+        let mut psbt = builder.finish().expect("build sweep");
+        assert!(
+            wallet
+                .sign(&mut psbt, bdk_wallet::SignOptions::default())
+                .expect("sign sweep"),
+            "sweep must finalize"
+        );
+        let tx = psbt.extract_tx().expect("extract sweep");
+        insert_tx(wallet, tx.clone());
+        insert_seen_at(wallet, tx.compute_txid(), 4_000_000_500);
     }
 
     /// Builds, signs, and inserts an unconfirmed spend of the wallet's funds.
@@ -605,9 +795,38 @@ mod tests {
         wallet: &mut bdk_wallet::Wallet,
         seen_at: u64,
     ) -> (Transaction, Transaction) {
+        insert_governance_package_with_change(wallet, seen_at, 19_700)
+    }
+
+    /// As [`insert_governance_package`], with the reveal paying `reveal_change_sats`
+    /// back to the wallet — the amount that decides whether the CPFP child's leftover
+    /// falls inside the dust window (#431).
+    fn insert_governance_package_with_change(
+        wallet: &mut bdk_wallet::Wallet,
+        seen_at: u64,
+        reveal_change_sats: u64,
+    ) -> (Transaction, Transaction) {
+        insert_governance_package_with_changes(wallet, seen_at, &[reveal_change_sats])
+    }
+
+    /// As [`insert_governance_package`], with one wallet-owned reveal output per
+    /// requested amount (F-007 needs a reveal with several own outputs).
+    ///
+    /// The envelope is sized as `changes + REVEAL_FEE_SATS`, mirroring production
+    /// (`proposals.rs`: `commit_amount = COMMIT_DUST_SATS + reveal_fee`), so shrinking
+    /// the reveal change does not silently inflate the reveal fee.
+    fn insert_governance_package_with_changes(
+        wallet: &mut bdk_wallet::Wallet,
+        seen_at: u64,
+        reveal_change_sats: &[u64],
+    ) -> (Transaction, Transaction) {
+        /// Reveal fee baked into the fixture's envelope output.
+        const REVEAL_FEE_SATS: u64 = 300;
+
+        let envelope_sats = reveal_change_sats.iter().sum::<u64>() + REVEAL_FEE_SATS;
         let envelope_script = external_script();
         let mut builder = wallet.build_tx();
-        builder.add_recipient(envelope_script.clone(), Amount::from_sat(20_000));
+        builder.add_recipient(envelope_script.clone(), Amount::from_sat(envelope_sats));
         let mut psbt = builder.finish().expect("build commit");
         let finalized = wallet
             .sign(&mut psbt, bdk_wallet::SignOptions::default())
@@ -622,10 +841,19 @@ mod tests {
             .iter()
             .position(|out| out.script_pubkey == envelope_script)
             .expect("envelope output present") as u32;
-        let change_script = wallet
-            .reveal_next_address(bdk_wallet::KeychainKind::Internal)
-            .address
-            .script_pubkey();
+        let mut output = vec![TxOut {
+            value: Amount::ZERO,
+            script_pubkey: ScriptBuf::new_op_return(b"sps50-action"),
+        }];
+        for change_sats in reveal_change_sats {
+            output.push(TxOut {
+                value: Amount::from_sat(*change_sats),
+                script_pubkey: wallet
+                    .reveal_next_address(bdk_wallet::KeychainKind::Internal)
+                    .address
+                    .script_pubkey(),
+            });
+        }
         let reveal = Transaction {
             version: transaction::Version::TWO,
             lock_time: absolute::LockTime::ZERO,
@@ -637,16 +865,7 @@ mod tests {
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                 ..Default::default()
             }],
-            output: vec![
-                TxOut {
-                    value: Amount::ZERO,
-                    script_pubkey: ScriptBuf::new_op_return(b"sps50-action"),
-                },
-                TxOut {
-                    value: Amount::from_sat(19_700),
-                    script_pubkey: change_script,
-                },
-            ],
+            output,
         };
         insert_tx(wallet, reveal.clone());
         insert_seen_at(wallet, reveal.compute_txid(), seen_at + 1);
@@ -1129,6 +1348,12 @@ mod tests {
                 .any(|input| input.previous_output.txid == reveal_txid),
             "child must anchor on the reveal's change output"
         );
+        // F-006: the size the fee was computed against is the size the network sees.
+        assert_eq!(
+            child.vsize() as u64,
+            111,
+            "a signed 1-in/1-out taproot child measures 111 vB"
+        );
     }
 
     #[tokio::test]
@@ -1230,6 +1455,230 @@ mod tests {
             matches!(result, Err(BumpFeeError::CpfpOutputUnavailable { .. })),
             "got: {result:?}"
         );
+    }
+
+    // ── bump_fee — CPFP dust window (#431) ──────────────────────────────────
+
+    /// Decodes the single transaction a mock broadcaster received.
+    fn only_broadcast_tx(mock: &MockBroadcaster) -> Transaction {
+        let sent = mock.sent_single();
+        assert_eq!(sent.len(), 1, "exactly one transaction must be broadcast");
+        bdk_wallet::bitcoin::consensus::encode::deserialize_hex(&sent[0])
+            .expect("broadcast hex decodes")
+    }
+
+    /// #431: a reveal whose change is the protocol's `COMMIT_DUST_SATS` leaves
+    /// `anchor - child_fee` below the P2TR dust limit, so the child cannot pay for a
+    /// valid output out of the anchor alone. Coin selection must reach for another
+    /// wallet UTXO instead of reporting insufficient funds on a funded wallet.
+    #[tokio::test]
+    async fn bump_fee_governance_cpfp_funds_dust_window_child_from_another_utxo() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package_with_change(
+            &mut wallet,
+            4_000_000_100,
+            crate::domain::fee_constants::COMMIT_DUST_SATS,
+        );
+        let commit_txid = commit.compute_txid().to_string();
+        let anchor = OutPoint {
+            txid: reveal.compute_txid(),
+            vout: 1,
+        };
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await
+            .expect("a funded wallet must be able to accelerate a dust-window reveal");
+
+        assert_eq!(result.method, BumpMethod::Cpfp);
+        let child = only_broadcast_tx(&mock);
+        assert!(
+            child.input.len() >= 2,
+            "the anchor alone cannot fund fee + a non-dust output: {} input(s)",
+            child.input.len()
+        );
+        assert!(
+            child
+                .input
+                .iter()
+                .any(|input| input.previous_output == anchor),
+            "the reveal change must stay a mandatory input"
+        );
+        assert!(
+            result.fee_rate_sat_per_kvb >= 4_500,
+            "realized package rate {} must approach the requested 5 sat/vB",
+            result.fee_rate_sat_per_kvb
+        );
+    }
+
+    /// #431: the same dust window with a *confirmed* spare coin — the defect never
+    /// depended on the extra funds being unconfirmed.
+    #[tokio::test]
+    async fn bump_fee_governance_cpfp_funds_dust_window_child_from_confirmed_utxo() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package_with_change(
+            &mut wallet,
+            4_000_000_100,
+            crate::domain::fee_constants::COMMIT_DUST_SATS,
+        );
+        let commit_txid = commit.compute_txid().to_string();
+        let anchor = OutPoint {
+            txid: reveal.compute_txid(),
+            vout: 1,
+        };
+        // Leave the anchor plus a single confirmed coin as the whole balance.
+        spend_all_except(&mut wallet, anchor);
+        receive_output_in_latest_block(&mut wallet, 50_000);
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await
+            .expect("confirmed spare funds must accelerate a dust-window reveal");
+
+        let child = only_broadcast_tx(&mock);
+        assert!(
+            child.input.len() >= 2,
+            "the confirmed coin must be spent too"
+        );
+        assert!(
+            child
+                .input
+                .iter()
+                .any(|input| input.previous_output == anchor),
+            "the reveal change must stay a mandatory input"
+        );
+        assert!(result.fee_rate_sat_per_kvb >= 4_500);
+    }
+
+    /// #431: with no coin left besides the dust-window anchor the bump still fails —
+    /// but as a typed `InsufficientFunds`, never a panic or an opaque build error.
+    #[tokio::test]
+    async fn bump_fee_governance_cpfp_dust_window_without_spare_funds_returns_insufficient_funds() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) = insert_governance_package_with_change(
+            &mut wallet,
+            4_000_000_100,
+            crate::domain::fee_constants::COMMIT_DUST_SATS,
+        );
+        let commit_txid = commit.compute_txid().to_string();
+        spend_all_except(
+            &mut wallet,
+            OutPoint {
+                txid: reveal.compute_txid(),
+                vout: 1,
+            },
+        );
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::InsufficientFunds { .. })),
+            "got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// F-007: when the reveal pays several wallet-owned outputs the anchor is the
+    /// largest one — extra funding inputs must not change that choice.
+    #[tokio::test]
+    async fn f007_cpfp_anchors_on_the_largest_reveal_change_output() {
+        let mut wallet = funded_wallet();
+        let (commit, reveal) =
+            insert_governance_package_with_changes(&mut wallet, 4_000_000_100, &[900, 1_700]);
+        let commit_txid = commit.compute_txid().to_string();
+        let reveal_txid = reveal.compute_txid();
+        let pending = pending_map(&commit, &reveal);
+        let svc = signing_service(wallet);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        svc.bump_fee(
+            &commit_txid,
+            higher_rate(),
+            &pending,
+            &mock_chain(&[Arc::clone(&mock)]),
+        )
+        .await
+        .expect("cpfp bump must succeed");
+
+        let child = only_broadcast_tx(&mock);
+        let spends = |vout: u32| {
+            child.input.iter().any(|input| {
+                input.previous_output
+                    == OutPoint {
+                        txid: reveal_txid,
+                        vout,
+                    }
+            })
+        };
+        assert!(spends(2), "F-007: the 1_700-sat output is the anchor");
+        assert!(
+            !spends(1),
+            "F-007: the smaller 900-sat output must not be picked as anchor"
+        );
+    }
+
+    /// F-006: the realized package rate must reach the requested one whatever the
+    /// child ends up looking like — the child fee is sized against its *signed*
+    /// vsize, so extra funding inputs cannot silently dilute the package.
+    #[tokio::test]
+    async fn f006_realized_package_rate_reaches_requested_rate_with_extra_inputs() {
+        for requested_sat_per_kvb in [5_000u64, 10_000, 20_000] {
+            let mut wallet = funded_wallet();
+            let (commit, reveal) = insert_governance_package_with_change(
+                &mut wallet,
+                4_000_000_100,
+                crate::domain::fee_constants::COMMIT_DUST_SATS,
+            );
+            let commit_txid = commit.compute_txid().to_string();
+            let pending = pending_map(&commit, &reveal);
+            let svc = signing_service(wallet);
+            let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+            let result = svc
+                .bump_fee(
+                    &commit_txid,
+                    FeeRate::new(requested_sat_per_kvb, 1_000).expect("valid rate"),
+                    &pending,
+                    &mock_chain(&[Arc::clone(&mock)]),
+                )
+                .await
+                .unwrap_or_else(|e| panic!("bump at {requested_sat_per_kvb} sat/kvB failed: {e}"));
+
+            let child = only_broadcast_tx(&mock);
+            assert!(child.input.len() >= 2, "dust window needs extra inputs");
+            assert!(
+                result.fee_rate_sat_per_kvb >= requested_sat_per_kvb * 90 / 100,
+                "realized package rate {} must reach 90% of the requested {}",
+                result.fee_rate_sat_per_kvb,
+                requested_sat_per_kvb
+            );
+        }
     }
 
     #[tokio::test]
@@ -1449,26 +1898,33 @@ mod tests {
 
     // ── PackageStats::required_child_fee ────────────────────────────────────
 
-    #[test]
-    fn required_child_fee_reaches_target_package_rate() {
-        let package = PackageStats {
+    fn sample_package() -> PackageStats {
+        PackageStats {
             fee_sats: 470,
             vsize_vbytes: 270,
-        };
-        // Target 5 sat/vB over 270 + 111 = 381 vB → 1_905 total − 470 = 1_435 child.
+        }
+    }
+
+    #[test]
+    fn required_child_fee_reaches_target_package_rate_for_the_child_size_at_hand() {
         let rate = FeeRate::new(5_000, 1_000).expect("valid rate");
-        assert_eq!(package.required_child_fee(rate).expect("fee ok"), 1_435);
+        // 5 sat/vB over `270 + child_vsize`, minus the 470 sats the package already pays.
+        for (child_vsize, expected_fee) in [(111u64, 1_435u64), (169, 1_725), (227, 2_015)] {
+            assert_eq!(
+                sample_package()
+                    .required_child_fee(rate, child_vsize)
+                    .expect("fee ok"),
+                expected_fee,
+                "child of {child_vsize} vB"
+            );
+        }
     }
 
     #[test]
     fn required_child_fee_below_child_relay_floor_is_rejected() {
-        let package = PackageStats {
-            fee_sats: 470,
-            vsize_vbytes: 270,
-        };
         // 1 sat/vB → 381 total < 470 already paid → child fee would be 0.
         let rate = FeeRate::new(1_000, 1_000).expect("valid rate");
-        match package.required_child_fee(rate) {
+        match sample_package().required_child_fee(rate, 111) {
             Err(BumpFeeError::FeeRateTooLow {
                 required_sat_per_kvb,
             }) => {
@@ -1477,6 +1933,25 @@ mod tests {
             }
             other => panic!("expected FeeRateTooLow, got: {other:?}"),
         }
+    }
+
+    /// The 111 vB the old constant hard-coded must fall out of the descriptor-driven
+    /// model for a single BIP-86 `tr()` input, and grow by one full input after that.
+    #[test]
+    fn cpfp_child_vsize_matches_the_signed_taproot_child() {
+        let wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+        let script = wallet
+            .peek_address(bdk_wallet::KeychainKind::Internal, 0)
+            .address
+            .script_pubkey();
+        let witness_wu = wallet
+            .public_descriptor(bdk_wallet::KeychainKind::Internal)
+            .max_weight_to_satisfy()
+            .expect("satisfiable")
+            .to_wu();
+
+        assert_eq!(cpfp_child_vsize(1, &script, witness_wu), 111);
+        assert_eq!(cpfp_child_vsize(2, &script, 2 * witness_wu), 169);
     }
 
     // ── F-001 regression: governance commit CPFP guard survives restart ─────
