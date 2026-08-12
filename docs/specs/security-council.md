@@ -165,6 +165,29 @@ Note that `is_activated()` alone cannot distinguish a Defcon 1 from a Defcon 3 t
 enactment detection for Defcon 3 additionally requires the update to be **absent from
 `admin.queued()`**.
 
+### 3.3 Go / no-go result
+
+**GO.** `e2e-tests/tests/e2e_defcon_probe.rs` proves all of the above against a real regtest ASM,
+through the real path — two council signatures, commit, reveal, worker processing the block — with
+no product code involved. Defcon 1 activates the safe harbour inside the reveal block and never
+enters the queue; Defcon 3 stays queued with the harbour off and activates exactly at its depth;
+the signing message matches the four canonical lines with no details block.
+
+Three things the probe settled that the source reading alone had left open:
+
+- **The harness needs no explicit bridge config.** `AsmParams::arbitrary` always emits all three
+  subprotocols, and `SafeHarbourAddress`'s `Arbitrary` impl derives a valid P2TR descriptor from a
+  fresh keypair, so the default harness already carries a deactivated safe harbour.
+- **The activation boundary is `activation_height <= tip`**, so exactly `depth` blocks after the
+  reveal are required — not `depth + 1`. Upstream's doc comment on `process_queued` says "equals"
+  while the code partitions on `<=`; harmless drift, but it means our existing
+  `e2e_enactment_predicate` mines one block more than necessary.
+- **Seqno is per-role**, so the council's counter is independent of the administrator's and a
+  fresh council authority starts from the same baseline regardless of admin activity.
+
+Not covered, and worth adding when the product surfaces a role-mismatch error: a Defcon signed by
+a non-council role. Upstream covers it in `asm/tests/asm/admin_to_bridge.rs`.
+
 ---
 
 ## 4. PRD ↔ upstream matrix
@@ -278,7 +301,7 @@ Neither is an open question any more; both were settled while this document was 
 | 0 | Branch off `develop`; triage the two prior branches | Done |
 | 1 | High-level discovery; this document | Done |
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
-| 3 | Upstream capability evaluation — **go/no-go gate** | Pending |
+| 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 4 | Functional specs, one per slice | Pending |
 | 5 | Vertical slices V1–V5 | Pending |
 | 6 | Close-out: compliance audit, doc updates, issue #117 | Pending |
