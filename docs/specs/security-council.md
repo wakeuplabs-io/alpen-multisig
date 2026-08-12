@@ -177,7 +177,7 @@ enactment detection for Defcon 3 additionally requires the update to be **absent
 | §5.5 *Strata Administrator: Safe Harbor address update* | US-E5 | `SafeHarbourAddressUpdate = 14` | **Strata Administrator** | V4 |
 | §3.1.4 *Strata Security Council multisig MUST be usable exclusively by all Strata Security Council Signers* | US-C1 | `Role::StrataSecurityCouncil` membership | — | V1 |
 | §5.2.2 *…does not apply to the Strata Security Council multisig, because it does not produce update types that have an "Approved" or "Canceled" state* | — | contradicted upstream, see [§5.1](#51-defcon-3-is-cancelable-upstream-the-prd-says-the-council-has-no-cancel) | — | V5 |
-| §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | US-E9, US-E10 | **none — concept withdrawn** | — | out of scope |
+| §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | US-E9, US-E10 | **none — confirmed withdrawn** | — | retired in Stage 6 |
 
 ### 4.1 Requirement numbering
 
@@ -239,14 +239,18 @@ every later variant by one. Any `action_hex` persisted before the bump decodes t
 action* after it, and `ActionId = hash(MultisigAction, SeqNo)` values are not comparable across the
 boundary. This makes the operational reset in Stage 3 mandatory, not optional.
 
-### 5.5 Two PRD items have no upstream counterpart at any revision
+### 5.5 Two PRD items have no upstream counterpart at any revision — both resolved
+
+Neither is an open question any more; both were settled while this document was being written.
 
 - **"Soft" bridge update / "Hard" bridge update** (§5.5, US-E9/US-E10): zero references in the ASM
-  at any tag. The client has since stated these are no longer relevant concepts. Out of scope here;
-  flagged for formal removal from the PRD — [open question 4](#9-open-questions-for-alpen).
+  at any tag. **Confirmed withdrawn** — they are no longer relevant concepts. US-E9 and US-E10 are
+  retired in Stage 6 rather than left pending.
 - **Payout Administrator**: no `Role::PayoutAdmin` and no corresponding `UpdateTxType` exists
-  upstream, not even on `main`. Out of scope for this feature, but it means `Authority::PayoutAdmin`
-  remains the one authority with no ASM mapping after this work lands.
+  upstream, not even on `main`. **Not implemented for now**, by decision rather than by blocker. It
+  is therefore expected — not a gap to chase — that `Authority::PayoutAdmin` remains the one
+  authority with no ASM role mapping after this work lands. The enum variant stays; it just maps to
+  nothing upstream.
 
 ---
 
@@ -319,11 +323,15 @@ carries no cancel CTA (pending V5).
    land the "structurally unreachable" invariant plus its test instead. Blocks slice V5 only.
 2. **Production `confirmation_depths.defcon3`.** Public docs say 72 hours (≈432 blocks); the code
    has no default. What value ships?
-3. **Expiry.** Does the standard 7-day pending-proposal expiry (§5.3.4) apply to Defcon proposals,
+3. **Production safe harbour address.** `BridgeV1InitConfig.safe_harbour_address` is required at
+   genesis and must be a P2TR BOSD descriptor. Ours is a regtest throwaway — who owns the real one?
+4. **Expiry.** Does the standard 7-day pending-proposal expiry (§5.3.4) apply to Defcon proposals,
    given their emergency nature?
-4. **"Soft"/"Hard" bridge update** (§5.5, US-E9/US-E10) have no upstream presence at any revision
-   and were described as no longer relevant. Confirm formal removal from the PRD.
-5. **Payout Administrator** has no upstream role at any revision. Any timeline?
+
+### Already answered
+
+- **"Soft"/"Hard" bridge update** — confirmed no longer relevant concepts. Retired in Stage 6.
+- **Payout Administrator** — not implemented for now; see [§5.5](#55-two-prd-items-have-no-upstream-counterpart-at-any-revision--both-resolved).
 
 ---
 
