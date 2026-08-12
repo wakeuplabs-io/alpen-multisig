@@ -256,7 +256,7 @@ boundary. This makes the operational reset in Stage 3 mandatory, not optional.
 |---|---|---|
 | 0 | Branch off `develop`; triage the two prior branches | Done |
 | 1 | High-level discovery; this document | Done |
-| 2 | ASM pin decision, with compile evidence → ADR-007 | In progress |
+| 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Pending |
 | 4 | Functional specs, one per slice | Pending |
 | 5 | Vertical slices V1–V5 | Pending |
@@ -332,7 +332,7 @@ carries no cancel CTA (pending V5).
 | Topic | Document |
 |---|---|
 | Alpen crate dependency strategy | [`adrs/001-alpen-crate-dependencies.md`](../architecture/adrs/001-alpen-crate-dependencies.md) |
-| ASM pin decision for this feature | `adrs/007-*.md` (Stage 2) |
+| ASM pin decision for this feature | [`adrs/007-asm-pin-for-security-council.md`](../architecture/adrs/007-asm-pin-for-security-council.md) |
 | Cancel lifecycle (template and precedent) | [`cancel-approved-proposal.md`](./cancel-approved-proposal.md) |
 | Signer safety model | [`signer-safety-model.md`](./signer-safety-model.md) |
 | Commit/reveal broadcast pipeline | [`proposal-broadcast-commit-reveal.md`](./proposal-broadcast-commit-reveal.md) |
