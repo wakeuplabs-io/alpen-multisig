@@ -10,8 +10,8 @@
 use strata_asm_common::Subprotocol;
 use strata_asm_params::AdministrationInitConfig;
 use strata_asm_proto_admin::{AdministrationSubprotoState, AdministrationSubprotocol};
-use strata_asm_proto_checkpoint::state::CheckpointState;
-use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
+use strata_asm_proto_checkpoint::CheckpointState;
+use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_worker::AsmState;
 use strata_predicate::PredicateTypeId;
 
@@ -75,6 +75,13 @@ const DEFAULT_ADMIN_SECTION_JSON: &str = r#"{
     ],
     "threshold": 1
   },
+  "strata_security_council": {
+    "keys": [
+      "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
+      "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
+    ],
+    "threshold": 2
+  },
   "confirmation_depths": {
     "strata_admin_multisig_update": 144,
     "strata_seq_manager_multisig_update": 144,
@@ -83,7 +90,10 @@ const DEFAULT_ADMIN_SECTION_JSON: &str = r#"{
     "sequencer_update": 144,
     "ol_stf_vk_update": 144,
     "asm_stf_vk_update": 144,
-    "ee_stf_vk_update": 144
+    "ee_stf_vk_update": 144,
+    "strata_security_council_multisig_update": 144,
+    "defcon3": 144,
+    "safe_harbour_address_update": 144
   },
   "max_seqno_gap": 10
 }"#;
@@ -108,6 +118,13 @@ const FAST_ADMIN_SECTION_JSON: &str = r#"{
     ],
     "threshold": 1
   },
+  "strata_security_council": {
+    "keys": [
+      "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
+      "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
+    ],
+    "threshold": 2
+  },
   "confirmation_depths": {
     "strata_admin_multisig_update": 5,
     "strata_seq_manager_multisig_update": 5,
@@ -116,7 +133,10 @@ const FAST_ADMIN_SECTION_JSON: &str = r#"{
     "sequencer_update": 5,
     "ol_stf_vk_update": 5,
     "asm_stf_vk_update": 5,
-    "ee_stf_vk_update": 5
+    "ee_stf_vk_update": 5,
+    "strata_security_council_multisig_update": 5,
+    "defcon3": 5,
+    "safe_harbour_address_update": 5
   },
   "max_seqno_gap": 10
 }"#;

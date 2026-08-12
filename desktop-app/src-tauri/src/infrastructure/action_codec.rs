@@ -236,6 +236,21 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
         }
+        // Security Council actions — decoded explicitly so a future upstream variant fails to
+        // compile here instead of silently falling through. Each becomes a real arm as its
+        // slice lands; see docs/specs/security-council.md.
+        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(_)) => Err(
+            CodecError::UnsupportedVariant("StrataSecurityCouncilMultisig"),
+        ),
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => {
+            Err(CodecError::UnsupportedVariant("Defcon1"))
+        }
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => {
+            Err(CodecError::UnsupportedVariant("Defcon3"))
+        }
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
+            Err(CodecError::UnsupportedVariant("SafeHarbourAddress"))
+        }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
 }
