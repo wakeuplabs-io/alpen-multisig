@@ -191,8 +191,9 @@ numbered §7.4, §12.2 and §15.4. This document uses the numbering of the lates
 
 ## 5. Known discrepancies
 
-Recorded rather than resolved silently. Each is either an open question for Alpen
-([§9](#9-open-questions-for-alpen)) or a decision this feature must make explicitly.
+Recorded rather than resolved silently. Each one is now either an explicit decision this feature
+makes, a deferral with a stated assumption, or — in exactly one case, Defcon 3 cancellation — a
+question still open with Alpen. [§9](#9-open-questions-for-alpen) tracks which is which.
 
 ### 5.1 Defcon 3 is cancelable upstream; the PRD says the council has no cancel
 
@@ -225,12 +226,28 @@ content of slice V5.
 (executes immediately)"*, and §5 of the same document says the Approved state does not apply to the
 council. Both predate upstream and are wrong for Defcon 3. Corrected in Stage 6.
 
-### 5.3 The 72-hour delay has no default in code
+### 5.3 The Defcon 3 delay is read from live ASM state, never hardcoded
 
 Alpen's public documentation describes the delayed sweep as a **72-hour** delay (≈432 blocks).
 `ConfirmationDepths.defcon3` is a per-deployment parameter with **no default anywhere in the ASM**;
-the only values in the tree are test fixtures (144 and 2). The production value must come from the
-operator — [open question 2](#9-open-questions-for-alpen).
+the only values in the tree are test fixtures (144 and 2).
+
+**Decision: the application always resolves the depth from the live `confirmation_depths`** — never
+a constant, never a UI default, never 432. The production value is
+[deferred](#9-open-questions-for-alpen) rather than unknown-and-blocking: because the depth is
+configurable, taking whatever the ASM reports is correct on every deployment without a code change,
+and production is assumed to honour the documented 72 hours. We neither depend on that number nor
+assert it.
+
+Two consequences worth stating, since they are easy to get wrong later:
+
+- This is why `lock_period_for_authority` has to become **`lock_period_for_action`** in V1. The
+  council has two tx types with different depths — Defcon 1 fixed at 0, Defcon 3 configurable — so
+  a per-authority mapping is wrong by construction, not merely imprecise.
+- The Defcon 3 activation countdown shown to signers derives from the same live value. Upstream's
+  own test harness does this too: its `activation_depth` helper reads
+  `admin_state().confirmation_depth(tx_type)` rather than a constant, precisely so it cannot drift
+  from how the deployment was configured.
 
 ### 5.4 The pin bump invalidates every persisted `action_hex`
 
@@ -314,22 +331,42 @@ Backend lifecycle stays uniform (`Pending → Approved → Enacted`); the **UI r
 re-models**. A council proposal shows "Quorum reached — ready to broadcast", never "Approved", and
 carries no cancel CTA (pending V5).
 
+**Expiry is not special-cased.** A Defcon proposal that fails to reach quorum expires on the
+standard 7-day window like any other pending proposal. The emergency framing applies to how the
+action is confirmed and how fast it enacts once broadcast — not to how long an unsigned proposal
+lingers. Decided, not overlooked: nothing in the PRD or upstream asks for a different window.
+
 ---
 
 ## 9. Open questions for Alpen
 
+### Open
+
 1. **Defcon 3 cancellation.** Upstream queues Defcon 3 in a cancellable window signed by the
    council itself, contradicting PRD §5.2.2. Should the application expose that cancel? If not, we
    land the "structurally unreachable" invariant plus its test instead. Blocks slice V5 only.
-2. **Production `confirmation_depths.defcon3`.** Public docs say 72 hours (≈432 blocks); the code
-   has no default. What value ships?
-3. **Production safe harbour address.** `BridgeV1InitConfig.safe_harbour_address` is required at
-   genesis and must be a P2TR BOSD descriptor. Ours is a regtest throwaway — who owns the real one?
-4. **Expiry.** Does the standard 7-day pending-proposal expiry (§5.3.4) apply to Defcon proposals,
-   given their emergency nature?
 
-### Already answered
+### Deferred until a testnet or production environment exists
 
+Alpen has neither today, so both of these are answerable only once those environments are stood up.
+Each records the assumption we build against, so the deferral stays auditable instead of becoming a
+forgotten gap.
+
+- **Production `confirmation_depths.defcon3`.** Public docs say 72 hours (≈432 blocks); the ASM has
+  no default. *We build against:* whatever the live ASM reports, never a constant — see
+  [§5.3](#53-the-defcon-3-delay-is-read-from-live-asm-state-never-hardcoded). Production is assumed
+  to honour the documented value.
+- **Production safe harbour address.** `BridgeV1InitConfig.safe_harbour_address` is required at
+  genesis and must be a P2TR BOSD descriptor; ours is a deliberate regtest throwaway. *We build
+  against:* the address being supplied when those environments are created. Nothing in the
+  application hardcodes or validates a specific destination — the council triggers the sweep, the
+  Strata Administrator owns where it lands ([§2.1](#21-the-segregation-invariant)).
+
+### Answered
+
+- **Expiry.** The standard 7-day pending-proposal window applies to Defcon proposals too — no
+  emergency carve-out. Neither the PRD nor anything else states an exception, so this is a decision,
+  not an oversight. See [§8](#8-signer-safety-position).
 - **"Soft"/"Hard" bridge update** — confirmed no longer relevant concepts. Retired in Stage 6.
 - **Payout Administrator** — not implemented for now; see [§5.5](#55-two-prd-items-have-no-upstream-counterpart-at-any-revision--both-resolved).
 
