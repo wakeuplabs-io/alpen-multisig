@@ -16,7 +16,7 @@ export type DeviceCopy = {
 	reviewPrompt: string
 	/** What the signer compares on the device screen — or why there is nothing to compare. */
 	verifyHint: string
-	/** Guidance while the app asks the signer to verify a derivation path / public key. */
+	/** Guidance while the app asks the signer to verify the Admin ID on the device screen. */
 	verifyOnDeviceHint: string
 	/** What the signer is asked to approve when broadcasting the commit transaction. */
 	broadcastHint: string
@@ -51,7 +51,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		verifyHint:
 			'Your Trezor renders the message text it signs. Compare that text on the device, character for character, before approving.',
 		verifyOnDeviceHint:
-			'Check your Trezor screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
+			'Check your Trezor screen: it displays the Admin ID itself, from the seed the device holds. Compare it character for character with the one shown here.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Trezor shows the commit transaction itself. Confirm every screen — inputs, outputs and fee — until the device is done.',
 		passphraseOnDevice: 'If your Trezor asks for your passphrase, enter it on the device.',
@@ -64,7 +64,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		verifyHint:
 			'Depending on the model and Bitcoin app version, your Ledger renders either the message text or its SHA-256 “Message hash”. Compare whichever one appears on the device before approving.',
 		verifyOnDeviceHint:
-			'Check your Ledger screen: it displays the address derived from the selected path — hardware signers cannot render a raw public key, so this address is what proves the key matches.',
+			'Check your Ledger screen: it displays the Admin ID itself, from the seed the device holds. Compare it character for character with the one shown here.',
 		broadcastHint:
 			'Broadcast is not the same as the login “Sign message”: your Ledger first registers the Admin Wallet policy, then shows the commit transaction. Press right on every screen until the app is done.',
 	},
@@ -75,7 +75,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		verifyHint:
 			'Your software wallet signs the message locally — there is no device screen to compare the message against.',
 		verifyOnDeviceHint:
-			'Your software wallet has no device screen — the Admin ID shown here is the public key it will use.',
+			'Your software wallet has no device screen — the Admin ID shown here is the one it will authenticate with.',
 		broadcastHint:
 			'The commit transaction is signed locally by your software wallet — no device confirmation is asked.',
 	},
@@ -85,7 +85,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		reviewPrompt: 'Review the payload, then sign it with the mock signer. Nothing is submitted until you sign.',
 		verifyHint: 'The mock signer signs locally — there is no device screen to compare the message against.',
 		verifyOnDeviceHint:
-			'The mock signer has no device screen — the path and public key shown here are the ones it will use.',
+			'The mock signer has no device screen — the path and Admin ID shown here are the ones it will use.',
 		broadcastHint: 'The commit transaction is signed locally by the mock signer — no device confirmation is asked.',
 	},
 }
