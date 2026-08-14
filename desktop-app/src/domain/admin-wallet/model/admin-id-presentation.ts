@@ -5,4 +5,4 @@
  * are shared with the connect flow, so they live in `@/lib/admin-id`; this module
  * re-exports them for the Admin Wallet domain.
  */
-export { ADMIN_ID_LABEL, adminIdSafetyCaption, isDisplayableAdminId, truncateAdminId } from '@/lib/admin-id'
+export { ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION, isDisplayableAdminId, truncateAdminId } from '@/lib/admin-id'

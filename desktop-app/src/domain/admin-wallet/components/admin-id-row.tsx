@@ -1,7 +1,7 @@
 import type { HwDeviceType } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
-import { isDisplayableAdminId, ADMIN_ID_LABEL, adminIdSafetyCaption } from '../model/admin-id-presentation'
+import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
 import { adminIdVerifyCaption } from '@/lib/admin-id'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 
@@ -71,13 +71,13 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 			</p>
 			<p className="mt-2 inline-flex items-start gap-1.5 text-mono-sm leading-[1.45] text-emphasis-soft">
 				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-emphasis-soft" />
-				<span>{adminIdSafetyCaption(value)}</span>
+				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>
 			{verify && (
 				<>
 					<p className="mt-3 text-mono-sm leading-[1.45] text-[#9ca3af]">
-						{adminIdVerifyCaption(verify.deviceType, value)} Compare it character for character with the one on the
-						device screen.
+						{adminIdVerifyCaption(verify.deviceType)} Compare it character for character with the one on the device
+						screen.
 					</p>
 					<VerifyOnDeviceButton
 						deviceType={verify.deviceType}

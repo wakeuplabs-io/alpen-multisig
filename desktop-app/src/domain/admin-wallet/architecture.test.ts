@@ -322,25 +322,14 @@ for (const entry of fs.readdirSync(screensDir)) {
 if (!adminIdPresentation.includes("from '@/lib/admin-id'")) {
 	rule9Violations.push('admin-id-presentation.ts: must re-export the shared Admin ID literals from @/lib/admin-id')
 }
-// Both captions live here while the surfaces migrate to the address (PRD 06 §3.b.ii.2):
-// the address one is the requirement, the key one is still true for whatever has not
-// migrated yet. The contract step deletes the second.
 if (!sharedAdminId.includes('never send funds to this address.')) {
-	rule9Violations.push('lib/admin-id.ts: must own the Admin ID address safety caption literal (PRD 06 §3.b.ii.2)')
+	rule9Violations.push('lib/admin-id.ts: must own the Admin ID safety caption literal (PRD 06 §3.b.ii.2)')
 }
-if (!sharedAdminId.includes('it is a public key, not a payment address.')) {
-	rule9Violations.push('lib/admin-id.ts: must own the Admin ID safety caption literal')
-}
-// A security caption must never be a constant picked independently of the value it
-// warns about: an unmigrated surface would show "never send funds to this address"
-// under a raw public key. The surfaces read the shape-aware helper instead.
-for (const [name, source] of [
-	['admin-id-row.tsx', adminIdRow],
-	['connect-admin-id-card.tsx', connectAdminIdCard],
-] as const) {
-	if (!source.includes('adminIdSafetyCaption(')) {
-		rule9Violations.push(`${name}: must pick the safety caption from the Admin ID's shape, not a constant`)
-	}
+// The caption the app carried between PR #444 and PRD 06. Its absence is the pin: the
+// Admin ID is an address again, and a surface that still calls it a public key would be
+// describing the wrong thing to the signer.
+if (sharedAdminId.includes('it is a public key, not a payment address.')) {
+	rule9Violations.push('lib/admin-id.ts: the Admin ID is an address, not a public key (PRD 06 §3.b.ii.2)')
 }
 // §4.3.4.1: the receive row renders a real QR code.
 if (!receiveRow.includes('QrCode')) {
