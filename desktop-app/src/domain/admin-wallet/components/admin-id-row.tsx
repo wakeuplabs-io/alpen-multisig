@@ -16,13 +16,6 @@ export type AdminIdVerifyContext = {
 	 * rejects m/84'/1'/73', stays happy).
 	 */
 	derivationPath: string
-	/**
-	 * Address the device will render for this key and path. While this row still shows
-	 * the compressed key it is the only thing a hardware signer can display (#409), so it
-	 * is rendered next to the key to make the comparison possible at all; once the row
-	 * shows the address itself, the two values are the same and this block goes away.
-	 */
-	address: string | undefined
 }
 
 export type AdminIdRowProps = {
@@ -35,8 +28,8 @@ export type AdminIdRowProps = {
 /**
  * Admin ID card (PRD 06 §4.a): shows the signer's authentication identity in full so it
  * can be visually verified, with copy-to-clipboard, and warns that it must never receive
- * funds. Mid-migration this row is still fed the compressed public key; the caption and
- * the verify note follow the shape of whatever it is given (see `@/lib/admin-id`).
+ * funds. The value shown is the one handed to the device for verification, so the signer
+ * compares the device screen against this exact string and nothing derived from it.
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const label = (
@@ -82,28 +75,17 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 			</p>
 			{verify && (
 				<>
-					{verify.address && (
-						<div className="mt-3 rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2">
-							<p className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Address on device</p>
-							<p
-								className="mt-1 break-all font-mono text-label leading-[1.45] text-[#374151]"
-								data-testid="e2e-wallet-admin-id-verify-address"
-							>
-								{verify.address}
-							</p>
-							<p className="mt-1 text-mono-sm leading-[1.45] text-[#9ca3af]">
-								{adminIdVerifyCaption(verify.deviceType, value)} Compare this address, character for character, with the
-								one on the device screen.
-							</p>
-						</div>
-					)}
+					<p className="mt-3 text-mono-sm leading-[1.45] text-[#9ca3af]">
+						{adminIdVerifyCaption(verify.deviceType, value)} Compare it character for character with the one on the
+						device screen.
+					</p>
 					<VerifyOnDeviceButton
 						deviceType={verify.deviceType}
 						network={verify.network}
 						derivationPath={verify.derivationPath}
 						scriptType="p2wpkh"
 						subject="Admin ID"
-						expectedAddress={verify.address}
+						expectedAddress={value}
 					/>
 				</>
 			)}
