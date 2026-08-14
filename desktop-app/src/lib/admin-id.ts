@@ -16,22 +16,28 @@
 import { deviceCopy } from '@/lib/device-copy'
 import type { WalletVendor } from '@/wallet/types'
 
-/** Connect-flow placeholder used when no real key is available. */
-const PLACEHOLDER_SIGNER = 'Mnemonic signer'
-
 /**
- * Segwit address shape: a known HRP, the `1` separator, then bech32 data characters
- * (`b`, `i`, `o` and `1` are outside the charset). Case-insensitive per BIP-173.
+ * P2WPKH shape: a known HRP, the `1` separator, the witness-v0 character `q`, then the
+ * 32 data characters of a 20-byte program plus a 6-character checksum. `b`, `i`, `o` and
+ * `1` are outside the bech32 charset; case-insensitive per BIP-173.
  *
- * This is a **display guard, not a consensus validator**: it stops the UI from
- * labelling a placeholder or a stray string as an identity, nothing more. The
- * authority on the Admin ID's correctness is the device, via verify-on-device.
+ * Pinned to **P2WPKH specifically**, not "any segwit address". A guard looser than the
+ * contract lets an unrelated output render as a copyable identity — the mock adapter
+ * ships a hardcoded taproot address that has nothing to do with the key it signs with.
+ *
+ * Still a **display guard, not a consensus validator**: the checksum is not verified,
+ * because the string comes from the device and the authority on its correctness is the
+ * device itself, via verify-on-device. What this stops is the UI labelling a placeholder,
+ * a public key or an unrelated address as the signer's identity.
  */
-const BECH32_ADDRESS_PATTERN = /^(?:bc|tb|bcrt)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{11,}$/i
+const P2WPKH_ADDRESS_PATTERN = /^(?:bc|tb|bcrt)1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$/i
 
 export const ADMIN_ID_LABEL = 'Admin ID'
 
 export const ADMIN_ID_SAFETY_CAPTION = 'For authentication only — never send funds to this address.'
+
+/** Shown wherever an Admin ID is expected but none is displayable. */
+export const ADMIN_ID_UNKNOWN = 'Unknown'
 
 /**
  * True when `value` is a real, copyable Admin ID. Narrows the type, so callers that
@@ -39,9 +45,23 @@ export const ADMIN_ID_SAFETY_CAPTION = 'For authentication only — never send f
  */
 export function isDisplayableAdminId(value: string | undefined): value is string {
 	if (!value) return false
-	const trimmed = value.trim()
-	if (trimmed === PLACEHOLDER_SIGNER) return false
-	return BECH32_ADDRESS_PATTERN.test(trimmed)
+	return P2WPKH_ADDRESS_PATTERN.test(value.trim())
+}
+
+/**
+ * The Admin ID as a surface should print it, or `'Unknown'`.
+ *
+ * One rule, because four surfaces used to answer this question separately and one of them
+ * answered it from the public key — so a screen's header chip and the panel that chip
+ * opens showed the same identity in two incompatible shapes.
+ */
+export function adminIdText(value: string | undefined): string {
+	return isDisplayableAdminId(value) ? value : ADMIN_ID_UNKNOWN
+}
+
+/** The same rule for chips and dense rows, truncated. */
+export function adminIdChipLabel(value: string | undefined): string {
+	return isDisplayableAdminId(value) ? truncateAdminId(value) : ADMIN_ID_UNKNOWN
 }
 
 /**

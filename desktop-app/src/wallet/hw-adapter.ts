@@ -51,8 +51,6 @@ export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 				derivationPath: info.derivationPath,
 				addressSample: info.addressSample,
 				publicKeyHex: publicKeyHex ?? undefined,
-				xpubOrFingerprint: info.xpubOrFingerprint,
-				keyLabel: info.keyLabel,
 			}
 		},
 

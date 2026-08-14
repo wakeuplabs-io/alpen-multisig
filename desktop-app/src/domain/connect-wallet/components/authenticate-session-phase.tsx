@@ -1,6 +1,6 @@
 import { CopyButton } from '@/components/copy-button'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
-import { ADMIN_ID_LABEL } from '@/lib/admin-id'
+import { ADMIN_ID_LABEL, adminIdText, isDisplayableAdminId } from '@/lib/admin-id'
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { useDeviceMessageDisplay } from '@/hooks/use-device-message-display'
 import type { WalletVendor } from '@/wallet/types'
@@ -86,9 +86,9 @@ export function AuthenticateSessionPhase({
 								className="m-0 min-w-0 break-all font-mono text-label text-[#111827]"
 								data-testid="e2e-authenticate-admin-id-value"
 							>
-								{adminId}
+								{adminIdText(adminId)}
 							</p>
-							<CopyButton text={adminId} variant="icon" />
+							{isDisplayableAdminId(adminId) && <CopyButton text={adminId} variant="icon" />}
 						</div>
 					</div>
 					<div className="grid grid-cols-2 gap-3">

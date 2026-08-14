@@ -305,16 +305,27 @@ if (!sessionControl.includes('adminId={adminId}')) {
 // PRD 06 §3.b.ii.2: every screen feeds the panel the Admin ID address, and none of them
 // still threads a separate address alongside it — the Admin ID *is* that address, so a
 // second field could only ever disagree with the first.
+// `SessionChip` is listed alongside the panel components on purpose: manual-proposal-screen
+// mounts the chip itself rather than through WalletSessionControl, and an earlier version of
+// this rule keyed only on the panel — so that screen kept labelling its chip from the public
+// key while the panel it opens showed the address. Same identity, two shapes, one click apart.
 const screensDir = path.join(domainRoot, '..', '..', 'screens')
 for (const entry of fs.readdirSync(screensDir)) {
 	if (!entry.endsWith('.tsx')) continue
 	const screen = fs.readFileSync(path.join(screensDir, entry), 'utf8')
-	if (!screen.includes('WalletSessionControl') && !screen.includes('WalletPanelContent')) continue
+	const mountsAdminId =
+		screen.includes('WalletSessionControl') || screen.includes('WalletPanelContent') || screen.includes('SessionChip')
+	if (!mountsAdminId) continue
 	if (!screen.includes('adminId={wallet.addressSample}')) {
 		rule9Violations.push(`screens/${entry}: must pass the Admin ID address into the panel (PRD 06 §3.b.ii.2)`)
 	}
 	if (screen.includes('adminIdAddress')) {
 		rule9Violations.push(`screens/${entry}: must not thread a separate Admin ID address — the Admin ID is the address`)
+	}
+	// Formatting an Admin ID for display is one rule in `lib/admin-id.ts`, not a ternary per
+	// screen. A screen that rolls its own is how the two shapes diverged in the first place.
+	if (screen.includes('truncateAdminId(')) {
+		rule9Violations.push(`screens/${entry}: must label the Admin ID via adminIdChipLabel, not its own truncation`)
 	}
 }
 // Safety caption is a single audited literal, owned by the shared module the connect

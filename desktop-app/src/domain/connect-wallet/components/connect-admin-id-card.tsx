@@ -1,5 +1,5 @@
 import { CopyButton } from '@/components/copy-button'
-import { ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION, isDisplayableAdminId } from '@/lib/admin-id'
+import { ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION, adminIdText, isDisplayableAdminId } from '@/lib/admin-id'
 
 export type ConnectAdminIdCardProps = {
 	/** The Admin ID derived at connect (PRD 06 §3.b.ii.2). */
@@ -27,7 +27,7 @@ export function ConnectAdminIdCard({ adminId }: ConnectAdminIdCardProps) {
 				className="m-0 mt-2 break-all font-mono text-label leading-[1.5] text-[#111827]"
 				data-testid="e2e-connect-admin-id-value"
 			>
-				{isDisplayable ? adminId : 'Unknown'}
+				{adminIdText(adminId)}
 			</p>
 			<p className="m-0 mt-2 text-mono-sm leading-[1.45] text-[#6b7280]">{ADMIN_ID_SAFETY_CAPTION}</p>
 		</div>

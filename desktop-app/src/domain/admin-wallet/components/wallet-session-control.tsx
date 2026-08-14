@@ -1,14 +1,9 @@
 import { SessionChip } from '@/components/session-chip'
-import { truncateAdminId } from '@/lib/admin-id'
+import { adminIdChipLabel } from '@/lib/admin-id'
 import type { WalletPanelData } from '../hooks/use-wallet-panel-data'
 import { WalletPanel, WALLET_PANEL_ID } from './wallet-panel'
 import { WalletPanelHeader } from './wallet-panel-header'
 import { WalletPanelContent } from './wallet-panel-content'
-
-function formatSignerLabel(adminId: string | undefined): string {
-	if (!adminId) return 'Unknown'
-	return truncateAdminId(adminId)
-}
 
 export type WalletSessionControlProps = {
 	panel: WalletPanelData
@@ -25,7 +20,7 @@ export type WalletSessionControlProps = {
  * authority badge and disconnect button.
  */
 export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, adminId }: WalletSessionControlProps) {
-	const signerLabel = formatSignerLabel(adminId)
+	const signerLabel = adminIdChipLabel(adminId)
 
 	return (
 		<>

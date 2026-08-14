@@ -151,15 +151,21 @@ Two boundaries keep the refactor from becoming undeclared scope:
 ### The validation rule
 
 `isDisplayableAdminId` currently requires 33-byte compressed-pubkey hex (`lib/pubkey.ts`), which
-**rejects addresses on purpose**. Its final form is: non-empty, not the `'Mnemonic signer'`
-placeholder, and bech32-shaped (`bc1` / `tb1` / `bcrt1` + bech32 charset). It reaches that form
-through the expand/contract steps above, accepting both shapes in between.
+**rejects addresses on purpose**. Its final form pins **P2WPKH specifically**: a known HRP, the `1`
+separator, the witness-v0 character `q`, then exactly the 38 characters a 20-byte program plus
+checksum occupies. It reaches that form through the expand/contract steps above.
 
-This is a **display guard, not a consensus validator** — and the spec says so out loud. There is no
-address validator in the frontend today (destination validation for Send BTC lives in Rust), and
-adding a bech32 dependency to gate a string the device itself produced would be theatre. The
-authority on the Admin ID's correctness is the device, via verify-on-device; this check only stops
-the UI from labelling a placeholder or an empty string as an identity.
+**Not "any segwit address".** The first cut of this guard accepted any bech32 string, and review
+found what that costs: the mock adapter ships a hardcoded **taproot** address unrelated to the key
+it signs with, which before this loop rendered as `Unknown` and under the loose guard rendered as a
+full, copyable Admin ID carrying the "never send funds to this address" caption. A guard looser than
+the contract does not fail safe — it launders an unrelated address into an identity.
+
+This is still a **display guard, not a consensus validator**: the checksum is not verified. There is
+no address validator in the frontend today (destination validation for Send BTC lives in Rust), and
+adding a bech32 dependency to checksum a string the device itself produced would be theatre. The
+authority on the Admin ID's correctness is the device, via verify-on-device; what this check stops
+is the UI labelling an empty string, a public key or an unrelated output as the signer's identity.
 
 ### Copy literals (restored, not invented)
 
@@ -199,7 +205,7 @@ commands, no exposed test utilities.
 - `isDisplayableAdminId('bcrt1q…')` / `tb1q…` → true (regtest and testnet);
 - `isDisplayableAdminId('02…64 hex')` → **false** — a raw pubkey is no longer an Admin ID, so the
   regression cannot silently come back;
-- `isDisplayableAdminId('')` / `undefined` / `'Mnemonic signer'` → false;
+- `isDisplayableAdminId('')` / `undefined` → false; a taproot or P2WSH address → false;
 - `ADMIN_ID_SAFETY_CAPTION` and `ADMIN_ID_LABEL` equal the exact literals above;
 - `adminIdVerifyCaption(vendor)` no longer contains `'cannot display a raw public key'`;
 - `matchesDeviceAddress` unchanged (case-insensitive per BIP-173) — it now compares the Admin ID

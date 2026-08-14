@@ -2,26 +2,28 @@
  * Admin ID single-source e2e test — the falsifiable check behind the reversion to a
  * bitcoin address (spec: docs/specs/admin-id-as-bitcoin-address.md).
  *
- * The Admin ID is rendered in three places: the multisig-selection step, the
- * authenticate step, and the wallet panel after login. All three are supposed to
- * resolve to the same `WalletAccountInfo.addressSample`, captured once at connect.
- * Nothing in the type system enforces that — the three are separate props on
- * separate component trees — so the claim is checked against the running app.
+ * The Admin ID is rendered in four places: the multisig-selection step, the
+ * authenticate step, the session chip in the header, and the wallet panel that chip
+ * opens. All four are supposed to resolve to the same `WalletAccountInfo.addressSample`,
+ * captured once at connect. Nothing in the type system enforces that — they are separate
+ * props on separate component trees — so the claim is checked against the running app.
  *
- * If the three strings ever differ, the signer is comparing a different value against
- * their device screen depending on which screen they happen to be looking at, which is
- * precisely the failure the address reversion exists to remove.
+ * If the strings ever differ, the signer is comparing a different value against their
+ * device screen depending on which one they happen to be looking at, which is precisely
+ * the failure the address reversion exists to remove. Review caught one such divergence
+ * that this spec, in its first form, was blind to: a screen labelling its chip from the
+ * public key while the panel below it showed the address.
  *
  * Requires the full regtest stack (bitcoind, ASM, orchestrator, Postgres) and .env.
  */
 import { DEMO_MNEMONIC } from '../helpers/login-mnemonic.mjs'
 import { openWalletPanel } from '../helpers/wallet-panel.mjs'
 
-/** Bech32 segwit address, any of the networks the app connects to. */
-const BECH32_RE = /^(bc|tb|bcrt)1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{11,}$/i
+/** P2WPKH — the output type the Admin ID is, on any network the app connects to. */
+const P2WPKH_RE = /^(bc|tb|bcrt)1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$/i
 
 describe('Strata Multisig — Admin ID is one address everywhere', () => {
-	it('shows the same bech32 Admin ID at both connect steps and in the wallet panel', async function () {
+	it('shows the same P2WPKH Admin ID at both connect steps, in the chip and in the panel', async function () {
 		this.timeout(300000)
 
 		// ── Connect with the demo mnemonic ──────────────────────────────────────
@@ -54,7 +56,7 @@ describe('Strata Multisig — Admin ID is one address everywhere', () => {
 		await connectValue.waitForDisplayed({ timeout: 30000 })
 		const atSelection = (await connectValue.getText()).trim()
 
-		expect(atSelection).toMatch(BECH32_RE)
+		expect(atSelection).toMatch(P2WPKH_RE)
 
 		await browser.waitUntil(
 			async () => {
@@ -97,5 +99,14 @@ describe('Strata Multisig — Admin ID is one address everywhere', () => {
 		// second, fundable address rather than as a harmless repetition.
 		const panelOccurrences = await $$(`//*[normalize-space(text())="${inPanel}"]`)
 		expect(panelOccurrences.length).toEqual(1)
+
+		// The header chip is the fourth surface, and the one review found disagreeing. It
+		// shows the Admin ID truncated, so it is checked by its ends rather than in full.
+		const chip = await $('[data-testid="e2e-session-chip-trigger"]')
+		if (await chip.isExisting()) {
+			const chipText = await chip.getText()
+			expect(chipText).toContain(inPanel.slice(0, 10))
+			expect(chipText).toContain(inPanel.slice(-8))
+		}
 	})
 })

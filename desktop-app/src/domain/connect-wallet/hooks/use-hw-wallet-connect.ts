@@ -53,11 +53,11 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 		try {
 			const info = await adapter.connect(kind)
-			const publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? ''
+			const publicKeyHex = info.publicKeyHex ?? ''
 			const canonicalEntry = {
 				index: 0,
 				derivationPath: info.derivationPath,
-				address: info.addressSample ?? 'Mnemonic signer',
+				address: info.addressSample ?? '',
 				publicKeyHex,
 			}
 
