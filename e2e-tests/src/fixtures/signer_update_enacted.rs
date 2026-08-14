@@ -10,6 +10,7 @@
 use strata_asm_common::Subprotocol;
 use strata_asm_params::AdministrationInitConfig;
 use strata_asm_proto_admin::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
 use strata_asm_proto_checkpoint::CheckpointState;
 use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_worker::AsmState;
@@ -169,6 +170,26 @@ pub fn strata_admin_confirmation_depth(admin: &serde_json::Value) -> u16 {
         .expect("confirmation_depths.strata_admin_multisig_update is u64") as u16
 }
 
+/// Ordered hex pubkeys for `strata_security_council` (canonical multisig order).
+pub fn strata_security_council_keys_hex(admin: &serde_json::Value) -> Vec<String> {
+    admin["strata_security_council"]["keys"]
+        .as_array()
+        .expect("strata_security_council.keys is an array")
+        .iter()
+        .map(|v| v.as_str().expect("each key is a string").to_string())
+        .collect()
+}
+
+/// Confirmation depth (in blocks) for Defcon 3 updates.
+///
+/// Defcon 1 has no counterpart here on purpose: upstream hard-codes its depth to zero
+/// (`ConfirmationDepths::get` returns `None`), so it can never be delayed by config.
+pub fn defcon3_confirmation_depth(admin: &serde_json::Value) -> u16 {
+    admin["confirmation_depths"]["defcon3"]
+        .as_u64()
+        .expect("confirmation_depths.defcon3 is u64") as u16
+}
+
 /// Confirmation depth (in blocks) for OL STF verifying-key updates.
 pub fn ol_stf_vk_confirmation_depth(admin: &serde_json::Value) -> u16 {
     admin["confirmation_depths"]["ol_stf_vk_update"]
@@ -200,6 +221,14 @@ pub fn decode_administration_subproto(asm_state: &AsmState) -> Option<Administra
         .state()
         .find_section(AdministrationSubprotocol::ID)
         .and_then(|section| section.try_to_state::<AdministrationSubprotocol>().ok())
+}
+
+/// Decode the bridge subprotocol state from an [`AsmState`].
+pub fn decode_bridge_subproto(asm_state: &AsmState) -> Option<BridgeV1State> {
+    asm_state
+        .state()
+        .find_section(BridgeV1Subproto::ID)
+        .and_then(|section| section.try_to_state::<BridgeV1Subproto>().ok())
 }
 
 /// Decode the checkpoint subprotocol state from an [`AsmState`].
