@@ -1,7 +1,7 @@
 import type { HwDeviceType } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
-import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
+import { isDisplayableAdminId, ADMIN_ID_LABEL, adminIdSafetyCaption } from '../model/admin-id-presentation'
 import { adminIdVerifyCaption } from '@/lib/admin-id'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 
@@ -17,24 +17,26 @@ export type AdminIdVerifyContext = {
 	 */
 	derivationPath: string
 	/**
-	 * Address the device will render for this key and path — the only thing a hardware
-	 * signer can display (#409). Shown next to the key so the comparison is possible at all.
+	 * Address the device will render for this key and path. While this row still shows
+	 * the compressed key it is the only thing a hardware signer can display (#409), so it
+	 * is rendered next to the key to make the comparison possible at all; once the row
+	 * shows the address itself, the two values are the same and this block goes away.
 	 */
 	address: string | undefined
 }
 
 export type AdminIdRowProps = {
-	/** The Admin ID: the signer's compressed public key (#408), or undefined when unknown. */
+	/** The Admin ID (PRD 06 §3.b.ii.2), or undefined when unknown. */
 	adminId: string | undefined
 	/** When set, renders a "Verify on device" affordance for the Admin ID (P2WPKH). */
 	verify?: AdminIdVerifyContext
 }
 
 /**
- * Admin ID card (PRD §4.1, corrected by issue #408): shows the signer's
- * authentication identity — the compressed public key — in full so it can be
- * visually verified, with copy-to-clipboard. It is an identity, NOT an address:
- * it must never receive BTC or sign Bitcoin transactions.
+ * Admin ID card (PRD 06 §4.a): shows the signer's authentication identity in full so it
+ * can be visually verified, with copy-to-clipboard, and warns that it must never receive
+ * funds. Mid-migration this row is still fed the compressed public key; the caption and
+ * the verify note follow the shape of whatever it is given (see `@/lib/admin-id`).
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const label = (
@@ -56,7 +58,7 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 		)
 	}
 
-	const value = adminId as string
+	const value = adminId
 
 	return (
 		<div
@@ -76,7 +78,7 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 			</p>
 			<p className="mt-2 inline-flex items-start gap-1.5 text-mono-sm leading-[1.45] text-emphasis-soft">
 				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-emphasis-soft" />
-				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
+				<span>{adminIdSafetyCaption(value)}</span>
 			</p>
 			{verify && (
 				<>
@@ -90,8 +92,8 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 								{verify.address}
 							</p>
 							<p className="mt-1 text-mono-sm leading-[1.45] text-[#9ca3af]">
-								{adminIdVerifyCaption(verify.deviceType)} Compare this address, character for character, with the one on
-								the device screen.
+								{adminIdVerifyCaption(verify.deviceType, value)} Compare this address, character for character, with the
+								one on the device screen.
 							</p>
 						</div>
 					)}

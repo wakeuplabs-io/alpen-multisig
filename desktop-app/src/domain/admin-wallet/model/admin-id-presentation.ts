@@ -1,8 +1,8 @@
 /**
- * Presentation rules for the Admin ID (PRD §4.1, as corrected by issue #408).
+ * Presentation rules for the Admin ID (PRD 06 §3.b.ii.2, §4.a).
  *
- * The Admin ID is the signer's **compressed public key**, not a Bitcoin address.
- * The rules are shared with the connect flow, so they live in `@/lib/admin-id`;
- * this module re-exports them for the Admin Wallet domain.
+ * The Admin ID is a P2WPKH bitcoin address derived at `m/84'/0'/73'/0/0`. The rules
+ * are shared with the connect flow, so they live in `@/lib/admin-id`; this module
+ * re-exports them for the Admin Wallet domain.
  */
-export { ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION, isDisplayableAdminId, truncateAdminId } from '@/lib/admin-id'
+export { ADMIN_ID_LABEL, adminIdSafetyCaption, isDisplayableAdminId, truncateAdminId } from '@/lib/admin-id'
