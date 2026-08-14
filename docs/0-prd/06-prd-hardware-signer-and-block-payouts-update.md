@@ -178,3 +178,21 @@ If multiple invalid signatures:
           1. “Your transaction exceeds the size limit, please remove one or more inputs to reduce its size.”
        1. If there are no critical error messages, the user MUST be able to click a “Confirm” button that will create the transaction and add their signature to the transaction.
           1. After the user has created and signed the transaction, it should be added to the "Pending" `block_payouts` transaction section.
+
+---
+
+**Wireframes: Admin ID Verification Certificate**
+
+Local copy of the wireframes linked from Requirement 3.c.i and Requirement 4.a above, kept in the repository so the requirement stays readable without external access. The three frames show the states of the same panel, in flow order.
+
+1. Unsigned — "Waiting for signature to generate Admin ID Verification Certificate…", with the "Sign" button (Step 1) and the "Verify" button (Step 2).
+
+   ![Admin ID Verification Certificate, unsigned state](./assets/admin-id-verification-certificate-unsigned.jpg)
+
+2. Signed — the certificate is displayed next to a copy icon, and the "Sign" button is replaced by a "Signed" confirmation.
+
+   ![Admin ID Verification Certificate, signed state](./assets/admin-id-verification-certificate-signed.jpg)
+
+3. Copied — same as signed, plus the "Copied to clipboard" feedback.
+
+   ![Admin ID Verification Certificate, copied to clipboard](./assets/admin-id-verification-certificate-copied.jpg)
