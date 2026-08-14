@@ -1,6 +1,6 @@
 # Security Council — Master Plan
 
-**Status:** Stage 1 — discovery complete
+**Status:** Stage 3 complete — upstream capability gate passed (**GO**); no open questions
 **PRD:** [`05-prd-payout-admin-block-payouts-update.md`](../0-prd/05-prd-payout-admin-block-payouts-update.md) (latest revision) §3.1.4, §5.1, §5.2.2, §5.5
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
@@ -111,7 +111,7 @@ OP_RETURN (`admin/txs/src/parser.rs:10-12`).
 | SPS-50 byte | `UpdateAction` variant | SSZ union selector | Payload | Authorizing role | Confirmation depth | Cancelable |
 |---|---|---|---|---|---|---|
 | **41** | `Defcon1` | 9 | `Defcon1Update` — unit struct | **Security Council** | hardcoded `0`, no config field | **never** |
-| **43** | `Defcon3` | 10 | `Defcon3Update` — unit struct | **Security Council** | `confirmation_depths.defcon3` | **yes**, see [§5.1](#51-defcon-3-is-cancelable-upstream-the-prd-says-the-council-has-no-cancel) |
+| **43** | `Defcon3` | 10 | `Defcon3Update` — unit struct | **Security Council** | `confirmation_depths.defcon3` | **yes**, by the council itself — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) |
 | **15** | `StrataSecurityCouncilMultisig` | 3 | `ThresholdConfigUpdate` | **Strata Administrator** | `strata_security_council_multisig_update` | yes if depth ≠ 0 |
 | **14** | `SafeHarbourAddress` | 11 | `SafeHarbourAddress` (P2TR BOSD descriptor) | **Strata Administrator** | `safe_harbour_address_update` | yes if depth ≠ 0 |
 
@@ -199,55 +199,80 @@ a non-council role. Upstream covers it in `asm/tests/asm/admin_to_bridge.rs`.
 | §5.5 *Strata Administrator: Security Council Signer update* | US-E7 | `StrataSecurityCouncilMultisigUpdate = 15` | **Strata Administrator** | V3 |
 | §5.5 *Strata Administrator: Safe Harbor address update* | US-E5 | `SafeHarbourAddressUpdate = 14` | **Strata Administrator** | V4 |
 | §3.1.4 *Strata Security Council multisig MUST be usable exclusively by all Strata Security Council Signers* | US-C1 | `Role::StrataSecurityCouncil` membership | — | V1 |
-| §5.2.2 *…does not apply to the Strata Security Council multisig, because it does not produce update types that have an "Approved" or "Canceled" state* | — | contradicted upstream, see [§5.1](#51-defcon-3-is-cancelable-upstream-the-prd-says-the-council-has-no-cancel) | — | V5 |
+| §5.2.2 *…does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V5 |
 | §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | US-E9, US-E10 | **none — confirmed withdrawn** | — | retired in Stage 6 |
 
-### 4.1 Requirement numbering
+### 4.1 Requirement numbering, and one amendment not yet in `0-prd/`
 
 The PRD has been re-issued twice. Sections 1–5 of the latest revision are identical to
 [`03-prd-update.md`](../0-prd/03-prd-update.md); only §6 (Payout Administrator) was rewritten.
-Everything about the Security Council has been carried **unchanged** since the original
+Everything about the Security Council had been carried **unchanged** since the original
 [`01-multisig-ui.md`](../0-prd/01-multisig-ui.md) of 2026-04-07, where the same requirements are
 numbered §7.4, §12.2 and §15.4. This document uses the numbering of the latest revision (05).
+
+> **The §5.2.2 carve-out was amended by Alpen on 2026-08-12** and the copy in
+> [`05-prd-payout-admin-block-payouts-update.md`](../0-prd/05-prd-payout-admin-block-payouts-update.md)
+> still carries the superseded wording. `0-prd/` holds frozen client inputs and is not edited in
+> place, so the amended text is quoted in [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)
+> and **that quote governs** until the client issues a full revision to drop into `0-prd/`. This is
+> the one place where the local PRD copy is knowingly behind.
 
 ---
 
 ## 5. Known discrepancies
 
-Recorded rather than resolved silently. Each one is now either an explicit decision this feature
-makes, a deferral with a stated assumption, or — in exactly one case, Defcon 3 cancellation — a
-question still open with Alpen. [§9](#9-open-questions-for-alpen) tracks which is which.
+Recorded rather than resolved silently. Every one is now either an explicit decision this feature
+makes, or a deferral with a stated assumption. **Nothing here is still open with Alpen** —
+[§9](#9-questions-for-alpen) tracks the trail.
 
-### 5.1 Defcon 3 is cancelable upstream; the PRD says the council has no cancel
+### 5.1 Defcon 3 is cancelable — resolved, the PRD was corrected
 
-PRD §5.2.2 excludes the Security Council from the Approved/Canceled lifecycle *"because it does not
-produce update types that have an 'Approved' or 'Canceled' state"*. Upstream, that is **half true**:
+**Resolved 2026-08-12. The PRD now matches upstream, and the carve-out applies to Defcon 1 only.**
 
-- **Defcon 1** — correct. Depth is hardcoded `0`, so it is never enqueued and a cancel targeting it
-  fails with `UnknownAction`. Upstream says so in the type doc (`defcon1.rs:11-14`).
-- **Defcon 3** — **incorrect**. It is enqueued like any other update and the cancel handler has no
-  variant filter (`handler.rs:129-142`). Every deployment in the upstream tree sets
+The original PRD §5.2.2 excluded the whole Security Council from the Approved/Canceled lifecycle
+*"because it does not produce update types that have an 'Approved' or 'Canceled' state"*. We raised
+that this is only half true against the code, and Alpen amended the requirement. It now reads:
+
+> For the avoidance of doubt, this subsection does not apply to the following multisigs /
+> transaction type, because they do not produce proposals that have an "Approved" or "Canceled"
+> state:
+> - Strata Sequencer Manager multisig
+> - **Strata Security Council multisig (Defcon 1 transaction)**
+
+Two clarifications came with it: "update types" became "proposals", and the *subsection* the
+carve-out refers to is everything under **§5(b)** — the whole Approved-updates block, including
+viewing cancellation signatures, cancelling, and the cancel broadcast flow.
+
+So the split is now explicit in the requirement, and it is exactly what the code does:
+
+- **Defcon 1** — carved out. Depth is hardcoded `0`, so it is never enqueued and a cancel targeting
+  it fails with `UnknownAction` (`defcon1.rs:11-14`). No Approved state, no cancel, ever.
+- **Defcon 3** — **in scope for §5(b)**. It is enqueued like any other update and the cancel handler
+  has no variant filter (`handler.rs:129-142`). Every deployment in the upstream tree sets
   `defcon3 ≠ 0` (functional tests use 144, the Rust harness 2), so the queued, cancellable window
-  genuinely exists.
+  genuinely exists and the application must expose it.
 
-Worse for the PRD's framing: a cancel's authorizing role is *the role of the update being
-cancelled* (`actions/mod.rs:62`). So a Defcon 3 cancel is signed by **the Security Council itself** —
-the very authority the PRD says has no cancel. There is no cross-role veto and no separate canceller
-role.
+One consequence to carry into V5: a cancel's authorizing role is *the role of the update being
+cancelled* (`actions/mod.rs:62`), so a Defcon 3 cancel is signed by **the Security Council itself**.
+There is no cross-role veto and no separate canceller role — the same council that raised the alarm
+is the one that stands it down.
 
 A deployment *could* collapse the two by setting `defcon3 = 0`, making Defcon 3 immediate and
-uncancellable. Nothing upstream does that, and the tests assert the opposite. We therefore treat
-"Defcon 3 has a queued, cancellable window" as ground truth and **drive it from the live
-`confirmation_depths` rather than hardcoding it**.
+uncancellable. Nothing upstream does that, and the tests assert the opposite. We treat "Defcon 3 has
+a queued, cancellable window" as ground truth and **drive it from the live `confirmation_depths`
+rather than hardcoding it** — which also means a deployment that did set it to 0 degrades correctly
+rather than showing a cancel affordance that cannot work.
 
-Product decision required — this is [open question 1](#9-open-questions-for-alpen) and the entire
-content of slice V5.
+**Slice V5 is confirmed in scope**, no longer conditional.
 
 ### 5.2 The story map says Defcon 3 executes immediately
 
 [`story-map.md`](../3-stories/story-map.md) US-E13 describes Defcon 3 as *"Defcon 3 emergency action
 (executes immediately)"*, and §5 of the same document says the Approved state does not apply to the
-council. Both predate upstream and are wrong for Defcon 3. Corrected in Stage 6.
+council. Both predate upstream and are wrong for Defcon 3 on two counts: it is timelocked, and it
+*does* reach an Approved state with a cancel window ([§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)).
+US-E13 also needs a sibling story for the Defcon 3 cancel, which slice V5 delivers. Corrected in
+Stage 6.
 
 ### 5.3 The Defcon 3 delay is read from live ASM state, never hardcoded
 
@@ -257,7 +282,7 @@ the only values in the tree are test fixtures (144 and 2).
 
 **Decision: the application always resolves the depth from the live `confirmation_depths`** — never
 a constant, never a UI default, never 432. The production value is
-[deferred](#9-open-questions-for-alpen) rather than unknown-and-blocking: because the depth is
+[deferred](#9-questions-for-alpen) rather than unknown-and-blocking: because the depth is
 configurable, taking whatever the ASM reports is correct on every deployment without a code change,
 and production is assumed to honour the documented 72 hours. We neither depend on that number nor
 assert it.
@@ -314,7 +339,7 @@ Neither is an open question any more; both were settled while this document was 
 | V2 — Defcon 3 | Same path, timelocked, with an activation countdown | Pending |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
-| V5 — Defcon 3 cancel | Conditional on [open question 1](#9-open-questions-for-alpen) | Pending |
+| V5 — Defcon 3 cancel | Council cancels its own queued Defcon 3, reusing the existing cancel flow | Pending — **confirmed in scope** |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
 codec, action builder, authentication, signer-safety UX), so every later slice is cheap.
@@ -351,8 +376,20 @@ payload, this drives the treatment:
 - A non-council session can never reach these forms; a council session sees only Defcon actions.
 
 Backend lifecycle stays uniform (`Pending → Approved → Enacted`); the **UI re-labels rather than
-re-models**. A council proposal shows "Quorum reached — ready to broadcast", never "Approved", and
-carries no cancel CTA (pending V5).
+re-models**. But the two levers diverge here, and the divergence is a PRD requirement rather than a
+styling choice — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected):
+
+- **Defcon 1** is carved out of PRD §5(b) entirely. It shows "Quorum reached — ready to broadcast",
+  never the word "Approved", and carries **no cancel CTA anywhere**. `Canceled` is structurally
+  unreachable for it: depth 0 means it is never enqueued, so a cancel would fail on-chain with
+  `UnknownAction` even if the UI offered one. Worth an invariant test rather than trusting the
+  absence of a button.
+- **Defcon 3** is fully inside §5(b). It reaches a real **Approved** state, appears in the Approved
+  list with its cancellation-signature count, and gets the standard cancel flow — copy signatures,
+  build the cancel transaction, broadcast. Signed by the council itself.
+
+The practical shape: the same authority that fires the alarm is the one that can stand it down, and
+only for the timelocked lever. Defcon 1 is deliberately a one-way door.
 
 **Expiry is not special-cased.** A Defcon proposal that fails to reach quorum expires on the
 standard 7-day window like any other pending proposal. The emergency framing applies to how the
@@ -361,13 +398,9 @@ lingers. Decided, not overlooked: nothing in the PRD or upstream asks for a diff
 
 ---
 
-## 9. Open questions for Alpen
+## 9. Questions for Alpen
 
-### Open
-
-1. **Defcon 3 cancellation.** Upstream queues Defcon 3 in a cancellable window signed by the
-   council itself, contradicting PRD §5.2.2. Should the application expose that cancel? If not, we
-   land the "structurally unreachable" invariant plus its test instead. Blocks slice V5 only.
+**None open.** Everything raised during discovery is answered or deferred with a stated assumption.
 
 ### Deferred until a testnet or production environment exists
 
@@ -387,6 +420,10 @@ forgotten gap.
 
 ### Answered
 
+- **Defcon 3 cancellation.** Answered 2026-08-12 by amending the PRD: the §5(b) carve-out now
+  applies to the Security Council **only for Defcon 1**, so Defcon 3 has a real Approved state and
+  a real cancel. Slice V5 is confirmed in scope. See
+  [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected).
 - **Expiry.** The standard 7-day pending-proposal window applies to Defcon proposals too — no
   emergency carve-out. Neither the PRD nor anything else states an exception, so this is a decision,
   not an oversight. See [§8](#8-signer-safety-position).
