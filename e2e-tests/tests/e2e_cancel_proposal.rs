@@ -53,7 +53,8 @@ async fn e2e_cancel_prevents_update_enactment() {
     let admin_config = AdministrationInitConfig {
         strata_administrator: strata_admin_config,
         strata_sequencer_manager: other_config.clone(),
-        alpen_administrator: other_config,
+        alpen_administrator: other_config.clone(),
+        strata_security_council: other_config,
         confirmation_depths: ConfirmationDepths {
             strata_admin_multisig_update: CONFIRMATION_DEPTH,
             strata_seq_manager_multisig_update: CONFIRMATION_DEPTH,
@@ -63,6 +64,9 @@ async fn e2e_cancel_prevents_update_enactment() {
             ol_stf_vk_update: CONFIRMATION_DEPTH,
             asm_stf_vk_update: CONFIRMATION_DEPTH,
             ee_stf_vk_update: CONFIRMATION_DEPTH,
+            strata_security_council_multisig_update: CONFIRMATION_DEPTH,
+            defcon3: CONFIRMATION_DEPTH,
+            safe_harbour_address_update: CONFIRMATION_DEPTH,
         },
         max_seqno_gap: NonZero::new(10).unwrap(),
     };
