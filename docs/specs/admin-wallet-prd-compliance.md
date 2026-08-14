@@ -1,8 +1,8 @@
 # Admin Wallet program — PRD compliance matrix
 
-**PRD source:** [`docs/0-prd/03-prd-update.md`](../0-prd/03-prd-update.md)  
+**PRD source:** [`docs/0-prd/06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot; rows below still carry the §-IDs of `03-prd-update.md`, which the 06 renumbering does not move for this program)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-06-13 (Phase 7 **complete** ✅ — §4.1 Admin ID display/copy + §4.3.4.1 receive QR & click-to-copy PASS; spec [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md). HW verify §4.2/§4.3.4.2 → Phase 8)
+**Last updated:** 2026-08-14 (G7 — the Admin ID is a bitcoin address again, per PRD 06 §3.b.ii.2; spec [`admin-id-as-bitcoin-address.md`](./admin-id-as-bitcoin-address.md). Certificate → G8, device QA and the §4.1/§4.2 flip → G9)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -58,6 +58,7 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | 3.2.1 | HW via HWI feature set | **FAIL** | Plan §8 excludes HWI | Direct adapters Phase 8; not HWI parity |
 | 3.2.1 | User picks from address list | **FAIL** | R1.4 canonical paths | Intentional UX change; see [`admin-wallet-canonical-connect-paths.md`](./admin-wallet-canonical-connect-paths.md) |
 | 3.2.1.2 | Admin ID `m/84'/0'/73'/0/0` (non-Payout) | **PASS** | `trezor-adapter.ts`, `ledger-adapter.ts` | Ledger testnet uses `m/84'/1'/73'/0/0` (documented app convention) |
+| 3.b.ii.1 (PRD 06) | Admin ID P2TR `m/86'/0'/73'/0/0` for **Payout Administrator** | **DEFER** | — | Not implemented: the path is BIP-84 for every authority. Deferred with the rest of the Payout Administrator scope; destination is the `block_payouts` program |
 | 3.2.1.3 | Admin Wallet `m/86'/0'/73'/n/n` | **PASS** | BDK descriptors, session init | External `0/*`, change `1/*` |
 | 3.2.3 | Nonce signed with Admin ID | **PASS** | Orchestrator auth flow | — |
 | 3.2.4 | Readable messages on HW screen | **PARTIAL** | Message signing on connect | Governance PSBT preview not full §3.2.4 audit |
@@ -67,8 +68,8 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
-| 4.1 | See Admin ID, copy to clipboard | **PASS** | Phase 7 — `AdminIdRow`; [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) | Admin ID = **compressed public key** (feedback #408, supersedes the address rendering); shown in full + copy at top of wallet panel and on the multisig-selection step (#410); auth-only caption; no QR on Admin ID by design |
-| 4.2 | View Admin ID on HW to verify | **PARTIAL** | `VerifyOnDeviceButton` + "Address on device" block (`AdminIdRow`) | The device confirms the key **indirectly** — Trezor and Ledger cannot render a raw compressed public key, only addresses (or an xpub). The panel shows the P2WPKH address derived from the same key and path so the signer can compare it against the device screen, and the app checks that the address the device returned matches (mismatch = security alarm). See [`admin-wallet-admin-id-and-receive-qr.md`](./admin-wallet-admin-id-and-receive-qr.md) §Device capability (#409) |
+| 4.1 | See Admin ID, copy to clipboard | **PASS** | G7 — `AdminIdRow`, `ConnectAdminIdCard`; [`admin-id-as-bitcoin-address.md`](./admin-id-as-bitcoin-address.md) | Admin ID = **P2WPKH bitcoin address** (PRD 06 §3.b.ii.2). The compressed-public-key rendering (#408, PR #444) is reverted: the PRD never stopped saying "address" and the subprotocol maintainer ruled on 2026-08-07. Shown in full + copy at the top of the wallet panel and on the multisig-selection step (#410), once per surface (#413); auth-only caption; **still no QR on the Admin ID** — it must never receive funds, which an address makes more dangerous, not less |
+| 4.2 | View Admin ID on HW to verify | **PARTIAL** | G7 — `VerifyOnDeviceButton` fed the Admin ID itself (`AdminIdRow`) | The indirection is gone: with the Admin ID being the address, the device renders the Admin ID **itself**, and the app checks the returned string matches (mismatch = security alarm). This is what answers #409 — no supported signer can display a raw compressed public key, but all of them display an address. Still **PARTIAL** pending device QA on Trezor and Ledger/Speculos → **G9**, which also measures whether a Ledger renders the message text or its SHA-256 hash (§3.2.4 / #402) |
 
 ### PRD §4.3 — Admin Wallet management
 

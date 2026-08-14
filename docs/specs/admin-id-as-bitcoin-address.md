@@ -36,8 +36,9 @@ screen. The Admin ID's internal identity stays the key; only its presentation be
 - `src/lib/admin-id.ts` becomes the single audited source for the new rule: an Admin ID is a bitcoin
   address; the safety caption and the verify caption follow.
 - The connect flow (pre-sign-in) shows the address at the multisig-selection step and the
-  authenticate step, **once** — the separate compressed-public-key row on the authenticate step is
-  removed (#408).
+  authenticate step, **once** on each. (The separate compressed-public-key row that #408 reported on
+  the authenticate step was already collapsed in July; what remains is the swap of the value that
+  single row carries.)
 - The wallet panel (post-login) shows the address; the now-redundant **"Address on device"** block is
   removed (#413), because the value above it *is* that address.
 - The nine screens that pass `adminId={wallet.publicKeyHex}` are repointed at the address.
@@ -94,7 +95,7 @@ self-check both still need it. It simply stops being what "Admin ID" means on sc
 | `src/domain/admin-wallet/model/admin-id-presentation.ts` | Keep re-exporting from `@/lib/admin-id` (unchanged surface, corrected docblock). |
 | `src/domain/connect-wallet/hooks/use-hw-wallet-connect.ts` | Publish the address as the Admin ID on the session; stop mirroring `publicKeyHex` into `xpubOrFingerprint`. |
 | `src/domain/connect-wallet/components/connect-admin-id-card.tsx` | Present the address at the multisig-selection step. |
-| `src/domain/connect-wallet/components/authenticate-session-phase.tsx` | Present the address at the authenticate step; the `compressedPublicKey` prop becomes `adminId` and the second, duplicated row is deleted. |
+| `src/domain/connect-wallet/components/authenticate-session-phase.tsx` | Present the address at the authenticate step; the `compressedPublicKey` prop becomes `adminId`, which is no longer what it carries. |
 | `src/domain/admin-wallet/components/admin-id-row.tsx` | Present the address once, with the safety caption and the verify affordance; the "Address on device" block is deleted. |
 | `src/domain/admin-wallet/components/wallet-session-control.tsx` | Feed the session chip from the address. |
 | `src/screens/*.tsx` (×9) | Pass `adminId={wallet.addressSample}`. |
@@ -209,11 +210,16 @@ screen is a public key.
 
 **Architecture wiring — `architecture.test.ts` Rule 9:** the six assertions in the table above.
 
-**Manual / E2E (non-blocking, repo convention):** extend
-`desktop-app/e2e-webdriver/test/specs/admin-wallet-panel.e2e.js` to assert the panel's Admin ID value
-is bech32-shaped, and add a connect-flow assertion that the value at step 2, step 3 and the panel is
-**byte-identical**. This is the falsifiable check for B0's single-source claim — if the three differ,
-the loop stops and re-plumbs before continuing.
+**Manual / E2E (non-blocking, repo convention):** a dedicated spec,
+`desktop-app/e2e-webdriver/test/specs/admin-id-single-source.e2e.js`
+(`npm run test:e2e:admin-id-single-source`), walks connect step 2 → step 3 → the wallet panel and
+asserts the value is bech32-shaped, **byte-identical** across the three, and rendered **once** per
+surface. This is the falsifiable check for B0's single-source claim: nothing in the type system
+enforces it, since the three are separate props on separate component trees.
+
+It is a spec of its own rather than an extension of `admin-wallet-panel.e2e.js` — that one is a
+funding/balance lifecycle and would bury the check in a 300-second run, against the repo's
+one-spec-per-flow convention.
 
 > React components cannot be unit-tested here (no vitest/RTL in the repo). They are covered by the
 > structural Rule 9 plus the optional WebDriver spec, consistent with the rest of `admin-wallet`.
@@ -236,9 +242,19 @@ being the Admin ID's validator.
 ## Out-of-scope follow-ups (tracked for the matrix)
 
 - **G8** — Admin ID Verification Certificate (PRD 06 §3.c.i, §4.a). §4.2 stays **PARTIAL** until then.
-- **G9** — device QA + compliance close-out; §4.1 and §4.2 → **PASS** there, with evidence.
+- **G9** — device QA + compliance close-out; §4.1 and §4.2 → **PASS** there, with evidence. G9 also
+  measures the open risk this loop did not touch: depending on model and Bitcoin app version a Ledger
+  renders either the message text or its SHA-256 hash (`lib/device-copy.ts`), which bears on
+  §3.2.4 / #402.
 - **Payout Administrator P2TR Admin ID** (PRD 06 §3.b.ii.1) → matrix row **DEFER**, destination the
   `block_payouts` program.
-- On merge, update [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md): repoint the
-  header **PRD source** from `03-prd-update.md` to `06-…`, and correct the §4.1 note, which today
-  records the compressed-public-key rendering as the requirement.
+
+Matrix changes made by this loop (§"How to update" rules followed):
+
+- header **PRD source** repointed from `03-prd-update.md` to the 06 snapshot;
+- **§4.1** stays **PASS** but its note recorded the compressed public key *as the requirement* — it
+  now records the address, the reversal and its reason;
+- **§4.2** stays **PARTIAL**, with the reason rewritten: the indirection it described is gone, and
+  what remains outstanding is device QA, not a device limitation;
+- a new **§3.b.ii.1 DEFER** row for the Payout Administrator P2TR Admin ID, so the gap is visible
+  rather than implied by silence.
