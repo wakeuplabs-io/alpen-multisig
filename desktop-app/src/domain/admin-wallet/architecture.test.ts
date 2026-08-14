@@ -271,12 +271,22 @@ const authoritySelectionPath = path.join(
 	'components',
 	'authority-selection-phase.tsx',
 )
+const hwWalletConnectPath = path.join(domainRoot, '..', 'connect-wallet', 'components', 'hw-wallet-connect.tsx')
+const authenticatePhasePath = path.join(
+	domainRoot,
+	'..',
+	'connect-wallet',
+	'components',
+	'authenticate-session-phase.tsx',
+)
 
 const adminIdRow = fs.readFileSync(adminIdRowPath, 'utf8')
 const adminIdPresentation = fs.readFileSync(adminIdPresentationPath, 'utf8')
 const sharedAdminId = fs.readFileSync(sharedAdminIdPath, 'utf8')
 const connectAdminIdCard = fs.readFileSync(connectAdminIdCardPath, 'utf8')
 const authoritySelection = fs.readFileSync(authoritySelectionPath, 'utf8')
+const hwWalletConnect = fs.readFileSync(hwWalletConnectPath, 'utf8')
+const authenticatePhase = fs.readFileSync(authenticatePhasePath, 'utf8')
 const receiveRow = fs.readFileSync(receiveRowPath, 'utf8')
 const sessionControl = fs.readFileSync(sessionControlPath, 'utf8')
 const panelContentForAdminId = fs.readFileSync(walletPanelContentPath, 'utf8')
@@ -336,6 +346,18 @@ if (connectAdminIdCard.includes('QrCode')) {
 // canonical signer-set membership check has resolved.
 if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId} />')) {
 	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
+}
+// PRD 06 §3.b.ii.2: both connect steps show the address the device derived, and both
+// read it from the same connect entry — the value the signer compares against the
+// device screen must not depend on which step they are looking at.
+const connectAdminIdSource = /adminId=\{state\.selectedEntry\.address\}/g
+if ((hwWalletConnect.match(connectAdminIdSource) ?? []).length < 2) {
+	rule9Violations.push(
+		'hw-wallet-connect.tsx: both connect steps must be fed the Admin ID address from the connect entry (PRD 06 §3.b.ii.2)',
+	)
+}
+if (authenticatePhase.includes('compressedPublicKey')) {
+	rule9Violations.push('authenticate-session-phase.tsx: the Admin ID is an address, not a compressed public key')
 }
 // #409/#412: a hardware signer can only render an address, so the row must show the address
 // derived from the Admin ID key and hand it to the verify button for comparison — otherwise
