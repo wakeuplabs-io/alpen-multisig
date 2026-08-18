@@ -355,7 +355,7 @@ if (connectAdminIdCard.includes('QrCode')) {
 }
 // #410: the signer sees the Admin ID on the multisig-selection step, i.e. before the
 // canonical signer-set membership check has resolved.
-if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId} />')) {
+if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId}')) {
 	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
 }
 // PRD 06 §3.b.ii.2: both connect steps show the address the device derived, and both
@@ -486,6 +486,12 @@ if (!certificateModal.includes('CERTIFICATE_STEP_2_NO_DEVICE')) {
 // Both Admin ID surfaces open the same modal — pre-sign-in (#410) and post-login (§4.a).
 if (!adminIdRow.includes('<AdminIdCertificateModal')) {
 	rule10Violations.push('admin-id-row.tsx: must offer the certificate modal (PRD 06 §4.a)')
+}
+// §3.c.i puts the certificate before sign-in as well, and #410 is explicit that the
+// signer sees their Admin ID before the app judges its membership — so the affordance
+// must sit on the connect card, which renders while that check is still running.
+if (!connectAdminIdCard.includes('<AdminIdCertificateModal')) {
+	rule10Violations.push('connect-admin-id-card.tsx: must offer the certificate before sign-in (PRD 06 §3.c.i, #410)')
 }
 
 assert.equal(
