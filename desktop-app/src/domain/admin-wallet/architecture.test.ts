@@ -271,12 +271,22 @@ const authoritySelectionPath = path.join(
 	'components',
 	'authority-selection-phase.tsx',
 )
+const hwWalletConnectPath = path.join(domainRoot, '..', 'connect-wallet', 'components', 'hw-wallet-connect.tsx')
+const authenticatePhasePath = path.join(
+	domainRoot,
+	'..',
+	'connect-wallet',
+	'components',
+	'authenticate-session-phase.tsx',
+)
 
 const adminIdRow = fs.readFileSync(adminIdRowPath, 'utf8')
 const adminIdPresentation = fs.readFileSync(adminIdPresentationPath, 'utf8')
 const sharedAdminId = fs.readFileSync(sharedAdminIdPath, 'utf8')
 const connectAdminIdCard = fs.readFileSync(connectAdminIdCardPath, 'utf8')
 const authoritySelection = fs.readFileSync(authoritySelectionPath, 'utf8')
+const hwWalletConnect = fs.readFileSync(hwWalletConnectPath, 'utf8')
+const authenticatePhase = fs.readFileSync(authenticatePhasePath, 'utf8')
 const receiveRow = fs.readFileSync(receiveRowPath, 'utf8')
 const sessionControl = fs.readFileSync(sessionControlPath, 'utf8')
 const panelContentForAdminId = fs.readFileSync(walletPanelContentPath, 'utf8')
@@ -292,17 +302,45 @@ if (!panelContentForAdminId.includes('adminId={adminId}')) {
 if (!sessionControl.includes('adminId={adminId}')) {
 	rule9Violations.push('wallet-session-control.tsx: must pass the session Admin ID into the panel content')
 }
-// #408: the Admin ID is the compressed public key — the panel must never be fed an address.
-if (sessionControl.includes('addressSample')) {
-	rule9Violations.push('wallet-session-control.tsx: must not surface addressSample as the Admin ID (#408)')
+// PRD 06 §3.b.ii.2: every screen feeds the panel the Admin ID address, and none of them
+// still threads a separate address alongside it — the Admin ID *is* that address, so a
+// second field could only ever disagree with the first.
+// `SessionChip` is listed alongside the panel components on purpose: manual-proposal-screen
+// mounts the chip itself rather than through WalletSessionControl, and an earlier version of
+// this rule keyed only on the panel — so that screen kept labelling its chip from the public
+// key while the panel it opens showed the address. Same identity, two shapes, one click apart.
+const screensDir = path.join(domainRoot, '..', '..', 'screens')
+for (const entry of fs.readdirSync(screensDir)) {
+	if (!entry.endsWith('.tsx')) continue
+	const screen = fs.readFileSync(path.join(screensDir, entry), 'utf8')
+	const mountsAdminId =
+		screen.includes('WalletSessionControl') || screen.includes('WalletPanelContent') || screen.includes('SessionChip')
+	if (!mountsAdminId) continue
+	if (!screen.includes('adminId={wallet.addressSample}')) {
+		rule9Violations.push(`screens/${entry}: must pass the Admin ID address into the panel (PRD 06 §3.b.ii.2)`)
+	}
+	if (screen.includes('adminIdAddress')) {
+		rule9Violations.push(`screens/${entry}: must not thread a separate Admin ID address — the Admin ID is the address`)
+	}
+	// Formatting an Admin ID for display is one rule in `lib/admin-id.ts`, not a ternary per
+	// screen. A screen that rolls its own is how the two shapes diverged in the first place.
+	if (screen.includes('truncateAdminId(')) {
+		rule9Violations.push(`screens/${entry}: must label the Admin ID via adminIdChipLabel, not its own truncation`)
+	}
 }
 // Safety caption is a single audited literal, owned by the shared module the connect
 // flow and the wallet panel both read (mirrors the §4.3.5 send-copy pattern).
 if (!adminIdPresentation.includes("from '@/lib/admin-id'")) {
 	rule9Violations.push('admin-id-presentation.ts: must re-export the shared Admin ID literals from @/lib/admin-id')
 }
-if (!sharedAdminId.includes('it is a public key, not a payment address.')) {
-	rule9Violations.push('lib/admin-id.ts: must own the Admin ID safety caption literal')
+if (!sharedAdminId.includes('never send funds to this address.')) {
+	rule9Violations.push('lib/admin-id.ts: must own the Admin ID safety caption literal (PRD 06 §3.b.ii.2)')
+}
+// The caption the app carried between PR #444 and PRD 06. Its absence is the pin: the
+// Admin ID is an address again, and a surface that still calls it a public key would be
+// describing the wrong thing to the signer.
+if (sharedAdminId.includes('it is a public key, not a payment address.')) {
+	rule9Violations.push('lib/admin-id.ts: the Admin ID is an address, not a public key (PRD 06 §3.b.ii.2)')
 }
 // §4.3.4.1: the receive row renders a real QR code.
 if (!receiveRow.includes('QrCode')) {
@@ -320,17 +358,27 @@ if (connectAdminIdCard.includes('QrCode')) {
 if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId} />')) {
 	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
 }
-// #409/#412: a hardware signer can only render an address, so the row must show the address
-// derived from the Admin ID key and hand it to the verify button for comparison — otherwise
-// the signer has nothing on screen to compare the device against.
-if (!adminIdRow.includes('e2e-wallet-admin-id-verify-address')) {
-	rule9Violations.push('admin-id-row.tsx: must show the address the device renders for the Admin ID (#409)')
+// PRD 06 §3.b.ii.2: both connect steps show the address the device derived, and both
+// read it from the same connect entry — the value the signer compares against the
+// device screen must not depend on which step they are looking at.
+const connectAdminIdSource = /adminId=\{state\.selectedEntry\.address\}/g
+if ((hwWalletConnect.match(connectAdminIdSource) ?? []).length < 2) {
+	rule9Violations.push(
+		'hw-wallet-connect.tsx: both connect steps must be fed the Admin ID address from the connect entry (PRD 06 §3.b.ii.2)',
+	)
 }
-if (!adminIdRow.includes('expectedAddress={verify.address}')) {
-	rule9Violations.push('admin-id-row.tsx: must pass the expected address to VerifyOnDeviceButton (#412)')
+if (authenticatePhase.includes('compressedPublicKey')) {
+	rule9Violations.push('authenticate-session-phase.tsx: the Admin ID is an address, not a compressed public key')
 }
-if (!panelContentForAdminId.includes('address: adminIdAddress')) {
-	rule9Violations.push('wallet-panel-content.tsx: must thread the Admin ID address into the verify context')
+// #409/#412: the device renders the Admin ID itself now, so the row hands the displayed
+// value straight to the verify button. The old "Address on device" block existed only to
+// give the signer something to compare a raw public key against; keeping it would put the
+// same string on screen twice.
+if (!adminIdRow.includes('expectedAddress={value}')) {
+	rule9Violations.push('admin-id-row.tsx: must verify the Admin ID shown on screen against the device (#412)')
+}
+if (adminIdRow.includes('Address on device')) {
+	rule9Violations.push('admin-id-row.tsx: must not repeat the Admin ID under a second heading (#413)')
 }
 // Both Admin ID surfaces read the same audited literals.
 if (!connectAdminIdCard.includes("from '@/lib/admin-id'")) {

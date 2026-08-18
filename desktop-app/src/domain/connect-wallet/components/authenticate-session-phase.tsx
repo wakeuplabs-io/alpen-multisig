@@ -1,6 +1,6 @@
 import { CopyButton } from '@/components/copy-button'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
-import { ADMIN_ID_LABEL } from '@/lib/admin-id'
+import { ADMIN_ID_LABEL, adminIdText, isDisplayableAdminId } from '@/lib/admin-id'
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { useDeviceMessageDisplay } from '@/hooks/use-device-message-display'
 import type { WalletVendor } from '@/wallet/types'
@@ -8,8 +8,8 @@ import type { WalletVendor } from '@/wallet/types'
 type Props = {
 	authorityLabel: string
 	adapterLabel: string
-	/** The Admin ID: the signer's compressed public key (#408). */
-	compressedPublicKey: string
+	/** The Admin ID: the P2WPKH address the signer's device derived (PRD 06 §3.b.ii.2). */
+	adminId: string
 	isAuthenticating: boolean
 	authError: string | null
 	authOkMessage: string | null
@@ -23,7 +23,7 @@ type Props = {
 export function AuthenticateSessionPhase({
 	authorityLabel,
 	adapterLabel,
-	compressedPublicKey,
+	adminId,
 	isAuthenticating,
 	authError,
 	authOkMessage,
@@ -86,9 +86,9 @@ export function AuthenticateSessionPhase({
 								className="m-0 min-w-0 break-all font-mono text-label text-[#111827]"
 								data-testid="e2e-authenticate-admin-id-value"
 							>
-								{compressedPublicKey}
+								{adminIdText(adminId)}
 							</p>
-							<CopyButton text={compressedPublicKey} variant="icon" />
+							{isDisplayableAdminId(adminId) && <CopyButton text={adminId} variant="icon" />}
 						</div>
 					</div>
 					<div className="grid grid-cols-2 gap-3">

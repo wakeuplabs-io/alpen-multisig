@@ -43,6 +43,16 @@ assert.doesNotMatch(ledger.verifyHint, /Trezor/)
 assert.doesNotMatch(ledger.broadcastHint, /Trezor/)
 assert.doesNotMatch(ledger.verifyOnDeviceHint, /Trezor/)
 
+// The verify-on-device hint backs the connect flow's verify step, which now compares the
+// Admin ID itself (PRD 06 §3.b.ii.2). Claiming the device shows something *derived* from
+// the value on screen would send the signer looking for a second string that no longer
+// exists — the indirection #409 objected to, described after it was removed.
+for (const vendor of ['trezor', 'ledger'] as const) {
+	const { verifyOnDeviceHint } = deviceCopy(vendor)
+	assert.doesNotMatch(verifyOnDeviceHint, /derived from/, `${vendor}: the device shows the Admin ID itself`)
+	assert.doesNotMatch(verifyOnDeviceHint, /raw public key/, `${vendor}: the Admin ID is not a public key`)
+}
+
 // Software signers → no device screen, and no hardware vendor is ever named (#421).
 for (const vendor of ['mnemonic', 'mock'] as const) {
 	const copy = deviceCopy(vendor)
