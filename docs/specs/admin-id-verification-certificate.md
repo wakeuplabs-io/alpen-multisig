@@ -45,8 +45,14 @@ certificate is a re-encoding, plus a verification, of a signature the app alread
 - Tests: Rust unit + recovery round-trip; `architecture.test.ts` Rule 10 pinning the wireframe
   literals and forbidding certificate assembly outside Rust; a WebDriver spec walking the three
   wireframe states.
-- Docs: matrix §4.2 **PARTIAL → PASS**; rename `sign_admin_sps65_binding`, which has been signing
-  non-SPS-65 messages since session auth landed.
+- Docs: the matrix records §3.c.i and updates §4.2 with what G8 shipped; rename
+  `sign_admin_sps65_binding`, which has been signing non-SPS-65 messages since session auth landed.
+
+  **Amended during B6:** the plan had §4.2 flipping to **PASS** here. It stays **PARTIAL**, and the
+  new §3.c.i row opens as **PARTIAL** too. Both requirements include reading the Admin ID off the
+  signer's screen, and that is measured on real devices in G9 — the same reason the matrix has kept
+  §4.2 partial since G7. Flipping it on app-side evidence alone would assert something no one has
+  observed on a device.
 
 **NOT in scope (explicitly deferred):**
 

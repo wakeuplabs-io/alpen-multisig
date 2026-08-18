@@ -2,7 +2,7 @@
 
 **PRD source:** [`docs/0-prd/06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot; rows below still carry the §-IDs of `03-prd-update.md`, which the 06 renumbering does not move for this program)  
 **Program plan:** [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md)  
-**Last updated:** 2026-08-14 (G7 — the Admin ID is a bitcoin address again, per PRD 06 §3.b.ii.2; spec [`admin-id-as-bitcoin-address.md`](./admin-id-as-bitcoin-address.md). Certificate → G8, device QA and the §4.1/§4.2 flip → G9)
+**Last updated:** 2026-08-18 (G8 — the Admin ID Verification Certificate, per PRD 06 §3.c.i; spec [`admin-id-verification-certificate.md`](./admin-id-verification-certificate.md). Device QA and the §3.c.i/§4.2 flip → G9)
 
 This matrix is the **single place** to record PASS / FAIL / N/A for PRD requirements touched by the Admin Wallet program. Phase ✅ markers in the implementation plan mean **engineering slices shipped**, not automatic PRD PASS for whole sections.
 
@@ -64,12 +64,13 @@ That pair is the agreed encoding of “total net” + “unconfirmed net visible
 | 3.2.4 | Readable messages on HW screen | **PARTIAL** | Message signing on connect | Governance PSBT preview not full §3.2.4 audit |
 | 3.2 (prod) | Custody from HW only | **FAIL** | `MnemonicPsbtSigner`, Palabras login | Regtest/testnet dev path; mainnet blocked for mnemonic signer (R1.1) |
 
-### PRD §4.1–4.2 — Admin ID in UI (after login)
+### PRD §3.c.i, §4.1–4.2 — Admin ID in the UI (before and after login)
 
 | ID | Requirement (summary) | Status | Evidence / phase | Notes |
 |----|------------------------|--------|------------------|-------|
 | 4.1 | See Admin ID, copy to clipboard | **PASS** | G7 — `AdminIdRow`, `ConnectAdminIdCard`; [`admin-id-as-bitcoin-address.md`](./admin-id-as-bitcoin-address.md) | Admin ID = **P2WPKH bitcoin address** (PRD 06 §3.b.ii.2). The compressed-public-key rendering (#408, PR #444) is reverted: the PRD never stopped saying "address" and the subprotocol maintainer ruled on 2026-08-07. Shown in full + copy at the top of the wallet panel and on the multisig-selection step (#410), once per surface (#413); auth-only caption; **still no QR on the Admin ID** — it must never receive funds, which an address makes more dangerous, not less |
-| 4.2 | View Admin ID on HW to verify | **PARTIAL** | G7 — `VerifyOnDeviceButton` fed the Admin ID itself (`AdminIdRow`) | The indirection is gone: with the Admin ID being the address, the device renders the Admin ID **itself**, and the app checks the returned string matches (mismatch = security alarm). This is what answers #409 — no supported signer can display a raw compressed public key, but all of them display an address. Still **PARTIAL** pending device QA on Trezor and Ledger/Speculos → **G9**, which also measures whether a Ledger renders the message text or its SHA-256 hash (§3.2.4 / #402) |
+| 4.2 | View Admin ID on HW to verify | **PARTIAL** | G8 — `VerifyOnDeviceButton` as Step 2 of `AdminIdCertificateModal`; [`admin-id-verification-certificate.md`](./admin-id-verification-certificate.md) | The indirection is gone: with the Admin ID being the address, the device renders the Admin ID **itself**, and the app checks the returned string matches (mismatch = security alarm). G8 moved this from the Admin ID card into the certificate modal, where PRD 06 §3.c.i puts it, and made it reachable **before** sign-in as well. A mnemonic session gets the step disabled with the reason — there is no device screen to compare against. Still **PARTIAL** pending device QA on Trezor and Ledger/Speculos → **G9**, which also measures whether a Ledger renders the message text or its SHA-256 hash (§3.2.4 / #402) |
+| 3.c.i | Admin ID Verification Certificate | **PARTIAL** | G8 — `admin_id_certificate.rs`, `AdminIdCertificateModal`; unit + e2e specs | Signing and issuing are done and proved. The certificate is the signature over `Admin ID: <address>` in Bitcoin Core's `signmessage` encoding (header `31 + recid`, the byte the normative wireframe pins), it is **self-verified in Rust before it is ever shown** — the recovered key must re-derive the Admin ID — and the copy button puts message and signature on the clipboard as two lines a reader can paste straight into a verifier. Independently checked against Bitcoin Core v28.1: `verifymessage <P2PKH from the same key> <certificate> "Admin ID: …"` → `true`, `false` on a tampered message. **Note:** Core's `verifymessage` rejects bech32 addresses outright (`Address does not refer to key`), so a certificate is verified against the P2PKH form of the same key, or by any tool that verifies through key recovery. **PARTIAL** because the third bullet of the requirement — reading the Admin ID off the signer's screen — is Step 2, pending device QA → **G9** |
 
 ### PRD §4.3 — Admin Wallet management
 
