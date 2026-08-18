@@ -392,4 +392,94 @@ assert.equal(
 )
 console.log('Rule 9 PASS: Admin ID row + receive QR wiring')
 
+// ── Rule 10: G8 wiring — Admin ID Verification Certificate (PRD 06 §3.c.i) ────
+
+const certificateModalPath = path.join(componentsDir, 'admin-id-certificate-modal.tsx')
+const certificateModelPath = path.join(modelDir, 'admin-id-certificate.ts')
+const certificateHookPath = path.join(domainRoot, 'hooks', 'use-admin-id-certificate.ts')
+
+const certificateModal = fs.readFileSync(certificateModalPath, 'utf8')
+const certificateModel = fs.readFileSync(certificateModelPath, 'utf8')
+const certificateHook = fs.readFileSync(certificateHookPath, 'utf8')
+
+const rule10Violations: string[] = []
+
+// The three wireframes in docs/0-prd/assets/ are the UI contract for this modal, so their
+// literals are pinned in the model and the modal must read them from there. A component
+// that inlines its own copy is how a client-approved screen quietly drifts.
+const wireframeLiterals = [
+	'Generate Admin ID Verification Certificate',
+	'Step 1. Sign Admin ID',
+	'Waiting for signature to generate Admin ID Verification Certificate...',
+	'Copied to clipboard',
+]
+for (const literal of wireframeLiterals) {
+	if (!certificateModel.includes(literal)) {
+		rule10Violations.push(`model/admin-id-certificate.ts: must own the wireframe literal "${literal}"`)
+	}
+	if (certificateModal.includes(`'${literal}'`) || certificateModal.includes(`>${literal}<`)) {
+		rule10Violations.push(`admin-id-certificate-modal.tsx: must read "${literal}" from the model, not inline it`)
+	}
+}
+if (!certificateModal.includes("from '../model/admin-id-certificate'")) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: must read its copy from model/admin-id-certificate')
+}
+// §3.c.i is satisfied by what the reader can do with the copied block, so the block's
+// shape is a contract: message on line 1, signature on line 2, built in one place.
+if (!certificateModal.includes('certificateBlock(')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: must copy the certificate block, not the bare signature')
+}
+// The modal reuses the shared dialog and clipboard primitives — Escape/overlay close and
+// the Linux clipboard-owner fix from #428 come with them.
+if (!certificateModal.includes('AccessibleDialog')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: must use AccessibleDialog (Escape / overlay close)')
+}
+if (!certificateModal.includes('useClipboardCopy')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: must copy through useClipboardCopy (#428)')
+}
+// D5: all certificate cryptography lives in Rust. The frontend moves strings — it never
+// builds the signed message (the `Admin ID: ` prefix is part of the signed bytes) and it
+// never encodes a signature. This file is skipped: it names the forbidden shapes to find
+// them.
+const frontendSrcRoot = path.join(domainRoot, '..', '..')
+const forbiddenInFrontend: Array<[string, string]> = [
+	['Admin ID: $', 'the signed message is rendered in Rust'],
+	["'Admin ID: '", 'the signed message is rendered in Rust'],
+	['btoa(', 'the certificate is base64-encoded in Rust'],
+]
+const walk = (dir: string): string[] =>
+	fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+		const full = path.join(dir, entry.name)
+		if (entry.isDirectory()) return walk(full)
+		return entry.name.endsWith('.ts') || entry.name.endsWith('.tsx') ? [full] : []
+	})
+for (const file of walk(frontendSrcRoot)) {
+	if (file === new URL(import.meta.url).pathname || file.includes('__tests__')) continue
+	const contents = fs.readFileSync(file, 'utf8')
+	for (const [marker, why] of forbiddenInFrontend) {
+		if (contents.includes(marker)) {
+			rule10Violations.push(`${path.relative(frontendSrcRoot, file)}: ${why} (found "${marker}")`)
+		}
+	}
+}
+// The signature comes from the wallet-adapter port that already signs the session
+// challenge; a second signing path would mean a second place to get device dispatch wrong.
+if (!certificateHook.includes('adapter.signSighash(')) {
+	rule10Violations.push('use-admin-id-certificate.ts: must sign through the wallet adapter port')
+}
+if (!certificateHook.includes('buildAdminIdCertificate(')) {
+	rule10Violations.push('use-admin-id-certificate.ts: the certificate must be built (and verified) in Rust')
+}
+// Both Admin ID surfaces open the same modal — pre-sign-in (#410) and post-login (§4.a).
+if (!adminIdRow.includes('<AdminIdCertificateModal')) {
+	rule10Violations.push('admin-id-row.tsx: must offer the certificate modal (PRD 06 §4.a)')
+}
+
+assert.equal(
+	rule10Violations.length,
+	0,
+	`Rule 10 violations — G8 Admin ID Verification Certificate:\n  ${rule10Violations.join('\n  ')}`,
+)
+console.log('Rule 10 PASS: Admin ID Verification Certificate wiring')
+
 console.log('All architecture compliance checks passed.')
