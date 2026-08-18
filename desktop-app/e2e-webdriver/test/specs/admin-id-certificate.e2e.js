@@ -76,7 +76,15 @@ describe('Strata Multisig — Admin ID Verification Certificate', () => {
 		expect((await preSignInMessage.getText()).trim()).toEqual(`Admin ID: ${connectAdminId}`)
 		expect(await (await $('[data-testid="e2e-admin-id-certificate-value"]')).getText()).toContain(WAITING_LITERAL)
 
-		// No visible close button in the wireframes: Escape is the way out.
+		// The modal covers the whole screen during a security operation, so it must offer a
+		// way out that is visible rather than only Escape and an overlay click.
+		const closeButton = await $('[data-testid="e2e-dialog-close"]')
+		await closeButton.waitForClickable({ timeout: 10000 })
+		await closeButton.click()
+		await $('[data-testid="e2e-admin-id-certificate-modal"]').waitForDisplayed({ timeout: 10000, reverse: true })
+
+		// Escape still works — the visible control is additive, not a replacement.
+		await openCertificateModal('e2e-connect-admin-id-verify')
 		await browser.keys('Escape')
 		await $('[data-testid="e2e-admin-id-certificate-modal"]').waitForDisplayed({ timeout: 10000, reverse: true })
 
@@ -131,10 +139,17 @@ describe('Strata Multisig — Admin ID Verification Certificate', () => {
 		// character. A raw device signature would start elsewhere.
 		expect(certificate.charAt(0)).toMatch(/[IJK]/)
 
-		// Step 2 is present and, in a mnemonic session, disabled with the reason (D3).
+		// Step 2 keeps its Verify control in a mnemonic session — disabled with the reason,
+		// never hidden (D3), so the modal has the same shape whatever the session signs with.
 		const noDevice = await $('[data-testid="e2e-admin-id-certificate-no-device"]')
 		expect(await noDevice.isDisplayed()).toBe(true)
 		expect(await noDevice.getText()).toContain('mnemonic')
+
+		// Addressed by testid, not by label: the Admin ID card's own trigger is also called
+		// "Verify" (PRD §3.c.i names it that), so a label selector matches the wrong button.
+		const disabledVerify = await $('[data-testid="e2e-admin-id-certificate-verify"]')
+		expect(await disabledVerify.isDisplayed()).toBe(true)
+		expect(await disabledVerify.isEnabled()).toBe(false)
 
 		// Wireframe 3 — copied: both lines reach the system clipboard, in order, with
 		// nothing for the reader to strip before verifying.

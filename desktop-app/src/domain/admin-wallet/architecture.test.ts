@@ -483,6 +483,23 @@ if (!certificateModal.includes('scriptType="p2wpkh"')) {
 if (!certificateModal.includes('CERTIFICATE_STEP_2_NO_DEVICE')) {
 	rule10Violations.push('admin-id-certificate-modal.tsx: a mnemonic session must be told why Step 2 is disabled (D3)')
 }
+// A modal covering a security operation must offer a way out that is visible, not only
+// Escape and an overlay click. It is the only dialog in the app opened from a panel the
+// signer may not know how to dismiss.
+if (!certificateModal.includes('closeLabel=')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: must offer a visible close control')
+}
+// The mismatch panel inside Step 2 is the security alarm — "your device showed a
+// different Admin ID". On a short window it is the first thing to fall off the bottom, so
+// the panel scrolls instead of clipping.
+if (!certificateModal.includes('overflow-y-auto') || !certificateModal.includes('max-h-')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: the panel must scroll rather than clip Step 2')
+}
+// D3: the step is disabled with the reason, never hidden. Both branches render a Verify
+// control, so the modal keeps its shape across session types.
+if (!certificateModal.includes('CERTIFICATE_VERIFY_BUTTON')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: Step 2 must render a Verify control in both session types')
+}
 // Both Admin ID surfaces open the same modal — pre-sign-in (#410) and post-login (§4.a).
 if (!adminIdRow.includes('<AdminIdCertificateModal')) {
 	rule10Violations.push('admin-id-row.tsx: must offer the certificate modal (PRD 06 §4.a)')

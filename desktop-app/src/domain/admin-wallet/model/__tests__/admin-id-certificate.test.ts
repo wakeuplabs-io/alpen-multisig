@@ -19,6 +19,7 @@ import {
 	CERTIFICATE_STEP_2_HEADING,
 	CERTIFICATE_STEP_2_HELP,
 	CERTIFICATE_STEP_2_NO_DEVICE,
+	CERTIFICATE_VERIFY_BUTTON,
 	certificateBlock,
 } from '../admin-id-certificate.ts'
 
@@ -54,6 +55,9 @@ assert.equal(CERTIFICATE_WAITING, 'Waiting for signature to generate Admin ID Ve
 assert.equal(CERTIFICATE_SIGNED_CHIP, 'Signed')
 assert.equal(CERTIFICATE_COPIED, 'Copied to clipboard')
 assert.equal(CERTIFICATE_STEP_2_HEADING, 'Step 2. Verify Admin ID')
+// The wireframes show a solid Verify button in all three frames, including states where
+// there is nothing to verify yet. It is a pinned literal like the rest, not UI chrome.
+assert.equal(CERTIFICATE_VERIFY_BUTTON, 'Verify')
 assert.equal(
 	CERTIFICATE_STEP_2_HELP,
 	'Click the "Verify" button to compare and verify that the Admin ID (in bitcoin address format) that appears on your hardware signer screen matches the signed Admin ID shown above.',

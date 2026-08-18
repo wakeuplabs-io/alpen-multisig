@@ -19,6 +19,7 @@ export const CERTIFICATE_SIGNED_CHIP = 'Signed'
 export const CERTIFICATE_COPIED = 'Copied to clipboard'
 
 export const CERTIFICATE_STEP_2_HEADING = 'Step 2. Verify Admin ID'
+export const CERTIFICATE_VERIFY_BUTTON = 'Verify'
 export const CERTIFICATE_STEP_2_HELP =
 	'Click the "Verify" button to compare and verify that the Admin ID (in bitcoin address format) that appears on your hardware signer screen matches the signed Admin ID shown above.'
 /**
