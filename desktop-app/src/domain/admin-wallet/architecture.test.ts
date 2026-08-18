@@ -370,12 +370,13 @@ if ((hwWalletConnect.match(connectAdminIdSource) ?? []).length < 2) {
 if (authenticatePhase.includes('compressedPublicKey')) {
 	rule9Violations.push('authenticate-session-phase.tsx: the Admin ID is an address, not a compressed public key')
 }
-// #409/#412: the device renders the Admin ID itself now, so the row hands the displayed
-// value straight to the verify button. The old "Address on device" block existed only to
-// give the signer something to compare a raw public key against; keeping it would put the
-// same string on screen twice.
-if (!adminIdRow.includes('expectedAddress={value}')) {
-	rule9Violations.push('admin-id-row.tsx: must verify the Admin ID shown on screen against the device (#412)')
+// #409/#412: the device renders the Admin ID itself now, and PRD 06 §3.c.i puts that
+// comparison inside the certificate modal as Step 2 — so the row offers one verify
+// affordance, not two. The old "Address on device" block existed only to give the signer
+// something to compare a raw public key against; keeping it would put the same string on
+// screen twice.
+if (adminIdRow.includes('VerifyOnDeviceButton')) {
+	rule9Violations.push('admin-id-row.tsx: verify-on-device belongs to the certificate modal Step 2 (PRD 06 §3.c.i)')
 }
 if (adminIdRow.includes('Address on device')) {
 	rule9Violations.push('admin-id-row.tsx: must not repeat the Admin ID under a second heading (#413)')
@@ -469,6 +470,18 @@ if (!certificateHook.includes('adapter.signSighash(')) {
 }
 if (!certificateHook.includes('buildAdminIdCertificate(')) {
 	rule10Violations.push('use-admin-id-certificate.ts: the certificate must be built (and verified) in Rust')
+}
+// Step 2 lives inside the modal and verifies the Admin ID as a P2WPKH address on the
+// device. In a mnemonic session there is no screen to compare against, so the step is
+// disabled with the reason rather than hidden (D3).
+if (!certificateModal.includes('<VerifyOnDeviceButton')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: Step 2 must verify the Admin ID on the device')
+}
+if (!certificateModal.includes('scriptType="p2wpkh"')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: the Admin ID is verified as P2WPKH (PRD 06 §3.b.ii.2)')
+}
+if (!certificateModal.includes('CERTIFICATE_STEP_2_NO_DEVICE')) {
+	rule10Violations.push('admin-id-certificate-modal.tsx: a mnemonic session must be told why Step 2 is disabled (D3)')
 }
 // Both Admin ID surfaces open the same modal — pre-sign-in (#410) and post-login (§4.a).
 if (!adminIdRow.includes('<AdminIdCertificateModal')) {

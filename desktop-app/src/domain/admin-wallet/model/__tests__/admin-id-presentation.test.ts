@@ -13,7 +13,7 @@ import {
 	ADMIN_ID_LABEL,
 	ADMIN_ID_SAFETY_CAPTION,
 } from '../admin-id-presentation.ts'
-import { adminIdText, adminIdChipLabel, adminIdVerifyCaption, matchesDeviceAddress } from '@/lib/admin-id'
+import { adminIdText, adminIdChipLabel, matchesDeviceAddress } from '@/lib/admin-id'
 
 const PUBKEY = '02f8b7d1a1b9f0f4e8f1c2d3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8'
 const ADDR = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'
@@ -66,16 +66,6 @@ assert.equal(adminIdText('Mnemonic signer'), 'Unknown', 'a label is never displa
 assert.equal(adminIdChipLabel(ADDR), truncateAdminId(ADDR), 'chips show the truncated Admin ID')
 assert.equal(adminIdChipLabel(PUBKEY), 'Unknown', 'a chip never falls back to the public key')
 assert.equal(adminIdChipLabel(undefined), 'Unknown')
-
-// ── The device shows the Admin ID itself ─────────────────────────────────────
-// The indirection #409 objected to is gone: no supported signer can render a raw
-// public key, but every one of them renders an address.
-
-const trezorCaption = adminIdVerifyCaption('trezor')
-assert.ok(trezorCaption.includes('Trezor'), 'names the connected device')
-assert.ok(!trezorCaption.includes('Ledger'), 'never names the other vendor')
-assert.ok(adminIdVerifyCaption('ledger').includes('Ledger'))
-assert.ok(!trezorCaption.includes('derived'), 'the device shows the Admin ID, not something derived from it')
 
 // ── Truncation and device comparison are shape-agnostic ──────────────────────
 

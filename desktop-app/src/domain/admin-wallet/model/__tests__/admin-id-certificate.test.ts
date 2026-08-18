@@ -16,6 +16,9 @@ import {
 	CERTIFICATE_WAITING,
 	CERTIFICATE_SIGNED_CHIP,
 	CERTIFICATE_COPIED,
+	CERTIFICATE_STEP_2_HEADING,
+	CERTIFICATE_STEP_2_HELP,
+	CERTIFICATE_STEP_2_NO_DEVICE,
 	certificateBlock,
 } from '../admin-id-certificate.ts'
 
@@ -50,10 +53,29 @@ assert.equal(
 assert.equal(CERTIFICATE_WAITING, 'Waiting for signature to generate Admin ID Verification Certificate...')
 assert.equal(CERTIFICATE_SIGNED_CHIP, 'Signed')
 assert.equal(CERTIFICATE_COPIED, 'Copied to clipboard')
+assert.equal(CERTIFICATE_STEP_2_HEADING, 'Step 2. Verify Admin ID')
+assert.equal(
+	CERTIFICATE_STEP_2_HELP,
+	'Click the "Verify" button to compare and verify that the Admin ID (in bitcoin address format) that appears on your hardware signer screen matches the signed Admin ID shown above.',
+)
+
+// Not from a wireframe: mnemonic sessions have no device screen to compare against, and
+// the decision was to disable Step 2 with a reason rather than hide it — a step that
+// vanishes reads as a broken modal, and the signer never learns why it does not apply.
+assert.ok(CERTIFICATE_STEP_2_NO_DEVICE.length > 0, 'the disabled Step 2 must say why')
+assert.ok(/mnemonic/i.test(CERTIFICATE_STEP_2_NO_DEVICE), 'names the reason: this session signs with a mnemonic')
+assert.ok(!/trezor|ledger/i.test(CERTIFICATE_STEP_2_NO_DEVICE), 'stays device-agnostic')
 
 // The wireframes name no vendor: the same modal serves Trezor, Ledger and a mnemonic
 // session, and #24/#18 settled that device-specific wording belongs in lib/device-copy.
-for (const literal of [CERTIFICATE_TITLE, CERTIFICATE_STEP_1_HEADING, CERTIFICATE_STEP_1_HELP, CERTIFICATE_WAITING]) {
+for (const literal of [
+	CERTIFICATE_TITLE,
+	CERTIFICATE_STEP_1_HEADING,
+	CERTIFICATE_STEP_1_HELP,
+	CERTIFICATE_WAITING,
+	CERTIFICATE_STEP_2_HEADING,
+	CERTIFICATE_STEP_2_HELP,
+]) {
 	assert.ok(!/trezor|ledger/i.test(literal), `certificate copy must stay device-agnostic: ${literal}`)
 }
 

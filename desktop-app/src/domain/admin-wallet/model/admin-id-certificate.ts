@@ -21,6 +21,13 @@ export const CERTIFICATE_COPIED = 'Copied to clipboard'
 export const CERTIFICATE_STEP_2_HEADING = 'Step 2. Verify Admin ID'
 export const CERTIFICATE_STEP_2_HELP =
 	'Click the "Verify" button to compare and verify that the Admin ID (in bitcoin address format) that appears on your hardware signer screen matches the signed Admin ID shown above.'
+/**
+ * Shown instead of an enabled Verify button when the session signs with a mnemonic.
+ * The step is disabled with a reason rather than hidden: a step that disappears looks
+ * like a broken modal, and the signer never learns why it does not apply to them.
+ */
+export const CERTIFICATE_STEP_2_NO_DEVICE =
+	'This session signs with a mnemonic, so there is no signer screen to compare against. Connect a hardware signer to verify your Admin ID on the device.'
 
 /**
  * The block the copy button puts on the clipboard: the signed message on line 1, the
