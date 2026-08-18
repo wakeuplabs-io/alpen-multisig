@@ -13,9 +13,6 @@
  * send-copy pattern); `architecture.test.ts` Rule 9 pins them.
  */
 
-import { deviceCopy } from '@/lib/device-copy'
-import type { WalletVendor } from '@/wallet/types'
-
 /**
  * P2WPKH shape: a known HRP, the `1` separator, the witness-v0 character `q`, then the
  * 32 data characters of a 20-byte program plus a 6-character checksum. `b`, `i`, `o` and
@@ -62,16 +59,6 @@ export function adminIdText(value: string | undefined): string {
 /** The same rule for chips and dense rows, truncated. */
 export function adminIdChipLabel(value: string | undefined): string {
 	return isDisplayableAdminId(value) ? truncateAdminId(value) : ADMIN_ID_UNKNOWN
-}
-
-/**
- * What the connected device shows when the signer verifies the Admin ID: the Admin ID
- * itself. This is what closes #409 — the objection was that no supported signer can
- * render a raw compressed public key, so the device could only ever confirm the identity
- * indirectly. Every one of them renders an address.
- */
-export function adminIdVerifyCaption(vendor: WalletVendor): string {
-	return `Your ${deviceCopy(vendor).label} shows this Admin ID itself, from the seed it holds.`
 }
 
 /**

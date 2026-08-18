@@ -3,6 +3,7 @@ import type { AuthRole } from '@/types'
 import { AuthorityShieldIcon, AuthorityLayersIcon, AuthorityServerIcon } from '@/assets/icons'
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
 import { ConnectAdminIdCard } from '@/domain/connect-wallet/components/connect-admin-id-card'
+import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
 
 export type AuthorityOption = {
 	id: string
@@ -19,6 +20,8 @@ type Props = {
 	options: AuthorityOption[]
 	/** Admin ID derived at connect — shown before the membership check runs (#410). */
 	adminId: string | undefined
+	/** Present for hardware sessions: lets the certificate modal verify on the device. */
+	adminIdVerify?: AdminIdVerifyContext
 	isChecking?: boolean
 	onSelectAuthority: (authorityId: string) => void
 	onContinueToAuthenticate: () => void
@@ -35,6 +38,7 @@ export function AuthoritySelectionPhase({
 	selectedAuthorityId,
 	options,
 	adminId,
+	adminIdVerify,
 	isChecking = false,
 	onSelectAuthority,
 	onContinueToAuthenticate,
@@ -71,7 +75,7 @@ export function AuthoritySelectionPhase({
 			</p>
 
 			<div className="mt-5">
-				<ConnectAdminIdCard adminId={adminId} />
+				<ConnectAdminIdCard adminId={adminId} verify={adminIdVerify} />
 			</div>
 
 			<div className="mt-5 space-y-3">

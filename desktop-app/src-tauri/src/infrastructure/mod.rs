@@ -37,6 +37,7 @@ mod mock_guard_tests {
 }
 
 pub mod action_codec;
+pub mod admin_id_certificate;
 pub mod admin_wallet;
 pub mod asm_enactment;
 pub mod asm_role_membership;

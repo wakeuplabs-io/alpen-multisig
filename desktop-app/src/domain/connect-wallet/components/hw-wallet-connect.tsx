@@ -12,6 +12,8 @@ import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
 import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mnemonic-signing-enabled'
 import type { WalletAccountInfo, WalletAdapter, WalletKind, WalletVendor } from '@/wallet/types'
+import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
+import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 
 type Props = {
 	adapter: WalletAdapter
@@ -77,6 +79,16 @@ export function HwWalletConnect({
 	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
+	// The certificate modal's Step 2 needs a device to render the Admin ID on. A mnemonic
+	// session has none, so it gets no context and the step explains itself instead (D3).
+	const adminIdVerify: AdminIdVerifyContext | undefined =
+		(walletVendor === 'trezor' || walletVendor === 'ledger') && state.selectedEntry
+			? {
+					deviceType: walletVendor,
+					network: networkFromPath(state.selectedEntry.derivationPath),
+					derivationPath: state.selectedEntry.derivationPath,
+				}
+			: undefined
 	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
 
 	// TODO: Refactor this to use a context
@@ -124,6 +136,7 @@ export function HwWalletConnect({
 						selectedAuthorityId={authoritySelection.selectedAuthorityId}
 						options={resolvedOptions}
 						adminId={state.selectedEntry.address}
+						adminIdVerify={adminIdVerify}
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}

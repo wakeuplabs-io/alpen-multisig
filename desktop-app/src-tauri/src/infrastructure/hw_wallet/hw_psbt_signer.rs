@@ -62,14 +62,20 @@ impl HwDeviceType {
         }
     }
 
-    pub fn sign_sps65(
+    /// Signs a human-readable message as a BIP-137 Bitcoin message on either device.
+    ///
+    /// It carried an SPS-65 name until G8 while already signing the session challenge and,
+    /// now, the Admin ID Verification Certificate message — three different strings, one
+    /// device call. The name said otherwise, which is the kind of thing that gets read as
+    /// a guarantee about what the device is being asked to sign.
+    pub fn sign_bitcoin_message(
         self,
         message: &str,
         derivation_path: &str,
     ) -> Result<SignatureResult, String> {
         match self {
-            HwDeviceType::Trezor => trezor::sign_admin_sps65_binding(message, derivation_path),
-            HwDeviceType::Ledger => ledger::sign_admin_sps65_binding(message, derivation_path),
+            HwDeviceType::Trezor => trezor::sign_bitcoin_message(message, derivation_path),
+            HwDeviceType::Ledger => ledger::sign_bitcoin_message(message, derivation_path),
         }
     }
 

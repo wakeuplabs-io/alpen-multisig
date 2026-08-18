@@ -15,6 +15,14 @@ export type VerifyOnDeviceButtonProps = {
 	 * actually shows is compared against it and a difference is surfaced as an alarm.
 	 */
 	expectedAddress?: string
+	/** Idle label. Defaults to the compact wording used beside a receive address. */
+	label?: string
+	/**
+	 * `chip` is the small outlined affordance that sits next to an address. `primary`
+	 * is the solid button the certificate wireframes give Step 2, where verifying on the
+	 * device is half the point of the screen rather than an optional extra.
+	 */
+	variant?: 'chip' | 'primary'
 }
 
 /**
@@ -31,6 +39,8 @@ export function VerifyOnDeviceButton({
 	scriptType,
 	subject,
 	expectedAddress,
+	label = 'Verify on device',
+	variant = 'chip',
 }: VerifyOnDeviceButtonProps) {
 	const { state, verify } = useVerifyOnDevice({ deviceType, network, expectedAddress })
 	const isVerifying = state.status === 'verifying'
@@ -39,21 +49,27 @@ export function VerifyOnDeviceButton({
 		void verify(derivationPath, scriptType)
 	}
 
+	const chipClassName = `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+		isVerifying
+			? 'cursor-wait border-[#e5e7eb] text-[#9ca3af]'
+			: 'border-[#ddd6fe] text-[#7c6cf0] hover:border-[#c4b5fd] hover:bg-[#faf9ff]'
+	}`
+	const primaryClassName = `inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-label font-medium text-white transition ${
+		isVerifying ? 'cursor-wait bg-[#9ca3af]' : 'bg-[#111827] hover:bg-[#374151]'
+	}`
+
 	return (
 		<div className="mt-2">
 			<button
 				type="button"
 				onClick={handleVerify}
 				disabled={isVerifying}
+				aria-busy={isVerifying}
 				data-testid="e2e-wallet-verify-on-device"
-				className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
-					isVerifying
-						? 'cursor-wait border-[#e5e7eb] text-[#9ca3af]'
-						: 'border-[#ddd6fe] text-[#7c6cf0] hover:border-[#c4b5fd] hover:bg-[#faf9ff]'
-				}`}
+				className={variant === 'primary' ? primaryClassName : chipClassName}
 			>
 				<ShieldCheckMutedIcon width={12} height={12} />
-				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : 'Verify on device'}
+				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : label}
 			</button>
 
 			{state.status === 'verified' && (
