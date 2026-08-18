@@ -27,13 +27,54 @@ false confidence.
 | Software wallet | Nothing — there is no device screen. | Nothing to compare; the host machine is trusted. |
 
 A Ledger running Bitcoin app **2.2.2 or later** renders the message text when it is printable and
-**640 bytes or shorter**, and the `Message hash` otherwise. In practice a signer-set change crosses
+**640 bytes or shorter**, and the `Message hash` otherwise. Both halves of that rule were confirmed
+on Bitcoin app 2.4.2: printable messages up to 256 characters rendered as text, a 1000-character one
+fell back to the hash, and so did a short message containing non-printable bytes. **A line break
+counts as non-printable** — which is why the session-authentication message, at 135 characters,
+still shows as a hash while the same text with spaces instead of line breaks shows in full. In practice a signer-set change crosses
 640 bytes at about six added or removed members. **Before 2.2.2 the device always showed the hash**,
 whatever the message — and the app cannot tell which Bitcoin app version your device is running.
 That is why it shows both values and asks you to match whichever one appears.
 
 The `Message hash` is `SHA-256` of the message text, printed by the device in **upper case**. The app
 prints it upper case too, so the two strings are identical character for character.
+
+## The Admin ID Verification Certificate
+
+The certificate is a different signature from the governance ones above, and it is the one case
+where the device screen is **the whole point**: it proves that the Admin ID shown in the application
+belongs to the key your signer holds.
+
+The message is a single short line, so **every supported signer shows it as readable text** — there
+is no hash case here. Measured on Bitcoin app 2.4.2 and on Trezor Safe 3 firmware 2.8.7:
+
+```
+Admin ID: bc1q…
+```
+
+| Signer | Signing screen | Verification screen |
+|---|---|---|
+| Trezor | `Signing address` with the Admin ID, then `Confirm message` carrying `Admin ID: <address>`. | The Admin ID, under the heading `Receive address`. |
+| Ledger | `Message (n/m)` pages carrying `Admin ID: <address>` in full. | The Admin ID, under the heading `Address`. |
+
+Two things to check, in this order:
+
+1. **On the signing screen**, the address inside `Admin ID: …` matches the one the application
+   shows. The device splits it across pages — compare it character by character, across the breaks.
+2. **On the verification screen** (Step 2 of the modal), the address the device displays is that
+   same Admin ID. If the application reports a mismatch, stop: the application and the device
+   disagree about which key is your Admin ID.
+
+> **A Trezor labels the verification screen `Receive address`.** That is the firmware's generic
+> wording for showing an address, not an instruction. **Never send funds to your Admin ID.** It is an
+> identity, not a wallet — the application deliberately refuses to show a QR code for it, and funds
+> sent there are not part of the Admin Wallet.
+
+Anyone can check a certificate without the application. Copy it — the copy control puts the message
+and the signature on the clipboard as two lines — and verify the signature recovers a public key
+that derives that Admin ID. Note that Bitcoin Core's `verifymessage` **rejects bech32 addresses
+outright**, so with Core you verify against the legacy `1…` address derived from the same key, or
+use any tool that verifies through public key recovery.
 
 ## The message format
 
