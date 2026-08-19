@@ -142,8 +142,11 @@ describe('G9 — Admin ID Verification Certificate on Trezor', () => {
 		const signScreens = await confirmOnDevice(() => chip.isDisplayed())
 		fs.writeFileSync(path.join(EVIDENCE, 'g9-b1-trezor-device-sign.txt'), signScreens.join('\n---\n'))
 
-		// The requirement: the signer reads what they sign, off the device itself.
-		expect(reassemble(signScreens)).toContain(adminId)
+		// The requirement: the signer reads what they sign, off the device itself. Match the whole
+		// message, not the address alone — a Trezor names the signing key on its own `Signing address`
+		// screen whatever the message is, so looking for the address would pass even if the device
+		// stopped showing the message.
+		expect(reassemble(signScreens)).toContain(reassemble([`Admin ID: ${adminId}`]))
 
 		await chip.waitForDisplayed({ timeout: 120000 })
 		const certificate = (await (await $('[data-testid="e2e-admin-id-certificate-value"]')).getText()).trim()
