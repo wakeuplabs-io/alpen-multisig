@@ -1,6 +1,7 @@
 import type { HwDeviceType, VerifyScriptType } from '../model/hw-device'
 import { ShieldCheckMutedIcon, CheckEmeraldIcon, AlertTriangleIcon } from '@/assets/icons'
 import { useVerifyOnDevice } from '../hooks/use-verify-on-device'
+import { verifyOnDeviceAppearance, verifyOnDeviceClassName } from '../model/verify-on-device-appearance'
 import { deviceCopy } from '@/lib/device-copy'
 
 export type VerifyOnDeviceButtonProps = {
@@ -43,33 +44,31 @@ export function VerifyOnDeviceButton({
 	variant = 'chip',
 }: VerifyOnDeviceButtonProps) {
 	const { state, verify } = useVerifyOnDevice({ deviceType, network, expectedAddress })
-	const isVerifying = state.status === 'verifying'
 
 	function handleVerify() {
 		void verify(derivationPath, scriptType)
 	}
 
-	const chipClassName = `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
-		isVerifying
-			? 'cursor-wait border-[#e5e7eb] text-[#9ca3af]'
-			: 'border-[#ddd6fe] text-[#7c6cf0] hover:border-[#c4b5fd] hover:bg-[#faf9ff]'
-	}`
-	const primaryClassName = `inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-label font-medium text-white transition ${
-		isVerifying ? 'cursor-wait bg-[#9ca3af]' : 'bg-[#111827] hover:bg-[#374151]'
-	}`
+	// A confirmed verification ends green, like the certificate's `Signed` chip — but it stays a
+	// button, because a signer may legitimately want to check again. See the model for the reasoning.
+	const appearance = verifyOnDeviceAppearance(state, label, `Confirm on your ${deviceCopy(deviceType).label}…`)
 
 	return (
 		<div className="mt-2">
 			<button
 				type="button"
 				onClick={handleVerify}
-				disabled={isVerifying}
-				aria-busy={isVerifying}
+				disabled={appearance.isBusy}
+				aria-busy={appearance.isBusy}
 				data-testid="e2e-wallet-verify-on-device"
-				className={variant === 'primary' ? primaryClassName : chipClassName}
+				className={verifyOnDeviceClassName(state, variant)}
 			>
-				<ShieldCheckMutedIcon width={12} height={12} />
-				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : label}
+				{appearance.icon === 'check' ? (
+					<CheckEmeraldIcon width={12} height={12} />
+				) : (
+					<ShieldCheckMutedIcon width={12} height={12} />
+				)}
+				{appearance.label}
 			</button>
 
 			{state.status === 'verified' && (

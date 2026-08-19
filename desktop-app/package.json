@@ -48,6 +48,7 @@
 		"test:model-build-verify-path": "tsx src/domain/admin-wallet/model/__tests__/build-verify-path.test.ts",
 		"test:model-network-from-path": "tsx src/domain/admin-wallet/model/__tests__/network-from-path.test.ts",
 		"test:model-admin-id-presentation": "tsx src/domain/admin-wallet/model/__tests__/admin-id-presentation.test.ts",
+		"test:model-verify-on-device-appearance": "tsx src/domain/admin-wallet/model/__tests__/verify-on-device-appearance.test.ts",
 		"test:model-admin-id-certificate": "tsx src/domain/admin-wallet/model/__tests__/admin-id-certificate.test.ts",
 		"test:lib-device-signing-display": "tsx src/lib/__tests__/device-signing-display.test.ts",
 		"test:lib-device-copy": "tsx src/lib/__tests__/device-copy.test.ts",
