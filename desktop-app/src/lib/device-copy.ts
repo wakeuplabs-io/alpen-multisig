@@ -62,7 +62,7 @@ const DEVICE_COPY: Record<WalletVendor, DeviceCopy> = {
 		isHardware: true,
 		reviewPrompt: 'Review the payload, then approve it on your Ledger. Nothing is submitted until you approve there.',
 		verifyHint:
-			'Your Ledger renders the message text. Compare that text on the device, character for character, before approving. Older models and Bitcoin app versions may instead show a SHA-256 “Message hash” — if that is what appears, compare the hash.',
+			'Your Ledger shows either the message text or its SHA-256 “Message hash”, depending on the model, the Bitcoin app version and the message itself — the application cannot tell which in advance. Compare whichever one appears on the device, character for character, before approving.',
 		verifyOnDeviceHint:
 			'Check your Ledger screen: it displays the Admin ID itself, from the seed the device holds. Compare it character for character with the one shown here.',
 		broadcastHint:

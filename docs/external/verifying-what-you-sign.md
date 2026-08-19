@@ -23,7 +23,7 @@ false confidence.
 | Signer | On screen | What the app shows |
 |---|---|---|
 | Trezor | The message text. | The same message text. |
-| Ledger | The message text, for every message this application asks it to sign. Older models and app versions may show a `Message hash` instead. | Both, so one of them always matches. |
+| Ledger | Either the message text **or** a `Message hash` — which one depends on the model, the Bitcoin app version and the message. | Both, so one of them always matches. |
 | Software wallet | Nothing — there is no device screen. | Nothing to compare; the host machine is trusted. |
 
 A Ledger running Bitcoin app **2.2.2 or later** renders the message text when it is printable and
@@ -33,7 +33,13 @@ fell back to the hash, and so did a short message containing non-printable bytes
 counts as non-printable**, and that is what used to make the login challenge unreadable: at 135
 characters it still showed as a hash purely because of its line breaks. The application now sends
 that message with ` | ` separators instead, and the device shows it in full — see
-**The login challenge** below. In practice a signer-set change crosses
+**The login challenge** below.
+
+**The governance message below is still laid out over lines**, because its format is fixed by the
+Strata subprotocol rather than by this application — so on the devices that apply that rule you will
+see its `Message hash`. Measured on a Nano S+ with app 2.4.2; the same message has been observed
+rendering as full text on a Nano X. Which is exactly why the screen shows you both values and asks
+you to match the one that appears. In practice a signer-set change also crosses
 640 bytes at about six added or removed members. **Before 2.2.2 the device always showed the hash**,
 whatever the message — and the app cannot tell which Bitcoin app version your device is running.
 That is why it shows both values and asks you to match whichever one appears.
