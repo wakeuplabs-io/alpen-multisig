@@ -154,7 +154,7 @@ describe('G10 — login challenge on Ledger', () => {
 
 		expect(seen.toLowerCase()).not.toContain('message hash')
 		expect(rendered).toContain(alnum('Strata Session Authentication v1'))
-		expect(rendered).toContain(alnum('Role: strata_administrator'))
+		expect(rendered).toContain(alnum('Role: strata_admin'))
 		expect(rendered).toContain(alnum('Challenge:'))
 
 		// Authentication itself: the orchestrator has to accept a signature over the new string,

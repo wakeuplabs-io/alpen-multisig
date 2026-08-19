@@ -189,3 +189,27 @@ fn now_unix_ms() -> u64 {
         .unwrap_or_default();
     duration.as_millis() as u64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pins the role vocabulary shared with the desktop's `role_wire`
+    /// (`desktop-app/src-tauri/src/application/authentication.rs`). See the note there: the token
+    /// goes inside the message a signer reads on their hardware screen, so the two paths must spell
+    /// an authority the same way (G9 audit, F-5).
+    #[test]
+    fn authority_wire_is_the_shared_vocabulary() {
+        assert_eq!(authority_wire(Authority::StrataAdmin), "strata_admin");
+        assert_eq!(
+            authority_wire(Authority::SequencerManager),
+            "sequencer_manager"
+        );
+        assert_eq!(authority_wire(Authority::AlpenAdmin), "alpen_admin");
+        assert_eq!(
+            authority_wire(Authority::SecurityCouncil),
+            "security_council"
+        );
+        assert_eq!(authority_wire(Authority::PayoutAdmin), "payout_admin");
+    }
+}

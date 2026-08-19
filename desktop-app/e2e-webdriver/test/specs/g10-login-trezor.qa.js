@@ -144,7 +144,7 @@ describe('G10 — login challenge on Trezor', () => {
 
 		const rendered = alnum(screens.join(''))
 		expect(rendered).toContain(alnum('Strata Session Authentication v1'))
-		expect(rendered).toContain(alnum('Role: strata_administrator'))
+		expect(rendered).toContain(alnum('Role: strata_admin'))
 		expect(rendered).toContain(alnum('Challenge:'))
 
 		// The separators must not have cost the session: the orchestrator still has to accept a
