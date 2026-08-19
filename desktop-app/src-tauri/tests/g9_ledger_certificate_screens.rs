@@ -94,7 +94,10 @@ fn ledger_text_to_hash_threshold() {
                 String::from_utf8_lossy(&[0x01u8, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
                     .into_owned(),
             ),
-            // The session-authentication message as it stood before G10 (newline-separated),
+            // The session-authentication message as it stood before G10 (newline-separated). The
+            // role token here is the desktop path's old spelling, which is what G9 measured; the
+            // live flow says `strata_admin` (F-5 unified them afterwards). Same length class, and
+            // the finding was about the newlines, so the measurement stands as recorded.
             // which G3 measured as a hash, and the same text with its newlines replaced by
             // spaces. If only the first hashes, the trigger is the newline, not the length —
             // which is the finding G10 acted on by shipping ` | ` separators.

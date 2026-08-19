@@ -132,8 +132,8 @@ mod tests {
         // puts the Ledger back on its "Message hash" screen and the signer can
         // no longer read what they approve. See `render_challenge_message`.
         assert_eq!(
-            render_challenge_message("strata_administrator", "deadbeef"),
-            "Strata Session Authentication v1 | Role: strata_administrator | Challenge: deadbeef"
+            render_challenge_message("strata_admin", "deadbeef"),
+            "Strata Session Authentication v1 | Role: strata_admin | Challenge: deadbeef"
         );
     }
 
@@ -142,7 +142,7 @@ mod tests {
         // The pin above catches an edit to this exact string; this catches the class of edit that
         // matters most — anything non-printable, which sends a Ledger back to its "Message hash"
         // screen and leaves the signer approving bytes they cannot read.
-        let message = render_challenge_message("strata_administrator", &"ab".repeat(32));
+        let message = render_challenge_message("strata_admin", &"ab".repeat(32));
         let offenders: Vec<char> = message
             .chars()
             .filter(|c| !c.is_ascii() || c.is_ascii_control())
@@ -157,7 +157,7 @@ mod tests {
     fn bitcoin_message_signature_round_trips() {
         let sk = SecretKey::from_slice(&[7u8; 32]).expect("valid key");
         let pk = PublicKey::from_secret_key(SECP256K1, &sk);
-        let message = render_challenge_message("strata_administrator", "aa");
+        let message = render_challenge_message("strata_admin", "aa");
         let signature_hex = sign_bitcoin_message(&message, &sk);
 
         verify_bitcoin_message_signature(&message, &hex::encode(pk.serialize()), &signature_hex)
@@ -168,10 +168,10 @@ mod tests {
     fn bitcoin_message_signature_rejects_tampered_message() {
         let sk = SecretKey::from_slice(&[9u8; 32]).expect("valid key");
         let pk = PublicKey::from_secret_key(SECP256K1, &sk);
-        let signed = render_challenge_message("strata_administrator", "aa");
+        let signed = render_challenge_message("strata_admin", "aa");
         let signature_hex = sign_bitcoin_message(&signed, &sk);
 
-        let tampered = render_challenge_message("strata_administrator", "bb");
+        let tampered = render_challenge_message("strata_admin", "bb");
         let err = verify_bitcoin_message_signature(
             &tampered,
             &hex::encode(pk.serialize()),
@@ -183,8 +183,8 @@ mod tests {
 
     #[test]
     fn create_challenge_digest_is_stable() {
-        let d1 = create_challenge_digest("strata_administrator", "ab", 10, 20, "sess");
-        let d2 = create_challenge_digest("strata_administrator", "ab", 10, 20, "sess");
+        let d1 = create_challenge_digest("strata_admin", "ab", 10, 20, "sess");
+        let d2 = create_challenge_digest("strata_admin", "ab", 10, 20, "sess");
         assert_eq!(d1, d2);
     }
 
@@ -194,7 +194,7 @@ mod tests {
         let sk = SecretKey::from_slice(&[42u8; 32]).expect("valid key");
         let pk = PublicKey::from_secret_key(&secp, &sk);
 
-        let digest = create_challenge_digest("strata_administrator", "aa", 1, 2, "sid");
+        let digest = create_challenge_digest("strata_admin", "aa", 1, 2, "sid");
         let msg = Message::from_digest_slice(&digest).expect("32-byte digest");
         let signature = secp.sign_ecdsa(&msg, &sk);
 

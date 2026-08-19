@@ -24,16 +24,12 @@ fn challenge_hex() -> String {
 }
 
 fn newline_format(challenge_hex: &str) -> String {
-    format!(
-        "Strata Session Authentication v1\nRole: strata_administrator\nChallenge: {challenge_hex}"
-    )
+    format!("Strata Session Authentication v1\nRole: strata_admin\nChallenge: {challenge_hex}")
 }
 
 /// The format G10 ships (`auth_crypto.rs` / `challenge_verifier.rs` after B1).
 fn pipe_format(challenge_hex: &str) -> String {
-    format!(
-        "Strata Session Authentication v1 | Role: strata_administrator | Challenge: {challenge_hex}"
-    )
+    format!("Strata Session Authentication v1 | Role: strata_admin | Challenge: {challenge_hex}")
 }
 
 struct Rendering {
@@ -125,7 +121,7 @@ fn what_the_device_shows_is_what_the_verifier_accepts() {
     std::env::set_var("LEDGER_SPECULOS_AUTO_APPROVE", "0");
 
     let challenge = challenge_hex();
-    let message = challenge_verifier::render_challenge_message("strata_administrator", &challenge);
+    let message = challenge_verifier::render_challenge_message("strata_admin", &challenge);
     let shot_dir = std::env::var("G10_SHOT_DIR").unwrap_or_else(|_| "/tmp".into());
     let (screens, signature) = sign_and_record(&base, &message, &shot_dir, "g10-b2-login");
     let signature = signature.expect("ledger signature over the challenge");

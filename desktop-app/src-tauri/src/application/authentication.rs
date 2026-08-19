@@ -256,11 +256,18 @@ pub fn logout() -> Result<(), String> {
     Ok(())
 }
 
+/// The role token inside the challenge the signer reads and signs.
+///
+/// **These must stay identical to the orchestrator's `authority_wire`**
+/// (`orchestrator-be/src/handlers/auth.rs`). Both paths render the same message for the same role,
+/// and a signer comparing the app against their device screen — or against the client docs — should
+/// never see two spellings of the authority they are authenticating as. The two drifted apart until
+/// the G9 audit pass (F-5) caught it on a device screen.
 fn role_wire(role: AuthRole) -> &'static str {
     match role {
-        AuthRole::StrataAdministrator => "strata_administrator",
-        AuthRole::StrataSequencerManager => "strata_sequencer_manager",
-        AuthRole::AlpenAdministrator => "alpen_administrator",
+        AuthRole::StrataAdministrator => "strata_admin",
+        AuthRole::StrataSequencerManager => "sequencer_manager",
+        AuthRole::AlpenAdministrator => "alpen_admin",
     }
 }
 
@@ -288,6 +295,25 @@ fn reset_auth_state_for_tests() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Pins the role vocabulary shared with the orchestrator's `authority_wire`
+    /// (`orchestrator-be/src/handlers/auth.rs`). The two crates cannot import each other — the
+    /// orchestrator is a binary with no library target — so each side pins the table and names the
+    /// other. That does not make a one-sided edit impossible, but it makes it deliberate: whoever
+    /// changes a value here has to walk past this comment.
+    ///
+    /// Why it matters: this token is inside the message the signer reads on their hardware screen.
+    /// Two spellings for one authority is a signer comparing the app against their device and
+    /// finding them different (G9 audit, F-5).
+    #[test]
+    fn role_wire_matches_the_orchestrator_vocabulary() {
+        assert_eq!(role_wire(AuthRole::StrataAdministrator), "strata_admin");
+        assert_eq!(
+            role_wire(AuthRole::StrataSequencerManager),
+            "sequencer_manager"
+        );
+        assert_eq!(role_wire(AuthRole::AlpenAdministrator), "alpen_admin");
+    }
+
     use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
     use std::sync::{Mutex, OnceLock};
 
