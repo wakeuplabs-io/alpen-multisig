@@ -65,8 +65,10 @@ The certificate is a different signature from the governance ones above, and it 
 where the device screen is **the whole point**: it proves that the Admin ID shown in the application
 belongs to the key your signer holds.
 
-The message is a single short line, so **every supported signer shows it as readable text** — there
-is no hash case here. Measured on Bitcoin app 2.4.2 and on Trezor Safe 3 firmware 2.8.7:
+The message is a single short line, so any signer that renders message text at all shows it in full —
+no page breaks, nothing truncated. Measured on Bitcoin app 2.4.2 and on Trezor Safe 3 firmware 2.8.7.
+On a Ledger older than Bitcoin app 2.2.2 you will still see the `Message hash` here, as you would for
+any message; compare that hash instead.
 
 ```
 Admin ID: bc1q…
