@@ -94,9 +94,10 @@ fn ledger_text_to_hash_threshold() {
                 String::from_utf8_lossy(&[0x01u8, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
                     .into_owned(),
             ),
-            // The real session-authentication message (`auth_crypto.rs:10-12`), which G3 measured
-            // as a hash, and the same text with its newlines replaced by spaces. If only the first
-            // hashes, the trigger is the newline, not the length.
+            // The session-authentication message as it stood before G10 (newline-separated),
+            // which G3 measured as a hash, and the same text with its newlines replaced by
+            // spaces. If only the first hashes, the trigger is the newline, not the length —
+            // which is the finding G10 acted on by shipping ` | ` separators.
             (
                 "session-lf".to_string(),
                 format!(
