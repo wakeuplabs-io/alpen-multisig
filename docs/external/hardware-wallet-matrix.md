@@ -155,8 +155,12 @@ Strata Session Authentication v1 | Role: <role> | Challenge: <64 hex characters>
 
 | Device | Signing screen |
 |---|---|
-| Trezor (Safe 3, fw 2.8.7) | The message text |
+| Trezor (Safe 3, fw 2.8.7) | `Confirm message`, the text across two pages |
 | Ledger (Bitcoin app 2.4.2) | `Message (n/m)` pages carrying the full line |
+
+Both wrap the line across pages, and neither drops anything: reassembling the fragments gives back
+the challenge exactly. A Trezor marks no continuation, so read across its page break with care — the
+challenge is 64 characters and all of them must be there.
 
 Earlier versions of the application laid this message out over three lines, and a Ledger answered
 with a `Message hash` screen instead of the text: its Bitcoin app falls back to the hash for any
