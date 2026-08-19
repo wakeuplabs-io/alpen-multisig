@@ -1,10 +1,12 @@
-//! G10/B0 — measures what a Ledger renders while signing the **login challenge**, before and
-//! after dropping its newlines.
+//! G10 — what a Ledger renders while signing the **login challenge**, and whether the signature
+//! it produces over that screen still authenticates.
 //!
 //! G9/B0 measured that the Bitcoin app falls back to the SHA-256 "Message hash" screen when the
 //! message is not printable ASCII, and that the session-authentication string hashes because of
-//! its `\n` separators. This gates G10: the ` | ` format only earns the change if the device
-//! actually paints it as text, with a real 64-hex challenge, on the same build.
+//! its `\n` separators. `pipe_separated_challenge_renders_as_text` is B0's gate: the ` | ` format
+//! only earns the change if the device actually paints it, with a real 64-hex challenge, on the
+//! same build. `what_the_device_shows_is_what_the_verifier_accepts` is B2's device QA: the same
+//! run has to end in a signature the shipped verifier takes.
 //!
 //! Run with Speculos up:
 //!   LEDGER_SPECULOS_URL=http://localhost:5001 \
@@ -12,6 +14,7 @@
 
 mod ledger_screens;
 
+use desktop_app::infrastructure::challenge_verifier;
 use ledger_screens::{drop_idle_screen, rendered_payload, sign_and_record, Screen};
 
 /// A challenge digest is a SHA-256, so the real message always carries 64 hex characters. Using a
@@ -107,4 +110,48 @@ fn pipe_separated_challenge_renders_as_text() {
          fixing — re-measure before changing the signing contract. Screens were:\n{}",
         newline.all_text
     );
+}
+
+/// The claim the loop actually has to make: what the signer reads off the device is the same
+/// string the verifier accepts. Screens and signature come from one run, and both the message and
+/// the verification come from the shipped code — not from a literal retyped in the test, which
+/// would pass just as happily if production drifted.
+#[test]
+fn what_the_device_shows_is_what_the_verifier_accepts() {
+    let Ok(base) = std::env::var("LEDGER_SPECULOS_URL") else {
+        eprintln!("skip: LEDGER_SPECULOS_URL not set");
+        return;
+    };
+    std::env::set_var("LEDGER_SPECULOS_AUTO_APPROVE", "0");
+
+    let challenge = challenge_hex();
+    let message = challenge_verifier::render_challenge_message("strata_administrator", &challenge);
+    let shot_dir = std::env::var("G10_SHOT_DIR").unwrap_or_else(|_| "/tmp".into());
+    let (screens, signature) = sign_and_record(&base, &message, &shot_dir, "g10-b2-login");
+    let signature = signature.expect("ledger signature over the challenge");
+    let screens = drop_idle_screen(&screens);
+
+    let all_text = screens
+        .iter()
+        .map(Screen::joined)
+        .collect::<Vec<_>>()
+        .join("\n");
+    eprintln!("\n--- login challenge ---\n{all_text}\n---");
+
+    assert!(
+        !all_text.to_lowercase().contains("hash"),
+        "the device fell back to the message hash for the shipped challenge format. \
+         Screens were:\n{all_text}"
+    );
+    assert!(
+        alphanumeric(&rendered_payload(&screens)).contains(&alphanumeric(&message)),
+        "the device did not render the whole challenge. Screens were:\n{all_text}"
+    );
+
+    challenge_verifier::verify_bitcoin_message_signature(
+        &message,
+        &signature.public_key_hex,
+        &signature.signature_hex,
+    )
+    .expect("the signature the device produced over what it displayed must verify");
 }
