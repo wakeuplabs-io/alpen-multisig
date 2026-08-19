@@ -47,7 +47,7 @@ Every session starts with your signer signing a short challenge that proves it h
 key. It looks like this, on one line:
 
 ```
-Strata Session Authentication v1 | Role: strata_administrator | Challenge: <64 hex characters>
+Strata Session Authentication v1 | Role: strata_admin | Challenge: <64 hex characters>
 ```
 
 **Read it on the device before approving.** The role tells you which multisig the session will act

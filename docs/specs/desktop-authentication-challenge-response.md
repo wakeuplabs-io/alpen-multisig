@@ -77,6 +77,12 @@ implementations — `orchestrator-be/src/infrastructure/auth_crypto.rs` and
 Strata Session Authentication v1 | Role: <role> | Challenge: <64 hex>
 ```
 
+`<role>` is the **issuer's** wire value, and the two issuers do not agree on it: the orchestrator
+emits `strata_admin` (`handlers/auth.rs:178`), the desktop's local path `strata_administrator`
+(`application/authentication.rs:261`). Harmless today — each side verifies the string it issued, and
+the live flow goes through the orchestrator — but it is two vocabularies inside a signed message, and
+worth collapsing before anything else reads the role off this line.
+
 **The separators are ` | ` and the whole string must stay printable ASCII.** This is a device
 constraint, not a style choice: a Ledger's Bitcoin app falls back to showing a SHA-256
 `Message hash` screen for any message that is not printable ASCII, and a single `\n` is enough. A
