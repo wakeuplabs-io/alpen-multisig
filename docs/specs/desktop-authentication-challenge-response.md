@@ -67,6 +67,31 @@ role_to_keys: HashMap<Role, Vec<CompressedPublicKeyHex>>
 6. Desktop checks signer key membership in role key set.
 7. On success, desktop creates local authenticated session scoped to that role.
 
+### 2b) The message the signer reads (signing contract)
+
+The signer approves a **rendered message**, not the digest. Its format is a signing contract in both
+implementations — `orchestrator-be/src/infrastructure/auth_crypto.rs` and
+`desktop-app/src-tauri/src/infrastructure/challenge_verifier.rs` — and each pins it in a test:
+
+```
+Strata Session Authentication v1 | Role: <role> | Challenge: <64 hex>
+```
+
+**The separators are ` | ` and the whole string must stay printable ASCII.** This is a device
+constraint, not a style choice: a Ledger's Bitcoin app falls back to showing a SHA-256
+`Message hash` screen for any message that is not printable ASCII, and a single `\n` is enough. A
+signer looking at a hash cannot satisfy PRD §3.2.4, which is why #402 was raised.
+
+Measured on Speculos, Bitcoin Test app 2.4.2 (`issues/evidence/G10-B0-CHALLENGE-MEASUREMENT.md`):
+the same content renders as text across three pages with ` | ` and as a hash with `\n`. A Trezor
+renders the text either way.
+
+Changing this string is safe without a migration **only because nothing re-renders a message it did
+not issue**: the orchestrator stores `challenge_message` on the pending challenge and verifies
+against that stored string, the frontend signs the message it received, and the desktop's local path
+renders and verifies inside one binary. A future change that makes a client re-render the message
+locally would break that property and would need a compatibility story.
+
 ### 3) Authorization model (desktop local)
 
 - Authorization predicate:

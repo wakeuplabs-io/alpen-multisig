@@ -23,21 +23,41 @@ false confidence.
 | Signer | On screen | What the app shows |
 |---|---|---|
 | Trezor | The message text. | The same message text. |
-| Ledger | Either the message text **or** a `Message hash`. | Both, so one of them always matches. |
+| Ledger | The message text, for every message this application asks it to sign. Older models and app versions may show a `Message hash` instead. | Both, so one of them always matches. |
 | Software wallet | Nothing — there is no device screen. | Nothing to compare; the host machine is trusted. |
 
 A Ledger running Bitcoin app **2.2.2 or later** renders the message text when it is printable and
 **640 bytes or shorter**, and the `Message hash` otherwise. Both halves of that rule were confirmed
 on Bitcoin app 2.4.2: printable messages up to 256 characters rendered as text, a 1000-character one
 fell back to the hash, and so did a short message containing non-printable bytes. **A line break
-counts as non-printable** — which is why the session-authentication message, at 135 characters,
-still shows as a hash while the same text with spaces instead of line breaks shows in full. In practice a signer-set change crosses
+counts as non-printable**, and that is what used to make the login challenge unreadable: at 135
+characters it still showed as a hash purely because of its line breaks. The application now sends
+that message with ` | ` separators instead, and the device shows it in full — see
+**The login challenge** below. In practice a signer-set change crosses
 640 bytes at about six added or removed members. **Before 2.2.2 the device always showed the hash**,
 whatever the message — and the app cannot tell which Bitcoin app version your device is running.
 That is why it shows both values and asks you to match whichever one appears.
 
 The `Message hash` is `SHA-256` of the message text, printed by the device in **upper case**. The app
 prints it upper case too, so the two strings are identical character for character.
+
+## The login challenge
+
+Every session starts with your signer signing a short challenge that proves it holds the Admin ID
+key. It looks like this, on one line:
+
+```
+Strata Session Authentication v1 | Role: strata_administrator | Challenge: <64 hex characters>
+```
+
+**Read it on the device before approving.** The role tells you which multisig the session will act
+as; the challenge is random per request, so it is never the same twice, and a request to sign a
+challenge you did not start is a request to hand someone else a session.
+
+This message used to be laid out over three lines, and a Ledger showed a `Message hash` for it — the
+line breaks alone were enough to trigger the hash screen. It now uses ` | ` separators and the device
+renders it in full across three pages. Measured on Bitcoin app 2.4.2, and on a Trezor, which showed
+the text either way.
 
 ## The Admin ID Verification Certificate
 

@@ -32,8 +32,10 @@ assert.doesNotMatch(trezor.verifyHint, /Ledger/)
 assert.doesNotMatch(trezor.broadcastHint, /Ledger/)
 assert.doesNotMatch(trezor.verifyOnDeviceHint, /Ledger/)
 
-// Ledger → named as Ledger, and pointed at BOTH values, since the device shows either the
-// message text or the SHA-256 "Message hash" depending on model / app version (#402).
+// Ledger → named as Ledger, and pointed at BOTH values. Since G10 every message the app signs is
+// printable ASCII, so current Bitcoin app versions show the text (#402) — but older models and app
+// versions still answer with the SHA-256 "Message hash", and the app cannot tell in advance, so the
+// hint has to keep naming both.
 const ledger = deviceCopy('ledger')
 assert.equal(ledger.label, 'Ledger')
 assert.equal(ledger.isHardware, true)

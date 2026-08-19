@@ -5,9 +5,11 @@ import type { WalletVendor } from '@/wallet/types'
  * can present the same value for the signer to compare — instead of the BIP-137 sighash,
  * which no device displays.
  *
- * - `hash-and-text`: Ledger renders either the message text or `sha256(message)` as its
- *   "Message hash", depending on the device model and Bitcoin app version — the app cannot
- *   tell which in advance, so both are shown and the signer compares whichever one appears.
+ * - `hash-and-text`: Ledger renders the message text for every message the app asks it to sign —
+ *   all of them are printable ASCII, which is what its Bitcoin app needs to show text (measured on
+ *   app 2.4.2, `issues/evidence/G10-B0-CHALLENGE-MEASUREMENT.md`). Older models and app versions
+ *   can still fall back to `sha256(message)` as a "Message hash", and the app cannot tell which in
+ *   advance, so both values are offered and the signer compares whichever one appears.
  * - `text`: Trezor renders the canonical message text.
  * - `none`: software signer (mnemonic/mock) — there is no device screen to compare.
  */
