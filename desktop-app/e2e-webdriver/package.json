@@ -17,6 +17,8 @@
 		"test:e2e:admin-id-certificate": "wdio run wdio.conf.js --spec ./test/specs/admin-id-certificate.e2e.js",
 		"test:e2e:signing-no-sighash": "wdio run wdio.conf.js --spec ./test/specs/signing-no-sighash.e2e.js",
 		"test:e2e:connect-no-passphrase-field": "wdio run wdio.conf.js --spec ./test/specs/connect-no-passphrase-field.e2e.js",
+		"qa:login-ledger": "wdio run wdio.conf.js --spec ./test/specs/g10-login-ledger.qa.js",
+		"qa:login-trezor": "wdio run wdio.conf.js --spec ./test/specs/g10-login-trezor.qa.js",
 		"qa:certificate-trezor": "wdio run wdio.conf.js --spec ./test/specs/g9-certificate-trezor.qa.js",
 		"qa:certificate-ledger": "wdio run wdio.conf.js --spec ./test/specs/g9-certificate-ledger.qa.js",
 		"qa:trezor-wallet-choice": "wdio run wdio.conf.js --spec ./test/specs/g5-wallet-choice.qa.js",

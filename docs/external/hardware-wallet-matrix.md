@@ -145,6 +145,25 @@ Before signing any transaction, users should verify:
 2. **Transaction details** — The action details (type, parameters, sequence number) displayed on the hardware wallet match what is shown in the application
 3. **Signing prompt** — The hardware wallet clearly indicates what is being signed
 
+### Signing in to a session
+
+Every session begins with the device signing a short challenge, on one line:
+
+```
+Strata Session Authentication v1 | Role: <role> | Challenge: <64 hex characters>
+```
+
+| Device | Signing screen |
+|---|---|
+| Trezor (Safe 3, fw 2.8.7) | The message text |
+| Ledger (Bitcoin app 2.4.2) | `Message (n/m)` pages carrying the full line |
+
+Earlier versions of the application laid this message out over three lines, and a Ledger answered
+with a `Message hash` screen instead of the text: its Bitcoin app falls back to the hash for any
+message that is not printable ASCII, and a line break is enough. The separators are now ` | `, and
+the device shows the message itself. **Read the role before approving** — it is the multisig the
+session will act as.
+
 ### Verifying the Admin ID
 
 The Admin ID is a P2WPKH address derived at `m/84'/0'/73'/0/0`, and the **Verify** control beside it
