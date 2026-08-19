@@ -6,8 +6,8 @@ import { deviceSigningDisplay } from '../device-signing-display.ts'
 const message = 'Strata ASM Administration v1\nAction: ...'
 const messageHash = 'ee020aa4a02d55a674aee20764aaa760d463559e7858c91f14f'
 
-// Ledger → both values: current Bitcoin app versions show the message text for everything this app
-// signs, but older models and versions show the SHA-256 "Message hash", and the app cannot
+// Ledger → both values: which one a device shows turns on the model, the app version and the
+// message itself — the governance message still renders as a hash on some builds — and the app cannot
 // tell which in advance (#402 — a Nano X was observed rendering the full text).
 // The hash is upper-cased to match the device, which prints it with "%02X".
 assert.deepEqual(deviceSigningDisplay('ledger', { message, messageHash }), {

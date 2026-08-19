@@ -32,10 +32,10 @@ assert.doesNotMatch(trezor.verifyHint, /Ledger/)
 assert.doesNotMatch(trezor.broadcastHint, /Ledger/)
 assert.doesNotMatch(trezor.verifyOnDeviceHint, /Ledger/)
 
-// Ledger → named as Ledger, and pointed at BOTH values. Since G10 every message the app signs is
-// printable ASCII, so current Bitcoin app versions show the text (#402) — but older models and app
-// versions still answer with the SHA-256 "Message hash", and the app cannot tell in advance, so the
-// hint has to keep naming both.
+// Ledger → named as Ledger, and pointed at BOTH values, neither presented as the likely one. Which
+// appears turns on the model, the app version AND the message: the login challenge and the
+// certificate render as text, the governance message renders as a hash on a Nano S+ with app 2.4.2
+// and as text on a Nano X. The app cannot tell in advance, which is the resolution #420 settled on.
 const ledger = deviceCopy('ledger')
 assert.equal(ledger.label, 'Ledger')
 assert.equal(ledger.isHardware, true)

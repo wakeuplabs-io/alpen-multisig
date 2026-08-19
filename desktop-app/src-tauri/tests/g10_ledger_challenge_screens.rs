@@ -151,3 +151,56 @@ fn what_the_device_shows_is_what_the_verifier_accepts() {
     )
     .expect("the signature the device produced over what it displayed must verify");
 }
+
+/// The governance message — what a signer approves to enact a proposal. Unlike the challenge and the
+/// certificate, this one is **not ours to reformat**: the ASM subprotocol crate builds it as
+/// `lines.join("\n")` (`asm/crates/subprotocols/admin/txs/src/signing_message.rs`) and the
+/// subprotocol verifies that exact payload.
+///
+/// Recorded here because the app's copy depends on it. #420 settled that a Ledger may show either
+/// the text or the hash and that the app cannot predict which, so it shows both — and this is the
+/// message that keeps the hash case live rather than residual: it renders as a hash on a Nano S+
+/// with app 2.4.2, while the client measured full text for it on a Nano X. A future reader tempted
+/// to simplify that copy to "the Ledger shows the text" should run this first.
+///
+/// Opt in with `MEASURE_GOVERNANCE=1`; drives the same device, so `--test-threads=1`.
+#[test]
+fn governance_message_screen_is_model_dependent() {
+    let Ok(base) = std::env::var("LEDGER_SPECULOS_URL") else {
+        eprintln!("skip: LEDGER_SPECULOS_URL not set");
+        return;
+    };
+    if std::env::var("MEASURE_GOVERNANCE").is_err() {
+        eprintln!("skip: set MEASURE_GOVERNANCE=1 to run this measurement");
+        return;
+    }
+    std::env::set_var("LEDGER_SPECULOS_AUTO_APPROVE", "0");
+
+    // A real signer-set update, as `SigningMessage::for_action` renders it.
+    let message = "Strata ASM Administration v1\n\
+         Action: Strata Administrator Multisig Update\n\
+         Authorized By: Strata Administrator\n\
+         Sequence: 4\n\
+         Action Details:\n  \
+         New Threshold: 2\n  \
+         Members to Add: 1\n  \
+         1. Add Member: 020202020202020202020202020202020202020202020202020202020202020202\n  \
+         Members to Remove: 0";
+
+    let shot_dir = std::env::var("G10_SHOT_DIR").unwrap_or_else(|_| "/tmp".into());
+    let (screens, _sig) = sign_and_record(&base, message, &shot_dir, "governance-message");
+    let screens = drop_idle_screen(&screens);
+    let all_text = screens
+        .iter()
+        .map(Screen::joined)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let showed_hash = all_text.to_lowercase().contains("hash");
+    let showed_text = alphanumeric(&rendered_payload(&screens)).contains(&alphanumeric(message));
+    eprintln!(
+        "\n--- governance message (len {}) ---\n{all_text}\n---",
+        message.len()
+    );
+    eprintln!("hash={showed_hash} text={showed_text}");
+}
