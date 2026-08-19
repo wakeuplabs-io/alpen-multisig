@@ -54,7 +54,10 @@ export function VerifyOnDeviceButton({
 	const appearance = verifyOnDeviceAppearance(state, label, `Confirm on your ${deviceCopy(deviceType).label}…`)
 
 	return (
-		<div className="mt-2">
+		// A column, not a row: the success line used to be an inline sibling of the button, which put
+		// it on the same visual line with an `mt-1.5` meant for stacking — half a line lower than the
+		// pill beside it. Stacking also spares the 360px wallet panel, where this sentence wraps.
+		<div className="mt-2 flex flex-col items-start gap-1.5">
 			<button
 				type="button"
 				onClick={handleVerify}
@@ -74,20 +77,17 @@ export function VerifyOnDeviceButton({
 			{state.status === 'verified' && (
 				<p
 					aria-live="polite"
-					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-[#059669]"
+					className="text-[11px] leading-[1.45] text-[#065f46]"
 					data-testid="e2e-wallet-verify-on-device-result"
 				>
-					<CheckEmeraldIcon width={12} height={12} className="mt-px shrink-0" />
-					<span>
-						Confirmed the {subject} on your {deviceCopy(deviceType).label}.
-					</span>
+					Confirmed the {subject} on your {deviceCopy(deviceType).label}.
 				</p>
 			)}
 
 			{state.status === 'mismatch' && (
 				<div
 					aria-live="assertive"
-					className="mt-1.5 rounded-lg border border-danger-border bg-danger-surface px-3 py-2"
+					className="w-full rounded-lg border border-danger-border bg-danger-surface px-3 py-2"
 					data-testid="e2e-wallet-verify-on-device-mismatch"
 				>
 					<p className="inline-flex items-start gap-1.5 text-[11px] font-medium leading-[1.45] text-danger-strong">
@@ -105,10 +105,7 @@ export function VerifyOnDeviceButton({
 			)}
 
 			{state.status === 'failed' && (
-				<p
-					aria-live="polite"
-					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-danger-strong"
-				>
+				<p aria-live="polite" className="inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-danger-strong">
 					<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-danger" />
 					<span>
 						Could not verify the {subject}: {state.message}
