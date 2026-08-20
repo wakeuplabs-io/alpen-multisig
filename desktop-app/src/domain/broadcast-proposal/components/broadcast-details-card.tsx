@@ -8,6 +8,7 @@ import { SectionLabel } from '@/components/section-label'
 import { satsToBtc } from '../model/broadcast-proposal'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
+import { deviceCopy } from '@/lib/device-copy'
 import type { WalletVendor } from '@/wallet/types'
 
 type AdminWalletInfoView = {
@@ -31,6 +32,12 @@ type Props = {
 	walletVendor: WalletVendor
 	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
 	feeSelector?: ReactNode
+}
+
+/** bech32 human-readable part — everything before the separator (`bcrt`, `tb`, `bc`). */
+function hrpOf(address: string): string {
+	const separator = address.lastIndexOf('1')
+	return separator === -1 ? '' : address.slice(0, separator)
 }
 
 const TIME_UNITS = [
@@ -80,6 +87,11 @@ export function BroadcastDetailsCard({
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
+	// The commit preview is rendered the way the connected device will show it, which off
+	// mainnet is a different prefix from the network's own (issue #401). The wallet's funding
+	// address is the network's, so a differing HRP is exactly that case.
+	const showsForeignPrefix = adminWalletInfo != null && hrpOf(bundle.commitAddress) !== hrpOf(adminWalletInfo.address)
+
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
@@ -129,6 +141,13 @@ export function BroadcastDetailsCard({
 						</span>
 						<CopyButton text={bundle.commitAddress} />
 					</div>
+					{deviceCopy(walletVendor).isHardware && showsForeignPrefix && (
+						<p className="mt-2 text-mono-sm leading-[1.45] text-[#9ca3af]">
+							Shown with the prefix your {deviceCopy(walletVendor).label} renders — its firmware has no coin for this
+							network. Compare it with the device screen character for character; the transaction itself pays the
+							address for this network, with the same characters after the prefix.
+						</p>
+					)}
 					<p className="mt-2 text-body-sm text-[#6b7280]">
 						{satsToBtc(bundle.commitAmountSats)} BTC{' '}
 						<span className="text-label text-[#9ca3af]">({bundle.commitAmountSats.toLocaleString()} sats)</span>
