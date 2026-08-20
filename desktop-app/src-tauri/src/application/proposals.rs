@@ -59,10 +59,12 @@ pub enum BroadcastError {
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
 use crate::domain::fee_rate::FeeRate;
 use crate::infrastructure::admin_wallet::EnvelopeKeyCache;
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 
 /// Assemble commit/reveal artifacts for an approved proposal without submitting to the network.
 ///
 /// Returns `(commit_address, commit_amount_sats, estimated_fee_sats)`.
+#[allow(clippy::too_many_arguments)]
 pub async fn prepare_broadcast_bundle(
     client: &dyn OrchestratorClient,
     asm_rpc_url: &str,
@@ -70,6 +72,7 @@ pub async fn prepare_broadcast_bundle(
     action_id: &str,
     fee_rate: FeeRate,
     envelope_cache: &EnvelopeKeyCache,
+    hw_device: Option<HwDeviceType>,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let proposal = client.get_proposal(action_id).await?;
 
@@ -106,7 +109,7 @@ pub async fn prepare_broadcast_bundle(
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
-        broadcast_tx::device_facing_commit_address(&commit_address, network),
+        broadcast_tx::device_facing_commit_address(&commit_address, network, hw_device),
         commit_amount_sats,
         estimated_fee_sats,
     ))
@@ -485,6 +488,7 @@ pub async fn prepare_broadcast_manual(
     signatures: &[Signature],
     fee_rate: FeeRate,
     envelope_cache: &EnvelopeKeyCache,
+    hw_device: Option<HwDeviceType>,
 ) -> Result<(String, u64, u64), BroadcastError> {
     let auth = crate::domain::authority::Authority::from_wire(authority)
         .map_err(|e| BroadcastError::Setup(e.to_string()))?;
@@ -521,7 +525,7 @@ pub async fn prepare_broadcast_manual(
     let commit_amount_sats = COMMIT_DUST_SATS + estimated_fee_sats;
 
     Ok((
-        broadcast_tx::device_facing_commit_address(&commit_address, network),
+        broadcast_tx::device_facing_commit_address(&commit_address, network, hw_device),
         commit_amount_sats,
         estimated_fee_sats,
     ))
@@ -786,6 +790,7 @@ pub async fn list_proposals(
 }
 
 /// Prepare commit/reveal fee estimate locally (desktop-owned Bitcoin RPC).
+#[allow(clippy::too_many_arguments)]
 pub async fn prepare_broadcast_local(
     client: &dyn OrchestratorClient,
     asm_rpc_url: &str,
@@ -793,6 +798,7 @@ pub async fn prepare_broadcast_local(
     action_id: &str,
     fee_rate: FeeRate,
     envelope_cache: &EnvelopeKeyCache,
+    hw_device: Option<HwDeviceType>,
 ) -> Result<(String, u64, u64), BroadcastError> {
     prepare_broadcast_bundle(
         client,
@@ -801,6 +807,7 @@ pub async fn prepare_broadcast_local(
         action_id,
         fee_rate,
         envelope_cache,
+        hw_device,
     )
     .await
 }
@@ -2111,9 +2118,10 @@ mod tests {
     /// preview and the broadcast each minted their own random ephemeral keypair, so the address
     /// the signer confirmed on a hardware wallet never matched the app — defeating on-device
     /// verification. With one cache across both calls (same payload → same keypair), the two
-    /// addresses are identical (modulo the regtest→testnet HRP the device renders).
+    /// addresses are identical (modulo the HRP the device renders — see issue #401).
     #[tokio::test]
     async fn preview_and_broadcast_commit_address_match() {
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
         use bitcoin::{Address, Network, ScriptBuf};
         use std::str::FromStr;
         use strata_l1_txfmt::MagicBytes;
@@ -2130,6 +2138,7 @@ mod tests {
             "action-match",
             fee_rate,
             &cache,
+            Some(HwDeviceType::Trezor),
         )
         .await
         .expect("preview ok");
@@ -2159,13 +2168,17 @@ mod tests {
         // The funded address is the real regtest (bcrt1) address; rendering it the way the
         // device would must reproduce the preview string exactly.
         assert_eq!(
-            broadcast_tx::device_facing_commit_address(&funded_addr, Network::Regtest),
+            broadcast_tx::device_facing_commit_address(
+                &funded_addr,
+                Network::Regtest,
+                Some(HwDeviceType::Trezor)
+            ),
             preview_address,
             "preview and broadcast must derive the same commit address"
         );
         assert!(
-            funded.starts_with("bcrt1p") && preview_address.starts_with("tb1p"),
-            "sanity: funded is regtest, preview is the testnet HRP the device shows"
+            funded.starts_with("bcrt1p") && preview_address.starts_with("bc1p"),
+            "sanity: funded is regtest, preview is the mainnet HRP a Trezor shows for coin 0'"
         );
     }
 

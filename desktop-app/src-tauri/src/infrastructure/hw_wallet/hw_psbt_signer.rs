@@ -41,6 +41,16 @@ impl HwDeviceType {
         }
     }
 
+    /// Maps an internal signer-kind label (as held by the wallet session) to a device,
+    /// or `None` for a software / absent signer.
+    pub fn from_signer_kind(raw: &str) -> Option<Self> {
+        match raw {
+            "trezor" => Some(HwDeviceType::Trezor),
+            "ledger" => Some(HwDeviceType::Ledger),
+            _ => None,
+        }
+    }
+
     /// The concrete adapter PSBT-signing function for this device.
     fn device_sign_fn(self) -> DeviceSignFn {
         match self {

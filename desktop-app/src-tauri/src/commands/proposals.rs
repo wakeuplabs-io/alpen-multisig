@@ -798,6 +798,7 @@ pub async fn proposals_prepare_broadcast(
             &input.action_id,
             fee_rate,
             &envelope_cache,
+            env.hw_device,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -982,6 +983,7 @@ pub async fn proposals_prepare_broadcast_manual(
             &signatures,
             fee_rate,
             &envelope_cache,
+            env.hw_device,
         )
         .await
         .map_err(map_broadcast_error)?;
