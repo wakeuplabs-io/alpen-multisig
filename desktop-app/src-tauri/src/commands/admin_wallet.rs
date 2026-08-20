@@ -13,7 +13,7 @@ use desktop_app::application::wallet_transactions::{
 };
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::infrastructure::admin_wallet::wallet::{
-    admin_wallet_account_path, render_address_with_hrp,
+    admin_wallet_account_path, device_hrp_network, render_address_with_hrp,
 };
 use desktop_app::infrastructure::admin_wallet::AdminWalletError;
 use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
@@ -103,15 +103,6 @@ pub struct AdminWalletSignStatus {
     pub admin_wallet_account_path: Option<String>,
 }
 
-/// Maps the internal signer label to a [`HwDeviceType`], or `None` for software/no signer.
-fn hw_device_kind(raw: &str) -> Option<HwDeviceType> {
-    match raw {
-        "trezor" => Some(HwDeviceType::Trezor),
-        "ledger" => Some(HwDeviceType::Ledger),
-        _ => None,
-    }
-}
-
 /// Maps internal signer labels to the FE capability DTO (`hardware` | `mnemonic` | `none`).
 fn capability_signer_kind(raw: &str) -> &'static str {
     match raw {
@@ -156,7 +147,7 @@ pub async fn admin_wallet_can_sign(
     let admin_wallet_account_path = current.as_ref().and_then(|svc| {
         raw_kind
             .as_deref()
-            .and_then(hw_device_kind)
+            .and_then(HwDeviceType::from_signer_kind)
             .map(|device| admin_wallet_account_path(device, svc.network()).to_string())
     });
     let (signer_kind, reason) = if can_sign {
@@ -287,7 +278,7 @@ pub async fn admin_wallet_next_receive_address(
     // For HW sessions, attach a device-accurate verification value: the same receive address
     // re-encoded with the HRP the device firmware shows (`bc1…` Bitcoin app, `tb1…` Testnet
     // app), so the on-device comparison is character-for-character exact.
-    if let Some(device) = hw_device_kind(&svc.signer_kind()) {
+    if let Some(device) = HwDeviceType::from_signer_kind(&svc.signer_kind()) {
         dto.verify_address = device_verify_address(&dto.address, device, svc.network());
     }
     Ok(dto)
@@ -300,14 +291,12 @@ fn device_verify_address(
     device: HwDeviceType,
     network: bdk_wallet::bitcoin::Network,
 ) -> Option<String> {
-    use bdk_wallet::bitcoin::{Address, Network};
-    let hrp_network = match (device, network) {
-        (HwDeviceType::Trezor, _) => Network::Bitcoin,
-        (HwDeviceType::Ledger, Network::Bitcoin) => Network::Bitcoin,
-        (HwDeviceType::Ledger, _) => Network::Testnet,
-    };
+    use bdk_wallet::bitcoin::Address;
     let parsed = address.parse::<Address<_>>().ok()?.assume_checked();
-    Some(render_address_with_hrp(&parsed, hrp_network))
+    Some(render_address_with_hrp(
+        &parsed,
+        device_hrp_network(device, network),
+    ))
 }
 
 #[tauri::command]
