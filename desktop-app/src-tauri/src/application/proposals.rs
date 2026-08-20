@@ -3,6 +3,7 @@
 //! Public API mirrors the PRD's `MultisigBackend` trait semantics:
 //! - `create_update_action(action_hex, seq_no, signature)` — propose + first signature
 //! - `approve_action(action_id, signature)` — add approval signature
+//! - `create_cancel_action(target_action_id, action_hex, seq_no, signature)` — propose a cancel
 //! - `get_update_action(action_id)` — fetch proposal detail
 //!
 //! Authority is implicit — bound to the authenticated session, not passed per call.
@@ -15,8 +16,8 @@ use strata_l1_txfmt::MagicBytes;
 
 use crate::application::commit_funding::CommitFunding;
 use crate::application::orchestrator_client::{
-    ApproveActionRequest, CreateProposalRequest, OrchestratorClient, OrchestratorError,
-    ReportBroadcastProgressRequest, TransitionProposalRequest,
+    ApproveActionRequest, CreateCancelProposalRequest, CreateProposalRequest, OrchestratorClient,
+    OrchestratorError, ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
 use crate::application::pending_reveals::PendingReveals;
 use crate::application::tx_broadcaster::TxBroadcaster;
@@ -719,6 +720,42 @@ pub async fn approve_action(
     Ok(proposal)
 }
 
+/// Create a Cancel proposal for an approved target and store the initiator's signature.
+///
+/// The orchestrator is idempotent: when a cancel proposal already exists for `target_action_id`
+/// it is returned unchanged, without recording another signature.
+///
+/// Like `create_update_action`, when that first signature already satisfies quorum (effective
+/// threshold 1) the explicit pending → approved transition is persisted here (P-012 / ADR-006) —
+/// the orchestrator never transitions on its own.
+///
+/// Callers are responsible for encoding the cancel action to SSZ hex before calling this
+/// function (`infrastructure::action_codec::encode_hex`).
+pub async fn create_cancel_action(
+    client: &dyn OrchestratorClient,
+    target_action_id: &str,
+    action_hex: &str,
+    seq_no: u64,
+    signature: &Signature,
+) -> Result<Proposal, ProposalError> {
+    let request = CreateCancelProposalRequest {
+        seq_no,
+        action_hex: action_hex.to_string(),
+        signer_pubkey: signature.signer_pubkey.clone(),
+        signature_hex: signature.signature_hex.clone(),
+    };
+
+    let proposal = client
+        .create_cancel_proposal(target_action_id, request)
+        .await?;
+    // The cancel proposal carries its own action id — transitioning `target_action_id` here
+    // would approve the very proposal being cancelled.
+    if proposal.status == "pending" && orchestrator_quorum_reached(&proposal) {
+        return transition_to_approved(client, &proposal.action_id).await;
+    }
+    Ok(proposal)
+}
+
 /// Fetch the action payload and details.
 ///
 /// Mirrors PRD: `get_update_action(id)`.
@@ -890,7 +927,9 @@ mod tests {
     struct MockOrchestratorClient {
         last_create_request: Mutex<Option<CreateProposalRequest>>,
         last_approve_request: Mutex<Option<(String, ApproveActionRequest)>>,
+        last_cancel_request: Mutex<Option<(String, CreateCancelProposalRequest)>>,
         transition_called: Mutex<bool>,
+        last_transition_action_id: Mutex<Option<String>>,
         approve_signature_count: Mutex<usize>,
         claim_broadcast_called: Mutex<bool>,
         report_broadcast_called: Mutex<bool>,
@@ -905,7 +944,9 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                last_cancel_request: Mutex::new(None),
                 transition_called: Mutex::new(false),
+                last_transition_action_id: Mutex::new(None),
                 approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
@@ -926,7 +967,9 @@ mod tests {
             Self {
                 last_create_request: Mutex::new(None),
                 last_approve_request: Mutex::new(None),
+                last_cancel_request: Mutex::new(None),
                 transition_called: Mutex::new(false),
+                last_transition_action_id: Mutex::new(None),
                 approve_signature_count: Mutex::new(0),
                 claim_broadcast_called: Mutex::new(false),
                 report_broadcast_called: Mutex::new(false),
@@ -946,6 +989,10 @@ mod tests {
 
         fn last_approve_request(&self) -> Option<(String, ApproveActionRequest)> {
             self.last_approve_request.lock().unwrap().take()
+        }
+
+        fn last_cancel_request(&self) -> Option<(String, CreateCancelProposalRequest)> {
+            self.last_cancel_request.lock().unwrap().take()
         }
     }
 
@@ -1006,10 +1053,41 @@ mod tests {
 
         async fn create_cancel_proposal(
             &self,
-            _target_action_id: &str,
-            _request: crate::application::orchestrator_client::CreateCancelProposalRequest,
+            target_action_id: &str,
+            request: CreateCancelProposalRequest,
         ) -> Result<OrcProposal, OrchestratorError> {
-            Err(OrchestratorError::Request("not used in tests".to_string()))
+            if self.should_fail {
+                return Err(OrchestratorError::Backend {
+                    status: 500,
+                    message: "mock error".to_string(),
+                });
+            }
+            // A `cancel_` prefix keeps the cancel proposal's own id distinguishable from the
+            // target's `action_` id, so tests can prove which one the transition targets.
+            let response = OrcProposal {
+                action_id: format!("cancel_{}", request.seq_no),
+                authority: Authority::StrataAdmin,
+                seq_no: request.seq_no,
+                action_hex: request.action_hex.clone(),
+                status: "pending".to_string(),
+                required_signatures: self.required_signatures,
+                signatures: vec![ProposalSignature {
+                    signer_pubkey: request.signer_pubkey.clone(),
+                    signature_hex: request.signature_hex.clone(),
+                }],
+                broadcast_status: "idle".to_string(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: Some(target_action_id.to_string()),
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: 0,
+                cancel_proposal: None,
+            };
+            *self.last_cancel_request.lock().unwrap() =
+                Some((target_action_id.to_string(), request));
+            Ok(response)
         }
 
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
@@ -1099,6 +1177,7 @@ mod tests {
             _request: TransitionProposalRequest,
         ) -> Result<OrcProposal, OrchestratorError> {
             *self.transition_called.lock().unwrap() = true;
+            *self.last_transition_action_id.lock().unwrap() = Some(action_id.to_string());
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,
@@ -1268,6 +1347,64 @@ mod tests {
 
         assert_eq!(result.status, "approved");
         assert!(*mock.transition_called.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_at_quorum_calls_transition() {
+        let mock = MockOrchestratorClient::with_required_signatures(1);
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 7, &action_hex);
+
+        let result = create_cancel_action(&mock, "action_target", &action_hex, 7, &sig)
+            .await
+            .expect("should succeed");
+
+        assert_eq!(result.status, "approved");
+        assert!(*mock.transition_called.lock().unwrap());
+        // The transition must target the cancel proposal, never the proposal being cancelled.
+        assert_eq!(
+            mock.last_transition_action_id.lock().unwrap().as_deref(),
+            Some("cancel_7")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_below_quorum_stays_pending() {
+        let mock = MockOrchestratorClient::new();
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 7, &action_hex);
+
+        let result = create_cancel_action(&mock, "action_target", &action_hex, 7, &sig)
+            .await
+            .expect("should succeed");
+
+        assert_eq!(result.status, "pending");
+        assert_eq!(result.signatures.len(), 1);
+        assert_eq!(result.target_action_id.as_deref(), Some("action_target"));
+        assert!(!*mock.transition_called.lock().unwrap());
+
+        let (target, req) = mock.last_cancel_request().expect("request sent");
+        assert_eq!(target, "action_target");
+        assert_eq!(req.seq_no, 7);
+        assert_eq!(req.action_hex, action_hex);
+        assert_eq!(req.signer_pubkey, sig.signer_pubkey);
+    }
+
+    #[tokio::test]
+    async fn test_create_cancel_backend_error_propagates() {
+        let mock = MockOrchestratorClient::failing();
+        let (sk, _pk) = generate_test_keypair();
+        let action_hex = demo_action_hex();
+        let sig = sign_action(&sk, 7, &action_hex);
+
+        let result = create_cancel_action(&mock, "action_target", &action_hex, 7, &sig).await;
+
+        assert!(matches!(
+            result.unwrap_err(),
+            ProposalError::Orchestrator(_)
+        ));
     }
 
     #[tokio::test]
