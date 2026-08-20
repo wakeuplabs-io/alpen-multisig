@@ -1,18 +1,7 @@
 # Supply-chain policy (P-011). See https://embarkstudios.github.io/cargo-deny/
 [advisories]
 version = 2
-# Tauri/Linux GTK3 stack and transitive deps without safe upgrades yet.
-#
-# quick-xml 0.39.x (RUSTSEC-2026-0194, RUSTSEC-2026-0195): both are DoS advisories
-# against XML parsed at runtime. quick-xml only enters the graph through two
-# build-time paths — `plist` (Tauri's Info.plist generation for the macOS bundle)
-# and `wayland-scanner` (a proc-macro). The shipped binary never parses XML, so
-# neither advisory is reachable at runtime. `plist ^0.39` pins the version; the fix
-# requires quick-xml >= 0.41 upstream in Tauri. Re-evaluate on the next Tauri bump.
-ignore = [
-    "RUSTSEC-2026-0194",
-    "RUSTSEC-2026-0195",
-]
+# No advisory ignores. Keep in sync with .cargo/audit.toml.
 unmaintained = "none"
 yanked = "deny"
 
