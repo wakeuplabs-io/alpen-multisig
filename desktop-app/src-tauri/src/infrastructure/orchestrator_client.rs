@@ -234,6 +234,7 @@ mod tests {
                 action_hex: "deadbeef".to_string(),
                 signer_pubkey: "02aa".to_string(),
                 signature_hex: "sig".to_string(),
+                title: None,
             })
             .await
             .unwrap_err();
@@ -252,6 +253,7 @@ mod tests {
                 action_hex: "deadbeef".to_string(),
                 signer_pubkey: "02aa".to_string(),
                 signature_hex: "sig".to_string(),
+                title: None,
             })
             .await
             .unwrap_err();

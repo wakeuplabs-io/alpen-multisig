@@ -28,6 +28,14 @@ pub(crate) fn normalize_signer_pubkey_hex(hex: &str) -> String {
     hex.trim().to_lowercase()
 }
 
+/// Treat a blank or whitespace-only title as absent, so the UI has one case to handle
+/// instead of two that look identical on screen.
+fn normalize_title(title: Option<String>) -> Option<String> {
+    title
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
 /// Create a new proposal with first signature. Rejects duplicate ActionId.
 ///
 /// Mirrors PRD: `create_update_action(action, seq, sig)`.
@@ -38,6 +46,7 @@ pub(crate) async fn create_update_action(
     action_hex: &str,
     sig: &ProposalSignature,
     required_signatures: u16,
+    title: Option<String>,
 ) -> Result<Proposal, AppError> {
     if !sig
         .signer_pubkey
@@ -58,6 +67,7 @@ pub(crate) async fn create_update_action(
         status: ProposalStatus::Pending,
         required_signatures,
         action_hex: action_hex.to_string(),
+        title: normalize_title(title),
         signatures: vec![first_sig],
         broadcast_status: BroadcastStatus::default(),
         commit_txid: None,
@@ -577,6 +587,8 @@ pub(crate) async fn create_cancel_proposal(
         status: ProposalStatus::Pending,
         required_signatures,
         action_hex: action_hex.to_string(),
+        // Cancel proposals carry no user-written title; the UI labels them from the target.
+        title: None,
         signatures: vec![ProposalSignature {
             signer_pubkey: normalized_pubkey,
             signature_hex: signature_hex.to_string(),
@@ -797,10 +809,10 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 3, ACTION_HEX, &sig, 2)
+        create_update_action(&repo, session.clone(), 3, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
-        create_update_action(&repo, session.clone(), 5, "cafebabe", &sig, 2)
+        create_update_action(&repo, session.clone(), 5, "cafebabe", &sig, 2, None)
             .await
             .unwrap();
 
@@ -812,6 +824,80 @@ mod tests {
         assert_eq!(next, 6);
     }
 
+    // #491 — the title the author typed used to be dropped on the way in. These pin that it
+    // survives the round trip, and that a blank one is stored as absent rather than as an empty
+    // string the UI would then have to special-case.
+    #[tokio::test]
+    async fn test_create_update_action_persists_title() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let proposal = create_update_action(
+            &repo,
+            session,
+            1,
+            ACTION_HEX,
+            &sig,
+            2,
+            Some("Rotate signing key Q3".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(proposal.title.as_deref(), Some("Rotate signing key Q3"));
+
+        let stored = repo
+            .find_by_action_id(&proposal.action_id)
+            .await
+            .unwrap()
+            .expect("proposal should be stored");
+        assert_eq!(stored.title.as_deref(), Some("Rotate signing key Q3"));
+    }
+
+    #[tokio::test]
+    async fn test_create_update_action_blank_title_is_absent() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let proposal = create_update_action(
+            &repo,
+            session,
+            1,
+            ACTION_HEX,
+            &sig,
+            2,
+            Some("   ".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(proposal.title, None);
+    }
+
+    #[tokio::test]
+    async fn test_create_update_action_without_title_is_none() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+
+        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
+            .await
+            .unwrap();
+
+        assert_eq!(proposal.title, None);
+    }
+
     #[tokio::test]
     async fn test_create_update_action() {
         let repo = new_repo();
@@ -821,7 +907,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+        let proposal = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -849,11 +935,11 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
-        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2).await;
+        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None).await;
 
         assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
     }
@@ -867,7 +953,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -895,7 +981,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -920,7 +1006,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -952,7 +1038,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 3)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 3, None)
             .await
             .unwrap();
 
@@ -973,7 +1059,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1014,6 +1100,7 @@ mod tests {
             status: ProposalStatus::Pending,
             required_signatures: 99,
             action_hex: ACTION_HEX.to_string(),
+            title: None,
             signatures: vec![sig_a(), sig_b()],
             broadcast_status: BroadcastStatus::Idle,
             commit_txid: None,
@@ -1047,7 +1134,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1079,7 +1166,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1132,7 +1219,7 @@ mod tests {
         };
 
         // required_signatures = 3, only 2 collected
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 3)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 3, None)
             .await
             .unwrap();
 
@@ -1157,7 +1244,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -1194,7 +1281,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -1226,7 +1313,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -1244,10 +1331,10 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2)
+        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2, None)
             .await
             .unwrap();
-        create_update_action(&repo, session, 2, "bb", &sig, 2)
+        create_update_action(&repo, session, 2, "bb", &sig, 2, None)
             .await
             .unwrap();
 
@@ -1265,7 +1352,7 @@ mod tests {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
-        create_update_action(&repo, strata_session, 1, "aa", &sig, 2)
+        create_update_action(&repo, strata_session, 1, "aa", &sig, 2, None)
             .await
             .unwrap();
 
@@ -1276,6 +1363,7 @@ mod tests {
             status: ProposalStatus::Pending,
             required_signatures: 2,
             action_hex: "cc".to_string(),
+            title: None,
             signatures: vec![sig.clone()],
             broadcast_status: BroadcastStatus::default(),
             commit_txid: None,
@@ -1304,10 +1392,10 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2)
+        create_update_action(&repo, session.clone(), 1, "aa", &sig, 2, None)
             .await
             .unwrap();
-        create_update_action(&repo, session, 2, "bb", &sig, 2)
+        create_update_action(&repo, session, 2, "bb", &sig, 2, None)
             .await
             .unwrap();
 
@@ -1335,6 +1423,7 @@ mod tests {
             status: ProposalStatus::Approved,
             required_signatures: 99,
             action_hex: ACTION_HEX.to_string(),
+            title: None,
             signatures: vec![sig_a()],
             broadcast_status: BroadcastStatus::Idle,
             commit_txid: None,
@@ -1362,7 +1451,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -1385,7 +1474,7 @@ mod tests {
             signer_pubkey: "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         };
 
-        let err = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+        let err = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Unauthorized));
@@ -1397,7 +1486,7 @@ mod tests {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
-        let created = create_update_action(repo, session.clone(), 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1646,9 +1735,10 @@ mod tests {
             authority,
             signer_pubkey: &sig.signer_pubkey,
         };
-        let created = create_update_action(repo, session.clone(), seq_no, action_hex, &sig, 2)
-            .await
-            .unwrap();
+        let created =
+            create_update_action(repo, session.clone(), seq_no, action_hex, &sig, 2, None)
+                .await
+                .unwrap();
         let session_b = SessionContext {
             authority,
             signer_pubkey: &sig_b().signer_pubkey,
@@ -1735,7 +1825,7 @@ mod tests {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
-        let pending = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2)
+        let pending = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
 
@@ -1777,6 +1867,7 @@ mod tests {
                 status: ProposalStatus::Approved,
                 required_signatures: 2,
                 action_hex: ACTION_HEX.to_string(),
+                title: None,
                 signatures: vec![sig_a(), sig_b()],
                 broadcast_status: BroadcastStatus::Idle,
                 commit_txid: None,
@@ -1820,7 +1911,7 @@ mod tests {
             signer_pubkey: &sig.signer_pubkey,
         };
 
-        let created = create_update_action(&*repo, session, 1, ACTION_HEX, &sig, 2)
+        let created = create_update_action(&*repo, session, 1, ACTION_HEX, &sig, 2, None)
             .await
             .unwrap();
         let action_id = created.action_id.clone();

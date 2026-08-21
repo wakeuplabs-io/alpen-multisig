@@ -22,6 +22,10 @@ pub struct Proposal {
     pub status: String,
     pub required_signatures: u16,
     pub action_hex: String,
+    /// Human-written label from the proposal author. Coordination metadata: not signed, not part
+    /// of `action_hex`. `None` for proposals created before the field existed.
+    #[serde(default)]
+    pub title: Option<String>,
     pub signatures: Vec<ProposalSignature>,
     pub broadcast_status: String,
     pub commit_txid: Option<String>,

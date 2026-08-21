@@ -201,6 +201,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				actionHex,
 				signerPubkey: sig.publicKeyHex,
 				signatureHex: sig.signatureHex,
+				title: formData.title.trim() || undefined,
 			})
 			if (!createResult.ok) throw new Error(createResult.error)
 			setCreatedProposal(createResult.data)

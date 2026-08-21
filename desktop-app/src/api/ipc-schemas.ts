@@ -43,6 +43,8 @@ export const proposalSchema = z
 		status: proposalStatusSchema,
 		requiredSignatures: z.number(),
 		actionHex: z.string(),
+		// Without this the field is stripped on the way in and the title silently disappears.
+		title: z.string().nullable().default(null),
 		actionType: z.enum([
 			'multisig_update',
 			'vk_update',
