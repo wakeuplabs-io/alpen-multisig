@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { ShieldAccentIcon } from '@/assets/icons'
@@ -7,15 +6,17 @@ import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/compon
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { BroadcastStepper } from '@/domain/broadcast-proposal/components/broadcast-stepper'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
-import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import { useBroadcastAdminWallet } from '@/domain/broadcast-proposal/hooks/use-broadcast-admin-wallet'
+import {
+	isBroadcastDetailsPhase,
+	isBroadcastInFlightPhase,
+	isBroadcastLoadingPhase,
+	isBroadcastProgressPhase,
+} from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
-import { useAdminWalletInfo } from '@/domain/broadcast-proposal/hooks/use-admin-wallet-info'
-import { useAdminWalletSync } from '@/domain/admin-wallet/hooks'
-import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-wallet-capability'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-import { useEnsureAdminWalletSession } from '@/domain/admin-wallet/hooks/use-ensure-admin-wallet-session'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -26,27 +27,12 @@ export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
-	const { sessionReady } = useEnsureAdminWalletSession(adapter)
+	const { signerKind, backendSignerKind, canSign, canSignReason, isAdminWalletMode, cardProps } =
+		useBroadcastAdminWallet(adapter)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	const { adminWalletInfo, refresh: refreshAdminWalletInfo } = useAdminWalletInfo(sessionReady)
-	const { canSign, signerKind: rawSignerKind, canSignReason } = useAdminWalletCapability()
-	const isAdminWalletMode = adminWalletInfo != null
-	const signerKind: SignerKind = rawSignerKind === 'hardware' ? 'hardware' : 'mnemonic'
-
-	const { syncStatus, triggerSync } = useAdminWalletSync()
-
 	const panel = useWalletPanelData(isAdminWalletMode)
-
-	// Trigger an Electrum sync on mount when in admin_wallet mode; re-read the funding info once
-	// the sync resolves so the card shows the post-sync balance and receive address (the initial
-	// fetch races the sync and would otherwise pin a stale 0-sats snapshot).
-	useEffect(() => {
-		if (isAdminWalletMode) {
-			void triggerSync().then(() => refreshAdminWalletInfo())
-		}
-	}, [isAdminWalletMode, triggerSync, refreshAdminWalletInfo])
 
 	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
@@ -72,22 +58,9 @@ export function BroadcastProposalScreen() {
 		return <Navigate to="/proposals" replace />
 	}
 
-	const isLoading = phase === 'idle' || phase === 'preparing'
-	const showDetails =
-		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
-	const showProgress =
-		phase === 'awaiting-device' ||
-		phase === 'broadcasting' ||
-		phase === 'awaiting-confirmation' ||
-		phase === 'done' ||
-		phase === 'error'
-
-	const lastSyncedAt = isAdminWalletMode ? (syncStatus?.lastSyncedAt ?? null) : undefined
-	const syncError = isAdminWalletMode
-		? syncStatus?.lastError != null
-			? { type: 'SyncIncomplete' as const, message: syncStatus.lastError.message }
-			: null
-		: undefined
+	const isLoading = isBroadcastLoadingPhase(phase)
+	const showDetails = bundle !== null && isBroadcastDetailsPhase(phase)
+	const showProgress = isBroadcastProgressPhase(phase)
 
 	return (
 		<ScreenShell
@@ -124,7 +97,7 @@ export function BroadcastProposalScreen() {
 				</div>
 
 				<div className="mt-6 space-y-4">
-					<BroadcastFundingSignerBanner backendSignerKind={rawSignerKind} connectVendor={adapter.vendor} />
+					<BroadcastFundingSignerBanner backendSignerKind={backendSignerKind} connectVendor={adapter.vendor} />
 
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
@@ -137,17 +110,13 @@ export function BroadcastProposalScreen() {
 
 					{showDetails && (
 						<BroadcastDetailsCard
+							{...cardProps}
 							bundle={bundle}
 							proposal={proposal}
 							walletVendor={adapter.vendor}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
-							canSign={canSign}
-							canSignReason={canSignReason}
+							isBroadcasting={isBroadcastInFlightPhase(phase)}
 							phase={phase}
-							adminWalletInfo={adminWalletInfo}
-							lastSyncedAt={lastSyncedAt}
-							syncError={syncError}
 							feeSelector={
 								feeState.status === 'ready' ? (
 									<FeeRateSelector
