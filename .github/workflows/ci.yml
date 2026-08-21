@@ -176,6 +176,10 @@ jobs:
           npm run test:model-format-admin-wallet-error --workspace desktop-app
           npm run test:model-bump-fee-rate --workspace desktop-app
           npm run test:model-compose-unconfirmed-tx-rows --workspace desktop-app
+          npm run test:model-broadcast-confirm-gate --workspace desktop-app
+          npm run test:model-broadcast-phase-predicates --workspace desktop-app
+          npm run test:broadcast-details-card --workspace desktop-app
+          npm run test:broadcast-screens-wiring --workspace desktop-app
           npm run test:architecture --workspace desktop-app
 
       - name: Wallet adapter + connect-path contract tests

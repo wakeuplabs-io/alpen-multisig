@@ -35,41 +35,32 @@ assert.ok(
 )
 console.log('BroadcastDetailsCard: UTXO count removed OK')
 
-// ── 3. Broadcast button disabled when wallet has no funds ────────────────────
-// Mirrors the JSX `disabled` expression.
-function isBroadcastDisabled(opts: {
-	isBroadcasting: boolean
-	canSign: boolean
-	adminWalletInfo: { balanceSats: number } | null | undefined
-}): boolean {
-	return opts.isBroadcasting || !opts.canSign || opts.adminWalletInfo == null || opts.adminWalletInfo.balanceSats === 0
-}
+// ── 3. The button gate lives in the model, not inline in the JSX ─────────────
+// The card used to spell the `disabled` expression out inline, and this test kept a hand-written
+// copy of it — two places to drift. Both now point at one pure function, covered exhaustively in
+// model/__tests__/broadcast-confirm-gate.test.ts.
 
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 0 } }),
-	true,
-	'disabled when total balance is 0',
+assert.ok(
+	cardSource.includes('isBroadcastConfirmDisabled({'),
+	'the send button must delegate its disabled state to isBroadcastConfirmDisabled',
 )
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: { balanceSats: 700 } }),
-	false,
-	'enabled when balance > 0',
-)
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: true, adminWalletInfo: null }),
-	true,
-	'disabled when adminWalletInfo is null (loading)',
-)
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: false, canSign: false, adminWalletInfo: { balanceSats: 700 } }),
-	true,
-	'disabled when signing is unavailable',
-)
-assert.equal(
-	isBroadcastDisabled({ isBroadcasting: true, canSign: true, adminWalletInfo: { balanceSats: 700 } }),
-	true,
-	'disabled while broadcasting',
-)
-console.log('BroadcastDetailsCard: broadcast disabled-when-no-funds logic OK')
+console.log('BroadcastDetailsCard: confirm gate delegated to the model OK')
+
+// ── 4. Admin-wallet props are required ───────────────────────────────────────
+// Issue #484: the cancel screen rendered this card without any admin-wallet prop, so
+// `adminWalletInfo` was undefined, the gate matched `adminWalletInfo == null`, and Confirm & Send
+// was disabled forever. Required keys make tsc reject a screen that forgets to wire them, so keep
+// these props mandatory even though their values stay nullable.
+
+const propsBlock = cardSource.slice(cardSource.indexOf('type Props = {'), cardSource.indexOf('/** bech32'))
+
+for (const prop of ['canSign', 'canSignReason', 'adminWalletInfo', 'lastSyncedAt', 'syncError', 'phase']) {
+	assert.ok(
+		new RegExp(`\\n\\t${prop}: `).test(propsBlock),
+		`${prop} must stay a required prop — optional (${prop}?:) is how #484 happened`,
+	)
+}
+assert.ok(!cardSource.includes('canSign = true'), 'canSign must not default to true — an unwired screen must fail tsc')
+console.log('BroadcastDetailsCard: admin-wallet props required OK')
 
 console.log('All BroadcastDetailsCard pure-logic contract tests passed.')

@@ -5,29 +5,33 @@ import type { AdminWalletError } from '@/api/admin-wallet'
 import { WalletIcon } from '@/assets/icons'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
-import { satsToBtc } from '../model/broadcast-proposal'
+import { isBroadcastConfirmDisabled, satsToBtc } from '../model/broadcast-proposal'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
+import type { AdminWalletInfoView } from '../hooks/use-admin-wallet-info'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
 import { deviceCopy } from '@/lib/device-copy'
 import type { WalletVendor } from '@/wallet/types'
-
-type AdminWalletInfoView = {
-	address: string
-	balanceSats: number
-}
 
 type Props = {
 	bundle: PrepareBroadcastResult
 	proposal: Proposal | null
 	onBroadcast: () => void
 	isBroadcasting: boolean
-	canSign?: boolean
-	canSignReason?: string
+	phase: BroadcastPhase
+	/** Cancel flow only — `false` means the targeted action already left the ASM queue. */
 	targetQueued?: boolean | null
-	adminWalletInfo?: AdminWalletInfoView | null
-	lastSyncedAt?: string | null
-	syncError?: AdminWalletError | null
-	phase?: BroadcastPhase
+	// ── Admin Wallet, required on purpose ─────────────────────────────────────
+	// The Admin Wallet always funds the commit, so a screen that renders this card must wire it.
+	// These were optional once, and the cancel screen silently omitted them: the send button read
+	// `adminWalletInfo == null` and stayed disabled forever (issue #484). Required keys turn that
+	// class of mistake into a compile error. Use `useBroadcastAdminWallet(adapter)` and spread its
+	// `cardProps`. Values may still be null/undefined — only the wiring is mandatory.
+	canSign: boolean
+	canSignReason: string | undefined
+	/** `null` = loading, `undefined` = unavailable. */
+	adminWalletInfo: AdminWalletInfoView | null | undefined
+	lastSyncedAt: string | null | undefined
+	syncError: AdminWalletError | null | undefined
 	/** Signer connected in this session — drives the device-specific broadcast prompt. */
 	walletVendor: WalletVendor
 	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
@@ -75,7 +79,7 @@ export function BroadcastDetailsCard({
 	proposal,
 	onBroadcast,
 	isBroadcasting,
-	canSign = true,
+	canSign,
 	canSignReason,
 	targetQueued,
 	adminWalletInfo,
@@ -238,13 +242,7 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={
-						isBroadcasting ||
-						!canSign ||
-						targetQueued === false ||
-						adminWalletInfo == null ||
-						adminWalletInfo.balanceSats === 0
-					}
+					disabled={isBroadcastConfirmDisabled({ isBroadcasting, canSign, targetQueued, adminWalletInfo })}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>
