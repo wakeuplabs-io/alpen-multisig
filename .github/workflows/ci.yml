@@ -179,6 +179,8 @@ jobs:
           npm run test:model-broadcast-confirm-gate --workspace desktop-app
           npm run test:model-broadcast-phase-predicates --workspace desktop-app
           npm run test:broadcast-details-card --workspace desktop-app
+          npm run test:cancel-details-card --workspace desktop-app
+          npm run test:approvals-list --workspace desktop-app
           npm run test:broadcast-screens-wiring --workspace desktop-app
           npm run test:cancel-copy-vendor-neutral --workspace desktop-app
           npm run test:architecture --workspace desktop-app

@@ -15,6 +15,8 @@
 		"test:model-broadcast-confirm-gate": "tsx src/domain/broadcast-proposal/model/__tests__/broadcast-confirm-gate.test.ts",
 		"test:model-broadcast-phase-predicates": "tsx src/domain/broadcast-proposal/model/__tests__/broadcast-phase-predicates.test.ts",
 		"test:broadcast-details-card": "tsx src/domain/broadcast-proposal/components/__tests__/broadcast-details-card.test.tsx",
+		"test:cancel-details-card": "tsx src/domain/cancel-proposal/components/__tests__/cancel-details-card.test.tsx",
+		"test:approvals-list": "tsx src/components/__tests__/approvals-list.test.tsx",
 		"test:broadcast-screens-wiring": "tsx src/screens/__tests__/broadcast-screens-wiring.test.ts",
 		"test:cancel-copy-vendor-neutral": "tsx src/screens/__tests__/cancel-copy-vendor-neutral.test.ts",
 		"test:derive-proposal-actions": "tsx src/domain/proposal-detail/model/__tests__/derive-proposal-actions.test.ts",
