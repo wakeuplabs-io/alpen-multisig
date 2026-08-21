@@ -671,12 +671,14 @@ pub async fn create_update_action(
     action_hex: &str,
     seq_no: u64,
     signature: &Signature,
+    title: Option<String>,
 ) -> Result<Proposal, ProposalError> {
     let request = CreateProposalRequest {
         seq_no,
         action_hex: action_hex.to_string(),
         signer_pubkey: signature.signer_pubkey.clone(),
         signature_hex: signature.signature_hex.clone(),
+        title,
     };
 
     let proposal = client.create_proposal(request).await?;
@@ -1038,6 +1040,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
+                title: None,
                 status: "pending".to_string(),
                 required_signatures: self.required_signatures,
                 signatures: vec![ProposalSignature {
@@ -1076,6 +1079,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: request.seq_no,
                 action_hex: request.action_hex.clone(),
+                title: None,
                 status: "pending".to_string(),
                 required_signatures: self.required_signatures,
                 signatures: vec![ProposalSignature {
@@ -1109,6 +1113,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: "pending".to_string(),
                 required_signatures: self.required_signatures,
                 signatures: vec![],
@@ -1163,6 +1168,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: "pending".to_string(),
                 required_signatures: self.required_signatures,
                 signatures,
@@ -1190,6 +1196,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![
@@ -1229,6 +1236,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: "pending".to_string(),
                 required_signatures: self.required_signatures,
                 signatures: vec![],
@@ -1267,6 +1275,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
@@ -1300,6 +1309,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: demo_action_hex(),
+                title: None,
                 status: request
                     .proposal_status
                     .unwrap_or_else(|| "approved".to_string()),
@@ -1327,7 +1337,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, &action_hex, 1, &sig)
+        let result = create_update_action(&mock, &action_hex, 1, &sig, None)
             .await
             .expect("should succeed");
 
@@ -1348,7 +1358,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, &action_hex, 1, &sig)
+        let result = create_update_action(&mock, &action_hex, 1, &sig, None)
             .await
             .expect("should succeed");
 
@@ -1472,7 +1482,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let created = create_update_action(&mock, &action_hex, 1, &sig)
+        let created = create_update_action(&mock, &action_hex, 1, &sig, None)
             .await
             .expect("should succeed");
 
@@ -1491,7 +1501,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let _result = create_update_action(&mock, &action_hex, 1, &sig)
+        let _result = create_update_action(&mock, &action_hex, 1, &sig, None)
             .await
             .expect("should succeed");
 
@@ -1515,7 +1525,7 @@ mod tests {
         let action_hex = demo_action_hex();
         let sig = sign_action(&sk, 1, &action_hex);
 
-        let result = create_update_action(&mock, &action_hex, 1, &sig).await;
+        let result = create_update_action(&mock, &action_hex, 1, &sig, None).await;
 
         assert!(matches!(
             result.unwrap_err(),
@@ -1762,6 +1772,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: large_demo_action_hex(),
+                title: None,
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
@@ -1818,6 +1829,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: large_demo_action_hex(),
+                title: None,
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
@@ -1843,6 +1855,7 @@ mod tests {
                 authority: Authority::StrataAdmin,
                 seq_no: 1,
                 action_hex: large_demo_action_hex(),
+                title: None,
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![],

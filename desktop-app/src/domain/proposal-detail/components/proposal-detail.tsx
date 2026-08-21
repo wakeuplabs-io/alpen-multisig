@@ -47,6 +47,11 @@ function StatusBadge({ status }: { status: DisplayStatus }) {
 }
 
 function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalData): string {
+	// What the author wrote wins: it is the only part that says why the change is being made. The
+	// summary of the decoded change stays as the fallback for untitled proposals.
+	const authored = proposal.title?.trim()
+	if (authored) return authored
+
 	const change = decodedData.signerSetChange
 	if (change === null) return `Proposal #${proposal.seqNo}`
 

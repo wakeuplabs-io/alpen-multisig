@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { buildProposalTitle } from '@/lib/proposal-title'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { ShieldAccentIcon } from '@/assets/icons'
@@ -61,8 +62,8 @@ export function SignScreen() {
 		if (proposal === null) {
 			return 'Proposal'
 		}
-		return `Proposal #${proposal.seqNo} - ${proposalTypeLabel}`
-	}, [proposal, proposalTypeLabel])
+		return buildProposalTitle(proposal)
+	}, [proposal])
 
 	const decodedActionHex = useMemo(() => {
 		if (proposal === null) {

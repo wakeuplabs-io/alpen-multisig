@@ -31,6 +31,8 @@ pub struct CreateProposalInput {
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,6 +101,7 @@ pub struct ProposalDto {
     pub required_signatures: u16,
     pub action_hex: String,
     pub action_type: String,
+    pub title: Option<String>,
     pub signatures: Vec<ProposalSignatureDto>,
     pub broadcast_status: String,
     pub commit_txid: Option<String>,
@@ -207,6 +210,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         required_signatures: proposal.required_signatures,
         action_hex: proposal.action_hex,
         action_type,
+        title: proposal.title,
         signatures: proposal.signatures.into_iter().map(map_signature).collect(),
         broadcast_status: proposal.broadcast_status,
         commit_txid: proposal.commit_txid,
@@ -627,6 +631,7 @@ pub async fn proposals_create(input: CreateProposalInput) -> Result<ProposalDto,
         input.action_hex.as_str(),
         input.seq_no,
         &signature,
+        input.title,
     )
     .await
     .map_err(map_proposal_error)?;
