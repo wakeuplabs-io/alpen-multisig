@@ -4,10 +4,12 @@ import { ShieldAccentIcon } from '@/assets/icons'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
+import { useCancelProposalDetails } from '@/domain/cancel-proposal/hooks/use-cancel-proposal-details'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
+import { useSignerPubkey } from '@/hooks/use-signer-pubkey'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -25,13 +27,15 @@ export function CancelProposalScreen() {
 	const location = useLocation()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
-	const signerPubkey: string | null = (location.state as LocationState)?.signerPubkey ?? null
+	// Router state is the primary source; a page refresh drops it, so fall back to the session (#486).
+	const signerPubkey = useSignerPubkey((location.state as LocationState)?.signerPubkey ?? null)
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const signerLabel = deviceCopy(adapter.vendor).label
 	const panel = useWalletPanelData()
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
+	const cancelDetails = useCancelProposalDetails(getOrchestratorBaseUrl(), proposal?.cancelProposal?.actionId ?? null)
 	const currentBlockHeight = useBlockHeight()
 
 	async function handleBack() {
@@ -129,6 +133,12 @@ export function CancelProposalScreen() {
 								(proposal.cancelProposal !== null ? (
 									<CancelDetailsCard
 										cancelProposal={proposal.cancelProposal}
+										cancelSeqNo={cancelDetails.cancelProposal?.seqNo ?? null}
+										cancelActionHex={cancelDetails.cancelProposal?.actionHex ?? null}
+										isLoadingDetails={cancelDetails.isLoading}
+										targetActionId={proposal.actionId}
+										targetUpdateId={proposal.updateIdInQueue}
+										allSigners={decodedData.allSigners}
 										signerPubkey={signerPubkey}
 										walletVendor={adapter.vendor}
 										onSign={() => navigate(`/proposals/${actionId}/cancel/sign`)}
