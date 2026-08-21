@@ -1,14 +1,18 @@
 import { CopyButton } from '@/components/copy-button'
 import type { CancelProposalSummary } from '@/api/proposals'
+import { deviceCopy } from '@/lib/device-copy'
+import type { WalletVendor } from '@/wallet/types'
 
 type Props = {
 	cancelProposal: CancelProposalSummary
 	signerPubkey: string | null
+	/** Vendor actually connected, so the sign button never names a device the signer lacks (#487). */
+	walletVendor: WalletVendor
 	onSign: () => void
 	onBroadcast: () => void
 }
 
-export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroadcast }: Props) {
+export function CancelDetailsCard({ cancelProposal, signerPubkey, walletVendor, onSign, onBroadcast }: Props) {
 	const collected = cancelProposal.signatures.length
 	const required = cancelProposal.requiredSignatures
 	const progress = required === 0 ? 100 : Math.min((collected / required) * 100, 100)
@@ -65,7 +69,7 @@ export function CancelDetailsCard({ cancelProposal, signerPubkey, onSign, onBroa
 						className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
 						onClick={onSign}
 					>
-						Sign on hardware wallet
+						Sign with {deviceCopy(walletVendor).label}
 					</button>
 				)}
 			</div>

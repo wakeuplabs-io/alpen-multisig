@@ -12,6 +12,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { deviceCopy } from '@/lib/device-copy'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
@@ -23,9 +24,10 @@ export function CancelProposalScreen() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const { actionId } = useParams<{ actionId: string }>()
-	const { wallet, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const signerPubkey: string | null = (location.state as LocationState)?.signerPubkey ?? null
 	const authorityLabel = authorityLabelForRole(selectedRole)
+	const signerLabel = deviceCopy(adapter.vendor).label
 	const panel = useWalletPanelData()
 
 	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
@@ -128,13 +130,14 @@ export function CancelProposalScreen() {
 									<CancelDetailsCard
 										cancelProposal={proposal.cancelProposal}
 										signerPubkey={signerPubkey}
+										walletVendor={adapter.vendor}
 										onSign={() => navigate(`/proposals/${actionId}/cancel/sign`)}
 										onBroadcast={() => navigate(`/proposals/${actionId}/cancel/broadcast`)}
 									/>
 								) : (
 									<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
 										<p className="m-0 text-body-sm text-[#6b7280]">
-											No cancel proposal initiated yet. Sign on your hardware wallet to start collecting cancel
+											No cancel proposal initiated yet. Sign with your {signerLabel} to start collecting cancel
 											signatures.
 										</p>
 										<button
