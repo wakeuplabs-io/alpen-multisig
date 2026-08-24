@@ -12,7 +12,17 @@ import {
 	parseSatPerVb,
 } from '@/domain/fee-selection/model/fee-rate'
 
-/** Backend estimate for the CPFP child: 1 P2TR input + 1 P2TR output. */
+/**
+ * Size of the common CPFP child: one P2TR input (the reveal's change) and one P2TR
+ * output. The backend no longer carries this as a constant — it sizes the child from the
+ * wallet descriptor — but the figure is the same whenever the anchor funds the child on
+ * its own, which is the ordinary case.
+ *
+ * When the anchor cannot cover fee and output the backend pulls in another coin, and the
+ * real child is a full input larger (#431). The estimate below is then low, and the
+ * confirmed result reports the true figure. Treated as an estimate on purpose: the exact
+ * number depends on a coin selection the UI does not run.
+ */
 const CPFP_CHILD_VSIZE_EST_VBYTES = 111
 
 export type BumpFeeFormProps = {
@@ -93,8 +103,17 @@ export function BumpFeeForm({
 
 	const parsed = parseSatPerVb(rateInput)
 	const isSubmitting = state.status === 'submitting'
-	const canConfirm = !isSubmitting && isValidBumpRate(parsed, minBumpSatPerKvb, maxSatPerKvb)
-	const estimatedFee = parsed !== null ? estimatedCostSats(method, parsed, vsizeVbytes, currentFeeSats) : null
+	// The package already pays so much that no child could raise it further without going
+	// over what a node accepts for one transaction (#431). Worth saying out loud — otherwise
+	// the form is a greyed-out button with no explanation.
+	const hasNoHeadroom = maxSatPerKvb < minBumpSatPerKvb
+	const isRateInRange = isValidBumpRate(parsed, minBumpSatPerKvb, maxSatPerKvb)
+	const canConfirm = !isSubmitting && isRateInRange
+	const isOverMax = parsed !== null && parsed > maxSatPerKvb
+	// Only price a rate that could actually be sent. Quoting the cost of a rejected rate
+	// reads as a promise the form will not keep.
+	const estimatedFee =
+		isRateInRange && parsed !== null ? estimatedCostSats(method, parsed, vsizeVbytes, currentFeeSats) : null
 	const estimateNoun = method === 'cpfp' ? 'child fee' : 'new fee'
 
 	function handleStep(direction: 1 | -1) {
@@ -151,6 +170,20 @@ export function BumpFeeForm({
 			{method === 'cpfp' && (
 				<p className="m-0 mt-1.5 text-mono-sm text-[#6b7280]">
 					Accelerates via a child transaction (CPFP) — the new rate applies to the whole commit+reveal package.
+				</p>
+			)}
+
+			{isOverMax && !hasNoHeadroom && (
+				<p className="m-0 mt-1.5 text-label text-danger" data-testid="e2e-wallet-bump-over-max">
+					{method === 'cpfp'
+						? `Above ${formatSatPerVb(maxSatPerKvb)} sat/vB the child transaction would pay more than a node accepts for a single transaction.`
+						: `The highest rate available here is ${formatSatPerVb(maxSatPerKvb)} sat/vB.`}
+				</p>
+			)}
+
+			{hasNoHeadroom && (
+				<p className="m-0 mt-1.5 text-label text-danger" data-testid="e2e-wallet-bump-no-headroom">
+					This package cannot be accelerated further — the child transaction would pay more than a node accepts.
 				</p>
 			)}
 

@@ -1,13 +1,10 @@
 import type { Proposal } from '@/api/proposals'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import { truncatePubkey } from '@/lib/pubkey'
 
 type Props = {
 	proposal: Proposal
 	decodedData: DecodedProposalData
-}
-
-function truncatePubkey(pubkey: string): string {
-	return `${pubkey.slice(0, 12)}…${pubkey.slice(-8)}`
 }
 
 export function CancelTargetSummary({ proposal, decodedData }: Props) {

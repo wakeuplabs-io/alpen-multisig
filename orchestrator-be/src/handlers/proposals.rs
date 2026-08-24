@@ -48,6 +48,9 @@ pub struct CreateProposalRequest {
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
+    /// Optional human-written label. Absent on clients that predate the field.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,6 +96,7 @@ pub async fn create_proposal(
         &body.action_hex,
         &sig,
         required_signatures,
+        body.title,
     )
     .await?;
 

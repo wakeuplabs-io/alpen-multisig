@@ -82,8 +82,10 @@ const bumpVariants: AdminWalletError[] = [
 	{ type: 'CpfpOutputUnavailable', message: 'x' },
 	{ type: 'FeeTooLow', message: 'x' },
 	{ type: 'FeeRateTooLow', message: 'x' },
+	{ type: 'FeeRateTooHigh', message: 'x' },
 	{ type: 'InvalidFeeRate', message: 'x' },
 	{ type: 'InsufficientFunds', message: 'x' },
+	{ type: 'CpfpFundingUnavailable', message: 'x' },
 	{ type: 'BuildFailed', message: 'x' },
 	{ type: 'SignFailed', message: 'x' },
 	{ type: 'BroadcastFailed', message: 'x' },
@@ -101,6 +103,30 @@ const cpfpUnavailable = formatAdminWalletError({
 })
 assert.ok(/reveal/i.test(cpfpUnavailable.body), 'CPFP copy must explain the reveal-change dependency')
 assert.ok(cpfpUnavailable.body.includes('already spent'), 'CPFP copy must carry the backend detail')
+
+// #431: the ceiling refusal must read as a rate problem the operator can fix, and carry the
+// package's own limit — not rust-bitcoin's "absurdly high fee rate" quoted in sat/kwu.
+const rateTooHigh = formatAdminWalletError({
+	type: 'FeeRateTooHigh',
+	message: 'this package tops out at 3255002 sat/kvB',
+})
+assert.ok(rateTooHigh.body.includes('3255002 sat/kvB'), 'the ceiling copy must carry the backend limit')
+assert.ok(!/absurd/i.test(rateTooHigh.body), 'the ceiling copy must not leak the library wording')
+
+// #431: the whole point of this variant is that it must NOT claim the balance is short.
+// That claim is what sent the original bug report down the wrong path.
+const fundingUnavailable = formatAdminWalletError({
+	type: 'CpfpFundingUnavailable',
+	message: 'newly mined coins are excluded',
+})
+assert.ok(
+	!/balance cannot cover/i.test(fundingUnavailable.body),
+	'funding-unavailable copy must not claim the balance is too small',
+)
+assert.ok(
+	fundingUnavailable.body.includes('newly mined coins are excluded'),
+	'funding-unavailable copy must carry the backend reason',
+)
 
 const notReplaceable = formatAdminWalletError({ type: 'TxNotReplaceable', message: 'x' })
 assert.ok(/RBF/.test(notReplaceable.body), 'not-replaceable copy must mention RBF')

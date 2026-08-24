@@ -99,8 +99,7 @@ export function ProposalDetailScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.publicKeyHex}
-						adminIdAddress={wallet.addressSample}
+						adminId={wallet.addressSample}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>

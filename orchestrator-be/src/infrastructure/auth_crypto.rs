@@ -7,8 +7,15 @@ use rand::RngCore;
 
 const AUTH_DOMAIN: &str = "alpen-multisig/orchestrator/v1";
 
+/// Renders the message the signer sees and signs to authenticate a session.
+///
+/// **The separators are ` | `, not newlines, and the whole string must stay printable ASCII.**
+/// A Ledger's Bitcoin app falls back to showing a SHA-256 "Message hash" screen for any message
+/// that is not printable ASCII — a `\n` is enough — and a signer confronted with a hash cannot
+/// read what they are approving. Measured on Speculos, Bitcoin Test app 2.4.2: the same content
+/// renders as text with ` | ` and as a hash with `\n`.
 pub(crate) fn render_challenge_message(role_label: &str, challenge_hex: &str) -> String {
-    format!("Strata Session Authentication v1\nRole: {role_label}\nChallenge: {challenge_hex}")
+    format!("Strata Session Authentication v1 | Role: {role_label} | Challenge: {challenge_hex}")
 }
 
 pub(crate) fn create_challenge_digest(
@@ -117,9 +124,29 @@ mod tests {
         // it, and the verifier re-hashes the same bytes. Pin it so a format
         // change (a space, a newline, the version label) fails loudly here
         // instead of silently breaking authentication in production.
+        //
+        // The ` | ` separators are load-bearing, not styling: a newline here
+        // puts the Ledger back on its "Message hash" screen and the signer can
+        // no longer read what they approve. See `render_challenge_message`.
         assert_eq!(
-            render_challenge_message("strata_administrator", "deadbeef"),
-            "Strata Session Authentication v1\nRole: strata_administrator\nChallenge: deadbeef"
+            render_challenge_message("strata_admin", "deadbeef"),
+            "Strata Session Authentication v1 | Role: strata_admin | Challenge: deadbeef"
+        );
+    }
+
+    #[test]
+    fn render_challenge_message_stays_printable_ascii() {
+        // The pin above catches an edit to this exact string; this catches the class of edit that
+        // matters most — anything non-printable, which sends a Ledger back to its "Message hash"
+        // screen and leaves the signer approving bytes they cannot read.
+        let message = render_challenge_message("strata_admin", &"ab".repeat(32));
+        let offenders: Vec<char> = message
+            .chars()
+            .filter(|c| !c.is_ascii() || c.is_ascii_control())
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "challenge message must be printable ASCII; found {offenders:?} in {message:?}"
         );
     }
 
@@ -127,7 +154,7 @@ mod tests {
     fn bitcoin_message_signature_round_trips() {
         let sk = SecretKey::from_slice(&[7u8; 32]).expect("valid key");
         let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
-        let message = render_challenge_message("strata_administrator", "aa");
+        let message = render_challenge_message("strata_admin", "aa");
         let signature_hex = sign_bitcoin_message(&message, &sk);
 
         verify_bitcoin_message_signature(&message, &hex::encode(pk.serialize()), &signature_hex)
@@ -138,10 +165,10 @@ mod tests {
     fn bitcoin_message_signature_rejects_tampered_message() {
         let sk = SecretKey::from_slice(&[9u8; 32]).expect("valid key");
         let pk = PublicKey::from_secret_key(&Secp256k1::new(), &sk);
-        let signed = render_challenge_message("strata_administrator", "aa");
+        let signed = render_challenge_message("strata_admin", "aa");
         let signature_hex = sign_bitcoin_message(&signed, &sk);
 
-        let tampered = render_challenge_message("strata_administrator", "bb");
+        let tampered = render_challenge_message("strata_admin", "bb");
         let err = verify_bitcoin_message_signature(
             &tampered,
             &hex::encode(pk.serialize()),

@@ -78,8 +78,10 @@ export type AdminWalletError =
 	| { type: 'CpfpOutputUnavailable'; message: string }
 	| { type: 'FeeTooLow'; message: string }
 	| { type: 'FeeRateTooLow'; message: string }
+	| { type: 'FeeRateTooHigh'; message: string }
 	| { type: 'InvalidFeeRate'; message: string }
 	| { type: 'InsufficientFunds'; message: string }
+	| { type: 'CpfpFundingUnavailable'; message: string }
 	| { type: 'BuildFailed'; message: string }
 	| { type: 'SignFailed'; message: string }
 	| { type: 'BroadcastFailed'; message: string }
@@ -151,6 +153,10 @@ export type UnconfirmedTxDto = {
 	packageFeeSats: number | null
 	packageVsizeVbytes: number | null
 	packageFeeRateSatPerKvb: number | null
+	// Highest rate this row can be bumped to. Set only for CPFP rows: the child pays the
+	// package's shortfall out of its own vsize, so the package rate tops out well below the
+	// general 10,000 sat/vB ceiling (#431). Null for RBF rows.
+	maxBumpRateSatPerKvb: number | null
 	lastSeenSecs: number | null
 }
 
@@ -306,4 +312,31 @@ export function verifyAddressOnDevice(input: VerifyAddressOnDeviceInput): Promis
 		scriptType: input.scriptType,
 		network: input.network,
 	})
+}
+
+// G8 (PRD 06 §3.c.i): the Admin ID Verification Certificate.
+export type AdminIdCertificate = {
+	/** The exact string that was signed — line 1 of the copied block. */
+	message: string
+	/** Base64, Bitcoin Core `signmessage` encoding — line 2 of the copied block. */
+	certificate: string
+	/** The compressed public key recovered from the certificate itself. */
+	publicKeyHex: string
+}
+
+/**
+ * Returns the string the certificate modal shows in Step 1 and the signer signs.
+ * Rust owns the literal so the message displayed, signed and verified is one string.
+ */
+export function adminIdCertificateMessage(adminId: string): Promise<ApiResult<string>> {
+	return tauriCall<string>('admin_id_certificate_message', { adminId })
+}
+
+/**
+ * Encodes a `[r||s||recid]` signature over that message into a certificate. Rust recovers
+ * the key and refuses to return a certificate that does not belong to this Admin ID, so a
+ * resolved result is always one the app has already verified.
+ */
+export function buildAdminIdCertificate(adminId: string, signatureHex: string): Promise<ApiResult<AdminIdCertificate>> {
+	return tauriCall<AdminIdCertificate>('build_admin_id_certificate', { adminId, signatureHex })
 }

@@ -22,6 +22,20 @@ export function suggestedBumpRateSatPerKvb(fastPresetSatPerKvb: number | null, m
 	return Math.max(fastPresetSatPerKvb, minBumpSatPerKvb)
 }
 
+/**
+ * The ceiling that actually applies to a row: the general one, lowered by whatever the row
+ * itself can carry.
+ *
+ * CPFP rows come with their own limit — the child pays the whole package's shortfall out of
+ * its own vsize, so its individual rate runs several times the requested package rate and
+ * hits the per-transaction broadcast ceiling long before the package does (#431). RBF rows
+ * send `null` and keep the general ceiling.
+ */
+export function effectiveMaxBumpRate(generalMaxSatPerKvb: number, rowMaxSatPerKvb: number | null): number {
+	if (rowMaxSatPerKvb === null) return generalMaxSatPerKvb
+	return Math.min(generalMaxSatPerKvb, rowMaxSatPerKvb)
+}
+
 /** A candidate replacement rate is valid when within [minBump, max]. */
 export function isValidBumpRate(satPerKvb: number | null, minBumpSatPerKvb: number, maxSatPerKvb: number): boolean {
 	return satPerKvb !== null && satPerKvb >= minBumpSatPerKvb && satPerKvb <= maxSatPerKvb

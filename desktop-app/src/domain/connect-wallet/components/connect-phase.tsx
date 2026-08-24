@@ -3,8 +3,9 @@ import { tauriCall } from '@/api/tauri-bridge'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+import { deviceCopy } from '@/lib/device-copy'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
-import type { HwAddressEntry, WalletVendor } from '@/wallet/types'
+import type { HwAddressEntry, WalletKind, WalletVendor } from '@/wallet/types'
 
 type Props = {
 	loading: boolean
@@ -12,9 +13,10 @@ type Props = {
 	error: string | null
 	onConnect: () => void
 	onConnectMnemonic?: (mnemonic: string) => void
-	onConnectTrezor?: (passphrase?: string) => void
+	/** Takes the wallet to open, because one Trezor seed backs more than one. */
+	onConnectTrezor?: (kind: WalletKind) => void
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	mnemonicEnabled: boolean
 }
 
@@ -36,10 +38,11 @@ export function ConnectPhase({
 	const [debugEntry, setDebugEntry] = useState<HwAddressEntry | null>(null)
 	const [debugLoading, setDebugLoading] = useState(false)
 	const [debugError, setDebugError] = useState<string | null>(null)
-	const [trezorPassphrase, setTrezorPassphrase] = useState('')
+	const passphraseCopy = deviceCopy(walletVendor).passphraseOnDevice
+	const hiddenWalletCopy = deviceCopy(walletVendor).hiddenWallet
 
 	function handleUseTrezor() {
-		onSelectWalletMethod('trezor', undefined, trezorPassphrase || undefined)
+		onSelectWalletMethod('trezor')
 		setMnemonicError(null)
 	}
 
@@ -121,6 +124,7 @@ export function ConnectPhase({
 				<div className="mt-2 flex items-center gap-2">
 					<button
 						type="button"
+						data-testid="e2e-connect-trezor"
 						className={`rounded-md border px-3 py-1.5 text-label font-medium transition ${
 							walletVendor === 'trezor'
 								? 'border-[#0a0a0a] bg-[#0a0a0a] text-white'
@@ -157,7 +161,12 @@ export function ConnectPhase({
 						</button>
 					)}
 				</div>
-				{mnemonicEnabled && (
+				{/*
+				  Seed words belong to the mnemonic method, not beside it. Left visible while a device
+				  is selected, the box reads as a second thing the signer might have to fill in on the
+				  very screen where they choose which keys sign — a mnemonic *replaces* the device.
+				*/}
+				{mnemonicEnabled && walletVendor === 'mnemonic' && (
 					<textarea
 						data-testid="e2e-connect-mnemonic-textarea"
 						className="mt-2 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
@@ -166,21 +175,6 @@ export function ConnectPhase({
 						value={mnemonicInput}
 						onChange={(event) => setMnemonicInput(event.target.value)}
 					/>
-				)}
-				{walletVendor === 'trezor' && (
-					<div className="mt-2">
-						<label className="text-mono-sm font-medium text-[#9ca3af]" htmlFor="trezor-passphrase">
-							Passphrase (optional)
-						</label>
-						<input
-							id="trezor-passphrase"
-							type="password"
-							className="mt-1 w-full rounded-md border border-[#d1d5db] bg-white px-3 py-2 text-label text-[#111827] outline-none focus:border-[#9ca3af]"
-							placeholder="Leave empty for default wallet"
-							value={trezorPassphrase}
-							onChange={(event) => setTrezorPassphrase(event.target.value)}
-						/>
-					</div>
 				)}
 				{mnemonicError !== null && <p className="m-0 mt-1 text-label text-danger">{mnemonicError}</p>}
 
@@ -229,6 +223,13 @@ export function ConnectPhase({
 						<div className="mt-0.5 text-label text-[#6b7280]">
 							{walletVendor === 'ledger' ? 'Looking for a Ledger on USB.' : 'Looking for a Trezor on USB.'}
 						</div>
+						{/* The device may already be holding up its keypad while this still says
+						    "Detecting" — say so here, or the signer waits on the wrong screen. */}
+						{passphraseCopy && (
+							<div className="mt-0.5 text-label text-[#6b7280]" data-testid="e2e-passphrase-on-device">
+								{passphraseCopy}
+							</div>
+						)}
 					</div>
 				</div>
 			)}
@@ -257,7 +258,7 @@ export function ConnectPhase({
 					walletVendor === 'mnemonic' && onConnectMnemonic
 						? () => onConnectMnemonic(mnemonicInput.trim() || DEMO_MNEMONIC)
 						: walletVendor === 'trezor' && onConnectTrezor
-							? () => onConnectTrezor(trezorPassphrase || undefined)
+							? () => onConnectTrezor('standard')
 							: onConnect
 				}
 				disabled={loading || isSuccess}
@@ -276,6 +277,24 @@ export function ConnectPhase({
 					</>
 				)}
 			</button>
+
+			{/*
+			  The second wallet behind the same seed. Deliberately a separate action rather than a
+			  setting: the button above opens the wallet derived from the seed alone, this one asks
+			  the Trezor for a passphrase on its own keypad and opens the wallet that passphrase
+			  derives. Kept out of the vendor chip row above — that row is "which device".
+			*/}
+			{walletVendor === 'trezor' && onConnectTrezor && (
+				<button
+					type="button"
+					data-testid="e2e-connect-hidden-wallet"
+					className="mt-2 w-full rounded-lg border border-[#d1d5db] bg-white px-4 py-2.5 text-body-sm font-medium text-[#374151] transition hover:bg-[#f3f4f6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+					onClick={() => onConnectTrezor('hidden')}
+					disabled={loading || isSuccess}
+				>
+					{hiddenWalletCopy}
+				</button>
+			)}
 
 			{/* Security note */}
 			<p className="mb-0 mt-5 flex items-center justify-center gap-2.5 text-center text-label text-[#9ca3af]">

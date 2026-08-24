@@ -13,7 +13,7 @@ import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
-import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
+import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
 
@@ -40,7 +40,7 @@ export type UseCreateProposalReturn = {
 	isSubmitting: boolean
 	error: string | null
 	createdProposal: Proposal | null
-	computeProposalPreview: (data: CreateProposalFormValues) => Promise<string | null>
+	computeProposalPreview: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	submitCreateProposal: (data: CreateProposalFormValues) => Promise<void>
 }
 
@@ -201,6 +201,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				actionHex,
 				signerPubkey: sig.publicKeyHex,
 				signatureHex: sig.signatureHex,
+				title: formData.title.trim() || undefined,
 			})
 			if (!createResult.ok) throw new Error(createResult.error)
 			setCreatedProposal(createResult.data)
@@ -214,7 +215,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		}
 	}
 
-	async function computeProposalPreview(formData: CreateProposalFormValues): Promise<string | null> {
+	async function computeProposalPreview(formData: CreateProposalFormValues): Promise<ProposalPreview | null> {
 		setError(null)
 		try {
 			const seqNo = Number(formData.seqNo.trim())
@@ -223,9 +224,12 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			}
 			await assertValidSessionForProposalCreation()
 			const actionHex = await buildActionHex(formData)
+			// The sighash is not shown and not carried: signing recomputes it. This call stays as a
+			// pre-flight check, so a draft that cannot be signed fails here instead of after the
+			// signer has already reviewed it and reached for their device.
 			const sighashResult = await computeSighash(seqNo, actionHex)
 			if (!sighashResult.ok) throw new Error(sighashResult.error)
-			return sighashResult.data.sighashHex
+			return { seqNo, actionHex }
 		} catch (err) {
 			if (isSessionExpiredReauthError(err)) {
 				throw err

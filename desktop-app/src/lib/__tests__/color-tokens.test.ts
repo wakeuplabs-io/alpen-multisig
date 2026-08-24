@@ -6,8 +6,13 @@
 // red/amber value, and a component that wants one has to say *why* by picking a
 // token — `danger` for failures, `emphasis` for everything that merely stands out.
 //
-// If this test fails, do not add the hex to the allowlist. Pick the token that
-// describes the intent; if none fits, the intent is probably not "error".
+// The check used to compare against a list of known hexes, so a red nobody had
+// listed walked straight through it (#492 — `#c0392b`). It now recognises the
+// family by hue and saturation instead, so any red/amber/orange is caught on
+// sight, listed or not.
+//
+// If this test fails, do not look for a way to exempt the value. Pick the token
+// that describes the intent; if none fits, the intent is probably not "error".
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -26,11 +31,11 @@ function code(filePath: string): string {
 }
 
 /**
- * The red/amber/warm family, and the token that replaces each one. Values that
- * only ever meant "error" map to `danger-*`; the warm tones that were doing
- * emphasis map to `emphasis*` or the brand `accent-border`.
+ * Hexes we have already replaced once, and the token each one became. Only a
+ * hint for the failure message — detection is by color family below, so an
+ * unlisted red is caught just the same.
  */
-const FORBIDDEN: Record<string, string> = {
+const KNOWN_REPLACEMENTS: Record<string, string> = {
 	'#dc2626': 'text-danger / border-danger',
 	'#b91c1c': 'text-danger-strong',
 	'#991b1b': 'text-danger-deep',
@@ -60,8 +65,51 @@ const FORBIDDEN: Record<string, string> = {
 /** Tailwind's own red/amber/orange utilities are the same problem by another spelling. */
 const FORBIDDEN_UTILITIES = /\b(?:text|bg|border|ring|from|to|via)-(?:red|amber|orange|yellow)-\d{2,3}\b/
 
+/**
+ * Six-digit hexes anywhere, plus three-digit ones only inside a Tailwind
+ * arbitrary value (`text-[#f00]`). Bare `#416` in code is an issue reference,
+ * not a color.
+ */
+const HEX_LITERAL = /#[0-9a-fA-F]{6}\b|(?<=-\[)#[0-9a-fA-F]{3}(?=\])/g
+
+/** Saturation below this reads as grey, whatever its nominal hue. */
+const GREY_BELOW = 0.12
+
 /** `styles.css` is the one place a raw value may live — it defines the tokens. */
 const OWNS_THE_PALETTE = 'styles.css'
+
+/** Hue in degrees and saturation in 0..1, straight from the HSV conversion. */
+function hueAndSaturation(hex: string): { hue: number; saturation: number } {
+	const full =
+		hex.length === 4
+			? hex
+					.slice(1)
+					.split('')
+					.map((c) => c + c)
+					.join('')
+			: hex.slice(1)
+	const r = parseInt(full.slice(0, 2), 16) / 255
+	const g = parseInt(full.slice(2, 4), 16) / 255
+	const b = parseInt(full.slice(4, 6), 16) / 255
+	const max = Math.max(r, g, b)
+	const delta = max - Math.min(r, g, b)
+
+	let hue = 0
+	if (delta !== 0) {
+		if (max === r) hue = 60 * (((g - b) / delta) % 6)
+		else if (max === g) hue = 60 * ((b - r) / delta + 2)
+		else hue = 60 * ((r - g) / delta + 4)
+	}
+	if (hue < 0) hue += 360
+
+	return { hue, saturation: max === 0 ? 0 : delta / max }
+}
+
+/** The red-through-yellow arc, ignoring greys. Greens, blues and violets pass. */
+function isWarm(hex: string): boolean {
+	const { hue, saturation } = hueAndSaturation(hex)
+	return saturation >= GREY_BELOW && (hue <= 60 || hue >= 345)
+}
 
 const offenders: string[] = []
 
@@ -77,10 +125,11 @@ function walk(dir: string) {
 		const source = code(full)
 		const rel = path.relative(srcRoot, full)
 
-		for (const [hex, token] of Object.entries(FORBIDDEN)) {
-			const at = source.toLowerCase().indexOf(hex)
-			if (at === -1) continue
-			const line = source.slice(0, at).split('\n').length
+		for (const match of source.matchAll(HEX_LITERAL)) {
+			const hex = match[0].toLowerCase()
+			if (!isWarm(hex)) continue
+			const line = source.slice(0, match.index).split('\n').length
+			const token = KNOWN_REPLACEMENTS[hex] ?? 'a danger/emphasis/accent token'
 			offenders.push(`${rel}:${line} uses ${hex} — use ${token}`)
 		}
 
@@ -117,4 +166,4 @@ for (const token of [
 	assert.match(theme, new RegExp(`${token}:`), `styles.css must define ${token}`)
 }
 
-console.log(`color-tokens: ${Object.keys(FORBIDDEN).length} red/amber values confined to styles.css`)
+console.log('color-tokens: no red/amber outside styles.css (detected by hue, not by allowlist)')

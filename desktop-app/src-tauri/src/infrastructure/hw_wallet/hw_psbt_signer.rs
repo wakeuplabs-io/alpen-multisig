@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::application::psbt_signer::PsbtSigner;
+use crate::infrastructure::hw_wallet::trezor::WalletKind;
 use crate::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 use bdk_wallet::bitcoin::psbt::Psbt;
@@ -40,6 +41,16 @@ impl HwDeviceType {
         }
     }
 
+    /// Maps an internal signer-kind label (as held by the wallet session) to a device,
+    /// or `None` for a software / absent signer.
+    pub fn from_signer_kind(raw: &str) -> Option<Self> {
+        match raw {
+            "trezor" => Some(HwDeviceType::Trezor),
+            "ledger" => Some(HwDeviceType::Ledger),
+            _ => None,
+        }
+    }
+
     /// The concrete adapter PSBT-signing function for this device.
     fn device_sign_fn(self) -> DeviceSignFn {
         match self {
@@ -48,46 +59,46 @@ impl HwDeviceType {
         }
     }
 
+    /// `kind` is Trezor-only. A Ledger's passphrase is a separate wallet unlocked by PIN on
+    /// the device itself, with nothing for the host to select, so it ignores the argument.
     pub fn connect(
         self,
         derivation_path: Option<String>,
-        passphrase: &str,
+        kind: WalletKind,
     ) -> Result<HwWalletInfo, String> {
         match self {
-            HwDeviceType::Trezor => trezor::connect(derivation_path, passphrase),
+            HwDeviceType::Trezor => trezor::connect(derivation_path, kind),
             HwDeviceType::Ledger => ledger::connect(derivation_path),
         }
     }
 
-    pub fn sign_sps65(
+    /// Signs a human-readable message as a BIP-137 Bitcoin message on either device.
+    ///
+    /// It carried an SPS-65 name until G8 while already signing the session challenge and,
+    /// now, the Admin ID Verification Certificate message — three different strings, one
+    /// device call. The name said otherwise, which is the kind of thing that gets read as
+    /// a guarantee about what the device is being asked to sign.
+    pub fn sign_bitcoin_message(
         self,
         message: &str,
         derivation_path: &str,
-        passphrase: &str,
     ) -> Result<SignatureResult, String> {
         match self {
-            HwDeviceType::Trezor => {
-                trezor::sign_admin_sps65_binding(message, derivation_path, passphrase)
-            }
-            HwDeviceType::Ledger => ledger::sign_admin_sps65_binding(message, derivation_path),
+            HwDeviceType::Trezor => trezor::sign_bitcoin_message(message, derivation_path),
+            HwDeviceType::Ledger => ledger::sign_bitcoin_message(message, derivation_path),
         }
     }
 
-    pub fn get_account_xpub(
-        self,
-        path: &str,
-        passphrase: &str,
-        network: Network,
-    ) -> Result<String, String> {
+    pub fn get_account_xpub(self, path: &str, network: Network) -> Result<String, String> {
         match self {
-            HwDeviceType::Trezor => trezor::get_account_xpub(path, passphrase, network),
+            HwDeviceType::Trezor => trezor::get_account_xpub(path, network),
             HwDeviceType::Ledger => ledger::get_account_xpub(path),
         }
     }
 
-    pub fn get_master_fingerprint(self, passphrase: &str) -> Result<u32, String> {
+    pub fn get_master_fingerprint(self) -> Result<u32, String> {
         match self {
-            HwDeviceType::Trezor => trezor::get_master_fingerprint(passphrase),
+            HwDeviceType::Trezor => trezor::get_master_fingerprint(),
             HwDeviceType::Ledger => ledger::get_master_fingerprint(),
         }
     }

@@ -113,6 +113,12 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: `The new rate must exceed what the transaction already pays. ${err.message}`,
 				severity: 'warning',
 			}
+		case 'FeeRateTooHigh':
+			return {
+				title: 'Rate too high for this package',
+				body: `The child transaction would pay more than a node accepts. ${err.message}`,
+				severity: 'warning',
+			}
 		case 'InvalidFeeRate':
 			return {
 				title: 'Invalid fee rate',
@@ -123,6 +129,12 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 			return {
 				title: 'Insufficient funds',
 				body: 'The wallet balance cannot cover this transaction and its fee.',
+				severity: 'warning',
+			}
+		case 'CpfpFundingUnavailable':
+			return {
+				title: 'No coins available to accelerate',
+				body: `The balance shown includes coins this acceleration cannot spend. ${err.message}`,
 				severity: 'warning',
 			}
 		case 'BuildFailed':

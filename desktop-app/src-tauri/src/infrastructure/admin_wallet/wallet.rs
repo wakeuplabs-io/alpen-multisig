@@ -94,6 +94,21 @@ pub fn admin_wallet_account_origin(device: HwDeviceType, network: Network) -> &'
         .expect("account path always starts with m/")
 }
 
+/// The HRP the connected device's firmware renders for the Admin Wallet account.
+///
+/// A device shows an address under the coin it derives the account with, not under the
+/// session network: Trezor holds the account at coin type `0'` on every network and so
+/// renders `bc1…`, while Ledger uses `1'` off mainnet and renders `tb1…`. This table must
+/// stay in lockstep with [`admin_wallet_account_path`] — the coin type is what the firmware
+/// keys off — or an on-device verification value stops matching what the device shows.
+pub fn device_hrp_network(device: HwDeviceType, network: Network) -> Network {
+    match (device, network) {
+        (HwDeviceType::Trezor, _) => Network::Bitcoin,
+        (HwDeviceType::Ledger, Network::Bitcoin) => Network::Bitcoin,
+        (HwDeviceType::Ledger, _) => Network::Testnet,
+    }
+}
+
 /// Re-encodes `address` with the human-readable prefix of `hrp_network`, preserving the
 /// witness program. Used to show a *device-accurate* verification value: a regtest receive
 /// address (`bcrt1…`) is rendered as the device's firmware shows it (`tb1…` on the Testnet
@@ -327,6 +342,33 @@ mod tests {
             admin_wallet_account_origin(HwDeviceType::Ledger, Network::Regtest),
             "86'/1'/73'"
         );
+    }
+
+    #[test]
+    fn device_hrp_network_follows_the_account_path_coin_type() {
+        // The firmware renders an address under the coin it derived the account with, so the
+        // HRP table and the account path must never drift apart: coin `0'` ⇒ mainnet HRP,
+        // coin `1'` ⇒ testnet HRP. Issue #401 was exactly this pair going out of sync.
+        for device in [HwDeviceType::Trezor, HwDeviceType::Ledger] {
+            for network in [
+                Network::Bitcoin,
+                Network::Testnet,
+                Network::Signet,
+                Network::Regtest,
+            ] {
+                let path = admin_wallet_account_path(device, network);
+                let expected = if path.starts_with("m/86'/0'/") {
+                    Network::Bitcoin
+                } else {
+                    Network::Testnet
+                };
+                assert_eq!(
+                    device_hrp_network(device, network),
+                    expected,
+                    "{device:?} on {network:?} derives at {path}; the rendered HRP must follow that coin type"
+                );
+            }
+        }
     }
 
     #[test]

@@ -2,6 +2,8 @@ import { CopyButton } from '@/components/copy-button'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
+import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import {
 	countSignersAfterUpdate,
@@ -22,7 +24,8 @@ type Props = {
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
 	newSequencerKeyHex: string
-	sighashHex: string | null
+	/** What the connected device shows for this action — nothing for software signers. */
+	deviceDisplay: DeviceSigningDisplay
 	authorityLabel: string
 	/** Signer connected in this session — drives the device-specific confirmation copy. */
 	walletVendor: WalletVendor
@@ -43,7 +46,7 @@ export function CreateProposalPreview({
 	operatorsToAdd,
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
-	sighashHex,
+	deviceDisplay,
 	authorityLabel,
 	walletVendor,
 	currentSigners,
@@ -226,26 +229,23 @@ export function CreateProposalPreview({
 				</div>
 			)}
 
-			<div>
-				<p className="m-0 mb-2 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
-					SPS-65 Sighash (32 bytes)
-				</p>
-				<div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] px-4 py-3">
-					<span className="min-w-0 flex-1 break-all font-mono text-body text-[#111827]">{sighashHex ?? '—'}</span>
-					{sighashHex && <CopyButton text={sighashHex} />}
+			<div className="rounded-xl border border-accent-border bg-highlight-surface p-4">
+				<div className="flex items-start gap-4">
+					<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white">
+						<UsbTridentIcon width={24} height={24} className="text-emphasis-soft" />
+					</div>
+					<div>
+						<p className="m-0 font-semibold text-[#111827]">
+							{signerCopy.isHardware ? 'Confirm on device' : 'Confirm before signing'}
+						</p>
+						<p className="m-0 mt-1 text-body text-[#6b7280]">{signerCopy.verifyHint}</p>
+					</div>
 				</div>
-			</div>
-
-			<div className="flex items-start gap-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
-				<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white">
-					<UsbTridentIcon width={24} height={24} className="text-emphasis-soft" />
-				</div>
-				<div>
-					<p className="m-0 font-semibold text-[#111827]">
-						{signerCopy.isHardware ? 'Confirm on device' : 'Confirm before signing'}
-					</p>
-					<p className="m-0 mt-1 text-body text-[#6b7280]">{signerCopy.verifyHint}</p>
-				</div>
+				{deviceDisplay.kind !== 'none' && (
+					<div className="mt-3">
+						<DeviceSigningHint display={deviceDisplay} />
+					</div>
+				)}
 			</div>
 		</div>
 	)

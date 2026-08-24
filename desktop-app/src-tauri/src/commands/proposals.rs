@@ -1,8 +1,7 @@
 use desktop_app::application::commit_funding::AdminWalletCommitFunding;
 use desktop_app::application::orchestrator_auth;
 use desktop_app::application::orchestrator_client::{
-    CreateCancelProposalRequest, OrchestratorClient, OrchestratorError,
-    ReportBroadcastProgressRequest,
+    OrchestratorClient, OrchestratorError, ReportBroadcastProgressRequest,
 };
 use desktop_app::application::orchestrator_url::validate_orchestrator_base_url;
 use desktop_app::application::pending_reveals::PendingReveals;
@@ -32,6 +31,8 @@ pub struct CreateProposalInput {
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,6 +101,7 @@ pub struct ProposalDto {
     pub required_signatures: u16,
     pub action_hex: String,
     pub action_type: String,
+    pub title: Option<String>,
     pub signatures: Vec<ProposalSignatureDto>,
     pub broadcast_status: String,
     pub commit_txid: Option<String>,
@@ -118,23 +120,19 @@ pub async fn proposals_create_cancel(
     input: CreateCancelProposalInput,
 ) -> Result<ProposalDto, String> {
     let client = build_client(input.base_url)?;
-    let proposal = client
-        .create_cancel_proposal(
-            &input.target_action_id,
-            CreateCancelProposalRequest {
-                seq_no: input.seq_no,
-                action_hex: input.action_hex,
-                signer_pubkey: input.signer_pubkey,
-                signature_hex: input.signature_hex,
-            },
-        )
-        .await
-        .map_err(|e| match e {
-            OrchestratorError::Backend { status: 401, .. } => {
-                "orchestrator session unauthorized (401). Re-authenticate and retry.".to_string()
-            }
-            other => other.to_string(),
-        })?;
+    let signature = Signature {
+        signer_pubkey: input.signer_pubkey,
+        signature_hex: input.signature_hex,
+    };
+    let proposal = proposals::create_cancel_action(
+        &client,
+        &input.target_action_id,
+        input.action_hex.as_str(),
+        input.seq_no,
+        &signature,
+    )
+    .await
+    .map_err(map_proposal_error)?;
     Ok(map_proposal(proposal))
 }
 
@@ -212,6 +210,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         required_signatures: proposal.required_signatures,
         action_hex: proposal.action_hex,
         action_type,
+        title: proposal.title,
         signatures: proposal.signatures.into_iter().map(map_signature).collect(),
         broadcast_status: proposal.broadcast_status,
         commit_txid: proposal.commit_txid,
@@ -632,6 +631,7 @@ pub async fn proposals_create(input: CreateProposalInput) -> Result<ProposalDto,
         input.action_hex.as_str(),
         input.seq_no,
         &signature,
+        input.title,
     )
     .await
     .map_err(map_proposal_error)?;
@@ -803,6 +803,7 @@ pub async fn proposals_prepare_broadcast(
             &input.action_id,
             fee_rate,
             &envelope_cache,
+            env.hw_device,
         )
         .await
         .map_err(map_broadcast_error)?;
@@ -987,6 +988,7 @@ pub async fn proposals_prepare_broadcast_manual(
             &signatures,
             fee_rate,
             &envelope_cache,
+            env.hw_device,
         )
         .await
         .map_err(map_broadcast_error)?;

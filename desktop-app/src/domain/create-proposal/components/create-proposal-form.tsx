@@ -5,6 +5,8 @@ import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
+import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
@@ -13,7 +15,7 @@ import {
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
-import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
+import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
@@ -41,7 +43,7 @@ type Props = {
 	error: string | null
 	createdProposal: Proposal | null
 	onCancel: () => void
-	onPreviewValid: (data: CreateProposalFormValues) => Promise<string | null>
+	onPreviewValid: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	onSubmitValid: (data: CreateProposalFormValues) => Promise<void>
 	onReauthenticate: () => Promise<void>
 }
@@ -82,7 +84,7 @@ export function CreateProposalForm({
 	onReauthenticate,
 }: Props) {
 	const [isPreviewMode, setIsPreviewMode] = useState(false)
-	const [previewSighashHex, setPreviewSighashHex] = useState<string | null>(null)
+	const [preview, setPreview] = useState<ProposalPreview | null>(null)
 	const [frozenAtPreview, setFrozenAtPreview] = useState<CreateProposalFormValues | null>(null)
 	const [showReauthModal, setShowReauthModal] = useState(false)
 	const [reauthError, setReauthError] = useState<string | null>(null)
@@ -151,10 +153,21 @@ export function CreateProposalForm({
 		}
 		if (JSON.stringify(watchedValues) !== JSON.stringify(frozenAtPreview)) {
 			setIsPreviewMode(false)
-			setPreviewSighashHex(null)
+			setPreview(null)
 			setFrozenAtPreview(null)
 		}
 	}, [watchedValues, isPreviewMode, frozenAtPreview])
+
+	// The device never renders the SPS-65 sighash, so the review step also resolves what it does
+	// render (canonical message / its SHA-256) for the exact action being signed (#402).
+	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
+		preview?.seqNo ?? null,
+		preview?.actionHex ?? null,
+	)
+	const deviceDisplay = deviceSigningDisplay(walletVendor, {
+		message: deviceMessage,
+		messageHash: deviceMessageHash,
+	})
 
 	const previewData = frozenAtPreview ?? getValues()
 	const previewAddingKeys = previewData.keysToAdd.map((row) => row.value.trim()).filter((value) => value.length > 0)
@@ -166,10 +179,10 @@ export function CreateProposalForm({
 		if (!isValid) return
 		try {
 			const snapshot = getValues()
-			const sighashHex = await onPreviewValid(snapshot)
-			if (sighashHex === null) return
+			const nextPreview = await onPreviewValid(snapshot)
+			if (nextPreview === null) return
 			setFrozenAtPreview(snapshot)
-			setPreviewSighashHex(sighashHex)
+			setPreview(nextPreview)
 			setIsPreviewMode(true)
 		} catch (error) {
 			if (!isSessionExpiredReauthError(error)) return
@@ -182,7 +195,7 @@ export function CreateProposalForm({
 	async function handleSubmitAttempt(data: CreateProposalFormValues) {
 		if (frozenAtPreview === null || JSON.stringify(data) !== JSON.stringify(frozenAtPreview)) {
 			setIsPreviewMode(false)
-			setPreviewSighashHex(null)
+			setPreview(null)
 			setFrozenAtPreview(null)
 			return
 		}
@@ -230,7 +243,7 @@ export function CreateProposalForm({
 								className="mb-4 flex items-center gap-1.5 text-body text-[#6b7280] hover:text-[#111827]"
 								onClick={() => {
 									setIsPreviewMode(false)
-									setPreviewSighashHex(null)
+									setPreview(null)
 									setFrozenAtPreview(null)
 								}}
 							>
@@ -287,7 +300,7 @@ export function CreateProposalForm({
 								.map((r) => r.value.trim())
 								.filter((v) => v.length > 0)}
 							newSequencerKeyHex={previewData.newSequencerKeyHex}
-							sighashHex={previewSighashHex}
+							deviceDisplay={deviceDisplay}
 							authorityLabel={authorityLabel}
 							walletVendor={walletVendor}
 							currentSigners={multisigConfig?.signers ?? []}

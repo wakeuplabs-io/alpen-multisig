@@ -32,7 +32,7 @@ import { authChallengeSchema, authSessionSchema } from './ipc-schemas.ts'
 const challenge = {
 	challengeId: 'c1',
 	challengeHex: 'aa',
-	challengeMessage: 'Strata Session Authentication v1\nRole: strata_administrator\nChallenge: aa',
+	challengeMessage: 'Strata Session Authentication v1 | Role: strata_admin | Challenge: aa',
 	nonceHex: 'bb',
 	domain: 'alpen-multisig',
 	role: 'strata_administrator',

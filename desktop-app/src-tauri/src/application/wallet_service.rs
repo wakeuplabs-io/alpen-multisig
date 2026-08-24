@@ -229,6 +229,30 @@ fn electrum_error(url: &str, e: &impl std::fmt::Display) -> AdminWalletError {
     }
 }
 
+/// Maps a PSBT extraction failure to an error the operator can act on.
+///
+/// Worth the match because rust-bitcoin's own `Display` is unreadable at the point it
+/// matters most: `AbsurdFeeRate` quotes sat/kwu, so a transaction paying 30,798 sat/vB
+/// surfaces as "An absurdly high fee rate of 7699471" (#431). Callers that can compute
+/// the real ceiling should reject the rate before reaching here — this is the net for the
+/// paths that cannot.
+fn map_extract_tx_error(e: bdk_wallet::bitcoin::psbt::ExtractTxError) -> AdminWalletError {
+    use bdk_wallet::bitcoin::psbt::ExtractTxError as E;
+    let message = match e {
+        E::AbsurdFeeRate { fee_rate, .. } => format!(
+            "the transaction would pay {} sat/vB, above the {} sat/vB ceiling — lower the fee rate",
+            fee_rate.to_sat_per_kwu() * 4 / 1_000,
+            bdk_wallet::bitcoin::Psbt::DEFAULT_MAX_FEE_RATE.to_sat_per_kwu() * 4 / 1_000,
+        ),
+        E::MissingInputValue { .. } => {
+            "an input's value is unknown to the wallet — sync and retry".to_string()
+        }
+        E::SendingTooMuch { .. } => "the transaction spends more than its inputs hold".to_string(),
+        other => other.to_string(),
+    };
+    AdminWalletError::WalletCreation(message)
+}
+
 pub fn error_code(e: &AdminWalletError) -> String {
     match e {
         AdminWalletError::RpcUnreachable { .. } => "RpcUnreachable".into(),
@@ -591,8 +615,7 @@ impl WalletService {
             ));
         }
 
-        psbt.extract_tx()
-            .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))
+        psbt.extract_tx().map_err(map_extract_tx_error)
     }
 
     /// Spawn the background sync loop once (idempotent). Must be called on first IPC invocation.

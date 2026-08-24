@@ -18,6 +18,8 @@ use strata_l1_envelope_fmt::builder::EnvelopeScriptBuilder;
 use strata_l1_txfmt::{MagicBytes, ParseConfig};
 
 use crate::domain::proposal::ProposalSignature;
+use crate::infrastructure::admin_wallet::wallet::{device_hrp_network, render_address_with_hrp};
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 
 /// Build the SSZ-encoded `SignedPayload` bytes to embed in the reveal envelope.
 ///
@@ -163,18 +165,29 @@ pub fn derive_commit_address(
 /// Renders `address` as the **hardware wallet will display it**, so the signer can match the
 /// app's "COMMIT TX PREVIEW" against the on-device address character-for-character (issue #382).
 ///
-/// Ledger and Trezor have no regtest app: on `Regtest` they render addresses with the testnet
-/// HRP (`tb1…`) rather than `bcrt1…`. We re-encode the commit address with the testnet HRP in
-/// that case. The witness program is unchanged — only the human-readable prefix and checksum
-/// differ — and the actual funded/broadcast transaction still uses the real regtest address.
-/// On testnet/signet/mainnet the app and device already agree, so the address is returned as-is.
-pub fn device_facing_commit_address(address: &Address, network: Network) -> String {
-    if network == Network::Regtest {
-        if let Ok(testnet_addr) = Address::from_script(&address.script_pubkey(), Network::Testnet) {
-            return testnet_addr.to_string();
-        }
-    }
-    address.to_string()
+/// The commit output is external — it pays an ephemeral envelope key, so it carries no wallet
+/// origin and the device renders it as a literal address under the coin it is signing with.
+/// That coin follows the Admin Wallet account path, not the session network: Trezor holds the
+/// account at coin `0'` on every network and shows `bc1p…` even on regtest, while Ledger uses
+/// coin `1'` off mainnet and shows `tb1p…`. Rendering the preview from the network alone made
+/// Trezor disagree with the app on every test network (issue #401), which is what the
+/// character-for-character comparison exists to rule out.
+///
+/// Only the human-readable prefix and checksum change; the witness program is identical and the
+/// transaction actually funded and broadcast still uses the real address for `network`.
+/// `device` is `None` for a software signer, where no on-device value exists to match: the
+/// pre-#401 rendering is kept so those previews do not shift.
+pub fn device_facing_commit_address(
+    address: &Address,
+    network: Network,
+    device: Option<HwDeviceType>,
+) -> String {
+    let hrp_network = match device {
+        Some(device) => device_hrp_network(device, network),
+        None if network == Network::Regtest => Network::Testnet,
+        None => network,
+    };
+    render_address_with_hrp(address, hrp_network)
 }
 
 /// Build the fully-signed reveal transaction spending the commit UTXO.
@@ -286,24 +299,45 @@ mod build_reveal_tx_tests {
         UntweakedKeypair::new(&secp, &mut thread_rng())
     }
 
+    /// The signer is told to compare this string to the device screen, so it has to be the
+    /// string that device shows. Trezor derives the Admin Wallet at coin `0'` on every network
+    /// and renders `bc1p…` even on regtest; Ledger uses coin `1'` off mainnet and renders
+    /// `tb1p…`. Rendering from the network alone (pre-#401) made Trezor disagree with the app.
     #[test]
-    fn device_facing_commit_address_reencodes_regtest_to_testnet_hrp() {
+    fn device_facing_commit_address_uses_the_hrp_the_device_renders() {
         const PAYLOAD: &[u8] = &[0x61u8; 128];
         let keypair = make_test_envelope_keypair();
         let (regtest_addr, _, _) =
             derive_commit_address(&keypair, PAYLOAD, Network::Regtest).unwrap();
-
-        let shown = device_facing_commit_address(&regtest_addr, Network::Regtest);
         assert!(
-            shown.starts_with("tb1p"),
-            "regtest taproot commit must be shown with the testnet HRP the device renders, got {shown}"
+            regtest_addr.to_string().starts_with("bcrt1p"),
+            "precondition: the real commit address is regtest"
         );
 
-        // Same witness program — only the HRP differs from the real regtest address.
-        let testnet_addr =
-            Address::from_script(&regtest_addr.script_pubkey(), Network::Testnet).unwrap();
-        assert_eq!(shown, testnet_addr.to_string());
-        assert_ne!(shown, regtest_addr.to_string());
+        for (device, expected_hrp) in [
+            (Some(HwDeviceType::Trezor), "bc1p"),
+            (Some(HwDeviceType::Ledger), "tb1p"),
+            // No device: nothing on a screen to match, so the pre-#401 rendering stands.
+            (None, "tb1p"),
+        ] {
+            let shown = device_facing_commit_address(&regtest_addr, Network::Regtest, device);
+            assert!(
+                shown.starts_with(expected_hrp),
+                "{device:?} renders {expected_hrp}…, got {shown}"
+            );
+
+            // What actually matters for safety: only the prefix moved. The address still pays
+            // the very script the funded transaction pays.
+            let shown_addr = shown
+                .parse::<Address<_>>()
+                .expect("re-encoded address must parse")
+                .assume_checked();
+            assert_eq!(
+                shown_addr.script_pubkey(),
+                regtest_addr.script_pubkey(),
+                "{device:?} preview must keep the commit witness program intact"
+            );
+        }
     }
 
     #[test]
@@ -312,11 +346,15 @@ mod build_reveal_tx_tests {
         let keypair = make_test_envelope_keypair();
         for network in [Network::Testnet, Network::Signet, Network::Bitcoin] {
             let (addr, _, _) = derive_commit_address(&keypair, PAYLOAD, network).unwrap();
-            assert_eq!(
-                device_facing_commit_address(&addr, network),
-                addr.to_string(),
-                "app and device already agree on {network:?}; address must be unchanged"
-            );
+            // A Ledger signs test nets under the Testnet coin and mainnet under Bitcoin —
+            // either way its HRP already equals the app's, as it does with no device at all.
+            for device in [Some(HwDeviceType::Ledger), None] {
+                assert_eq!(
+                    device_facing_commit_address(&addr, network, device),
+                    addr.to_string(),
+                    "app and {device:?} already agree on {network:?}; address must be unchanged"
+                );
+            }
         }
     }
 

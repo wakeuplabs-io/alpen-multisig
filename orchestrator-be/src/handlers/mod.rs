@@ -349,6 +349,7 @@ mod tests {
             status: ProposalStatus::Pending,
             required_signatures: 2,
             action_hex: "deadbeef".to_string(),
+            title: None,
             signatures: vec![ProposalSignature {
                 signer_pubkey: SIGNER_A_PK.to_string(),
                 signature_hex: "sig_a".to_string(),

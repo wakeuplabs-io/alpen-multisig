@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::{Mutex, OnceLock};
 
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
@@ -11,9 +12,178 @@ use crate::infrastructure::signing::SignatureResult;
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
 const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
 
-fn open_trezor() -> Result<Trezor, String> {
+/// Which wallet behind the seed the signer asked for.
+///
+/// One Trezor seed backs unlimited wallets: the standard one, plus a distinct wallet per
+/// passphrase. The passphrase is a per-session parameter rather than device state, so the
+/// wallet is chosen on every connection by how the host answers `PassphraseRequest` —
+/// there is no "current wallet" the device remembers between sessions.
+///
+/// Neither answer sends a secret from this machine: [`Standard`](Self::Standard) sends an
+/// empty string, which is the absence of one, and [`Hidden`](Self::Hidden) hands entry to
+/// the device keypad. Verified on the emulator in `issues/evidence/G5-B0-PROTOCOL.md`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WalletKind {
+    /// The wallet derived from the seed alone.
+    #[default]
+    Standard,
+    /// A wallet derived from the seed plus a passphrase typed on the device.
+    Hidden,
+}
+
+/// The device session, and which wallet it belongs to.
+///
+/// Every Trezor operation opens its own transport (`open_trezor`), so without the session id
+/// the device would treat each one as a fresh session and re-derive the seed — which means
+/// re-prompting for the passphrase on the device keypad on *every* call. Resuming the
+/// session keeps the firmware's cached seed (`APP_COMMON_SEED`) alive, so the signer enters
+/// the passphrase once per connection.
+///
+/// The kind is stored *with* the id rather than beside it because they are one fact — which
+/// wallet we are talking to — and they must never disagree. If the firmware evicts our
+/// session mid-flow ([`SessionOutcome::Lost`]), the next `PassphraseRequest` has to receive
+/// the same answer as the first, or a later operation would silently run against the other
+/// wallet.
+#[derive(Debug, Default, Clone)]
+struct SessionState {
+    /// The id from the last successful `Initialize`, if the device reported a usable one.
+    id: Option<Vec<u8>>,
+    /// The wallet the signer chose on the connection this session belongs to.
+    kind: WalletKind,
+}
+
+/// A process-wide `static` rather than Tauri managed state, following the precedent of
+/// `LEDGER_DEVICE_LOCK` in `ledger.rs`: managed state would have to be threaded through
+/// six commands and would break their `spawn_blocking(move || ...)` bodies. It also has to
+/// reach `sign_taproot_psbt`, which runs behind a `DeviceSignFn` with no parameter path
+/// back to the UI.
+static TREZOR_SESSION: OnceLock<Mutex<SessionState>> = OnceLock::new();
+
+/// `trezor_client::unique()` claims the USB device, so two overlapping operations fight over
+/// it: the loser reports a confusing "init failed on both transport modes" and, worse, both
+/// would race to write [`TREZOR_SESSION`], leaving one session orphaned and the signer facing
+/// an extra passphrase prompt. Mirrors `LEDGER_DEVICE_LOCK` in `ledger.rs`.
+static TREZOR_DEVICE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// An open device, held for as long as the operation using it.
+///
+/// The lock guard travels with the device rather than wrapping each entry point, so an
+/// operation cannot lose exclusivity halfway through a multi-message exchange like `SignTx`.
+/// Derefs to [`Trezor`], so call sites use it as if it were the device itself.
+struct TrezorDevice {
+    trezor: Trezor,
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+impl std::ops::Deref for TrezorDevice {
+    type Target = Trezor;
+
+    fn deref(&self) -> &Trezor {
+        &self.trezor
+    }
+}
+
+impl std::ops::DerefMut for TrezorDevice {
+    fn deref_mut(&mut self) -> &mut Trezor {
+        &mut self.trezor
+    }
+}
+
+/// The session slot. A poisoned lock is recovered rather than swallowed: dropping the write
+/// silently would leave a stale session id in place, and `start_session` reporting success
+/// without forgetting anything is the one outcome that must not happen.
+fn session_store() -> &'static Mutex<SessionState> {
+    TREZOR_SESSION.get_or_init(|| Mutex::new(SessionState::default()))
+}
+
+fn session_slot() -> std::sync::MutexGuard<'static, SessionState> {
+    session_store().lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// What the device did with the session we asked it to resume.
+///
+/// The firmware never *fails* an `Initialize` carrying an unknown session id: it silently
+/// starts a fresh, empty session and returns a different id (`cache_codec.py:91-128`). The
+/// only way to tell the two apart is to compare the id it returned against the one we sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionOutcome {
+    /// We asked for nothing; this is a new session.
+    Started,
+    /// The device resumed the session we asked for — its seed cache is still warm.
+    Resumed,
+    /// We asked to resume and got a *different* session back. The passphrase cache is
+    /// empty, so the device will prompt again before it derives any key.
+    Lost,
+}
+
+/// Pure classification of an `Initialize` round-trip. Split out from `open_trezor` so the
+/// silent-downgrade rule is testable without a device.
+fn session_outcome(requested: Option<&[u8]>, returned: &[u8]) -> SessionOutcome {
+    match requested {
+        None => SessionOutcome::Started,
+        Some(asked) if asked == returned => SessionOutcome::Resumed,
+        Some(_) => SessionOutcome::Lost,
+    }
+}
+
+/// Length of a firmware session id (`_SESSION_ID_LENGTH` in the Trezor firmware).
+const SESSION_ID_LEN: usize = 32;
+
+/// The session id the device reported, if it sent a usable one. Anything that is not exactly
+/// 32 bytes is treated as absent: the firmware answers an off-length id the same way it
+/// answers a missing one — with a fresh, empty session — so storing it would silently cost a
+/// passphrase prompt on every single operation.
+fn reported_session_id(trezor: &Trezor) -> Option<Vec<u8>> {
+    let id = trezor.features()?.session_id();
+    (id.len() == SESSION_ID_LEN).then(|| id.to_vec())
+}
+
+/// Begins a connection for `kind`: drops the remembered session so the next operation starts
+/// a clean one and the device asks for the passphrase again, and records which wallet every
+/// `PassphraseRequest` from here on should be answered for.
+///
+/// Both writes happen under one lock acquisition. Split into two, a connect could publish the
+/// new kind while the previous session id was still readable, and an operation racing between
+/// them would resume the old wallet's session under the new wallet's answer.
+fn start_session(kind: WalletKind) {
+    *session_slot() = SessionState { id: None, kind };
+}
+
+/// The wallet the current connection is for. Defaults to [`WalletKind::Standard`], so an
+/// operation arriving before any connect gets the wallet that needs no secret.
+fn current_wallet_kind() -> WalletKind {
+    session_slot().kind
+}
+
+/// Records the session the device just handed back.
+///
+/// `Lost` is not an error: the signer simply re-enters the passphrase on the device before
+/// the next key is derived, so there is no way to end up on the standard wallet without
+/// the device saying so. It is worth logging because a session that keeps getting lost
+/// means the passphrase prompt keeps coming back, which reads as a bug from the signer's
+/// side. (`_MAX_SESSIONS_COUNT = 10` in the firmware, so another client can evict ours.)
+fn remember_session(requested: Option<&[u8]>, trezor: &Trezor) {
+    let Some(returned) = reported_session_id(trezor) else {
+        return;
+    };
+    if session_outcome(requested, &returned) == SessionOutcome::Lost {
+        eprintln!("trezor: device session was not resumed; the passphrase will be requested again");
+    }
+    // Only the id changes: the wallet kind belongs to the connection, and a re-derivation
+    // after a lost session must be answered for the same wallet the signer chose.
+    session_slot().id = Some(returned);
+}
+
+fn open_trezor() -> Result<TrezorDevice, String> {
+    let guard = TREZOR_DEVICE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
     let mut attempts = Vec::with_capacity(2);
     let mut saw_invalid_protocol = false;
+    let requested = session_slot().id.clone();
+
     for debug in [false, true] {
         let mut trezor = match trezor_client::unique(debug) {
             Ok(device) => device,
@@ -23,8 +193,14 @@ fn open_trezor() -> Result<Trezor, String> {
             }
         };
 
-        match trezor.init_device(None) {
-            Ok(_) => return Ok(trezor),
+        match trezor.init_device(requested.clone()) {
+            Ok(_) => {
+                remember_session(requested.as_deref(), &trezor);
+                return Ok(TrezorDevice {
+                    trezor,
+                    _guard: guard,
+                });
+            }
             Err(e) => {
                 if e.to_string().contains("Failure_InvalidProtocol") {
                     saw_invalid_protocol = true;
@@ -34,6 +210,10 @@ fn open_trezor() -> Result<Trezor, String> {
         }
     }
 
+    // The remembered session is deliberately kept. Failing to reach the device says nothing
+    // about whether its session is still valid, and a stale id costs nothing: the firmware
+    // answers it with a fresh session, which `session_outcome` reports as `Lost`. Dropping it
+    // here would mean a transient probe failure re-prompts the signer for the passphrase.
     let mut hint = "Ensure trezord/emulator are healthy, then reconnect the device.".to_string();
     if saw_invalid_protocol {
         hint.push_str(
@@ -119,15 +299,48 @@ fn get_xpub<'a>(
         .map_err(|e: trezor_client::Error| e.to_string())
 }
 
+/// Turns a device `Failure` into something a signer can act on.
+///
+/// The one case worth naming is a device with no keypad for the passphrase: it rejects
+/// on-device entry outright, and the raw protobuf dump says nothing about what to do. This
+/// app never sends a passphrase from the host, so such a device cannot open a hidden wallet
+/// here at all — the signer needs to be told that, not handed `Failure { code: ... }`.
+fn describe_failure(failure: &protos::Failure) -> String {
+    if failure.message().contains("incapable of passphrase entry") {
+        return "This Trezor cannot take a passphrase on its own keypad, and Strata Multisig \
+never asks for one on this computer. Disable the passphrase on the device to use its standard \
+wallet, or connect a Trezor model with on-device passphrase entry."
+            .to_string();
+    }
+    format!("Device failure: {:?}", failure)
+}
+
 /// Drive a TrezorResponse to completion, handling ButtonRequests and PassphraseRequests.
-fn resolve<'a, T, R: TrezorMessage>(
-    mut response: TrezorResponse<'a, T, R>,
-    passphrase: &str,
-) -> Result<T, String> {
+///
+/// A `PassphraseRequest` is answered for the wallet the signer chose on this connection
+/// ([`current_wallet_kind`]), and **neither answer carries a secret typed on this machine**:
+///
+/// - [`WalletKind::Standard`] → `ack_passphrase("")`. The empty string is the absence of a
+///   passphrase, and it is what opens the wallet derived from the seed alone. It is sent
+///   explicitly rather than as `ack(false)`, which sets no field at all.
+/// - [`WalletKind::Hidden`] → `ack(true)`, which asks the firmware to prompt on its own
+///   screen. It must not carry a passphrase alongside it or the device answers `DataError`.
+///
+/// So a keylogger on this machine has nothing to capture in either branch, while the signer
+/// still chooses which wallet to open — the two answers produce two different wallets from
+/// one seed (measured in `issues/evidence/G5-B0-PROTOCOL.md`).
+///
+/// This deliberately does not consult `PassphraseRequest::on_device()`: that field was
+/// deprecated in firmware 2.3.0 (`reserved 1` in messages-common.proto) and modern devices
+/// never set it, so branching on it would silently mean "always ask the host".
+///
+/// Devices without a keypad (Trezor One / T1B1) reject `on_device` with `Failure_DataError`,
+/// which [`describe_failure`] turns into an actionable message.
+fn resolve<'a, T, R: TrezorMessage>(mut response: TrezorResponse<'a, T, R>) -> Result<T, String> {
     loop {
         match response {
             TrezorResponse::Ok(data) => return Ok(data),
-            TrezorResponse::Failure(f) => return Err(format!("Device failure: {:?}", f)),
+            TrezorResponse::Failure(f) => return Err(describe_failure(&f)),
             TrezorResponse::ButtonRequest(req) => {
                 response = req.ack().map_err(|e| format!("ButtonAck failed: {e}"))?;
             }
@@ -135,10 +348,9 @@ fn resolve<'a, T, R: TrezorMessage>(
                 return Err("PIN entry not supported in this build.".to_string());
             }
             TrezorResponse::PassphraseRequest(req) => {
-                response = if req.on_device() {
-                    req.ack(true)
-                } else {
-                    req.ack_passphrase(passphrase.to_string())
+                response = match current_wallet_kind() {
+                    WalletKind::Standard => req.ack_passphrase(String::new()),
+                    WalletKind::Hidden => req.ack(true),
                 }
                 .map_err(|e| format!("PassphraseAck failed: {e}"))?;
             }
@@ -146,12 +358,41 @@ fn resolve<'a, T, R: TrezorMessage>(
     }
 }
 
+/// The message shown when a hidden wallet is asked for on a device that has the passphrase
+/// switched off. Without this the connection would succeed against the *standard* wallet and
+/// report success: the firmware simply never emits `PassphraseRequest`, so nothing the host
+/// sends can produce a prompt (case 4 in `issues/evidence/G5-B0-PROTOCOL.md`).
+const PASSPHRASE_DISABLED_ON_DEVICE: &str =
+    "This Trezor has the passphrase switched off, so it cannot open a hidden wallet. Enable \
+Passphrase in the device's own settings and connect again, or use the standard wallet.";
+
 /// Connect: read the P2WPKH Admin ID address at the BIP-84 derivation path.
-pub fn connect(derivation_path: Option<String>, passphrase: &str) -> Result<HwWalletInfo, String> {
+///
+/// `kind` selects which wallet behind the seed to open, and holds for every later operation
+/// on this connection — see [`SessionState`].
+pub fn connect(derivation_path: Option<String>, kind: WalletKind) -> Result<HwWalletInfo, String> {
     let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
     let path = parse_path(&path_str)?;
 
+    // A connection starts its own device session, so the signer is asked for the passphrase
+    // once per connect and a session from an earlier one is never inherited. Doing it here
+    // rather than on disconnect keeps it ordered: disconnect is fire-and-forget from the UI
+    // and could otherwise land *after* the next connect and wipe the session it just made.
+    start_session(kind);
+
     let mut trezor = open_trezor()?;
+
+    // Refuse a hidden wallet the device cannot give us, rather than silently handing back the
+    // standard one. Checked against `has_passphrase_protection` too: the firmware omits the
+    // field entirely while the device is locked, and absent must not read as "switched off".
+    if kind == WalletKind::Hidden {
+        let features = trezor
+            .features()
+            .ok_or("Trezor returned no device features.".to_string())?;
+        if features.has_passphrase_protection() && !features.passphrase_protection() {
+            return Err(PASSPHRASE_DISABLED_ON_DEVICE.to_string());
+        }
+    }
 
     let xpub = resolve(
         get_xpub(
@@ -162,7 +403,6 @@ pub fn connect(derivation_path: Option<String>, passphrase: &str) -> Result<HwWa
             false,
         )
         .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
-        passphrase,
     )?;
 
     let pubkey_hex = hex::encode(xpub.public_key.serialize());
@@ -218,7 +458,7 @@ pub fn verify_address_on_device(
         })?;
     // The device confirmed: return the exact address it rendered so the caller can
     // compare it against what the app shows (#412).
-    resolve(resp, "")
+    resolve(resp)
 }
 
 /// Returns the BIP-86 (Taproot) account xpub for the given derivation path.
@@ -226,25 +466,22 @@ pub fn verify_address_on_device(
 /// Uses `SPENDTAPROOT` script type so Trezor derives the correct key material
 /// for a P2TR wallet. `ignore_xpub_magic = true` (set inside `get_xpub`) ensures
 /// standard `xpub` version bytes are returned instead of SLIP-0132 `Xpub` bytes.
-pub fn get_account_xpub(path: &str, passphrase: &str, network: Network) -> Result<String, String> {
+pub fn get_account_xpub(path: &str, network: Network) -> Result<String, String> {
     let derivation_path = parse_path(path)?;
     let mut trezor = open_trezor()?;
-    let xpub = resolve(
-        get_xpub(
-            &mut trezor,
-            &derivation_path,
-            InputScriptType::SPENDTAPROOT,
-            trezor_coin_network(network),
-            false,
-        )?,
-        passphrase,
-    )?;
+    let xpub = resolve(get_xpub(
+        &mut trezor,
+        &derivation_path,
+        InputScriptType::SPENDTAPROOT,
+        trezor_coin_network(network),
+        false,
+    )?)?;
     Ok(xpub.to_string())
 }
 
 /// Returns the master fingerprint (first 4 bytes of hash160 of master public key) from the Trezor.
 /// Obtained by requesting the master xpub at path `m/` and reading the root_fingerprint from the response.
-pub fn get_master_fingerprint(passphrase: &str) -> Result<u32, String> {
+pub fn get_master_fingerprint() -> Result<u32, String> {
     let mut trezor = open_trezor()?;
     let master_path = DerivationPath::from_str("m/").map_err(|e| format!("Invalid path: {e}"))?;
 
@@ -266,20 +503,20 @@ pub fn get_master_fingerprint(passphrase: &str) -> Result<u32, String> {
         )
         .map_err(|e: trezor_client::Error| e.to_string())?;
 
-    resolve(response, passphrase)
+    resolve(response)
 }
 
-/// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
+/// Signs an arbitrary human-readable message on Trezor using Bitcoin `signMessage`.
 ///
-/// `message` must be the human-readable string produced by
-/// `SigningMessage::for_action(action, seqno).as_str()`. Trezor will compute
-/// `Hash256(prefix || message)` internally, which matches `compute_sighash()` exactly.
+/// Three callers pass three different strings — the SPS-65 signing message, the session
+/// authentication challenge, and the Admin ID Verification Certificate message — and the
+/// device treats all of them the same way: it computes `Hash256(prefix || message)`
+/// internally, which matches `compute_sighash()` for the SPS-65 case exactly.
 ///
 /// Uses `SPENDWITNESS` (BIP-84 P2WPKH) which is required for `m/84'` Admin ID paths.
-pub fn sign_admin_sps65_binding(
+pub fn sign_bitcoin_message(
     message: &str,
     derivation_path: &str,
-    passphrase: &str,
 ) -> Result<SignatureResult, String> {
     let path = parse_path(derivation_path)?;
     let mut trezor = open_trezor()?;
@@ -293,7 +530,6 @@ pub fn sign_admin_sps65_binding(
             false,
         )
         .map_err(|e| format!("Trezor get_public_key failed: {e}"))?,
-        passphrase,
     )?;
 
     let recoverable_sig = resolve(
@@ -305,7 +541,6 @@ pub fn sign_admin_sps65_binding(
             Network::Bitcoin,
         )
         .map_err(|e| format!("Trezor sign_message failed: {e}"))?,
-        passphrase,
     )?;
 
     Ok(SignatureResult {
@@ -330,7 +565,7 @@ fn read_root_fingerprint(trezor: &mut Trezor) -> Result<u32, String> {
             Box::new(|_, m: protos::PublicKey| Ok(m.root_fingerprint())),
         )
         .map_err(|e: trezor_client::Error| e.to_string())?;
-    resolve(resp, "")
+    resolve(resp)
 }
 
 /// Full BIP-32 derivation path (as Trezor `address_n`) for the wallet-owned key in
@@ -530,7 +765,6 @@ fn sign_taproot_psbt(
         trezor
             .sign_tx(psbt, coin_net)
             .map_err(|e| format!("Trezor sign_tx failed: {e}"))?,
-        "",
     )?;
 
     loop {
@@ -556,7 +790,6 @@ fn sign_taproot_psbt(
             progress
                 .ack_msg(ack)
                 .map_err(|e| format!("Trezor TxAck failed: {e}"))?,
-            "",
         )?;
     }
 
@@ -592,6 +825,75 @@ pub fn sign_admin_wallet_psbt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The default must be the wallet that needs no secret. An operation reaching `resolve`
+    /// before any connect — or after a panic wiped the intent — has to answer for the
+    /// standard wallet, never open a hidden one the signer did not ask for.
+    #[test]
+    fn a_session_with_no_connect_yet_is_for_the_standard_wallet() {
+        assert_eq!(SessionState::default().kind, WalletKind::Standard);
+        assert_eq!(WalletKind::default(), WalletKind::Standard);
+    }
+
+    /// Both halves of the session transition, in one test on purpose: they share the
+    /// process-wide [`TREZOR_SESSION`], and `cargo test` runs test fns on parallel threads,
+    /// so splitting them would let one clobber the other's state.
+    #[test]
+    fn a_connect_publishes_its_wallet_and_keeps_it_across_a_new_session_id() {
+        // Connecting must publish the requested wallet and drop the previous session id in
+        // the same step. A stale id alongside a new kind is the silent-wrong-wallet case: the
+        // device would resume the old wallet's warm seed cache and never prompt, so the signer
+        // would get the previous wallet while the app reported the new one.
+        for kind in [WalletKind::Hidden, WalletKind::Standard] {
+            session_slot().id = Some(vec![7u8; SESSION_ID_LEN]);
+
+            start_session(kind);
+
+            assert_eq!(current_wallet_kind(), kind);
+            assert_eq!(
+                session_slot().id,
+                None,
+                "a stale session id survived {kind:?}"
+            );
+        }
+
+        // A session lost mid-flow makes the device prompt again, and that prompt has to be
+        // answered for the wallet the signer chose — so storing the replacement id must leave
+        // the kind alone.
+        start_session(WalletKind::Hidden);
+        session_slot().id = Some(vec![9u8; SESSION_ID_LEN]);
+        assert_eq!(current_wallet_kind(), WalletKind::Hidden);
+
+        // Leave the slot as a fresh standard session, so nothing later in this process
+        // inherits a hidden-wallet intent from a test.
+        start_session(WalletKind::Standard);
+    }
+
+    #[test]
+    fn session_without_a_request_is_a_fresh_start() {
+        assert_eq!(session_outcome(None, &[1, 2, 3]), SessionOutcome::Started);
+    }
+
+    #[test]
+    fn session_is_resumed_only_when_the_device_echoes_the_same_id() {
+        let id = [7u8; 32];
+        assert_eq!(session_outcome(Some(&id), &id), SessionOutcome::Resumed);
+    }
+
+    /// The firmware answers an unknown session id with a *new* empty session instead of an
+    /// error, so a resumed session and a silently restarted one look identical apart from
+    /// the id. Comparing the ids is the only signal there is.
+    #[test]
+    fn a_different_id_means_the_session_was_lost_not_resumed() {
+        let asked = [7u8; 32];
+        let got = [9u8; 32];
+        assert_eq!(session_outcome(Some(&asked), &got), SessionOutcome::Lost);
+        // A truncated echo is not a resume either.
+        assert_eq!(
+            session_outcome(Some(&asked), &asked[..16]),
+            SessionOutcome::Lost
+        );
+    }
 
     #[test]
     fn trezor_coin_network_maps_regtest_and_signet_to_testnet() {

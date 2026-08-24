@@ -1,15 +1,10 @@
-import { CopyButton } from '@/components/copy-button'
 import { useState } from 'react'
 import type { Proposal } from '@/api/proposals'
 import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
-import {
-	CheckCircleEmeraldIcon,
-	CopyClipboardIcon,
-	DownloadIcon,
-	ImportJsonIcon,
-	SendIcon,
-	SignaturePenMutedIcon,
-} from '@/assets/icons'
+import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon, SendIcon } from '@/assets/icons'
+import { ApprovalsList } from '@/components/approvals-list'
+import { DeviceSigningHint } from '@/components/device-signing-hint'
+import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
@@ -23,6 +18,11 @@ type Props = {
 	proposal: Proposal
 	signerPubkey: string | null
 	decodedData: DecodedProposalData
+	/**
+	 * What the connected device shows for this action. Rendered next to the Sign button, because
+	 * the signer compares it while the device is prompting — not a screen away (#402).
+	 */
+	deviceDisplay?: DeviceSigningDisplay
 	onSign: () => void
 	onBroadcast: () => void
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
@@ -46,11 +46,12 @@ function StatusBadge({ status }: { status: DisplayStatus }) {
 	)
 }
 
-function truncatePubkey(pubkey: string): string {
-	return `${pubkey.slice(0, 12)}…${pubkey.slice(-8)}`
-}
-
 function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalData): string {
+	// What the author wrote wins: it is the only part that says why the change is being made. The
+	// summary of the decoded change stays as the fallback for untitled proposals.
+	const authored = proposal.title?.trim()
+	if (authored) return authored
+
 	const change = decodedData.signerSetChange
 	if (change === null) return `Proposal #${proposal.seqNo}`
 
@@ -74,6 +75,7 @@ export function ProposalDetail({
 	proposal,
 	signerPubkey,
 	decodedData,
+	deviceDisplay,
 	onSign,
 	onBroadcast,
 	onPasteSignatures,
@@ -226,64 +228,13 @@ export function ProposalDetail({
 				</div>
 			)}
 
-			{/* ── SPS-65 sighash ── */}
-			{decodedData.sighashHex !== null && (
-				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm p-6 py-5">
-					<SectionLabel>SPS-65 Sighash</SectionLabel>
-					<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-						<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">
-							{decodedData.sighashHex}
-						</span>
-						<CopyButton text={decodedData.sighashHex} />
-					</div>
-				</div>
-			)}
-
 			{/* ── Approvals ── */}
-			<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
-				<div className="flex items-center justify-between border-b border-[#f3f4f6] px-6 py-4">
-					<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
-						Approvals · {collectedSignatures} of {requiredSignatures}
-					</p>
-				</div>
-				<div className="divide-y divide-[#f3f4f6]">
-					{/* Signed rows — from proposal.signatures */}
-					{proposal.signatures.map((sig, i) => {
-						const isMe = signerPubkey !== null && sig.signerPubkey.toLowerCase() === signerPubkey.toLowerCase()
-						return (
-							<div key={i} className="flex items-center gap-3 bg-[#f0fdf9] px-6 py-3">
-								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0f9d7a]">
-									<SignaturePenMutedIcon width={10} height={10} style={{ filter: 'brightness(10)' }} />
-								</span>
-								<span className="flex-1 font-mono text-label text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
-								{isMe && (
-									<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
-										YOU
-									</span>
-								)}
-								<CopyButton text={sig.signatureHex} variant="icon" />
-								<span className="shrink-0 text-label text-[#6b7280]">Signed</span>
-							</div>
-						)
-					})}
-
-					{/* Pending rows — signers not yet in signatures */}
-					{decodedData.allSigners
-						.filter((signer) => !proposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signer.toLowerCase()))
-						.map((signer, i) => (
-							<div key={`pending-${i}`} className="flex items-center gap-3 px-6 py-3">
-								<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d1d5db] bg-white" />
-								<span className="flex-1 font-mono text-label text-[#6b7280]">{truncatePubkey(signer)}</span>
-								<span className="shrink-0 text-label text-[#9ca3af]">Pending</span>
-							</div>
-						))}
-
-					{/* Fallback if no signer data available (allSigners empty, only show signed) */}
-					{decodedData.allSigners.length === 0 && proposal.signatures.length === 0 && (
-						<div className="px-6 py-4 text-body-sm text-[#9ca3af]">No signatures yet.</div>
-					)}
-				</div>
-			</div>
+			<ApprovalsList
+				signatures={proposal.signatures}
+				allSigners={decodedData.allSigners}
+				signerPubkey={signerPubkey}
+				requiredSignatures={requiredSignatures}
+			/>
 
 			{/* ── Broadcast TXIDs ── */}
 			{(proposal.commitTxid ?? proposal.revealTxid) && (
@@ -353,6 +304,8 @@ export function ProposalDetail({
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
 						</div>
 					)}
+
+					{canSign && deviceDisplay !== undefined && <DeviceSigningHint display={deviceDisplay} />}
 
 					{canSign && (
 						<button

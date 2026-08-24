@@ -7,6 +7,17 @@ pub const MAX_FEE_RATE_SAT_PER_KVB: u64 = 10_000_000;
 /// 1 sat/vB — static fallback when no relay-fee source is reachable (1_000 sat/kvB).
 pub const FALLBACK_MIN_RELAY_SAT_PER_KVB: u64 = 1_000;
 
+/// 10,000 sat/vB — the highest rate a node will accept for **one transaction**.
+///
+/// `sendrawtransaction` rejects anything above `0.10 BTC/kvB` by default (Core's
+/// `-maxfeerate`), and `Psbt::extract_tx` refuses to even build a transaction over
+/// 25,000 sat/vB. Numerically the same as [`MAX_FEE_RATE_SAT_PER_KVB`], but a
+/// different rule: that one caps the rate an operator may *ask for*, this one caps
+/// what a single transaction may *pay*. They come apart in CPFP, where the rate
+/// asked for applies to the package while the cap below applies to the child alone
+/// (#431) — see `PackageStats::max_package_rate_sat_per_kvb`.
+pub const MAX_BROADCAST_SAT_PER_KVB: u64 = 10_000_000;
+
 /// A validated fee rate in satoshis per virtual kilobyte (sat/kvB).
 ///
 /// Unit: 1 sat/vB == 1_000 sat/kvB; the UI step of 0.1 sat/vB == 100 sat/kvB.

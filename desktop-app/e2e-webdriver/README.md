@@ -136,6 +136,27 @@ Fee-bump flow for PRD §4.3.3: login → fund wallet → send unconfirmed BTC �
 
 Selectors use `data-testid` attributes on the React side (`e2e-*`).
 
+## Device QA specs (`*.qa.js`) — run by hand, never in CI
+
+Two specs need a real Trezor emulator and drive its keypad over the debug link, so they are
+named `*.qa.js` and fall outside the `**/*.e2e.js` glob that `test:e2e:all` uses. They exist to
+be re-runnable evidence for #448, not to gate merges.
+
+Both need the dockerised emulator (see the notes kept alongside it, outside this repo) and each
+needs the device in a specific state, which the spec cannot set for you:
+
+| Script                          | Device state needed         | Proves                                                                     |
+| ------------------------------- | --------------------------- | -------------------------------------------------------------------------- |
+| `npm run qa:trezor-wallet-choice` | passphrase **enabled**  | "Connect wallet" and "Enter passphrase on Trezor" open **different** wallets |
+| `npm run qa:trezor-hidden-refused` | passphrase **disabled** | asking for a hidden wallet is refused, not silently answered with the standard one |
+
+Screenshots land in `issues/evidence/g5-448-b6-*.png`.
+
+**Check the device state before blaming the app.** Toggling the passphrase does not always take
+effect on a container restart; if it did not, a hidden-wallet connect puts the keypad up and the
+spec waits forever on a refusal that will never come. Read `passphrase_protection` off the live
+device first.
+
 ## Troubleshooting
 
 | Symptom                         | Likely fix                                                                                                                                                                                                                                                                                                                                                                                          |

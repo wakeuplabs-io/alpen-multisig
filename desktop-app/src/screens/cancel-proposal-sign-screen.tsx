@@ -13,9 +13,10 @@ import {
 import { computeSighash } from '@/api/signing'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
-import { useDeviceSigningMessage } from '@/domain/sign-proposal/hooks/use-device-signing-message'
+import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -39,6 +40,7 @@ export function CancelProposalSignScreen() {
 		ensureOrchestratorSession,
 	} = useSession()
 	const authorityLabel = authorityLabelForRole(selectedRole)
+	const signerLabel = deviceCopy(adapter.vendor).label
 	const panel = useWalletPanelData()
 
 	const [isLoading, setIsLoading] = useState(true)
@@ -214,8 +216,8 @@ export function CancelProposalSignScreen() {
 	const flowTitle = flow === 'initiate' ? 'Initiate cancel' : 'Sign cancel'
 	const flowSubtitle =
 		flow === 'initiate'
-			? 'Sign on your hardware wallet to create the cancel proposal and add the first signature.'
-			: 'Sign on your hardware wallet to add your signature to the existing cancel proposal.'
+			? `Sign with your ${signerLabel} to create the cancel proposal and add the first signature.`
+			: `Sign with your ${signerLabel} to add your signature to the existing cancel proposal.`
 
 	const buttonLabel = isSigning
 		? 'Signing…'
@@ -237,8 +239,7 @@ export function CancelProposalSignScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.publicKeyHex}
-						adminIdAddress={wallet.addressSample}
+						adminId={wallet.addressSample}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>
@@ -290,18 +291,10 @@ export function CancelProposalSignScreen() {
 							</p>
 						</div>
 
-						{/* Sighash */}
-						<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-							<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Sighash to sign</p>
-							<code className="mt-1.5 block break-all font-mono text-label leading-5 text-[#374151]">
-								{sighashHex || '—'}
-							</code>
-							{deviceDisplay.kind !== 'none' && (
-								<div className="mt-3">
-									<DeviceSigningHint display={deviceDisplay} />
-								</div>
-							)}
-						</div>
+						{/* What the device will render for this signature. Shown only while there is something
+						    to sign, and next to the button, because the comparison happens with the device
+						    already prompting. The hint carries its own card, so it needs no wrapper. */}
+						{!alreadySigned && !signResult && <DeviceSigningHint display={deviceDisplay} />}
 
 						{/* Sign error */}
 						{signError && (

@@ -3,7 +3,8 @@ import { verifyAddressOnDevice } from '@/api/admin-wallet'
 import type { HwDeviceType } from '@/api/admin-wallet'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
-import type { WalletAccountInfo, WalletAdapter } from '@/wallet/types'
+import { matchesDeviceAddress } from '@/lib/admin-id'
+import type { WalletAccountInfo, WalletAdapter, WalletKind } from '@/wallet/types'
 
 /** The connected device kind for verify dispatch, or null for software vendors. */
 function hwDeviceType(vendor: WalletAdapter['vendor']): HwDeviceType | null {
@@ -18,7 +19,8 @@ type Params = {
 type HookResult = {
 	state: HwWalletConnectState
 	actions: {
-		connect: () => Promise<void>
+		/** Defaults to the standard wallet: the one that needs no passphrase. */
+		connect: (kind?: WalletKind) => Promise<void>
 		goBackToConnect: () => void
 		verifyOnDevice: () => Promise<void>
 		disconnect: () => void
@@ -44,18 +46,18 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 		}
 	}, [])
 
-	async function connect() {
+	async function connect(kind: WalletKind = 'standard') {
 		setLoading(true)
 		setConnectViewState('loading')
 		setError(null)
 
 		try {
-			const info = await adapter.connect()
-			const publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? ''
+			const info = await adapter.connect(kind)
+			const publicKeyHex = info.publicKeyHex ?? ''
 			const canonicalEntry = {
 				index: 0,
 				derivationPath: info.derivationPath,
-				address: info.addressSample ?? 'Mnemonic signer',
+				address: info.addressSample ?? '',
 				publicKeyHex,
 			}
 
@@ -64,11 +66,12 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 			setVerifyMessage(null)
 			onConnected({
 				...info,
+				// The Admin ID (PRD 06 §3.b.ii.2). Both connect steps and the wallet panel read
+				// this one field, so they cannot drift apart.
 				addressSample: canonicalEntry.address,
-				// The Admin ID is this key (#408); keep it on the session under an explicit field
-				// so screens never have to fall back to xpubOrFingerprint.
+				// Not the Admin ID, but still the signer's identity to the backend: the nonce
+				// signature is checked against the canonical signer set by recovered public key.
 				publicKeyHex: canonicalEntry.publicKeyHex,
-				xpubOrFingerprint: canonicalEntry.publicKeyHex,
 			})
 			setConnectViewState('success')
 			successTransitionTimeoutRef.current = window.setTimeout(() => {
@@ -110,6 +113,17 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 		if (!result.ok) {
 			setVerifyMessage(`Verification failed: ${result.error}`)
+			return
+		}
+
+		// Compare what the device drew against what this screen shows. Reporting success on
+		// the mere fact that the device answered would confirm nothing: a device sitting on a
+		// different wallet — a passphrase typed differently after the session was dropped —
+		// returns a perfectly valid address for the wrong key.
+		if (!matchesDeviceAddress(selectedEntry.address, result.data)) {
+			setVerifyMessage(
+				`Address mismatch: the device shows ${result.data}, this screen shows ${selectedEntry.address}. Do not use this key — reconnect and check the passphrase you entered on the device.`,
+			)
 			return
 		}
 

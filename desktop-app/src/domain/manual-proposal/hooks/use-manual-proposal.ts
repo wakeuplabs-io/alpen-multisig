@@ -7,6 +7,8 @@ import {
 	type PrepareBroadcastResult,
 } from '@/api/proposals'
 import { computeSighash, decodeActionHex } from '@/api/signing'
+import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type {
 	ManualBundleJson,
@@ -46,7 +48,6 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 
 	// Step 2
 	const [decodedData, setDecodedData] = useState<DecodedProposalData>({
-		sighashHex: null,
 		signerSetChange: null,
 		allSigners: [],
 		isLoading: false,
@@ -65,6 +66,19 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 
 	const hasQuorum = requiredSignatures !== null && localSignatures.length >= requiredSignatures
 
+	// No device renders the SPS-65 sighash, so the offline flow also resolves what the device does
+	// render (canonical message / its SHA-256) for the imported action — the signer has nothing else
+	// to compare the device screen against on this path (#402). Resolved here rather than in the
+	// component because this hook owns both `importData` and the session adapter.
+	const { message: deviceMessage, messageHash: deviceMessageHash } = useDeviceSigningMessage(
+		importData?.seqNo ?? null,
+		importData?.actionHex ?? null,
+	)
+	const deviceDisplay: DeviceSigningDisplay = deviceSigningDisplay(adapter.vendor, {
+		message: deviceMessage,
+		messageHash: deviceMessageHash,
+	})
+
 	// When importData is set (step advances to sign-collect), fetch decoded data and config.
 	useEffect(() => {
 		if (importData === null) return
@@ -78,7 +92,6 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 
 				setDecodedData((prev) => ({
 					...prev,
-					sighashHex: importData.sighashHex,
 					isLoading: false,
 					allSigners: configRes.ok ? configRes.data.signers : [],
 					signerSetChange: (() => {
@@ -392,7 +405,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		setImportErrors({})
 		setIsValidating(false)
 		setImportData(null)
-		setDecodedData({ sighashHex: null, signerSetChange: null, allSigners: [], isLoading: false })
+		setDecodedData({ signerSetChange: null, allSigners: [], isLoading: false })
 		setLocalSignatures([])
 		setRequiredSignatures(null)
 		setIsSigning(false)
@@ -416,6 +429,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		// step 2
 		importData,
 		decodedData,
+		deviceDisplay,
 		localSignatures,
 		requiredSignatures,
 		hasQuorum,

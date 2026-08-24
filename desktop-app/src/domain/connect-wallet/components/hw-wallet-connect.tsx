@@ -11,12 +11,14 @@ import { deviceCopy } from '@/lib/device-copy'
 import { useHwWalletConnect } from '@/domain/connect-wallet/hooks/use-hw-wallet-connect'
 import { useAuthorityMembership } from '@/domain/connect-wallet/hooks/use-authority-membership'
 import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mnemonic-signing-enabled'
-import type { WalletAccountInfo, WalletAdapter, WalletVendor } from '@/wallet/types'
+import type { WalletAccountInfo, WalletAdapter, WalletKind, WalletVendor } from '@/wallet/types'
+import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
+import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 
 type Props = {
 	adapter: WalletAdapter
 	walletVendor: WalletVendor
-	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string, passphrase?: string) => void
+	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	onConnected: (info: WalletAccountInfo | null) => void
 	/** Wired to the shell header so Disconnect lives only in the top bar. */
 	disconnectRef?: MutableRefObject<(() => void) | null>
@@ -52,28 +54,41 @@ export function HwWalletConnect({
 	const mnemonicEnabled = useMnemonicSigningEnabled()
 	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
 
-	const [shouldAutoConnect, setShouldAutoConnect] = useState(false)
+	// Holds the wallet the pending auto-connect is for, or null when none is queued. It carries
+	// the kind rather than a bare flag because selecting the vendor swaps the adapter through
+	// context asynchronously, so the choice has to survive until the adapter is in place.
+	const [pendingConnect, setPendingConnect] = useState<WalletKind | null>(null)
 	const connectRef = useRef(actions.connect)
 	useEffect(() => {
 		connectRef.current = actions.connect
 	})
 	useEffect(() => {
-		if (!shouldAutoConnect) return
-		setShouldAutoConnect(false)
-		void connectRef.current()
-	}, [shouldAutoConnect])
+		if (pendingConnect === null) return
+		setPendingConnect(null)
+		void connectRef.current(pendingConnect)
+	}, [pendingConnect])
 
-	function handleConnectTrezor(passphrase?: string) {
-		onSelectWalletMethod('trezor', undefined, passphrase)
-		setShouldAutoConnect(true)
+	function handleConnectTrezor(kind: WalletKind = 'standard') {
+		onSelectWalletMethod('trezor')
+		setPendingConnect(kind)
 	}
 
 	function handleConnectMnemonic(mnemonic: string) {
 		onSelectWalletMethod('mnemonic', mnemonic)
-		setShouldAutoConnect(true)
+		setPendingConnect('standard')
 	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
+	// The certificate modal's Step 2 needs a device to render the Admin ID on. A mnemonic
+	// session has none, so it gets no context and the step explains itself instead (D3).
+	const adminIdVerify: AdminIdVerifyContext | undefined =
+		(walletVendor === 'trezor' || walletVendor === 'ledger') && state.selectedEntry
+			? {
+					deviceType: walletVendor,
+					network: networkFromPath(state.selectedEntry.derivationPath),
+					derivationPath: state.selectedEntry.derivationPath,
+				}
+			: undefined
 	const { resolvedOptions, isChecking } = useAuthorityMembership(signerPubkeyHex, authoritySelection?.options ?? [])
 
 	// TODO: Refactor this to use a context
@@ -120,7 +135,8 @@ export function HwWalletConnect({
 					<AuthoritySelectionPhase
 						selectedAuthorityId={authoritySelection.selectedAuthorityId}
 						options={resolvedOptions}
-						adminId={state.selectedEntry.publicKeyHex}
+						adminId={state.selectedEntry.address}
+						adminIdVerify={adminIdVerify}
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
 						onContinueToAuthenticate={authoritySelection.onContinueToAuthenticate}
@@ -135,7 +151,7 @@ export function HwWalletConnect({
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
 						adapterLabel={deviceCopy(walletVendor).label}
-						compressedPublicKey={state.selectedEntry.publicKeyHex}
+						adminId={state.selectedEntry.address}
 						isAuthenticating={authoritySelection.isAuthenticating}
 						authError={authoritySelection.authError}
 						authOkMessage={authoritySelection.authOkMessage}

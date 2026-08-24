@@ -293,7 +293,7 @@ Cancel proposal                            [Authority badge] [Session] [Disconne
   │  Target update ID: <hex>                                                  │
   │  Cancel payload (reviewable hex, copy button)                            │
   │  Signatures: 1 / 3              [Copy all cancel signatures]             │
-  │  [Sign on hardware wallet]   ← disabled if user already signed           │
+  │  [Sign with <signer>]        ← signer named per connected vendor         │
   │  ─────────────────────────────────────────────────────────────────────── │
   │  [Broadcast cancel tx]       ← enabled only when quorum reached          │
   └──────────────────────────────────────────────────────────────────────────┘
@@ -403,7 +403,7 @@ Manual E2E flow:
 1. Connect wallet → authenticate → navigate to an Approved proposal (AlpenAdmin or StrataAdmin).
 2. Cancel CTA visible; activation countdown shown.
 3. Navigate to `/proposals/:actionId/cancel` — cancel details card renders with correct target summary.
-4. Sign on hardware wallet — cancel sig collected; sig count updates.
+4. Sign with the connected signer — cancel sig collected; sig count updates.
 5. Copy all cancel signatures to clipboard.
 6. When quorum reached — "Broadcast cancel tx" CTA appears; broadcast reuses existing pipeline.
 7. After broadcast — target proposal shows `Canceled` status in dashboard.

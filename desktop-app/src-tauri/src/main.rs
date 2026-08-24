@@ -35,6 +35,9 @@ fn main() {
             // Ephemeral envelope keypairs cached per payload so the commit address the signer
             // confirms on a hardware wallet matches the app preview (issue #382).
             app.manage(EnvelopeKeyCache::default());
+            // Long-lived arboard owner so Linux/X11 pastes survive without a clipboard
+            // manager (Lubuntu/LXQt — issue #428).
+            app.manage(commands::system::ClipboardState::default());
             Ok(())
         })
         .run(tauri::generate_context!())

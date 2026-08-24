@@ -5,32 +5,43 @@ import type { AdminWalletError } from '@/api/admin-wallet'
 import { WalletIcon } from '@/assets/icons'
 import { CopyButton } from '@/components/copy-button'
 import { SectionLabel } from '@/components/section-label'
-import { satsToBtc } from '../model/broadcast-proposal'
+import { isBroadcastConfirmDisabled, satsToBtc } from '../model/broadcast-proposal'
 import type { BroadcastPhase } from '../model/broadcast-proposal'
+import type { AdminWalletInfoView } from '../hooks/use-admin-wallet-info'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
+import { deviceCopy } from '@/lib/device-copy'
 import type { WalletVendor } from '@/wallet/types'
-
-type AdminWalletInfoView = {
-	address: string
-	balanceSats: number
-}
 
 type Props = {
 	bundle: PrepareBroadcastResult
 	proposal: Proposal | null
 	onBroadcast: () => void
 	isBroadcasting: boolean
-	canSign?: boolean
-	canSignReason?: string
+	phase: BroadcastPhase
+	/** Cancel flow only — `false` means the targeted action already left the ASM queue. */
 	targetQueued?: boolean | null
-	adminWalletInfo?: AdminWalletInfoView | null
-	lastSyncedAt?: string | null
-	syncError?: AdminWalletError | null
-	phase?: BroadcastPhase
+	// ── Admin Wallet, required on purpose ─────────────────────────────────────
+	// The Admin Wallet always funds the commit, so a screen that renders this card must wire it.
+	// These were optional once, and the cancel screen silently omitted them: the send button read
+	// `adminWalletInfo == null` and stayed disabled forever (issue #484). Required keys turn that
+	// class of mistake into a compile error. Use `useBroadcastAdminWallet(adapter)` and spread its
+	// `cardProps`. Values may still be null/undefined — only the wiring is mandatory.
+	canSign: boolean
+	canSignReason: string | undefined
+	/** `null` = loading, `undefined` = unavailable. */
+	adminWalletInfo: AdminWalletInfoView | null | undefined
+	lastSyncedAt: string | null | undefined
+	syncError: AdminWalletError | null | undefined
 	/** Signer connected in this session — drives the device-specific broadcast prompt. */
 	walletVendor: WalletVendor
 	/** Fee selection UI (presets + custom input), rendered above the estimated fee. */
 	feeSelector?: ReactNode
+}
+
+/** bech32 human-readable part — everything before the separator (`bcrt`, `tb`, `bc`). */
+function hrpOf(address: string): string {
+	const separator = address.lastIndexOf('1')
+	return separator === -1 ? '' : address.slice(0, separator)
 }
 
 const TIME_UNITS = [
@@ -68,7 +79,7 @@ export function BroadcastDetailsCard({
 	proposal,
 	onBroadcast,
 	isBroadcasting,
-	canSign = true,
+	canSign,
 	canSignReason,
 	targetQueued,
 	adminWalletInfo,
@@ -80,6 +91,11 @@ export function BroadcastDetailsCard({
 }: Props) {
 	const collectedSignatures = proposal?.signatures.length ?? 0
 	const requiredSignatures = proposal?.requiredSignatures ?? 0
+	// The commit preview is rendered the way the connected device will show it, which off
+	// mainnet is a different prefix from the network's own (issue #401). The wallet's funding
+	// address is the network's, so a differing HRP is exactly that case.
+	const showsForeignPrefix = adminWalletInfo != null && hrpOf(bundle.commitAddress) !== hrpOf(adminWalletInfo.address)
+
 	const signaturesProgress =
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
@@ -129,6 +145,13 @@ export function BroadcastDetailsCard({
 						</span>
 						<CopyButton text={bundle.commitAddress} />
 					</div>
+					{deviceCopy(walletVendor).isHardware && showsForeignPrefix && (
+						<p className="mt-2 text-mono-sm leading-[1.45] text-[#9ca3af]">
+							Shown with the prefix your {deviceCopy(walletVendor).label} renders — its firmware has no coin for this
+							network. Compare it with the device screen character for character; the transaction itself pays the
+							address for this network, with the same characters after the prefix.
+						</p>
+					)}
 					<p className="mt-2 text-body-sm text-[#6b7280]">
 						{satsToBtc(bundle.commitAmountSats)} BTC{' '}
 						<span className="text-label text-[#9ca3af]">({bundle.commitAmountSats.toLocaleString()} sats)</span>
@@ -219,13 +242,7 @@ export function BroadcastDetailsCard({
 				<button
 					type="button"
 					data-testid="e2e-broadcast-confirm"
-					disabled={
-						isBroadcasting ||
-						!canSign ||
-						targetQueued === false ||
-						adminWalletInfo == null ||
-						adminWalletInfo.balanceSats === 0
-					}
+					disabled={isBroadcastConfirmDisabled({ isBroadcasting, canSign, targetQueued, adminWalletInfo })}
 					onClick={onBroadcast}
 					className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
 				>

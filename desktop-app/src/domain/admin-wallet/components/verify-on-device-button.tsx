@@ -1,6 +1,7 @@
 import type { HwDeviceType, VerifyScriptType } from '../model/hw-device'
 import { ShieldCheckMutedIcon, CheckEmeraldIcon, AlertTriangleIcon } from '@/assets/icons'
 import { useVerifyOnDevice } from '../hooks/use-verify-on-device'
+import { verifyOnDeviceAppearance, verifyOnDeviceClassName } from '../model/verify-on-device-appearance'
 import { deviceCopy } from '@/lib/device-copy'
 
 export type VerifyOnDeviceButtonProps = {
@@ -15,6 +16,14 @@ export type VerifyOnDeviceButtonProps = {
 	 * actually shows is compared against it and a difference is surfaced as an alarm.
 	 */
 	expectedAddress?: string
+	/** Idle label. Defaults to the compact wording used beside a receive address. */
+	label?: string
+	/**
+	 * `chip` is the small outlined affordance that sits next to an address. `primary`
+	 * is the solid button the certificate wireframes give Step 2, where verifying on the
+	 * device is half the point of the screen rather than an optional extra.
+	 */
+	variant?: 'chip' | 'primary'
 }
 
 /**
@@ -31,48 +40,54 @@ export function VerifyOnDeviceButton({
 	scriptType,
 	subject,
 	expectedAddress,
+	label = 'Verify on device',
+	variant = 'chip',
 }: VerifyOnDeviceButtonProps) {
 	const { state, verify } = useVerifyOnDevice({ deviceType, network, expectedAddress })
-	const isVerifying = state.status === 'verifying'
 
 	function handleVerify() {
 		void verify(derivationPath, scriptType)
 	}
 
+	// A confirmed verification ends green, like the certificate's `Signed` chip — but it stays a
+	// button, because a signer may legitimately want to check again. See the model for the reasoning.
+	const appearance = verifyOnDeviceAppearance(state, label, `Confirm on your ${deviceCopy(deviceType).label}…`)
+
 	return (
-		<div className="mt-2">
+		// A column, not a row: the success line used to be an inline sibling of the button, which put
+		// it on the same visual line with an `mt-1.5` meant for stacking — half a line lower than the
+		// pill beside it. Stacking also spares the 360px wallet panel, where this sentence wraps.
+		<div className="mt-2 flex flex-col items-start gap-1.5">
 			<button
 				type="button"
 				onClick={handleVerify}
-				disabled={isVerifying}
+				disabled={appearance.isBusy}
+				aria-busy={appearance.isBusy}
 				data-testid="e2e-wallet-verify-on-device"
-				className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
-					isVerifying
-						? 'cursor-wait border-[#e5e7eb] text-[#9ca3af]'
-						: 'border-[#ddd6fe] text-[#7c6cf0] hover:border-[#c4b5fd] hover:bg-[#faf9ff]'
-				}`}
+				className={verifyOnDeviceClassName(state, variant)}
 			>
-				<ShieldCheckMutedIcon width={12} height={12} />
-				{isVerifying ? `Confirm on your ${deviceCopy(deviceType).label}…` : 'Verify on device'}
+				{appearance.icon === 'check' ? (
+					<CheckEmeraldIcon width={12} height={12} />
+				) : (
+					<ShieldCheckMutedIcon width={12} height={12} />
+				)}
+				{appearance.label}
 			</button>
 
 			{state.status === 'verified' && (
 				<p
 					aria-live="polite"
-					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-[#059669]"
+					className="text-[11px] leading-[1.45] text-[#065f46]"
 					data-testid="e2e-wallet-verify-on-device-result"
 				>
-					<CheckEmeraldIcon width={12} height={12} className="mt-px shrink-0" />
-					<span>
-						Confirmed the {subject} on your {deviceCopy(deviceType).label}.
-					</span>
+					Confirmed the {subject} on your {deviceCopy(deviceType).label}.
 				</p>
 			)}
 
 			{state.status === 'mismatch' && (
 				<div
 					aria-live="assertive"
-					className="mt-1.5 rounded-lg border border-danger-border bg-danger-surface px-3 py-2"
+					className="w-full rounded-lg border border-danger-border bg-danger-surface px-3 py-2"
 					data-testid="e2e-wallet-verify-on-device-mismatch"
 				>
 					<p className="inline-flex items-start gap-1.5 text-[11px] font-medium leading-[1.45] text-danger-strong">
@@ -90,10 +105,7 @@ export function VerifyOnDeviceButton({
 			)}
 
 			{state.status === 'failed' && (
-				<p
-					aria-live="polite"
-					className="mt-1.5 inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-danger-strong"
-				>
+				<p aria-live="polite" className="inline-flex items-start gap-1.5 text-[11px] leading-[1.45] text-danger-strong">
 					<AlertTriangleIcon width={12} height={12} className="mt-px shrink-0 text-danger" />
 					<span>
 						Could not verify the {subject}: {state.message}

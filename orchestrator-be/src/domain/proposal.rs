@@ -96,6 +96,10 @@ pub struct Proposal {
     pub required_signatures: u16,
     /// Hex-encoded MultisigAction payload (opaque to backend).
     pub action_hex: String,
+    /// Human-written label for the proposal. Coordination metadata only: it is not part of
+    /// `action_hex`, not covered by any signature, and not an input to `compute_action_id`.
+    /// Optional, because proposals created before this field existed have none.
+    pub title: Option<String>,
     pub signatures: Vec<ProposalSignature>,
     pub broadcast_status: BroadcastStatus,
     pub commit_txid: Option<String>,
