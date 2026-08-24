@@ -2,8 +2,16 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
+import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
 import { BroadcastStepper } from '@/domain/broadcast-proposal/components/broadcast-stepper'
+import { useBroadcastAdminWallet } from '@/domain/broadcast-proposal/hooks/use-broadcast-admin-wallet'
+import {
+	isBroadcastDetailsPhase,
+	isBroadcastInFlightPhase,
+	isBroadcastLoadingPhase,
+	isBroadcastProgressPhase,
+} from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
@@ -19,9 +27,11 @@ export function CancelProposalBroadcastScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
 	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
+	const { signerKind, backendSignerKind, canSign, canSignReason, isAdminWalletMode, cardProps } =
+		useBroadcastAdminWallet(adapter)
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
-	const panel = useWalletPanelData()
+	const panel = useWalletPanelData(isAdminWalletMode)
 
 	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
@@ -39,7 +49,7 @@ export function CancelProposalBroadcastScreen() {
 		error,
 		prepare,
 		broadcast,
-	} = useCancelBroadcast(getOrchestratorBaseUrl(), actionId ?? '', feeRateSatPerKvb)
+	} = useCancelBroadcast(getOrchestratorBaseUrl(), actionId ?? '', feeRateSatPerKvb, signerKind, adapter)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -48,10 +58,9 @@ export function CancelProposalBroadcastScreen() {
 	if (wallet === null) return <Navigate to="/" replace />
 	if (actionId === undefined) return <Navigate to="/proposals" replace />
 
-	const isLoading = isResolvingCancel || phase === 'idle' || phase === 'preparing'
-	const showDetails =
-		bundle !== null && (phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting')
-	const showProgress = phase === 'broadcasting' || phase === 'done' || phase === 'error'
+	const isLoading = isResolvingCancel || isBroadcastLoadingPhase(phase)
+	const showDetails = bundle !== null && isBroadcastDetailsPhase(phase)
+	const showProgress = isBroadcastProgressPhase(phase)
 
 	return (
 		<ScreenShell
@@ -67,8 +76,7 @@ export function CancelProposalBroadcastScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.publicKeyHex}
-						adminIdAddress={wallet.addressSample}
+						adminId={wallet.addressSample}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>
@@ -89,6 +97,8 @@ export function CancelProposalBroadcastScreen() {
 				</div>
 
 				<div className="mt-6 space-y-4">
+					<BroadcastFundingSignerBanner backendSignerKind={backendSignerKind} connectVendor={adapter.vendor} />
+
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<div className="h-7 w-48 rounded-lg bg-[#f3f4f6]" />
@@ -114,11 +124,13 @@ export function CancelProposalBroadcastScreen() {
 
 					{showDetails && (
 						<BroadcastDetailsCard
+							{...cardProps}
 							bundle={bundle}
 							proposal={proposal}
 							walletVendor={adapter.vendor}
 							onBroadcast={() => void broadcast()}
-							isBroadcasting={phase === 'broadcasting' || phase === 'awaiting-device'}
+							isBroadcasting={isBroadcastInFlightPhase(phase)}
+							phase={phase}
 							targetQueued={targetQueued}
 							feeSelector={
 								feeState.status === 'ready' ? (
@@ -144,7 +156,10 @@ export function CancelProposalBroadcastScreen() {
 					)}
 
 					{phase === 'done' && (
-						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
+						<div
+							className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3"
+							data-testid="e2e-broadcast-done-banner"
+						>
 							<p className="m-0 text-body font-medium text-[#065f46]">
 								Cancel transaction confirmed on-chain. The queued update has been removed.
 							</p>
@@ -159,13 +174,20 @@ export function CancelProposalBroadcastScreen() {
 					)}
 
 					{phase === 'error' && (
-						<button
-							type="button"
-							onClick={() => void prepare()}
-							className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-body font-medium text-white transition hover:bg-black"
-						>
-							Retry
-						</button>
+						<div>
+							<button
+								type="button"
+								data-testid="e2e-broadcast-prepare"
+								disabled={!canSign}
+								onClick={() => void prepare()}
+								className="inline-flex items-center rounded-xl border border-[#111827] bg-[#111827] px-4 py-2 text-body font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								Retry
+							</button>
+							{!canSign && (
+								<p className="mt-2 text-label text-[#6b7280]">{canSignReason ?? 'Hardware wallet required to sign'}</p>
+							)}
+						</div>
 					)}
 				</div>
 			</div>

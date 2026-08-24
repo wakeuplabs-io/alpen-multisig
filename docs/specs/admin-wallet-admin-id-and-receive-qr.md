@@ -111,6 +111,47 @@ Dependency direction is preserved: components depend on pure model helpers and s
 
 ---
 
+## Update — PRD 06 (2026-08-14) — the section below is superseded
+
+**The Admin ID is a bitcoin address again.** PRD snapshot 06 §3.b.ii.2 restores the P2WPKH
+address at `m/84'/0'/73'/0/0`, reversing the compressed-public-key rendering that the July
+section below specified and that PR #444 shipped.
+
+Read the July section as history, not as contract. What it recorded is still worth keeping:
+it explains *why* the app went the other way for five weeks, and its device-capability table
+(#409) is the measurement the reversion rests on — no supported signer can render a raw
+compressed public key, which is precisely why an address is the shape that lets the device
+show the Admin ID itself.
+
+What changed and where:
+
+| July section says | Now | Where |
+|---|---|---|
+| The Admin ID is the compressed public key everywhere (#408, #412) | It is the P2WPKH address, on all three surfaces | [`admin-id-as-bitcoin-address.md`](./admin-id-as-bitcoin-address.md) |
+| The device confirms the key **indirectly**, via a separate "Address on device" block | The device shows the Admin ID **itself**; the block is gone, and its duplicate reading of the same value was #413 | same spec, B3 |
+| `isDisplayableAdminId` validates a compressed pubkey | It validates a bech32 address, and **rejects** a raw key so the July rendering cannot return unnoticed | `src/lib/admin-id.ts` |
+| Safety caption: "it is a public key, not a payment address" | "never send funds to this address" | same |
+
+Unchanged, and deliberately so:
+
+- **The derivation path.** `m/84'/…/73'/0/0`, exactly as before. No signer is re-derived or
+  re-enrolled by this reversal.
+- **The backend.** `is_signer_member_for_authority` compares a compressed pubkey **recovered
+  from the nonce signature**; it never parsed a displayed string, so nothing there moves.
+- **No QR on the Admin ID.** The July decision (see In/NOT-in-scope above) stands with a
+  stronger reason: the Admin ID is a real address now, so a scannable code would invite the
+  mis-send it was always meant to prevent.
+- **The receive-QR half of this spec** (§4.3.4.1) is untouched by any of this.
+
+Why the reversal happened at all: the maintainer's ruling, the updated PRD and the wireframes
+arrived through a channel outside the tracker, so #408, #409, #410 and #412 record no
+explanation for it. This section is that explanation.
+
+Still open after G7: the **Admin ID Verification Certificate** (PRD 06 §3.c.i, §4.a) → G8, and
+**device QA plus the §4.1/§4.2 compliance flip** → G9.
+
+---
+
 ## Update — feedback 2026-07-01 (#408, #409, #410, #412)
 
 Alpen corrected a requirement that this spec encoded from the pre-update PRD: **the Admin ID

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useBroadcastProposal } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
+import type { SignerKind } from '@/domain/broadcast-proposal/hooks/use-broadcast-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import type { BroadcastError, BroadcastPhase } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
@@ -9,6 +10,7 @@ import {
 	type PrepareBroadcastResult,
 	type Proposal,
 } from '@/api/proposals'
+import type { WalletAdapter } from '@/wallet/types'
 
 type UseCancelBroadcastReturn = {
 	isResolvingCancel: boolean
@@ -32,12 +34,16 @@ export function useCancelBroadcast(
 	targetActionId: string,
 	/** `null` while fee presets load — broadcast stays blocked until ready. */
 	feeRateSatPerKvb: number | null,
+	/** Drives the `awaiting-device` phase — a hardware signer must be prompted before the commit. */
+	signerKind: SignerKind = 'mnemonic',
+	/** Required to (re)bind the Admin Wallet session and check the hardware binding before sending. */
+	adapter?: WalletAdapter,
 ): UseCancelBroadcastReturn {
 	const { proposal: targetProposal, isLoading, error: targetError } = useProposalDetail(baseUrl, targetActionId)
 
 	const cancelActionId = targetProposal?.cancelProposal?.actionId ?? null
 
-	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '', feeRateSatPerKvb)
+	const broadcastState = useBroadcastProposal(baseUrl, cancelActionId ?? '', feeRateSatPerKvb, signerKind, adapter)
 
 	const [isCheckingTargetQueued, setIsCheckingTargetQueued] = useState(false)
 	const [targetQueued, setTargetQueued] = useState<boolean | null>(null)

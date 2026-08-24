@@ -49,8 +49,6 @@ export function createMnemonicAdapter(opts: MnemonicAdapterOptions): MnemonicAda
 				derivationPath,
 				addressSample: selectedAddress,
 				publicKeyHex: publicKeyHex ?? undefined,
-				xpubOrFingerprint: publicKeyHex,
-				keyLabel: 'Public key',
 			}
 		},
 

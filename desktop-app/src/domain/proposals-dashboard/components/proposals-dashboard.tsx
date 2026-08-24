@@ -14,6 +14,7 @@ import {
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { buildProposalTitle } from '@/lib/proposal-title'
 import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
@@ -588,11 +589,6 @@ function ProposalCard({
 			)}
 		</div>
 	)
-}
-
-function buildProposalTitle(proposal: Proposal): string {
-	if (proposal.kind === 'cancel') return `Cancel #${proposal.seqNo}`
-	return `Proposal #${proposal.seqNo} - ${inferProposalTypeLabel(proposal)}`
 }
 
 function StatusBadge({ status }: { status: DisplayStatus }) {

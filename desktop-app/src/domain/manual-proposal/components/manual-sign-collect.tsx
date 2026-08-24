@@ -55,6 +55,8 @@ export function ManualSignCollect({
 		requiredSignatures: requiredSignatures ?? 0,
 		actionHex: importData.actionHex,
 		actionType: derivedActionType(importData.actionHex),
+		// The manual bundle carries no title: it is rebuilt from the sighash payload alone.
+		title: null,
 		signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
 		broadcastStatus: 'idle',
 		kind: 'update',

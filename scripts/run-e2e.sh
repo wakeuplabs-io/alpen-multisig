@@ -23,11 +23,10 @@
 # Test execution order (dependencies respected):
 #   1. wallet-smoke              — independent
 #   2. admin-wallet-panel         — independent (tests wallet panel lifecycle)
-#   3. wallet-panel-sync-on-open  — independent
+#   3. fee-bump                   — independent (validates wallet panel balance flow)
 #   4. proposal-add-signer        — independent (creates a proposal)
 #   5. proposal-co-sign-mnemonic  — requires add-signer first
 #   6. proposal-broadcast-quorum  — requires co-sign first (quorum reached)
-#   7. broadcast-mnemonic-walking-skeleton — requires a quorum-ready proposal
 
 set -euo pipefail
 

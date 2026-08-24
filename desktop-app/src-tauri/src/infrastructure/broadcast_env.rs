@@ -5,6 +5,7 @@ use strata_l1_txfmt::MagicBytes;
 
 use crate::application::wallet_session::WalletSession;
 use crate::infrastructure::admin_wallet::AdminWalletError;
+use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 use crate::infrastructure::node_config_store::NodeConfig;
 
 #[derive(Debug, thiserror::Error)]
@@ -40,6 +41,11 @@ pub struct BroadcastEnv {
     pub network: Network,
     pub confirm_poll_interval_ms: u64,
     pub confirm_timeout_ms: u64,
+    /// Device holding this session, or `None` for a software signer. Needed wherever the app
+    /// shows a value the signer is meant to compare against the device screen — the device
+    /// renders addresses under its own coin, not the session network (see
+    /// `admin_wallet::wallet::device_hrp_network`).
+    pub hw_device: Option<HwDeviceType>,
 }
 
 /// Loads broadcast config: RPC endpoints from [`NodeConfig`], network/dev flags from env.
@@ -75,6 +81,10 @@ pub fn load_broadcast_env(
         .and_then(|s| s.parse().ok())
         .unwrap_or(600_000);
 
+    let hw_device = wallet_session
+        .current()
+        .and_then(|svc| HwDeviceType::from_signer_kind(&svc.signer_kind()));
+
     Ok(BroadcastEnv {
         btc_rpc_url,
         btc_rpc_user,
@@ -84,6 +94,7 @@ pub fn load_broadcast_env(
         network,
         confirm_poll_interval_ms,
         confirm_timeout_ms,
+        hw_device,
     })
 }
 

@@ -69,7 +69,7 @@ pub async fn hw_wallet_sign(
 ) -> Result<SignatureResult, String> {
     let device = parse_device_kind(&vendor)?;
     let message = signing::render_signing_message(seqno, &action_hex)?;
-    tokio::task::spawn_blocking(move || device.sign_sps65(&message, &derivation_path))
+    tokio::task::spawn_blocking(move || device.sign_bitcoin_message(&message, &derivation_path))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -81,9 +81,11 @@ pub async fn hw_wallet_sign_challenge(
     derivation_path: String,
 ) -> Result<SignatureResult, String> {
     let device = parse_device_kind(&vendor)?;
-    tokio::task::spawn_blocking(move || device.sign_sps65(&challenge_message, &derivation_path))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        device.sign_bitcoin_message(&challenge_message, &derivation_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

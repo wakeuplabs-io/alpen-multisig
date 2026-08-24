@@ -13,6 +13,7 @@ import {
 import { computeSighash } from '@/api/signing'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
@@ -39,6 +40,7 @@ export function CancelProposalSignScreen() {
 		ensureOrchestratorSession,
 	} = useSession()
 	const authorityLabel = authorityLabelForRole(selectedRole)
+	const signerLabel = deviceCopy(adapter.vendor).label
 	const panel = useWalletPanelData()
 
 	const [isLoading, setIsLoading] = useState(true)
@@ -214,8 +216,8 @@ export function CancelProposalSignScreen() {
 	const flowTitle = flow === 'initiate' ? 'Initiate cancel' : 'Sign cancel'
 	const flowSubtitle =
 		flow === 'initiate'
-			? 'Sign on your hardware wallet to create the cancel proposal and add the first signature.'
-			: 'Sign on your hardware wallet to add your signature to the existing cancel proposal.'
+			? `Sign with your ${signerLabel} to create the cancel proposal and add the first signature.`
+			: `Sign with your ${signerLabel} to add your signature to the existing cancel proposal.`
 
 	const buttonLabel = isSigning
 		? 'Signing…'
@@ -237,8 +239,7 @@ export function CancelProposalSignScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.publicKeyHex}
-						adminIdAddress={wallet.addressSample}
+						adminId={wallet.addressSample}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>

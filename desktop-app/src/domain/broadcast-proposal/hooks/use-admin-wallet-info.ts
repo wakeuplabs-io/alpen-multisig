@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAdminWalletInfo } from '@/api/admin-wallet'
 
-type AdminWalletInfoView = {
+/** Funding snapshot the broadcast screens render — address plus total (confirmed + unconfirmed) balance. */
+export type AdminWalletInfoView = {
 	address: string
 	balanceSats: number
 }

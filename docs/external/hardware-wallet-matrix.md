@@ -145,6 +145,52 @@ Before signing any transaction, users should verify:
 2. **Transaction details** — The action details (type, parameters, sequence number) displayed on the hardware wallet match what is shown in the application
 3. **Signing prompt** — The hardware wallet clearly indicates what is being signed
 
+### Signing in to a session
+
+Every session begins with the device signing a short challenge, on one line:
+
+```
+Strata Session Authentication v1 | Role: <role> | Challenge: <64 hex characters>
+```
+
+| Device | Signing screen |
+|---|---|
+| Trezor (Safe 3, fw 2.8.7) | `Confirm message`, the text across two pages |
+| Ledger (Bitcoin app 2.4.2) | `Message (n/m)` pages carrying the full line |
+
+Both wrap the line across pages, and neither drops anything: reassembling the fragments gives back
+the challenge exactly. A Trezor marks no continuation, so read across its page break with care — the
+challenge is 64 characters and all of them must be there.
+
+Earlier versions of the application laid this message out over three lines, and a Ledger answered
+with a `Message hash` screen instead of the text: its Bitcoin app falls back to the hash for any
+message that is not printable ASCII, and a line break is enough. The separators are now ` | `, and
+the device shows the message itself. **Read the role before approving** — it is the multisig the
+session will act as.
+
+### Verifying the Admin ID
+
+The Admin ID is a P2WPKH address derived at `m/84'/0'/73'/0/0`, and the **Verify** control beside it
+opens the Admin ID Verification Certificate. Step 1 signs the line `Admin ID: <address>` — shown as
+readable text on both supported devices — and Step 2 asks the device to display that same address so
+it can be compared on screen.
+
+| Device | Signing screen | Verification screen |
+|---|---|---|
+| Trezor (Safe 3, fw 2.8.7) | `Signing address`, then `Confirm message` | The address, headed **`Receive address`** |
+| Ledger (Bitcoin app 2.4.2) | `Message (n/m)` pages with the full line | The address, headed `Address` |
+
+> **Never send funds to the Admin ID.** A Trezor headlines the verification screen `Receive address`
+> because that is its generic label for displaying an address — it is not an instruction. The Admin
+> ID identifies an authority; it is not a wallet, which is why the application will not render a QR
+> code for it.
+
+If the application reports a **mismatch** instead of a confirmation, stop and escalate: the
+application and the device disagree about which key is the Admin ID.
+
+Verification is only available in a hardware session. Connected with seed words, Step 2 is shown
+disabled with the reason — there is no device screen to compare against.
+
 ## Firmware Requirements
 
 | Device | Minimum Firmware | Recommended Firmware |
