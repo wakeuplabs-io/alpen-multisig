@@ -26,13 +26,15 @@ deferred for a good reason: upstream had nothing to build against.
 same after the last ASM bump. The 2026-05-22 comprehensive audit records Defcon 1/3 as **FAIL —
 not implemented**.
 
-**Those statements are now stale.** `alpenlabs/asm` PR #81 (*feat(admin): add Security Council and
+**Those statements are stale.** `alpenlabs/asm` PR #81 (*feat(admin): add Security Council and
 Defcon actions*, merge commit `3d45351`, merged 2026-05-30) implemented the role and all four
-actions this feature needs, complete. Our workspace is pinned at `e0461f8` (2026-05-11), 19 commits
-before that merge, which is why none of it is visible from here yet.
+actions this feature needs, complete. They were invisible from here because the workspace was
+pinned at `e0461f8` (2026-05-11), 19 commits before that merge. The pin has since moved to
+`v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) and the
+capability is proven against a regtest ASM — see [§3.3](#33-go-no-go-result).
 
-The historical documents are not edited — they were true when written. They gain a superseded-by
-pointer to this document in [Stage 6](#6-stage-board).
+The historical documents are not edited; they were true when written. They are routed around
+instead, by the Security Council row in the SSOT table of [`docs/README.md`](../README.md).
 
 ---
 
@@ -180,8 +182,9 @@ Three things the probe settled that the source reading alone had left open:
   fresh keypair, so the default harness already carries a deactivated safe harbour.
 - **The activation boundary is `activation_height <= tip`**, so exactly `depth` blocks after the
   reveal are required — not `depth + 1`. Upstream's doc comment on `process_queued` says "equals"
-  while the code partitions on `<=`; harmless drift, but it means our existing
-  `e2e_enactment_predicate` mines one block more than necessary.
+  while the code partitions on `<=`; harmless drift, but `e2e_enactment_predicate` was mining one
+  block more than necessary. Corrected in Stage 3 close-out, and checked in both directions: the
+  test passes at `depth` and fails at `depth - 1`.
 - **Seqno is per-role**, so the council's counter is independent of the administrator's and a
   fresh council authority starts from the same baseline regardless of admin activity.
 
@@ -200,7 +203,7 @@ a non-council role. Upstream covers it in `asm/tests/asm/admin_to_bridge.rs`.
 | §5.5 *Strata Administrator: Safe Harbor address update* | US-E5 | `SafeHarbourAddressUpdate = 14` | **Strata Administrator** | V4 |
 | §3.1.4 *Strata Security Council multisig MUST be usable exclusively by all Strata Security Council Signers* | US-C1 | `Role::StrataSecurityCouncil` membership | — | V1 |
 | §5.2.2 *…subsection (b) does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V5 |
-| §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | US-E9, US-E10 | **none — confirmed withdrawn** | — | retired in Stage 6 |
+| §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | ~~US-E9~~, ~~US-E10~~ | **none — confirmed withdrawn** | — | retired |
 
 ### 4.1 Requirement numbering
 
@@ -270,14 +273,17 @@ rather than showing a cancel affordance that cannot work.
 
 **Slice V5 is confirmed in scope**, no longer conditional.
 
-### 5.2 The story map says Defcon 3 executes immediately
+### 5.2 The story map said Defcon 3 executes immediately — corrected
 
-[`story-map.md`](../3-stories/story-map.md) US-E13 describes Defcon 3 as *"Defcon 3 emergency action
-(executes immediately)"*, and §5 of the same document says the Approved state does not apply to the
-council. Both predate upstream and are wrong for Defcon 3 on two counts: it is timelocked, and it
-*does* reach an Approved state with a cancel window ([§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)).
-US-E13 also needs a sibling story for the Defcon 3 cancel, which slice V5 delivers. Corrected in
-Stage 6.
+[`story-map.md`](../3-stories/story-map.md) US-E13 used to describe Defcon 3 as *"executes
+immediately"*, and the carve-out language elsewhere in that document excluded the whole council from
+the Approved state. Both predated upstream and were wrong for Defcon 3 on two counts: it is
+timelocked, and it *does* reach an Approved state with a cancel window
+([§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)).
+
+**Corrected in Stage 3 close-out** rather than deferred: US-E13 now describes the timelock and the
+cancel window, US-D3 and US-F2 narrow the carve-out to Defcon 1, and **US-E14** carries the Defcon 3
+cancel that slice V5 delivers.
 
 ### 5.3 The Defcon 3 delay is read from live ASM state, never hardcoded
 
@@ -314,8 +320,9 @@ boundary. This makes the operational reset in Stage 3 mandatory, not optional.
 Neither is an open question any more; both were settled while this document was being written.
 
 - **"Soft" bridge update / "Hard" bridge update** (§5.5, US-E9/US-E10): zero references in the ASM
-  at any tag. **Confirmed withdrawn** — they are no longer relevant concepts. US-E9 and US-E10 are
-  retired in Stage 6 rather than left pending.
+  at any tag. **Confirmed withdrawn** — they are no longer relevant concepts. US-E9 and US-E10 were
+  retired in place in the story map during Stage 3 close-out; the rows stay, struck through, so the
+  numbering other documents cite does not shift.
 - **Payout Administrator**: no `Role::PayoutAdmin` and no corresponding `UpdateTxType` exists
   upstream, not even on `main`. **Not implemented for now**, by decision rather than by blocker. It
   is therefore expected — not a gap to chase — that `Authority::PayoutAdmin` remains the one
@@ -332,9 +339,19 @@ Neither is an open question any more; both were settled while this document was 
 | 1 | High-level discovery; this document | Done |
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
-| 4 | Functional specs, one per slice | Pending |
+| 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
+| 4 | Functional specs — Defcon first (V1, V2, V5's cancel), then the rest | Pending |
 | 5 | Vertical slices V1–V5 | Pending |
-| 6 | Close-out: compliance audit, doc updates, issue #117 | Pending |
+| 6 | Close-out: compliance audit, issue #117 | Pending |
+
+Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
+branch (28 commits: v0.2.6 and the Admin ID program), and every live document that still called the
+Security Council *blocked on upstream* now says what is actually true — it is not built yet, and the
+protocol support has been proven. What remains historical stays historical:
+[`2-discovery/`](../2-discovery/) is Phase 1 evidence and is covered by a routing row in
+[`docs/README.md`](../README.md) instead of being rewritten. Corrections that this document had
+parked for Stage 6 — the story map, the retired stories — were made here, so Stage 6 is now only the
+compliance audit and issue #117.
 
 ## 7. Slice board
 
@@ -344,7 +361,7 @@ Neither is an open question any more; both were settled while this document was 
 | V2 — Defcon 3 | Same path, timelocked, with an activation countdown | Pending |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
-| V5 — Defcon 3 cancel | Council cancels its own queued Defcon 3, reusing the existing cancel flow | Pending — **confirmed in scope** |
+| V5 — Defcon 3 cancel | Council cancels its own queued Defcon 3 (US-E14), reusing the existing cancel flow | Pending — **confirmed in scope** |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
 codec, action builder, authentication, signer-safety UX), so every later slice is cheap.
@@ -374,7 +391,7 @@ Defcon authorizes sweeping **all bridge funds**, and there is no de-escalation p
 payload, this drives the treatment:
 
 - **The four-line signing message is the reviewable artifact.** Rendered verbatim in the form, it
-  is byte-identical to what the hardware wallet displays.
+  is byte-identical to what the hardware signer displays.
 - **Type-to-confirm** (`DEFCON 1` / `DEFCON 3`) before the sign CTA enables.
 - **Distinct destructive visual treatment**, unmistakably different from every other action form.
 - **Authority context on every step** — the council badge from create through broadcast.
@@ -432,7 +449,8 @@ forgotten gap.
 - **Expiry.** The standard 7-day pending-proposal window applies to Defcon proposals too — no
   emergency carve-out. Neither the PRD nor anything else states an exception, so this is a decision,
   not an oversight. See [§8](#8-signer-safety-position).
-- **"Soft"/"Hard" bridge update** — confirmed no longer relevant concepts. Retired in Stage 6.
+- **"Soft"/"Hard" bridge update** — confirmed no longer relevant concepts. US-E9 and US-E10 are
+  retired in the story map.
 - **Payout Administrator** — not implemented for now; see [§5.5](#55-two-prd-items-have-no-upstream-counterpart-at-any-revision--both-resolved).
 
 ---
