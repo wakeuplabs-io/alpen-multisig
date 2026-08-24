@@ -512,14 +512,17 @@ fn connect_unlocked(derivation_path: Option<String>) -> Result<HwWalletInfo, Str
     }
 }
 
-pub fn sign_admin_sps65_binding(
+/// Signs an arbitrary human-readable message on Ledger using its `sign_message` call —
+/// the SPS-65 signing message, the session challenge, or the Admin ID Verification
+/// Certificate message. The device hashes it as BIP-137 either way.
+pub fn sign_bitcoin_message(
     message: &str,
     derivation_path: &str,
 ) -> Result<SignatureResult, String> {
-    with_ledger_device(|| sign_admin_sps65_binding_unlocked(message, derivation_path))
+    with_ledger_device(|| sign_bitcoin_message_unlocked(message, derivation_path))
 }
 
-fn sign_admin_sps65_binding_unlocked(
+fn sign_bitcoin_message_unlocked(
     message: &str,
     derivation_path: &str,
 ) -> Result<SignatureResult, String> {

@@ -506,14 +506,15 @@ pub fn get_master_fingerprint() -> Result<u32, String> {
     resolve(response)
 }
 
-/// Signs the canonical SPS-65 signing message on Trezor using Bitcoin `signMessage`.
+/// Signs an arbitrary human-readable message on Trezor using Bitcoin `signMessage`.
 ///
-/// `message` must be the human-readable string produced by
-/// `SigningMessage::for_action(action, seqno).as_str()`. Trezor will compute
-/// `Hash256(prefix || message)` internally, which matches `compute_sighash()` exactly.
+/// Three callers pass three different strings — the SPS-65 signing message, the session
+/// authentication challenge, and the Admin ID Verification Certificate message — and the
+/// device treats all of them the same way: it computes `Hash256(prefix || message)`
+/// internally, which matches `compute_sighash()` for the SPS-65 case exactly.
 ///
 /// Uses `SPENDWITNESS` (BIP-84 P2WPKH) which is required for `m/84'` Admin ID paths.
-pub fn sign_admin_sps65_binding(
+pub fn sign_bitcoin_message(
     message: &str,
     derivation_path: &str,
 ) -> Result<SignatureResult, String> {

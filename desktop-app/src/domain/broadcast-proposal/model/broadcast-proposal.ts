@@ -95,3 +95,65 @@ export function satsToBtc(sats: number): string {
 export function isTerminal(status: BroadcastStatus): boolean {
 	return status === 'reveal_confirmed' || status === 'failed'
 }
+
+// ── Phase-driven view predicates ─────────────────────────────────────────────
+// Shared by the send-proposal and send-cancel screens: both render the same
+// stepper/card/progress stack, and keeping the predicates here stops the two
+// screens from drifting apart (the cancel screen used to omit `awaiting-device`
+// and `awaiting-confirmation`, which blanked the UI while the reveal confirmed).
+
+/** Skeleton while the commit bundle is being prepared. */
+export function isBroadcastLoadingPhase(phase: BroadcastPhase): boolean {
+	return phase === 'idle' || phase === 'preparing'
+}
+
+/** Details card is visible — callers must additionally require a non-null bundle. */
+export function isBroadcastDetailsPhase(phase: BroadcastPhase): boolean {
+	return phase === 'confirming' || phase === 'awaiting-device' || phase === 'broadcasting'
+}
+
+/**
+ * Phase-progress panel is visible. Overlaps `isBroadcastDetailsPhase` on
+ * `awaiting-device` by design: the card shows the device prompt while the panel
+ * shows the commit/reveal step.
+ */
+export function isBroadcastProgressPhase(phase: BroadcastPhase): boolean {
+	return (
+		phase === 'awaiting-device' ||
+		phase === 'broadcasting' ||
+		phase === 'awaiting-confirmation' ||
+		phase === 'done' ||
+		phase === 'error'
+	)
+}
+
+/** A submit is in flight — drives the details card's `isBroadcasting`. */
+export function isBroadcastInFlightPhase(phase: BroadcastPhase): boolean {
+	return phase === 'broadcasting' || phase === 'awaiting-device'
+}
+
+export type BroadcastConfirmGateInput = {
+	isBroadcasting: boolean
+	canSign: boolean
+	/** Cancel flow only: `false` means the targeted action is no longer queued on the ASM. */
+	targetQueued: boolean | null | undefined
+	/** `null` = still loading, `undefined` = unavailable — neither can fund a commit. */
+	adminWalletInfo: { balanceSats: number } | null | undefined
+}
+
+/**
+ * Whether "Confirm & Send" must stay disabled.
+ *
+ * `adminWalletInfo == null` is loose on purpose — a wallet that is still loading and one that is
+ * unavailable are equally unable to pay the commit. `targetQueued === false` is strict on purpose:
+ * `null`/`undefined` mean "not applicable / not checked yet" and must not block the send.
+ */
+export function isBroadcastConfirmDisabled(input: BroadcastConfirmGateInput): boolean {
+	return (
+		input.isBroadcasting ||
+		!input.canSign ||
+		input.targetQueued === false ||
+		input.adminWalletInfo == null ||
+		input.adminWalletInfo.balanceSats === 0
+	)
+}

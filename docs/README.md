@@ -25,6 +25,7 @@ flowchart LR
 
 | If you need… | Read first | Status |
 |--------------|------------|--------|
+| Client PRD (latest snapshot) | [`0-prd/06-prd-hardware-signer-and-block-payouts-update.md`](./0-prd/06-prd-hardware-signer-and-block-payouts-update.md) | Current |
 | System architecture (internal) | [`architecture/overview.md`](./architecture/overview.md) + [`architecture/adrs/`](./architecture/adrs/) | Current |
 | Client-facing architecture | [`external/architecture-overview.md`](./external/architecture-overview.md) | Client |
 | Coordination boundary (backend vs desktop) | [ADR-006](./architecture/adrs/006-backend-coordination-boundary.md) | Current |
@@ -71,7 +72,7 @@ When documents disagree, use this order:
 
 | Path | Purpose |
 |------|---------|
-| `0-prd/`, `1-proposal/` | Frozen client inputs |
+| `0-prd/`, `1-proposal/` | Frozen client inputs. PRD snapshots are numbered (`01`…`06`); the highest number is the current one, earlier ones are kept as history |
 | `2-discovery/` | Phase 1 research (historical); includes [`crate-inventory.md`](./2-discovery/crate-inventory.md) |
 | `3-stories/` | Story map and non-functional items |
 | `architecture/` | Overview + ADRs |

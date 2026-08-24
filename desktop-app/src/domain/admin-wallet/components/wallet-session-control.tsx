@@ -1,23 +1,16 @@
 import { SessionChip } from '@/components/session-chip'
-import { truncateAdminId } from '@/lib/admin-id'
+import { adminIdChipLabel } from '@/lib/admin-id'
 import type { WalletPanelData } from '../hooks/use-wallet-panel-data'
 import { WalletPanel, WALLET_PANEL_ID } from './wallet-panel'
 import { WalletPanelHeader } from './wallet-panel-header'
 import { WalletPanelContent } from './wallet-panel-content'
 
-function formatSignerLabel(adminId: string | undefined): string {
-	if (!adminId) return 'Unknown'
-	return truncateAdminId(adminId)
-}
-
 export type WalletSessionControlProps = {
 	panel: WalletPanelData
 	sessionTimeLabel: string
 	sessionWarning: boolean
-	/** Admin ID — the signer's compressed public key (#408); truncated in the chip. */
+	/** Admin ID — the P2WPKH address the device derived (PRD 06 §3.b.ii.2); truncated in the chip. */
 	adminId: string | undefined
-	/** Address derived from the Admin ID key — what a hardware signer can display (#409). */
-	adminIdAddress: string | undefined
 }
 
 /**
@@ -26,14 +19,8 @@ export type WalletSessionControlProps = {
  * header flow). Place inside `ScreenShell`'s `headerContent` alongside the
  * authority badge and disconnect button.
  */
-export function WalletSessionControl({
-	panel,
-	sessionTimeLabel,
-	sessionWarning,
-	adminId,
-	adminIdAddress,
-}: WalletSessionControlProps) {
-	const signerLabel = formatSignerLabel(adminId)
+export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, adminId }: WalletSessionControlProps) {
+	const signerLabel = adminIdChipLabel(adminId)
 
 	return (
 		<>
@@ -54,7 +41,6 @@ export function WalletSessionControl({
 				<WalletPanelContent
 					disabledError={panel.disabledError}
 					adminId={adminId}
-					adminIdAddress={adminIdAddress}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}

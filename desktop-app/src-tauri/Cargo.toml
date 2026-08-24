@@ -1,6 +1,6 @@
 [package]
 name = 'desktop-app'
-version = "0.2.5"
+version = "0.2.6"
 description = 'Strata Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
 license = 'MIT OR Apache-2.0'

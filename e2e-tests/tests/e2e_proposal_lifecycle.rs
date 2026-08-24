@@ -229,6 +229,7 @@ mod proposal_lifecycle {
             &action_hex,
             seq_no,
             &sign_action(&sk_a, seq_no, &action_hex),
+            None,
         )
         .await
         .expect("create proposal");
@@ -298,6 +299,7 @@ mod proposal_lifecycle {
             &action_hex,
             seq_no,
             &sign_action(&sk_a, seq_no, &action_hex),
+            None,
         )
         .await
         .expect("create");
@@ -346,6 +348,7 @@ mod proposal_lifecycle {
             &action_hex,
             seq_no,
             &sign_action(&sk_a, seq_no, &action_hex),
+            None,
         )
         .await
         .expect("create");
@@ -383,7 +386,7 @@ mod proposal_lifecycle {
         let seq_no = 501u64;
         let sig_a = sign_action(&sk_a, seq_no, &action_hex);
 
-        let created = proposals::create_update_action(&client_a, &action_hex, seq_no, &sig_a)
+        let created = proposals::create_update_action(&client_a, &action_hex, seq_no, &sig_a, None)
             .await
             .expect("create");
         assert_eq!(created.signatures.len(), 1);
@@ -423,6 +426,7 @@ mod proposal_lifecycle {
             &action_hex,
             seq_no,
             &sign_action(&sk_a, seq_no, &action_hex),
+            None,
         )
         .await
         .expect("create");

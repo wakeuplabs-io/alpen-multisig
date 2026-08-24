@@ -313,3 +313,30 @@ export function verifyAddressOnDevice(input: VerifyAddressOnDeviceInput): Promis
 		network: input.network,
 	})
 }
+
+// G8 (PRD 06 §3.c.i): the Admin ID Verification Certificate.
+export type AdminIdCertificate = {
+	/** The exact string that was signed — line 1 of the copied block. */
+	message: string
+	/** Base64, Bitcoin Core `signmessage` encoding — line 2 of the copied block. */
+	certificate: string
+	/** The compressed public key recovered from the certificate itself. */
+	publicKeyHex: string
+}
+
+/**
+ * Returns the string the certificate modal shows in Step 1 and the signer signs.
+ * Rust owns the literal so the message displayed, signed and verified is one string.
+ */
+export function adminIdCertificateMessage(adminId: string): Promise<ApiResult<string>> {
+	return tauriCall<string>('admin_id_certificate_message', { adminId })
+}
+
+/**
+ * Encodes a `[r||s||recid]` signature over that message into a certificate. Rust recovers
+ * the key and refuses to return a certificate that does not belong to this Admin ID, so a
+ * resolved result is always one the app has already verified.
+ */
+export function buildAdminIdCertificate(adminId: string, signatureHex: string): Promise<ApiResult<AdminIdCertificate>> {
+	return tauriCall<AdminIdCertificate>('build_admin_id_certificate', { adminId, signatureHex })
+}

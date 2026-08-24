@@ -32,8 +32,10 @@ assert.doesNotMatch(trezor.verifyHint, /Ledger/)
 assert.doesNotMatch(trezor.broadcastHint, /Ledger/)
 assert.doesNotMatch(trezor.verifyOnDeviceHint, /Ledger/)
 
-// Ledger → named as Ledger, and pointed at BOTH values, since the device shows either the
-// message text or the SHA-256 "Message hash" depending on model / app version (#402).
+// Ledger → named as Ledger, and pointed at BOTH values, neither presented as the likely one. Which
+// appears turns on the model, the app version AND the message: the login challenge and the
+// certificate render as text, the governance message renders as a hash on a Nano S+ with app 2.4.2
+// and as text on a Nano X. The app cannot tell in advance, which is the resolution #420 settled on.
 const ledger = deviceCopy('ledger')
 assert.equal(ledger.label, 'Ledger')
 assert.equal(ledger.isHardware, true)
@@ -42,6 +44,16 @@ assert.match(ledger.verifyHint, /message text/)
 assert.doesNotMatch(ledger.verifyHint, /Trezor/)
 assert.doesNotMatch(ledger.broadcastHint, /Trezor/)
 assert.doesNotMatch(ledger.verifyOnDeviceHint, /Trezor/)
+
+// The verify-on-device hint backs the connect flow's verify step, which now compares the
+// Admin ID itself (PRD 06 §3.b.ii.2). Claiming the device shows something *derived* from
+// the value on screen would send the signer looking for a second string that no longer
+// exists — the indirection #409 objected to, described after it was removed.
+for (const vendor of ['trezor', 'ledger'] as const) {
+	const { verifyOnDeviceHint } = deviceCopy(vendor)
+	assert.doesNotMatch(verifyOnDeviceHint, /derived from/, `${vendor}: the device shows the Admin ID itself`)
+	assert.doesNotMatch(verifyOnDeviceHint, /raw public key/, `${vendor}: the Admin ID is not a public key`)
+}
 
 // Software signers → no device screen, and no hardware vendor is ever named (#421).
 for (const vendor of ['mnemonic', 'mock'] as const) {

@@ -53,11 +53,11 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 
 		try {
 			const info = await adapter.connect(kind)
-			const publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? ''
+			const publicKeyHex = info.publicKeyHex ?? ''
 			const canonicalEntry = {
 				index: 0,
 				derivationPath: info.derivationPath,
-				address: info.addressSample ?? 'Mnemonic signer',
+				address: info.addressSample ?? '',
 				publicKeyHex,
 			}
 
@@ -66,11 +66,12 @@ export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult
 			setVerifyMessage(null)
 			onConnected({
 				...info,
+				// The Admin ID (PRD 06 §3.b.ii.2). Both connect steps and the wallet panel read
+				// this one field, so they cannot drift apart.
 				addressSample: canonicalEntry.address,
-				// The Admin ID is this key (#408); keep it on the session under an explicit field
-				// so screens never have to fall back to xpubOrFingerprint.
+				// Not the Admin ID, but still the signer's identity to the backend: the nonce
+				// signature is checked against the canonical signer set by recovered public key.
 				publicKeyHex: canonicalEntry.publicKeyHex,
-				xpubOrFingerprint: canonicalEntry.publicKeyHex,
 			})
 			setConnectViewState('success')
 			successTransitionTimeoutRef.current = window.setTimeout(() => {

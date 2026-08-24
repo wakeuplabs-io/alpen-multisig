@@ -110,6 +110,7 @@ fn row_to_proposal_no_sigs(
         status: status_from_db(&status)?,
         required_signatures: row.get::<i16, _>("required_signatures") as u16,
         action_hex: row.get("action_hex"),
+        title: row.get("title"),
         signatures: Vec::new(),
         broadcast_status: BroadcastStatus::from_str(&broadcast_status)?,
         commit_txid: row.get("commit_txid"),
@@ -125,7 +126,7 @@ fn row_to_proposal_no_sigs(
 const SELECT_PROPOSAL_COLS: &str = r#"
     action_id, seq_no, authority, status, action_hex, required_signatures,
     broadcast_status, commit_txid, reveal_txid, broadcast_error,
-    target_action_id, activation_height, update_id_in_queue, created_at
+    target_action_id, activation_height, update_id_in_queue, created_at, title
 "#;
 
 #[async_trait::async_trait]
@@ -139,8 +140,8 @@ impl ProposalRepository for PostgresProposalRepository {
 
         let proposal_insert = sqlx::query(
             r#"
-            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex, required_signatures, target_action_id, activation_height, update_id_in_queue)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO proposals(action_id, seq_no, authority, status, action_hex, required_signatures, target_action_id, activation_height, update_id_in_queue, title)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
         )
         .bind(&proposal.action_id.0)
@@ -152,6 +153,7 @@ impl ProposalRepository for PostgresProposalRepository {
         .bind(proposal.target_action_id.as_ref().map(|id| &id.0))
         .bind(proposal.activation_height.map(|h| h as i64))
         .bind(proposal.update_id_in_queue.map(|id| id as i32))
+        .bind(proposal.title.as_deref())
         .execute(&mut *tx)
         .await;
 

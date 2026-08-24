@@ -28,6 +28,8 @@ export type Proposal = {
 	requiredSignatures: number
 	actionHex: string
 	actionType: ActionType
+	/** Author-written label. Coordination metadata: unsigned, and null on older proposals. */
+	title: string | null
 	signatures: Array<{
 		signerPubkey: string
 		signatureHex: string
@@ -70,6 +72,7 @@ export type CreateProposalInput = {
 	actionHex: string
 	signerPubkey: string
 	signatureHex: string
+	title?: string
 }
 
 export type ListProposalsInput = {

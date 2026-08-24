@@ -5,9 +5,14 @@ import type { WalletVendor } from '@/wallet/types'
  * can present the same value for the signer to compare — instead of the BIP-137 sighash,
  * which no device displays.
  *
- * - `hash-and-text`: Ledger renders either the message text or `sha256(message)` as its
- *   "Message hash", depending on the device model and Bitcoin app version — the app cannot
- *   tell which in advance, so both are shown and the signer compares whichever one appears.
+ * - `hash-and-text`: a Ledger renders either the message text or `sha256(message)` as its
+ *   "Message hash", and **which one is not predictable from here**: it turns on the model, the
+ *   Bitcoin app version and the message itself. The login challenge and the certificate are
+ *   printable ASCII and render as text (measured, `issues/evidence/G10-B0-CHALLENGE-MEASUREMENT.md`);
+ *   the governance message is built with embedded newlines by the ASM subprotocol crate and renders
+ *   as a hash on a Nano S+ with app 2.4.2, while the client measured full text for it on a Nano X
+ *   (#420). Hence both values, always, with the signer comparing whichever appears — the resolution
+ *   #420 settled on.
  * - `text`: Trezor renders the canonical message text.
  * - `none`: software signer (mnemonic/mock) — there is no device screen to compare.
  */

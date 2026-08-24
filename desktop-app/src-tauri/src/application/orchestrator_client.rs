@@ -23,6 +23,7 @@ pub struct CreateProposalRequest {
     pub action_hex: String,
     pub signer_pubkey: String,
     pub signature_hex: String,
+    pub title: Option<String>,
 }
 
 /// Request to approve (add signature to) an existing proposal.

@@ -1,42 +1,25 @@
-import type { HwDeviceType } from '../model/hw-device'
+import { useState } from 'react'
+import type { AdminIdVerifyContext } from '../model/hw-device'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
 import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
-import { adminIdVerifyCaption } from '@/lib/admin-id'
-import { VerifyOnDeviceButton } from './verify-on-device-button'
-
-/** Present only for HW sessions: drives the verify-on-device affordance (PRD §4.2). */
-export type AdminIdVerifyContext = {
-	deviceType: HwDeviceType
-	network: string
-	/**
-	 * Connect-returned Admin ID path (BIP-84). Verifying against this exact path keeps the
-	 * device showing the same key/coin it derived at connect — Trezor uses coin type 0',
-	 * Ledger 1' on test nets — so app and device match (and the Trezor emulator, which
-	 * rejects m/84'/1'/73', stays happy).
-	 */
-	derivationPath: string
-	/**
-	 * Address the device will render for this key and path — the only thing a hardware
-	 * signer can display (#409). Shown next to the key so the comparison is possible at all.
-	 */
-	address: string | undefined
-}
+import { AdminIdCertificateModal } from './admin-id-certificate-modal'
 
 export type AdminIdRowProps = {
-	/** The Admin ID: the signer's compressed public key (#408), or undefined when unknown. */
+	/** The Admin ID (PRD 06 §3.b.ii.2), or undefined when unknown. */
 	adminId: string | undefined
 	/** When set, renders a "Verify on device" affordance for the Admin ID (P2WPKH). */
 	verify?: AdminIdVerifyContext
 }
 
 /**
- * Admin ID card (PRD §4.1, corrected by issue #408): shows the signer's
- * authentication identity — the compressed public key — in full so it can be
- * visually verified, with copy-to-clipboard. It is an identity, NOT an address:
- * it must never receive BTC or sign Bitcoin transactions.
+ * Admin ID card (PRD 06 §4.a): shows the signer's authentication identity in full so it
+ * can be visually verified, with copy-to-clipboard, and warns that it must never receive
+ * funds. The value shown is the one handed to the device for verification, so the signer
+ * compares the device screen against this exact string and nothing derived from it.
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
+	const [isCertificateOpen, setIsCertificateOpen] = useState(false)
 	const label = (
 		<span className="inline-flex items-center gap-1.5 text-mono-sm font-medium uppercase tracking-[0.08em] text-emphasis">
 			<ShieldCheckMutedIcon width={13} height={13} className="text-emphasis-soft" />
@@ -56,7 +39,7 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 		)
 	}
 
-	const value = adminId as string
+	const value = adminId
 
 	return (
 		<div
@@ -65,7 +48,17 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 		>
 			<div className="flex items-center justify-between gap-2">
 				{label}
-				<CopyButton text={value} variant="labeled" />
+				<div className="flex items-center gap-1.5">
+					<button
+						type="button"
+						onClick={() => setIsCertificateOpen(true)}
+						data-testid="e2e-wallet-admin-id-verify"
+						className="inline-flex shrink-0 items-center rounded-md border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-label font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"
+					>
+						Verify
+					</button>
+					<CopyButton text={value} variant="labeled" />
+				</div>
 			</div>
 			<p
 				className="mt-1.5 break-all font-mono text-label leading-[1.5] text-[#374151]"
@@ -78,33 +71,12 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 				<AlertTriangleIcon width={13} height={13} className="mt-px shrink-0 text-emphasis-soft" />
 				<span>{ADMIN_ID_SAFETY_CAPTION}</span>
 			</p>
-			{verify && (
-				<>
-					{verify.address && (
-						<div className="mt-3 rounded-lg border border-[#f3f4f6] bg-[#fafafa] px-3 py-2">
-							<p className="text-mono-sm font-medium uppercase tracking-[0.08em] text-[#9ca3af]">Address on device</p>
-							<p
-								className="mt-1 break-all font-mono text-label leading-[1.45] text-[#374151]"
-								data-testid="e2e-wallet-admin-id-verify-address"
-							>
-								{verify.address}
-							</p>
-							<p className="mt-1 text-mono-sm leading-[1.45] text-[#9ca3af]">
-								{adminIdVerifyCaption(verify.deviceType)} Compare this address, character for character, with the one on
-								the device screen.
-							</p>
-						</div>
-					)}
-					<VerifyOnDeviceButton
-						deviceType={verify.deviceType}
-						network={verify.network}
-						derivationPath={verify.derivationPath}
-						scriptType="p2wpkh"
-						subject="Admin ID"
-						expectedAddress={verify.address}
-					/>
-				</>
-			)}
+			<AdminIdCertificateModal
+				isOpen={isCertificateOpen}
+				onClose={() => setIsCertificateOpen(false)}
+				adminId={value}
+				verify={verify}
+			/>
 		</div>
 	)
 }
