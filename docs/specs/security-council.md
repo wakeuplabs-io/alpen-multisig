@@ -199,23 +199,25 @@ a non-council role. Upstream covers it in `asm/tests/asm/admin_to_bridge.rs`.
 | §5.5 *Strata Administrator: Security Council Signer update* | US-E7 | `StrataSecurityCouncilMultisigUpdate = 15` | **Strata Administrator** | V3 |
 | §5.5 *Strata Administrator: Safe Harbor address update* | US-E5 | `SafeHarbourAddressUpdate = 14` | **Strata Administrator** | V4 |
 | §3.1.4 *Strata Security Council multisig MUST be usable exclusively by all Strata Security Council Signers* | US-C1 | `Role::StrataSecurityCouncil` membership | — | V1 |
-| §5.2.2 *…does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V5 |
+| §5.2.2 *…subsection (b) does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V5 |
 | §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | US-E9, US-E10 | **none — confirmed withdrawn** | — | retired in Stage 6 |
 
-### 4.1 Requirement numbering, and one amendment not yet in `0-prd/`
+### 4.1 Requirement numbering
 
-The PRD has been re-issued twice. Sections 1–5 of the latest revision are identical to
-[`03-prd-update.md`](../0-prd/03-prd-update.md); only §6 (Payout Administrator) was rewritten.
-Everything about the Security Council had been carried **unchanged** since the original
-[`01-multisig-ui.md`](../0-prd/01-multisig-ui.md) of 2026-04-07, where the same requirements are
-numbered §7.4, §12.2 and §15.4. This document uses the numbering of the latest revision (05).
+This document uses the numbering of the current PRD snapshot,
+[`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md).
 
-> **The §5.2.2 carve-out was amended by Alpen on 2026-08-12** and the copy in
-> [`05-prd-payout-admin-block-payouts-update.md`](../0-prd/05-prd-payout-admin-block-payouts-update.md)
-> still carries the superseded wording. `0-prd/` holds frozen client inputs and is not edited in
-> place, so the amended text is quoted in [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)
-> and **that quote governs** until the client issues a full revision to drop into `0-prd/`. This is
-> the one place where the local PRD copy is knowingly behind.
+Nothing about the Security Council has ever moved. §1–5 were carried unchanged from
+[`03-prd-update.md`](../0-prd/03-prd-update.md) through snapshots 05 and 06, and the requirements
+themselves go back to the original [`01-multisig-ui.md`](../0-prd/01-multisig-ui.md) of 2026-04-07,
+where they are numbered §7.4, §12.2 and §15.4. Between 05 and 06 the only substantive change
+anywhere in §5 is the §5.2.2 carve-out described below.
+
+> **The §5.2.2 amendment has landed in `0-prd/`.** It was agreed on 2026-08-12 and arrived in the
+> repository with snapshot 06, which carries the amended wording verbatim — so the PRD, upstream and
+> this document now agree, and there is no local copy running behind. Snapshot 05 keeps the
+> superseded wording as history; read 06. `0-prd/` holds frozen client inputs and is never edited in
+> place, so a correction always arrives as a new snapshot rather than a patch to an old one.
 
 ---
 
@@ -227,21 +229,24 @@ makes, or a deferral with a stated assumption. **Nothing here is still open with
 
 ### 5.1 Defcon 3 is cancelable — resolved, the PRD was corrected
 
-**Resolved 2026-08-12. The PRD now matches upstream, and the carve-out applies to Defcon 1 only.**
+**Resolved 2026-08-12, and in `0-prd/` since snapshot 06. The PRD matches upstream, and the carve-out
+applies to Defcon 1 only.**
 
 The original PRD §5.2.2 excluded the whole Security Council from the Approved/Canceled lifecycle
 *"because it does not produce update types that have an 'Approved' or 'Canceled' state"*. We raised
-that this is only half true against the code, and Alpen amended the requirement. It now reads:
+that this is only half true against the code, and the requirement was amended. Quoting
+[`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md)
+§5.2.2, which is the authority here:
 
-> For the avoidance of doubt, this subsection does not apply to the following multisigs /
+> For the avoidance of doubt, this subsection (b) does not apply to the following multisigs /
 > transaction type, because they do not produce proposals that have an "Approved" or "Canceled"
 > state:
 > - Strata Sequencer Manager multisig
 > - **Strata Security Council multisig (Defcon 1 transaction)**
 
-Two clarifications came with it: "update types" became "proposals", and the *subsection* the
-carve-out refers to is everything under **§5(b)** — the whole Approved-updates block, including
-viewing cancellation signatures, cancelling, and the cancel broadcast flow.
+Two clarifications came with it: "update types" became "proposals", and the subsection was named
+explicitly as **(b)** — the whole Approved-updates block, including viewing cancellation signatures,
+cancelling, and the cancel broadcast flow.
 
 So the split is now explicit in the requirement, and it is exactly what the code does:
 
