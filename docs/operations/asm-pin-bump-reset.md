@@ -38,6 +38,13 @@ terminal — do not leave them queryable.
 psql "$DATABASE_URL" -c 'TRUNCATE proposals, proposal_signatures CASCADE;'
 ```
 
+> **Postgres runs in the local stack, and a bare `docker compose down -v` misses it.** Only
+> `docker-compose.local.yml` declares the `postgres` service — the default `docker-compose.yml` picked
+> up by a bare `docker compose` in `staging/` does not, so it tears down bitcoin, electrs and the ASM
+> runner while leaving the database untouched. The pre-bump proposals survive, which is the exact
+> failure this runbook exists to prevent. Always name the file, or use the script in step 3 that
+> already does.
+
 For a deployment with history worth keeping, mark instead of truncating, and record the bump
 boundary so the rows are never re-decoded:
 
@@ -61,9 +68,8 @@ rm -rf /tmp/asm-runner-db                        # [database].path in asm-config
 Under Docker Compose the equivalent is a rebuild without cache plus a volume drop:
 
 ```bash
-cd staging
-docker compose down -v
-docker compose build --no-cache asm
+docker compose -f staging/docker-compose.local.yml down -v
+docker compose -f staging/docker-compose.local.yml build --no-cache asm
 ```
 
 ### 3. Regtest datadir
@@ -72,8 +78,12 @@ Genesis carries the admin params, so an existing chain still has the **old** aut
 no Security Council in it. The chain has to be recreated.
 
 ```bash
-rm -rf ~/.bitcoin/asm-runner-regtest              # local
-docker compose down -v                            # staging: drops the bitcoin volume too
+# Local stack — the canonical path. Wraps `down -v` on docker-compose.local.yml, so it drops the
+# bitcoin, electrs and ASM volumes *and* removes the Postgres container along with them.
+./scripts/local-stack.sh --clean
+
+# By hand, if you are not using the script — name the compose file explicitly:
+docker compose -f staging/docker-compose.local.yml down -v
 ```
 
 Confirm `staging/asm-params.template.json` carries the four new fields before restarting:
@@ -95,12 +105,30 @@ cargo test --workspace
 
 The e2e suites that boot a real regtest ASM are the ones that matter here — they skip themselves
 when `bitcoind` is not in `PATH`, so check they actually ran rather than trusting a green summary.
-Then confirm the runner is serving the new authority set:
+
+Then confirm the runner is serving the new authority set. The ASM container reaching `healthy` is
+already evidence the params file deserialized — a missing field aborts startup — but that says
+nothing about *which* authorities are in genesis:
 
 ```bash
 curl -s localhost:8080 -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"strata_asm_getStatus","params":[]}' | jq .
 ```
+
+Two things to read off it: `cur_block.height` restarted from a low number rather than continuing the
+old chain, and the served state actually contains the new keys. The state comes back as a byte array,
+so grep it for a council key from `staging/asm-params.template.json` — x-only, i.e. the key without
+its `02`/`03` prefix:
+
+```bash
+curl -s localhost:8080 -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"strata_asm_getStatus","params":[]}' \
+  | python3 -c "import json,sys; s=bytes(json.load(sys.stdin)['result']['cur_state']['state']).hex(); \
+      print('council in genesis' if '300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7' in s else 'OLD GENESIS')"
+```
+
+`council in genesis` is the pass. `OLD GENESIS` means the datadir survived step 3 and the chain still
+carries the old authority set.
 
 ## What does not need resetting
 
