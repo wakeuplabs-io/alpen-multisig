@@ -9,6 +9,7 @@
 | [`runbook.md`](./runbook.md) | **SSOT** for backend ops (health, env, local stack) |
 | [`threat-model.md`](./threat-model.md) | **SSOT** for assets, trust boundaries, top risks (pair with [`specs/signer-safety-model.md`](../specs/signer-safety-model.md)) |
 | [`executable-delivery-plan.md`](./executable-delivery-plan.md) | **SSOT** for internal release program (D1–D8); concluded 2026-06-05 |
+| [`asm-pin-bump-reset.md`](./asm-pin-bump-reset.md) | **SSOT** for resetting orchestrator DB, ASM runner and regtest state after a wire-breaking ASM pin bump |
 
 ## Client-facing (canonical for delivery steps)
 

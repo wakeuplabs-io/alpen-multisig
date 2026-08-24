@@ -11,23 +11,23 @@ resolver = '2'
 # sign_tx fixes for modern Trezor firmware (`script_pubkey` on TxAck inputs, P2TR → SPENDTAPROOT).
 [workspace.dependencies]
 # Alpen crates — see docs/architecture/adrs/001-alpen-crate-dependencies.md
-# From alpenlabs/asm (rev e0461f8; upstream renames — keep Rust crate paths via `package =`)
-strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-proto-bridge-v1 = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+# From alpenlabs/asm (tag v0.1-alpha.11 = rev b84eb28; upstream renames — keep Rust crate paths via `package =`)
+strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-proto-bridge-v1 = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 
-# From alpenlabs/strata-common (rc19 — matches alpenlabs/asm @ e0461f8 workspace)
-strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+# From alpenlabs/strata-common (rc23 — matches alpenlabs/asm @ v0.1-alpha.11 workspace)
+strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
 
 # SSZ serialization (replaces Borsh for admin tx wire format after upstream PR alpenlabs/asm#8)
-ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.15.0" }
+ssz = { git = "https://github.com/alpenlabs/ssz-gen", tag = "v0.16.0" }
 
 # Third-party (versions matched to Alpen workspace to avoid type duplication)
 bitcoin = { version = "0.32.6", features = ["serde", "base64"] }

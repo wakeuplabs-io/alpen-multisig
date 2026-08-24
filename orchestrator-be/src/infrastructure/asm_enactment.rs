@@ -9,8 +9,8 @@ use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
-use strata_asm_proto_checkpoint::state::CheckpointState;
-use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
+use strata_asm_proto_checkpoint::CheckpointState;
+use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_predicate::{PredicateKey, PredicateTypeId};
@@ -95,7 +95,26 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 &remove_members,
             ))
         }
-        MultisigAction::Update(_) => {
+        // Security Council actions. Explicit arms rather than a catch-all: without them these
+        // would fall through to the multisig-config branch, which returns `Ok(false)` for an
+        // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. Each
+        // gains a real post-condition as its slice lands; see docs/specs/security-council.md.
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => Err(AppError::BadRequest(
+            "Defcon1 enactment detection is not implemented yet".to_string(),
+        )),
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => Err(AppError::BadRequest(
+            "Defcon3 enactment detection is not implemented yet".to_string(),
+        )),
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => Err(AppError::BadRequest(
+            "SafeHarbourAddress enactment detection is not implemented yet".to_string(),
+        )),
+        MultisigAction::Update(
+            UpdateAction::StrataAdminMultisig(_)
+            | UpdateAction::StrataSeqManagerMultisig(_)
+            | UpdateAction::AlpenAdminMultisig(_)
+            | UpdateAction::StrataSecurityCouncilMultisig(_)
+            | UpdateAction::AsmStfVk(_),
+        ) => {
             let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
                 return Ok(false);
             };
@@ -161,6 +180,13 @@ fn extract_multisig_config_update(
             Authority::AlpenAdmin,
             MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)),
         ) => Ok(Some(update.config())),
+        // Security Council rotation is authorized by the Strata Administrator, not by the
+        // council — see docs/specs/security-council.md §2.1. Wired up in slice V3.
+        (_, MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(_))) => {
+            Err(AppError::BadRequest(
+                "Security Council multisig update enactment is not implemented yet".to_string(),
+            ))
+        }
         // MultisigUpdate variant present but wrong authority — data integrity issue.
         (
             _,
@@ -173,7 +199,19 @@ fn extract_multisig_config_update(
             "action variant does not match proposal authority for enactment check".to_string(),
         )),
         // Non-multisig-update variants — not handled here; caller routes them.
-        (_, MultisigAction::Update(_)) => Ok(None),
+        (
+            _,
+            MultisigAction::Update(
+                UpdateAction::OperatorSet(_)
+                | UpdateAction::Sequencer(_)
+                | UpdateAction::OlStfVk(_)
+                | UpdateAction::AsmStfVk(_)
+                | UpdateAction::EeStfVk(_)
+                | UpdateAction::Defcon1(_)
+                | UpdateAction::Defcon3(_)
+                | UpdateAction::SafeHarbourAddress(_),
+            ),
+        ) => Ok(None),
         (_, MultisigAction::Cancel(_)) => Err(AppError::BadRequest(
             "cancel actions are not supported for enactment post-condition checks".to_string(),
         )),

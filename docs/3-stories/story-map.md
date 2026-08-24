@@ -159,7 +159,7 @@ Format: `As a <actor>, I want to <goal>, so that <motivation>.` Each story carri
 #### US-D3 · List approved proposals with cancellation signatures
 - **Story:** As an Alpen or Strata Admin Signer, I want to see all approved proposals and the count of cancellation signatures collected for each, so that I can coordinate an emergency cancellation before enactment.
 - **Classification:** Functional
-- **Acceptance signals:** Lists approved updates; shows cancellation signatures per update. Approved = quorum reached and confirmed on-chain, not yet enacted. Not applicable to Sequencer Manager or Security Council (execute immediately).
+- **Acceptance signals:** Lists approved updates; shows cancellation signatures per update. Approved = quorum reached and confirmed on-chain, not yet enacted. Not applicable to Sequencer Manager or to Defcon 1, which execute immediately; Defcon 3 *is* applicable.
 - **Source:** UI PRD §1.12, §1.12.2.
 - **Slice:** 3.
 
@@ -186,11 +186,12 @@ Format: `As a <actor>, I want to <goal>, so that <motivation>.` Each story carri
 | US-E6 | Create Strata verification key update | Strata Admin Signer | Strata Admin | Strata VK update | 2 |
 | US-E7 | Create Security Council signer update | Strata Admin Signer | Strata Admin | Security Council signer update | 2 |
 | US-E8 | Create operator update | Strata Admin Signer | Strata Admin | Bridge operator add/remove | 2 |
-| US-E9 | Create soft bridge update | Strata Admin Signer | Strata Admin | Soft bridge param change | 2 |
-| US-E10 | Create hard bridge update | Strata Admin Signer | Strata Admin | Hard bridge param change | 2 |
+| ~~US-E9~~ | ~~Create soft bridge update~~ | — | — | **Retired** — "soft bridge update" is no longer a relevant concept and has no counterpart upstream at any revision | — |
+| ~~US-E10~~ | ~~Create hard bridge update~~ | — | — | **Retired** — same as US-E9 | — |
 | US-E11 | Create Sequencer Manager signer update | Sequencer Manager Signer | Sequencer Manager | Sequencer Manager signer update | 2 |
-| US-E12 | Create Defcon 1 transaction | Security Council Signer | Security Council | Defcon 1 emergency action (executes immediately) | 2 |
-| US-E13 | Create Defcon 3 transaction | Security Council Signer | Security Council | Defcon 3 emergency action (executes immediately) | 2 |
+| US-E12 | Create Defcon 1 transaction | Security Council Signer | Security Council | Defcon 1 emergency action — executes immediately, never queued, no cancel | 2 |
+| US-E13 | Create Defcon 3 transaction | Security Council Signer | Security Council | Defcon 3 emergency action — timelocked; reaches Approved and has a cancel window | 2 |
+| US-E14 | Cancel a queued Defcon 3 | Security Council Signer | Security Council | Cancel of a queued Defcon 3, signed by the council itself | 2 |
 
 Shared acceptance signals for all US-E*:
 - Proposal is persisted with stable `ActionId = hash(MultisigAction, SeqNo)`.
@@ -212,7 +213,7 @@ Shared acceptance signals for all US-E*:
 #### US-F2 · Cancel an approved proposal
 - **Story:** As an Alpen or Strata Admin Signer, I want to produce a cancellation signature on an approved proposal, so that the authority can block enactment.
 - **Classification:** Functional
-- **Acceptance signals:** Cancellation signature produced; a fresh cancellation quorum is required. Not applicable to Sequencer Manager or Security Council.
+- **Acceptance signals:** Cancellation signature produced; a fresh cancellation quorum is required. Not applicable to Sequencer Manager or to Defcon 1. A Defcon 3 cancel is signed by the Security Council itself — see US-E14.
 - **Source:** UI PRD §1.12.1; Backend PRD (cancellation signature path).
 - **Slice:** 3.
 
@@ -383,11 +384,11 @@ Shared acceptance signals for all US-E*:
 
 Surfaced from `2-discovery/`:
 
-- **Alpen crate gap (blocks Slice 2):** 8 of 13 update types have no representation in the upstream admin subprotocol crate. Creation stories for those types depend on Alpen expanding the `Role` enum, `AdminTxType` values, and sighash tags. See `2-discovery/08-alpen-crate-prd-coverage.md`.
+- **~~Alpen crate gap (blocks Slice 2)~~ — resolved.** When this was written, 8 of 13 update types had no representation in the upstream admin subprotocol crate. The pin bump to ASM `v0.1-alpha.11` closed that: every update type still in scope now exists upstream, and the two that do not (soft/hard bridge update) were withdrawn rather than added. `2-discovery/08-alpen-crate-prd-coverage.md` is the superseded snapshot; see [`specs/security-council.md`](../specs/security-council.md) and [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md).
 - **HW wallet SPS-65 digest gap (affects all signing stories):** No consumer device natively signs a raw SPS-65 digest. POC-5 validated a synthetic PSBT binding on Trezor, but not yet against real on-chain ASM. This is a design constraint that could reshape US-F1/US-F2/US-I4 acceptance criteria.
 - **Strata node RPC surface (affects Slice 1+):** No documented/verified RPC for reading current ASM state (signer sets, last_seqno, queued updates, confirmation_depth). Required for Activity D, authority access control, and fee/standardness validation.
 - **Payout Admin architecture unknown (affects Slice 4):** Payout is not part of SPS-65 — it is a Bitcoin-native UTXO spend from a bridge multisig script. Script templates and spending conditions are not documented. Slice 4 may need its own mini-discovery.
-- **Security Council and Alpen Admin role definitions (affects Slices 2 & 4):** Only Strata Admin and Sequencer Manager roles exist in crates today. The other 3 authorities require upstream Alpen definition.
+- **~~Security Council and Alpen Admin role definitions~~ — resolved.** When this was written only Strata Admin and Sequencer Manager existed upstream. As of ASM `v0.1-alpha.11` the Security Council role and all four of its update types are defined and proven against a regtest ASM; Alpen Admin is implemented. Payout Administrator remains the one authority with no upstream role. See [`specs/security-council.md`](../specs/security-council.md).
 
 ---
 

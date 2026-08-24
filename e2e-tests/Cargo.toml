@@ -6,28 +6,29 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # From alpenlabs/asm
-strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
 strata-asm-params = { workspace = true, features = ["arbitrary"] }
 strata-asm-common.workspace = true
-strata-asm-proto-admin = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-admin = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-proto-bridge-v1.workspace = true
+strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-txs-test-utils.workspace = true
 
 # From alpenlabs/strata-common
-strata-btc-types = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-btc-types = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
 strata-crypto = { workspace = true, features = ["test-utils"] }
-strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-l1-envelope-fmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
 strata-l1-txfmt.workspace = true
-strata-merkle = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
-strata-tasks = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc19" }
+strata-merkle = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
+strata-tasks = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23" }
 
 # Desktop app (application layer)
 desktop-app = { path = "../desktop-app/src-tauri" }

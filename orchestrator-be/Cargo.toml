@@ -37,7 +37,7 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "macro
 ssz = { workspace = true }
 strata-asm-common = { workspace = true }
 strata-asm-params = { workspace = true }
-strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-proto-bridge-v1 = { workspace = true }
 strata-asm-proto-checkpoint = { workspace = true }
 strata-asm-txs-admin = { workspace = true }
