@@ -37,6 +37,7 @@ flowchart LR
 | Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
+| Security Council (Defcon, safe harbour, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |
@@ -54,6 +55,7 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 | Backlog & closure | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md), [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | [`assessment/archive/`](./assessment/archive/) wave snapshots | See [`assessment/README.md`](./assessment/README.md) ([conflict rule #6](#conflict-resolution)) |
 | Operations | [`operations/runbook.md`](./operations/runbook.md) | [`assessment/archive/action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md) P-051 row | Runbook exists; 2026-05-14 table is a historical snapshot |
 | Security | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
+| Security Council | [`specs/security-council.md`](./specs/security-council.md) | [`2-discovery/08-alpen-crate-prd-coverage.md`](./2-discovery/08-alpen-crate-prd-coverage.md), [`2-discovery/19-asm-bump-impact-assessment.md`](./2-discovery/19-asm-bump-impact-assessment.md) | Both discovery notes predate the pin bump and call the council blocked on upstream; the spec carries the upstream evidence and the current stage board |
 
 Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`operations/README.md`](./operations/README.md), [`archive/README.md`](./archive/README.md).
 
