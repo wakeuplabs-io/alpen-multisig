@@ -119,11 +119,15 @@ Map `Role::StrataSecurityCouncil` (upstream ASM role, SPS-50 byte 40–49) to `A
 Enactment detection must read the action-specific lock period from live ASM state, **never** from a cached or hardcoded mapping:
 
 ```rust
-pub async fn lock_period_for_action(
-    asm_rpc: &dyn AsmRpc,
-    action: &UpdateAction,
-) -> Result<u64>
+pub(crate) async fn lock_period_for_action(
+    rpc_url: &str,
+    action_hex: &str,
+) -> Result<u64, AppError>
 ```
+
+The shape follows the existing convention of the module it joins — `threshold_for_authority`,
+`lock_period_for_authority` and `update_id_in_queue_for_action` all take the ASM RPC URL as `&str`.
+The action is resolved from the stored `action_hex` via `decode_multisig_action_hex`.
 
 For `UpdateAction::Defcon1(_)`, this returns a hardcoded `0` (no configurable field upstream).  
 For `UpdateAction::Defcon3(_)`, this reads `confirmation_depths.defcon3` from the live ASM state (deployment-specific).
@@ -418,6 +422,15 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 **When** the signer opens the proposals dashboard  
 **Then** the proposal appears in the "Past" list, distinct from the Pending and quorum-reached listings, as required by PRD 06 §5.4.
 
+### 17. The backend refuses Defcon 1 creation from a non-council session
+**Given** a session authenticated for any authority other than the Security Council  
+**When** it sends a Defcon 1 creation request to `POST /proposals`  
+**Then** the request is refused before any proposal is persisted, and no proposal exists for that `(action, seq_no)` afterwards.
+
+> AC 1 and AC 1a cover what the UI renders and where it routes. This criterion covers the server-side
+> half of PRD 06 §3.1.4 — the "usable exclusively by" requirement holds against a caller that never
+> touches the UI.
+
 ## Edge Cases
 
 | Scenario | Behavior |
@@ -437,8 +450,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | File | Change |
 |---|---|
 | `orchestrator-be/src/domain/proposal.rs` | Add `kind: ProposalKind` enum variant `Defcon1`; map to upstream action type. |
-| `orchestrator-be/src/application/traits.rs` | Add `lock_period_for_action(action: &UpdateAction) -> u64` to `AsmRepository`. |
-| `orchestrator-be/src/infrastructure/asm_role_membership.rs` | Refactor away from per-authority `lock_period_for_authority`; implement per-action lookup via `lock_period_for_action`. |
+| `orchestrator-be/src/infrastructure/asm_role_membership.rs` | Add `lock_period_for_action`, resolving the depth from the action rather than the authority; retire `lock_period_for_authority`. |
 | `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbour activation; refactor enactment detection to use per-action depth; **replace the cancel gate's authority allow-list with the action's confirmation depth** (see [Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)). |
 | `orchestrator-be/src/handlers/proposals.rs` | Extend `create_proposal_handler` to route `type: "defcon_1"` to `create_defcon_proposal`. |
 | `orchestrator-be/src/handlers/mod.rs` | Ensure Security Council role mapping is wired; route guards check `authority == SecurityCouncil`. |
@@ -463,6 +475,7 @@ Run `cargo test -p orchestrator-be` (see AGENTS.md for CI checklist).
   restarting the backend; the resolved lock period must reflect the changed state.
 - **Enactment detection:** When `safe_harbour.is_activated() == true` is detected in ASM state AND no Defcon 1 entry exists in admin queue, proposal transitions to `Enacted`.
 - **Cancelability gate:** Attempt to cancel a Defcon 1 proposal is rejected with a reason referencing the action's depth (0), not the authority.
+- **Council-only creation (AC 17):** a `POST /proposals` Defcon 1 request carrying a non-council session is refused, and the repository holds no proposal for that `(action, seq_no)` afterwards.
 - **Expiry:** Defcon 1 proposal expires after 7 days (wall-clock) without reaching quorum.
 
 ### Backend Integration Tests
