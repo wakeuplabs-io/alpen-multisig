@@ -38,6 +38,7 @@ flowchart LR
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
 | Security Council (Defcon, safe harbour, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
+| Security Council — Defcon 1 functional contract (V1) | [`specs/security-council-defcon.md`](./specs/security-council-defcon.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |
