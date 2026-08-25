@@ -71,7 +71,13 @@ V1 must satisfy three requirements that are non-negotiable and forward-compatibl
 
 **Why:** Defcon 1 (depth 0) can never be cancelled because it is never enqueued — a cancel targeting it fails on-chain with `UnknownAction`. Defcon 3 (configurable depth ≥ 0) IS cancellable when depth ≠ 0. V5 will deliver the Defcon 3 cancel flow. A hardcoded authority check would cement the wrong decision for Defcon 3 and force V5 to fight it.
 
-**Implementation note:** `orchestrator-be/src/application/proposals.rs:570` currently rejects with `"cancel is only supported for AlpenAdmin and StrataAdmin"` (an authority gate). V1 must not wire this into the domain; V5 will lift the gate by reading the live depth and enabling cancel for Defcon 3.
+**Implementation note:** `orchestrator-be/src/application/proposals.rs` currently gates cancel on an authority allow-list, rejecting anything outside `AlpenAdmin | StrataAdmin`. That question cannot answer this feature: Defcon 1 and Defcon 3 share one authority and have opposite answers, so no allow-list of authorities separates them.
+
+**V1 replaces the gate rather than deferring it.** The condition becomes the action's confirmation depth — reject when the depth is zero, because a zero-depth action is never enqueued and an on-chain cancel would fail with `UnknownAction`. This is what makes [AC 11](#11-cancelability-gate-is-per-depth-not-per-authority) satisfiable: the rejection has to name the depth, which an authority-shaped check cannot do.
+
+Deferring the change to V5 would defeat this constraint's own purpose. V1 introduces `Authority::SecurityCouncil` into a system whose gate rejects it wholesale; V5 would then have to open that gate *and* prove that opening it does not expose a cancel affordance on Defcon 1 — the very fight this rule exists to prevent. Expressed as depth, V5 touches no gate at all: Defcon 3 carries a non-zero depth and passes on its own.
+
+The replacement does not depend on Defcon and is verifiable before it exists: the current authorities' actions already carry configurable depths, so the rewrite can land and be tested against the existing suite.
 
 ### 3. Defcon 1 never displays "Approved" and offers no cancel CTA anywhere
 
@@ -433,7 +439,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | `orchestrator-be/src/domain/proposal.rs` | Add `kind: ProposalKind` enum variant `Defcon1`; map to upstream action type. |
 | `orchestrator-be/src/application/traits.rs` | Add `lock_period_for_action(action: &UpdateAction) -> u64` to `AsmRepository`. |
 | `orchestrator-be/src/infrastructure/asm_role_membership.rs` | Refactor away from per-authority `lock_period_for_authority`; implement per-action lookup via `lock_period_for_action`. |
-| `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbour activation; refactor enactment detection to use per-action depth. |
+| `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbour activation; refactor enactment detection to use per-action depth; **replace the cancel gate's authority allow-list with the action's confirmation depth** (see [Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)). |
 | `orchestrator-be/src/handlers/proposals.rs` | Extend `create_proposal_handler` to route `type: "defcon_1"` to `create_defcon_proposal`. |
 | `orchestrator-be/src/handlers/mod.rs` | Ensure Security Council role mapping is wired; route guards check `authority == SecurityCouncil`. |
 | `desktop-app/src/types/proposal.ts` | Add `kind: "defcon_1"` union variant to `ProposalKind`. |
