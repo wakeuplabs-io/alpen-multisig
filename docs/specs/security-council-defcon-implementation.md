@@ -106,12 +106,28 @@ Every phase: its own branch off current `develop`, one atomic commit (never a co
 one before it), and the full [`AGENTS.md`](../../AGENTS.md) pre-commit CI checklist green before
 pushing.
 
-### Phase 1 — Per-action lock period
+### Phase 1 — Per-action lock period ✅
 
-Replace `lock_period_for_authority` with a resolution keyed on the action. Defcon 1 returns a
-hardcoded `0` — upstream has no `ConfirmationDepths` field for it — and Defcon 3 reads
-`confirmation_depths.defcon3` from live ASM state. The value is read at enactment-detection time,
-never cached at startup.
+Replace `lock_period_for_authority` with a resolution keyed on the action. Defcon 1 resolves to `0` —
+upstream has no `ConfirmationDepths` field for it — and Defcon 3 reads `confirmation_depths.defcon3`
+from live ASM state. The value is read on every call, never cached at startup.
+
+**Shipped as `lock_period_for_action`. Detail spec:**
+[`security-council-defcon-phase-1.md`](./security-council-defcon-phase-1.md), which supersedes the
+bullets below where they differ. Three things it settled that this plan had wrong:
+
+- **The resolution composes upstream's table rather than restating it.** `UpdateAction::update_tx_type()`
+  and `ConfirmationDepths::get()` already map every variant and already hardcode Defcon 1 to `0`, so
+  writing our own per-variant match would have been a second copy of a table we do not own. Same
+  observable behaviour; the AC 12 test asserts upstream's hardcoding directly as a tripwire.
+- **It is a bug fix, not a no-op.** The per-authority mapping was already wrong for actions in
+  production — a Strata-admin VK update resolved to the authority's multisig depth and now resolves to
+  `ol_stf_vk_update`. The regression test therefore pins the *corrected* mapping; phrased as "the same
+  depths as before" it would have pinned the bug.
+- **AC 12a is structural evidence, not a unit test.** The only place a cache could live is the RPC
+  layer a unit test would stub out. There is also no repeated resolution cycle in the code:
+  `compute_and_store_activation_height` runs once per proposal at reveal confirmation, not at
+  enactment detection as the contract's wording suggests.
 
 - **Call site:** `compute_and_store_activation_height` in `orchestrator-be/src/application/proposals.rs`
   already holds the whole `Proposal`, so it has `action_hex` on hand. The migration is local.
@@ -121,15 +137,6 @@ never cached at startup.
   convention — an `async fn` taking the ASM RPC URL as `&str`, like `threshold_for_authority` and
   `update_id_in_queue_for_action` — and resolves the action from the stored `action_hex` through
   `decode_multisig_action_hex`.
-- **Tests:** there is no coverage of lock-period resolution today, so this phase creates it:
-  - the distinguishing case — Defcon 1 and Defcon 3, both on the Security Council, resolving to
-    different depths, which a per-authority mapping cannot produce;
-  - the live-read case — the depth changes in ASM state between two resolutions with no restart, and
-    the second resolution reflects it;
-  - **regression cover for the authorities already in production** — the Alpen and Strata
-    administrators must resolve to exactly the depths they resolved to before the refactor. This is
-    the real risk of the phase: the function being replaced is shared, and its current callers are
-    live.
 
 ### Phase 2 — Cancel gate by depth
 
