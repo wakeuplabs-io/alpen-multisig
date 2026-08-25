@@ -148,6 +148,7 @@ test, and the assertions still run through upstream's real `ConfirmationDepths::
 `mock_lock_period` becomes action-keyed **by delegating to `depth_for_action`** over a
 `ConfirmationDepths` with every field set to `2016`. It therefore cannot drift from the real dispatch,
 and it gets the Defcon 1 answer right for free: upstream's `get` forces `0` regardless of the fixture.
+The fixture builder is shared with the tests (§7).
 
 A mock that returned `2016` unconditionally would store `activation_height = reveal + 2016` for an
 action that applies immediately — precisely the value Constraint 1 exists to prevent, in the
@@ -168,16 +169,19 @@ leaves dead code, so no intermediate commit is a valid stopping point.
 
 ## 7. Tests
 
-Three inline unit tests in `asm_role_membership.rs`, all over `depth_for_action` with a literal
-`ConfirmationDepths` fixture. **Every field in the fixture is non-zero and mutually distinct** — with
-`defcon3 = 0`, `ConfirmationDepths::get` returns `None` for it too (`confirmation_depth.rs:59`:
-`(depth != 0).then_some(depth)`), and the Defcon 1 / Defcon 3 test would pass while proving the
-opposite of its name. AC 12 states this precondition itself.
+Three inline unit tests in `asm_role_membership.rs`, all over `depth_for_action`.
+
+Each starts from `uniform_confirmation_depths(NON_ZERO_BASELINE)` — **every field non-zero** — and
+overrides only the fields it compares, to distinct values. The non-zero baseline is load-bearing:
+`ConfirmationDepths::get` returns `None` for *any* zero field (`confirmation_depth.rs:59`:
+`(depth != 0).then_some(depth)`), so with `defcon3 = 0` the Defcon 1 / Defcon 3 test would pass while
+proving the opposite of its name. AC 12 states this precondition itself. The same builder produces
+the mock's fixture, so mock and tests cannot disagree about the shape of the table.
 
 | # | Claim | Assertion |
 |---|---|---|
-| 1 | AC 12 — resolved per action | On one authority, `Defcon1` resolves to `0` and `Defcon3` to the fixture's `defcon3`. The same test asserts `depths.get(UpdateTxType::Defcon1).is_none()` against the all-distinct fixture: the tripwire from §4, which fires if upstream ever gives Defcon 1 a knob. |
-| 2 | §3 — resolution follows the action, not the authority | A Strata-admin signer update resolves to `strata_admin_multisig_update`; a Strata-admin VK update resolves to `ol_stf_vk_update`. The two fields differ in the fixture, so the old per-authority mapping cannot pass this. |
+| 1 | AC 12 — resolved per action | On one authority, `Defcon1` resolves to `0` and `Defcon3` to the fixture's `defcon3`. The same test asserts `depths.get(UpdateTxType::Defcon1).is_none()` against the non-zero fixture: the tripwire from §4, which fires if upstream ever gives Defcon 1 a knob. |
+| 2 | §3 — resolution follows the action, not the authority | A Strata-admin signer update resolves to `strata_admin_multisig_update`; a Strata-admin operator-set update resolves to `operator_update`. The two fields differ in the fixture, so the retired per-authority mapping cannot pass this. |
 | 3 | Cancel is total and safe | A `Cancel` wrapping a non-zero-depth update resolves to `0`. |
 
 ### AC 12a is structural evidence, not a unit test

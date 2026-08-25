@@ -11,7 +11,7 @@ use crate::domain::proposal::{
 };
 use crate::error::AppError;
 use crate::infrastructure::asm_role_membership::{
-    last_seqno_for_authority, lock_period_for_authority, threshold_for_authority,
+    last_seqno_for_authority, lock_period_for_action, threshold_for_authority,
     update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -620,7 +620,7 @@ async fn compute_and_store_activation_height(
         return Ok(());
     };
     let reveal_confirm_block = btc_client.get_block_height_for_txid(reveal_txid).await?;
-    let lock_period = lock_period_for_authority(asm_rpc_url, proposal.authority).await?;
+    let lock_period = lock_period_for_action(asm_rpc_url, &proposal.action_hex).await?;
     let activation_height = reveal_confirm_block + lock_period;
     repo.update_activation_height(&proposal.action_id, activation_height)
         .await

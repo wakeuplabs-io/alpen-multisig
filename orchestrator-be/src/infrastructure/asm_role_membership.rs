@@ -102,14 +102,21 @@ pub(crate) async fn threshold_for_authority(
     Ok(u16::from(authority_config.config().threshold()))
 }
 
-/// Return the confirmation depth (in blocks) before an update for `authority` activates.
+/// Return the confirmation depth (in blocks) before the update in `action_hex` activates.
 ///
-/// Returns `0` when the authority is configured for immediate activation (no queue).
-pub(crate) async fn lock_period_for_authority(
+/// Resolved from the action, never from the authority: the Security Council signs both Defcon 1
+/// (immediate) and Defcon 3 (timelocked), so no per-authority mapping can answer for it. Read live
+/// on every call — see docs/specs/security-council-defcon-phase-1.md.
+///
+/// Returns `0` for actions that bypass the queue and apply immediately.
+pub(crate) async fn lock_period_for_action(
     rpc_url: &str,
-    authority: Authority,
+    action_hex: &str,
 ) -> Result<u64, AppError> {
-    if let Some(period) = mock_lock_period(rpc_url, authority) {
+    let action =
+        action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
+
+    if let Some(period) = mock_lock_period(rpc_url, &action) {
         return Ok(period);
     }
 
@@ -118,9 +125,27 @@ pub(crate) async fn lock_period_for_authority(
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
     let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-    let tx_type = authority_to_update_tx_type(authority).map_err(AppError::BadRequest)?;
-    let depth = admin.confirmation_depth(tx_type).unwrap_or(0);
-    Ok(depth as u64)
+
+    Ok(depth_for_action(&action, |tx_type| {
+        admin.confirmation_depth(tx_type)
+    }))
+}
+
+/// Resolve `action`'s confirmation depth through `depth_of`, upstream's per-tx-type lookup.
+///
+/// The lookup is a parameter so the decision is testable without an ASM. Upstream owns the table
+/// (`UpdateAction::update_tx_type` and `ConfirmationDepths::get`); this only dispatches into it.
+///
+/// A cancel resolves to `0`: it is never enqueued, it applies when it confirms. Deliberately not
+/// the depth of the update it targets, which would be a plausible-looking wrong number.
+fn depth_for_action(
+    action: &MultisigAction,
+    depth_of: impl Fn(UpdateTxType) -> Option<u16>,
+) -> u64 {
+    match action {
+        MultisigAction::Update(update) => u64::from(depth_of(update.update_tx_type()).unwrap_or(0)),
+        MultisigAction::Cancel(_) => 0,
+    }
 }
 
 /// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
@@ -156,17 +181,6 @@ pub(crate) async fn update_id_in_queue_for_action(
         .map(|q| *q.id());
 
     Ok(found)
-}
-
-fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, String> {
-    match authority {
-        Authority::StrataAdmin => Ok(UpdateTxType::StrataAdminMultisigUpdate),
-        Authority::AlpenAdmin => Ok(UpdateTxType::AlpenAdminMultisigUpdate),
-        Authority::SequencerManager => Ok(UpdateTxType::StrataSeqManagerMultisigUpdate),
-        _ => Err(format!(
-            "authority `{authority:?}` has no UpdateTxType mapping"
-        )),
-    }
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
@@ -400,25 +414,123 @@ fn mock_threshold(_rpc_url: &str, _authority: Authority) -> Option<u16> {
     None
 }
 
+/// Every depth set to `depth`. Upstream's `get` still overrides the variants it hardcodes, which is
+/// the point: a fixture cannot give Defcon 1 a lock period.
 #[cfg(any(test, feature = "dev-mocks"))]
-fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
-    if rpc_url != "mock://asm-membership" {
-        return None;
-    }
-    match authority {
-        Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
-        _ => None,
+fn uniform_confirmation_depths(depth: u16) -> strata_asm_params::ConfirmationDepths {
+    strata_asm_params::ConfirmationDepths {
+        strata_admin_multisig_update: depth,
+        strata_seq_manager_multisig_update: depth,
+        alpen_admin_multisig_update: depth,
+        strata_security_council_multisig_update: depth,
+        operator_update: depth,
+        sequencer_update: depth,
+        ol_stf_vk_update: depth,
+        asm_stf_vk_update: depth,
+        ee_stf_vk_update: depth,
+        defcon3: depth,
+        safe_harbour_address_update: depth,
     }
 }
 
+/// Uniform 2016-block depths, dispatched through `depth_for_action` rather than answered directly.
+///
+/// Going through the real dispatch is what keeps the mock honest: upstream forces Defcon 1 to `0`
+/// whatever the fixture says, so the dev stack cannot show a lock period for an action that applies
+/// immediately.
+#[cfg(any(test, feature = "dev-mocks"))]
+fn mock_lock_period(rpc_url: &str, action: &MultisigAction) -> Option<u64> {
+    if rpc_url != "mock://asm-membership" {
+        return None;
+    }
+
+    let depths = uniform_confirmation_depths(2016);
+    Some(depth_for_action(action, |tx_type| depths.get(tx_type)))
+}
+
 #[cfg(not(any(test, feature = "dev-mocks")))]
-fn mock_lock_period(_rpc_url: &str, _authority: Authority) -> Option<u64> {
+fn mock_lock_period(_rpc_url: &str, _action: &MultisigAction) -> Option<u64> {
     None
 }
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU8;
+
+    use strata_asm_txs_admin::actions::updates::{
+        Defcon1Update, Defcon3Update, OperatorSetUpdate, StrataAdminMultisigUpdate,
+    };
+    use strata_asm_txs_admin::actions::{CancelAction, UpdateAction};
+    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+
     use super::*;
+
+    /// Fixtures start from a non-zero depth for every variant, so a `0` in an assertion can only
+    /// come from upstream's hardcoded arm and never from an unset field.
+    const NON_ZERO_BASELINE: u16 = 1;
+
+    fn signer_update() -> MultisigAction {
+        let config_update =
+            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+        MultisigAction::Update(UpdateAction::StrataAdminMultisig(
+            StrataAdminMultisigUpdate::new(config_update),
+        ))
+    }
+
+    fn operator_set_update() -> MultisigAction {
+        MultisigAction::Update(UpdateAction::OperatorSet(OperatorSetUpdate::new(
+            vec![],
+            vec![],
+        )))
+    }
+
+    /// AC 12: two actions on the Strata Security Council resolve to different depths — the
+    /// distinguishing case a per-authority mapping cannot produce.
+    #[test]
+    fn defcon_1_and_defcon_3_resolve_to_different_depths_on_one_authority() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.defcon3 = 7;
+
+        // Tripwire for the composition in docs/specs/security-council-defcon-phase-1.md §4: we hold
+        // no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
+        // configurable depth. Every field is non-zero, so `None` here can only come from the
+        // hardcoded arm.
+        assert!(depths.get(UpdateTxType::Defcon1).is_none());
+
+        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
+        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
+
+        assert_eq!(depth_for_action(&defcon1, |t| depths.get(t)), 0);
+        assert_eq!(depth_for_action(&defcon3, |t| depths.get(t)), 7);
+    }
+
+    /// The depth follows the action, not the authority: both of these are created by the Strata
+    /// administrator, and the retired per-authority mapping gave them the same answer.
+    #[test]
+    fn two_actions_of_one_authority_resolve_to_their_own_depths() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.strata_admin_multisig_update = 11;
+        depths.operator_update = 23;
+
+        assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
+        assert_eq!(
+            depth_for_action(&operator_set_update(), |t| depths.get(t)),
+            23
+        );
+    }
+
+    /// A cancel is never enqueued — it applies when it confirms — so it carries no lock period,
+    /// not the lock period of the update it targets.
+    #[test]
+    fn cancel_resolves_to_zero() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.defcon3 = 7;
+
+        let cancel =
+            MultisigAction::Cancel(CancelAction::new(0, UpdateAction::Defcon3(Defcon3Update)));
+
+        assert_eq!(depth_for_action(&cancel, |t| depths.get(t)), 0);
+    }
 
     #[test]
     fn all_five_authorities_have_explicit_asm_mapping_status() {
