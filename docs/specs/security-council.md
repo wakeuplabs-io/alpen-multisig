@@ -357,7 +357,7 @@ compliance audit and issue #117.
 
 | Slice | End-to-end path | Status |
 |---|---|---|
-| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); implementation pending |
+| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); implementation pending |
 | V2 — Defcon 3 | Same path, timelocked, with an activation countdown | Pending |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
