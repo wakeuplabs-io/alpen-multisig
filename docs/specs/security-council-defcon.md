@@ -192,7 +192,16 @@ Only a Security Council session can reach the Defcon 1 create form. A non-counci
 
 ### Create Form Layout
 
-**Route:** `/proposals/create/defcon-1` (only accessible when `session.authority === "security_council"`).
+**Route:** `/proposals/create` — the existing creation route, whose action-type menu offers Defcon 1
+to a Security Council session and to no other authority.
+
+> Corrected in Phase 5. This line previously specified a dedicated `/proposals/create/defcon-1`
+> route. Stage 5 was given that decision by *Critical Files* below, and settled it the other way:
+> the creation flow is a two-step machine with a frozen preview, a re-authentication modal, a
+> navigation guard and a sighash pre-flight, and a sibling screen would have reimplemented all of
+> it to change a colour scheme and add one input. What replaces the route guard is the
+> authority-keyed menu plus the backend gate [AC 17](#17-the-backend-refuses-defcon-1-creation-from-a-non-council-session)
+> pins. See [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md) §4.
 
 **Form structure:**
 
@@ -464,10 +473,10 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | `orchestrator-be/src/handlers/proposals.rs` | Extend `create_proposal_handler` to route `type: "defcon_1"` to `create_defcon_proposal`. |
 | `orchestrator-be/src/handlers/mod.rs` | Ensure Security Council role mapping is wired; route guards check `authority == SecurityCouncil`. |
 | `desktop-app/src/types/proposal.ts` | Add `kind: "defcon_1"` union variant to `ProposalKind`. |
-| `desktop-app/src/domain/create-proposal/` (preferred) or a new `defcon-proposal/` | Defcon 1 is one more action in the creation flow, so extend the existing domain unless the destructive treatment and the type-to-confirm gate justify a sibling domain. Stage 5 decides; this contract does not mandate a new abstraction. |
-| `desktop-app/src/screens/defcon-proposal-create-screen.tsx` | New screen with signing message, type-to-confirm, warning box, destructive styling. |
+| `desktop-app/src/domain/create-proposal/` | **Settled in Phase 5:** Defcon 1 extends this domain. One `ACTION_TYPES_BY_AUTHORITY` entry, one validator, one `defcon-1-form-fields.tsx` carrying the warning, the rendered signing message and the type-to-confirm gate. No sibling domain. |
+| `desktop-app/src/types/auth-role.ts`, `lib/authority-label.ts`, `api/orchestrator-auth.ts`, `screens/wallet-connect-screen.tsx`, `src-tauri/src/domain/auth.rs` | **Added in Phase 5, and not anticipated by this contract:** the desktop app had no Security Council session at all. Two of these were `default:` arms that substitute silently rather than fail. |
 | `desktop-app/src/screens/proposals-dashboard-screen.tsx` | Display Defcon 1 proposals with "Security Council" label; no cancel affordance shown. |
-| `desktop-app/src/App.tsx` | Register route `/proposals/create/defcon-1` with auth guard (`authority === "security_council"`). |
+| ~~`desktop-app/src/screens/defcon-proposal-create-screen.tsx`, route in `App.tsx`~~ | **Not built.** See the correction under *Create Form Layout*. The route is never registered, so `App.tsx`'s catch-all answers direct navigation for every session — which is what [AC 1a](#1a-direct-navigation-by-a-non-council-session-is-refused) describes. |
 
 ## Test Plan
 

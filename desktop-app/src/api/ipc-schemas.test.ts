@@ -148,7 +148,7 @@ if (!_typeCheck.ok) {
 
 console.log('ipc-schemas: P-023 errorCode field on ApiResult OK')
 
-// Phase 5: both IPC boundaries accept Defcon 1. Each is a closed schema, so an
+// Security Council Phase 5: both IPC boundaries accept Defcon 1. Each is a closed schema, so an
 // unregistered value is a parse error rather than an unknown-action fallback — and for
 // `actionType` that takes down the parse of every proposal in the same list.
 const defcon1Proposal = proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType: 'defcon_1' })

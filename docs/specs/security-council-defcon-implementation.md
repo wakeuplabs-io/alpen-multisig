@@ -161,7 +161,7 @@ supersedes the bullets below where they differ. Three things it settled that thi
   `orchestrator-be/src/application/proposals.rs` encodes the old gate. It becomes a depth-based
   rejection test. Existing cancel behaviour for the Alpen and Strata administrators must not change.
 
-### Phase 3 — Backend Defcon 1: role, codec, creation
+### Phase 3 — Backend Defcon 1: role, codec, creation ✅
 
 **Detail spec:** [`security-council-defcon-phase-3.md`](./security-council-defcon-phase-3.md), which
 supersedes the bullets below where they differ. Four things it settled that this plan left open or
@@ -222,14 +222,35 @@ left open:
   per-block read that nothing in V1 can exercise; it becomes reachable only once Defcon 3 gains a
   product flow.
 
-### Phase 5 — Frontend: create and sign
+### Phase 5 — Frontend: create and sign ✅
 
-- Register `defcon_1` in the IPC action-type enum (`desktop-app/src/api/ipc-schemas.ts`), in
-  `ACTION_TYPES_BY_AUTHORITY`, and in `decode_action_hex` — which currently routes unrecognised
-  variants to `DecodedAction::Unknown`, so an unregistered Defcon 1 would render as unknown.
-- A fields component following the existing `*-form-fields.tsx` pattern, carrying the four-line
-  signing message rendered verbatim, the `DEFCON 1` type-to-confirm gate, and the destructive
-  treatment that separates this form from every other creation form.
+**Detail spec:** [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md), which
+supersedes the bullets below where they differ. Four things it settled that this plan left out or
+had wrong:
+
+- **The desktop app had no Security Council session at all**, and this plan's two bullets assume
+  one. Five places encoded three-or-four authorities and none was the council — two of them
+  `default:` arms that substitute silently rather than fail, so a council role added to TypeScript
+  without touching `authorityFromRole` would have produced a session that authenticates, works, and
+  is the wrong authority. A sixth site turned up only in review: `get_multisig_config` refused the
+  council through a catch-all `_` arm, which is why adding the variant compiled cleanly.
+- **The commit order is the reverse of the obvious one.** Session first reads as the prerequisite
+  but is the broken half: `getActionTypeOptions` falls back to the Strata Administrator's menu for
+  an unregistered authority, so a council session that existed before `security_council: ['defcon_1']`
+  did would be offered three actions its role cannot authorize. The menu entry lands first, and both
+  commits are then correct in isolation.
+- **The four-line message needs no new code and must not get any.** Upstream's
+  `SigningMessage::for_action` already appends `Action Details:` only when `render_details` produced
+  lines, and Defcon 1's is empty — so AC 4 is a *placement* requirement, not a formatting one. The
+  form resolves the message through the same Rust renderer the device signs over and prints it
+  verbatim; a hand-written template would review identically and diverge the moment upstream bumps a
+  version. The resolved message is mirrored into a form value, so a failed resolve disables the CTA
+  instead of letting a signer confirm four lines they never saw.
+- **No `/proposals/create/defcon-1` route is built.** This plan §3 already said Defcon 1 extends
+  `create-proposal`; the contract still described a dedicated route and screen, which it had marked
+  as Stage 5's call. AC 1a holds either way — the route is never registered, so `App.tsx`'s
+  catch-all redirects every session, which is the behaviour AC 1a describes. The contract's
+  *Create Form Layout* and *Critical Files* were corrected alongside this phase.
 
 ### Phase 6 — Frontend: lifecycle
 

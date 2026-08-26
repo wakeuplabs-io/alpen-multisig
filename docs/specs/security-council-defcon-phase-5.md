@@ -27,8 +27,9 @@ It is not a new screen or a new domain. See §4.
 
 The build plan reduces Phase 5 to two bullets — register `defcon_1` in three places, add one
 `*-form-fields.tsx`. Both are necessary and neither is sufficient, because **the desktop app has no
-Security Council session at all.** Five places encode three-or-four authorities and none of them is
-the council:
+Security Council session at all.** Six places encode three-or-four authorities and none of them is
+the council — and the sixth only surfaced when the implementation was audited, which is itself the
+point about catch-all arms:
 
 | Place | State today | Consequence |
 |---|---|---|
@@ -37,6 +38,7 @@ the council:
 | `desktop-app/src/lib/authority-label.ts:11` | `default: 'Unknown authority'` | AC 14 fails: the badge must read "Security Council" |
 | `desktop-app/src/screens/wallet-connect-screen.tsx:14` | three `AUTHORITY_OPTIONS` | no way to select the council |
 | `desktop-app/src-tauri/src/domain/auth.rs:8`, `infrastructure/asm_status_rpc.rs:59-70` | three `AuthRole` variants, three `role_to_keys` inserts | the membership check that marks an authority card *Available* cannot answer for the council |
+| `desktop-app/src-tauri/src/commands/asm_state.rs:37-45` | authority→role match ends in `_ =>` "not supported in the desktop app yet" | **found in review, not in this table's first draft** — the council's config read fails and `use-create-proposal.ts:124` swallows it, so the review step renders a threshold of `0` over an empty signer set with nothing on screen saying so |
 
 The `default:` arms are the dangerous half. They are not compile errors and they are not runtime
 errors — they are silent substitutions. A council enum member added to TypeScript without touching
