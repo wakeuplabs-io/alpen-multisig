@@ -197,15 +197,30 @@ had wrong:
   UI renders, so without this the requirement would ship untested. It is pinned by AC 17, added to the
   contract alongside this plan.
 
-### Phase 4 — Enactment detection
-
-**Detail spec:** [`security-council-defcon-phase-4.md`](./security-council-defcon-phase-4.md),
-which supersedes the bullets below where they differ.
+### Phase 4 — Enactment detection ✅
 
 Add the Defcon 1 arm to the action dispatch in `orchestrator-be/src/infrastructure/asm_enactment.rs`.
 Enacted requires **both** post-conditions: `safe_harbour().is_activated()` is true, **and** no Defcon 1
-entry sits in the ASM admin queue. The activation flag alone cannot distinguish a Defcon 1 from a
-Defcon 3 that has matured, which is why the queue check is not optional.
+entry sits in the ASM admin queue.
+
+**Detail spec:** [`security-council-defcon-phase-4.md`](./security-council-defcon-phase-4.md),
+which supersedes this section where they differ. Two things it settled that this plan had wrong or
+left open:
+
+- **The queue check is a tripwire against upstream drift, not a disambiguator.** This plan said the
+  check exists because the activation flag "cannot distinguish a Defcon 1 from a Defcon 3 that has
+  matured". The premise is right — upstream routes both variants to the same `relay_bridge_defcon`
+  — but the conclusion is not: a matured Defcon 3 has already left the queue, so no queue check
+  sees it. What the check does buy is protection against upstream ever giving Defcon 1 a non-zero
+  depth, which would start enqueuing it; without the check a proposal would be marked `Enacted`
+  while its update was still pending and still cancellable.
+- **The post-condition reads a value, and the reveal-block ordering is never checked.** The
+  contract requires a Defcon 1 to enact even when the safe harbour was already activated
+  beforehand, so no transition-watching design is admissible. It also asks for the activation to be
+  observed at or after the reveal block — and no height comparison exists anywhere in this module,
+  for any action. The phase records that as an explicit V1 constraint rather than building a
+  per-block read that nothing in V1 can exercise; it becomes reachable only once Defcon 3 gains a
+  product flow.
 
 ### Phase 5 — Frontend: create and sign
 

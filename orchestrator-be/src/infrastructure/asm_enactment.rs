@@ -103,14 +103,12 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let still_queued = admin
+            let safe_harbour_activated = bridge.safe_harbour().is_activated();
+            let defcon1_queued = admin
                 .queued()
                 .iter()
                 .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
-            Ok(defcon1_enacted(
-                bridge.safe_harbour().is_activated(),
-                still_queued,
-            ))
+            Ok(defcon1_enacted(safe_harbour_activated, defcon1_queued))
         }
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Err(AppError::BadRequest(
             "Defcon3 enactment detection is not implemented yet".to_string(),

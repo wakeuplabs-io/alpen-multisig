@@ -109,16 +109,20 @@ The dispatch arm, replacing `asm_enactment.rs:102-104`:
 MultisigAction::Update(UpdateAction::Defcon1(_)) => {
     let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
     let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-    let still_queued = admin
+    let safe_harbour_activated = bridge.safe_harbour().is_activated();
+    let defcon1_queued = admin
         .queued()
         .iter()
         .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
-    Ok(defcon1_enacted(
-        bridge.safe_harbour().is_activated(),
-        still_queued,
-    ))
+    Ok(defcon1_enacted(safe_harbour_activated, defcon1_queued))
 }
 ```
+
+The two locals are named for the parameters they fill, and that is deliberate. Both are `bool`, so
+a swapped call site compiles, passes the predicate's test — which never exercises the caller — and
+inverts the post-condition in production. Matching names is the cheapest defence that does not cost
+a newtype; the alternative, inlining `bridge.safe_harbour().is_activated()` into the call, hides
+the mismatch instead of showing it.
 
 and the decision it delegates to, beside `ee_stf_vk_enacted`:
 
@@ -151,7 +155,7 @@ particular the arm does **not** need `Role::StrataSecurityCouncil`, so the modul
   two reconcilers log it and move on, so the proposal stays `Approved` and is retried on the next
   poll — which is what Edge Cases (`security-council-defcon.md:453`) requires of an unavailable
   ASM. `report_broadcast_progress` keeps propagating, which is right for a client-asserted status.
-- **`extract_multisig_config_update` is untouched.** Its `Defcon1(_)` arm (`:210`) is unreachable
+- **`extract_multisig_config_update` is untouched.** Its `Defcon1(_)` arm (`:227`) is unreachable
   from the dispatch and stays as `Ok(None)`: it is there for match exhaustiveness over upstream's
   enum, not as a second dispatch.
 - **A pre-existing warning becomes routine.** `report_broadcast_progress` logs "update not found
@@ -160,7 +164,7 @@ particular the arm does **not** need `Role::StrataSecurityCouncil`, so the modul
   enqueues — so the line is expected noise, not a symptom. (`reconcile_update_id_in_queue:444`
   handles the same `Ok(None)` silently, so only the broadcast-progress path is loud.) Left alone
   here; if it becomes a nuisance it belongs to Phase 6's lifecycle work, not to this arm.
-- **`mock_is_enacted` (`:302`) stays URL-keyed and action-blind.** Under `mock://asm-enacted` a
+- **`mock_is_enacted` (`:323`) stays URL-keyed and action-blind.** Under `mock://asm-enacted` a
   Defcon 1 enacts vacuously, exactly as every other action does. Phase 1's precedent for making a
   mock action-aware does not transfer: `mock_lock_period` delegates to the real `depth_for_action`
   because a depth is a pure lookup, whereas enactment is a fact about the world that no in-process
@@ -196,6 +200,12 @@ which asserts `bridge.safe_harbour().is_activated()` (`:110`) and `admin.queued(
 **No test asserts the `matches!` over the queue.** It has no branch of its own to get wrong that
 the predicate's second argument does not already cover, and asserting it would require the same
 missing fixture.
+
+**What this leaves undetectable, stated rather than glossed:** a unit test of the predicate cannot
+catch a fault in the caller — the `matches!` naming the wrong variant, the queue boolean inverted,
+or the two arguments swapped. All three need the SSZ fixture this crate does not have. The
+mitigations are the naming discipline in §4, review, and the e2e probe. That is the honest cost of
+the fixture decision, and it is the same cost every other arm in this module already pays.
 
 ## 8. Out of scope
 
