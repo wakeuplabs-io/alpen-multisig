@@ -97,6 +97,10 @@ It stays an `AppError::BadRequest` → HTTP 400 (`orchestrator-be/src/error.rs:4
 the allow-list returned. No handler change (`orchestrator-be/src/handlers/proposals.rs:210-232`), no
 signature change, no new error variant: the rejection changes its *reason*, not its shape.
 
+**Decoding the target is safe.** `POST /proposals` already rejects an `action_hex` that is not valid
+SSZ (`orchestrator-be/src/handlers/proposals.rs:84`, P-026 hygiene), so no stored proposal can carry
+a hex the gate cannot decode. Without that guard this phase would break cancel for legacy rows.
+
 ## 5. Blast radius
 
 **Sequencer Manager becomes cancellable on the backend, deliberately.** Its updates are enqueued with
