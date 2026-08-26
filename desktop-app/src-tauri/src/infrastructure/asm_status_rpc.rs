@@ -65,8 +65,15 @@ pub async fn fetch_role_membership(
         AuthRole::AlpenAdministrator,
         AuthRole::StrataSecurityCouncil,
     ] {
-        if let Ok(keys) = authority_keys_hex(&admin, role) {
-            role_to_keys.insert(role, keys);
+        match authority_keys_hex(&admin, role) {
+            Ok(keys) => {
+                role_to_keys.insert(role, keys);
+            }
+            // The caller cannot tell this apart from "not a signer", so the reason lands in the
+            // log rather than nowhere.
+            Err(e) => {
+                tracing::warn!(role = ?role, error = %e, "skipping authority absent from admin state")
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { VK_PREDICATE_TYPES } from '@/lib/vk-predicate'
+import { getActionTypeOptions } from './action-type-config'
 import { getActionValidator } from './validators'
 
 export type { VkPredicateType } from '@/lib/vk-predicate'
@@ -60,10 +61,28 @@ export function countSignersAfterUpdate(
 
 export type BuildCreateProposalFormSchemaArgs = {
 	currentMultisigSigners: string[] | null
+	/** The session's authority. Decides which action types this form may produce at all. */
+	authority: string
 }
 
-export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildCreateProposalFormSchemaArgs) {
+export function buildCreateProposalFormSchema({
+	currentMultisigSigners,
+	authority,
+}: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
+		// The action-type menu is display data. This is the rule: an authority can only draft the
+		// actions it is allowed to author, whatever route or stale form state got the value here.
+		// The backend refuses the rest too (AC 17), but a signer must never reach a device prompt
+		// for an action their authority cannot sign.
+		const allowed = getActionTypeOptions(authority).map((option) => option.actionType)
+		if (!allowed.includes(data.actionType)) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['actionType'],
+				message: `This authority cannot create a ${data.actionType} proposal.`,
+			})
+		}
+
 		const seqNoTrim = data.seqNo.trim()
 		if (seqNoTrim.length === 0) {
 			ctx.addIssue({ code: 'custom', path: ['seqNo'], message: 'Sequence number is required' })

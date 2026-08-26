@@ -98,8 +98,9 @@ export function CreateProposalForm({
 		() =>
 			buildCreateProposalFormSchema({
 				currentMultisigSigners: multisigConfig?.signers ?? null,
+				authority,
 			}),
-		[multisigConfig],
+		[multisigConfig, authority],
 	)
 
 	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])

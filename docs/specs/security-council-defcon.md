@@ -234,7 +234,8 @@ Create Defcon 1 proposal                  [Security Council badge] [Session] [Di
 1. `seq_no` must be a non-negative integer.
 2. Type-to-confirm field must match `"DEFCON 1"` exactly (case-insensitive matching: `input.toUpperCase() === "DEFCON 1"`).
 3. Sign button is disabled until both conditions pass.
-4. Duplicate `(action, seq_no)` submissions are rejected via idempotency (see "Proposal Creation" in Backend Contract).
+4. Duplicate `(action, seq_no)` submissions are rejected naming the existing `ActionId` (see
+   "Proposal Creation" in Backend Contract, and the correction under [AC 3](#3-actionid-is-stable-and-duplicate-rejection-works)).
 
 **Signing message rendering:** The four lines are rendered verbatim from the signing-message bytes, monospace, in a read-only text area. No abbreviations, no line wrapping beyond the natural message boundary.
 

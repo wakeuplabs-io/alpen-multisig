@@ -28,6 +28,7 @@
 		"test:connect-phase-mnemonic-gate": "tsx src/domain/connect-wallet/components/__tests__/connect-phase-mnemonic-gate.test.tsx",
 		"test:wallet-binding": "tsx src/domain/sign-proposal/wallet-binding.test.ts",
 		"test:defcon-1-confirm-gate": "tsx src/domain/create-proposal/model/__tests__/defcon-1-confirm-gate.test.ts",
+		"test:device-signing-message-pairing": "tsx src/hooks/__tests__/device-signing-message-pairing.test.ts",
 		"test:model-format-btc-from-sats": "tsx src/domain/admin-wallet/model/__tests__/format-btc-from-sats.test.ts",
 		"test:model-balance-denomination": "tsx src/domain/admin-wallet/model/__tests__/balance-denomination.test.ts",
 		"test:model-format-signed-sats": "tsx src/domain/admin-wallet/model/__tests__/format-signed-sats.test.ts",

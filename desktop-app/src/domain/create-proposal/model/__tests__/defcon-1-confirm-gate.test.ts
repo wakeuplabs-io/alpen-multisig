@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict'
 import { matchesDefconConfirmation } from '../validators/defcon-1.ts'
 import { getActionTypeOptions } from '../action-type-config.ts'
+import { buildCreateProposalFormSchema } from '../create-proposal.schema.ts'
 
 // AC 5 — case-insensitive, and nothing else. The contract's own rule is
 // `input.toUpperCase() === "DEFCON 1"`, so there is deliberately no trim().
@@ -28,3 +29,31 @@ for (const authority of ['strata_admin', 'sequencer_manager', 'alpen_admin', 'no
 	const actionTypes = getActionTypeOptions(authority).map((option) => option.actionType)
 	assert.ok(!actionTypes.includes('defcon_1'), `${authority} must not be offered defcon_1`)
 }
+
+// ...and the menu is not the only thing enforcing that. The schema itself refuses an action the
+// session's authority cannot author, so no stale form state or future route can reach a device
+// prompt for one. The backend refuses it too (AC 17); this is the half the signer never sees.
+const draft = {
+	actionType: 'defcon_1' as const,
+	seqNo: '1',
+	title: '',
+	keysToAdd: [{ value: '' }],
+	keysToRemove: [{ value: '' }],
+	threshold: '2',
+	vkTypeId: 'always_accept' as const,
+	newVkHex: '',
+	operatorsToAdd: [{ value: '' }],
+	operatorIndicesToRemove: [{ value: '' }],
+	newSequencerKeyHex: '',
+	defconConfirm: 'DEFCON 1',
+	defconMessage: 'Strata ASM Administration v1',
+}
+
+function actionTypeIssues(authority: string): number {
+	const result = buildCreateProposalFormSchema({ currentMultisigSigners: [], authority }).safeParse(draft)
+	if (result.success) return 0
+	return result.error.issues.filter((issue) => issue.path[0] === 'actionType').length
+}
+
+assert.equal(actionTypeIssues('security_council'), 0, 'the council may author defcon_1')
+assert.ok(actionTypeIssues('strata_admin') > 0, 'a non-council authority must not author defcon_1')

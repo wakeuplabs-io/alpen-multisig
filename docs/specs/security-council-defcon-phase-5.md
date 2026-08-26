@@ -90,8 +90,13 @@ registered, so `App.tsx:131` — `{ path: '*', element: <Navigate to="/" replace
 for *every* session, council included. AC 1a's letter is met and its spirit is exceeded: the form is
 not merely guarded at that path, it does not exist at that path.
 
-What replaces the route guard is the authority-keyed menu (§3.1) plus the backend gate AC 17 already
-pins. The contract's *Create Form Layout* and *Critical Files* are corrected in the
+What replaces the route guard is a **rule, not a menu**. `ACTION_TYPES_BY_AUTHORITY` is display
+data, so on its own it would leave `actionType` a plain enum that accepts `defcon_1` from any
+session — a boundary the contract asked for and an entry that only `POST /proposals` would refuse.
+The form schema therefore refuses an action the session's authority cannot author, whatever route or
+stale form state produced the value, and it does so for all five authorities rather than for the
+council alone. The backend gate AC 17 pins stays the enforcement point; this is the half that keeps
+a signer from ever reaching a device prompt for an action they cannot sign. The contract's *Create Form Layout* and *Critical Files* are corrected in the
 back-propagation commit, the way Phase 3 corrected AC 3.
 
 ## 5. The four-line message needs no new code, and must not get any
