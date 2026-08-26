@@ -56,18 +56,14 @@ pub async fn fetch_role_membership(
     let admin = decode_admin_state(&anchor)?;
 
     let mut role_to_keys = HashMap::new();
-    role_to_keys.insert(
+    for role in [
         AuthRole::StrataAdministrator,
-        authority_keys_hex(&admin, AuthRole::StrataAdministrator)?,
-    );
-    role_to_keys.insert(
         AuthRole::StrataSequencerManager,
-        authority_keys_hex(&admin, AuthRole::StrataSequencerManager)?,
-    );
-    role_to_keys.insert(
         AuthRole::AlpenAdministrator,
-        authority_keys_hex(&admin, AuthRole::AlpenAdministrator)?,
-    );
+        AuthRole::StrataSecurityCouncil,
+    ] {
+        role_to_keys.insert(role, authority_keys_hex(&admin, role)?);
+    }
 
     Ok((role_to_keys, now_unix_ms()))
 }
