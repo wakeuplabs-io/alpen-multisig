@@ -3,6 +3,7 @@ import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-
 import type { CurrentVk } from '@/api/asm-state'
 import {
 	buildAdminMultisigUpdateHex,
+	buildDefcon1ActionHex,
 	buildOperatorSetUpdateHex,
 	buildSequencerKeyUpdateHex,
 	buildVkUpdateHex,
@@ -88,6 +89,11 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			const hexResult = await buildSequencerKeyUpdateHex({
 				newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex),
 			})
+			if (!hexResult.ok) throw new Error(hexResult.error)
+			return hexResult.data.actionHex
+		}
+		if (formData.actionType === 'defcon_1') {
+			const hexResult = await buildDefcon1ActionHex()
 			if (!hexResult.ok) throw new Error(hexResult.error)
 			return hexResult.data.actionHex
 		}

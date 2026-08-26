@@ -39,25 +39,38 @@ export function ActionTypeCard({
 	title,
 	description,
 	selected,
+	destructive = false,
 	onClick,
 }: {
 	title: string
 	description: string
 	selected: boolean
+	/** Irreversible actions read in the danger palette, selected or not. */
+	destructive?: boolean
 	onClick: () => void
 }) {
+	const palette = destructive
+		? {
+				selected: 'border-danger bg-danger-surface',
+				idle: 'border-danger-border bg-white hover:border-danger hover:bg-danger-surface/40',
+				title: 'text-danger-deep',
+				description: 'text-danger-strong',
+			}
+		: {
+				selected: 'border-accent-border bg-highlight-surface',
+				idle: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40',
+				title: 'text-emphasis',
+				description: 'text-emphasis-soft',
+			}
+
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`rounded-xl border-2 p-4 text-left transition-colors ${
-				selected
-					? 'border-accent-border bg-highlight-surface'
-					: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
-			}`}
+			className={`rounded-xl border-2 p-4 text-left transition-colors ${selected ? palette.selected : palette.idle}`}
 		>
-			<p className="m-0 text-body font-semibold text-emphasis">{title}</p>
-			<p className="m-0 mt-1 text-label text-emphasis-soft">{description}</p>
+			<p className={`m-0 text-body font-semibold ${palette.title}`}>{title}</p>
+			<p className={`m-0 mt-1 text-label ${palette.description}`}>{description}</p>
 		</button>
 	)
 }

@@ -16,7 +16,7 @@ export function normalizeSignerKey(value: string): string {
 }
 
 const createProposalFormObjectSchema = z.object({
-	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update', 'sequencer_key_update']),
+	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update', 'sequencer_key_update', 'defcon_1']),
 	seqNo: z.string(),
 	title: z.string().max(512, 'Title must be at most 512 characters'),
 	keysToAdd: z.array(keyRowSchema),
@@ -27,6 +27,7 @@ const createProposalFormObjectSchema = z.object({
 	operatorsToAdd: z.array(keyRowSchema),
 	operatorIndicesToRemove: z.array(keyRowSchema),
 	newSequencerKeyHex: z.string(),
+	defconConfirm: z.string(),
 })
 
 export type CreateProposalFormValues = z.infer<typeof createProposalFormObjectSchema>
