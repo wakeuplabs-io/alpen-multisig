@@ -178,10 +178,8 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
         Ok(desktop_app::domain::action::Action::SequencerKeyUpdate(_)) => {
             "sequencer_key_update".to_string()
         }
-        // Defcon 1 decodes, but `actionType` is a closed zod enum on the other side of the IPC
-        // boundary, so naming it before Phase 5 registers it would fail the parse of every
-        // proposal in the same list. See docs/specs/security-council-defcon-phase-3.md §7.
-        Ok(desktop_app::domain::action::Action::Defcon1) | Err(_) => "unknown".to_string(),
+        Ok(desktop_app::domain::action::Action::Defcon1) => "defcon_1".to_string(),
+        Err(_) => "unknown".to_string(),
     }
 }
 
@@ -1083,4 +1081,31 @@ pub async fn proposals_broadcast_manual(
         commit_txid,
         reveal_txid,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `actionType` is a closed zod enum on the other side of this boundary, and a value it does
+    /// not know fails the parse of every proposal in the same list — so what this function emits
+    /// has to stay in step with `decodedActionSchema`'s sibling enum in `ipc-schemas.ts`.
+    #[test]
+    fn action_type_from_hex_names_defcon_1() {
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(
+            &desktop_app::domain::action::Action::Defcon1,
+        )
+        .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "defcon_1");
+    }
+
+    /// A cancel is identified by its target, never by decoding its own payload.
+    #[test]
+    fn action_type_from_hex_prefers_the_cancel_target() {
+        assert_eq!(
+            action_type_from_hex(&Some("target".to_string()), "not-valid-hex"),
+            "cancel"
+        );
+    }
 }

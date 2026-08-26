@@ -27,6 +27,8 @@ pub enum DecodedAction {
         type_id: u8,
         condition_hex: String,
     },
+    #[serde(rename = "defcon_1")]
+    Defcon1,
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -49,14 +51,12 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             type_id: update.type_id,
             condition_hex: hex::encode(&update.condition),
         },
-        // Defcon 1 decodes fine one layer down; it stays `Unknown` at this boundary until Phase 5
-        // registers the kind in `decodedActionSchema`, which is a zod discriminated union — an
-        // unregistered kind would be a parse error rather than this graceful fallback.
-        // See docs/specs/security-council-defcon-phase-3.md §7.
-        Ok(Action::OperatorSetUpdate(_))
-        | Ok(Action::SequencerKeyUpdate(_))
-        | Ok(Action::Defcon1)
-        | Err(_) => DecodedAction::Unknown { raw_hex: hex },
+        Ok(Action::Defcon1) => DecodedAction::Defcon1,
+        // Still unregistered at this boundary, and unrelated to the council: both predate this
+        // slice and both render through the raw-hex fallback today.
+        Ok(Action::OperatorSetUpdate(_)) | Ok(Action::SequencerKeyUpdate(_)) | Err(_) => {
+            DecodedAction::Unknown { raw_hex: hex }
+        }
     }
 }
 
@@ -217,6 +217,17 @@ mod tests {
             }
             other => panic!("expected VkUpdate, got {other:?}"),
         }
+    }
+
+    /// The proposal DTO's `actionType` and this command are the two IPC boundaries Phase 3
+    /// parked on `Unknown`; both are closed schemas on the TypeScript side, so this asserts the
+    /// Rust half emits the value `decodedActionSchema` was taught to accept.
+    #[test]
+    fn decode_defcon_1_names_the_action() {
+        let hex = build_defcon_1_action_hex()
+            .expect("build should succeed")
+            .action_hex;
+        assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon1));
     }
 
     #[test]
