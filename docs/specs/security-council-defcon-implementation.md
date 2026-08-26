@@ -138,10 +138,24 @@ bullets below where they differ. Three things it settled that this plan had wron
   `update_id_in_queue_for_action` — and resolves the action from the stored `action_hex` through
   `decode_multisig_action_hex`.
 
-### Phase 2 — Cancel gate by depth
+### Phase 2 — Cancel gate by depth ✅
 
 Replace the authority allow-list in `create_cancel_proposal` with the action's confirmation depth:
 reject when the depth is zero, and say so in the rejection.
+
+**Detail spec:** [`security-council-defcon-phase-2.md`](./security-council-defcon-phase-2.md), which
+supersedes the bullets below where they differ. Three things it settled that this plan left open:
+
+- **"The action's" depth is the *target's*, never the cancel's.** Every `MultisigAction::Cancel`
+  resolves to `0` (Phase 1), so resolving the `action_hex` this function already receives — the
+  cancel's own — would compile, read plausibly, and reject every cancel in the system.
+- **The Sequencer Manager becomes cancellable.** This plan required only that the Alpen and Strata
+  administrators not change; depth-only gating also opens the Sequencer Manager, whose updates are
+  enqueued with a configurable depth. Knowingly accepted, and invisible to users because the desktop
+  hides the affordance behind its own authority allow-list — which V5 owns replacing.
+- **The rewritten test needed a fixture the plan did not anticipate.** `ACTION_HEX = "deadbeef"` is
+  not valid SSZ. Decoding the target was optional under the old gate and is mandatory under this one,
+  so the cancel tests move to the valid fixture the handler tests already use.
 
 - **Test to rewrite, not delete:** `test_create_cancel_proposal_rejects_unsupported_authority` in
   `orchestrator-be/src/application/proposals.rs` encodes the old gate. It becomes a depth-based

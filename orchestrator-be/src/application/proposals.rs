@@ -562,13 +562,15 @@ pub(crate) async fn create_cancel_proposal(
         )));
     }
 
-    if !matches!(
-        target.authority,
-        Authority::AlpenAdmin | Authority::StrataAdmin
-    ) {
+    // Cancelability is the target action's confirmation depth, never its authority: the Security
+    // Council signs both Defcon 1 (depth 0) and Defcon 3 (timelocked). A zero-depth action is never
+    // enqueued, so an on-chain cancel would fail with `UnknownAction`.
+    // See docs/specs/security-council-defcon-phase-2.md.
+    let target_depth = lock_period_for_action(asm_rpc_url, &target.action_hex).await?;
+    if target_depth == 0 {
         return Err(AppError::BadRequest(format!(
-            "cancel is only supported for AlpenAdmin and StrataAdmin (got: {:?})",
-            target.authority
+            "cancel is not possible: this action has a confirmation depth of {target_depth}, so it \
+             is never enqueued and an on-chain cancel would fail with UnknownAction"
         )));
     }
 
@@ -736,6 +738,9 @@ pub(crate) async fn report_broadcast_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::action_codec::{
+        test_fixture_action_hex, test_fixture_defcon_1_action_hex,
+    };
     use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
     use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 
@@ -1579,7 +1584,7 @@ mod tests {
     #[tokio::test]
     async fn reconcile_marks_target_canceled_when_cancel_enacted() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let cancel = create_cancel_proposal(
             &repo,
@@ -1636,7 +1641,7 @@ mod tests {
     #[tokio::test]
     async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let cancel = create_cancel_proposal(
             &repo,
@@ -1724,19 +1729,21 @@ mod tests {
     // create_cancel_proposal tests
     // ---------------------------------------------------------------------------
 
+    /// An approved target for the cancel tests. Its `action_hex` must decode: the cancel gate
+    /// resolves the target's confirmation depth from it.
     async fn save_approved_proposal(
         repo: &InMemoryProposalRepository,
         authority: Authority,
         seq_no: SeqNo,
-        action_hex: &str,
     ) -> Proposal {
+        let action_hex = test_fixture_action_hex();
         let sig = sig_a();
         let session = SessionContext {
             authority,
             signer_pubkey: &sig.signer_pubkey,
         };
         let created =
-            create_update_action(repo, session.clone(), seq_no, action_hex, &sig, 2, None)
+            create_update_action(repo, session.clone(), seq_no, &action_hex, &sig, 2, None)
                 .await
                 .unwrap();
         let session_b = SessionContext {
@@ -1759,7 +1766,7 @@ mod tests {
     async fn test_create_cancel_proposal_happy_path() {
         let repo = new_repo();
         // StrataAdmin has a mock threshold of 2; use it for cancel creation
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let cancel = create_cancel_proposal(
             &repo,
@@ -1783,7 +1790,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_cancel_proposal_idempotent() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let first = create_cancel_proposal(
             &repo,
@@ -1844,59 +1851,53 @@ mod tests {
         assert!(matches!(err, AppError::BadRequest(_)));
     }
 
+    /// AC 11: the gate is the action's confirmation depth, and the rejection names it. Defcon 1 is
+    /// the zero-depth case — never enqueued, so an on-chain cancel would fail with `UnknownAction`.
     #[tokio::test]
-    async fn test_create_cancel_proposal_rejects_unsupported_authority() {
-        // Insert approved proposals directly to avoid threshold_for_authority calls during setup.
-        let cases = [
-            (
-                Authority::SequencerManager,
-                ActionId("seq_target".to_string()),
-            ),
-            (
-                Authority::SecurityCouncil,
-                ActionId("sec_target".to_string()),
-            ),
-        ];
+    async fn test_create_cancel_proposal_rejects_zero_depth_action() {
+        // Inserted directly: the Security Council has no ASM role mapping until Phase 3, so
+        // `create_update_action` cannot build this target.
+        let repo = new_repo();
+        let target_action_id = ActionId("defcon_1_target".to_string());
+        let target = Proposal {
+            action_id: target_action_id.clone(),
+            seq_no: 1,
+            authority: Authority::SecurityCouncil,
+            status: ProposalStatus::Approved,
+            required_signatures: 2,
+            action_hex: test_fixture_defcon_1_action_hex(),
+            title: None,
+            signatures: vec![sig_a(), sig_b()],
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
+        };
+        repo.save_proposal(target).await.unwrap();
 
-        for (authority, target_action_id) in cases {
-            let repo = new_repo();
-            let target = Proposal {
-                action_id: target_action_id.clone(),
-                seq_no: 1,
-                authority,
-                status: ProposalStatus::Approved,
-                required_signatures: 2,
-                action_hex: ACTION_HEX.to_string(),
-                title: None,
-                signatures: vec![sig_a(), sig_b()],
-                broadcast_status: BroadcastStatus::Idle,
-                commit_txid: None,
-                reveal_txid: None,
-                broadcast_error: None,
-                target_action_id: None,
-                activation_height: None,
-                update_id_in_queue: None,
-                created_at: chrono::Utc::now(),
-            };
-            repo.save_proposal(target).await.unwrap();
+        let err = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            target_action_id,
+            99,
+            "cafebabe",
+            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap_err();
 
-            let err = create_cancel_proposal(
-                &repo,
-                "mock://asm-membership",
-                target_action_id,
-                99,
-                "cafebabe",
-                &sig_a().signer_pubkey,
-                "cancel_sig",
-            )
-            .await
-            .unwrap_err();
-
-            assert!(
-                matches!(err, AppError::BadRequest(_)),
-                "expected BadRequest for authority {authority:?}"
-            );
-        }
+        let AppError::BadRequest(message) = err else {
+            panic!("expected BadRequest");
+        };
+        assert!(
+            message.contains("depth") && message.contains('0'),
+            "the rejection must name the depth, not the authority: {message}"
+        );
     }
 
     /// P-032 (race): concurrent duplicate approve results in exactly one signature stored.
