@@ -199,6 +199,9 @@ had wrong:
 
 ### Phase 4 — Enactment detection
 
+**Detail spec:** [`security-council-defcon-phase-4.md`](./security-council-defcon-phase-4.md),
+which supersedes the bullets below where they differ.
+
 Add the Defcon 1 arm to the action dispatch in `orchestrator-be/src/infrastructure/asm_enactment.rs`.
 Enacted requires **both** post-conditions: `safe_harbour().is_activated()` is true, **and** no Defcon 1
 entry sits in the ASM admin queue. The activation flag alone cannot distinguish a Defcon 1 from a
