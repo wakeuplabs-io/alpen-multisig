@@ -295,10 +295,21 @@ is wiring, and a failing wire is a failing `npm run build` or a failing parse, n
 - **Phase 6** owns everything after the creator's signature.
 - **The `/proposals/create/defcon-1` route** (§4).
 - **A discriminated-union form model** (§9).
-- **Provisioning the local regtest stack.** Nothing to do: `scripts/asm-params.json:38-44` already
-  seeds `strata_security_council` with three keys at threshold 2, and its first key
-  (`02300dc4…f4df7`) is also the Strata Administrator's — so one connected signer can walk both
-  authorities and check AC 1 by switching roles rather than by swapping devices.
+- **Provisioning the local regtest stack.** Nearly nothing to do, and this section originally got
+  the file wrong: `scripts/asm-params.json` is **gitignored and generated** — the tracked source is
+  `staging/asm-params.template.json`, which `staging/Dockerfile.asm:31` bakes into the image and
+  `staging/entrypoint-asm.sh:39-46` expands on first boot. It already seeded
+  `strata_security_council` at threshold 2 with `02300dc4…` and `030e8575…`, whose demo mnemonics
+  are documented in `faucet-ui/index.html` — so the council was reachable with software wallets
+  before this phase, and no hardware is needed to walk §11.
+
+  One key was added alongside this phase: `029b8c2b…` (`…absent`). It is not needed to avoid
+  hardware; it is there because the in-process e2e fixture
+  (`e2e-tests/src/fixtures/signer_update_enacted.rs`) defines the council as `{…neglect, …absent}`
+  while the stack used a different trio, and because
+  `docs/external/local-dev-smoke-test-guide.md` names those two as "Signer 1" and "Signer 2". The
+  stack's council is now a superset of the fixture's, and the guide's pair can reach the council's
+  2-of-N quorum. A template change only takes effect on a fresh genesis — see §11.
 
 ## 11. Verification
 
@@ -328,15 +339,38 @@ grep -rn "Strata ASM Administration" desktop-app/src
 
 must return nothing.
 
-Manual, against the local stack, once all three commits are in:
+Manual, against the local stack. **A `--clean` is mandatory, not hygiene:** the `asm-data` volume
+and its `.initialized` flag freeze the params, so a council key added to the template reaches
+genesis only on a fresh chain (`docs/operations/asm-pin-bump-reset.md` §3).
 
-1. Connect a council key → the Security Council card reads *Available*; authenticate; land on
-   `/proposals`.
+```bash
+./scripts/local-stack.sh --clean
+cd desktop-app && npm run tauri dev   # a debug build, so mnemonic signing over IPC is enabled
+```
+
+Confirm the genesis actually carries the new key before trusting anything below — the runbook's
+check (`asm-pin-bump-reset.md:117-126`) with the x-only form of `029b8c2b…`:
+
+```bash
+curl -s localhost:8080 -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"strata_asm_getStatus","params":[]}' \
+  | python3 -c "import json,sys; s=bytes(json.load(sys.stdin)['result']['cur_state']['state']).hex(); \
+      print('absent in council' if '9b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e' in s else 'OLD GENESIS')"
+```
+
+Every step below runs on the demo mnemonic ending `…absent`, which after this phase is both a
+Security Council and a Strata Administrator signer — so step 5 is a change of role, not of device.
+`…neglect` works for steps 1–4 and 6 too, and `…jar` is the second council signer if you want to
+watch a quorum form.
+
+1. Connect → the Security Council card reads *Available*; authenticate; land on `/proposals`.
 2. `/proposals/create` offers Defcon 1 and nothing else, and the form is unmistakably destructive.
 3. Submit stays disabled until seq-no is set **and** the confirm field matches; `defcon1` keeps it
    disabled with the contract's message.
-4. The form shows the four lines with no `Action Details:` block, and they match the review step and
-   the device; the header badge reads *Security Council* and no other.
+4. The form shows the four lines with no `Action Details:` block, and the header badge reads
+   *Security Council* and no other. **The device half of AC 4 stays open on a software signer** —
+   it renders nothing on a screen to compare against, so what this step settles is that the form
+   and the review step agree. Comparing against a device needs a Ledger or the Trezor emulator.
 5. Reconnect as Strata Administrator → no Defcon 1 entry anywhere; `/proposals/create/defcon-1`
    redirects to `/`.
 6. The created proposal lists as *Defcon 1*, not *Unknown*, and the sign screen renders it as
