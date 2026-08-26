@@ -225,7 +225,7 @@ the smallest possible addition to all three layers:
    (`CreateProposalRequest.seq_no`), and folding it into the builder here would be a shape no other
    builder has.
 
-### `decode_action_hex` stays untouched — and the build plan is wrong about why
+### Two IPC boundaries stay on `Unknown` — and the build plan is wrong about why
 
 The build plan assigns `decode_action_hex` to Phase 5 ([§4 Phase 5](./security-council-defcon-implementation.md#phase-5--frontend-create-and-sign)),
 and it is right, but not for the reason it gives. Moving that arm earlier is not merely premature: it
@@ -235,9 +235,19 @@ fallback. Emitting `kind: "defcon_1"` from the command before Phase 5 registers 
 turns today's graceful "unknown action" rendering into a thrown parse error on any screen that
 touches a Defcon 1 proposal — and after §5 and §6 the backend does accept one.
 
-So the IPC boundary keeps answering `Unknown` for Defcon 1 until the TypeScript side is ready, and it
-moves in one step with the union that reads it. The round trip is still proven in this phase, one
-layer below, through `action_codec::encode_hex`/`decode_hex`.
+**There are two such boundaries, not one.** The compiler finds the second: `action_type_from_hex`
+(`desktop-app/src-tauri/src/commands/proposals.rs:167-182`) fills the `actionType` field every
+proposal DTO carries, and its zod counterpart (`ipc-schemas.ts:48-55`) is a closed `z.enum`. An
+unregistered value there is worse than at the first boundary: it fails the parse of the whole
+proposal list, taking every unrelated proposal down with it.
+
+So both boundaries keep answering `Unknown` for Defcon 1 until the TypeScript side is ready, and each
+moves in one step with the schema that reads it — Phase 5 now has two registrations to make, not one.
+The round trip is still proven in this phase, one layer below, through
+`action_codec::encode_hex`/`decode_hex`.
+
+Neither arm is a `_ =>` catch-all: both are explicit, so the next action variant is a compile error
+here rather than a silent `unknown` in the UI. That is how this phase found the second boundary.
 
 ## 8. Migration
 
@@ -260,7 +270,7 @@ restate a language guarantee or a fixture.
 | 1 | AC 17 — a non-council session cannot create a Defcon 1 proposal | `handlers/mod.rs` | A `strata_admin` session POSTs `test_fixture_defcon_1_action_hex()`; the response is a refusal, and the subsequent `GET /proposals` holds no proposal for that `(action, seq_no)`. The second half is the half AC 17 actually asks for. |
 | 2 | B — the gate reads the action, not the authority | `asm_role_membership.rs` | `require_authorized_for_action` accepts the Defcon 1 fixture for `SecurityCouncil` and rejects it for `StrataAdmin`, with a message naming the required role. One test, both directions: split in two they would be halves of one claim. |
 | 3 | AC 3 — a duplicate creation is refused and names the existing proposal | `application/proposals.rs` | Two `create_update_action` calls with the same `(action_hex, seq_no)` and *different* signers: the second is a `Conflict` whose message contains the first's `action_id`, and the stored proposal still holds exactly the first signature. The differing signer is what makes it a test of the rule rather than of equality. |
-| 4 | D — the Defcon 1 action round-trips | `src-tauri/src/infrastructure/action_codec.rs` | `Action::Defcon1` → hex → `Action::Defcon1`, and the hex equals the orchestrator's fixture bytes. Both halves matter: the round trip alone would pass on a codec that agreed with itself and with nobody else. |
+| 4 | D — the Defcon 1 action round-trips, as Defcon 1 | `src-tauri/src/infrastructure/action_codec.rs` | `Action::Defcon1` → hex → `Action::Defcon1`, **and** the encoded bytes decode through upstream to `UpdateTxType::Defcon1`. Both halves matter: the round trip alone would pass on a codec that mapped both of its arms to Defcon *3*. |
 
 Test 3 **rewrites** `test_create_duplicate_action_rejected` (`application/proposals.rs:933-948`),
 which asserted only that *a* `Conflict` came back. It keeps that assertion, gains the `ActionId` in

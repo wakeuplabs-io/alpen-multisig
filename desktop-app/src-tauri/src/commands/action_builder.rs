@@ -49,9 +49,14 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             type_id: update.type_id,
             condition_hex: hex::encode(&update.condition),
         },
-        Ok(Action::OperatorSetUpdate(_)) | Ok(Action::SequencerKeyUpdate(_)) | Err(_) => {
-            DecodedAction::Unknown { raw_hex: hex }
-        }
+        // Defcon 1 decodes fine one layer down; it stays `Unknown` at this boundary until Phase 5
+        // registers the kind in `decodedActionSchema`, which is a zod discriminated union — an
+        // unregistered kind would be a parse error rather than this graceful fallback.
+        // See docs/specs/security-council-defcon-phase-3.md §7.
+        Ok(Action::OperatorSetUpdate(_))
+        | Ok(Action::SequencerKeyUpdate(_))
+        | Ok(Action::Defcon1)
+        | Err(_) => DecodedAction::Unknown { raw_hex: hex },
     }
 }
 
@@ -152,6 +157,17 @@ pub fn build_sequencer_key_update_hex(
     let action = Action::SequencerKeyUpdate(SequencerKeyUpdate { new_pub_key });
     let action_hex =
         action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
+/// Build the payload-less Defcon 1 action.
+///
+/// No input: the action carries nothing, and the sequence number is a field of the proposal
+/// creation request, as it is for every other action type.
+#[tauri::command]
+pub fn build_defcon_1_action_hex() -> Result<BuildActionHexResponse, String> {
+    let action_hex = action_codec::encode_hex(&Action::Defcon1)
+        .map_err(|e| format!("failed to encode action: {e}"))?;
     Ok(BuildActionHexResponse { action_hex })
 }
 

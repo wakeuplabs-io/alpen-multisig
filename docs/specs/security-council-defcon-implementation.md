@@ -174,9 +174,11 @@ had wrong:
   `authorized_role()` with the session's authority, so it closes the same hole for all five
   authorities — a Strata admin session posting an Alpen admin action is refused too, which today it
   is not.
-- **`decode_action_hex` stays on `Unknown` until Phase 5, and moving it earlier would be a
-  regression**, not just premature: the TypeScript side is a zod discriminated union, so an
-  unregistered `kind` is a parse error rather than an unknown-action fallback.
+- **Two IPC boundaries stay on `Unknown` until Phase 5, and moving either earlier would be a
+  regression**, not just premature: both TypeScript counterparts are closed schemas, so an
+  unregistered value is a parse error rather than an unknown-action fallback. Besides
+  `decode_action_hex` there is `actionType` on the proposal DTO, where the failure takes down the
+  parse of the whole proposal list. Phase 5 registers both.
 - **The duplicate rule follows the PRD, not AC 3's old wording.** PRD 02 §3.4.1 requires a
   duplicate creation to be *rejected*; the contract said "returns the existing proposal", against
   its own title and the story map. AC 3 was corrected. The `409` stays and gains the existing

@@ -178,7 +178,10 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
         Ok(desktop_app::domain::action::Action::SequencerKeyUpdate(_)) => {
             "sequencer_key_update".to_string()
         }
-        Err(_) => "unknown".to_string(),
+        // Defcon 1 decodes, but `actionType` is a closed zod enum on the other side of the IPC
+        // boundary, so naming it before Phase 5 registers it would fail the parse of every
+        // proposal in the same list. See docs/specs/security-council-defcon-phase-3.md §7.
+        Ok(desktop_app::domain::action::Action::Defcon1) | Err(_) => "unknown".to_string(),
     }
 }
 
