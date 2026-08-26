@@ -31,7 +31,7 @@ Enactment detection stays in Phase 4: a Defcon 1 proposal created after this pha
 |---|---|---|---|
 | A | `Authority::SecurityCouncil` → `Role::StrataSecurityCouncil` | `orchestrator-be/src/infrastructure/asm_role_membership.rs` | prerequisite for all of V1 |
 | B | The action's authorizing role must match the session's authority | `orchestrator-be` handler + `asm_role_membership.rs` | AC 17 |
-| C | Duplicate `(action, seq_no)` returns the existing proposal | `orchestrator-be/src/application/proposals.rs` | AC 3 |
+| C | A duplicate `(action, seq_no)` is refused *by name* | `orchestrator-be/src/application/proposals.rs` | AC 3 |
 | D | Defcon 1 action builder | `desktop-app/src-tauri` | AC 2 (backend half) |
 
 A, B and C are backend and land together (§8, cycle 1). D is the desktop side and lands separately
@@ -128,7 +128,11 @@ explicit, with that reason, rather than a `_ =>` catch-all.
 **The error is a `BadRequest` naming both roles**, e.g.
 
 > action `Defcon 1` must be authorized by `Strata Security Council`, but the session is
-> `StrataAdmin`
+> `Strata Administrator`
+
+Both sides are named in upstream's vocabulary — `UpdateTxType::name()` and `Role::name()`, the same
+strings the hardware signer renders — so the message reads in the terms the signer just saw, not in
+ours.
 
 Not `Unauthorized`: that variant renders as the bare string `unauthorized`
 (`error.rs:44`), which would tell a signer nothing about which of the two halves is wrong. There is
@@ -145,49 +149,60 @@ gate. The handler suite's `create_body` uses `test_fixture_action_hex()`, a Stra
 consistent; the expectation is that nothing needs to move, and any surprise found while implementing
 is a real finding to report, not to paper over.
 
-## 6. C — creation is idempotent on `(action, seq_no)` (AC 3)
+## 6. C — a duplicate creation is refused by name (AC 3)
 
 `create_update_action` (`application/proposals.rs:42-84`) computes a stable `ActionId` from
 `(seq_no, action_hex)` and hands the proposal to `repo.save_proposal`, which rejects a duplicate id
 with `AppError::Conflict` in both repositories (`memory_repo.rs:33-35`,
-`postgres_repo.rs:160-165`). AC 3 wants the opposite: the second creator gets the existing proposal
-back and the stored state is untouched.
+`postgres_repo.rs:160-165`). The refusal is correct; what it cannot do is tell the second creator
+*which* proposal already holds that id.
 
-The change is a lookup before the insert:
+### The contract said the opposite, and the PRD wins
+
+AC 3 read "the second signer's POST returns the existing proposal (idempotent)" until this phase.
+That contradicts three things at once:
+
+| Source | Says |
+|---|---|
+| [PRD 02](../0-prd/02-multisig-backend.md) §3.4.1 | "The backend MUST **reject** duplicate creation" |
+| AC 3's own title | "ActionId is stable and **duplicate rejection** works" |
+| [`story-map.md`](../3-stories/story-map.md), quoted by this contract's Requirements Alignment | "duplicate rejection" |
+
+The PRD is the client's SSOT and is not ours to modify; the contract is ours, so the contract is
+what moves. AC 3 is corrected in the same commit as this spec, with the citation inline. Both
+readings already agreed on PRD 02 §3.4.2 — the existing proposal must not be mutated.
+
+### The change
 
 ```rust
-if let Some(existing) = repo.find_by_action_id(&action_id).await? {
-    return Ok(existing);
+if repo.find_by_action_id(&action_id).await?.is_some() {
+    return Err(AppError::Conflict(/* a message naming `action_id` */));
 }
 ```
 
-**Why a pre-check and not "insert, then recover from `Conflict`":** the recovery shape would also
-swallow a `Conflict` raised for a different reason and, on Postgres, would depend on the insert being
-free of side effects on the way to its unique violation. The pre-check races with a concurrent insert
-— two simultaneous creators can both see `None` and one still gets a `Conflict` — and that is the
-correct outcome: the loser is told the state did not change, which is exactly what AC 3 protects. The
-race narrows the window; it does not need to close it.
+The lookup is what lets the message name the id; `save_proposal`'s own `Conflict` stays as the
+backstop for the race where two creators both see `None`, and reports the same outcome in weaker
+words. Mapping that error instead of pre-checking would have been one code path fewer and wrong:
+`save_proposal` raises `Conflict` for a second reason — a duplicate signer inside the same insert
+(`postgres_repo.rs:187`) — and relabelling that as a duplicate proposal would misreport it.
 
-### Two things this deliberately does not do
+### The second signer's signature is dropped, deliberately
 
-**It does not record the second signer's signature.** AC 3 says "backend state is not mutated by the
-duplicate attempt", so the signature that came with the duplicate POST is dropped, and that signer is
-still unsigned on a proposal the response hands them. They sign it through `approve_action` like any
-other signer. This is a real cost — they signed on their device and the signature was discarded — and
-it is the right trade: a creation call is not an approval, and quietly turning one into the other is
-how a signature ends up on a proposal nobody deliberately approved. Phase 6 owns making the UI take
-the signer to the proposal instead of showing them a conflict.
+They signed on their device and the backend keeps nothing. That is the point of PRD 02 §3.4.2, and
+it is the safe half of the trade: a creation call is not an approval, and quietly turning one into
+the other is how a signature ends up on a proposal nobody deliberately approved. Naming the
+`ActionId` in the refusal is what keeps this from being a dead end — the signer approves that
+proposal instead, through the path that exists for approving. Phase 6 owns making the UI follow the
+name instead of showing a raw conflict.
 
-**It does not check that the existing proposal matches the caller's expectations.** It cannot differ
-in a way that matters: the `ActionId` is a hash of `(seq_no, action_hex)`, so an id collision means
-the same action at the same sequence number, and after B the same action implies the same authority.
-B is what makes C's blind return safe — without it, a duplicate could return a proposal filed under a
-different authority.
+### What this does not check
 
-**The status code stays `201 Created`** for both branches, as the contract's Backend Contract
-specifies ("creates or returns existing (idempotent)"). Splitting `200`/`201` would be more honest
-about which branch ran, and no consumer reads it: the desktop's client parses the body and only
-checks that the status is a success (`orchestrator_client.rs:106-116`).
+That the existing proposal belongs to the caller's authority. It cannot differ in a way that
+matters: the `ActionId` is a hash of `(seq_no, action_hex)`, and after B the same action implies the
+same authority — with one exception, `MultisigAction::Cancel`, which B passes unconditionally
+(§5) and which therefore *can* collide across authorities. The refusal leaks only that an id
+exists, never the proposal, so the exception costs an id and no state. Closing it belongs to
+whoever gives cancels their own gate on this endpoint; this phase records it rather than widening.
 
 ## 7. D — the Defcon 1 action builder
 
@@ -244,12 +259,13 @@ restate a language guarantee or a fixture.
 |---|---|---|---|
 | 1 | AC 17 — a non-council session cannot create a Defcon 1 proposal | `handlers/mod.rs` | A `strata_admin` session POSTs `test_fixture_defcon_1_action_hex()`; the response is a refusal, and the subsequent `GET /proposals` holds no proposal for that `(action, seq_no)`. The second half is the half AC 17 actually asks for. |
 | 2 | B — the gate reads the action, not the authority | `asm_role_membership.rs` | `require_authorized_for_action` accepts the Defcon 1 fixture for `SecurityCouncil` and rejects it for `StrataAdmin`, with a message naming the required role. One test, both directions: split in two they would be halves of one claim. |
-| 3 | AC 3 — a duplicate creation returns the existing proposal | `application/proposals.rs` | Two `create_update_action` calls with the same `(action_hex, seq_no)` and *different* signers: the second returns the first's `action_id` and its signature list still holds exactly the first signer. The differing signer is what makes it a test of idempotency rather than of equality. |
+| 3 | AC 3 — a duplicate creation is refused and names the existing proposal | `application/proposals.rs` | Two `create_update_action` calls with the same `(action_hex, seq_no)` and *different* signers: the second is a `Conflict` whose message contains the first's `action_id`, and the stored proposal still holds exactly the first signature. The differing signer is what makes it a test of the rule rather than of equality. |
 | 4 | D — the Defcon 1 action round-trips | `src-tauri/src/infrastructure/action_codec.rs` | `Action::Defcon1` → hex → `Action::Defcon1`, and the hex equals the orchestrator's fixture bytes. Both halves matter: the round trip alone would pass on a codec that agreed with itself and with nobody else. |
 
-Test 3 **replaces** `test_create_duplicate_action_rejected` (`application/proposals.rs:933-948`),
-which pins the `Conflict` C retires; it is rewritten, not deleted, and gains `sig_b()` — already in
-the fixtures at `:785-791` — as its second creator.
+Test 3 **rewrites** `test_create_duplicate_action_rejected` (`application/proposals.rs:933-948`),
+which asserted only that *a* `Conflict` came back. It keeps that assertion, gains the `ActionId` in
+the message, gains `sig_b()` — already in the fixtures at `:785-791` — as a second creator, and
+gains the read-back that proves the stored signatures did not change.
 
 Test 1 needs a council **session** only if it tests the positive path; it does not — AC 17 is the
 refusal, and the positive path is already covered by test 2 at the level where the decision is made.
@@ -266,9 +282,9 @@ fail if it is wrong, and a test that restated it would only pin the line to itse
 
 - **Every authority's proposal creation** now refuses a mismatched action (§5). Intended, and the
   reason this is one of the two phases that touch a shared path.
-- **Duplicate creation stops being a `409`** for every proposal type, not just Defcon 1 (§6). The
-  desktop currently surfaces the conflict as an error; after this it receives the existing proposal
-  and reports a success. No client code changes in this phase.
+- **Duplicate creation stays a `409`** and only its message changes (§6), so no client changes and
+  no behaviour change for any existing proposal type. The correction landed in the contract, not in
+  the code.
 - **The council becomes an authenticatable authority.** `POST /auth/challenge` with
   `authority: "security_council"` now succeeds for a member. There is still nothing a council session
   can reach in the UI.
@@ -281,8 +297,8 @@ create form, the type-to-confirm gate and the `decodedActionSchema` union (Phase
 `create_defcon_proposal` function the functional contract sketches under Backend Contract → Proposal
 Creation is **not** written: creation on this backend is generic over `action_hex`
 (`create_update_action`), a Defcon-specific constructor would fork a shared path to add nothing, and
-the contract's own logic for it — stable `ActionId`, idempotent on `(action, seq_no)` — is exactly
-what C gives the generic path.
+the contract's own logic for it — a stable `ActionId` and a duplicate that changes nothing — is
+what the generic path already does, plus C's naming of the id.
 
 ## 12. Verification
 
