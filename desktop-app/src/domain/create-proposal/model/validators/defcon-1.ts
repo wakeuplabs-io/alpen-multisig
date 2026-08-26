@@ -16,6 +16,15 @@ export function matchesDefconConfirmation(input: string): boolean {
 }
 
 export const validateDefcon1: ActionValidator = ({ data, ctx }) => {
+	// Signing something the form could not render is the one failure this action cannot afford,
+	// so the resolved message gates submission exactly like the typed confirmation does.
+	if (data.defconMessage.trim().length === 0) {
+		ctx.addIssue({
+			code: 'custom',
+			path: ['defconMessage'],
+			message: 'The signing message has not resolved yet.',
+		})
+	}
 	if (!matchesDefconConfirmation(data.defconConfirm)) {
 		ctx.addIssue({ code: 'custom', path: ['defconConfirm'], message: DEFCON_1_CONFIRMATION_ERROR })
 	}

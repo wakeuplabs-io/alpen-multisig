@@ -62,6 +62,7 @@ const defaultFormValues: CreateProposalFormValues = {
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
 	defconConfirm: '',
+	defconMessage: '',
 }
 
 export function CreateProposalForm({
@@ -316,7 +317,7 @@ export function CreateProposalForm({
 						<div className="flex flex-col gap-6">
 							<div>
 								<p className="mb-3 text-body font-medium text-[#111827]">Action type</p>
-								<div className="grid grid-cols-2 gap-3">
+								<div className={`grid gap-3 ${actionTypeOptions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
 									{actionTypeOptions.map((option) => (
 										<ActionTypeCard
 											key={option.actionType}

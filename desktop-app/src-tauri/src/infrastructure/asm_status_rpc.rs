@@ -55,6 +55,9 @@ pub async fn fetch_role_membership(
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)?;
 
+    // A role the chain does not carry is "not a member", never "membership unknowable": one
+    // missing authority must not fail the read for the others, because the caller turns any
+    // error into "not a signer" for *every* card and locks the whole connect flow.
     let mut role_to_keys = HashMap::new();
     for role in [
         AuthRole::StrataAdministrator,
@@ -62,7 +65,9 @@ pub async fn fetch_role_membership(
         AuthRole::AlpenAdministrator,
         AuthRole::StrataSecurityCouncil,
     ] {
-        role_to_keys.insert(role, authority_keys_hex(&admin, role)?);
+        if let Ok(keys) = authority_keys_hex(&admin, role) {
+            role_to_keys.insert(role, keys);
+        }
     }
 
     Ok((role_to_keys, now_unix_ms()))

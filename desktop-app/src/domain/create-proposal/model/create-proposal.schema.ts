@@ -28,6 +28,9 @@ const createProposalFormObjectSchema = z.object({
 	operatorIndicesToRemove: z.array(keyRowSchema),
 	newSequencerKeyHex: z.string(),
 	defconConfirm: z.string(),
+	/** The canonical signing message, resolved from Rust and mirrored here so that
+	 * "the signer can see what they are signing" gates submission like any other field. */
+	defconMessage: z.string(),
 })
 
 export type CreateProposalFormValues = z.infer<typeof createProposalFormObjectSchema>
