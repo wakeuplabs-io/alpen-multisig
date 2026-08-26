@@ -163,6 +163,23 @@ supersedes the bullets below where they differ. Three things it settled that thi
 
 ### Phase 3 — Backend Defcon 1: role, codec, creation
 
+**Detail spec:** [`security-council-defcon-phase-3.md`](./security-council-defcon-phase-3.md), which
+supersedes the bullets below where they differ. Four things it settled that this plan left open or
+had wrong:
+
+- **The builder takes no sequence number.** `seq_no` is a field of the creation request everywhere
+  else in this codebase, not part of the action; folding it into the builder would give Defcon 1 a
+  shape no other builder has.
+- **The authorization gate is not council-shaped.** It compares the action's upstream
+  `authorized_role()` with the session's authority, so it closes the same hole for all five
+  authorities — a Strata admin session posting an Alpen admin action is refused too, which today it
+  is not.
+- **`decode_action_hex` stays on `Unknown` until Phase 5, and moving it earlier would be a
+  regression**, not just premature: the TypeScript side is a zod discriminated union, so an
+  unregistered `kind` is a parse error rather than an unknown-action fallback.
+- **Idempotency is a change to the generic creation path**, not a Defcon-only branch, and it retires
+  a `409` for every proposal type. No `create_defcon_proposal` is written.
+
 - Map `Authority::SecurityCouncil` to `Role::StrataSecurityCouncil` in `authority_to_role_impl`, which
   currently falls through to an error for it.
 - Add the Defcon 1 action to the codec and to the Tauri action builder. `Defcon1Update` is a
