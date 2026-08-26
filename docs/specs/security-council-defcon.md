@@ -150,7 +150,7 @@ pub async fn create_defcon_proposal(
 Logic:
 1. Construct `action_hex` from `MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))` and the provided `seq_no`.
 2. Compute `ActionId = hash(action_hex, seq_no)` (stable across resubmissions).
-3. Check for existing proposal with same `(action_hex, seq_no)`. If found, return it (idempotent — no state mutation).
+3. Check for existing proposal with same `(action_hex, seq_no)`. If found, reject naming its `ActionId`, mutating nothing (PRD 02 §3.4).
 4. Persist new `Proposal` with `authority = SecurityCouncil`, `status = Pending`, and the creator's signature.
 
 ### Enactment Detection
@@ -178,7 +178,7 @@ Extend existing endpoint to accept `type: "defcon_1"` as a proposal kind:
 }
 ```
 
-Returns `201 Created` with the proposal JSON; creates or returns existing (idempotent).
+Returns `201 Created` with the proposal JSON. A duplicate `(action, seq_no)` is rejected with `409 Conflict` naming the existing `ActionId` (PRD 02 §3.4).
 
 **Existing: `GET /proposals`, `GET /proposals/:action_id`**
 
@@ -333,7 +333,16 @@ A session authenticated for Alpen Admin, Strata Admin, Sequencer Manager, or Pay
 ### 3. ActionId is stable and duplicate rejection works
 **Given** two signers independently create proposals with identical `(action: Defcon1, seq_no: 1)`  
 **When** the first signer's proposal is persisted  
-**Then** the second signer's POST returns the existing proposal (idempotent); backend state is not mutated by the duplicate attempt.
+**Then** the second signer's POST is **rejected** and names the existing `ActionId`, so the signer can
+approve that proposal instead; backend state is not mutated by the duplicate attempt — including the
+signature the duplicate arrived with.
+
+> Corrected in Phase 3. This criterion previously read "returns the existing proposal (idempotent)",
+> which contradicts [PRD 02](../0-prd/02-multisig-backend.md) §3.4.1 — "the backend MUST reject
+> duplicate creation" — its own title, and the story map's "duplicate rejection" signal. The PRD is
+> the client's SSOT and wins. Both readings agree on §3.4.2, that the existing proposal must not be
+> mutated; naming the `ActionId` in the rejection is what preserves the intent the old wording was
+> reaching for.
 
 ### 4. Signing message rendered verbatim
 **Given** a Defcon 1 proposal on the create form  
@@ -436,7 +445,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | Scenario | Behavior |
 |---|---|
 | User navigates to `/proposals/create/defcon-1` with a non-council session | Redirect to `/` (wallet-connect screen). No Defcon 1 form rendered. |
-| Two signers submit concurrent Defcon 1 proposals with same `seq_no` | Second POST returns existing proposal; backend state unchanged (idempotency). |
+| Two signers submit concurrent Defcon 1 proposals with same `seq_no` | Second POST is rejected naming the existing `ActionId`; backend state unchanged. The second signer approves that proposal. |
 | User clicks Sign but the hardware wallet refuses the signature | Error shown; form remains; user can retry or change seq_no and try again. |
 | User closes browser before broadcast completes | Proposal remains in "Quorum reached" state on the backend; user can reconnect and retry broadcast anytime. |
 | seq_no is not a valid integer (e.g., `"1.5"` or `"abc"`) | Validation error shown; Sign button disabled. |
@@ -466,7 +475,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 
 Run `cargo test -p orchestrator-be` (see AGENTS.md for CI checklist).
 
-- **Proposal creation idempotency:** Two calls with same `(action, seq_no)` return the existing proposal; backend state unchanged.
+- **Duplicate creation is rejected:** a second call with the same `(action, seq_no)` is refused, the refusal names the existing `ActionId`, and the stored proposal — signatures included — is unchanged.
 - **Defcon 1 stability:** Action type round-trips through codec; signing message matches upstream test vector.
 - **Per-action resolution (AC 12):** on a single Security Council authority, a Defcon 1 proposal resolves to `0` while a Defcon 3
   proposal resolves to the deployment's configured `confirmation_depths.defcon3` — two proposals sharing an authority resolve to
@@ -513,7 +522,7 @@ Desktop app tests use granular scripts (see `desktop-app/package.json` for avail
 - [ ] Security Council badge is visible on all screens in the Defcon 1 flow.
 - [ ] Non-council sessions cannot reach `/proposals/create/defcon-1`.
 - [ ] ActionId computation is stable across resubmissions (hash of action + seqno).
-- [ ] Duplicate `(action, seqno)` submissions return existing proposal (idempotent).
+- [ ] Duplicate `(action, seqno)` submissions are rejected and name the existing `ActionId`, mutating nothing.
 
 **Post-merge validation:**
 

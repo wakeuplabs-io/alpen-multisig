@@ -81,7 +81,9 @@ pub async fn create_proposal(
         signature_hex: body.signature_hex,
     };
 
-    action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
+    let action =
+        action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
+    asm_role_membership::require_authorized_for_action(auth.authority, &action)?;
 
     let required_signatures =
         asm_role_membership::threshold_for_authority(&state.asm_rpc_url, auth.authority).await?;

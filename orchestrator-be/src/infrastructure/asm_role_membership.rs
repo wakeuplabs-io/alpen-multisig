@@ -183,6 +183,36 @@ pub(crate) async fn update_id_in_queue_for_action(
     Ok(found)
 }
 
+/// Refuse an action the session's authority is not allowed to sign (AC 17).
+///
+/// The role that may sign an update is upstream's table (`UpdateTxType::authorized_role`), not a
+/// copy of ours, so a new update variant is gated correctly here the moment it exists. Reads no
+/// chain state — hence sync, unlike its neighbours in this module.
+///
+/// See docs/specs/security-council-defcon-phase-3.md §5.
+pub(crate) fn require_authorized_for_action(
+    authority: Authority,
+    action: &MultisigAction,
+) -> Result<(), AppError> {
+    // A cancel carries no `UpdateTxType` and so no authorized role. Cancels are created through
+    // their own endpoint, gated on the target's confirmation depth (Phase 2).
+    let MultisigAction::Update(update) = action else {
+        return Ok(());
+    };
+
+    let tx_type = update.update_tx_type();
+    let required = tx_type.authorized_role();
+    let session_role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+
+    if session_role != required {
+        return Err(AppError::BadRequest(format!(
+            "action `{}` must be authorized by `{required}`, but the session is `{session_role}`",
+            tx_type.name()
+        )));
+    }
+    Ok(())
+}
+
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
     authority_to_role_impl(authority)
 }
@@ -192,6 +222,7 @@ fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
         _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
@@ -215,6 +246,10 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     role_to_keys.insert(
         Role::AlpenAdministrator,
         authority_keys_hex(&admin, Role::AlpenAdministrator)?,
+    );
+    role_to_keys.insert(
+        Role::StrataSecurityCouncil,
+        authority_keys_hex(&admin, Role::StrataSecurityCouncil)?,
     );
 
     Ok(role_to_keys)
@@ -366,6 +401,14 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
         Authority::AlpenAdmin => signer_pubkey.eq_ignore_ascii_case(
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         ),
+        // Same signer pair as the Strata admin: the local stack authenticates the two
+        // roles with one wallet, and a council-only key would only add a second mnemonic
+        // to every manual test of the Defcon flow.
+        Authority::SecurityCouncil => {
+            signer_pubkey.eq_ignore_ascii_case(
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            ) || mock_strata_signer_b_pk_matches(signer_pubkey)
+        }
         Authority::SequencerManager => false,
         _ => return None,
     };
@@ -386,6 +429,7 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
         Authority::StrataAdmin => Some(0),
         Authority::SequencerManager => Some(0),
         Authority::AlpenAdmin => Some(0),
+        Authority::SecurityCouncil => Some(0),
         _ => None,
     }
 }
@@ -405,6 +449,7 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
         Authority::AlpenAdmin => Some(2),
+        Authority::SecurityCouncil => Some(2),
         _ => None,
     }
 }
@@ -484,6 +529,21 @@ mod tests {
         )))
     }
 
+    /// The gate reads the action, not the authority: one Defcon 1 action, opposite answers for two
+    /// sessions. Both directions in one test — apart they are halves of a single claim.
+    #[test]
+    fn defcon_1_is_authorized_for_the_council_and_refused_for_everyone_else() {
+        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
+
+        require_authorized_for_action(Authority::SecurityCouncil, &defcon1).expect("council signs");
+
+        let err = require_authorized_for_action(Authority::StrataAdmin, &defcon1)
+            .expect_err("the Strata administrator does not");
+        let message = err.to_string();
+        assert!(message.contains("Defcon 1"), "{message}");
+        assert!(message.contains("Strata Security Council"), "{message}");
+    }
+
     /// AC 12: two actions on the Strata Security Council resolve to different depths — the
     /// distinguishing case a per-authority mapping cannot produce.
     #[test]
@@ -549,7 +609,7 @@ mod tests {
         );
         assert_eq!(
             authority_asm_support(SecurityCouncil),
-            AuthorityAsmSupport::Unsupported
+            AuthorityAsmSupport::Supported
         );
         assert_eq!(
             authority_asm_support(PayoutAdmin),

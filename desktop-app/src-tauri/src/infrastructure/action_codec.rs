@@ -8,7 +8,7 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
-    AlpenAdminMultisigUpdate, EeStfVkUpdate, OlStfVkUpdate,
+    AlpenAdminMultisigUpdate, Defcon1Update, EeStfVkUpdate, OlStfVkUpdate,
     OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
     StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
@@ -150,6 +150,7 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
         Action::SequencerKeyUpdate(update) => Ok(MultisigAction::Update(UpdateAction::Sequencer(
             StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
         ))),
+        Action::Defcon1 => Ok(MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))),
     }
 }
 
@@ -242,9 +243,7 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(_)) => Err(
             CodecError::UnsupportedVariant("StrataSecurityCouncilMultisig"),
         ),
-        MultisigAction::Update(UpdateAction::Defcon1(_)) => {
-            Err(CodecError::UnsupportedVariant("Defcon1"))
-        }
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
         MultisigAction::Update(UpdateAction::Defcon3(_)) => {
             Err(CodecError::UnsupportedVariant("Defcon3"))
         }
@@ -312,6 +311,24 @@ mod tests {
             remove_keys: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         })
+    }
+
+    /// The round trip alone would pass on a codec that agreed with itself and with nobody else —
+    /// mapping both arms to Defcon *3* round-trips just as happily. The tx type is what pins the
+    /// bytes to the action the Security Council means to sign.
+    #[test]
+    fn defcon_1_round_trips_and_encodes_upstreams_defcon_1_tx_type() {
+        use strata_asm_params::UpdateTxType;
+
+        let encoded = encode(&Action::Defcon1).expect("encode ok");
+
+        assert_eq!(decode(&encoded).expect("decode ok"), Action::Defcon1);
+
+        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
+        let MultisigAction::Update(update) = upstream else {
+            panic!("Defcon 1 is an update, not a cancel");
+        };
+        assert_eq!(update.update_tx_type(), UpdateTxType::Defcon1);
     }
 
     #[test]

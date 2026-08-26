@@ -163,12 +163,33 @@ supersedes the bullets below where they differ. Three things it settled that thi
 
 ### Phase 3 — Backend Defcon 1: role, codec, creation
 
+**Detail spec:** [`security-council-defcon-phase-3.md`](./security-council-defcon-phase-3.md), which
+supersedes the bullets below where they differ. Four things it settled that this plan left open or
+had wrong:
+
+- **The builder takes no sequence number.** `seq_no` is a field of the creation request everywhere
+  else in this codebase, not part of the action; folding it into the builder would give Defcon 1 a
+  shape no other builder has.
+- **The authorization gate is not council-shaped.** It compares the action's upstream
+  `authorized_role()` with the session's authority, so it closes the same hole for all five
+  authorities — a Strata admin session posting an Alpen admin action is refused too, which today it
+  is not.
+- **Two IPC boundaries stay on `Unknown` until Phase 5, and moving either earlier would be a
+  regression**, not just premature: both TypeScript counterparts are closed schemas, so an
+  unregistered value is a parse error rather than an unknown-action fallback. Besides
+  `decode_action_hex` there is `actionType` on the proposal DTO, where the failure takes down the
+  parse of the whole proposal list. Phase 5 registers both.
+- **The duplicate rule follows the PRD, not AC 3's old wording.** PRD 02 §3.4.1 requires a
+  duplicate creation to be *rejected*; the contract said "returns the existing proposal", against
+  its own title and the story map. AC 3 was corrected. The `409` stays and gains the existing
+  `ActionId` in its message. No `create_defcon_proposal` is written.
+
 - Map `Authority::SecurityCouncil` to `Role::StrataSecurityCouncil` in `authority_to_role_impl`, which
   currently falls through to an error for it.
 - Add the Defcon 1 action to the codec and to the Tauri action builder. `Defcon1Update` is a
   payload-less unit struct, so the builder takes only the sequence number.
-- Proposal creation with a stable `ActionId`, idempotent on `(action, seq_no)` — a duplicate returns
-  the existing proposal and mutates nothing. `seq_no` is a non-negative integer and **may repeat**
+- Proposal creation with a stable `ActionId` — a duplicate `(action, seq_no)` is rejected naming the
+  existing `ActionId` and mutates nothing. `seq_no` is a non-negative integer and **may repeat**
   across distinct proposals.
 - **The backend authorization gate**, which the contract requires under Backend Contract → Authorization
   Gate: a non-council session is refused at the `POST /proposals` handler before any proposal object

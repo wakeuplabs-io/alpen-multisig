@@ -146,6 +146,9 @@ pub enum Action {
     VkUpdate(VkUpdate),
     OperatorSetUpdate(OperatorSetUpdate),
     SequencerKeyUpdate(SequencerKeyUpdate),
+    /// Activate the bridge safe harbour immediately. Authorized by the Strata Security Council and
+    /// payload-less upstream — the sequence number travels with the proposal, not the action.
+    Defcon1,
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -189,7 +192,10 @@ mod tests {
         let action = Action::MultisigUpdate(update.clone());
         match action {
             Action::MultisigUpdate(u) => assert_eq!(u, update),
-            Action::VkUpdate(_) | Action::OperatorSetUpdate(_) | Action::SequencerKeyUpdate(_) => {
+            Action::VkUpdate(_)
+            | Action::OperatorSetUpdate(_)
+            | Action::SequencerKeyUpdate(_)
+            | Action::Defcon1 => {
                 panic!("unexpected variant")
             }
         }

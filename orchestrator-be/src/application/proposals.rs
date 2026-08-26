@@ -57,6 +57,18 @@ pub(crate) async fn create_update_action(
 
     let action_id = compute_action_id(seq_no, action_hex)?;
 
+    // PRD 02 §3.4: a duplicate `(action, seq_no)` MUST be rejected and MUST NOT mutate the
+    // existing proposal. The rejection names the proposal that already holds this `ActionId`, so
+    // the second creator can reach the one they meant to sign — and signs it through
+    // `approve_action`, because a creation call is not an approval.
+    if repo.find_by_action_id(&action_id).await?.is_some() {
+        return Err(AppError::Conflict(format!(
+            "a proposal for this action and seq_no already exists: `{}` — approve it instead of \
+             creating it again",
+            action_id.0
+        )));
+    }
+
     let mut first_sig = sig.clone();
     first_sig.signer_pubkey = normalize_signer_pubkey_hex(&sig.signer_pubkey);
 
@@ -932,21 +944,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_duplicate_action_rejected() {
+    /// PRD 02 §3.4: the duplicate is rejected and the existing proposal is left alone — including
+    /// the signature the second creator arrived with. The rejection names the `ActionId` they
+    /// should approve instead. A second *different* signer is what makes this a test of the rule
+    /// rather than of equality.
+    async fn test_create_duplicate_action_rejected_naming_the_existing_proposal() {
         let repo = new_repo();
-        let sig = sig_a();
-        let session = SessionContext {
-            authority: Authority::StrataAdmin,
-            signer_pubkey: &sig.signer_pubkey,
-        };
+        let first = sig_a();
+        let second = sig_b();
 
-        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
-            .await
-            .unwrap();
+        let created = create_update_action(
+            &repo,
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &first.signer_pubkey,
+            },
+            1,
+            ACTION_HEX,
+            &first,
+            2,
+            None,
+        )
+        .await
+        .unwrap();
 
-        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None).await;
+        let err = create_update_action(
+            &repo,
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &second.signer_pubkey,
+            },
+            1,
+            ACTION_HEX,
+            &second,
+            2,
+            None,
+        )
+        .await
+        .expect_err("the duplicate is rejected");
 
-        assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
+        assert!(matches!(err, AppError::Conflict(_)));
+        assert!(err.to_string().contains(&created.action_id.0));
+
+        let stored = repo.find_by_action_id(&created.action_id).await.unwrap();
+        let stored = stored.expect("the first proposal survives");
+        assert_eq!(stored.signatures.len(), 1);
+        assert_eq!(stored.signatures[0].signer_pubkey, first.signer_pubkey);
     }
 
     #[tokio::test]
