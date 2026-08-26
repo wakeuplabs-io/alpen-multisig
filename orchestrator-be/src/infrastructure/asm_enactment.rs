@@ -97,11 +97,21 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         }
         // Security Council actions. Explicit arms rather than a catch-all: without them these
         // would fall through to the multisig-config branch, which returns `Ok(false)` for an
-        // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. Each
-        // gains a real post-condition as its slice lands; see docs/specs/security-council.md.
-        MultisigAction::Update(UpdateAction::Defcon1(_)) => Err(AppError::BadRequest(
-            "Defcon1 enactment detection is not implemented yet".to_string(),
-        )),
+        // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. Defcon 1
+        // has its post-condition (V1); the remaining two gain theirs as their slice lands. See
+        // docs/specs/security-council.md and docs/specs/security-council-defcon-phase-4.md.
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => {
+            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let still_queued = admin
+                .queued()
+                .iter()
+                .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
+            Ok(defcon1_enacted(
+                bridge.safe_harbour().is_activated(),
+                still_queued,
+            ))
+        }
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Err(AppError::BadRequest(
             "Defcon3 enactment detection is not implemented yet".to_string(),
         )),
@@ -159,6 +169,13 @@ fn predicate_keys_match(proposed: &PredicateKey, current: &PredicateKey) -> bool
 /// Treat as enacted once the reveal consumed the seqno and the update left the admin queue.
 fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
     last_seqno >= seq_no && !still_queued
+}
+
+/// Defcon 1 executes at depth 0: it activates the safe harbour in the reveal block and never
+/// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
+/// proposal enacted.
+fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool) -> bool {
+    safe_harbour_activated && !defcon1_queued
 }
 
 /// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
@@ -298,6 +315,10 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 // In-process ASM enactment mock — compiled only under `cfg(test)` or `dev-mocks`.
 // In production builds this is an inert stub returning `None`, so a `mock://` URL
 // never short-circuits the real enactment post-condition check.
+//
+// Keyed on the URL, never on the action: unlike `mock_lock_period`, which resolves a table and so
+// can delegate to the real lookup, enactment is a fact about chain state that no in-process mock
+// can derive. Every action — Defcon 1 included — enacts vacuously under `mock://asm-enacted`.
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
@@ -503,6 +524,13 @@ mod tests {
     fn operator_set_no_op_is_vacuously_enacted() {
         let current = vec![even_key_hex_from_scalar(1)];
         assert!(operator_set_post_conditions_met(&current, &[], &[]));
+    }
+
+    #[test]
+    fn defcon1_enacted_requires_safe_harbour_active_and_queue_clear() {
+        assert!(!defcon1_enacted(false, false));
+        assert!(!defcon1_enacted(true, true));
+        assert!(defcon1_enacted(true, false));
     }
 
     #[test]
