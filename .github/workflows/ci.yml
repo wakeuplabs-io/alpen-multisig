@@ -185,6 +185,9 @@ jobs:
           npm run test:broadcast-screens-wiring --workspace desktop-app
           npm run test:cancel-copy-vendor-neutral --workspace desktop-app
           npm run test:architecture --workspace desktop-app
+          npm run test:wallet-binding --workspace desktop-app
+          npm run test:defcon-1-confirm-gate --workspace desktop-app
+          npm run test:device-signing-message-pairing --workspace desktop-app
 
       - name: Wallet adapter + connect-path contract tests
         run: |

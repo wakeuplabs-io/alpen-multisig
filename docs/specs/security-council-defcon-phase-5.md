@@ -136,9 +136,10 @@ Rendering it requires the action hex, which for a payload-less action is a const
 Phase 3) takes no input, so a small hook resolves it once and feeds `useDeviceSigningMessage`
 together with the seq-no the signer is typing — which the form already auto-detects from chain via
 `getNextSeqNo` (`use-create-proposal.ts:133-144`) and lets the signer override. Until the hex
-resolves, `useDeviceSigningMessage` returns `null` and the box shows a placeholder; it never shows a
-stale message, because the hook clears before every resolve
-(`use-device-signing-message.ts:24-27`). The message therefore updates live with
+resolves, `useDeviceSigningMessage` returns `null` and the box says so; it never shows a stale
+message, because the hook pairs each resolved value with the inputs it came from and returns it only
+while they still match (`messageForInputs`, `use-device-signing-message.ts`). The message therefore
+updates live with
 `Sequence:` — which is what the contract's wireframe (`security-council-defcon.md:204-211`) draws.
 
 ## 6. The gate, and why it lives in the validator

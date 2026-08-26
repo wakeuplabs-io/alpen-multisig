@@ -4,7 +4,7 @@ import { AlertTriangleIcon } from '@/assets/icons'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useDefcon1ActionHex } from '../hooks/use-defcon-1-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
-import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
+import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
 import { DEFCON_1_CONFIRMATION } from '../model/validators/defcon-1'
 
 const CONFIRM_INPUT_ID = 'defcon-1-confirm'
@@ -73,7 +73,15 @@ export function Defcon1FormFields() {
 						try again. ({actionHexError})
 					</p>
 				)}
-				<p className="mt-1 text-label text-emphasis-soft">This is exactly what you will see on your signer screen.</p>
+				{/* Only once the (constant) action hex is in hand: before that the box is still doing
+				    its first fetch, and an error there would flash on every mount. */}
+				{actionHex !== null && errors.defconMessage?.message ? (
+					<p role="alert" className={fieldErrorClass}>
+						{errors.defconMessage.message} Nothing can be signed until it does.
+					</p>
+				) : (
+					<p className="mt-1 text-label text-emphasis-soft">This is exactly what you will see on your signer screen.</p>
+				)}
 			</div>
 
 			<div>
@@ -83,7 +91,7 @@ export function Defcon1FormFields() {
 				<input
 					id={CONFIRM_INPUT_ID}
 					type="text"
-					className={`${monoInputClass} focus:border-danger focus:ring-danger`}
+					className={monoInputDangerClass}
 					{...register('defconConfirm')}
 					data-testid="e2e-defcon-1-confirm"
 					autoComplete="off"
