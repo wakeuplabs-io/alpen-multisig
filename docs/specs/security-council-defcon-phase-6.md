@@ -26,17 +26,20 @@ Writing Defcon-shaped copies of code that is already correct is the failure Phas
 refusing a sibling create screen, and §3 is the audit that says which criteria those are, with
 evidence, instead of pinning `proposalSendState` a second time.
 
-The other direction is the one that cost more. Auditing them turned up **seven** defects, and three
-are not Defcon-specific at all — the offline route rejects the app's own clipboard export (§4.5),
-discards the raw transaction hex it exists to hand over (§4.6), and labels every imported action by
-guessing at a hex prefix (§4.4). They are in scope because AC 15/15a/15b are Phase 6's to close and
-because the offline path is the fallback the whole slice leans on for an irreversible action.
+The other direction is the one that cost more. Auditing them turned up **six** defects, and two are
+not Defcon-specific at all — the offline route discards the raw transaction hex it exists to hand
+over (§4.6) and labels every imported action by guessing at a hex prefix (§4.4). They are in scope
+because AC 15/15a/15b are Phase 6's to close and because that path is the fallback the whole slice
+leans on for an irreversible action.
 
-Two of the seven were found only after this document had been written and reviewed: the cancel gate
-has three copies rather than one (§4.3), and AC 15b was marked *"already offered"* on no evidence
-(§4.6). Both are recorded in place rather than quietly corrected, because the pattern — a claim with
-nothing under it, and a rule duplicated until one copy is forgotten — is the same one Phase 5 ended
-with.
+Three findings arrived only after this document had been written and reviewed, and all three are
+recorded in place rather than quietly corrected. The cancel gate has three copies rather than one
+(§4.3). AC 15b was marked *"already offered"* on no evidence, and was the only audit row stated
+without a `file:line` (§4.6). And a seventh "defect" was not one: §4.5 described a paste box that
+nothing renders, so the export it was said to reject has always been accepted by the importer that
+is actually on screen. The pattern behind all three — a claim with nothing under it, a rule
+duplicated until one copy is forgotten, and a grep that never asks whether its target is reachable —
+is what this phase is worth reading for.
 
 ## 3. What already holds, and the evidence
 
@@ -46,7 +49,7 @@ with.
 | 7 | Broadcast builds and transmits commit + reveal | The `/proposals/:id/broadcast` screen and `broadcast-details-card.tsx` never branch on the action; Phase 5 fixed the one authority-keyed read the send path had (`src-tauri/.../asm_role_membership.rs` `ordered_keys_for_authority`) | No code |
 | 13 | Seven-day expiry applies normally | The backend marks a proposal `expired` (`orchestrator-be/src/application/proposals.rs:527-544`) and the Tauri DTO mapper computes `expiresAtMs` as `created_at_ms + PROPOSAL_EXPIRY_DAYS` (`src-tauri/src/commands/proposals.rs:205`); both are action-agnostic, as are `PendingExpiryCountdown` and the `expired` style (`proposal-status.ts:46`) | No code |
 | 16 | Enacted or expired proposals land in *Past* | The dashboard buckets on `status` alone (`proposals-dashboard-screen.tsx:65-69`) | No code |
-| 15 | Collected signatures can be exported | `Copy bundle` / `Download bundle` on the detail screen serialise the whole `Proposal`, signatures included (`proposal-detail.tsx:102-114`) | Export holds; **the clipboard half is not consumable on `/manual`** — §4.5 |
+| 15 | Collected signatures can be exported, in the format the manual path consumes | `Copy bundle` / `Download bundle` serialise the whole `Proposal`, signatures included (`proposal-detail.tsx:102-114`), and `ImportBundleModal` — the paste box `/manual` step 2 actually renders — unwraps `{ signatures: [...] }` (`import-bundle-modal.tsx:63-70`) | No code; **see §4.5 for the audit error this row started as** |
 | 15a | The export broadcasts through `/manual` | `processBundle` (`use-manual-proposal.ts:241`) accepts the downloaded proposal JSON — it reads the four fields it needs and ignores the rest — and `security_council` is already in its `AUTHORITIES` list (`:24`) | Display defect only, §4.4 |
 | 15b | The raw transaction can go to an external RPC | **Half true.** The *Send manually* panel — the raw commit and reveal hex, each with a copy button and a `sendrawtransaction` instruction — exists at `broadcast-phase-progress.tsx:138-147` and is rendered by `/proposals/:id/broadcast` and the cancel broadcast screen. `/manual`, the route AC 15b names, throws the same structured error away and prints its raw string (`manual-proposal-screen.tsx:332`) | §4.6 |
 | 9 | Never the word *Approved* | **Fails.** `PROPOSAL_STATUS_STYLE.approved.label` is `'Approved'` and is keyed on status alone | §4.1 |
@@ -55,7 +58,7 @@ with.
 The two "no code" columns are not an invitation to skip verification: §10 walks the flow. They are a
 refusal to add tests that would pin `proposalSendState` a second time.
 
-## 4. The seven defects
+## 4. The six defects, and one correction
 
 ### 4.1 A Defcon 1 at quorum reads *Approved* (AC 9)
 
@@ -229,31 +232,30 @@ This fixes `vk_update`'s cousin too: the heuristic returned `multisig_update` fo
 today (`decodeActionHex` still returns `unknown` for them, so the import is refused before the
 label matters) — noted so the change is understood as removing a guess, not as widening support.
 
-### 4.5 The clipboard export is refused by the screen it is meant for (AC 15)
+### 4.5 AC 15 already holds, and the component that said otherwise is orphaned
 
-AC 15 asks that the copy-signatures action put every collected signature on the clipboard *"in the
-format the manual path consumes"*. The app has the export — `Copy bundle` (`proposal-detail.tsx:102`)
-writes the whole `Proposal` JSON, signatures included. Two importers can be handed it, and they
-disagree:
+**This section is kept as a correction, not as a defect.** Its first version claimed the offline
+route rejected the app's own clipboard export, and a commit was written to fix it. The commit fixed
+dead code.
 
-| Importer | Accepts a bundle object? | Where |
+`Copy bundle` (`proposal-detail.tsx:102`) writes the whole `Proposal` JSON. Two components in the
+repo parse a pasted bundle, and they disagree:
+
+| Component | Accepts a bundle object? | Reachable? |
 |---|---|---|
-| `ImportBundleModal` — paste into an existing proposal | **Yes.** An object with a `signatures` array is unwrapped, and `broadcastStatus`/txids/`status` are read off it too | `import-bundle-modal.tsx:64-68` |
-| `PasteSignaturesModal` — paste into the `/manual` flow at step 2 | **No.** A non-array object is treated as a single signature row and fails with *"missing signerPubkey or signatureHex"* | `paste-signatures-modal.tsx:20-30` |
+| `ImportBundleModal` (`import-bundle-modal.tsx:63-70`) | **Yes** — unwraps `signatures`, and reads `broadcastStatus`/txids/`status` off it | **Yes.** `/manual` step 2 renders `ManualSignCollect` → `ProposalDetail`, whose *Import signatures* button opens it (`proposal-detail.tsx:329-341`, `:382-390`) |
+| `manual-proposal/components/paste-signatures-modal.tsx` | No — a non-array object is read as one signature row and rejected | **No.** Imported by nothing. The similarly named `block-payouts` modal is a different component |
 
-So a signer who follows the copy button to the offline screen — the exact sequence AC 15 and AC 15a
-describe, and the one that matters when the orchestrator is unreachable — is told their own export is
-malformed. The path that does work is *Download bundle* → drop the file on `/manual` step 1, because
-`processBundle` reads the four fields it needs and ignores the rest (`use-manual-proposal.ts:241`).
+So AC 15 holds today, by the live importer, and the audit read the dead one because it sits in the
+offline feature's folder and looks like the paste box on that screen — which it once was.
 
-**`parseSignaturesInput` unwraps `{ signatures: [...] }`,** which is what its sibling already does.
-Four lines, in the same pure function the modal already routes every input through, and it makes the
-two paste boxes in the app agree about what a bundle is.
+The phase deletes it. A dead component that disagrees with the live one about what a bundle is will
+be read as the live one again by the next person to audit this path, which is precisely what
+happened here.
 
-Not Defcon-specific, and that is the point: AC 15 is Phase 6's to close, the export is the fallback
-the whole slice leans on for an irreversible action, and the failure is one branch away from the
-code that already handles it correctly. Widening the import is not the same as building the missing
-*Enter manually* entry point (§7), which is a new affordance rather than a fix to an existing one.
+The generalisable part, and the second time this phase paid for it: **none of the structural greps
+in §9 checks whether the code they point at is reachable.** The other time was AC 15b (§4.6), where
+the failure was the opposite — a claim of "already offered" with no `file:line` at all.
 
 ### 4.6 The offline route drops the escape hatch it is the escape hatch for (AC 15b)
 
@@ -295,12 +297,14 @@ listed because it is the same class of defect as §4.4 — a view rendering an a
 — on the one action where a wrong title is worst, and because the fix is the `else` the effect is
 missing.
 
-## 5. Migration — six commits, each atomic
+## 5. Migration — seven commits, each atomic
 
-Each leaves the tree green and none repairs the one before it. A and B both edit the dashboard and
-the detail screen, and are ordered so the badge lands before the affordance — they fail differently
-and revert independently. C, D and E touch the offline path and are independent of both and of each
-other. F is documentation.
+Each leaves the tree green. A and B both edit the dashboard and the detail screen, and are ordered so
+the badge lands before the affordance — they fail differently and revert independently. C, D and E
+touch the offline path and are independent of both and of each other. F and G were written after the
+implementation was reviewed: F is the residuals that review found, G is documentation. F is the one
+commit here that repairs earlier ones, and it says so — the alternative was rewriting three commits
+to hide that a review had happened.
 
 **Every commit that adds a test script adds it to `.github/workflows/ci.yml` in the same commit.**
 CI enumerates the frontend test scripts one by one (`:170-197`); a script in `package.json` alone
@@ -339,14 +343,12 @@ never runs there. Phase 5 nearly shipped that way.
 | `domain/proposal-detail/hooks/use-decoded-proposal.ts` | the missing `else`: clear `signerSetChange` when the decode is not a signer update |
 | `package.json`, `.github/workflows/ci.yml` | `test:action-type-from-decoded` |
 
-**Commit D — the offline path accepts the export the app told the signer to make.** AC 15.
+**Commit D — delete the orphaned offline paste box.** §4.5. No test: it removes a file nothing
+imports, and AC 15's live path is `ImportBundleModal`, unchanged by this phase.
 
 | File | Change |
 |---|---|
-| `domain/manual-proposal/model/parse-pasted-signatures.ts` (new) | `parseSignaturesInput` moves out of the modal so it can be tested without mounting; gains the bundle-object branch |
-| `domain/manual-proposal/components/paste-signatures-modal.tsx` | import it |
-| `domain/manual-proposal/model/__tests__/parse-pasted-signatures.test.ts` (new) | §6, test 6 |
-| `package.json`, `.github/workflows/ci.yml` | `test:parse-pasted-signatures` |
+| `domain/manual-proposal/components/paste-signatures-modal.tsx` | deleted |
 
 **Commit E — the offline route keeps the raw transactions.** AC 15b, §4.6.
 
@@ -355,7 +357,13 @@ never runs there. Phase 5 nearly shipped that way.
 | `domain/manual-proposal/hooks/use-manual-proposal.ts` | store `deriveBroadcastError(raw)` instead of the raw string |
 | `screens/manual-proposal-screen.tsx` | render the existing *Send manually* block on `broadcast_unavailable` |
 
-**Commit F — back-propagate the corrections into the contract.** Documentation only.
+**Commit F — review-pass residuals.** Three places where a change was almost right, found by
+reviewing the implementation: the send screen's done banner still said "stays approved" for an action
+carved out of that word (prose, so §9's capitalised grep missed it); `SendManuallyPanel` had copied
+the txid row it was extracted alongside, so both now render `HexCopyRow`; and two assertions in the
+display-status test could not fail.
+
+**Commit G — back-propagate the corrections into the contract.** Documentation only.
 
 `security-council-defcon.md` names *"Quorum reached — ready to broadcast"* in three places, not one:
 AC 9, the State Model's display-label list, and the *Lifecycle Display* wireframe. Correcting AC 9
@@ -368,7 +376,7 @@ number and safe-harbour line are not built (§8).
 
 ## 6. Tests
 
-Six assertions, all pure, each pinned to a claim that can regress and none of them re-pinning generic
+Five assertions, all pure, each pinned to a claim that can regress and none of them re-pinning generic
 lifecycle machinery.
 
 | # | Claim | Assertion | Where |
@@ -378,14 +386,13 @@ lifecycle machinery.
 | 3 | §4.2: a depth-0 action shows no countdown | `showsActivationCountdown` is `false` for `defcon_1` with a height, `true` for another action with the same height, `false` with no height | same file |
 | 4 | AC 10, against the V5 future | `canCancel` is `false` for a `defcon_1` **whose authority is in the allow-list**, and `true` for a `multisig_update` on the same authority | extend `derive-proposal-actions.test.ts` |
 | 5 | §4.4: the decoded kind maps to an action type without guessing | every `DecodedAction['kind']` maps to its own `ActionType`, `unknown` included | `domain/manual-proposal/model/__tests__/action-type-from-decoded.test.ts` |
-| 6 | AC 15: the copied bundle is accepted where the signer is told to paste it | `parseSignaturesInput` on a full proposal bundle yields its signatures; on a bare array it is unchanged; on an object with no `signatures` field it still errors | `domain/manual-proposal/model/__tests__/parse-pasted-signatures.test.ts` |
 
 Tests 3, 4 and 5 exist because the reviewer of this document asked what would catch their deletion,
 and `npm run build` was the honest answer in all three cases.
 
 **Deliberately not tested, and why:**
 
-- **The four "no code" criteria (6, 7, 13, 16) and 15.** They are properties of code this phase does
+- **The five "no code" criteria (6, 7, 13, 15, 16).** They are properties of code this phase does
   not touch, and they are already exercised by the existing suite and by the flow walk in §10. A test
   written here would assert that `proposalSendState` still works, which
   `derive-proposal-actions.test.ts` and the broadcast model tests already do.
@@ -473,7 +480,6 @@ cd desktop-app
 npm run test:proposal-display-status
 npm run test:derive-proposal-actions
 npm run test:action-type-from-decoded
-npm run test:parse-pasted-signatures
 npm run test:derive-broadcast-error
 ```
 
@@ -486,6 +492,10 @@ grep -rn "StatusBadge status=" desktop-app/src        # every hit passes proposa
 grep -rn "CANCELABLE_AUTHORITIES" desktop-app/src     # one declaration, in derive-proposal-actions.ts
 grep -rn "derivedActionType" desktop-app/src          # nothing
 ```
+
+**And the caveat these greps cost this phase twice (§4.5, §4.6): a hit proves the code exists, never
+that a signer can reach it.** Before trusting one, check that the file it points at is imported by
+something a route renders.
 
 ## 10. Manual walk (what §3 leaves to the flow)
 
@@ -506,8 +516,8 @@ cd desktop-app && npm run tauri dev
 4. **AC 16.** After the ASM applies it, the proposal reads *Enacted* and appears under **Past**.
 5. **AC 15/15a.** *Download bundle* on the detail screen, then `/manual` from the connect screen and
    drop the file: the imported proposal reads **Defcon 1**, not *Signer update*, and its signatures
-   are the ones that were collected. Then *Copy bundle* and paste it into the same screen's
-   **Paste signatures** box: it is accepted, where before it read as malformed.
+   are the ones that were collected. Then *Copy bundle* and paste it into that screen's *Import
+   signatures* box, which is the live importer and already accepted a whole bundle.
 6. **AC 15b.** Stop the Electrum and Bitcoin endpoints, then send from `/manual`: the failure shows
    **Send manually** with the commit and reveal raw hex and a copy button on each, instead of a bare
    error line.
