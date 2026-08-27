@@ -7,6 +7,7 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
+import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
@@ -18,8 +19,6 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -201,7 +200,7 @@ export function ProposalDetailScreen() {
 							{/* Cancel CTA */}
 							{proposal.status === 'approved' &&
 								proposal.kind !== 'cancel' &&
-								CANCELABLE_AUTHORITIES.includes(proposal.authority) &&
+								canCancelProposal(proposal) &&
 								proposal.cancelProposal === null && (
 									<button
 										type="button"
