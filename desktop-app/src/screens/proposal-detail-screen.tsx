@@ -15,6 +15,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
@@ -169,8 +170,9 @@ export function ProposalDetailScreen() {
 								</div>
 							)}
 
-							{/* Activation countdown */}
-							{proposal.activationHeight !== null && proposal.status === 'approved' && (
+							{/* Activation countdown. The null check repeats one the predicate already makes —
+							    it is what narrows the prop below; the rule itself lives in `lib`. */}
+							{proposal.activationHeight !== null && showsActivationCountdown(proposal) && (
 								<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<ActivationCountdown
 										activationHeight={proposal.activationHeight}

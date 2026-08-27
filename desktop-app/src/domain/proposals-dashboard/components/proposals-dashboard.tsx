@@ -15,7 +15,7 @@ import {
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { buildProposalTitle } from '@/lib/proposal-title'
-import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
 const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
@@ -472,7 +472,7 @@ function ProposalCard({
 						)}
 					</p>
 				</div>
-				<StatusBadge status={awaitingEnactment ? 'awaiting_enactment' : proposal.status} />
+				<StatusBadge status={proposalDisplayStatus(proposal)} />
 			</div>
 
 			<div className="mt-4">
