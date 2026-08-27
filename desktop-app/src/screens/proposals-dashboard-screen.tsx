@@ -5,8 +5,10 @@ import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orches
 import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
+import { SafeHarbourBanner } from '@/domain/proposals-dashboard/components/safe-harbour-banner'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
@@ -93,6 +95,8 @@ export function ProposalsDashboardScreen() {
 				</>
 			}
 		>
+			{selectedRole === AuthRole.StrataSecurityCouncil && <SafeHarbourBanner />}
+
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
 				signerPubkey={signerPubkey}
