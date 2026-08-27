@@ -50,6 +50,7 @@ export const proposalSchema = z
 			'vk_update',
 			'operator_set_update',
 			'sequencer_key_update',
+			'defcon_1',
 			'cancel',
 			'unknown',
 		]),
@@ -139,6 +140,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		typeId: z.number(),
 		conditionHex: z.string(),
 	}),
+	z.object({ kind: z.literal('defcon_1') }),
 	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
 ])
 

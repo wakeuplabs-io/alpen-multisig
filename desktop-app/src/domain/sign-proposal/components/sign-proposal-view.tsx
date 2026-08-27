@@ -1,4 +1,4 @@
-import { PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
+import { AlertTriangleIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
@@ -116,6 +116,21 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
+function Defcon1Details() {
+	return (
+		<div className="mt-5 rounded-lg border border-danger-border bg-danger-surface p-3.5">
+			<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
+				<AlertTriangleIcon width={15} height={15} className="shrink-0 text-danger" />
+				Irreversible
+			</p>
+			<p className="m-0 mt-2 text-label text-danger-deep">
+				Approving this authorizes the bridge safe harbour to activate immediately once the proposal is broadcast. The
+				action carries no payload — its identity is the signal — and it cannot be cancelled.
+			</p>
+		</div>
+	)
+}
+
 function UnknownActionDetails({ rawHex }: { rawHex: string }) {
 	return (
 		<div className="mt-5">
@@ -142,6 +157,7 @@ export function SignProposalView({
 	onSign,
 }: SignProposalViewProps) {
 	const { label, isHardware } = deviceCopy(walletVendor)
+	const isDestructive = decodedAction?.kind === 'defcon_1'
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-bg-surface p-4">
@@ -157,6 +173,8 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
+			) : decodedAction.kind === 'defcon_1' ? (
+				<Defcon1Details />
 			) : (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
 			)}
@@ -184,7 +202,11 @@ export function SignProposalView({
 				<button
 					type="button"
 					data-testid="e2e-sign-proposal-submit"
-					className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+					className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-body font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+						isDestructive
+							? 'border-danger bg-danger hover:bg-danger-strong'
+							: 'border-[#0a0a0a] bg-[#0a0a0a] hover:bg-[#232323]'
+					}`}
 					onClick={onSign}
 					disabled={isSigning}
 				>

@@ -50,6 +50,11 @@ export function buildSequencerKeyUpdateHex(
 	return tauriCall('build_sequencer_key_update_hex', { input }, buildActionHexResponseSchema)
 }
 
+/** Defcon 1 carries no payload, so its action hex is a constant the Rust side encodes. */
+export function buildDefcon1ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_defcon_1_action_hex', {}, buildActionHexResponseSchema)
+}
+
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_cancel_action_hex', { targetActionHex }, buildActionHexResponseSchema)
 }

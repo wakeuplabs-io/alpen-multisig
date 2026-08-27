@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { VK_PREDICATE_TYPES } from '@/lib/vk-predicate'
+import { getActionTypeOptions } from './action-type-config'
 import { getActionValidator } from './validators'
 
 export type { VkPredicateType } from '@/lib/vk-predicate'
@@ -16,7 +17,7 @@ export function normalizeSignerKey(value: string): string {
 }
 
 const createProposalFormObjectSchema = z.object({
-	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update', 'sequencer_key_update']),
+	actionType: z.enum(['vk_update', 'signer_update', 'operator_set_update', 'sequencer_key_update', 'defcon_1']),
 	seqNo: z.string(),
 	title: z.string().max(512, 'Title must be at most 512 characters'),
 	keysToAdd: z.array(keyRowSchema),
@@ -27,6 +28,10 @@ const createProposalFormObjectSchema = z.object({
 	operatorsToAdd: z.array(keyRowSchema),
 	operatorIndicesToRemove: z.array(keyRowSchema),
 	newSequencerKeyHex: z.string(),
+	defconConfirm: z.string(),
+	/** The canonical signing message, resolved from Rust and mirrored here so that
+	 * "the signer can see what they are signing" gates submission like any other field. */
+	defconMessage: z.string(),
 })
 
 export type CreateProposalFormValues = z.infer<typeof createProposalFormObjectSchema>
@@ -56,10 +61,28 @@ export function countSignersAfterUpdate(
 
 export type BuildCreateProposalFormSchemaArgs = {
 	currentMultisigSigners: string[] | null
+	/** The session's authority. Decides which action types this form may produce at all. */
+	authority: string
 }
 
-export function buildCreateProposalFormSchema({ currentMultisigSigners }: BuildCreateProposalFormSchemaArgs) {
+export function buildCreateProposalFormSchema({
+	currentMultisigSigners,
+	authority,
+}: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
+		// The action-type menu is display data. This is the rule: an authority can only draft the
+		// actions it is allowed to author, whatever route or stale form state got the value here.
+		// The backend refuses the rest too (AC 17), but a signer must never reach a device prompt
+		// for an action their authority cannot sign.
+		const allowed = getActionTypeOptions(authority).map((option) => option.actionType)
+		if (!allowed.includes(data.actionType)) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['actionType'],
+				message: `This authority cannot create a ${data.actionType} proposal.`,
+			})
+		}
+
 		const seqNoTrim = data.seqNo.trim()
 		if (seqNoTrim.length === 0) {
 			ctx.addIssue({ code: 'custom', path: ['seqNo'], message: 'Sequence number is required' })

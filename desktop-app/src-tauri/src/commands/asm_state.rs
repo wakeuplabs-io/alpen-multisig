@@ -37,7 +37,10 @@ pub async fn get_multisig_config(
         Authority::StrataAdmin => AuthRole::StrataAdministrator,
         Authority::SequencerManager => AuthRole::StrataSequencerManager,
         Authority::AlpenAdmin => AuthRole::AlpenAdministrator,
-        _ => {
+        Authority::SecurityCouncil => AuthRole::StrataSecurityCouncil,
+        // Listed rather than caught by `_`: a catch-all is how the council reached this arm
+        // silently in the first place, and the next authority added should be a compile error.
+        Authority::PayoutAdmin => {
             return Err(format!(
                 "authority `{}` is not supported in the desktop app yet",
                 parsed.as_str()

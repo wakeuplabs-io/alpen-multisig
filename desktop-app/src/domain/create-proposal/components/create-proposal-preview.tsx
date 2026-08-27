@@ -5,6 +5,8 @@ import { deviceCopy } from '@/lib/device-copy'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
+import { actionTypeTitle } from '../model/action-type-config'
+import type { ActionType } from '../model/create-proposal.types'
 import {
 	countSignersAfterUpdate,
 	normalizeSignerKey,
@@ -14,7 +16,7 @@ import {
 
 type Props = {
 	title: string
-	actionType: 'signer_update' | 'vk_update' | 'operator_set_update' | 'sequencer_key_update'
+	actionType: ActionType
 	seqNo: string
 	keysToAdd: string[]
 	keysToRemove: string[]
@@ -54,14 +56,7 @@ export function CreateProposalPreview({
 	createdProposal,
 }: Props) {
 	const signerCopy = deviceCopy(walletVendor)
-	const actionTypeLabel =
-		actionType === 'signer_update'
-			? 'Signer update'
-			: actionType === 'operator_set_update'
-				? 'Bridge Operator update'
-				: actionType === 'sequencer_key_update'
-					? 'Sequencer key update'
-					: 'Verification key update'
+	const actionTypeLabel = actionTypeTitle(actionType)
 
 	const removeNorm = new Set(
 		keysToRemove
@@ -127,7 +122,15 @@ export function CreateProposalPreview({
 
 			<div className="border-t border-[#e5e7eb]" />
 
-			{actionType === 'operator_set_update' ? (
+			{actionType === 'defcon_1' ? (
+				<div className="rounded-xl border border-danger-border bg-danger-surface p-4">
+					<p className="m-0 text-body font-semibold text-danger-deep">Irreversible</p>
+					<p className="m-0 mt-2 text-body text-danger-deep">
+						Signing this activates the bridge safe harbour immediately. The action carries no payload — its identity is
+						the signal — and it cannot be cancelled.
+					</p>
+				</div>
+			) : actionType === 'operator_set_update' ? (
 				<div className="flex flex-col gap-4">
 					{operatorsToAdd.length > 0 && (
 						<div>

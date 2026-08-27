@@ -55,19 +55,27 @@ pub async fn fetch_role_membership(
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)?;
 
+    // A role the chain does not carry is "not a member", never "membership unknowable": one
+    // missing authority must not fail the read for the others, because the caller turns any
+    // error into "not a signer" for *every* card and locks the whole connect flow.
     let mut role_to_keys = HashMap::new();
-    role_to_keys.insert(
+    for role in [
         AuthRole::StrataAdministrator,
-        authority_keys_hex(&admin, AuthRole::StrataAdministrator)?,
-    );
-    role_to_keys.insert(
         AuthRole::StrataSequencerManager,
-        authority_keys_hex(&admin, AuthRole::StrataSequencerManager)?,
-    );
-    role_to_keys.insert(
         AuthRole::AlpenAdministrator,
-        authority_keys_hex(&admin, AuthRole::AlpenAdministrator)?,
-    );
+        AuthRole::StrataSecurityCouncil,
+    ] {
+        match authority_keys_hex(&admin, role) {
+            Ok(keys) => {
+                role_to_keys.insert(role, keys);
+            }
+            // The caller cannot tell this apart from "not a signer", so the reason lands in the
+            // log rather than nowhere.
+            Err(e) => {
+                tracing::warn!(role = ?role, error = %e, "skipping authority absent from admin state")
+            }
+        }
+    }
 
     Ok((role_to_keys, now_unix_ms()))
 }

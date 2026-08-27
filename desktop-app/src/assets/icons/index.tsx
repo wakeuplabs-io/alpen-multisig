@@ -482,3 +482,30 @@ export function AuthorityServerIcon({ width = 24, height = 24, className, ...res
 		</svg>
 	)
 }
+
+/**
+ * Octagonal halt sign — authority: security council.
+ *
+ * Deliberately shares no silhouette with the other three authority icons: the council's one action
+ * is the emergency lever that halts the bridge, and an authority that looks like another authority
+ * is a signer-safety problem, not a cosmetic one.
+ */
+export function AuthorityHaltIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M8.5 3.5h7l5 5v7l-5 5h-7l-5-5v-7z" />
+				<path d="M8.5 12h7" />
+			</g>
+		</svg>
+	)
+}
+
+/** Neutral placeholder for an authority with no icon of its own — never another authority's glyph. */
+export function AuthorityUnknownIcon({ width = 24, height = 24, className, ...rest }: IconProps) {
+	return (
+		<svg viewBox="0 0 24 24" fill="none" width={width} height={height} className={className} aria-hidden {...rest}>
+			<circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 2.5" />
+		</svg>
+	)
+}

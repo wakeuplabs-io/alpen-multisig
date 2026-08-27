@@ -234,23 +234,25 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)?;
 
+    // A role the chain does not carry is "not a member", never "membership unknowable". This is
+    // read for every authority on every auth challenge, so one authority missing from an older
+    // genesis must not refuse the login of the three that are there.
     let mut role_to_keys = HashMap::new();
-    role_to_keys.insert(
+    for role in [
         Role::StrataAdministrator,
-        authority_keys_hex(&admin, Role::StrataAdministrator)?,
-    );
-    role_to_keys.insert(
         Role::StrataSequencerManager,
-        authority_keys_hex(&admin, Role::StrataSequencerManager)?,
-    );
-    role_to_keys.insert(
         Role::AlpenAdministrator,
-        authority_keys_hex(&admin, Role::AlpenAdministrator)?,
-    );
-    role_to_keys.insert(
         Role::StrataSecurityCouncil,
-        authority_keys_hex(&admin, Role::StrataSecurityCouncil)?,
-    );
+    ] {
+        match authority_keys_hex(&admin, role) {
+            Ok(keys) => {
+                role_to_keys.insert(role, keys);
+            }
+            Err(e) => {
+                tracing::warn!(role = ?role, error = %e, "skipping authority absent from admin state")
+            }
+        }
+    }
 
     Ok(role_to_keys)
 }

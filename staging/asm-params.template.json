@@ -39,7 +39,8 @@
           "keys": [
             "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
             "030e85756649a1ed5629bff6c464009bd5b807bacf01c8026b45992c4d00de2ebb",
-            "03294e4ca49cb1af7b8c120ace0877a806432f89f08504b9d572972c729a226efe"
+            "03294e4ca49cb1af7b8c120ace0877a806432f89f08504b9d572972c729a226efe",
+            "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
           ],
           "threshold": 2
         },

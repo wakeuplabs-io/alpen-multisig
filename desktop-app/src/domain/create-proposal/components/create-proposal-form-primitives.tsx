@@ -35,6 +35,11 @@ export function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: s
 	)
 }
 
+/**
+ * Selecting an action type is not itself the dangerous step, so every card reads in the neutral
+ * selection palette — including Defcon 1. The danger palette is spent once, on the `Irreversible`
+ * callout below the form, where it still means something.
+ */
 export function ActionTypeCard({
 	title,
 	description,
@@ -46,15 +51,14 @@ export function ActionTypeCard({
 	selected: boolean
 	onClick: () => void
 }) {
+	const selectedClass = 'border-accent-border bg-highlight-surface'
+	const idleClass = 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
+
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`rounded-xl border-2 p-4 text-left transition-colors ${
-				selected
-					? 'border-accent-border bg-highlight-surface'
-					: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
-			}`}
+			className={`rounded-xl border-2 p-4 text-left transition-colors ${selected ? selectedClass : idleClass}`}
 		>
 			<p className="m-0 text-body font-semibold text-emphasis">{title}</p>
 			<p className="m-0 mt-1 text-label text-emphasis-soft">{description}</p>

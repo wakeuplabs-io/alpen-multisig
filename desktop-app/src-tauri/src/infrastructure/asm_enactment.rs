@@ -137,11 +137,16 @@ fn multisig_update_post_conditions_met(
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
+    // Exhaustive for the same reason as its twin in `asm_role_membership`: the council sat in a
+    // catch-all error arm here for four phases, and a new authority upstream should stop the
+    // build rather than surface as a runtime failure.
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        _ => Err(format!(
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
+        // No ASM role upstream.
+        Authority::PayoutAdmin => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
     }

@@ -18,7 +18,8 @@ action codec and builder, and the signer-safety UX. Delivered in one piece it wo
 containing a refactor of a contract shared with every other authority.
 
 This plan breaks it into six phases, one PR each, ordered so that **the two shared-contract refactors
-land first**, before any Defcon product flow exists. The phases are **sequential, not parallel** —
+land first**, before any Defcon product flow exists. A seventh was added after the flow was run by
+hand — see Phase 7 for what running it exposed that reviewing it did not. The phases are **sequential, not parallel** —
 each assumes the ones before it have merged, and Phase 2 in particular cannot compile without
 Phase 1's resolution function. Each phase leaves the tree green and carries the tests that prove it.
 
@@ -47,6 +48,7 @@ Phase 1's resolution function. Each phase leaves the tree green and carries the 
 | 4 | Enactment detection | AC 8 | `orchestrator-be` |
 | 5 | Frontend — create and sign | AC 1, AC 1a, AC 4, AC 5, AC 14 | `desktop-app`, `src-tauri` |
 | 6 | Frontend — lifecycle | AC 6, AC 7, AC 9, AC 10, AC 13, AC 15/15a/15b, AC 16 | `desktop-app` |
+| 7 | Safe harbour visible, enactment per proposal | AC 8 (tightened), AC 18, AC 19, AC 20 | `orchestrator-be`, `desktop-app`, `src-tauri` |
 
 ## 3. Architecture
 
@@ -161,7 +163,7 @@ supersedes the bullets below where they differ. Three things it settled that thi
   `orchestrator-be/src/application/proposals.rs` encodes the old gate. It becomes a depth-based
   rejection test. Existing cancel behaviour for the Alpen and Strata administrators must not change.
 
-### Phase 3 — Backend Defcon 1: role, codec, creation
+### Phase 3 — Backend Defcon 1: role, codec, creation ✅
 
 **Detail spec:** [`security-council-defcon-phase-3.md`](./security-council-defcon-phase-3.md), which
 supersedes the bullets below where they differ. Four things it settled that this plan left open or
@@ -222,14 +224,35 @@ left open:
   per-block read that nothing in V1 can exercise; it becomes reachable only once Defcon 3 gains a
   product flow.
 
-### Phase 5 — Frontend: create and sign
+### Phase 5 — Frontend: create and sign ✅
 
-- Register `defcon_1` in the IPC action-type enum (`desktop-app/src/api/ipc-schemas.ts`), in
-  `ACTION_TYPES_BY_AUTHORITY`, and in `decode_action_hex` — which currently routes unrecognised
-  variants to `DecodedAction::Unknown`, so an unregistered Defcon 1 would render as unknown.
-- A fields component following the existing `*-form-fields.tsx` pattern, carrying the four-line
-  signing message rendered verbatim, the `DEFCON 1` type-to-confirm gate, and the destructive
-  treatment that separates this form from every other creation form.
+**Detail spec:** [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md), which
+supersedes the bullets below where they differ. Four things it settled that this plan left out or
+had wrong:
+
+- **The desktop app had no Security Council session at all**, and this plan's two bullets assume
+  one. Five places encoded three-or-four authorities and none was the council — two of them
+  `default:` arms that substitute silently rather than fail, so a council role added to TypeScript
+  without touching `authorityFromRole` would have produced a session that authenticates, works, and
+  is the wrong authority. A sixth site turned up only in review: `get_multisig_config` refused the
+  council through a catch-all `_` arm, which is why adding the variant compiled cleanly.
+- **The commit order is the reverse of the obvious one.** Session first reads as the prerequisite
+  but is the broken half: `getActionTypeOptions` falls back to the Strata Administrator's menu for
+  an unregistered authority, so a council session that existed before `security_council: ['defcon_1']`
+  did would be offered three actions its role cannot authorize. The menu entry lands first, and both
+  commits are then correct in isolation.
+- **The four-line message needs no new code and must not get any.** Upstream's
+  `SigningMessage::for_action` already appends `Action Details:` only when `render_details` produced
+  lines, and Defcon 1's is empty — so AC 4 is a *placement* requirement, not a formatting one. The
+  form resolves the message through the same Rust renderer the device signs over and prints it
+  verbatim; a hand-written template would review identically and diverge the moment upstream bumps a
+  version. The resolved message is mirrored into a form value, so a failed resolve disables the CTA
+  instead of letting a signer confirm four lines they never saw.
+- **No `/proposals/create/defcon-1` route is built.** This plan §3 already said Defcon 1 extends
+  `create-proposal`; the contract still described a dedicated route and screen, which it had marked
+  as Stage 5's call. AC 1a holds either way — the route is never registered, so `App.tsx`'s
+  catch-all redirects every session, which is the behaviour AC 1a describes. The contract's
+  *Create Form Layout* and *Critical Files* were corrected alongside this phase.
 
 ### Phase 6 — Frontend: lifecycle
 
@@ -237,6 +260,24 @@ The display carve-out and the states after quorum: never the word "Approved" for
 "Quorum reached — ready to broadcast"), no cancel affordance in any state or view, the "Send" control
 once quorum is reached, enacted and expired proposals in the "Past" list, and the manual fallback
 reachable through the existing `/manual` route.
+
+### Phase 7 — The safe harbour is visible, and enactment is per proposal
+
+**Detail spec:** [`security-council-defcon-phase-7.md`](./security-council-defcon-phase-7.md).
+
+Not in this plan's original six. It exists because running the finished flow produced a second
+Defcon 1 on a chain whose safe harbour was already active, and neither half of the system
+distinguished it: the enactment predicate reduces to "the safe harbour is active" on any honest
+chain, so the second proposal read as `Enacted` on the strength of the first one's activation; and
+the app that creates the state cannot read it, so the council had nothing on screen saying the
+bridge was already in safe harbour.
+
+Two commits. The predicate gains the sequence-number term every other action's post-condition
+already carries, which makes the answer per-proposal. The desktop gains a safe-harbour read, a
+dashboard banner for council sessions and a warning on the Defcon 1 form — a warning, never a
+block: refusing the emergency lever on the strength of a state read is the worse failure.
+
+Adds AC 18–20 to the contract and tightens the Edge Case that was read as licence for the predicate.
 
 ## 5. Verification
 

@@ -20,6 +20,7 @@ import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '..
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
+import { Defcon1FormFields } from './defcon-1-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
@@ -60,6 +61,8 @@ const defaultFormValues: CreateProposalFormValues = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
+	defconConfirm: '',
+	defconMessage: '',
 }
 
 export function CreateProposalForm({
@@ -95,8 +98,9 @@ export function CreateProposalForm({
 		() =>
 			buildCreateProposalFormSchema({
 				currentMultisigSigners: multisigConfig?.signers ?? null,
+				authority,
 			}),
-		[multisigConfig],
+		[multisigConfig, authority],
 	)
 
 	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])
@@ -229,6 +233,9 @@ export function CreateProposalForm({
 		}
 	}
 
+	// Defcon 1 is irreversible, so its CTAs carry the danger palette all the way through the
+	// review step — the last control the signer touches must not look like every other one.
+	const isDestructive = actionType === 'defcon_1'
 	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
 
 	return (
@@ -311,7 +318,7 @@ export function CreateProposalForm({
 						<div className="flex flex-col gap-6">
 							<div>
 								<p className="mb-3 text-body font-medium text-[#111827]">Action type</p>
-								<div className="grid grid-cols-2 gap-3">
+								<div className={`grid gap-3 ${actionTypeOptions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
 									{actionTypeOptions.map((option) => (
 										<ActionTypeCard
 											key={option.actionType}
@@ -362,7 +369,9 @@ export function CreateProposalForm({
 								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
 							</div>
 
-							{actionType === 'signer_update' ? (
+							{actionType === 'defcon_1' ? (
+								<Defcon1FormFields />
+							) : actionType === 'signer_update' ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}
@@ -405,7 +414,9 @@ export function CreateProposalForm({
 										<button
 											type="submit"
 											data-testid="e2e-create-proposal-sign-submit"
-											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-body font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
+												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
+											}`}
 											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
@@ -426,7 +437,11 @@ export function CreateProposalForm({
 									<button
 										type="button"
 										data-testid="e2e-create-proposal-preview"
-										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-body font-medium text-[#111827] hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
+										className={`flex items-center gap-2 rounded-lg border bg-white px-5 py-2.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+											isDestructive
+												? 'border-danger text-danger-deep hover:bg-danger-surface'
+												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
+										}`}
 										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
 										onClick={() => void handlePreviewClick()}
 									>
