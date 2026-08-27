@@ -5,6 +5,7 @@ import { ActivationCountdown } from '@/domain/cancel-proposal/components/activat
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
 import { useCancelProposalDetails } from '@/domain/cancel-proposal/hooks/use-cancel-proposal-details'
+import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
@@ -17,8 +18,6 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -49,7 +48,7 @@ export function CancelProposalScreen() {
 	if (proposal !== null && proposal.status !== 'approved') {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
-	if (proposal !== null && !CANCELABLE_AUTHORITIES.includes(proposal.authority)) {
+	if (proposal !== null && !canCancelProposal(proposal)) {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
 

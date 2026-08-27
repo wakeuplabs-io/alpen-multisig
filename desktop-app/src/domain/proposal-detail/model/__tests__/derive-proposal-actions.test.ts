@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
+import { canCancelProposal, deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
 
 const SIGNER_A = '02aaaa'
 const SIGNER_B = '02bbbb'
@@ -9,6 +9,8 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 	return {
 		status: 'pending',
 		broadcastStatus: 'idle',
+		authority: 'strata_admin',
+		actionType: 'multisig_update',
 		requiredSignatures: 2,
 		signatures: [],
 		...overrides,
@@ -114,6 +116,21 @@ for (const status of ['enacted', 'canceled', 'expired'] as const) {
 	const actions = deriveProposalActions(proposal(), null)
 	assert.equal(actions.canSign, false, 'no signerPubkey means no sign affordance')
 	assert.equal(actions.alreadySigned, false, 'no signer cannot have already signed')
+}
+
+// ── AC 10: no cancel affordance for a Defcon 1, written against the V5 future ─
+// The gate used to be an authority allow-list that happened to exclude the
+// council. A test asserting "security_council cannot cancel" would have passed
+// against that code and would go green on the day V5 adds the council to the
+// list for Defcon 3. So the Defcon 1 is given an authority that IS allowed: the
+// only thing that can refuse it then is the action.
+{
+	assert.equal(canCancelProposal({ authority: 'strata_admin', actionType: 'defcon_1' }), false)
+	assert.equal(canCancelProposal({ authority: 'strata_admin', actionType: 'multisig_update' }), true)
+	assert.equal(canCancelProposal({ authority: 'security_council', actionType: 'defcon_1' }), false)
+
+	const actions = deriveProposalActions(proposal({ authority: 'strata_admin', actionType: 'defcon_1' }), SIGNER_A)
+	assert.equal(actions.canCancel, false, 'a Defcon 1 offers no cancel even on a cancellable authority')
 }
 
 console.log('derive-proposal-actions: all assertions passed.')

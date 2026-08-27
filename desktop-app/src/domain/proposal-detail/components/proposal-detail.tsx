@@ -11,7 +11,7 @@ import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-sign
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
-import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
 
 type Props = {
@@ -89,10 +89,7 @@ export function ProposalDetail({
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
 
-	const displayStatus: DisplayStatus =
-		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
-			? 'awaiting_enactment'
-			: proposal.status
+	const displayStatus = proposalDisplayStatus(proposal)
 
 	const [bundleCopied, setBundleCopied] = useState(false)
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)

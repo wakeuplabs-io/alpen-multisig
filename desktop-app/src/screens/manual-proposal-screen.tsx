@@ -3,6 +3,7 @@ import { ManualImportForm } from '@/domain/manual-proposal/components/manual-imp
 import { ManualSignCollect } from '@/domain/manual-proposal/components/manual-sign-collect'
 import { useManualProposal } from '@/domain/manual-proposal/hooks/use-manual-proposal'
 import type { ManualBundleJson } from '@/domain/manual-proposal/model/manual-proposal.types'
+import { SendManuallyPanel } from '@/domain/broadcast-proposal/components/send-manually-panel'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { feeSats } from '@/domain/fee-selection/model/fee-rate'
@@ -329,10 +330,11 @@ export function ManualProposalScreen() {
 									<div className="space-y-3">
 										<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
 											<p className="m-0 text-body-sm font-medium text-danger">Send failed</p>
-											{manual.broadcastError && (
-												<p className="m-0 mt-1 text-label text-danger-deep">{manual.broadcastError}</p>
+											{manual.broadcastErrorDetail && (
+												<p className="m-0 mt-1 text-label text-danger-deep">{manual.broadcastErrorDetail.message}</p>
 											)}
 										</div>
+										{manual.broadcastErrorDetail && <SendManuallyPanel error={manual.broadcastErrorDetail} />}
 										<button
 											type="button"
 											className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-body font-medium text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827]"

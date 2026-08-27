@@ -15,10 +15,9 @@ import {
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { buildProposalTitle } from '@/lib/proposal-title'
-import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
 
 type Tab = 'pending' | 'past'
@@ -420,7 +419,7 @@ function ProposalCard({
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
-	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
+	const { hasQuorum, canSign, canBroadcast, canCancel } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
 	const awaitingEnactment = sendState.kind === 'confirmed'
 
@@ -472,7 +471,7 @@ function ProposalCard({
 						)}
 					</p>
 				</div>
-				<StatusBadge status={awaitingEnactment ? 'awaiting_enactment' : proposal.status} />
+				<StatusBadge status={proposalDisplayStatus(proposal)} />
 			</div>
 
 			<div className="mt-4">
@@ -551,7 +550,7 @@ function ProposalCard({
 								Refresh the dashboard after the confirmation delay to see enacted status.
 							</p>
 						</div>
-						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
+						{canCancel && proposal.cancelProposal === null && (
 							<button
 								type="button"
 								className="shrink-0 rounded-xl border border-danger bg-white px-3 py-1.5 text-body-sm font-medium text-danger transition hover:bg-danger-surface"

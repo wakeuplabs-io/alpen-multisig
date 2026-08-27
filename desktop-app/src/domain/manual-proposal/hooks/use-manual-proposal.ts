@@ -7,6 +7,8 @@ import {
 	type PrepareBroadcastResult,
 } from '@/api/proposals'
 import { computeSighash, decodeActionHex } from '@/api/signing'
+import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
+import { actionTypeFromDecoded } from '@/domain/manual-proposal/model/action-type-from-decoded'
 import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
@@ -65,6 +67,13 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 	const [revealTxid, setRevealTxid] = useState<string | null>(null)
 
 	const hasQuorum = requiredSignatures !== null && localSignatures.length >= requiredSignatures
+
+	// The Tauri layer answers a failed send with a structured error — `code`, a readable
+	// `message` and, when no broadcaster could be reached, the signed commit and reveal
+	// hex. This route used to print that JSON at the signer and drop the transactions
+	// with it, which on the one path built for "the orchestrator is gone" is the worst
+	// place to lose them (AC 15b).
+	const broadcastErrorDetail = broadcastError === null ? null : deriveBroadcastError(broadcastError)
 
 	// No device renders the SPS-65 sighash, so the offline flow also resolves what the device does
 	// render (canonical message / its SHA-256) for the imported action — the signer has nothing else
@@ -210,6 +219,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 				seqNo: seqNoNum,
 				authority: importForm.authority,
 				sighashHex: sighashRes.data.sighashHex,
+				actionType: actionTypeFromDecoded(decodeRes.data),
 			})
 			setStep('sign-collect')
 		} finally {
@@ -297,6 +307,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 				seqNo: bundle.seqNo,
 				authority: bundle.authority,
 				sighashHex: sighashRes.data.sighashHex,
+				actionType: actionTypeFromDecoded(decodeRes.data),
 			})
 			if (bundleSigs.length > 0) setLocalSignatures(bundleSigs)
 			setStep('sign-collect')
@@ -441,7 +452,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		// step 3
 		broadcastPhase,
 		broadcastBundle,
-		broadcastError,
+		broadcastErrorDetail,
 		commitTxid,
 		revealTxid,
 		handleConfirmBroadcast,

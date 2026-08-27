@@ -171,6 +171,8 @@ jobs:
           npm run test:color-tokens --workspace desktop-app
           npm run test:proposal-send-state --workspace desktop-app
           npm run test:proposal-title --workspace desktop-app
+          npm run test:proposal-display-status --workspace desktop-app
+          npm run test:action-type-from-decoded --workspace desktop-app
           npm run test:model-multisig-update-changes --workspace desktop-app
           npm run test:hooks-use-clipboard-copy --workspace desktop-app
           npm run test:model-balance-denomination --workspace desktop-app

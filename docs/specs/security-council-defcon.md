@@ -87,6 +87,13 @@ The replacement does not depend on Defcon and is verifiable before it exists: th
 
 **Implementation note:** The state machine must account for this: Defcon 1 proposals reach `approved` status in the backend but display as "Quorum reached" in the frontend. An invariant test should verify that a simulated cancel targeting a Defcon 1 fails.
 
+> Extended in Phase 6. The desktop held **three** copies of the authority allow-list this rule
+> forbids — the dashboard card, the detail screen's *Cancel this proposal* button, and the cancel
+> route's redirect guard — so AC 10 held only because the council was absent from all three. They are
+> now one `canCancelProposal` carrying the action term, and the test is written against the V5 future:
+> the Defcon 1 it refuses carries an authority that *is* in the list. See
+> [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md) §4.3.
+
 ## State Model
 
 Defcon 1 proposals follow the standard lifecycle, with one label carve-out in the UI:
@@ -100,7 +107,7 @@ Pending → Approved (labeled "Quorum reached" in UI) → Enacted
 Backend state names: `Pending`, `Approved`, `Enacted`, `Expired` (unchanged from other proposal types).  
 Frontend display labels for Defcon 1:
 - `Pending` → "Pending"
-- `Approved` → "Quorum reached — ready to broadcast"  
+- `Approved` → "Quorum reached"  
 - `Enacted` → "Enacted"
 - `Expired` → "Expired"
 
@@ -256,7 +263,8 @@ Status: Pending                          Signatures: 1 / 3
 **Quorum reached (not "Approved"):**
 
 ```
-Status: Quorum reached — ready to broadcast       Signatures: 3 / 3
+Status: Quorum reached                            Signatures: 3 / 3
+Quorum reached — ready to send
 
 [Send]                  ← enable commit/reveal broadcast (UX similar to wallet send screen)
 [Copy signatures]       ← copy all collected signatures to clipboard
@@ -374,7 +382,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 ### 6. Quorum detection and broadcast enable
 **Given** a Defcon 1 proposal with 2 signatures of 3 required  
 **When** the third signature is collected and confirmed on-chain  
-**Then** the proposal status updates to "Quorum reached — ready to broadcast"; the broadcast button becomes enabled.
+**Then** the proposal status updates to "Quorum reached"; the send button becomes enabled.
 
 ### 7. Broadcast construction and transmission
 **Given** a Defcon 1 proposal at quorum  
@@ -389,7 +397,19 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 ### 9. No "Approved" label for Defcon 1
 **Given** a Defcon 1 proposal at quorum  
 **When** displaying its status in the UI  
-**Then** the label shown is "Quorum reached — ready to broadcast", never "Approved".
+**Then** the label shown is "Quorum reached", never "Approved".
+
+> Corrected in Phase 6. This criterion, the State Model's label list and the *Lifecycle Display*
+> wireframe all named the string "Quorum reached — ready to broadcast"; all three now name the
+> shipped badge. Three reasons, and [Constraint 3](#3-defcon-1-never-displays-approved-and-offers-no-cancel-cta-anywhere)
+> — "something like ..., never the word 'Approved'" — is the latitude they are taken under. The app's
+> verb has been *Send* since #432, so a status naming *broadcast* would name a control that is not on
+> screen. A 34-character badge is not a badge: it reflows the card header for one action type, which
+> is a worse signal than the word it replaces. And "Quorum reached" is already the app's name for this
+> moment, on the dashboard group heading and the post-signature modal. The full sentence is not lost —
+> both screens render *Quorum reached — ready to send* beside the badge on a proposal that can be
+> sent. **The non-negotiable half is unchanged: the word "Approved" never appears for a Defcon 1, in
+> any state.** See [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md) §4.1.
 
 ### 10. No cancel CTA anywhere
 **Given** any Defcon 1 proposal in any state (Pending, Quorum reached, Enacted)  
@@ -525,7 +545,7 @@ Desktop app tests use granular scripts (see `desktop-app/package.json` for avail
 
 - [ ] Per-action lock period is read from live ASM state at enactment time, never a cached per-authority value.
 - [ ] Cancelability gate is per-action/per-depth, not an authority check (`Authority::SecurityCouncil`).
-- [ ] Frontend never displays "Approved" label for Defcon 1; uses "Quorum reached — ready to broadcast" instead.
+- [ ] Frontend never displays "Approved" label for Defcon 1; the badge reads "Quorum reached" (corrected under AC 9).
 - [ ] No cancel button, cancel CTA, or cancellation-signature UI appears for Defcon 1 proposals.
 - [ ] Type-to-confirm field exists and enforces exact match (case-insensitive) before signing.
 - [ ] Signing message is rendered verbatim, monospace, without line wrapping or abbreviation.
