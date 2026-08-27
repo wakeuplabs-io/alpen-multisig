@@ -35,42 +35,33 @@ export function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: s
 	)
 }
 
+/**
+ * Selecting an action type is not itself the dangerous step, so every card reads in the neutral
+ * selection palette — including Defcon 1. The danger palette is spent once, on the `Irreversible`
+ * callout below the form, where it still means something.
+ */
 export function ActionTypeCard({
 	title,
 	description,
 	selected,
-	destructive = false,
 	onClick,
 }: {
 	title: string
 	description: string
 	selected: boolean
-	/** Irreversible actions read in the danger palette, selected or not. */
-	destructive?: boolean
 	onClick: () => void
 }) {
-	const palette = destructive
-		? {
-				selected: 'border-danger bg-danger-surface',
-				idle: 'border-danger-border bg-white hover:border-danger hover:bg-danger-surface/40',
-				title: 'text-danger-deep',
-				description: 'text-danger-strong',
-			}
-		: {
-				selected: 'border-accent-border bg-highlight-surface',
-				idle: 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40',
-				title: 'text-emphasis',
-				description: 'text-emphasis-soft',
-			}
+	const selectedClass = 'border-accent-border bg-highlight-surface'
+	const idleClass = 'border-[#e5e7eb] bg-white hover:border-accent-border hover:bg-highlight-surface/40'
 
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`rounded-xl border-2 p-4 text-left transition-colors ${selected ? palette.selected : palette.idle}`}
+			className={`rounded-xl border-2 p-4 text-left transition-colors ${selected ? selectedClass : idleClass}`}
 		>
-			<p className={`m-0 text-body font-semibold ${palette.title}`}>{title}</p>
-			<p className={`m-0 mt-1 text-label ${palette.description}`}>{description}</p>
+			<p className="m-0 text-body font-semibold text-emphasis">{title}</p>
+			<p className="m-0 mt-1 text-label text-emphasis-soft">{description}</p>
 		</button>
 	)
 }

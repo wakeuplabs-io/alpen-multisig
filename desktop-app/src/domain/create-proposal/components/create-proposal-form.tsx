@@ -325,7 +325,6 @@ export function CreateProposalForm({
 											title={option.title}
 											description={option.description}
 											selected={actionType === option.actionType}
-											destructive={option.actionType === 'defcon_1'}
 											onClick={() =>
 												form.setValue('actionType', option.actionType, { shouldValidate: true, shouldDirty: true })
 											}

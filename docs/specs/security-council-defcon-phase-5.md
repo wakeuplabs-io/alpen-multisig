@@ -39,6 +39,13 @@ point about catch-all arms:
 | `desktop-app/src/screens/wallet-connect-screen.tsx:14` | three `AUTHORITY_OPTIONS` | no way to select the council |
 | `desktop-app/src-tauri/src/domain/auth.rs:8`, `infrastructure/asm_status_rpc.rs:59-70` | three `AuthRole` variants, three `role_to_keys` inserts | the membership check that marks an authority card *Available* cannot answer for the council |
 | `desktop-app/src-tauri/src/commands/asm_state.rs:37-45` | authority→role match ends in `_ =>` "not supported in the desktop app yet" | **found in review, not in this table's first draft** — the council's config read fails and `use-create-proposal.ts:124` swallows it, so the review step renders a threshold of `0` over an empty signer set with nothing on screen saying so |
+| `desktop-app/src-tauri/src/infrastructure/asm_role_membership.rs:28-37`, `asm_enactment.rs:139-147` | `authority_to_role` maps three authorities and ends in `_ =>` "not mapped to ASM role authorization yet" | **found by running the flow, after review had closed** — the desktop keeps its own copy of the mapping Phase 3 fixed in `orchestrator-be`, and `ordered_keys_for_authority` is read on every broadcast, so a council proposal creates and signs fine and then fails at *Send* with an error no signer can act on |
+
+The seventh row is the sharpest form of the point: two of these places are in Rust, where the
+compiler *could* have refused the catch-all, and the mapping they duplicate had already been
+corrected once, in another crate, two phases earlier. Every one of the seven is now written
+exhaustively — the council listed, `PayoutAdmin` given its own arm — so the next authority added
+upstream is a build failure rather than a runtime one.
 
 The `default:` arms are the dangerous half. They are not compile errors and they are not runtime
 errors — they are silent substitutions. A council enum member added to TypeScript without touching
@@ -256,6 +263,14 @@ is wiring, and a failing wire is a failing `npm run build` or a failing parse, n
 - **No test of the destructive styling.** `src/lib/__tests__/color-tokens.test.ts` already fails the
   build if a red hex appears outside `styles.css`, which is the only mechanical part of "looks
   dangerous". The rest is a design judgement a test cannot hold.
+
+  That design judgement was made twice. The first implementation also put the action-type card in
+  the danger palette, so the council's only card was red before it was even selected. The contract
+  asks for a form that is unmistakably destructive (`security-council-defcon.md:310-312`), not for
+  every element of it to be — choosing an action type is not the irreversible step, and a red that
+  is spent on the menu is not available for the `Irreversible` callout and the type-to-confirm gate
+  that follow it. The card now reads in the neutral selection palette for every action type,
+  Defcon 1 included.
 - **No e2e / WebDriver spec.** The regtest stack does seed a council (§10), so a spec is
   *possible* — but the WebDriver suite is run one spec at a time by hand
   (`desktop-app/e2e-webdriver/README.md`) and covers the wallet, not proposal creation. Adding the
@@ -364,7 +379,9 @@ Security Council and a Strata Administrator signer — so step 5 is a change of 
 watch a quorum form.
 
 1. Connect → the Security Council card reads *Available*; authenticate; land on `/proposals`.
-2. `/proposals/create` offers Defcon 1 and nothing else, and the form is unmistakably destructive.
+2. `/proposals/create` offers Defcon 1 and nothing else, and the form is unmistakably destructive —
+   the `Irreversible` callout and the type-to-confirm gate, not the action-type card, which reads
+   like any other.
 3. Submit stays disabled until seq-no is set **and** the confirm field matches; `defcon1` keeps it
    disabled with the contract's message.
 4. The form shows the four lines with no `Action Details:` block, and the header badge reads
