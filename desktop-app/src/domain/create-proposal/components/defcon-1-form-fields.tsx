@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useFormContext, useWatch } from 'react-hook-form'
 import { AlertTriangleIcon } from '@/assets/icons'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
+import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useDefcon1ActionHex } from '../hooks/use-defcon-1-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
@@ -25,6 +26,9 @@ export function Defcon1FormFields() {
 	} = useFormContext<CreateProposalFormValues>()
 
 	const { actionHex, error: actionHexError } = useDefcon1ActionHex()
+	// Told, never enforced: the type-to-confirm gate stays the only gate. Refusing the emergency
+	// lever on the strength of a state read that may be stale is the worse failure.
+	const safeHarbourActivated = useSafeHarbourActivated()
 	const seqNo = parseSeqNo(useWatch({ control, name: 'seqNo' }))
 	// Rendered, never written: the four canonical lines come from the same Rust renderer the
 	// device signs over, so they cannot drift from what the signer is about to confirm.
@@ -41,6 +45,17 @@ export function Defcon1FormFields() {
 
 	return (
 		<div className="flex flex-col gap-5">
+			{safeHarbourActivated && (
+				<div className="rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
+					<p className="m-0 text-body font-medium text-emphasis">Safe harbour is already active</p>
+					<p className="m-0 mt-1 text-body text-emphasis-soft">
+						The bridge is already in safe harbour. Another Defcon 1 does not change that — it consumes a council
+						sequence number, costs fees, and needs a full quorum. Create one only if you have reason to believe this
+						state is wrong.
+					</p>
+				</div>
+			)}
+
 			<div className="rounded-xl border border-danger-border bg-danger-surface p-4">
 				<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
 					<AlertTriangleIcon width={16} height={16} className="shrink-0 text-danger" />
