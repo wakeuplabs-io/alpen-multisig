@@ -170,6 +170,10 @@ export const currentVkSchema = z.object({
 	conditionHex: z.string(),
 })
 
+export const safeHarbourStatusSchema = z.object({
+	activated: z.boolean(),
+})
+
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
 
 // action-builder.ts schema
