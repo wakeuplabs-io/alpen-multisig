@@ -148,7 +148,7 @@ export function BroadcastProposalScreen() {
 							<p className="m-0 text-body font-medium text-[#065f46]">
 								{proposal?.status === 'enacted' || result?.proposalStatus === 'enacted'
 									? 'Proposal enacted on-chain.'
-									: 'Reveal confirmed on-chain. Proposal stays approved until ASM enactment; refresh the dashboard after the confirmation delay.'}{' '}
+									: 'Reveal confirmed on-chain. Nothing left to send — the ASM applies the change; refresh the dashboard after the confirmation delay.'}{' '}
 								({proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
 							</p>
 							<button

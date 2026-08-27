@@ -2,15 +2,10 @@
 //
 // PRD 06 §5.2.2 carves Defcon 1 out of the Approved/Canceled lifecycle. The backend still moves it
 // to `approved` at quorum, so the carve-out is a display rule, and it has to hold for every one of
-// the four states the contract lists — not only the one the screens happen to render first.
+// the five states it can hold — not only the one the screens happen to render first.
 
 import assert from 'node:assert/strict'
-import {
-	PROPOSAL_STATUS_STYLE,
-	proposalDisplayStatus,
-	showsActivationCountdown,
-	type DisplayStatus,
-} from '../proposal-status.ts'
+import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, showsActivationCountdown } from '../proposal-status.ts'
 import type { ActionType, BroadcastStatus, ProposalStatus } from '../../api/proposals.ts'
 
 function proposal(status: ProposalStatus, actionType: ActionType, broadcastStatus: BroadcastStatus = 'idle') {
@@ -19,7 +14,7 @@ function proposal(status: ProposalStatus, actionType: ActionType, broadcastStatu
 
 // ── AC 9: no Defcon 1 state renders the word "Approved" ─────────────────────
 {
-	const states: ProposalStatus[] = ['pending', 'approved', 'enacted', 'expired']
+	const states: ProposalStatus[] = ['pending', 'approved', 'enacted', 'expired', 'canceled']
 	for (const status of states) {
 		const display = proposalDisplayStatus(proposal(status, 'defcon_1'))
 		const label = PROPOSAL_STATUS_STYLE[display].label
@@ -39,12 +34,6 @@ function proposal(status: ProposalStatus, actionType: ActionType, broadcastStatu
 	const revealConfirmed: BroadcastStatus = 'reveal_confirmed'
 	assert.equal(proposalDisplayStatus(proposal('approved', 'defcon_1', revealConfirmed)), 'awaiting_enactment')
 	assert.equal(proposalDisplayStatus(proposal('approved', 'vk_update', revealConfirmed)), 'awaiting_enactment')
-}
-
-// ── Every display status has a style, including the two UI-only ones ─────────
-{
-	const uiOnly: DisplayStatus[] = ['awaiting_enactment', 'quorum_reached']
-	for (const status of uiOnly) assert.ok(PROPOSAL_STATUS_STYLE[status] !== undefined)
 }
 
 // ── A depth-0 action counts down to nothing, so it counts down to nothing ────

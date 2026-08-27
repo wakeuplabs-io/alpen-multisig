@@ -1,17 +1,5 @@
-import { CopyButton } from '@/components/copy-button'
+import { HexCopyRow } from './hex-copy-row'
 import type { BroadcastError } from '../model/broadcast-proposal'
-
-function TxHexRow({ label, hex }: { label: string; hex: string }) {
-	return (
-		<div>
-			<p className="mb-1.5 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
-			<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-				<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">{hex}</span>
-				<CopyButton text={hex} />
-			</div>
-		</div>
-	)
-}
 
 /**
  * The last resort: when no broadcaster could be reached, the signed commit and
@@ -33,8 +21,8 @@ export function SendManuallyPanel({ error }: { error: BroadcastError }) {
 				Send the commit first, then the reveal, via any Bitcoin node (
 				<code className="font-mono text-mono-sm">sendrawtransaction</code>).
 			</p>
-			<TxHexRow label="Commit TX (send first)" hex={error.commitTxHex} />
-			<TxHexRow label="Reveal TX (send second)" hex={error.revealTxHex} />
+			<HexCopyRow label="Commit TX (send first)" value={error.commitTxHex} />
+			<HexCopyRow label="Reveal TX (send second)" value={error.revealTxHex} />
 		</div>
 	)
 }

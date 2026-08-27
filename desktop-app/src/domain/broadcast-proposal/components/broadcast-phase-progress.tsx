@@ -1,4 +1,4 @@
-import { CopyButton } from '@/components/copy-button'
+import { HexCopyRow } from './hex-copy-row'
 import { SendManuallyPanel } from './send-manually-panel'
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 
@@ -20,18 +20,6 @@ const STEPS: Step[] = [
 
 /** Commit (0) + Reveal (1) are broadcast together as one package. */
 const BROADCAST_GROUP_LAST_INDEX = 1
-
-function TxidRow({ label, txid }: { label: string; txid: string }) {
-	return (
-		<div>
-			<p className="mb-1.5 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
-			<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
-				<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">{txid}</span>
-				<CopyButton text={txid} />
-			</div>
-		</div>
-	)
-}
 
 export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, revealTxid, error }: Props) {
 	const isError = phase === 'error'
@@ -126,8 +114,8 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 				{showTxids && (
 					<div className="space-y-3">
-						{commitTxid && <TxidRow label="Commit TXID" txid={commitTxid} />}
-						{revealTxid && <TxidRow label="Reveal TXID" txid={revealTxid} />}
+						{commitTxid && <HexCopyRow label="Commit TXID" value={commitTxid} />}
+						{revealTxid && <HexCopyRow label="Reveal TXID" value={revealTxid} />}
 					</div>
 				)}
 
