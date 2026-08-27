@@ -4,8 +4,8 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
+import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
-import { SafeHarbourBanner } from '@/domain/proposals-dashboard/components/safe-harbour-banner'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { AuthRole } from '@/types/auth-role'
@@ -95,7 +95,10 @@ export function ProposalsDashboardScreen() {
 				</>
 			}
 		>
-			{selectedRole === AuthRole.StrataSecurityCouncil && <SafeHarbourBanner />}
+			{/* The council only: no other authority has a lever that answers a bridge-wide state. */}
+			{selectedRole === AuthRole.StrataSecurityCouncil && (
+				<SafeHarbourNote>The bridge is in safe harbour. Another Defcon 1 does not change that.</SafeHarbourNote>
+			)}
 
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
