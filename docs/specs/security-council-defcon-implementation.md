@@ -18,7 +18,8 @@ action codec and builder, and the signer-safety UX. Delivered in one piece it wo
 containing a refactor of a contract shared with every other authority.
 
 This plan breaks it into six phases, one PR each, ordered so that **the two shared-contract refactors
-land first**, before any Defcon product flow exists. The phases are **sequential, not parallel** —
+land first**, before any Defcon product flow exists. A seventh was added after the flow was run by
+hand — see Phase 7 for what running it exposed that reviewing it did not. The phases are **sequential, not parallel** —
 each assumes the ones before it have merged, and Phase 2 in particular cannot compile without
 Phase 1's resolution function. Each phase leaves the tree green and carries the tests that prove it.
 
@@ -47,6 +48,7 @@ Phase 1's resolution function. Each phase leaves the tree green and carries the 
 | 4 | Enactment detection | AC 8 | `orchestrator-be` |
 | 5 | Frontend — create and sign | AC 1, AC 1a, AC 4, AC 5, AC 14 | `desktop-app`, `src-tauri` |
 | 6 | Frontend — lifecycle | AC 6, AC 7, AC 9, AC 10, AC 13, AC 15/15a/15b, AC 16 | `desktop-app` |
+| 7 | Safe harbour visible, enactment per proposal | AC 8 (tightened), AC 18, AC 19, AC 20 | `orchestrator-be`, `desktop-app`, `src-tauri` |
 
 ## 3. Architecture
 
@@ -258,6 +260,24 @@ The display carve-out and the states after quorum: never the word "Approved" for
 "Quorum reached — ready to broadcast"), no cancel affordance in any state or view, the "Send" control
 once quorum is reached, enacted and expired proposals in the "Past" list, and the manual fallback
 reachable through the existing `/manual` route.
+
+### Phase 7 — The safe harbour is visible, and enactment is per proposal
+
+**Detail spec:** [`security-council-defcon-phase-7.md`](./security-council-defcon-phase-7.md).
+
+Not in this plan's original six. It exists because running the finished flow produced a second
+Defcon 1 on a chain whose safe harbour was already active, and neither half of the system
+distinguished it: the enactment predicate reduces to "the safe harbour is active" on any honest
+chain, so the second proposal read as `Enacted` on the strength of the first one's activation; and
+the app that creates the state cannot read it, so the council had nothing on screen saying the
+bridge was already in safe harbour.
+
+Two commits. The predicate gains the sequence-number term every other action's post-condition
+already carries, which makes the answer per-proposal. The desktop gains a safe-harbour read, a
+dashboard banner for council sessions and a warning on the Defcon 1 form — a warning, never a
+block: refusing the emergency lever on the strength of a state read is the worse failure.
+
+Adds AC 18–20 to the contract and tightens the Edge Case that was read as licence for the predicate.
 
 ## 5. Verification
 
