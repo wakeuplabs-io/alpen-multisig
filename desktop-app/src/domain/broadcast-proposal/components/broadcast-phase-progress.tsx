@@ -1,4 +1,5 @@
 import { CopyButton } from '@/components/copy-button'
+import { SendManuallyPanel } from './send-manually-panel'
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
@@ -135,17 +136,7 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 						<div className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3">
 							<p className="m-0 text-body-sm text-danger-strong">{error.message}</p>
 						</div>
-						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
-							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
-								<p className="m-0 text-body-sm font-medium text-[#111827]">Send manually</p>
-								<p className="m-0 text-label text-[#6b7280]">
-									Send the commit first, then the reveal, via any Bitcoin node (
-									<code className="font-mono text-mono-sm">sendrawtransaction</code>).
-								</p>
-								<TxidRow label="Commit TX (send first)" txid={error.commitTxHex} />
-								<TxidRow label="Reveal TX (send second)" txid={error.revealTxHex} />
-							</div>
-						)}
+						<SendManuallyPanel error={error} />
 					</div>
 				)}
 			</div>
