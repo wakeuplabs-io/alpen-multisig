@@ -254,12 +254,39 @@ had wrong:
   catch-all redirects every session, which is the behaviour AC 1a describes. The contract's
   *Create Form Layout* and *Critical Files* were corrected alongside this phase.
 
-### Phase 6 — Frontend: lifecycle
+### Phase 6 — Frontend: lifecycle ✅
 
-The display carve-out and the states after quorum: never the word "Approved" for Defcon 1 (it reads
-"Quorum reached — ready to broadcast"), no cancel affordance in any state or view, the "Send" control
-once quorum is reached, enacted and expired proposals in the "Past" list, and the manual fallback
-reachable through the existing `/manual` route.
+The display carve-out and the states after quorum: never the word "Approved" for Defcon 1, no cancel
+affordance in any state or view, the "Send" control once quorum is reached, enacted and expired
+proposals in the "Past" list, and the manual fallback reachable through the existing `/manual` route.
+
+**Detail spec:** [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md), which
+supersedes the bullets above where they differ. Four things it settled that this plan left open or
+had wrong:
+
+- **Half of the phase's eight criteria need no code, and saying so with evidence is the work.**
+  The lifecycle screens are action-agnostic, so AC 6, 7, 13 and 16 hold for Defcon 1 the moment
+  Phase 5 lets one exist. Writing Defcon-shaped copies of correct code is what Phase 5 avoided by
+  refusing a sibling create screen; the phase's §3 is a `file:line` audit instead.
+- **The badge reads "Quorum reached", not the contract's literal string.** The app's verb has been
+  *Send* since #432 and a 34-character badge reflows the card header. Constraint 3 grants the
+  latitude; AC 9, the State Model row and the wireframe are corrected together, since correcting one
+  would have left the contract contradicting itself twice.
+- **The cancel gate had three copies, not one.** The dashboard card, the detail screen's *Cancel
+  this proposal* button and the cancel route's redirect guard each declared the authority allow-list
+  Constraint 2 forbids. AC 10 held only because the council was absent from all three. The V5 that
+  adds `security_council` for Defcon 3 would have opened all three at once.
+- **Three of the seven defects it found are not Defcon-specific.** The offline route rejected the
+  app's own clipboard export, discarded the raw transaction hex it exists to hand over (AC 15b, which
+  the phase's first audit wrongly marked as already satisfied — the only row it stated without
+  evidence), and labelled every imported action by guessing at a hex prefix. In scope because
+  AC 15/15a/15b are this phase's to close and that path is the fallback the slice leans on for an
+  irreversible action.
+
+**Known divergence:** the contract's *Lifecycle Display* wireframe draws an enacted proposal with a
+block number and a `Safe harbour activated: ✓` line. Neither is rendered and neither is required by
+an acceptance criterion; the safe-harbour read does not exist in the desktop until Phase 7, which
+spends it on the dashboard banner and the create-form warning.
 
 ### Phase 7 — The safe harbour is visible, and enactment is per proposal
 
