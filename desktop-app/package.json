@@ -65,6 +65,7 @@
 		"test:proposal-send-state": "tsx src/lib/__tests__/proposal-send-state.test.ts",
 		"test:proposal-title": "tsx src/lib/__tests__/proposal-title.test.ts",
 		"test:proposal-display-status": "tsx src/lib/__tests__/proposal-display-status.test.ts",
+		"test:action-type-from-decoded": "tsx src/domain/manual-proposal/model/__tests__/action-type-from-decoded.test.ts",
 		"test:model-multisig-update-changes": "tsx src/domain/sign-proposal/model/__tests__/multisig-update-changes.test.ts",
 		"test:hooks-use-clipboard-copy": "tsx src/hooks/__tests__/use-clipboard-copy.test.ts",
 		"test:architecture": "tsx src/domain/admin-wallet/architecture.test.ts",

@@ -92,6 +92,16 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						thresholdBefore,
 						thresholdAfter,
 					})
+				} else if (actionRes.ok && actionRes.data.kind !== 'multisig_update') {
+					// A decoded view must not outlive the action it decoded. Without this the
+					// table survives into a proposal that has no signer-set change — and
+					// `deriveProposalTitle` would then title a Defcon 1 "Add 2 signers".
+					//
+					// Narrowed to a successful decode of another action on purpose: a failed
+					// decode or a failed config read says nothing about whether this proposal
+					// has a signer-set change, and blanking the table on a transient RPC error
+					// would lose information rather than correct it.
+					setSignerSetChange(null)
 				}
 			},
 		)
