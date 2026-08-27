@@ -288,7 +288,7 @@ block number and a `Safe harbour activated: ✓` line. Neither is rendered and n
 an acceptance criterion; the safe-harbour read does not exist in the desktop until Phase 7, which
 spends it on the dashboard banner and the create-form warning.
 
-### Phase 7 — The safe harbour is visible, and enactment is per proposal
+### Phase 7 — The safe harbour is visible, and enactment is per proposal ✅
 
 **Detail spec:** [`security-council-defcon-phase-7.md`](./security-council-defcon-phase-7.md).
 
@@ -299,12 +299,35 @@ chain, so the second proposal read as `Enacted` on the strength of the first one
 the app that creates the state cannot read it, so the council had nothing on screen saying the
 bridge was already in safe harbour.
 
-Two commits. The predicate gains the sequence-number term every other action's post-condition
-already carries, which makes the answer per-proposal. The desktop gains a safe-harbour read, a
-dashboard banner for council sessions and a warning on the Defcon 1 form — a warning, never a
-block: refusing the emergency lever on the strength of a state read is the worse failure.
+The predicate gains the sequence-number term every other action's post-condition already carries,
+which makes the answer per-proposal. The desktop gains a safe-harbour read, a note on the council
+dashboard and the same note on the Defcon 1 form — a warning, never a block: refusing the emergency
+lever on the strength of a state read is the worse failure.
 
 Adds AC 18–20 to the contract and tightens the Edge Case that was read as licence for the predicate.
+Four things the detail spec settled that it had itself got wrong, all found by reading the code
+before writing any:
+
+- **Its test plan was written against infrastructure this repository does not have.** Two of the
+  three tests it named needed a DOM runner (there is none — "component tests" here read source text
+  with `readFileSync`) and the third needed an `AnchorState` fixture that exists nowhere in
+  `src-tauri`. The Rust read composes three functions `fetch_current_operators` already exercises,
+  so the honest coverage is the predicate's unit tests plus the manual run; §6.2 now says that with
+  evidence instead of listing tests nobody could write.
+- **The read carries `activated` and nothing else.** It first returned the safe-harbour address
+  too, which §8 puts out of scope and which would have added a `bitcoin_bosd` dependency to the
+  desktop for a field no caller has.
+- **The note is amber, not the `Irreversible` callout's red**, which the spec first asked it to
+  reuse. Two red blocks in one column leave the signer with two alarms of equal weight, one of them
+  merely a fact about the chain.
+- **"Two commits" was five.** The frontend half spans two languages and four layers; the read is
+  reviewable before either surface consumes it, and the banner and the form warning are one shared
+  note component rather than two blocks that drift.
+
+**Known consequence, recorded in the detail spec §3.3:** with the seqno term,
+`report_broadcast_progress` returns a conflict in the window between a reveal confirming and the
+ASM consuming the seqno, where before it silently succeeded. That is the behaviour every other
+action already has, and the conflict is true where the silent success was not.
 
 ## 5. Verification
 

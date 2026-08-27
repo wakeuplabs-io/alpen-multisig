@@ -470,6 +470,28 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 > half of PRD 06 §3.1.4 — the "usable exclusively by" requirement holds against a caller that never
 > touches the UI.
 
+### 18. Enactment is decided per proposal, not per bridge
+**Given** a Defcon 1 proposal whose reveal transaction has confirmed, on a chain where the safe harbour is already active  
+**When** the orchestrator checks its post-condition while the council's `last_seqno` is still below the proposal's `seq_no`  
+**Then** the proposal is **not** marked `Enacted`, and it becomes `Enacted` only once the council's `last_seqno` has reached its `seq_no` — that is, once its own action executed.
+
+> Added by Phase 7. `safe_harbour().is_activated()` is never reset, so the two terms AC 8 names hold
+> for every Defcon 1 once any of them has enacted. This criterion is the third term that makes the
+> answer this proposal's; AC 8 keeps its wording.
+
+### 19. The council can see the state before it signs
+**Given** a Security Council session on a chain whose safe harbour is already active  
+**When** the signer opens the proposals dashboard, or the Defcon 1 create form  
+**Then** both say that the bridge is already in safe harbour, before any signature is requested. A node that cannot answer shows nothing rather than an error.
+
+### 20. Seeing the state never blocks the lever
+**Given** the Defcon 1 create form with the safe harbour already active  
+**When** the signer completes the type-to-confirm field  
+**Then** the submit control is enabled and the proposal can be created. The type-to-confirm gate remains the only gate.
+
+> Defcon 1 is the emergency lever. Refusing it on the strength of a state read that may be stale, or
+> served by a node that is behind, is a worse failure than allowing a redundant one.
+
 ## Edge Cases
 
 | Scenario | Behavior |
@@ -481,7 +503,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | seq_no is not a valid integer (e.g., `"1.5"` or `"abc"`) | Validation error shown; Sign button disabled. |
 | Type-to-confirm field has extra spaces or case mismatch (`"defcon1"` or `"DEFCON 1 "`) | Sign button disabled; message: `"Type must match 'DEFCON 1' exactly (case-insensitive)."` |
 | ASM state is unavailable when reconciling enacted proposals | Orchestrator retries on next poll cycle; proposal stays in `approved` status until post-condition is confirmed. |
-| Safe harbour is already activated before Defcon 1 is broadcast | The activation is idempotent (`set_activated(true)`). Defcon 1 proposal still reaches `enacted` status correctly. |
+| Safe harbour is already activated before Defcon 1 is broadcast | The activation is idempotent (`set_activated(true)`). The proposal still reaches `enacted` — but on **its own** sequence number ([AC 18](#18-enactment-is-decided-per-proposal-not-per-bridge)), never on the earlier activation. The app says the safe harbour is already active before the signer commits to a second lever ([AC 19](#19-the-council-can-see-the-state-before-it-signs)). |
 | User attempts to copy "all cancel signatures" for Defcon 1 | No such button exists; UI only shows "Copy approval signatures" and "Broadcast" actions. |
 
 ## Critical Files
