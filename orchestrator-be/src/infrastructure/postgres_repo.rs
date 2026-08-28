@@ -50,6 +50,7 @@ fn status_to_db(status: ProposalStatus) -> &'static str {
         ProposalStatus::Enacted => "enacted",
         ProposalStatus::Canceled => "canceled",
         ProposalStatus::Expired => "expired",
+        ProposalStatus::Superseded => "superseded",
     }
 }
 
@@ -60,6 +61,7 @@ fn status_from_db(status: &str) -> Result<ProposalStatus, AppError> {
         "enacted" => Ok(ProposalStatus::Enacted),
         "canceled" => Ok(ProposalStatus::Canceled),
         "expired" => Ok(ProposalStatus::Expired),
+        "superseded" => Ok(ProposalStatus::Superseded),
         _ => Err(AppError::Internal(anyhow::anyhow!(
             "invalid status in database: {status}"
         ))),

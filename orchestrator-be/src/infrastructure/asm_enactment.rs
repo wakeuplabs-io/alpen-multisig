@@ -22,7 +22,15 @@ use crate::infrastructure::{action_codec, rpc_timeout};
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
 #[cfg(any(test, feature = "dev-mocks"))]
-const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+pub(crate) const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+/// Enacts *and* stands past the proposal's seqno: the fixture that proves enactment is decided
+/// before supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_ENACTED_AHEAD_URL: &str = "mock://asm-enacted-ahead";
+/// A chain whose role sequence number has moved past the proposals under test: nothing enacts, and
+/// `last_seqno` answers 5. The fixture for supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_SEQNO_AHEAD_URL: &str = "mock://asm-seqno-ahead";
 
 /// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
 pub(crate) async fn is_proposal_enacted_on_asm(
@@ -352,8 +360,8 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
-        MOCK_ENACTED_URL => Some(true),
-        MOCK_MEMBERSHIP_URL => Some(false),
+        MOCK_ENACTED_URL | MOCK_ENACTED_AHEAD_URL => Some(true),
+        MOCK_MEMBERSHIP_URL | MOCK_SEQNO_AHEAD_URL => Some(false),
         _ => None,
     }
 }

@@ -345,7 +345,72 @@ pub(crate) async fn claim_broadcast_coordination(
     repo.claim_broadcast(action_id).await
 }
 
-/// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions.
+/// The role's live sequence number, or `None` when the ASM cannot answer.
+///
+/// Supersession is a cleanup, never a reason to fail a read: a node that is down must not turn a
+/// proposal list into an error.
+async fn live_last_seqno(asm_rpc_url: &str, authority: Authority) -> Option<u64> {
+    match last_seqno_for_authority(asm_rpc_url, authority).await {
+        Ok(seqno) => Some(seqno),
+        Err(e) => {
+            tracing::warn!("supersession: last_seqno lookup failed for {authority:?}: {e}");
+            None
+        }
+    }
+}
+
+/// Retire a proposal the chain has moved past.
+///
+/// Upstream accepts an action only when its seqno is strictly above the role's `last_seqno`, and
+/// the seqno is inside the signed message — so once the role stands past it, the proposal cannot
+/// be sent, and cannot be relabelled without a fresh quorum. Only reached after the enactment
+/// check, so a proposal that did enact is never swept.
+/// See docs/specs/proposal-lifecycle-seqno-truth.md §4.
+///
+/// A queued update is the exception, and it is not a small one: upstream consumes the seqno when
+/// it *accepts* an action, and an action with a confirmation depth waits in the admin queue for
+/// its activation height. So a perfectly healthy update maturing over 2016 blocks has its seqno
+/// passed by the next action of the same role, and would be swept while it is still on its way.
+/// Presence in the live queue is proof the ASM accepted it; that outranks the seqno.
+async fn supersede_if_seq_no_consumed(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    proposal: &Proposal,
+    last_seqno: Option<u64>,
+) -> Result<(), AppError> {
+    if last_seqno.is_none_or(|last| proposal.seq_no >= last) {
+        return Ok(());
+    }
+    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+        Ok(Some(_)) => return Ok(()),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!(
+                action_id = %proposal.action_id.0,
+                "supersession: queue lookup failed, leaving the proposal alone: {e}"
+            );
+            return Ok(());
+        }
+    }
+    tracing::info!(
+        action_id = %proposal.action_id.0,
+        seq_no = proposal.seq_no,
+        "superseding proposal: the role's sequence number has passed it"
+    );
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        proposal.broadcast_status,
+        Some(ProposalStatus::Superseded),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions,
+/// and retire the ones whose sequence number the chain has already consumed.
 pub(crate) async fn reconcile_enacted_for_authority(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
@@ -355,31 +420,39 @@ pub(crate) async fn reconcile_enacted_for_authority(
         .list_by_status(authority, Some(ProposalStatus::Approved))
         .await?;
 
+    if approved.is_empty() {
+        return Ok(());
+    }
+    let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
+
     for proposal in approved {
-        if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
-            continue;
-        }
-        if proposal.reveal_txid.is_none() {
-            continue;
-        }
-        let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-            asm_rpc_url,
-            proposal.authority,
-            proposal.seq_no,
-            &proposal.action_hex,
-        )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!(
-                    action_id = %proposal.action_id.0,
-                    "reconcile_enacted_for_authority: ASM enactment check failed: {e}"
-                );
-                continue;
+        // Only a confirmed reveal can have enacted; everything else goes straight to the
+        // supersession check, which is what retires a bundle that never made it on chain.
+        let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
+            && proposal.reveal_txid.is_some();
+        let enacted = if awaiting_enactment {
+            match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+                asm_rpc_url,
+                proposal.authority,
+                proposal.seq_no,
+                &proposal.action_hex,
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!(
+                        action_id = %proposal.action_id.0,
+                        "reconcile_enacted_for_authority: ASM enactment check failed: {e}"
+                    );
+                    continue;
+                }
             }
+        } else {
+            false
         };
         if !enacted {
+            supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await?;
             continue;
         }
         if let Some(target_action_id) = &proposal.target_action_id {
@@ -465,32 +538,36 @@ pub(crate) async fn reconcile_enacted_for_action(
     };
     require_proposal_authority(&proposal, authority)?;
 
-    if proposal.status != ProposalStatus::Approved
-        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        || proposal.reveal_txid.is_none()
-    {
+    if proposal.status != ProposalStatus::Approved {
         return Ok(());
     }
 
-    let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-        asm_rpc_url,
-        proposal.authority,
-        proposal.seq_no,
-        &proposal.action_hex,
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!(
-                action_id = %action_id.0,
-                "reconcile_enacted_for_action: ASM enactment check failed: {e}"
-            );
-            return Ok(());
+    let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
+        && proposal.reveal_txid.is_some();
+    let enacted = if awaiting_enactment {
+        match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+            asm_rpc_url,
+            proposal.authority,
+            proposal.seq_no,
+            &proposal.action_hex,
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %action_id.0,
+                    "reconcile_enacted_for_action: ASM enactment check failed: {e}"
+                );
+                return Ok(());
+            }
         }
+    } else {
+        false
     };
     if !enacted {
-        return Ok(());
+        let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
+        return supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await;
     }
 
     if let Some(target_action_id) = &proposal.target_action_id {
@@ -1609,6 +1686,67 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    /// Setup for the supersession tests: approved, quorum reached, nothing broadcast.
+    async fn save_approved(repo: &InMemoryProposalRepository, seq_no: u64) -> ActionId {
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(repo, session, seq_no, ACTION_HEX, &sig, 2, None)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(repo, session_b, "mock://asm-membership", &created.action_id)
+            .await
+            .unwrap();
+        created.action_id
+    }
+
+    /// The chain's sequence number has passed the proposal, so its transaction can never be
+    /// accepted — whether or not it was ever broadcast.
+    #[tokio::test]
+    async fn reconcile_supersedes_a_proposal_the_chain_moved_past() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Superseded);
+    }
+
+    /// Enactment is decided first, so a proposal that did enact is never swept even though the
+    /// same chain state would supersede it.
+    #[tokio::test]
+    async fn reconcile_prefers_enactment_over_supersession() {
+        let repo = new_repo();
+        let action_id = save_reveal_confirmed_approved(&repo).await;
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Enacted);
     }
 
     #[tokio::test]

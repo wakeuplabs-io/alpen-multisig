@@ -367,7 +367,10 @@ fn authority_keys_hex(
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn is_mock_url(rpc_url: &str) -> bool {
-    rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted"
+    rpc_url == "mock://asm-membership"
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_URL
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
 }
 
 #[cfg(not(any(test, feature = "dev-mocks")))]
@@ -424,6 +427,12 @@ fn mock_membership(_rpc_url: &str, _authority: Authority, _signer_pubkey: &str) 
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
+    // Two chains that have moved past the proposals under test: one enacts them, one does not.
+    if rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL
+    {
+        return Some(5);
+    }
     if rpc_url != "mock://asm-membership" {
         return None;
     }
