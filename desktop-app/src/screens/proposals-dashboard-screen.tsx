@@ -6,6 +6,7 @@ import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
+import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { AuthRole } from '@/types/auth-role'
@@ -25,6 +26,11 @@ export function ProposalsDashboardScreen() {
 	const panel = useWalletPanelData()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
+
+	// The council only: no other authority has a lever that answers a bridge-wide state, so no
+	// other session reads it either.
+	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
+	const safeHarbourActivated = useSafeHarbourActivated(isCouncil)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -95,13 +101,13 @@ export function ProposalsDashboardScreen() {
 				</>
 			}
 		>
-			{/* The council only: no other authority has a lever that answers a bridge-wide state. */}
-			{selectedRole === AuthRole.StrataSecurityCouncil && (
-				<SafeHarbourNote>The bridge is in safe harbour. Another Defcon 1 does not change that.</SafeHarbourNote>
-			)}
-
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
+				notice={
+					safeHarbourActivated ? (
+						<SafeHarbourNote>The bridge is in safe harbour. Another Defcon 1 does not change that.</SafeHarbourNote>
+					) : null
+				}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}

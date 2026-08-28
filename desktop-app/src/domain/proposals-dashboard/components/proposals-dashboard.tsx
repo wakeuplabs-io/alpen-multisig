@@ -24,6 +24,8 @@ type Tab = 'pending' | 'past'
 
 type Props = {
 	authorityLabel: string
+	/** Rendered above the header, inside the same column. Nothing is reserved when it is absent. */
+	notice?: ReactNode
 	signerPubkey: string | null
 	quorumReached: Proposal[]
 	pending: Proposal[]
@@ -42,6 +44,7 @@ type Props = {
 
 export function ProposalsDashboard({
 	authorityLabel,
+	notice,
 	signerPubkey,
 	quorumReached,
 	pending,
@@ -74,6 +77,8 @@ export function ProposalsDashboard({
 
 	return (
 		<section className="mx-auto w-full max-w-200">
+			{notice ? <div className="mb-6">{notice}</div> : null}
+
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
 					<h1 className="m-0 font-display text-display-md font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
