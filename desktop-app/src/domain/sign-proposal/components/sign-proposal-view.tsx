@@ -3,6 +3,8 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -117,17 +119,32 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 }
 
 function Defcon1Details() {
+	// Read here and not only on the dashboard: this is the screen where the signer commits, and
+	// the sentence below is written in the future tense, which is wrong once the harbour is up.
+	const safeHarbourActivated = useSafeHarbourActivated()
+
 	return (
-		<div className="mt-5 rounded-lg border border-danger-border bg-danger-surface p-3.5">
-			<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
-				<AlertTriangleIcon width={15} height={15} className="shrink-0 text-danger" />
-				Irreversible
-			</p>
-			<p className="m-0 mt-2 text-label text-danger-deep">
-				Approving this authorizes the bridge safe harbour to activate immediately once the proposal is broadcast. The
-				action carries no payload — its identity is the signal — and it cannot be cancelled.
-			</p>
-		</div>
+		<>
+			{safeHarbourActivated && (
+				<div className="mt-5">
+					<SafeHarbourNote>
+						The bridge is already in safe harbour. Signing this does not change that — it consumes a council sequence
+						number and needs a full quorum.
+					</SafeHarbourNote>
+				</div>
+			)}
+
+			<div className="mt-5 rounded-lg border border-danger-border bg-danger-surface p-3.5">
+				<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
+					<AlertTriangleIcon width={15} height={15} className="shrink-0 text-danger" />
+					Irreversible
+				</p>
+				<p className="m-0 mt-2 text-label text-danger-deep">
+					Approving this authorizes the bridge safe harbour to activate immediately once the proposal is broadcast. The
+					action carries no payload — its identity is the signal — and it cannot be cancelled.
+				</p>
+			</div>
+		</>
 	)
 }
 

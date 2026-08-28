@@ -1,6 +1,7 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { ShieldAccentIcon } from '@/assets/icons'
+import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
@@ -98,6 +99,15 @@ export function BroadcastProposalScreen() {
 
 				<div className="mt-6 space-y-4">
 					<BroadcastFundingSignerBanner backendSignerKind={backendSignerKind} connectVendor={adapter.vendor} />
+
+					{/* The last screen before the fees are spent. Defcon 1 only: no other action reads on
+					    a bridge-wide state, and the note performs its own read when it mounts. */}
+					{proposal?.actionType === 'defcon_1' && (
+						<SafeHarbourNote>
+							The bridge is already in safe harbour. Sending this does not change that — it consumes a council sequence
+							number and costs the commit and reveal fees.
+						</SafeHarbourNote>
+					)}
 
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
