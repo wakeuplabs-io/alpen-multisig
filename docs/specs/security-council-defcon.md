@@ -99,19 +99,26 @@ The replacement does not depend on Defcon and is verifiable before it exists: th
 Defcon 1 proposals follow the standard lifecycle, with one label carve-out in the UI:
 
 ```
-Pending → Approved (labeled "Quorum reached" in UI) → Enacted
-   ↓                                                      ↓
-   └──────────────── Past (expired or enacted) ─────────→
+Pending ──→ Approved (labeled "Quorum reached" in UI) ──→ Enacted
+   │            │
+   ↓            ↓
+Expired     Superseded
+
+Past list: Enacted, Expired, Superseded
 ```
 
-Backend state names: `Pending`, `Approved`, `Enacted`, `Expired` (unchanged from other proposal types).  
+Backend state names: `Pending`, `Approved`, `Enacted`, `Expired`, `Superseded` (unchanged from other proposal types — `Superseded` was added for all of them by
+[`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md)).  
 Frontend display labels for Defcon 1:
 - `Pending` → "Pending"
 - `Approved` → "Quorum reached"  
 - `Enacted` → "Enacted"
 - `Expired` → "Expired"
+- `Superseded` → "Superseded"
 
-**Past proposals:** Enacted or expired Defcon 1 proposals appear in the "Past" list on the dashboard (per PRD 06 §5.4). A signer can review the historical record.
+**Superseded** is reached when the council's on-chain `last_seqno` passes the proposal's `seq_no` without the proposal enacting: the sequence number is inside the signed message, so it can no longer be sent and cannot be relabelled without a fresh quorum. It is terminal and it is not a failure of the signers — it means another action of the same authority used that number first.
+
+**Past proposals:** Enacted, expired and superseded Defcon 1 proposals appear in the "Past" list on the dashboard (per PRD 06 §5.4). A signer can review the historical record.
 
 Defcon 1 proposals **never** display "Approved" or "Canceled" labels and **never** display a cancel CTA.
 
@@ -478,6 +485,11 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 > Added by Phase 7. `safe_harbour().is_activated()` is never reset, so the two terms AC 8 names hold
 > for every Defcon 1 once any of them has enacted. This criterion is the third term that makes the
 > answer this proposal's; AC 8 keeps its wording.
+>
+> Tightened afterwards to an equality, and the reason is upstream's: `update_last_seqno` *jumps* to
+> whatever seqno it accepted, so `last_seqno > seq_no` is another action's doing. A proposal the
+> role has passed does not stay `Approved` either — it is `Superseded`. See
+> [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §3.1 and §4.
 
 ### 19. The council can see the state before it signs
 **Given** a Security Council session on a chain whose safe harbour is already active  
@@ -498,6 +510,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 |---|---|
 | User navigates to `/proposals/create/defcon-1` with a non-council session | Redirect to `/` (wallet-connect screen). No Defcon 1 form rendered. |
 | Two signers submit concurrent Defcon 1 proposals with same `seq_no` | Second POST is rejected naming the existing `ActionId`; backend state unchanged. The second signer approves that proposal. |
+| Two Defcon 1 proposals with different `seq_no` are broadcast while both are unconfirmed | The miner decides the order. Whichever is applied first advances the council's `last_seqno` past the other, which then becomes `Superseded` — the ASM refuses it, silently, and it can never be sent. Sending it is refused before any fee is spent. See [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md). |
 | User clicks Sign but the hardware wallet refuses the signature | Error shown; form remains; user can retry or change seq_no and try again. |
 | User closes browser before broadcast completes | Proposal remains in "Quorum reached" state on the backend; user can reconnect and retry broadcast anytime. |
 | seq_no is not a valid integer (e.g., `"1.5"` or `"abc"`) | Validation error shown; Sign button disabled. |

@@ -19,7 +19,8 @@ containing a refactor of a contract shared with every other authority.
 
 This plan breaks it into six phases, one PR each, ordered so that **the two shared-contract refactors
 land first**, before any Defcon product flow exists. A seventh was added after the flow was run by
-hand — see Phase 7 for what running it exposed that reviewing it did not. The phases are **sequential, not parallel** —
+hand, and an eighth after it was run again — see Phase 7 and Phase 8 for what running it exposed
+that reviewing it did not. The phases are **sequential, not parallel** —
 each assumes the ones before it have merged, and Phase 2 in particular cannot compile without
 Phase 1's resolution function. Each phase leaves the tree green and carries the tests that prove it.
 
@@ -49,6 +50,7 @@ Phase 1's resolution function. Each phase leaves the tree green and carries the 
 | 5 | Frontend — create and sign | AC 1, AC 1a, AC 4, AC 5, AC 14 | `desktop-app`, `src-tauri` |
 | 6 | Frontend — lifecycle | AC 6, AC 7, AC 9, AC 10, AC 13, AC 15/15a/15b, AC 16 | `desktop-app` |
 | 7 | Safe harbour visible, enactment per proposal | AC 8 (tightened), AC 18, AC 19, AC 20 | `orchestrator-be`, `desktop-app`, `src-tauri` |
+| 8 | The sequence number tells the truth | [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) AC A–E; AC 18 tightened | `orchestrator-be`, `desktop-app`, `src-tauri` |
 
 ## 3. Architecture
 
@@ -345,3 +347,40 @@ if any state predates the ASM pin bump):
 4. No cancel affordance and no "Approved" label in any state.
 5. `e2e-tests/tests/e2e_defcon_probe.rs` still passes — it is the upstream capability evidence this
    slice is built on.
+
+### Phase 8 — The sequence number tells the truth ✅
+
+**Contract:** [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md). It is a
+document of its own rather than an eighth phase spec, because **none of it is Defcon-specific**: the
+same rules and the same new terminal state apply to every authority and every action type. Running
+Defcon 1 by hand is only what exposed them.
+
+Two symptoms from a manual session — two proposals stuck at *Reveal sent* and never enacting, and an
+older proposal still signable with the safe harbour already active — turned out to be surface
+effects of one upstream fact nothing here modelled: the ASM accepts an action only when its seqno is
+strictly above the role's `last_seqno`, `update_last_seqno` **jumps** to the accepted value, and the
+seqno is inside the signed message. So a proposal whose seqno is passed is finished, and a rejected
+action leaves no trace at all — `let _ = handle_action(...)`.
+
+What Phase 8 changed, and what it deliberately did not:
+
+- **Phase 7's fix was incomplete in a way only this reading exposes.** `last_seqno >= seq_no` is
+  satisfied by any later action of the role, and Defcon 1's other two terms are facts about the
+  bridge, so a proposal the chain refused could still be marked `Enacted` on another transaction's
+  activation. The Defcon 1 arm now requires equality; the config-carrying arms keep `>=` because
+  their remaining terms are independent evidence.
+- **`Superseded` is a new terminal state for every authority.** Nothing retired a dead proposal:
+  `expire_if_overdue` touches `Pending` only and the orchestrator runs no background job. Two
+  orderings carry its correctness — enactment is decided before supersession, and a queued update
+  outranks the seqno, because upstream consumes the seqno when it *accepts* an action and a
+  depth-bearing update then waits in the queue for its activation height.
+- **The claim refuses a consumed sequence number**, which is hygiene on a transaction the chain will
+  reject, not the ordering enforcement PRD 02 §4.3 forbids.
+- **Four screens stopped asserting what they had not checked**, and the safe-harbour note reached
+  the sign and send screens — the two places where the second symptom's decisions were actually
+  taken, and where the copy was still in the future tense.
+- **The broadcast engine was left alone, on purpose.** §9 of the contract records the finding most
+  likely to explain the first symptom — two commits can select the same UTXO, because coin selection
+  reserves nothing and the signed commit is never inserted into the local `TxGraph`, and the loser's
+  reveal is unrecoverable once the ephemeral key is evicted. It is a change to the signing path and
+  does not belong in a phase about labels.
