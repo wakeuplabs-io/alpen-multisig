@@ -155,8 +155,8 @@ the desktop can already decode.
 | `fetch_safe_harbour_activated(rpc_url) -> Result<bool, String>` | `infrastructure/asm_status_rpc.rs` — decode bridge state, return `safe_harbour().is_activated()` |
 | `get_safe_harbour_status` IPC command | `commands/asm_state.rs`, beside `get_current_operators` |
 | `useSafeHarbourStatus` | `desktop-app/src/hooks/` — both consumers are outside `create-proposal`, so it sits with `use-device-signing-message.ts` rather than inside one domain |
-| `SafeHarbourNote` | `desktop-app/src/components/` — one component for both surfaces: it owns the read, renders nothing when the state is inactive or unreadable, and takes the caller's sentence as `children` |
-| Dashboard banner (council session only) | `desktop-app/src/screens/proposals-dashboard-screen.tsx` |
+| `SafeHarbourNote` | `desktop-app/src/components/` — one presentational primitive for both surfaces, taking the caller's sentence as `children`; the read stays in the hook, as the frontend rules require of anything in `components/` |
+| Dashboard banner (council session only) | `desktop-app/src/screens/proposals-dashboard-screen.tsx` reads the state and passes the note to `ProposalsDashboard`'s `notice` slot, so it lands in the same column as the heading and the *Create proposal* button rather than at the shell's full width |
 | Create-form warning | `desktop-app/src/domain/create-proposal/components/defcon-1-form-fields.tsx` |
 
 Two corrections to that table, both found by reading the code the phase was about to touch:
@@ -224,9 +224,14 @@ layers, and the read is useful and reviewable before either surface consumes it:
 **Commit B3 — the dashboard banner.** The council-only banner in `proposals-dashboard-screen.tsx`,
 which is the same note in a second place and depends on nothing B2 introduced beyond the hook.
 
-A fifth commit followed the review of B1–B3: the two amber blocks were the same container, heading
+Two commits followed the review of B1–B3. The two amber blocks were the same container, heading
 and conditional read differing only in prose, so they became one `SafeHarbourNote` taking that
 prose as `children`, with `role="status"` so a note that appears after an async read is announced.
+Then the dashboard copy was found rendering at the shell's full width, a column wider than every
+surface below it, which made a note about the proposals read as an alarm about the app: it moved
+into `ProposalsDashboard` as a `notice` slot, the read moved out of the component and into the
+screen (`components/` holds presentational primitives, which do not call the API), and the hook
+gained the `enabled` flag that keeps non-council sessions from making the request.
 
 ## 6. Tests
 
