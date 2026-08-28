@@ -33,11 +33,16 @@ type SendStateInput = {
 /**
  * Definitions of every broadcast stage, in transition order. This table is what
  * the user-facing lifecycle doc describes, so keep the two in step.
+ *
+ * Each line says what the app did and what it has seen — never where a transaction is now. The
+ * status here is the last one that was persisted; nothing re-reads the mempool once the send
+ * screen is closed, so "it is in the mempool" was an assertion no code had checked, and it read
+ * identically whether the transaction was propagating normally or had been dropped hours ago.
  */
 const STAGE: Record<Exclude<BroadcastStatus, 'idle'>, { label: string; detail: string }> = {
 	commit_broadcasted: {
 		label: 'Commit sent',
-		detail: 'The commit transaction is in the mempool, waiting to be mined.',
+		detail: 'The commit transaction was broadcast. The app has not seen it confirm.',
 	},
 	commit_confirmed: {
 		label: 'Commit confirmed',
@@ -45,11 +50,12 @@ const STAGE: Record<Exclude<BroadcastStatus, 'idle'>, { label: string; detail: s
 	},
 	reveal_broadcasted: {
 		label: 'Reveal sent',
-		detail: 'The reveal transaction is in the mempool, waiting to be mined.',
+		detail: 'The reveal transaction was broadcast. The app has not seen it confirm.',
 	},
 	reveal_confirmed: {
 		label: 'Reveal confirmed — awaiting ASM enactment',
-		detail: 'Both transactions are on chain. Nothing left to send; the ASM applies the change after the delay.',
+		detail:
+			'Both transactions are on chain. Nothing left to send: the ASM applies the change if it accepts the action.',
 	},
 	failed: {
 		label: 'Send failed',

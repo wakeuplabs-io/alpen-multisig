@@ -551,9 +551,7 @@ function ProposalCard({
 							<p className="m-0 text-body font-medium text-[#0f9d7a]">
 								{sendState.kind === 'confirmed' ? sendState.label : ''}
 							</p>
-							<p className="m-0 mt-1 text-label text-[#6b7280]">
-								Refresh the dashboard after the confirmation delay to see enacted status.
-							</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">Refresh to check whether the ASM has applied it.</p>
 						</div>
 						{canCancel && proposal.cancelProposal === null && (
 							<button
