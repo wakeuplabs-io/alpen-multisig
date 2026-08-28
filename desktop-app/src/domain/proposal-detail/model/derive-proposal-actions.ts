@@ -52,7 +52,11 @@ export function canCancelProposal(proposal: CancelableInput): boolean {
 // signer to add their signature.
 export function deriveProposalActions(proposal: ProposalActionInput, signerPubkey: string | null): ProposalActions {
 	const collectedSignatures = proposal.signatures.length
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
+	const isTerminal =
+		proposal.status === 'enacted' ||
+		proposal.status === 'canceled' ||
+		proposal.status === 'expired' ||
+		proposal.status === 'superseded'
 	const hasQuorum =
 		!isTerminal && (proposal.status === 'approved' || collectedSignatures >= proposal.requiredSignatures)
 	const broadcastStarted = proposal.broadcastStatus !== 'idle'

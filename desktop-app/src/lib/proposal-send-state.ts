@@ -20,6 +20,8 @@ export type ProposalSendState =
 	| { kind: 'confirmed'; label: string; detail: string }
 	/** Broadcast failed. The button comes back as a retry — the backend allows it. */
 	| { kind: 'failed'; label: string; detail: string }
+	/** The chain moved past this proposal's sequence number. Nothing to press, ever again. */
+	| { kind: 'superseded'; label: string; detail: string }
 
 type SendStateInput = {
 	status: ProposalStatus
@@ -55,13 +57,28 @@ const STAGE: Record<Exclude<BroadcastStatus, 'idle'>, { label: string; detail: s
 	},
 }
 
+/**
+ * Said wherever the broadcast stage would be said, because it replaces it: this is the one
+ * terminal state a signer is likely to have been waiting on when it arrives.
+ */
+const SUPERSEDED = {
+	label: 'Superseded',
+	detail:
+		'Another action used this sequence number first. The signatures on this proposal are bound to that number, so it can no longer be sent — a replacement has to be created and signed again.',
+}
+
 export function proposalSendState(proposal: SendStateInput): ProposalSendState {
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
+	const isTerminal =
+		proposal.status === 'enacted' ||
+		proposal.status === 'canceled' ||
+		proposal.status === 'expired' ||
+		proposal.status === 'superseded'
 	const hasQuorum =
 		!isTerminal && (proposal.status === 'approved' || proposal.signatures.length >= proposal.requiredSignatures)
 
 	// Only an approved proposal has a bundle to broadcast. Quorum alone is not
 	// enough: the backend approves the proposal before the bundle exists.
+	if (proposal.status === 'superseded') return { kind: 'superseded', ...SUPERSEDED }
 	if (isTerminal || !hasQuorum || proposal.status !== 'approved') return { kind: 'unavailable' }
 
 	switch (proposal.broadcastStatus) {

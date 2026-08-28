@@ -569,7 +569,7 @@ function ProposalCard({
 						)}
 					</div>
 				</div>
-			) : sendState.kind === 'in-flight' ? (
+			) : sendState.kind === 'in-flight' || sendState.kind === 'superseded' ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
 					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>

@@ -53,6 +53,11 @@ export const PROPOSAL_STATUS_STYLE: Record<DisplayStatus, StatusStyle> = {
 		label: 'Canceled',
 	},
 	expired: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Expired' },
+	/**
+	 * Same neutral palette as `expired`: both are proposals that ran out of a window rather than
+	 * failing at anything. The difference is which window, and the card says so in words.
+	 */
+	superseded: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb', dot: '#6b7280', label: 'Superseded' },
 }
 
 type DisplayStatusInput = {

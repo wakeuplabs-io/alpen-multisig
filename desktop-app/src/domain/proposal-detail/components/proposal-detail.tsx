@@ -292,7 +292,7 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"
