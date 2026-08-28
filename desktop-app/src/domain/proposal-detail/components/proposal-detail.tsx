@@ -5,6 +5,7 @@ import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
@@ -299,6 +300,7 @@ export function ProposalDetail({
 						>
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+							<p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChangeLabel(proposal.updatedAtMs)}</p>
 						</div>
 					)}
 

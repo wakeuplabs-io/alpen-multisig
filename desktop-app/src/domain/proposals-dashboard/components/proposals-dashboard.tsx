@@ -14,6 +14,7 @@ import {
 } from '@/assets/icons'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { lastChangeLabel } from '@/lib/last-change-label'
 import { buildProposalTitle } from '@/lib/proposal-title'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
@@ -571,6 +572,7 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
 					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+					<p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChangeLabel(proposal.updatedAtMs)}</p>
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">

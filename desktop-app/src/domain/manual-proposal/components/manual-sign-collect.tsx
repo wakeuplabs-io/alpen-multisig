@@ -59,6 +59,7 @@ export function ManualSignCollect({
 		updateIdInQueue: null,
 		cancelProposal: null,
 		createdAtMs: 0,
+		updatedAtMs: 0,
 		expiresAtMs: 0,
 	}
 

@@ -15,6 +15,7 @@ const proposalWithNullBroadcastFields = {
 	revealTxid: null,
 	broadcastError: null,
 	createdAtMs: 1000000,
+	updatedAtMs: 1000000,
 	expiresAtMs: 2000000,
 }
 

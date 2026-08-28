@@ -6,6 +6,7 @@ use crate::domain::proposal::{
     ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
 };
 use crate::error::AppError;
+use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -105,6 +106,7 @@ impl ProposalRepository for InMemoryProposalRepository {
             }
         }
         proposal.broadcast_status = BroadcastStatus::CommitBroadcasted;
+        proposal.updated_at = Utc::now();
         Ok(proposal.clone())
     }
 
@@ -125,6 +127,7 @@ impl ProposalRepository for InMemoryProposalRepository {
             return Ok(None);
         };
         proposal.broadcast_status = status;
+        proposal.updated_at = Utc::now();
         if let Some(s) = proposal_status {
             proposal.status = s;
         }
@@ -203,9 +206,11 @@ impl ProposalRepository for InMemoryProposalRepository {
 
         if let Some(target) = proposals.get_mut(target_action_id) {
             target.status = ProposalStatus::Canceled;
+            target.updated_at = Utc::now();
         }
         if let Some(proposal) = proposals.get_mut(cancel_action_id) {
             proposal.status = ProposalStatus::Enacted;
+            proposal.updated_at = Utc::now();
         }
         Ok(true)
     }
@@ -241,6 +246,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: Utc::now(),
+            updated_at: Utc::now(),
         }
     }
 

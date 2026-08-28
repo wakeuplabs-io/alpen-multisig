@@ -89,6 +89,7 @@ pub(crate) async fn create_update_action(
         activation_height: None,
         update_id_in_queue: None,
         created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -713,6 +714,7 @@ pub(crate) async fn create_cancel_proposal(
         activation_height: None,
         update_id_in_queue: None,
         created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -1256,6 +1258,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1547,6 +1550,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -1607,6 +1611,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
@@ -2106,6 +2111,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
         repo.save_proposal(target).await.unwrap();
 

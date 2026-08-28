@@ -49,6 +49,8 @@ export type Proposal = {
 	updateIdInQueue: number | null
 	cancelProposal: CancelProposalSummary | null
 	createdAtMs: number
+	/** Last change of any kind, including every broadcast-status write. */
+	updatedAtMs: number
 	expiresAtMs: number
 }
 

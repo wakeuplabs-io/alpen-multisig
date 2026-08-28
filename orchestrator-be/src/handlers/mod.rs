@@ -389,6 +389,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         })
         .await
         .unwrap();
