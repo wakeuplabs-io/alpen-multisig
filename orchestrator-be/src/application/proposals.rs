@@ -341,8 +341,29 @@ pub(crate) async fn claim_broadcast_coordination(
 
     let proposal = require_approved(raw)?;
     ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
+    ensure_seq_no_still_open(&proposal, asm_rpc_url).await?;
 
     repo.claim_broadcast(action_id).await
+}
+
+/// Refuse to broadcast a bundle the ASM will refuse.
+///
+/// Upstream accepts an action only when its seqno is strictly above the role's `last_seqno`, so a
+/// proposal the role has already passed is a commit fee, a reveal fee and a destroyed ephemeral
+/// key spent on a transaction that cannot execute. Not an ordering rule (PRD 02 §4.3): nothing
+/// here stops a higher seqno from going first, and the proposal being refused is one no ordering
+/// could rescue. Best-effort, like the threshold snapshot beside it — the chain can move between
+/// this check and the block.
+async fn ensure_seq_no_still_open(proposal: &Proposal, asm_rpc_url: &str) -> Result<(), AppError> {
+    let last_seqno = last_seqno_for_authority(asm_rpc_url, proposal.authority).await?;
+    if proposal.seq_no > last_seqno {
+        return Ok(());
+    }
+    Err(AppError::Conflict(format!(
+        "sequence number {} was already used on chain (the authority is at {}); \
+         this proposal can no longer be broadcast and needs to be recreated",
+        proposal.seq_no, last_seqno
+    )))
 }
 
 /// The role's live sequence number, or `None` when the ASM cannot answer.
@@ -1280,6 +1301,34 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    /// The bundle would be refused on chain, so the fee is spent for nothing and the ephemeral
+    /// envelope key is destroyed in the attempt.
+    #[tokio::test]
+    async fn claim_refuses_a_sequence_number_the_chain_already_used() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+
+        let err = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &action_id,
+        )
+        .await
+        .unwrap_err();
+
+        let AppError::Conflict(message) = err else {
+            panic!("expected a conflict naming the sequence number");
+        };
+        assert!(
+            message.contains('1'),
+            "message should name the sequence: {message}"
+        );
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.broadcast_status, BroadcastStatus::Idle);
     }
 
     #[tokio::test]

@@ -452,7 +452,12 @@ fn mock_last_seqno(_rpc_url: &str, _authority: Authority) -> Option<u64> {
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
-    if rpc_url != "mock://asm-membership" {
+    // The seqno fixtures answer the same threshold as the membership one: they exist to move
+    // `last_seqno`, not to drift the snapshot.
+    let known = rpc_url == "mock://asm-membership"
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
+        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL;
+    if !known {
         return None;
     }
 
