@@ -124,10 +124,24 @@ point", which anyone can cause; `==` asks "is the role standing exactly where th
 have left it".
 
 **2. Superseded — new terminal state.** A proposal that is `Approved`, is not enacted, and whose
-`seq_no < last_seqno`, can never execute. It becomes `Superseded` and moves to the Past list.
+`seq_no <= last_seqno`, can never execute. It becomes `Superseded` and moves to the Past list.
+
+The comparison mirrors upstream's rejection rule exactly (`payload.seqno <= last_seqno`), which
+this document first got wrong: it said `<`, leaving a proposal whose seqno *equals* the role's
+sitting `Approved` forever. The manual run had two proposals on sequence 1 — one enacted, one
+stuck — which is what exposed it.
 
 The two rules are one pass and one ASM read, and the order matters: enactment is decided first, so
-a proposal that did enact is never swept.
+a proposal that did enact is never swept. Equality makes that ordering load-bearing rather than
+merely tidy, and the same goes for the queued-update check: a depth-bearing update sits at
+`seq_no == last_seqno` for its whole maturation.
+
+**0. Before either: did the reveal confirm?** The desktop reports `reveal_confirmed` from a task
+that lives with its send screen, and nothing asks again once that screen closes. Both rules above
+read the broadcast status, so a reveal mined while the app was elsewhere made an executed proposal
+look dead — and with equality in rule 2 it would have been *labelled* dead. The reconcile pass asks
+first, using the Bitcoin client the app state already carries and the reveal txid it already
+stores.
 
 ### 4.1 The residual ambiguity, stated rather than hidden
 
@@ -194,6 +208,8 @@ No database migration: `status` is `TEXT NOT NULL` with no `CHECK`
 | 4 | A passed seqno supersedes | an `Approved` proposal with `seq_no < last_seqno` and unmet post-conditions is `Superseded` after a reconcile |
 | 5 | An enacted proposal is never swept | the same pass leaves an enacted proposal `Enacted` |
 | 6 | The claim gate refuses a consumed sequence | `claim_broadcast_coordination` returns a conflict naming the sequence, and the proposal's `broadcast_status` is unchanged |
+| 7 | A reveal that confirmed unwatched is noticed | a `reveal_broadcasted` proposal whose txid has a block height is promoted to `reveal_confirmed` by the reconcile pass, on a sequence number that keeps it out of the sweep |
+| 8 | Equality supersedes | a proposal whose `seq_no` equals the role's `last_seqno` and did not enact is `Superseded` |
 
 The frontend carries no new automated test: the desktop has no DOM runner, and the `superseded`
 label and bucket are pinned by the existing `proposal-display-status` and `derive-proposal-actions`
@@ -240,9 +256,10 @@ candidate for the next phase.
   `desktop-app/src-tauri/src/application/pending_reveals.rs:20-26` already documents as the reason a
   commit must never be RBF-bumped. **This is the most likely cause of symptom 1**, and it is a
   change to the signing path, which is why it is not bundled with a phase about labels.
-- **No mempool watcher.** `await_reveal_confirmation` returns `PendingConfirmation` on timeout and
-  logs it; nothing ever degrades `reveal_broadcasted` to `failed`, and `proposals_resubmit_reveal`
-  exists with no UI that can reach it.
+- **Only half the watcher.** Confirmations are noticed on read (rule 0 in §4), but the opposite is
+  not: a reveal that was dropped or replaced never degrades `reveal_broadcasted` to `failed`, and
+  `proposals_resubmit_reveal` still exists with no UI that can reach it. A bundle that never
+  reaches a block stays in flight until something else consumes its sequence number.
 - **`max_seqno_gap` is unknown off-chain.** A `seq_no` more than the deployment's gap past
   `last_seqno` is refused silently on chain (§2) and the app never warns. Nothing in
   `orchestrator-be` or `desktop-app` reads that parameter.
