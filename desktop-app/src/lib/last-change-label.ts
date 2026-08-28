@@ -6,6 +6,9 @@
  * not need a ticking clock to stay accurate on a screen nobody is refreshing — which is exactly
  * the screen this line exists for.
  */
-export function lastChangeLabel(updatedAtMs: number): string {
+export function lastChangeLabel(updatedAtMs: number): string | null {
+	// A synthetic proposal — the manual route builds one — carries no timestamp, and "1 Jan 1970"
+	// is worse than saying nothing.
+	if (updatedAtMs <= 0) return null
 	return `Last change: ${new Date(updatedAtMs).toLocaleString()}`
 }

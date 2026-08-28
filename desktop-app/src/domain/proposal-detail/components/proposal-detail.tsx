@@ -89,6 +89,7 @@ export function ProposalDetail({
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
+	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 
 	const displayStatus = proposalDisplayStatus(proposal)
 
@@ -300,7 +301,7 @@ export function ProposalDetail({
 						>
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
-							<p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChangeLabel(proposal.updatedAtMs)}</p>
+							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 						</div>
 					)}
 

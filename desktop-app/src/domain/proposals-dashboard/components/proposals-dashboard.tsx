@@ -427,6 +427,7 @@ function ProposalCard({
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
 	const { hasQuorum, canSign, canBroadcast, canCancel } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
+	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 	const awaitingEnactment = sendState.kind === 'confirmed'
 
 	const signButton = canSign ? (
@@ -572,7 +573,7 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
 					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
-					<p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChangeLabel(proposal.updatedAtMs)}</p>
+					{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
