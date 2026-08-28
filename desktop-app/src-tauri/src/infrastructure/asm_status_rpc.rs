@@ -112,6 +112,18 @@ pub async fn fetch_current_operators(rpc_url: &str) -> Result<Vec<String>, Strin
         .collect())
 }
 
+/// Whether the bridge is currently in safe harbour.
+///
+/// Read straight from the node like the other live ASM facts this module serves: the desktop
+/// decodes the bridge section it already decodes for the operator set. The address is not
+/// returned — nothing in the app renders it.
+pub async fn fetch_safe_harbour_activated(rpc_url: &str) -> Result<bool, String> {
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    let bridge = decode_bridge_state(&anchor)?;
+    Ok(bridge.safe_harbour().is_activated())
+}
+
 /// Search the live ASM queue for the `UpdateId` matching `action_hex`.
 ///
 /// Returns `None` when the update is not yet queued (reveal not processed by ASM yet) or

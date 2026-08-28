@@ -108,7 +108,22 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 .queued()
                 .iter()
                 .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
-            Ok(defcon1_enacted(safe_harbour_activated, defcon1_queued))
+            // The role is named literally rather than resolved through `authority_to_role`, which
+            // does not map the council: an arm that matches one action variant knows its role.
+            let council = admin
+                .authority(Role::StrataSecurityCouncil)
+                .ok_or_else(|| {
+                    AppError::BadRequest(
+                        "admin state missing authority for role `StrataSecurityCouncil`"
+                            .to_string(),
+                    )
+                })?;
+            Ok(defcon1_enacted(
+                safe_harbour_activated,
+                defcon1_queued,
+                council.last_seqno(),
+                seq_no,
+            ))
         }
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Err(AppError::BadRequest(
             "Defcon3 enactment detection is not implemented yet".to_string(),
@@ -172,8 +187,18 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
 /// Defcon 1 executes at depth 0: it activates the safe harbour in the reveal block and never
 /// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
 /// proposal enacted.
-fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool) -> bool {
-    safe_harbour_activated && !defcon1_queued
+///
+/// The seqno term is what makes the answer this proposal's: `safe_harbour().is_activated()` is
+/// never reset, so the other two terms hold for every Defcon 1 once any of them has enacted.
+/// Upstream advances the role's seqno only after applying the action, so a rejected one never
+/// satisfies it.
+fn defcon1_enacted(
+    safe_harbour_activated: bool,
+    defcon1_queued: bool,
+    last_seqno: u64,
+    seq_no: u64,
+) -> bool {
+    last_seqno >= seq_no && safe_harbour_activated && !defcon1_queued
 }
 
 /// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
@@ -524,11 +549,20 @@ mod tests {
         assert!(operator_set_post_conditions_met(&current, &[], &[]));
     }
 
+    /// The seqno term is what makes the answer per proposal: `safe_harbour().is_activated()` is
+    /// never reset, so without it every later Defcon 1 reads as enacted on the strength of the
+    /// first one's activation.
+    #[test]
+    fn defcon1_enacted_requires_this_proposals_seqno_consumed() {
+        assert!(!defcon1_enacted(true, false, 1, 2));
+        assert!(defcon1_enacted(true, false, 2, 2));
+    }
+
     #[test]
     fn defcon1_enacted_requires_safe_harbour_active_and_queue_clear() {
-        assert!(!defcon1_enacted(false, false));
-        assert!(!defcon1_enacted(true, true));
-        assert!(defcon1_enacted(true, false));
+        assert!(!defcon1_enacted(false, false, 2, 2));
+        assert!(!defcon1_enacted(true, true, 2, 2));
+        assert!(defcon1_enacted(true, false, 2, 2));
     }
 
     #[test]

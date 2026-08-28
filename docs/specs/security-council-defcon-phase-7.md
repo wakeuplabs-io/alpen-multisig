@@ -88,6 +88,13 @@ fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool, last_seqn
 already holds — `admin.authority(Role::StrataSecurityCouncil)`, exactly as the multisig arm does at
 `:129-141`. No new RPC, no new decode.
 
+The role is named literally, not resolved through the module's `authority_to_role`
+(`asm_enactment.rs:302-311`), which still returns an error for `Authority::SecurityCouncil`. That
+is the shape the `EeStfVk` arm already uses for `Role::AlpenAdministrator` (`:54-69`): an arm that
+matches one action variant knows its role, and routing through the map would make the arm fail on a
+mapping it does not need. Teaching that map about the council belongs to the slice that gives the
+council a second action.
+
 With the term, the second proposal of the manual run reaches `Enacted` when the council's
 `last_seqno` reaches `2` — that is, when **its own** transaction executed.
 
@@ -118,6 +125,17 @@ at quorum with its reveal txid, which is what a signer needs to investigate. Rec
 known consequence rather than left to be rediscovered; the sweeper belongs with V2, where a matured
 Defcon 3 gives the module a second, independent post-condition to reason with.
 
+There is a second consequence this section missed when it was written, and it is user-visible.
+`report_broadcast_progress` (`application/proposals.rs:667-690`) is the one caller that does not
+swallow a `false` predicate: it turns it into `AppError::Conflict("ASM state does not yet show
+proposal enactment")`. So a signer who marks a Defcon 1 enacted in the window between its reveal
+confirming and the ASM consuming the council's seqno now gets that conflict, where before the
+seqno term they got a silent success. This is not a regression introduced here — it is the
+behaviour every other action in the module already has, and the conflict says the true thing where
+the silent success said a false one. The two reconciling callers
+(`reconcile_enacted_for_authority`, `reconcile_enacted_for_action`) are unaffected: they log and
+retry on the next poll.
+
 ## 4. The gap — the app creates the state and cannot read it
 
 `SafeHarbour` upstream is `{ address, activated }`
@@ -134,19 +152,32 @@ the desktop can already decode.
 
 | Piece | Where |
 |---|---|
-| `fetch_safe_harbour_status(rpc_url) -> Result<SafeHarbourStatus, String>` | `infrastructure/asm_status_rpc.rs` — decode bridge state, return `{ activated, address }` |
-| `asm_safe_harbour_status` IPC command | `commands/asm_state.rs`, beside `get_multisig_config` |
-| `useSafeHarbourStatus` | `desktop-app/src/domain/create-proposal/hooks/` or the dashboard's hooks dir, following whichever the sibling reads use |
-| Dashboard banner (council session only) | `desktop-app/src/screens/proposals-dashboard-screen.tsx` |
+| `fetch_safe_harbour_activated(rpc_url) -> Result<bool, String>` | `infrastructure/asm_status_rpc.rs` — decode bridge state, return `safe_harbour().is_activated()` |
+| `get_safe_harbour_status` IPC command | `commands/asm_state.rs`, beside `get_current_operators` |
+| `useSafeHarbourStatus` | `desktop-app/src/hooks/` — both consumers are outside `create-proposal`, so it sits with `use-device-signing-message.ts` rather than inside one domain |
+| `SafeHarbourNote` | `desktop-app/src/components/` — one presentational primitive for both surfaces, taking the caller's sentence as `children`; the read stays in the hook, as the frontend rules require of anything in `components/` |
+| Dashboard banner (council session only) | `desktop-app/src/screens/proposals-dashboard-screen.tsx` reads the state and passes the note to `ProposalsDashboard`'s `notice` slot, so it lands in the same column as the heading and the *Create proposal* button rather than at the shell's full width |
 | Create-form warning | `desktop-app/src/domain/create-proposal/components/defcon-1-form-fields.tsx` |
+
+Two corrections to that table, both found by reading the code the phase was about to touch:
+
+- **The read carries `activated` and nothing else.** This document first had it return
+  `{ activated, address }`, while §8 puts the address out of scope — a field no caller could use
+  and, because `SafeHarbourAddress` wraps a `bitcoin_bosd::Descriptor` the desktop does not depend
+  on, a new crate dependency for the privilege. `is_activated()` is an inherent method on the
+  decoded state, so the boolean costs no dependency at all.
+- **The command is named for its neighbours.** `asm_safe_harbour_status` was this document's
+  invention; the three commands already in that file are `get_multisig_config`,
+  `get_current_operators` and `get_current_vk`.
 
 ### 4.1 What the warning may say, and what it may not
 
 The state carries no activation height — there is no block number in `SafeHarbour` and inventing
-one from the tip would be a fabrication. Provenance, when it is available, comes from the
-orchestrator: the most recent Defcon 1 proposal the app knows to be `Enacted`. When there is none —
-the activation happened outside this app — the banner says the state and says nothing about where
-it came from.
+one from the tip would be a fabrication. This document first proposed recovering provenance from
+the orchestrator — the most recent Defcon 1 proposal the app knows to be `Enacted` — and that is
+cut. It would couple a chain-state read to proposal data for one sentence, it is wrong whenever the
+activation happened outside this app, and this document's own next clause already accepted a banner
+that says nothing about provenance. **The banner and the warning state the fact and stop there.**
 
 The warning is about cost and about meaning, not about danger:
 
@@ -154,8 +185,15 @@ The warning is about cost and about meaning, not about danger:
 > not change that — it consumes a council sequence number, costs fees, and needs a full quorum.
 > Create one only if you have reason to believe this state is wrong.
 
-It renders above the type-to-confirm gate, in the same warning treatment the `Irreversible` callout
-already uses, and it **does not disable the submit control** (§2).
+It renders above the type-to-confirm gate and it **does not disable the submit control** (§2).
+
+It does **not** reuse the `Irreversible` callout's treatment, which this document first asked for.
+That callout is `danger-*` red, and it is the strongest thing on the screen for a reason: the
+action is irreversible. Rendering a second red block directly above it flattens that hierarchy and
+leaves the signer with two alarms of equal weight, one of which is merely a fact about the chain.
+The state note takes the app's existing amber attention treatment — `border-accent-border
+bg-highlight-surface`, as used at `sign-screen.tsx:278` and `proposal-detail-screen.tsx:167` — and
+red stays with the irreversibility.
 
 ### 4.2 The banner is the council's, not everyone's
 
@@ -164,17 +202,36 @@ reads on it and no lever that answers it; showing them a bridge-wide alarm they 
 noise. The create-form warning is Defcon-1-only by construction — it lives in the Defcon 1 fields
 component.
 
-## 5. Migration — two commits
+## 5. Migration — four commits
 
-Ordered so that neither repairs the other and both leave the tree green.
+Ordered so that none repairs the one before it and each leaves the tree green on its own.
 
 **Commit A — enactment is per proposal.** The predicate gains its seqno term, the Defcon 1 arm
 reads the council's `last_seqno` from the admin state it already decodes, and the tests of §6.1
 land with it. Backend only; no frontend change depends on it.
 
-**Commit B — the safe harbour is visible.** The Rust read, the IPC command, the hook, the dashboard
-banner and the create-form warning, with the tests of §6.2. Frontend plus one infrastructure
-function; nothing in commit A is touched.
+Commit B of this document's first draft — "the Rust read, the IPC command, the hook, the dashboard
+banner and the create-form warning" — is three commits, not one. It spans two languages and four
+layers, and the read is useful and reviewable before either surface consumes it:
+
+**Commit B1 — the read reaches the API layer.** `fetch_safe_harbour_activated`, the
+`get_safe_harbour_status` command in both `invoke.rs` handler lists, the Zod schema and the
+`api/asm-state.ts` wrapper. No UI change; `npm run test:ipc-schemas` and `npm run build` cover it.
+
+**Commit B2 — the warning on the Defcon 1 form.** `useSafeHarbourStatus` and the amber note in
+`defcon-1-form-fields.tsx`. This is where the decision is made, so it lands before the banner.
+
+**Commit B3 — the dashboard banner.** The council-only banner in `proposals-dashboard-screen.tsx`,
+which is the same note in a second place and depends on nothing B2 introduced beyond the hook.
+
+Two commits followed the review of B1–B3. The two amber blocks were the same container, heading
+and conditional read differing only in prose, so they became one `SafeHarbourNote` taking that
+prose as `children`, with `role="status"` so a note that appears after an async read is announced.
+Then the dashboard copy was found rendering at the shell's full width, a column wider than every
+surface below it, which made a note about the proposals read as an alarm about the app: it moved
+into `ProposalsDashboard` as a `notice` slot, the read moved out of the component and into the
+screen (`components/` holds presentational primitives, which do not call the API), and the hook
+gained the `enabled` flag that keeps non-council sessions from making the request.
 
 ## 6. Tests
 
@@ -189,16 +246,30 @@ function; nothing in commit A is touched.
 Test 1 is the regression: it is the manual run, reduced to four booleans and two integers, and it
 fails against the predicate as Phase 4 left it.
 
-### 6.2 Commit B
+### 6.2 Commits B1–B3 — no new automated test, and why
 
-| # | Claim | Shape |
-|---|---|---|
-| 4 | The status is decoded from bridge state, not guessed | `fetch_safe_harbour_status` over a fixture anchor returns `activated` matching the encoded `SafeHarbour`; the existing `asm_status_rpc` decode tests are the pattern |
-| 5 | The warning is shown when the state is active and absent when it is not | a component test over the Defcon 1 fields with the status prop in both positions |
-| 6 | The warning never disables submission | with the status active and the confirm text typed, the submit control is enabled — the assertion that pins §2 against a future "just block it" |
+This document first listed three: a Rust decode test over a fixture anchor, and two component tests
+over the Defcon 1 fields. All three were written against test infrastructure this repository does
+not have, and the honest answer is that the UI half of this phase is verified by §9 and by review.
 
-No test asserts the banner's colours; `src/lib/__tests__/color-tokens.test.ts` already fails the
-build on a stray red hex, and the rest is design judgement, as Phase 5 §8 argued.
+- **The fixture anchor does not exist.** `desktop-app/src-tauri` contains no `AnchorState` fixture
+  and no builder for one — `asm_status_rpc.rs`'s own tests cover `decode_state_bytes_from_status`
+  over hand-written JSON and stop there, because constructing a valid SSZ `AnchorState` with a
+  bridge section means constructing upstream's whole state. `fetch_safe_harbour_activated` adds no
+  decoding of its own: it composes `rpc_call`, `decode_anchor_state_from_status` and
+  `decode_bridge_state`, all three already exercised by `fetch_current_operators`. A test worth
+  its fixture would be testing upstream's SSZ, not this function.
+- **There is no DOM runner.** The desktop has neither vitest nor testing-library; every
+  `__tests__/*.test.tsx` in the repo is a *contract test* that reads the component's source with
+  `readFileSync` and asserts on substrings. "The submit control is enabled with the status active"
+  cannot be asserted that way — only "the source does not mention the status near `disabled`",
+  which pins a phrasing rather than a behaviour and goes stale the first time the file is
+  reformatted. §9 step 2 asserts the real thing against the real app.
+
+What does hold the line automatically: `npm run test:ipc-schemas` fails if the new command's Zod
+schema and its Rust DTO drift apart, and `src/lib/__tests__/color-tokens.test.ts` fails the build
+on a raw red or amber hex, so the note has to use the tokens. The rest is design judgement, as
+Phase 5 §8 argued.
 
 ## 7. Blast radius
 
