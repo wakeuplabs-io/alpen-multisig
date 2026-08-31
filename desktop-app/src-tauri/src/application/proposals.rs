@@ -36,8 +36,12 @@ pub enum ProposalError {
 /// Errors that can occur during direct broadcast from Tauri.
 #[derive(Debug, thiserror::Error)]
 pub enum BroadcastError {
-    #[error("failed to fetch proposal: {0}")]
-    ProposalFetch(#[from] OrchestratorError),
+    /// Any orchestrator call in the broadcast flow: fetching the proposal, claiming the
+    /// coordination, or reporting progress afterwards. Named for the boundary rather than for one
+    /// of its callers — it used to read "failed to fetch proposal", which sent a reader of the
+    /// logs looking at the read path for a failure that happened while reporting.
+    #[error("orchestrator request failed: {0}")]
+    Orchestrator(#[from] OrchestratorError),
     #[error("broadcast setup error: {0}")]
     Setup(String),
     #[error("bitcoin RPC error: {0}")]
@@ -213,7 +217,7 @@ pub async fn submit_commit_then_reveal(
         {
             BroadcastError::Setup(format!("broadcast already in progress: {message}"))
         } else {
-            BroadcastError::ProposalFetch(e)
+            BroadcastError::Orchestrator(e)
         }
     })?;
 
@@ -1055,6 +1059,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
@@ -1094,6 +1099,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             };
             *self.last_cancel_request.lock().unwrap() =
@@ -1125,6 +1131,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1180,6 +1187,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1217,6 +1225,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1248,6 +1257,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             }])
         }
@@ -1287,6 +1297,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1323,6 +1334,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1784,6 +1796,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1841,6 +1854,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }
@@ -1867,6 +1881,7 @@ mod tests {
                 activation_height: None,
                 update_id_in_queue: None,
                 created_at: 0,
+                updated_at: 0,
                 cancel_proposal: None,
             })
         }

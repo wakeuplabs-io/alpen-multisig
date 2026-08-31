@@ -112,6 +112,7 @@ pub struct ProposalDto {
     pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummaryDto>,
     pub created_at_ms: u64,
+    pub updated_at_ms: u64,
     pub expires_at_ms: u64,
 }
 
@@ -202,6 +203,7 @@ fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDt
 fn map_proposal(proposal: Proposal) -> ProposalDto {
     let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     let created_at_ms = proposal.created_at as u64;
+    let updated_at_ms = proposal.updated_at as u64;
     let expires_at_ms = created_at_ms + PROPOSAL_EXPIRY_DAYS * 24 * 3600 * 1000;
     ProposalDto {
         action_id: proposal.action_id,
@@ -222,6 +224,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         update_id_in_queue: proposal.update_id_in_queue,
         cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
         created_at_ms,
+        updated_at_ms,
         expires_at_ms,
     }
 }
@@ -328,7 +331,7 @@ mod broadcast_error_code_tests {
     /// matrix is covered by `broadcast_error_code_maps_all_10_codes` (step 01-10).
     #[test]
     fn test_broadcast_error_orchestrator_unauthorized() {
-        let error = BroadcastError::ProposalFetch(OrchestratorError::Backend {
+        let error = BroadcastError::Orchestrator(OrchestratorError::Backend {
             status: 401,
             message: "unauthorized".to_string(),
         });
@@ -341,7 +344,7 @@ mod broadcast_error_code_tests {
         let cases = [
             // OrchestratorUnauthorized: 401 from proposal fetch
             (
-                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                BroadcastError::Orchestrator(OrchestratorError::Backend {
                     status: 401,
                     message: "unauthorized".to_string(),
                 }),
@@ -388,9 +391,9 @@ mod broadcast_error_code_tests {
                 false,
                 "Unknown",
             ),
-            // ProposalFetch non-401 → Unknown
+            // Orchestrator non-401 → Unknown
             (
-                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                BroadcastError::Orchestrator(OrchestratorError::Backend {
                     status: 500,
                     message: "server error".to_string(),
                 }),
@@ -520,7 +523,7 @@ fn broadcast_error_code(
     _has_pending: bool,
 ) -> &'static str {
     match error {
-        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+        BroadcastError::Orchestrator(OrchestratorError::Backend { status: 401, .. }) => {
             "OrchestratorUnauthorized"
         }
         BroadcastError::NoPendingReveal { .. } => "NoPendingReveal",
@@ -528,7 +531,7 @@ fn broadcast_error_code(
         BroadcastError::Timeout { .. } => "Timeout",
         BroadcastError::AllBroadcastersFailed { .. } => "broadcast_unavailable",
         BroadcastError::Setup(_) => "Unknown",
-        BroadcastError::ProposalFetch(_) => "Unknown",
+        BroadcastError::Orchestrator(_) => "Unknown",
     }
 }
 
@@ -569,7 +572,7 @@ fn map_broadcast_error_with_boundary(
     let code = broadcast_error_code(&error, broadcast_reached, has_pending);
     let can_resubmit = broadcast_reached && has_pending;
     let message = match &error {
-        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+        BroadcastError::Orchestrator(OrchestratorError::Backend { status: 401, .. }) => {
             "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
                 .to_string()
         }
@@ -589,7 +592,7 @@ fn map_broadcast_error_with_boundary(
         // Handled by the early return above; kept non-panicking per backend standards.
         BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
         BroadcastError::Setup(msg) => msg.clone(),
-        BroadcastError::ProposalFetch(e) => e.to_string(),
+        BroadcastError::Orchestrator(e) => e.to_string(),
     };
     serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
 }

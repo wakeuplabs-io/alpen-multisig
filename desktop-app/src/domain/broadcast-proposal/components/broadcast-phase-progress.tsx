@@ -44,7 +44,8 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 	function stepDetail(index: number, fallback: string): string {
 		if (index === STEPS.length - 1 && isAwaitingConfirmation) {
-			return 'Reveal is in the mempool — confirming on Bitcoin. Safe to leave; it keeps confirming.'
+			// Not "safe to leave": the confirmation poll is this screen's, and it stops on unmount.
+			return 'Reveal broadcast — waiting for a block. This screen is what watches for it.'
 		}
 		return fallback
 	}

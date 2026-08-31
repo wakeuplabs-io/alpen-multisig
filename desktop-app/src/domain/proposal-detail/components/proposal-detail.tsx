@@ -5,6 +5,7 @@ import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
@@ -88,6 +89,7 @@ export function ProposalDetail({
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
+	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 
 	const displayStatus = proposalDisplayStatus(proposal)
 
@@ -292,13 +294,14 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"
 						>
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 						</div>
 					)}
 

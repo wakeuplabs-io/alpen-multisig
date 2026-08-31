@@ -74,7 +74,11 @@ export function ProposalsDashboardScreen() {
 		() => proposals.filter((proposal) => proposal.status === 'enacted' || proposal.status === 'canceled'),
 		[proposals],
 	)
-	const expiredOrSkipped = useMemo(() => proposals.filter((proposal) => proposal.status === 'expired'), [proposals])
+	// Superseded sits with expired: both ran out of a window rather than failing at anything.
+	const expiredOrSkipped = useMemo(
+		() => proposals.filter((proposal) => proposal.status === 'expired' || proposal.status === 'superseded'),
+		[proposals],
+	)
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />

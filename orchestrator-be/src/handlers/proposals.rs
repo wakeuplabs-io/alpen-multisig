@@ -127,6 +127,7 @@ pub async fn list_proposals(
     proposals::reconcile_enacted_for_authority(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        state.btc_client.as_ref(),
         auth.authority,
     )
     .await?;
@@ -154,6 +155,7 @@ pub async fn get_proposal(
     proposals::reconcile_enacted_for_action(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        state.btc_client.as_ref(),
         auth.authority,
         &action_id,
     )

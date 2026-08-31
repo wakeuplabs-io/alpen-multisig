@@ -12,7 +12,7 @@ function nullishToNull<T extends z.ZodType>(schema: T) {
 	return schema.nullish().transform((v) => v ?? null)
 }
 
-export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
+export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired', 'superseded'])
 
 export const broadcastStatusSchema = z.enum([
 	'idle',
@@ -70,6 +70,7 @@ export const proposalSchema = z
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
 		createdAtMs: z.number(),
+		updatedAtMs: z.number(),
 		expiresAtMs: z.number(),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))

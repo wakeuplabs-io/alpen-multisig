@@ -22,7 +22,15 @@ use crate::infrastructure::{action_codec, rpc_timeout};
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
 #[cfg(any(test, feature = "dev-mocks"))]
-const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+pub(crate) const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+/// Enacts *and* stands past the proposal's seqno: the fixture that proves enactment is decided
+/// before supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_ENACTED_AHEAD_URL: &str = "mock://asm-enacted-ahead";
+/// A chain whose role sequence number has moved past the proposals under test: nothing enacts, and
+/// `last_seqno` answers 5. The fixture for supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_SEQNO_AHEAD_URL: &str = "mock://asm-seqno-ahead";
 
 /// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
 pub(crate) async fn is_proposal_enacted_on_asm(
@@ -190,15 +198,22 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
 ///
 /// The seqno term is what makes the answer this proposal's: `safe_harbour().is_activated()` is
 /// never reset, so the other two terms hold for every Defcon 1 once any of them has enacted.
-/// Upstream advances the role's seqno only after applying the action, so a rejected one never
-/// satisfies it.
+///
+/// It is an equality, not `>=`, and this arm is the only one in the module that needs it.
+/// `update_last_seqno` jumps to whatever seqno upstream accepted, for any action of the role, so
+/// `>=` asks "has the role moved past this point" — a question another proposal can answer. `==`
+/// asks whether the role is standing exactly where this proposal would have left it. The
+/// config-carrying arms keep `>=` because their remaining terms name the keys, threshold or VK the
+/// action was supposed to install, which a jumped seqno does not supply.
+///
+/// See docs/specs/proposal-lifecycle-seqno-truth.md §3.1 and §4.1, including what stays ambiguous.
 fn defcon1_enacted(
     safe_harbour_activated: bool,
     defcon1_queued: bool,
     last_seqno: u64,
     seq_no: u64,
 ) -> bool {
-    last_seqno >= seq_no && safe_harbour_activated && !defcon1_queued
+    last_seqno == seq_no && safe_harbour_activated && !defcon1_queued
 }
 
 /// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
@@ -345,8 +360,8 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
-        MOCK_ENACTED_URL => Some(true),
-        MOCK_MEMBERSHIP_URL => Some(false),
+        MOCK_ENACTED_URL | MOCK_ENACTED_AHEAD_URL => Some(true),
+        MOCK_MEMBERSHIP_URL | MOCK_SEQNO_AHEAD_URL => Some(false),
         _ => None,
     }
 }
@@ -556,6 +571,14 @@ mod tests {
     fn defcon1_enacted_requires_this_proposals_seqno_consumed() {
         assert!(!defcon1_enacted(true, false, 1, 2));
         assert!(defcon1_enacted(true, false, 2, 2));
+    }
+
+    /// Upstream jumps `last_seqno` to whatever it accepted, so a role standing past this
+    /// proposal's seqno is another action's doing, not this one's. Equality is the whole
+    /// difference between "the role moved on" and "this proposal moved it".
+    #[test]
+    fn defcon1_not_enacted_when_a_later_action_consumed_the_seqno() {
+        assert!(!defcon1_enacted(true, false, 2, 1));
     }
 
     #[test]

@@ -38,6 +38,9 @@ pub struct Proposal {
     pub cancel_proposal: Option<CancelProposalSummary>,
     /// Unix epoch milliseconds when the proposal was created. Used to derive expiry.
     pub created_at: i64,
+    /// Unix epoch milliseconds of the last change. Lets a screen say how long a bundle has been
+    /// sitting where it is.
+    pub updated_at: i64,
 }
 
 /// A signature attached to a proposal.

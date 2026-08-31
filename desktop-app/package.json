@@ -62,6 +62,7 @@
 		"test:lib-device-signing-display": "tsx src/lib/__tests__/device-signing-display.test.ts",
 		"test:lib-device-copy": "tsx src/lib/__tests__/device-copy.test.ts",
 		"test:color-tokens": "tsx src/lib/__tests__/color-tokens.test.ts",
+		"test:redundant-defcon-1": "tsx src/lib/__tests__/redundant-defcon-1.test.ts",
 		"test:proposal-send-state": "tsx src/lib/__tests__/proposal-send-state.test.ts",
 		"test:proposal-title": "tsx src/lib/__tests__/proposal-title.test.ts",
 		"test:proposal-display-status": "tsx src/lib/__tests__/proposal-display-status.test.ts",
