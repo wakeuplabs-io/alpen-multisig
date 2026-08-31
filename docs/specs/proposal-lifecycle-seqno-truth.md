@@ -242,6 +242,16 @@ contract tests, which do run in CI.
 **When** a signer opens the sign screen or the send screen
 **Then** the state is on screen, and the existing gates remain the only gates.
 
+### F. A terminal state says which one it was
+**Given** a superseded proposal
+**When** a signer reads it
+**Then** it says whether the transaction reached a block and lost the race — which cost the fees, and is the case whose attribution rests on a sequence number rather than a receipt — or never got that far.
+
+### G. A redundant enactment says so
+**Given** a Defcon 1 proposal that enacted after another Defcon 1 had already enacted
+**When** a signer reads it
+**Then** it says the bridge was already in safe harbour and the action changed nothing, alongside the `Enacted` badge, which remains true: the ASM applied the action.
+
 ## 9. Not in this phase
 
 Recorded because they were found, and because none of them is fixed by anything above. Each is a

@@ -66,11 +66,22 @@ const STAGE: Record<Exclude<BroadcastStatus, 'idle'>, { label: string; detail: s
 /**
  * Said wherever the broadcast stage would be said, because it replaces it: this is the one
  * terminal state a signer is likely to have been waiting on when it arrives.
+ *
+ * Two ways to get here, and they are not the same thing to the person reading. A bundle whose
+ * reveal was mined reached the chain and lost the race — it cost the commit and reveal fees, and
+ * it is the case where the attribution rests on a sequence number rather than on a receipt, since
+ * the ASM discards a refused action silently. A bundle that never confirmed never got that far.
  */
-const SUPERSEDED = {
+const SUPERSEDED_AFTER_CONFIRMATION = {
 	label: 'Superseded',
 	detail:
-		'Another action used this sequence number first. The signatures on this proposal are bound to that number, so it can no longer be sent — a replacement has to be created and signed again.',
+		'This transaction was mined, but another action had already used its sequence number, so the ASM did not apply it. The signatures are bound to that number, so it cannot be sent again — a replacement has to be created and signed. The commit and reveal fees were spent.',
+}
+
+const SUPERSEDED_BEFORE_CONFIRMATION = {
+	label: 'Superseded',
+	detail:
+		'Another action used this sequence number before this proposal reached a block. The signatures are bound to that number, so it can no longer be sent — a replacement has to be created and signed.',
 }
 
 export function proposalSendState(proposal: SendStateInput): ProposalSendState {
@@ -84,7 +95,11 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 
 	// Only an approved proposal has a bundle to broadcast. Quorum alone is not
 	// enough: the backend approves the proposal before the bundle exists.
-	if (proposal.status === 'superseded') return { kind: 'superseded', ...SUPERSEDED }
+	if (proposal.status === 'superseded') {
+		const stage =
+			proposal.broadcastStatus === 'reveal_confirmed' ? SUPERSEDED_AFTER_CONFIRMATION : SUPERSEDED_BEFORE_CONFIRMATION
+		return { kind: 'superseded', ...stage }
+	}
 	if (isTerminal || !hasQuorum || proposal.status !== 'approved') return { kind: 'unavailable' }
 
 	switch (proposal.broadcastStatus) {
