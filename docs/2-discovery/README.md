@@ -53,6 +53,15 @@ The discovery plan was organised around five focused POCs. Each one reduced a sp
 | [`12-upstream-readiness-findings.md`](./12-upstream-readiness-findings.md) | Executive summary of upstream protocol maturity and delivery risk |
 | [`15-nightly-dependency-finding.md`](./15-nightly-dependency-finding.md) | Why the workspace is forced onto nightly Rust (`generic_const_exprs` via SSZ) |
 
+### Payout Administrator / block_payout
+
+| Doc | What it covers |
+|---|---|
+| [`20-block-payouts-domain-overview.md`](./20-block-payouts-domain-overview.md) | Domain overview — false claim reports, bridge config, mock vs real contract |
+| [`../0-prd/06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md) | **Frozen client input** — Claim/Contest/Ack validation, config, design decisions ([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)) |
+| [`../0-prd/04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md) | On-chain shape of Claim and Admin Block Payouts transactions |
+| [`../proposals/block-payouts-estimate.md`](../proposals/block-payouts-estimate.md) | Implementation estimate (internal draft) |
+
 ### Reference material
 
 | Doc | What it covers |

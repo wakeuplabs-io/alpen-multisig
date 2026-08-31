@@ -175,6 +175,8 @@
 
 **Description:** The application must support the Payout-Admin multisig authority end-to-end, not just Strata Administrator and Sequencer Manager.
 
+False claim report contract: [`docs/0-prd/06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md) ([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)).
+
 **Requirement:**
 - Payout-Admin proposals can be created, co-signed, approved, and broadcast through the standard flow.
 - UI displays "Payout Admin" authority label correctly.

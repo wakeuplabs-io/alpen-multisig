@@ -1,5 +1,11 @@
 # Spec: Block Payouts UI Mock — Payout Administrator
 
+> **Note (2026-08-31):** This mock is **obsolete as a contract** for false claim report ingestion. Step 1 uses a fabricated
+> JSON/`proof` format that does **not** match Alpen's supplementary spec. The real contract is
+> [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)
+> ([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)).
+> The mock remains useful only as a **visual** reference for list/card/modal layout until real implementation.
+
 ## Objective
 
 Implement a frontend-only UI mock (hardcoded data, no real backend calls) covering the full `block_payouts` management flow for the **Payout Administrator multisig**. The goal is to validate UX and component design before wiring real Tauri IPC and orchestrator endpoints.
@@ -25,7 +31,7 @@ PRD source: section 2–4 of the Payout Administrator multisig requirements.
 
 - Real Tauri IPC calls
 - Real orchestrator or backend integration
-- Cryptographic validation of signatures or false claim proofs
+- Cryptographic validation of signatures or on-chain false claim reports (Claim/Contest/Ack)
 - Real Bitcoin broadcast
 - Automatic expiration in real-time (expiry is static/visual only)
 
@@ -209,9 +215,12 @@ Steps:
 
 Multi-step modal:
 
-**Step 1 — Load false claim reports**
+**Step 1 — Load false claim reports** *(mock only — obsolete input format)*
+
 - Textarea for pasting raw report JSON, or file input for upload
 - Mock validation: any report where `proof` field is absent or empty is marked invalid with inline error
+- **Real implementation:** user supplies Claim txid(s); app fetches and validates Contest/Ack per
+  [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)
 - Derives `BlockPayoutInput[]` from valid reports
 - Already-spent outpoints are filtered out (mock: mark any outpoint ending in `:0` as spent)
 
@@ -251,7 +260,7 @@ All actions operate on React state initialized from `block-payouts.mock.ts`. No 
 ## What Comes Next (out of scope here)
 
 - Replace mock data with real Tauri IPC calls to the orchestrator
-- Real false claim proof validation (Rust/Tauri)
+- On-chain Claim/Contest/Ack validation per [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md) (Rust/Tauri + Bitcoin RPC)
 - Real signature validation against pubkeys
 - Real Bitcoin broadcast via connected Bitcoin node
 - Automatic expiration polling

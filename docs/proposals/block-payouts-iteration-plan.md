@@ -50,10 +50,12 @@ path carries over — that's the crux of the estimate.
 - **Confirm the sighash *and* that we can recompute it.** Reuse the `verify_threshold` pattern: the exit criterion is not
   "the device signed" but "we independently recomputed the sighash and the signature verifies against it." POC-5's trap
   was self-verifying against the *wrong* sighash and calling it green.
-- **Data contract: derive-or-escalate.** Read `claim_contest.rs` / `contest_counterproof.rs` to see if the false claim
-  report and the per-outpoint metadata are derivable from chain/types. Assume nothing from the mock. If proof validation
-  (§6.4.1) turns out to be a ZK/sp1 verification, flag it as *unestimable until contract* — don't fold a guess into the
-  number.
+- **Data contract: start from supplementary doc, then derive-or-escalate.** [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)
+  is the starting spec for report ingestion (Claim txid → fetch Contest/Ack → validate N/N, operator, Ack format).
+  Spike probes: `claim_contest.rs` / `contest_counterproof.rs` in `strata-bridge`, signet test claims referenced in the
+  supplementary doc, config versioning when the operator set changes. Assume nothing from the mock JSON format. If the
+  spike finds verification beyond on-chain parsing (e.g. ZK/sp1), flag as *unestimable until contract* — don't fold a
+  guess into the number.
 
 **Spike outputs (each is either an answer or a named blocker):** device signing verdict + device set · sighash & witness
 layout · reproducible connector fixture · report/metadata contract (ours or Alpen's).
@@ -118,7 +120,9 @@ layout · reproducible connector fixture · report/metadata contract (ours or Al
 - **Conflict detection** across pendings (shared-outpoint index, live), **rebroadcast**, **exact error strings**.
 - **L1 signer-set source.** The authority enum has `PayoutAdmin` but no backing data; membership can't come from ASM.
   This is design + backend + an operational decision (static signed config vs. read from the bridge script).
-- **Proof validation (§6.4.1)** stays out unless the spike found a contract; if in, it's a separate line (+4–8w placeholder).
+- **False claim ingestion (§6.4.1):** Claim txid input + Bitcoin RPC fetch + on-chain Claim/Contest/Ack validation per
+  [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md); optional deposit index
+  / range UX; versioned bridge config. Not the mock's JSON/`proof` placeholder.
 
 ---
 
@@ -150,6 +154,6 @@ layout · reproducible connector fixture · report/metadata contract (ours or Al
 
 1. Track A verdict: stock-app script-path works ✓, or "custom signing path / device narrowing" (biggest swing).
 2. Miniscript/wallet-policy expressibility (drives Track A).
-3. Proof validation in-scope or descoped (±4–8 weeks).
+3. Proof validation scope: on-chain parsing per supplementary doc (default), or extra mechanism found in spike (±4–8 weeks).
 4. Windows in-scope for payout or not.
 5. UX 1 week from-scratch vs. 0.5 week mock-as-spec.

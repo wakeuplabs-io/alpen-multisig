@@ -8,18 +8,76 @@ The **Payout Administrator** section manages `block_payout` transactions: Bitcoi
 
 When a user wants to withdraw BTC from Alpen to Bitcoin L1, a bridge **operator** advances the funds from their own pocket. Then, the operator creates a "claim transaction" to recover that money from the bridge's locked funds — optimistically: if no one challenges it during the challenge period, the operator gets paid.
 
-A fraudulent operator could try to collect without having actually advanced the funds. If a **challenger** detects this, they generate a **false claim report** with cryptographic proof that the claim is invalid.
+A fraudulent operator could try to collect without having actually advanced the funds. If a **watchtower** detects this, it posts an **Ack** transaction in the challenge-response graph — marking the operator as faulty. The Payout Administrator then uses that evidence to block the operator's claim.
 
 ### Role of the Payout Administrator
 
-The Payout Administrator uses those reports to create a `block_payout` transaction that **spends the claimed UTXOs before the fraudulent operator can**, blocking the undue reimbursement.
+The Payout Administrator uses validated false-claim evidence to create a `block_payout` transaction that **spends the claimed UTXOs before the fraudulent operator can**, blocking the undue reimbursement.
 
 **Full flow:**
 
-1. A challenger detects a fraudulent claim and generates a **false claim report**
-2. A Payout Admin signer creates a `block_payout` tx using the report's outpoints as inputs
-3. The other signers **sign** it until quorum is reached
-4. Once quorum is reached, the tx is **broadcast to Bitcoin** — the fraudulent operator loses their claim
+1. A watchtower posts an **Ack** for a faulty operator's claim graph (or the admin supplies a Claim txid and the app discovers it on-chain).
+2. A Payout Admin signer creates a `block_payout` tx spending the claim payout connector(s) derived from those claims.
+3. The other signers **sign** it until quorum is reached.
+4. Once quorum is reached, the tx is **broadcast to Bitcoin** — the fraudulent operator loses their claim.
+
+---
+
+## False claim reports (PRD §6.4.1)
+
+Alpen's supplementary document defines what a **false claim report** actually is. It is **not** an off-chain JSON blob with a `proof` field — it is **on-chain validation** of the Claim → Contest → Ack transaction graph.
+
+**Source (frozen client input):** [`docs/0-prd/06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)  
+**Notion:** [Strata multisig app supplementary info](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)
+
+### Transaction graph
+
+```
+Claim  ──►  Contest  ──►  Ack
+         (contest spends claim output)
+                    (ack spends contest output)
+```
+
+| Term | Meaning |
+|------|---------|
+| **False claim** | A claim by a **faulty operator** |
+| **Faulty operator** | An operator who posted a Claim tx and later had a watchtower post an **Ack** tx in the same graph |
+| **False claim report** | Evidence linking the **Claim tx to block** with a prior **Ack** for the same operator |
+
+### User input (Alpen design decision)
+
+For uniformity, the application should **always require the Claim transaction txid**. Under the hood it fetches Contest and Ack transactions from Bitcoin and validates them.
+
+Optional: the user may supply the **deposit index** exactly, or a range; if unknown, the implementation may brute-force over `0..max_deposit_idx`.
+
+### Validation rules (summary)
+
+1. **Contest authenticity:** parse the contest input witness; compare the N/N bridge key against configured `n_of_n_pubkey`.
+2. **Operator identification:** the contest's 1st output ("contest proof connector") carries the operator pubkey tweaked with the game index; match against the configured operator list and deposit index.
+3. **Ack format:** Ack must spend the **contest payout connector**, not the contest proof connector, and reference the correct contest txid.
+4. **Same operator:** the Ack and the Claim to be blocked must belong to the **same operator**.
+5. **Spent filter:** ignore claim payout outpoints already spent on-chain (PRD §6.4.1).
+
+The reference implementation lives in `strata-bridge` (`claim_contest.rs`, related modules). Signet test claims are referenced in the supplementary doc.
+
+### Bridge config (required)
+
+The application needs bridge parameters to validate reports and rebuild connectors. Example shape from Alpen (signet):
+
+| Field | Purpose |
+|-------|---------|
+| `network` | e.g. signet, regtest, mainnet |
+| `n_of_n_pubkey` | N/N bridge key for contest authentication |
+| `proof_timelock` (Δproof) | e.g. 24 blocks |
+| `game_index` | `deposit_idx + 1` |
+| `max_deposit_idx` | upper bound for deposit-index search |
+| `operator pubkeys` | ordered x-only list |
+
+**Dynamic operator set:** operators may be added or removed; the bridge key changes with each update. Claims may correspond to **old or new** operator lists — config cannot be blindly overwritten; historical versions must be retained.
+
+### What the app derives after validation
+
+From a validated Claim, the app derives the **claim payout connector outpoint(s)** to include as `block_payout` inputs (see [`04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md)).
 
 ---
 
@@ -36,24 +94,9 @@ domain/block-payouts/
     └── block-payouts.mock.ts    ← Hardcoded data
 ```
 
-All state lives in React, initialized with fake data. No action (sign, create tx, rebroadcast) calls any real service. The goal is to validate the visual flow before connecting it to the real backend.
+All state lives in React, initialized with fake data. No action (sign, create tx, rebroadcast) calls any real service.
 
-### Example of a false claim report
-
-The user pastes (or uploads) one or more reports in JSON format. Each report represents an off-chain detected fraudulent withdrawal attempt:
-
-```json
-{"claimId":"claim-test-001","outpoint":"aabb1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab:2","amount":500000,"proof":"a1b2c3d4e5f6a1b2c3d4e5f6"}
-```
-
-| Field | Description |
-|---|---|
-| `claimId` | Unique identifier of the operator's claim being disputed |
-| `outpoint` | UTXO to spend (`txid:vout`) — the bridge output the operator fraudulently wants to collect |
-| `amount` | Amount in satoshis of that output |
-| `proof` | Cryptographic proof that the operator's claim is false (real validation pending) |
-
-The modal parses these reports, filters already-spent outpoints, and builds the input list for the `block_payout` transaction. In the mock, any JSON with a non-empty `proof` is considered valid.
+**The mock does not implement the false claim report contract.** Step 1 of the create modal accepts fabricated JSON with a `proof` field; that format is obsolete and must not be used as a specification for real implementation.
 
 ---
 
@@ -74,11 +117,15 @@ The modal parses these reports, filters already-spent outpoints, and builds the 
 When the real backend is integrated, the connection points are:
 
 1. **Tauri IPC** — derive the P2TR address from the hardware wallet (BIP-86) to authenticate the signer
-2. **Orchestrator backend** — persist pending txs, collect signatures between signers, broadcast
-3. **Real signature validation** — Schnorr/Taproot in Rust (currently any string ≥ 64 chars passes)
-4. **False claim proof validation** — real cryptographic validation (currently: any JSON with a non-empty `proof` field passes)
+2. **Orchestrator backend** — persist pending txs, collect signatures between signers, broadcast coordination
+3. **Real signature validation** — Schnorr/Taproot script-path (`AdminBurn` leaf), not string-length checks
+4. **False claim validation** — on-chain Claim/Contest/Ack parsing per supplementary doc, not mock JSON
+5. **Bridge config** — versioned operator/N/N parameters for report validation and connector rebuild
 
 References:
-- PRD source: [docs/0-prd/03-prd-update.md](../0-prd/03-prd-update.md) §6
-- Mock UI spec: [docs/specs/block-payouts-ui-mock.md](../specs/block-payouts-ui-mock.md)
-- ASM vs Bitcoin L1 difference: [docs/2-discovery/10-asm-bitcoin-state-model.md](./10-asm-bitcoin-state-model.md)
+- PRD §6: [`docs/0-prd/05-prd-payout-admin-block-payouts-update.md`](../0-prd/05-prd-payout-admin-block-payouts-update.md)
+- False claim reports: [`docs/0-prd/06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)
+- Block payout tx shape: [`docs/0-prd/04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md)
+- Implementation estimate: [`docs/proposals/block-payouts-estimate.md`](../proposals/block-payouts-estimate.md)
+- Mock UI spec (obsolete input format): [`docs/specs/block-payouts-ui-mock.md`](../specs/block-payouts-ui-mock.md)
+- ASM vs Bitcoin L1 difference: [`docs/2-discovery/10-asm-bitcoin-state-model.md`](./10-asm-bitcoin-state-model.md)

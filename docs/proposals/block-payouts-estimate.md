@@ -8,8 +8,10 @@
 
 **Partially yes.** The spec plus the [`claim_payout.rs` unit test](https://github.com/alpenlabs/strata-bridge/blob/70cc4e82d13c15285e4ade371499f0a6f31cd239/crates/connectors/src/claim_payout.rs#L296-L314)
 are enough to estimate the **signing mechanism**, and that is a real unblock — it closes the gap we previously recorded as
-"knowledge of the bridge script spending conditions". It is **not** enough to commit to a delivery date, because three
-inputs only Alpen can provide are still missing (§4).
+"knowledge of the bridge script spending conditions". Alpen's [supplementary false claim report doc](../0-prd/06-supplementary-false-claim-reports.md)
+([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)) further reduces
+uncertainty on **report ingestion and §6.4.1 validation** (on-chain Claim/Contest/Ack graph). It is **not** enough to commit
+to a delivery date, because several inputs only Alpen can provide are still missing or incomplete (§4).
 
 The test tells us what a `block_payout` actually is: the **`AdminBurn` spend path** of the `ClaimPayoutConnector` — a
 **taproot script-path** spend (leaf 0) over `threshold_multisig_script(admin_pubkeys, admin_threshold)`, witnessed with
@@ -38,7 +40,7 @@ Phase 0 is a genuine go/no-go, not a formality — a "no-go" outcome renegotiate
 number down (release pipeline, Admin Wallet and its coin selection, session auth, UI kit, dockerised regtest stack), but
 this scope carries **more** technical risk than governance did: governance had a ready-made upstream crate and signed
 *messages*, whereas this work depends on an upstream repository with no frozen revision, a hardware-wallet blocker with no
-known workaround, and two data contracts that do not yet exist.
+known workaround, and connector metadata that is only partially specified.
 
 ## 3. Disclaimers
 
@@ -47,9 +49,10 @@ known workaround, and two data contracts that do not yet exist.
    are registered **per wallet, not per input**, so expressing M distinct trees may be structurally impossible with the
    stock Bitcoin app. Trezor today signs **key-path only**. Nothing in the current signing layer is reusable here. The
    likely spike outcome is a custom signing path or a partial no-go — not "register a policy and move on".
-2. **Per-outpoint metadata has no known provenance.** Rebuilding the script and control block for each input requires the
-   N/N key and unstaking image **per claim**. There is no published contract for where these come from. This blocks even
-   the first end-to-end transaction.
+2. **Per-outpoint connector metadata is only partially specified.** Rebuilding the script and control block for each input
+   requires the N/N key and unstaking image **per claim**. The supplementary doc covers bridge config (`n_of_n_pubkey`,
+   operator list, deposit index) for **report validation**, but not every field needed to assemble `ClaimPayoutConnector`
+   inputs. This may still block the first end-to-end transaction until confirmed against `strata-bridge`.
 3. **`strata-bridge` is a new dependency that upstream itself avoided.** The project does not depend on it today. Alpen's
    own ASM runner documents being written "to avoid a painful dependency on `strata-bridge`", and the ASM security audit
    configuration carries advisories whose upgrade is "blocked until the strata-bridge dependency updates its
@@ -64,10 +67,16 @@ known workaround, and two data contracts that do not yet exist.
 ## 4. What we need from Alpen
 
 1. A **frozen revision or tag of `strata-bridge`** for the duration of the project.
-2. The **false claim report contract** — format, issuer, and the per-outpoint metadata needed to rebuild each input.
-3. **PRD §6.4.1 (cryptographic validation of false claim proofs) descoped, in writing.** We cannot commit to a phase
-   called "full flow" while its central validation step is disclaimed. If the proof must be verified in-app, it is not
-   estimable until the contract exists; as a placeholder, assume **+4–8 weeks**.
+2. **False claim report contract — partially provided.** See [`06-supplementary-false-claim-reports.md`](../0-prd/06-supplementary-false-claim-reports.md)
+   ([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)). This covers:
+   - user input shape (Claim txid; fetch Contest/Ack under the hood);
+   - on-chain validation rules (N/N authenticity, Ack format, same operator);
+   - bridge config shape (operators, `n_of_n_pubkey`, timelocks, deposit-index search).
+   **Still open:** admin pubkeys/threshold for the Payout Administrator multisig (distinct from bridge operators),
+   unstaking image per claim, pinned `strata-bridge` revision, and concrete signet test txids/hashes referenced in the doc.
+3. **PRD §6.4.1 is now estimable as on-chain parsing**, not an opaque proof blob. Scope is bounded Claim/Contest/Ack
+   validation per the supplementary doc plus `strata-bridge` reference impl. Reserve **+4–8 weeks** only if the spike
+   discovers verification beyond that (e.g. ZK/sp1 not described in the supplementary doc).
 4. Confirmation of the **spend path and sighash type** used by the connector.
 5. A **reproducible test environment** for the bridge, or agreement that we build the fixtures ourselves (already priced
    into Phase 0).
