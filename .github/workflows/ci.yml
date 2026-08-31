@@ -169,6 +169,7 @@ jobs:
           npm run test:lib-device-signing-display --workspace desktop-app
           npm run test:lib-device-copy --workspace desktop-app
           npm run test:color-tokens --workspace desktop-app
+          npm run test:redundant-defcon-1 --workspace desktop-app
           npm run test:proposal-send-state --workspace desktop-app
           npm run test:proposal-title --workspace desktop-app
           npm run test:proposal-display-status --workspace desktop-app

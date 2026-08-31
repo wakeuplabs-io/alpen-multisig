@@ -15,6 +15,7 @@ import {
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { lastChangeLabel } from '@/lib/last-change-label'
+import { redundantDefcon1ActionIds } from '@/lib/redundant-defcon-1'
 import { buildProposalTitle } from '@/lib/proposal-title'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
@@ -66,6 +67,9 @@ export function ProposalsDashboard({
 
 	const activeProposals = [...quorumReached, ...pending]
 	const pastProposals = [...executedOrCanceled, ...expiredOrSkipped]
+	// Over every past proposal, never the current page: which Defcon 1 activated the harbour is a
+	// fact about the whole history.
+	const changedNothing = redundantDefcon1ActionIds(pastProposals)
 	const totalPastPages = Math.ceil(pastProposals.length / PAGE_SIZE)
 	const pagedPastProposals = pastProposals.slice((pastPage - 1) * PAGE_SIZE, pastPage * PAGE_SIZE)
 
@@ -185,6 +189,7 @@ export function ProposalsDashboard({
 					) : (
 						<PastTab
 							proposals={pagedPastProposals}
+							changedNothing={changedNothing}
 							totalProposals={pastProposals.length}
 							page={pastPage}
 							totalPages={totalPastPages}
@@ -271,6 +276,7 @@ function PastTab({
 	page,
 	totalPages,
 	signerPubkey,
+	changedNothing,
 	onPageChange,
 	onSignProposal,
 	onBroadcastProposal,
@@ -282,6 +288,8 @@ function PastTab({
 	page: number
 	totalPages: number
 	signerPubkey: string | null
+	/** Computed over every past proposal, not this page: pagination must not move the answer. */
+	changedNothing: ReadonlySet<string>
 	onPageChange: (page: number) => void
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
@@ -307,6 +315,7 @@ function PastTab({
 					key={proposal.actionId}
 					proposal={proposal}
 					signerPubkey={signerPubkey}
+					changedNothing={changedNothing.has(proposal.actionId)}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -391,6 +400,8 @@ function ProposalGroup({
 							key={proposal.actionId}
 							proposal={proposal}
 							signerPubkey={signerPubkey}
+							// Only an enacted proposal can have changed nothing, and this group never holds one.
+							changedNothing={false}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
 							onViewProposal={onViewProposal}
@@ -406,6 +417,7 @@ function ProposalGroup({
 function ProposalCard({
 	proposal,
 	signerPubkey,
+	changedNothing,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -413,6 +425,8 @@ function ProposalCard({
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
+	/** Enacted, but the safe harbour was already active — see `redundantDefcon1ActionIds`. */
+	changedNothing: boolean
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -517,6 +531,16 @@ function ProposalCard({
 					</div>
 				)}
 			</div>
+
+			{changedNothing && (
+				<div className="mt-4 border-t border-[#eceff3] pt-3">
+					<p className="m-0 text-body font-medium text-[#111827]">Changed nothing on chain</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">
+						The bridge was already in safe harbour when this executed. It consumed a council sequence number and its
+						fees, and left the state as it found it.
+					</p>
+				</div>
+			)}
 
 			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
