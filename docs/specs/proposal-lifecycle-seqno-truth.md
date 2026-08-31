@@ -260,6 +260,13 @@ candidate for the next phase.
   not: a reveal that was dropped or replaced never degrades `reveal_broadcasted` to `failed`, and
   `proposals_resubmit_reveal` still exists with no UI that can reach it. A bundle that never
   reaches a block stays in flight until something else consumes its sequence number.
+- **The desktop's report can lose its session and nothing retries it.** The confirmation task
+  captures a bearer token when the broadcast starts and keeps it for the whole wait; sessions live
+  in the orchestrator's memory, so a restart or an expiry turns the final `PATCH` into a `401` that
+  is logged and dropped. This is the mechanism behind the symptom in §1: the reveal was mined and
+  the report never landed. Rule 0 in §4 absorbs the consequence — the orchestrator now sees the
+  confirmation on its own — but the app still shows a healthy session countdown while its token is
+  dead, because that countdown is computed from a locally stored expiry.
 - **`max_seqno_gap` is unknown off-chain.** A `seq_no` more than the deployment's gap past
   `last_seqno` is refused silently on chain (§2) and the app never warns. Nothing in
   `orchestrator-be` or `desktop-app` reads that parameter.

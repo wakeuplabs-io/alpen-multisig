@@ -36,8 +36,12 @@ pub enum ProposalError {
 /// Errors that can occur during direct broadcast from Tauri.
 #[derive(Debug, thiserror::Error)]
 pub enum BroadcastError {
-    #[error("failed to fetch proposal: {0}")]
-    ProposalFetch(#[from] OrchestratorError),
+    /// Any orchestrator call in the broadcast flow: fetching the proposal, claiming the
+    /// coordination, or reporting progress afterwards. Named for the boundary rather than for one
+    /// of its callers — it used to read "failed to fetch proposal", which sent a reader of the
+    /// logs looking at the read path for a failure that happened while reporting.
+    #[error("orchestrator request failed: {0}")]
+    Orchestrator(#[from] OrchestratorError),
     #[error("broadcast setup error: {0}")]
     Setup(String),
     #[error("bitcoin RPC error: {0}")]
@@ -213,7 +217,7 @@ pub async fn submit_commit_then_reveal(
         {
             BroadcastError::Setup(format!("broadcast already in progress: {message}"))
         } else {
-            BroadcastError::ProposalFetch(e)
+            BroadcastError::Orchestrator(e)
         }
     })?;
 
