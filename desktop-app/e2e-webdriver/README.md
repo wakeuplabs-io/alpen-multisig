@@ -81,6 +81,7 @@ npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (canonical Admin ID)
 npm run test:e2e:proposal-co-sign-mnemonic # second signer (cosign mnemonic, same canonical path)
 npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
+npm run test:e2e:defcon-1-create    # Security Council session: Defcon 1 form, four signing lines, type-to-confirm gate
 npm run test:e2e:admin-wallet-panel # admin wallet panel lifecycle (fund, sync, unconfirmed balance)
 npm run test:e2e:fee-bump           # fee-bump flow (PRD §4.3.3) — RBF on unconfirmed send
 ```

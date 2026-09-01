@@ -6,9 +6,12 @@ export const DEMO_MNEMONIC_COSIGN = 'multiply toss magic exclude crawl obey gard
 
 /**
  * Full wallet connect + session auth until URL is /proposals.
+ *
  * @param {string} [mnemonic]
+ * @param {string} [authority] Card label on the "Select multisig" step, exactly as rendered.
+ *   Defaults to the Strata Administrator, which is what every spec but the Defcon 1 one wants.
  */
-export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
+export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC, authority = 'Strata Administrator') {
 	// The mnemonic method must be picked first: the textarea only mounts once mnemonic is the
 	// selected method (#461 — seed words no longer sit beside a hardware selection). The chip
 	// itself appears only after an async capability check (useMnemonicSigningEnabled), so the
@@ -50,20 +53,18 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC) {
 	await connectWithWords.click()
 
 	await $('//h1[contains(.,"Select multisig")]').waitForDisplayed({ timeout: 60000 })
-	// Membership check disables Continue until ASM confirms the signer; wait for Strata Admin.
+	// Membership check disables Continue until ASM confirms the signer for this authority.
 	await browser.waitUntil(
 		async () => {
-			const badge = await $(
-				'//button[.//p[contains(text(),"Strata Administrator")]]//span[contains(text(),"Available")]',
-			)
+			const badge = await $(`//button[.//p[contains(text(),"${authority}")]]//span[contains(text(),"Available")]`)
 			return badge.isDisplayed()
 		},
 		{
 			timeout: 90000,
-			timeoutMsg: 'Strata Administrator should show Available after ASM membership check',
+			timeoutMsg: `${authority} should show Available after ASM membership check`,
 		},
 	)
-	await $('//button[.//p[contains(text(),"Strata Administrator")]]').click()
+	await $(`//button[.//p[contains(text(),"${authority}")]]`).click()
 	const authorityContinue = await $('button[data-testid="e2e-authority-select-continue"]')
 	await authorityContinue.waitForClickable({ timeout: 30000 })
 	await authorityContinue.click()
