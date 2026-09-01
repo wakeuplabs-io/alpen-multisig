@@ -491,6 +491,86 @@ async fn supersede_if_seq_no_consumed(
     Ok(())
 }
 
+/// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
+///
+/// The list sweep and the single-proposal read used to hold a copy of this each, and V2 adds a
+/// Defcon 3 branch to it. `last_seqno` is the role's live sequence number, or `None` when the ASM
+/// could not answer — supersession is a cleanup, never a reason to fail a read.
+///
+/// An ASM enactment check that fails leaves the proposal exactly where it is: the next cycle asks
+/// again.
+async fn reconcile_one(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    proposal: Proposal,
+    last_seqno: Option<u64>,
+) -> Result<(), AppError> {
+    // First: did its reveal confirm while nobody was watching? Both the enactment check and the
+    // sweep below read the broadcast status, so a missed confirmation would make an executed
+    // proposal look dead.
+    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
+
+    // Only a confirmed reveal can have enacted; everything else goes straight to the supersession
+    // check, which is what retires a bundle that never made it on chain.
+    let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
+        && proposal.reveal_txid.is_some();
+    let enacted = if awaiting_enactment {
+        match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+            asm_rpc_url,
+            proposal.authority,
+            proposal.seq_no,
+            &proposal.action_hex,
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "reconcile: ASM enactment check failed: {e}"
+                );
+                return Ok(());
+            }
+        }
+    } else {
+        false
+    };
+
+    if !enacted {
+        return supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await;
+    }
+
+    if let Some(target_action_id) = &proposal.target_action_id {
+        let applied = repo
+            .enact_cancel(&proposal.action_id, target_action_id)
+            .await?;
+        if !applied {
+            repo.update_broadcast_status(
+                &proposal.action_id,
+                BroadcastStatus::RevealConfirmed,
+                Some(ProposalStatus::Expired),
+                None,
+                None,
+                None,
+            )
+            .await?;
+        }
+        return Ok(());
+    }
+
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        BroadcastStatus::RevealConfirmed,
+        Some(ProposalStatus::Enacted),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    cascade_enact_associated_cancel(repo, &proposal.action_id).await
+}
+
 /// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions,
 /// and retire the ones whose sequence number the chain has already consumed.
 pub(crate) async fn reconcile_enacted_for_authority(
@@ -509,67 +589,7 @@ pub(crate) async fn reconcile_enacted_for_authority(
     let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
 
     for proposal in approved {
-        // First: did its reveal confirm while nobody was watching? Both the enactment check and
-        // the sweep below read the broadcast status, so a missed confirmation would make an
-        // executed proposal look dead.
-        let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
-
-        // Only a confirmed reveal can have enacted; everything else goes straight to the
-        // supersession check, which is what retires a bundle that never made it on chain.
-        let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
-            && proposal.reveal_txid.is_some();
-        let enacted = if awaiting_enactment {
-            match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-                asm_rpc_url,
-                proposal.authority,
-                proposal.seq_no,
-                &proposal.action_hex,
-            )
-            .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    tracing::warn!(
-                        action_id = %proposal.action_id.0,
-                        "reconcile_enacted_for_authority: ASM enactment check failed: {e}"
-                    );
-                    continue;
-                }
-            }
-        } else {
-            false
-        };
-        if !enacted {
-            supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await?;
-            continue;
-        }
-        if let Some(target_action_id) = &proposal.target_action_id {
-            let applied = repo
-                .enact_cancel(&proposal.action_id, target_action_id)
-                .await?;
-            if !applied {
-                repo.update_broadcast_status(
-                    &proposal.action_id,
-                    BroadcastStatus::RevealConfirmed,
-                    Some(ProposalStatus::Expired),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-            }
-            continue;
-        }
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await?;
-        cascade_enact_associated_cancel(repo, &proposal.action_id).await?;
+        reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await?;
     }
     Ok(())
 }
@@ -631,63 +651,11 @@ pub(crate) async fn reconcile_enacted_for_action(
         return Ok(());
     }
 
-    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
-
-    let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
-        && proposal.reveal_txid.is_some();
-    let enacted = if awaiting_enactment {
-        match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-            asm_rpc_url,
-            proposal.authority,
-            proposal.seq_no,
-            &proposal.action_hex,
-        )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!(
-                    action_id = %action_id.0,
-                    "reconcile_enacted_for_action: ASM enactment check failed: {e}"
-                );
-                return Ok(());
-            }
-        }
-    } else {
-        false
-    };
-    if !enacted {
-        let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
-        return supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await;
-    }
-
-    if let Some(target_action_id) = &proposal.target_action_id {
-        let applied = repo.enact_cancel(action_id, target_action_id).await?;
-        if !applied {
-            repo.update_broadcast_status(
-                action_id,
-                BroadcastStatus::RevealConfirmed,
-                Some(ProposalStatus::Expired),
-                None,
-                None,
-                None,
-            )
-            .await?;
-        }
-        return Ok(());
-    }
-
-    repo.update_broadcast_status(
-        action_id,
-        BroadcastStatus::RevealConfirmed,
-        Some(ProposalStatus::Enacted),
-        None,
-        None,
-        None,
-    )
-    .await?;
-    cascade_enact_associated_cancel(repo, action_id).await?;
-    Ok(())
+    // Read up front rather than only on the supersession branch: it costs one extra RPC on the
+    // cycle where the proposal enacts — once, since an enacted proposal returns above — and it is
+    // what lets this share `reconcile_one` with the sweep.
+    let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
+    reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await
 }
 
 /// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
