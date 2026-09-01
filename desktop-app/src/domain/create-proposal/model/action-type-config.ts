@@ -29,8 +29,8 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 	},
 	defcon_1: {
 		actionType: 'defcon_1',
-		title: 'Defcon 1',
-		description: 'Activate the bridge safe harbour immediately. Irreversible.',
+		title: 'DEFCON 1',
+		description: 'Immediately sweep bridge funds to the Safe Harbor.',
 	},
 }
 

@@ -140,8 +140,8 @@ function Defcon1Details() {
 					Irreversible
 				</p>
 				<p className="m-0 mt-2 text-label text-danger-deep">
-					Approving this authorizes the bridge safe harbour to activate immediately once the proposal is broadcast. The
-					action carries no payload — its identity is the signal — and it cannot be cancelled.
+					DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is
+					confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.
 				</p>
 			</div>
 		</>

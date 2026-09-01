@@ -59,8 +59,8 @@ export function Defcon1FormFields() {
 					Irreversible
 				</p>
 				<p className="m-0 mt-2 text-body text-danger-deep">
-					Defcon 1 activates the bridge safe harbour immediately. It takes effect in the block that carries it, it
-					cannot be cancelled, and there is no way to undo it.
+					DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is
+					confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.
 				</p>
 			</div>
 
