@@ -18,6 +18,7 @@ import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -46,6 +47,11 @@ export function BroadcastProposalScreen() {
 		signerKind,
 		adapter,
 	)
+
+	// Read live from the node, exactly like the create and sign screens: the note states a fact
+	// about the chain, so rendering it on a bridge that is *not* in safe harbour tells the council
+	// the emergency lever they are about to pull is pointless when it is not.
+	const safeHarbourActivated = useSafeHarbourActivated(proposal?.actionType === 'defcon_1')
 
 	async function handleBack() {
 		await disconnectSession()
@@ -101,8 +107,8 @@ export function BroadcastProposalScreen() {
 					<BroadcastFundingSignerBanner backendSignerKind={backendSignerKind} connectVendor={adapter.vendor} />
 
 					{/* The last screen before the fees are spent. Defcon 1 only: no other action reads on
-					    a bridge-wide state, and the note performs its own read when it mounts. */}
-					{proposal?.actionType === 'defcon_1' && (
+					    a bridge-wide state, and only when the chain says the harbour is already up. */}
+					{proposal?.actionType === 'defcon_1' && safeHarbourActivated && (
 						<SafeHarbourNote>
 							The bridge is already in safe harbour. Sending this does not change that — it consumes a council sequence
 							number and costs the commit and reveal fees.
