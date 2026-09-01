@@ -1,6 +1,6 @@
 # Security Council — Master Plan
 
-**Status:** Stage 4 in progress — V1's functional contract is written ([`security-council-defcon.md`](./security-council-defcon.md)); V2 and V5 still have none
+**Status:** V1 (Defcon 1) shipped end to end; V2–V5 pending, and none of them has a functional contract yet
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
@@ -340,8 +340,8 @@ Neither is an open question any more; both were settled while this document was 
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
-| 4 | Functional specs — Defcon first (V1, V2, V5's cancel), then the rest | In progress — V1 done: [`security-council-defcon.md`](./security-council-defcon.md) |
-| 5 | Vertical slices V1–V5 | Pending |
+| 4 | Functional specs — Defcon first (V1, V2, V5's cancel), then the rest | In progress — V1 done: [`security-council-defcon.md`](./security-council-defcon.md); V2–V5 unwritten |
+| 5 | Vertical slices V1–V5 | In progress — V1 shipped; V2–V5 pending |
 | 6 | Close-out: compliance audit, issue #117 | Pending |
 
 Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
@@ -357,7 +357,7 @@ compliance audit and issue #117.
 
 | Slice | End-to-end path | Status |
 |---|---|---|
-| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); all seven phases shipped |
+| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
 | V2 — Defcon 3 | Same path, timelocked, with an activation countdown | Pending |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |

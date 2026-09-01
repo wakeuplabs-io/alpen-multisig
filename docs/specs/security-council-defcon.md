@@ -1,6 +1,7 @@
 # Spec: Security Council — Defcon 1
 
-**Status:** Pending — V1 functional contract for Stage 4 implementation  
+**Status:** Shipped — V1 delivered on `develop` across eight phases (PRs #505–#512); see the build plan
+[`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)  
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §3.1.4, §5.1, §5.2.2, §5.3, §5.4, §5.5  
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E12 (in scope); US-E13, US-E14 (constraints)  
 **Master plan:** [`security-council.md`](./security-council.md)
