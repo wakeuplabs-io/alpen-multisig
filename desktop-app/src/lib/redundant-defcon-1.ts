@@ -12,6 +12,13 @@ import type { Proposal } from '@/api/proposals'
  * The earliest enacted Defcon 1 by sequence number is the one that activated the harbour; every
  * enacted one after it changed nothing. Only proposals this app knows about are considered, so an
  * activation performed outside it leaves no trace here and the answer errs towards saying nothing.
+ *
+ * V2 breaks that premise and has to revisit this. Defcon 3 activates the same flag, on a timelock,
+ * so once it exists the earliest enacted Defcon 1 is no longer necessarily what turned the harbour
+ * on — a Defcon 3 that matured first would have, and this would then call the wrong proposal the
+ * activation and stay silent about a genuinely redundant one. The fix is the activation height
+ * rather than the sequence number, and it is not worth writing before there is a second action
+ * that can set the flag. See docs/specs/security-council-defcon.md.
  */
 export function redundantDefcon1ActionIds(proposals: readonly Proposal[]): ReadonlySet<string> {
 	const enacted = proposals
