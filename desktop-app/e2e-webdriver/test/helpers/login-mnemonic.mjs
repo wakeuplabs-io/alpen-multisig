@@ -64,7 +64,13 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC, authori
 			timeoutMsg: `${authority} should show Available after ASM membership check`,
 		},
 	)
-	await $(`//button[.//p[contains(text(),"${authority}")]]`).click()
+	// Scrolled into view first: the authority cards are a scrolling list under a fixed footer, and
+	// the last of them — the Security Council — sits behind that footer, where a click lands on the
+	// footer instead. The first card never needed this, which is why it went unnoticed.
+	const authorityCard = await $(`//button[.//p[contains(text(),"${authority}")]]`)
+	await browser.execute((el) => el.scrollIntoView({ block: 'center' }), authorityCard)
+	await authorityCard.waitForClickable({ timeout: 30000 })
+	await authorityCard.click()
 	const authorityContinue = await $('button[data-testid="e2e-authority-select-continue"]')
 	await authorityContinue.waitForClickable({ timeout: 30000 })
 	await authorityContinue.click()
