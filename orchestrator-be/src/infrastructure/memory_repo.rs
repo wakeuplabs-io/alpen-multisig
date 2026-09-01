@@ -166,6 +166,7 @@ impl ProposalRepository for InMemoryProposalRepository {
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
         if let Some(proposal) = proposals.get_mut(action_id) {
             proposal.activation_height = Some(height);
+            proposal.updated_at = Utc::now();
         }
         Ok(())
     }
@@ -181,6 +182,7 @@ impl ProposalRepository for InMemoryProposalRepository {
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
         if let Some(proposal) = proposals.get_mut(action_id) {
             proposal.update_id_in_queue = Some(update_id);
+            proposal.updated_at = Utc::now();
         }
         Ok(())
     }
@@ -248,6 +250,36 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
+    }
+
+    /// `updated_at` is what the screens read to say how long a bundle has been sitting where it
+    /// is, and the Postgres repository bumps it on every write that changes a proposal. This one
+    /// used to bump on the broadcast writes only, so the two disagreed and nothing noticed:
+    /// the suite runs against this repository.
+    #[tokio::test]
+    async fn every_write_moves_updated_at() {
+        let repo = InMemoryProposalRepository::new();
+        let action_id = ActionId("action1".to_string());
+        let mut proposal = make_proposal("action1", "02aa");
+        proposal.updated_at = Utc::now() - chrono::Duration::hours(1);
+        let before = proposal.updated_at;
+        repo.save_proposal(proposal).await.unwrap();
+
+        repo.update_activation_height(&action_id, 101)
+            .await
+            .unwrap();
+        let after_height = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert!(
+            after_height.updated_at > before,
+            "activation height is a change"
+        );
+
+        repo.update_update_id_in_queue(&action_id, 7).await.unwrap();
+        let after_queue = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert!(
+            after_queue.updated_at >= after_height.updated_at,
+            "the queue id is a change too"
+        );
     }
 
     #[tokio::test]

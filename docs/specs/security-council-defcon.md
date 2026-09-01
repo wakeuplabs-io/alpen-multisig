@@ -95,6 +95,26 @@ The replacement does not depend on Defcon and is verifiable before it exists: th
 > the Defcon 1 it refuses carries an authority that *is* in the list. See
 > [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md) §4.3.
 
+## What V2 inherits, and must revisit
+
+Two pieces of V1 are correct only because Defcon 1 is currently the only action of its kind. Both
+are noted here rather than in the code alone, because both go wrong quietly.
+
+**The "changed nothing on chain" badge assumes only Defcon 1 sets the flag.**
+`desktop-app/src/lib/redundant-defcon-1.ts` treats the earliest enacted Defcon 1 by sequence number
+as the one that activated the safe harbour. Defcon 3 activates the same flag, on a timelock, so from
+V2 onwards a Defcon 3 that matured first would have been the activation — and this would then name
+the wrong proposal and stay silent about a genuinely redundant one. The answer is the activation
+height, not the sequence number.
+
+**The desktop's cancel gate is still half authority-shaped.** `canCancelProposal` reads
+`CANCELABLE_AUTHORITIES.includes(authority) && actionType !== 'defcon_1'`, because the desktop
+cannot read a live confirmation depth. The backend gate is the depth alone
+([Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)),
+so the two sides ask different questions. V5 has to open that list for Defcon 3; the durable fix is
+for the proposal DTO to carry the resolved depth — or a `cancellable` flag derived from it — so both
+sides ask the backend's question. Cheapest to decide in V2, which is when Defcon 3 first exists.
+
 ## State Model
 
 Defcon 1 proposals follow the standard lifecycle, with one label carve-out in the UI:
@@ -151,22 +171,27 @@ V1 only calls this for Defcon 1, but the function signature must accept any acti
 
 ### Proposal Creation
 
-Create a new proposal with type `defcon_1`:
+Defcon 1 is created through the **existing** `create_update_action`, with no Defcon-specific
+function and no new proposal-kind field. The action arrives as `action_hex` like every other action,
+built by the desktop's `build_defcon_1_action_hex` command, and the authority gate is
+`require_authorized_for_action`, which reads upstream's `UpdateTxType::authorized_role` rather than
+a table of ours.
 
-```rust
-pub async fn create_defcon_proposal(
-    repo: &dyn ProposalRepository,
-    seq_no: u64,
-    signer_pubkey: String,
-    signature_hex: String,
-) -> Result<Proposal>
-```
-
-Logic:
-1. Construct `action_hex` from `MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))` and the provided `seq_no`.
+Logic, unchanged from the other action types:
+1. Decode `action_hex` and refuse it if the session's authority is not the role upstream names for
+   that action ([AC 17](#17-the-backend-refuses-defcon-1-creation-from-a-non-council-session)).
 2. Compute `ActionId = hash(action_hex, seq_no)` (stable across resubmissions).
-3. Check for existing proposal with same `(action_hex, seq_no)`. If found, reject naming its `ActionId`, mutating nothing (PRD 02 §3.4).
-4. Persist new `Proposal` with `authority = SecurityCouncil`, `status = Pending`, and the creator's signature.
+3. Check for an existing proposal with the same `ActionId`. If found, reject naming it, mutating
+   nothing (PRD 02 §3.4).
+4. Persist a new `Proposal` with `authority = SecurityCouncil`, `status = Pending`, and the
+   creator's signature.
+
+> Corrected at V1 close-out. This section previously specified a dedicated
+> `create_defcon_proposal(repo, seq_no, signer_pubkey, signature_hex)`. Nothing in that signature is
+> Defcon-specific except the action it hardcodes, and the action already travels as `action_hex`, so
+> the function would have been `create_update_action` with one argument replaced by a constant. What
+> V1 actually needed was the authorization gate, which is per-action and therefore serves every
+> future action type — V2's Defcon 3 included — without a second creation path.
 
 ### Enactment Detection
 
@@ -180,24 +205,30 @@ When the backend receives a new ASM block (e.g., via RPC poll in `reconcile_enac
 
 ### API Endpoints
 
-**New: `POST /proposals`**
-
-Extend existing endpoint to accept `type: "defcon_1"` as a proposal kind:
+**Existing: `POST /proposals`** — unchanged. Defcon 1 needs no new field on it:
 
 ```json
 {
-  "type": "defcon_1",
-  "seqNo": 1,
-  "signerPubkey": "02...",
-  "signatureHex": "..."
+  "seq_no": 1,
+  "action_hex": "…",
+  "signer_pubkey": "02…",
+  "signature_hex": "…"
 }
 ```
 
-Returns `201 Created` with the proposal JSON. A duplicate `(action, seq_no)` is rejected with `409 Conflict` naming the existing `ActionId` (PRD 02 §3.4).
+Returns `201 Created` with the proposal JSON. A request whose action the session's authority may not
+sign is refused with `400 Bad Request` before anything is persisted. A duplicate `(action, seq_no)`
+is rejected with `409 Conflict` naming the existing `ActionId` (PRD 02 §3.4).
+
+> Corrected at V1 close-out. This entry previously introduced a `type: "defcon_1"` discriminator and
+> a camelCase body, neither of which exists: the endpoint identifies an action by decoding its
+> `action_hex`, and a discriminator would be a second, redundant source of truth about what the
+> signer signed. **V2 adds no field here either.**
 
 **Existing: `GET /proposals`, `GET /proposals/:action_id`**
 
-Include Defcon 1 proposals in lists and detail views. Display `authority: "security_council"` and `type: "defcon_1"` in responses.
+Include Defcon 1 proposals in lists and detail views. The desktop derives `actionType: "defcon_1"`
+by decoding `action_hex`; the wire authority reads `security_council`.
 
 ## Frontend Contract (desktop-app)
 
@@ -350,6 +381,12 @@ A session authenticated for Alpen Admin, Strata Admin, Sequencer Manager, or Pay
 **Given** a user authenticated as any non-council authority  
 **When** they navigate directly to `/proposals/create/defcon-1`  
 **Then** the Defcon 1 form is not rendered and the router redirects to `/` (the wallet-connect screen), matching the existing catch-all behaviour in `desktop-app/src/App.tsx`.
+
+> Held by absence since Phase 5, not by a guard: that route was never registered, so the catch-all
+> answers it for *every* session, council included. What refuses a non-council signer on the route
+> that does exist is the authority-keyed action-type menu plus the form schema behind it, and the
+> backend gate [AC 17](#17-the-backend-refuses-defcon-1-creation-from-a-non-council-session) behind
+> that.
 
 ### 2. Defcon 1 proposal creation
 **Given** a Security Council signer on the create form with seq_no = 1 (first council proposal)  
@@ -524,12 +561,12 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 
 | File | Change |
 |---|---|
-| `orchestrator-be/src/domain/proposal.rs` | Add `kind: ProposalKind` enum variant `Defcon1`; map to upstream action type. |
+| ~~`orchestrator-be/src/domain/proposal.rs`~~ | **Not changed.** There is no `ProposalKind`: the action is identified by decoding `action_hex`, and a stored discriminator would be a second answer to a question the bytes already settle. |
 | `orchestrator-be/src/infrastructure/asm_role_membership.rs` | Add `lock_period_for_action`, resolving the depth from the action rather than the authority; retire `lock_period_for_authority`. |
 | `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbour activation; refactor enactment detection to use per-action depth; **replace the cancel gate's authority allow-list with the action's confirmation depth** (see [Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)). |
-| `orchestrator-be/src/handlers/proposals.rs` | Extend `create_proposal_handler` to route `type: "defcon_1"` to `create_defcon_proposal`. |
+| `orchestrator-be/src/handlers/proposals.rs` | **Shipped differently:** no routing by type. `create_proposal` decodes the action and calls `require_authorized_for_action` before the generic `create_update_action` — see the correction under *Proposal Creation*. |
 | `orchestrator-be/src/handlers/mod.rs` | Ensure Security Council role mapping is wired; route guards check `authority == SecurityCouncil`. |
-| `desktop-app/src/types/proposal.ts` | Add `kind: "defcon_1"` union variant to `ProposalKind`. |
+| `desktop-app/src/api/proposals.ts` | Add `'defcon_1'` to the `ActionType` union (the file is `api/proposals.ts`, not `types/proposal.ts`, and the union is `ActionType`, not `ProposalKind`). Mirrored in `api/ipc-schemas.ts`, whose enums are closed — an unregistered value fails the parse of every proposal in the same list. |
 | `desktop-app/src/domain/create-proposal/` | **Settled in Phase 5:** Defcon 1 extends this domain. One `ACTION_TYPES_BY_AUTHORITY` entry, one validator, one `defcon-1-form-fields.tsx` carrying the warning, the rendered signing message and the type-to-confirm gate. No sibling domain. |
 | `desktop-app/src/types/auth-role.ts`, `lib/authority-label.ts`, `api/orchestrator-auth.ts`, `screens/wallet-connect-screen.tsx`, `src-tauri/src/domain/auth.rs` | **Added in Phase 5, and not anticipated by this contract:** the desktop app had no Security Council session at all. Two of these were `default:` arms that substitute silently rather than fail. |
 | `desktop-app/src/screens/proposals-dashboard-screen.tsx` | Display Defcon 1 proposals with "Security Council" label; no cancel affordance shown. |
@@ -566,8 +603,10 @@ Desktop app tests use granular scripts (see `desktop-app/package.json` for avail
 
 - **Type-to-confirm validation:** Sign button disabled until input matches "DEFCON 1" (case-insensitive).
 - **Four-line message rendering:** Signing message displays verbatim without wrapping or abbreviation.
-- **Non-council access blocked:** (AC 1) a non-council session on the proposals dashboard sees no "Create Defcon 1" CTA;
-  (AC 1a) direct navigation to `/proposals/create/defcon-1` renders no form and redirects to `/`.
+- **Non-council access blocked:** (AC 1) a non-council session's action-type menu on `/proposals/create`
+  offers no Defcon 1, and the form schema refuses the action even if the field is set by other means;
+  (AC 1a) `/proposals/create/defcon-1` is not a registered route, so `App.tsx`'s catch-all answers it
+  for every session.
 - **Status labels:** "Quorum reached" label shown (not "Approved"); "Enacted" label shown post-enactment.
 - **No cancel CTA:** Defcon 1 proposal screens do not render cancel button or cancellation-signature UI.
 - **Manual broadcast:** Signatures can be exported to clipboard; raw transaction hex can be composed and broadcast externally.
@@ -586,7 +625,10 @@ Desktop app tests use granular scripts (see `desktop-app/package.json` for avail
 - [ ] Type-to-confirm field exists and enforces exact match (case-insensitive) before signing.
 - [ ] Signing message is rendered verbatim, monospace, without line wrapping or abbreviation.
 - [ ] Security Council badge is visible on all screens in the Defcon 1 flow.
-- [ ] Non-council sessions cannot reach `/proposals/create/defcon-1`.
+- [ ] A non-council session is offered no Defcon 1 anywhere, and the backend refuses one it sends
+      anyway ([AC 1](#1-non-council-session-sees-no-defcon-1-entry-point),
+      [AC 17](#17-the-backend-refuses-defcon-1-creation-from-a-non-council-session)). There is no
+      `/proposals/create/defcon-1` route to guard — see the correction under *Create Form Layout*.
 - [ ] ActionId computation is stable across resubmissions (hash of action + seqno).
 - [ ] Duplicate `(action, seqno)` submissions are rejected and name the existing `ActionId`, mutating nothing.
 

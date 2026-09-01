@@ -8,6 +8,7 @@
 		"build": "tsc && vite build",
 		"lint": "eslint src",
 		"format:check": "prettier --check src",
+		"test:unit": "node scripts/run-unit-tests.mjs",
 		"test:ipc-schemas": "tsx src/api/ipc-schemas.test.ts",
 		"test:admin-wallet-capability-schema": "tsx src/api/__tests__/admin-wallet-capability-schema.test.ts",
 		"test:derive-broadcast-error": "tsx src/domain/broadcast-proposal/model/__tests__/derive-broadcast-error.test.ts",

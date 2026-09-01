@@ -2,7 +2,8 @@
 //
 // PRD 06 §5.2.2 carves Defcon 1 out of the Approved/Canceled lifecycle. The backend still moves it
 // to `approved` at quorum, so the carve-out is a display rule, and it has to hold for every one of
-// the five states it can hold — not only the one the screens happen to render first.
+// every state it can hold — not only the one the screens happen to render first. `superseded`
+// arrived after this test did, which is exactly the way a carve-out like this goes stale.
 
 import assert from 'node:assert/strict'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, showsActivationCountdown } from '../proposal-status.ts'
@@ -14,7 +15,7 @@ function proposal(status: ProposalStatus, actionType: ActionType, broadcastStatu
 
 // ── AC 9: no Defcon 1 state renders the word "Approved" ─────────────────────
 {
-	const states: ProposalStatus[] = ['pending', 'approved', 'enacted', 'expired', 'canceled']
+	const states: ProposalStatus[] = ['pending', 'approved', 'enacted', 'expired', 'canceled', 'superseded']
 	for (const status of states) {
 		const display = proposalDisplayStatus(proposal(status, 'defcon_1'))
 		const label = PROPOSAL_STATUS_STYLE[display].label

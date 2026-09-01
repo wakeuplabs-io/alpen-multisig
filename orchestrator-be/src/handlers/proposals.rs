@@ -224,10 +224,13 @@ pub async fn create_cancel_proposal(
     let proposal = proposals::create_cancel_proposal(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
         ActionId(action_id),
         body.seq_no,
         &body.action_hex,
-        &auth.signer_pubkey,
         &body.signature_hex,
     )
     .await?;
