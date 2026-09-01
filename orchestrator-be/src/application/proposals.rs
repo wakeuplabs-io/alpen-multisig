@@ -724,16 +724,23 @@ async fn cascade_enact_associated_cancel(
 pub(crate) async fn create_cancel_proposal(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
+    session: SessionContext<'_>,
     target_action_id: ActionId,
     seq_no: SeqNo,
     action_hex: &str,
-    signer_pubkey: &str,
     signature_hex: &str,
 ) -> Result<Proposal, AppError> {
     let target = repo
         .find_by_action_id(&target_action_id)
         .await?
         .ok_or(AppError::NotFound)?;
+
+    // The cancel is stored under the *target's* authority, so without this a session of any
+    // authority could file one — with its own signature as the first — into another authority's
+    // queue. It could never be enacted (the signature is outside the target's key set), but a
+    // session is bound to exactly one authority and this is the write path that forgot it. The
+    // read path beside it, `get_cancel_target_status`, has always checked.
+    require_proposal_authority(&target, session.authority)?;
 
     if target.status != ProposalStatus::Approved {
         return Err(AppError::BadRequest(format!(
@@ -760,7 +767,7 @@ pub(crate) async fn create_cancel_proposal(
 
     let required_signatures = threshold_for_authority(asm_rpc_url, target.authority).await?;
     let action_id = compute_action_id(seq_no, action_hex)?;
-    let normalized_pubkey = normalize_signer_pubkey_hex(signer_pubkey);
+    let normalized_pubkey = normalize_signer_pubkey_hex(session.signer_pubkey);
 
     let proposal = Proposal {
         action_id,
@@ -1969,10 +1976,13 @@ mod tests {
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -2031,10 +2041,13 @@ mod tests {
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -2166,10 +2179,13 @@ mod tests {
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -2190,10 +2206,13 @@ mod tests {
         let first = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -2202,10 +2221,13 @@ mod tests {
         let second = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_b().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_b().signer_pubkey,
             "cancel_sig_2",
         )
         .await
@@ -2234,16 +2256,53 @@ mod tests {
         let err = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             pending.action_id,
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
         .unwrap_err();
 
         assert!(matches!(err, AppError::BadRequest(_)));
+    }
+
+    /// A cancel is stored under the *target's* authority, so the session that files it has to be
+    /// that authority. Without the check, a signer of any authority could put a proposal carrying
+    /// their own signature into someone else's queue. The second half is the one that matters:
+    /// nothing is persisted, so the refusal is not merely a status code.
+    #[tokio::test]
+    async fn test_create_cancel_proposal_refuses_a_foreign_authority_session() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+
+        let err = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            SessionContext {
+                authority: Authority::SequencerManager,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            "cancel_sig",
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, AppError::Unauthorized), "{err:?}");
+        assert!(
+            repo.find_cancel_for_target(&target.action_id)
+                .await
+                .unwrap()
+                .is_none(),
+            "a refused cancel must leave nothing behind"
+        );
     }
 
     /// AC 11: the gate is the action's confirmation depth, and the rejection names it. Defcon 1 is
@@ -2278,10 +2337,13 @@ mod tests {
         let err = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::SecurityCouncil,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target_action_id,
             99,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
