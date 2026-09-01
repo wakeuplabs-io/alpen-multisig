@@ -7,6 +7,8 @@ V1 must do. This document is only *how* it gets built, and never overrides it.
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E12.
 
+**Status:** All eight phases shipped on `develop` (PRs #505–#512).
+
 A phase marked ✅ here means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
 
