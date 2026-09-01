@@ -4,7 +4,7 @@ import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
-import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
+import { AlertTriangleIcon, CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { actionTypeTitle } from '../model/action-type-config'
 import type { ActionType } from '../model/create-proposal.types'
 import {
@@ -124,10 +124,13 @@ export function CreateProposalPreview({
 
 			{actionType === 'defcon_1' ? (
 				<div className="rounded-xl border border-danger-border bg-danger-surface p-4">
-					<p className="m-0 text-body font-semibold text-danger-deep">Irreversible</p>
+					<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
+						<AlertTriangleIcon width={16} height={16} className="shrink-0 text-danger" />
+						Irreversible
+					</p>
 					<p className="m-0 mt-2 text-body text-danger-deep">
-						Signing this activates the bridge safe harbour immediately. The action carries no payload — its identity is
-						the signal — and it cannot be cancelled.
+						DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal
+						is confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.
 					</p>
 				</div>
 			) : actionType === 'operator_set_update' ? (
