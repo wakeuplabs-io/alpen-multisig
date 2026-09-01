@@ -85,21 +85,21 @@ const SUPERSEDED_BEFORE_CONFIRMATION = {
 }
 
 export function proposalSendState(proposal: SendStateInput): ProposalSendState {
-	const isTerminal =
-		proposal.status === 'enacted' ||
-		proposal.status === 'canceled' ||
-		proposal.status === 'expired' ||
-		proposal.status === 'superseded'
-	const hasQuorum =
-		!isTerminal && (proposal.status === 'approved' || proposal.signatures.length >= proposal.requiredSignatures)
-
-	// Only an approved proposal has a bundle to broadcast. Quorum alone is not
-	// enough: the backend approves the proposal before the bundle exists.
+	// Answered ahead of the terminal check below, because it is the one terminal state with
+	// something of its own to say — including which of the two ways it got there. Quorum never
+	// enters into it: the sequence number is gone either way.
 	if (proposal.status === 'superseded') {
 		const stage =
 			proposal.broadcastStatus === 'reveal_confirmed' ? SUPERSEDED_AFTER_CONFIRMATION : SUPERSEDED_BEFORE_CONFIRMATION
 		return { kind: 'superseded', ...stage }
 	}
+
+	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
+	const hasQuorum =
+		!isTerminal && (proposal.status === 'approved' || proposal.signatures.length >= proposal.requiredSignatures)
+
+	// Only an approved proposal has a bundle to broadcast. Quorum alone is not
+	// enough: the backend approves the proposal before the bundle exists.
 	if (isTerminal || !hasQuorum || proposal.status !== 'approved') return { kind: 'unavailable' }
 
 	switch (proposal.broadcastStatus) {

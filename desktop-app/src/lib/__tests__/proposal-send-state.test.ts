@@ -75,4 +75,41 @@ for (const terminal of ['enacted', 'canceled', 'expired'] as const) {
 	assert.equal(proposalSendState(proposal(terminal, 'reveal_confirmed')).kind, 'unavailable')
 }
 
+// ── Superseded: terminal, and it says which of the two ways it got there ──
+//
+// The chain used this proposal's sequence number for another action, so the ASM will refuse its
+// transaction from here on. Two ways to arrive, and they are not the same thing to the person
+// reading: a bundle whose reveal was mined reached a block and lost the race — the commit and
+// reveal fees were spent — while one that never confirmed never got that far.
+
+const supersededAfter = proposalSendState(proposal('superseded', 'reveal_confirmed'))
+assert.equal(supersededAfter.kind, 'superseded')
+assert.equal(showsSendButton(supersededAfter), false)
+assert.match(
+	supersededAfter.kind === 'superseded' ? supersededAfter.detail : '',
+	/fees were spent/i,
+	'a superseded bundle that was mined must say the fees were spent',
+)
+
+const supersededBefore = proposalSendState(proposal('superseded', 'idle'))
+assert.equal(supersededBefore.kind, 'superseded')
+assert.equal(showsSendButton(supersededBefore), false)
+assert.doesNotMatch(
+	supersededBefore.kind === 'superseded' ? supersededBefore.detail : '',
+	/fees were spent/i,
+	'a bundle that never confirmed spent no reveal fee',
+)
+
+// The label is the same either way — only the detail differs.
+assert.equal(
+	supersededAfter.kind === 'superseded' && supersededBefore.kind === 'superseded'
+		? supersededAfter.label === supersededBefore.label
+		: false,
+	true,
+)
+
+// Quorum is irrelevant once the sequence number is gone: a superseded proposal that never reached
+// quorum is just as dead, and must not fall through to `unavailable`.
+assert.equal(proposalSendState(proposal('superseded', 'idle', 0)).kind, 'superseded')
+
 console.log('proposal-send-state: all assertions passed')
