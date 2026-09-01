@@ -361,7 +361,7 @@ compliance audit and issue #117.
 | Slice | End-to-end path | Status |
 |---|---|---|
 | V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
-| V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); **in progress** |
+| V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **in progress** |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
 | ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2) |
