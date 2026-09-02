@@ -491,14 +491,6 @@ async fn supersede_if_seq_no_consumed(
     Ok(())
 }
 
-/// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
-///
-/// `last_seqno` is the role's live sequence number, or `None` when the ASM could not answer —
-/// supersession is a cleanup, never a reason to fail a read.
-///
-/// An ASM enactment check that fails — including a Defcon 3 whose height or tip is missing —
-/// leaves the proposal exactly where it is: the next cycle asks again. `Ok(false)` is "not
-/// enacted"; inconclusive must be `Err`.
 async fn bitcoin_tip_for_enactment(
     action_hex: &str,
     btc_client: &dyn BitcoinRpcClient,
@@ -509,6 +501,36 @@ async fn bitcoin_tip_for_enactment(
     btc_client.get_chain_tip().await.map(Some)
 }
 
+/// Whether a cancel of this proposal already reached the chain, so the sweep must not decide the
+/// target's lifecycle this cycle.
+///
+/// A cancel that confirms takes its target out of the admin queue while the target's seqno is
+/// already consumed — the exact shape `supersede_if_seq_no_consumed` reads as "dead". Left alone,
+/// a cancelled Defcon 3 would land on `Superseded` instead of `Canceled`, and `enact_cancel` would
+/// then refuse (it requires an Approved target) and retire the cancel as `Expired`. The other
+/// ordering loses too: the cancel writes `Canceled`, and this sweep's copy — read before that
+/// write — puts the target back. Only the cancel decides a cancelled target.
+///
+/// An `Expired` cancel is the case where the target enacted first, so it holds nothing up.
+async fn cancel_reached_chain(
+    repo: &dyn ProposalRepository,
+    target_action_id: &ActionId,
+) -> Result<bool, AppError> {
+    let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
+        return Ok(false);
+    };
+    Ok(cancel.broadcast_status == BroadcastStatus::RevealConfirmed
+        && cancel.status != ProposalStatus::Expired)
+}
+
+/// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
+///
+/// `last_seqno` is the role's live sequence number, or `None` when the ASM could not answer —
+/// supersession is a cleanup, never a reason to fail a read.
+///
+/// An ASM enactment check that fails — including a Defcon 3 whose height or tip is missing —
+/// leaves the proposal exactly where it is: the next cycle asks again. `Ok(false)` is "not
+/// enacted"; inconclusive must be `Err`.
 async fn reconcile_one(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
@@ -520,6 +542,11 @@ async fn reconcile_one(
     // sweep below read the broadcast status, so a missed confirmation would make an executed
     // proposal look dead.
     let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
+
+    // A cancel that is already on chain owns this proposal's outcome — see `cancel_reached_chain`.
+    if !proposal.is_cancel() && cancel_reached_chain(repo, &proposal.action_id).await? {
+        return Ok(());
+    }
 
     // Only a confirmed reveal can have enacted; everything else goes straight to the supersession
     // check, which is what retires a bundle that never made it on chain.
@@ -2029,6 +2056,81 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(target.status, ProposalStatus::Canceled);
+    }
+
+    /// A cancel that reached the chain takes its target out of the ASM queue while the target's
+    /// seqno is already consumed — the exact shape the supersession sweep reads as "dead". The
+    /// target belongs to the cancel: it must stay put until the cancel's own enactment writes
+    /// `Canceled`, or a cancelled Defcon 3 would end on `Superseded` and its cancel on `Expired`.
+    /// See docs/specs/security-council-defcon-3.md Constraint 3 and AC 12.
+    #[tokio::test]
+    async fn reconcile_leaves_a_target_alone_once_its_cancel_reached_the_chain() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+        repo.update_broadcast_status(
+            &target.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(&repo, session_b, "mock://asm-membership", &cancel.action_id)
+            .await
+            .unwrap();
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // A chain that has moved past both seqnos and shows neither in the queue: without the
+        // guard this is what supersedes the target.
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Approved);
     }
 
     #[tokio::test]

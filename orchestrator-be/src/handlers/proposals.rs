@@ -27,8 +27,7 @@ pub struct CancelProposalSummary {
 #[derive(Debug, Serialize)]
 pub struct ProposalDetailResponse {
     #[serde(flatten)]
-    pub proposal: Proposal,
-    pub is_cancelable: bool,
+    pub proposal: ProposalResponse,
     pub cancel_proposal: Option<CancelProposalSummary>,
 }
 
@@ -77,10 +76,12 @@ pub struct ProposalListResponse {
     pub proposals: Vec<ProposalResponse>,
 }
 
-fn to_proposal_response(
-    proposal: Proposal,
-    resolver: &asm_role_membership::ConfirmationDepthResolver,
-) -> ProposalResponse {
+/// Enrich a proposal with the cancelability the desktop reads instead of guessing by authority.
+///
+/// One `strata_asm_getStatus` per response. Every handler that returns a proposal goes through
+/// here, so a value written by one endpoint and read from another cannot disagree.
+async fn proposal_response(state: &AppState, proposal: Proposal) -> ProposalResponse {
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
     ProposalResponse {
         is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
         proposal,
@@ -120,10 +121,9 @@ pub async fn create_proposal(
     )
     .await?;
 
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
     Ok((
         StatusCode::CREATED,
-        Json(to_proposal_response(proposal, &resolver)),
+        Json(proposal_response(&state, proposal).await),
     ))
 }
 
@@ -164,10 +164,19 @@ pub async fn list_proposals(
         );
     }
 
+    if checked.is_empty() {
+        return Ok(Json(ProposalListResponse { proposals: vec![] }));
+    }
+
+    // One depth read for the whole page: `is_cancelable_for_hex` answers from the table, so a
+    // listing of N proposals is one round trip and not N.
     let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
     let proposals = checked
         .into_iter()
-        .map(|p| to_proposal_response(p, &resolver))
+        .map(|proposal| ProposalResponse {
+            is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
+            proposal,
+        })
         .collect();
 
     Ok(Json(ProposalListResponse { proposals }))
@@ -208,10 +217,8 @@ pub async fn get_proposal(
             required_signatures: c.required_signatures,
         });
 
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
     Ok(Json(ProposalDetailResponse {
-        is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
-        proposal,
+        proposal: proposal_response(&state, proposal).await,
         cancel_proposal,
     }))
 }
@@ -265,8 +272,7 @@ pub async fn create_cancel_proposal(
     )
     .await?;
 
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
-    Ok(Json(to_proposal_response(proposal, &resolver)))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
@@ -292,8 +298,7 @@ pub async fn approve_action(
     )
     .await?;
 
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
-    Ok(Json(to_proposal_response(proposal, &resolver)))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[derive(Debug, Deserialize)]
@@ -327,8 +332,7 @@ pub async fn patch_proposal(
     )
     .await?;
 
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
-    Ok(Json(to_proposal_response(proposal, &resolver)))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 /// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
@@ -346,8 +350,7 @@ pub async fn claim_broadcast(
         &action_id,
     )
     .await?;
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
-    Ok(Json(to_proposal_response(proposal, &resolver)))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[derive(Debug, Deserialize)]
@@ -383,6 +386,5 @@ pub async fn report_broadcast_progress(
         },
     )
     .await?;
-    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
-    Ok(Json(to_proposal_response(proposal, &resolver)))
+    Ok(Json(proposal_response(&state, proposal).await))
 }

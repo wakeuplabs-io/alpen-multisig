@@ -100,9 +100,12 @@ would be marked `Superseded`.
 
 | Missing observation | Result |
 |---|---|
-| `activation_height == None` | `Err` — inconclusive; next poll retries |
-| `bitcoin_tip == None` / tip RPC failed | `Err` — inconclusive; next poll retries |
+| `activation_height == None` | `Err(Conflict)` — inconclusive; next poll retries |
+| `bitcoin_tip == None` / tip RPC failed | `Err(Conflict)` — inconclusive; next poll retries |
 | ASM decode error | `Err(BadRequest)` — unchanged |
+
+`Conflict` rather than `BadRequest`: nothing about the caller's request is wrong, the answer is not
+available yet, and `report_broadcast_progress` already answers a not-yet-enacted proposal that way.
 
 ### 4.5 Call sites
 
@@ -110,11 +113,19 @@ Both in [`proposals.rs`](../../orchestrator-be/src/application/proposals.rs): `r
 `report_broadcast_progress`. `bitcoin_tip_for_enactment` skips `getblockcount` unless the hex is a
 Defcon 3.
 
-### 4.6 Known limit (recorded, not solved)
+### 4.6 The in-band cancel outranks the sweep
+
+`reconcile_one` decides on a copy read at the start of the sweep, and `update_broadcast_status`
+writes without looking at the stored status — so a cancel that reached the chain has to be checked
+for explicitly, or the target lands on `Superseded` (its seqno is consumed and it left the queue)
+and `enact_cancel` then refuses it, retiring the cancel as `Expired`. `cancel_reached_chain` is that
+check: a proposal whose cancel is `RevealConfirmed` and not `Expired` is left alone this cycle.
+
+### 4.7 Known limit (recorded, not solved)
 
 Cancel broadcast entirely outside this app, tip past activation height, harbour already active — no
-observable ASM state distinguishes cancelled from enacted. In-band cancels write `Canceled` and
-terminal proposals are not re-evaluated. Phase 7 e2e pins the in-band path.
+observable ASM state distinguishes cancelled from enacted, and there is no cancel proposal to defer
+to. Phase 7 e2e pins the in-band path.
 
 ## 5. Tests
 
