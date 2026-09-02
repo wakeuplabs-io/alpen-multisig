@@ -148,6 +148,63 @@ fn depth_for_action(
     }
 }
 
+/// Whether an action can be cancelled on chain — same gate as `create_cancel_proposal`.
+///
+/// Non-zero confirmation depth means the update is enqueued and a cancel can target it.
+pub(crate) fn is_cancelable_for_action(
+    action: &MultisigAction,
+    depth_of: impl Fn(UpdateTxType) -> Option<u16>,
+) -> bool {
+    depth_for_action(action, depth_of) > 0
+}
+
+/// Live confirmation depths for one HTTP request — one `strata_asm_getStatus` per fetch.
+pub(crate) enum ConfirmationDepthResolver {
+    Live(AdministrationSubprotoState),
+    #[cfg(any(test, feature = "dev-mocks"))]
+    Mock(strata_asm_params::ConfirmationDepths),
+    Unavailable,
+}
+
+impl ConfirmationDepthResolver {
+    pub async fn fetch(rpc_url: &str) -> Self {
+        #[cfg(any(test, feature = "dev-mocks"))]
+        if rpc_url == "mock://asm-membership" {
+            return Self::Mock(uniform_confirmation_depths(2016));
+        }
+
+        match fetch_admin_state(rpc_url).await {
+            Ok(admin) => Self::Live(admin),
+            Err(e) => {
+                tracing::warn!("cancelability: confirmation depth lookup failed: {e}");
+                Self::Unavailable
+            }
+        }
+    }
+
+    fn depth(&self, tx_type: UpdateTxType) -> Option<u16> {
+        match self {
+            Self::Live(admin) => admin.confirmation_depth(tx_type),
+            #[cfg(any(test, feature = "dev-mocks"))]
+            Self::Mock(depths) => depths.get(tx_type),
+            Self::Unavailable => None,
+        }
+    }
+
+    pub fn is_cancelable_for_hex(&self, action_hex: &str) -> bool {
+        let Ok(action) = action_codec::decode_multisig_action_hex(action_hex) else {
+            return false;
+        };
+        is_cancelable_for_action(&action, |tx_type| self.depth(tx_type))
+    }
+}
+
+async fn fetch_admin_state(rpc_url: &str) -> Result<AdministrationSubprotoState, String> {
+    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
+    let anchor = decode_anchor_state_from_status(&status_result)?;
+    decode_admin_state(&anchor)
+}
+
 /// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
 ///
 /// Decodes the action, then scans the live ASM queue for the matching `UpdateAction`.
@@ -641,5 +698,37 @@ mod tests {
             "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
         );
         assert_eq!(is_member, Some(true));
+    }
+
+    #[test]
+    fn defcon_1_is_not_cancelable() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.defcon3 = 7;
+        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
+        assert!(!is_cancelable_for_action(&defcon1, |t| depths.get(t)));
+    }
+
+    #[test]
+    fn defcon_3_with_depth_is_cancelable() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.defcon3 = 7;
+        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
+        assert!(is_cancelable_for_action(&defcon3, |t| depths.get(t)));
+    }
+
+    #[test]
+    fn cancel_is_never_cancelable() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.defcon3 = 7;
+        let cancel =
+            MultisigAction::Cancel(CancelAction::new(0, UpdateAction::Defcon3(Defcon3Update)));
+        assert!(!is_cancelable_for_action(&cancel, |t| depths.get(t)));
+    }
+
+    #[test]
+    fn multisig_update_with_depth_is_cancelable() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.strata_admin_multisig_update = 11;
+        assert!(is_cancelable_for_action(&signer_update(), |t| depths.get(t)));
     }
 }

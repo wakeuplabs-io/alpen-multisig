@@ -15,6 +15,7 @@ const proposalWithNullBroadcastFields = {
 	commitTxid: null,
 	revealTxid: null,
 	broadcastError: null,
+	isCancelable: false,
 	createdAtMs: 1000000,
 	updatedAtMs: 1000000,
 	expiresAtMs: 2000000,
@@ -175,3 +176,9 @@ const mixedList = z.array(proposalSchema).safeParse([
 assert.equal(mixedList.success, true, 'one defcon_3 row must not take down the list beside it')
 
 console.log('ipc-schemas: Defcon 3 boundaries OK')
+
+const withoutCancelable = { ...proposalWithNullBroadcastFields }
+delete (withoutCancelable as { isCancelable?: boolean }).isCancelable
+assert.equal(proposalSchema.safeParse(withoutCancelable).success, false, 'proposalSchema must require isCancelable')
+
+console.log('ipc-schemas: isCancelable field OK')
