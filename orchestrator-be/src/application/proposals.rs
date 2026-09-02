@@ -496,26 +496,17 @@ async fn supersede_if_seq_no_consumed(
 /// `last_seqno` is the role's live sequence number, or `None` when the ASM could not answer —
 /// supersession is a cleanup, never a reason to fail a read.
 ///
-/// An ASM enactment check that fails leaves the proposal exactly where it is: the next cycle asks
-/// again.
-async fn enactment_observations(
-    proposal: &Proposal,
+/// An ASM enactment check that fails — including a Defcon 3 whose height or tip is missing —
+/// leaves the proposal exactly where it is: the next cycle asks again. `Ok(false)` is "not
+/// enacted"; inconclusive must be `Err`.
+async fn bitcoin_tip_for_enactment(
+    action_hex: &str,
     btc_client: &dyn BitcoinRpcClient,
-) -> crate::infrastructure::asm_enactment::EnactmentObservations {
-    let bitcoin_tip = match btc_client.get_chain_tip().await {
-        Ok(tip) => Some(tip),
-        Err(e) => {
-            tracing::warn!(
-                action_id = %proposal.action_id.0,
-                "enactment: bitcoin tip lookup failed: {e}"
-            );
-            None
-        }
-    };
-    crate::infrastructure::asm_enactment::EnactmentObservations {
-        activation_height: proposal.activation_height,
-        bitcoin_tip,
+) -> Result<Option<u64>, AppError> {
+    if !crate::infrastructure::asm_enactment::action_needs_chain_tip(action_hex) {
+        return Ok(None);
     }
+    btc_client.get_chain_tip().await.map(Some)
 }
 
 async fn reconcile_one(
@@ -535,13 +526,23 @@ async fn reconcile_one(
     let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
         && proposal.reveal_txid.is_some();
     let enacted = if awaiting_enactment {
-        let observations = enactment_observations(&proposal, btc_client).await;
+        let bitcoin_tip = match bitcoin_tip_for_enactment(&proposal.action_hex, btc_client).await {
+            Ok(tip) => tip,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "reconcile: bitcoin tip lookup failed: {e}"
+                );
+                return Ok(());
+            }
+        };
         match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
             asm_rpc_url,
             proposal.authority,
             proposal.seq_no,
             &proposal.action_hex,
-            observations,
+            proposal.activation_height,
+            bitcoin_tip,
         )
         .await
         {
@@ -845,7 +846,8 @@ pub(crate) async fn report_broadcast_progress(
                     raw.authority,
                     raw.seq_no,
                     &raw.action_hex,
-                    enactment_observations(&raw, btc_client).await,
+                    raw.activation_height,
+                    bitcoin_tip_for_enactment(&raw.action_hex, btc_client).await?,
                 )
                 .await?
                 {

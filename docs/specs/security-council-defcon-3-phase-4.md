@@ -71,39 +71,44 @@ fn defcon3_enacted(
 
 ### 4.2 Dispatch arm
 
-Replace `asm_enactment.rs:136-138`. Read council `last_seqno`, bridge harbour flag, and whether
-**this** `UpdateAction::Defcon3` is still in `admin.queued()` — match the decoded action, not any
-Defcon 3 entry (contract edge case: byte-identical payloads).
+Replace `asm_enactment.rs`'s `BadRequest` stub. Read council `last_seqno`, bridge harbour flag, and
+whether any Defcon 3 is still in `admin.queued()`. The payload is empty, so matching this action
+and matching any Defcon 3 are the same question — two in-flight Defcon 3s share queue state
+(contract edge case). Same `matches!` shape as Defcon 1.
 
 ### 4.3 Extended signature
 
 V1 left `is_proposal_enacted_on_asm` unchanged because Defcon 1 needs no stored height. Defcon 3
-does:
+does. The extra arguments are ignored by every other arm:
 
 ```rust
-pub(crate) struct EnactmentObservations {
-    pub activation_height: Option<u64>,
-    pub bitcoin_tip: Option<u64>,
-}
+activation_height: Option<u64>,
+bitcoin_tip: Option<u64>,
 ```
 
 | Observation | Source |
 |---|---|
 | `activation_height` | `Proposal.activation_height` from [`compute_and_store_activation_height`](../../orchestrator-be/src/application/proposals.rs) |
-| `bitcoin_tip` | new `BitcoinRpcClient::get_chain_tip()` via `getblockcount` |
+| `bitcoin_tip` | `BitcoinRpcClient::get_chain_tip()` via `getblockcount`, **only when the action is Defcon 3** |
 
 ### 4.4 Degradation
 
+`reconcile_one` treats `Ok(false)` as "not enacted" and falls through to supersession. A missing
+observation must therefore be `Err`, so the cycle logs and retries — the same path as an ASM
+decode failure. Otherwise a matured Defcon 3 with a failed tip read (or a null stored height)
+would be marked `Superseded`.
+
 | Missing observation | Result |
 |---|---|
-| `activation_height == None` | `Ok(false)` — retry when reveal facts persist |
-| `bitcoin_tip == None` | `Ok(false)` — retry next reconcile poll |
+| `activation_height == None` | `Err` — inconclusive; next poll retries |
+| `bitcoin_tip == None` / tip RPC failed | `Err` — inconclusive; next poll retries |
 | ASM decode error | `Err(BadRequest)` — unchanged |
 
 ### 4.5 Call sites
 
 Both in [`proposals.rs`](../../orchestrator-be/src/application/proposals.rs): `reconcile_one` and
-`report_broadcast_progress`. Shared helper `enactment_observations(proposal, btc_client)`.
+`report_broadcast_progress`. `bitcoin_tip_for_enactment` skips `getblockcount` unless the hex is a
+Defcon 3.
 
 ### 4.6 Known limit (recorded, not solved)
 
