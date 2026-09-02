@@ -7,7 +7,7 @@ for *what* V2 must do. This document is only *how* it gets built, and never over
 
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E13 and US-E14.
 
-**Status:** Not started. Seven phases planned, plus one held in reserve.
+**Status:** Phase 1 shipped. Seven phases planned, plus one held in reserve.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -38,7 +38,7 @@ variant, two inherited debts, and the cancel.
 
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
-| 1 | `defcon_3` is a readable type | (none directly — prerequisite) | `src-tauri`, `desktop-app` |
+| 1 ✅ | `defcon_3` is a readable type — [phase spec](./security-council-defcon-3-phase-1.md) | (none directly — prerequisite) | `src-tauri`, `desktop-app` |
 | 2 | Redundancy by activation height | AC 9; [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) | `desktop-app` |
 | 3 | Cancelability travels on the proposal | AC 13; [Constraint 4](./security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority) | `orchestrator-be`, `src-tauri`, `desktop-app` |
 | 4 | Defcon 3 enactment detection | AC 6, AC 8, AC 12; [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality) and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `orchestrator-be` |

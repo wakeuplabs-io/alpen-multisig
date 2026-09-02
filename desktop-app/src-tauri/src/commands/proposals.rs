@@ -180,6 +180,7 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
             "sequencer_key_update".to_string()
         }
         Ok(desktop_app::domain::action::Action::Defcon1) => "defcon_1".to_string(),
+        Ok(desktop_app::domain::action::Action::Defcon3) => "defcon_3".to_string(),
         Err(_) => "unknown".to_string(),
     }
 }
@@ -1101,6 +1102,16 @@ mod tests {
         .expect("encode should succeed");
 
         assert_eq!(action_type_from_hex(&None, &hex), "defcon_1");
+    }
+
+    #[test]
+    fn action_type_from_hex_names_defcon_3() {
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(
+            &desktop_app::domain::action::Action::Defcon3,
+        )
+        .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "defcon_3");
     }
 
     /// A cancel is identified by its target, never by decoding its own payload.
