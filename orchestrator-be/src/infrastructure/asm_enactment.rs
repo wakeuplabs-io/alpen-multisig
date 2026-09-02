@@ -33,11 +33,17 @@ pub(crate) const MOCK_ENACTED_AHEAD_URL: &str = "mock://asm-enacted-ahead";
 pub(crate) const MOCK_SEQNO_AHEAD_URL: &str = "mock://asm-seqno-ahead";
 
 /// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
+///
+/// `activation_height` and `bitcoin_tip` are only read by the Defcon 3 arm. Other variants ignore
+/// them. Missing values there are inconclusive (`Err`), not "not enacted" — `Ok(false)` would fall
+/// through to supersession.
 pub(crate) async fn is_proposal_enacted_on_asm(
     rpc_url: &str,
     authority: Authority,
     seq_no: u64,
     action_hex: &str,
+    activation_height: Option<u64>,
+    bitcoin_tip: Option<u64>,
 ) -> Result<bool, AppError> {
     if let Some(enacted) = mock_is_enacted(rpc_url) {
         return Ok(enacted);
@@ -106,8 +112,8 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         // Security Council actions. Explicit arms rather than a catch-all: without them these
         // would fall through to the multisig-config branch, which returns `Ok(false)` for an
         // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. Defcon 1
-        // has its post-condition (V1); the remaining two gain theirs as their slice lands. See
-        // docs/specs/security-council.md and docs/specs/security-council-defcon-phase-4.md.
+        // and Defcon 3 have post-conditions; SafeHarbourAddress waits on slice V4. See
+        // docs/specs/security-council.md and docs/specs/security-council-defcon-3-phase-4.md.
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
@@ -133,9 +139,34 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 seq_no,
             ))
         }
-        MultisigAction::Update(UpdateAction::Defcon3(_)) => Err(AppError::BadRequest(
-            "Defcon3 enactment detection is not implemented yet".to_string(),
-        )),
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => {
+            let (activation_height, bitcoin_tip) =
+                defcon3_observations(activation_height, bitcoin_tip)?;
+            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            // Payload is empty, so this is the same question as equality against `this` action —
+            // two in-flight Defcon 3s share queue state (contract edge case). Same shape as Defcon 1.
+            let still_queued = admin
+                .queued()
+                .iter()
+                .any(|q| matches!(q.action(), UpdateAction::Defcon3(_)));
+            let council = admin
+                .authority(Role::StrataSecurityCouncil)
+                .ok_or_else(|| {
+                    AppError::BadRequest(
+                        "admin state missing authority for role `StrataSecurityCouncil`"
+                            .to_string(),
+                    )
+                })?;
+            Ok(defcon3_enacted(
+                council.last_seqno(),
+                seq_no,
+                still_queued,
+                bridge.safe_harbour().is_activated(),
+                bitcoin_tip,
+                activation_height,
+            ))
+        }
         MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => Err(AppError::BadRequest(
             "SafeHarbourAddress enactment detection is not implemented yet".to_string(),
         )),
@@ -214,6 +245,53 @@ fn defcon1_enacted(
     seq_no: u64,
 ) -> bool {
     last_seqno == seq_no && safe_harbour_activated && !defcon1_queued
+}
+
+/// Defcon 3 matures after `activation_height` blocks. A cancel removes the queue entry before that
+/// height; the tip term is what separates "matured" from "taken out early".
+///
+/// Uses `>=` on the seqno, not `==`: upstream consumes the seqno at reveal acceptance, and a
+/// later council action may jump `last_seqno` past this proposal before it matures. Equality would
+/// leave a successfully enacted Defcon 3 marked `Superseded`. See Constraint 2 in
+/// docs/specs/security-council-defcon-3.md.
+fn defcon3_enacted(
+    last_seqno: u64,
+    seq_no: u64,
+    still_queued: bool,
+    safe_harbour_activated: bool,
+    bitcoin_tip: u64,
+    activation_height: u64,
+) -> bool {
+    last_seqno >= seq_no
+        && !still_queued
+        && safe_harbour_activated
+        && bitcoin_tip >= activation_height
+}
+
+/// Missing height or tip is inconclusive: the caller must not treat that as `not enacted`.
+fn defcon3_observations(
+    activation_height: Option<u64>,
+    bitcoin_tip: Option<u64>,
+) -> Result<(u64, u64), AppError> {
+    let activation_height = activation_height.ok_or_else(|| {
+        AppError::BadRequest(
+            "Defcon 3 enactment is inconclusive: activation_height is missing".to_string(),
+        )
+    })?;
+    let bitcoin_tip = bitcoin_tip.ok_or_else(|| {
+        AppError::BadRequest(
+            "Defcon 3 enactment is inconclusive: bitcoin tip is unavailable".to_string(),
+        )
+    })?;
+    Ok((activation_height, bitcoin_tip))
+}
+
+/// Defcon 3 is the only arm that compares against chain tip. Other actions must not pay that RPC.
+pub(crate) fn action_needs_chain_tip(action_hex: &str) -> bool {
+    matches!(
+        action_codec::decode_multisig_action_hex(action_hex),
+        Ok(MultisigAction::Update(UpdateAction::Defcon3(_)))
+    )
 }
 
 /// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
@@ -593,6 +671,67 @@ mod tests {
         assert!(!ee_stf_vk_enacted(2, 3, false));
         assert!(!ee_stf_vk_enacted(3, 3, true));
         assert!(ee_stf_vk_enacted(3, 3, false));
+    }
+
+    #[test]
+    fn defcon3_enacted_when_all_four_terms_hold() {
+        assert!(defcon3_enacted(2, 2, false, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_enacted_when_a_later_action_consumed_the_seqno() {
+        assert!(defcon3_enacted(5, 2, false, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_when_seqno_still_below() {
+        assert!(!defcon3_enacted(1, 2, false, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_while_still_queued() {
+        assert!(!defcon3_enacted(2, 2, true, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_when_harbour_off() {
+        assert!(!defcon3_enacted(2, 2, false, false, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_before_activation_height() {
+        assert!(!defcon3_enacted(2, 2, false, true, 99, 100));
+    }
+
+    #[test]
+    fn defcon3_enacted_at_exact_activation_height() {
+        assert!(defcon3_enacted(2, 2, false, true, 100, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_when_equality_would_fail_but_gte_passes() {
+        assert!(defcon3_enacted(3, 2, false, true, 120, 100));
+        assert!(!defcon1_enacted(true, false, 3, 2));
+    }
+
+    #[test]
+    fn defcon3_missing_observations_are_inconclusive() {
+        let missing_height = defcon3_observations(None, Some(100)).unwrap_err();
+        assert!(missing_height.to_string().contains("activation_height"));
+        let missing_tip = defcon3_observations(Some(100), None).unwrap_err();
+        assert!(missing_tip.to_string().contains("bitcoin tip"));
+        assert!(defcon3_observations(Some(100), Some(120)).is_ok());
+    }
+
+    #[test]
+    fn only_defcon_3_needs_chain_tip() {
+        assert!(action_needs_chain_tip(
+            &crate::infrastructure::action_codec::test_fixture_defcon_3_action_hex()
+        ));
+        assert!(!action_needs_chain_tip(
+            &crate::infrastructure::action_codec::test_fixture_defcon_1_action_hex()
+        ));
+        assert!(!action_needs_chain_tip("deadbeef"));
     }
 
     /// `UpdateAction::Sequencer` enactment is detected by comparing the proposed key

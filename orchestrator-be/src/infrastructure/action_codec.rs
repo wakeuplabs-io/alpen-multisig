@@ -40,6 +40,17 @@ pub(crate) fn test_fixture_defcon_1_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
+/// Test-only fixture for Defcon 3 enactment and cancel paths in later phases.
+#[cfg(test)]
+pub(crate) fn test_fixture_defcon_3_action_hex() -> String {
+    use ssz::Encode;
+    use strata_asm_txs_admin::actions::updates::Defcon3Update;
+    use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+
+    let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
+    hex::encode(action.as_ssz_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +63,10 @@ mod tests {
     #[test]
     fn accepts_fixture_action() {
         decode_multisig_action_hex(&test_fixture_action_hex()).unwrap();
+    }
+
+    #[test]
+    fn accepts_defcon_3_fixture_action() {
+        decode_multisig_action_hex(&test_fixture_defcon_3_action_hex()).unwrap();
     }
 }

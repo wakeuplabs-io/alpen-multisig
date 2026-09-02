@@ -493,12 +493,22 @@ async fn supersede_if_seq_no_consumed(
 
 /// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
 ///
-/// The list sweep and the single-proposal read used to hold a copy of this each, and V2 adds a
-/// Defcon 3 branch to it. `last_seqno` is the role's live sequence number, or `None` when the ASM
-/// could not answer — supersession is a cleanup, never a reason to fail a read.
+/// `last_seqno` is the role's live sequence number, or `None` when the ASM could not answer —
+/// supersession is a cleanup, never a reason to fail a read.
 ///
-/// An ASM enactment check that fails leaves the proposal exactly where it is: the next cycle asks
-/// again.
+/// An ASM enactment check that fails — including a Defcon 3 whose height or tip is missing —
+/// leaves the proposal exactly where it is: the next cycle asks again. `Ok(false)` is "not
+/// enacted"; inconclusive must be `Err`.
+async fn bitcoin_tip_for_enactment(
+    action_hex: &str,
+    btc_client: &dyn BitcoinRpcClient,
+) -> Result<Option<u64>, AppError> {
+    if !crate::infrastructure::asm_enactment::action_needs_chain_tip(action_hex) {
+        return Ok(None);
+    }
+    btc_client.get_chain_tip().await.map(Some)
+}
+
 async fn reconcile_one(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
@@ -516,11 +526,23 @@ async fn reconcile_one(
     let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
         && proposal.reveal_txid.is_some();
     let enacted = if awaiting_enactment {
+        let bitcoin_tip = match bitcoin_tip_for_enactment(&proposal.action_hex, btc_client).await {
+            Ok(tip) => tip,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "reconcile: bitcoin tip lookup failed: {e}"
+                );
+                return Ok(());
+            }
+        };
         match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
             asm_rpc_url,
             proposal.authority,
             proposal.seq_no,
             &proposal.action_hex,
+            proposal.activation_height,
+            bitcoin_tip,
         )
         .await
         {
@@ -824,6 +846,8 @@ pub(crate) async fn report_broadcast_progress(
                     raw.authority,
                     raw.seq_no,
                     &raw.action_hex,
+                    raw.activation_height,
+                    bitcoin_tip_for_enactment(&raw.action_hex, btc_client).await?,
                 )
                 .await?
                 {
@@ -923,6 +947,7 @@ mod tests {
 
     struct MockBitcoinRpcClient {
         block_height: u64,
+        chain_tip: u64,
     }
 
     #[async_trait::async_trait]
@@ -937,11 +962,16 @@ mod tests {
         async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
             Ok(self.block_height)
         }
+
+        async fn get_chain_tip(&self) -> Result<u64, AppError> {
+            Ok(self.chain_tip)
+        }
     }
 
     fn mock_btc() -> MockBitcoinRpcClient {
         MockBitcoinRpcClient {
             block_height: 800_000,
+            chain_tip: 800_000,
         }
     }
 
