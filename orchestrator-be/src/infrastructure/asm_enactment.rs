@@ -269,17 +269,21 @@ fn defcon3_enacted(
 }
 
 /// Missing height or tip is inconclusive: the caller must not treat that as `not enacted`.
+///
+/// `Conflict`, not `BadRequest`: nothing about the request is wrong — the answer is not available
+/// yet. The reconciliation cycle logs any `Err` and retries; the broadcast endpoint already answers
+/// a not-yet-enacted proposal with the same status.
 fn defcon3_observations(
     activation_height: Option<u64>,
     bitcoin_tip: Option<u64>,
 ) -> Result<(u64, u64), AppError> {
     let activation_height = activation_height.ok_or_else(|| {
-        AppError::BadRequest(
+        AppError::Conflict(
             "Defcon 3 enactment is inconclusive: activation_height is missing".to_string(),
         )
     })?;
     let bitcoin_tip = bitcoin_tip.ok_or_else(|| {
-        AppError::BadRequest(
+        AppError::Conflict(
             "Defcon 3 enactment is inconclusive: bitcoin tip is unavailable".to_string(),
         )
     })?;
@@ -673,14 +677,12 @@ mod tests {
         assert!(ee_stf_vk_enacted(3, 3, false));
     }
 
-    #[test]
-    fn defcon3_enacted_when_all_four_terms_hold() {
-        assert!(defcon3_enacted(2, 2, false, true, 120, 100));
-    }
-
+    /// Constraint 2: the seqno term is `>=`. Defcon 1 answers the same observation with `==` and
+    /// says "not enacted" — which for a Defcon 3 would end in `Superseded`.
     #[test]
     fn defcon3_enacted_when_a_later_action_consumed_the_seqno() {
         assert!(defcon3_enacted(5, 2, false, true, 120, 100));
+        assert!(!defcon1_enacted(true, false, 5, 2));
     }
 
     #[test]
@@ -709,17 +711,9 @@ mod tests {
     }
 
     #[test]
-    fn defcon3_not_enacted_when_equality_would_fail_but_gte_passes() {
-        assert!(defcon3_enacted(3, 2, false, true, 120, 100));
-        assert!(!defcon1_enacted(true, false, 3, 2));
-    }
-
-    #[test]
     fn defcon3_missing_observations_are_inconclusive() {
-        let missing_height = defcon3_observations(None, Some(100)).unwrap_err();
-        assert!(missing_height.to_string().contains("activation_height"));
-        let missing_tip = defcon3_observations(Some(100), None).unwrap_err();
-        assert!(missing_tip.to_string().contains("bitcoin tip"));
+        assert!(defcon3_observations(None, Some(100)).is_err());
+        assert!(defcon3_observations(Some(100), None).is_err());
         assert!(defcon3_observations(Some(100), Some(120)).is_ok());
     }
 

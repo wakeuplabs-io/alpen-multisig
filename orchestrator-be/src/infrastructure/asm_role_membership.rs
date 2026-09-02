@@ -148,16 +148,6 @@ fn depth_for_action(
     }
 }
 
-/// Whether an action can be cancelled on chain — same gate as `create_cancel_proposal`.
-///
-/// Non-zero confirmation depth means the update is enqueued and a cancel can target it.
-pub(crate) fn is_cancelable_for_action(
-    action: &MultisigAction,
-    depth_of: impl Fn(UpdateTxType) -> Option<u16>,
-) -> bool {
-    depth_for_action(action, depth_of) > 0
-}
-
 /// Live confirmation depths for one HTTP request — one `strata_asm_getStatus` per fetch.
 pub(crate) enum ConfirmationDepthResolver {
     Live(AdministrationSubprotoState),
@@ -191,11 +181,14 @@ impl ConfirmationDepthResolver {
         }
     }
 
+    /// Whether the action can be cancelled on chain — the same gate `create_cancel_proposal`
+    /// applies: a non-zero confirmation depth means the update is enqueued and a cancel can reach
+    /// it. An action nobody can decode, and an ASM nobody could reach, both answer "no affordance".
     pub fn is_cancelable_for_hex(&self, action_hex: &str) -> bool {
         let Ok(action) = action_codec::decode_multisig_action_hex(action_hex) else {
             return false;
         };
-        is_cancelable_for_action(&action, |tx_type| self.depth(tx_type))
+        depth_for_action(&action, |tx_type| self.depth(tx_type)) > 0
     }
 }
 
@@ -700,35 +693,21 @@ mod tests {
         assert_eq!(is_member, Some(true));
     }
 
+    /// The answer the proposal DTO carries, through the function the handlers actually call. The
+    /// depth mapping itself is pinned by the tests above; this pins the wire answer and the two
+    /// ways it degrades — neither of which may produce a cancel affordance.
     #[test]
-    fn defcon_1_is_not_cancelable() {
+    fn cancelability_follows_the_depth_and_degrades_to_no_affordance() {
         let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
         depths.defcon3 = 7;
-        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-        assert!(!is_cancelable_for_action(&defcon1, |t| depths.get(t)));
-    }
+        let resolver = ConfirmationDepthResolver::Mock(depths);
 
-    #[test]
-    fn defcon_3_with_depth_is_cancelable() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.defcon3 = 7;
-        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-        assert!(is_cancelable_for_action(&defcon3, |t| depths.get(t)));
-    }
+        let defcon3 = action_codec::test_fixture_defcon_3_action_hex();
+        let defcon1 = action_codec::test_fixture_defcon_1_action_hex();
 
-    #[test]
-    fn cancel_is_never_cancelable() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.defcon3 = 7;
-        let cancel =
-            MultisigAction::Cancel(CancelAction::new(0, UpdateAction::Defcon3(Defcon3Update)));
-        assert!(!is_cancelable_for_action(&cancel, |t| depths.get(t)));
-    }
-
-    #[test]
-    fn multisig_update_with_depth_is_cancelable() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.strata_admin_multisig_update = 11;
-        assert!(is_cancelable_for_action(&signer_update(), |t| depths.get(t)));
+        assert!(resolver.is_cancelable_for_hex(&defcon3));
+        assert!(!resolver.is_cancelable_for_hex(&defcon1));
+        assert!(!resolver.is_cancelable_for_hex("not-an-action"));
+        assert!(!ConfirmationDepthResolver::Unavailable.is_cancelable_for_hex(&defcon3));
     }
 }

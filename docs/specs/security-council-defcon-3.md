@@ -1,7 +1,8 @@
 # Spec: Security Council — Defcon 3
 
-**Status:** Draft — V2 not started. This document is the functional contract; the build plan is
-[`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md).
+**Status:** In progress — Phases 1–4 shipped. This document is the functional contract; the build
+plan is [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md),
+whose phase board says what has landed.
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §3.1.4, §5.1, §5.2.2, §5.5
 
@@ -121,12 +122,17 @@ state is never re-evaluated.
 "harbour on and not queued" is satisfied by a Defcon 3 that was cancelled. The height term is what
 separates "matured" from "was taken out early".
 
+**Inside the application, the cancel owns the target's outcome.** A cancel that reached the chain
+takes its target out of the queue while the target's sequence number is already consumed — which is
+also the shape the supersession sweep reads as "dead". The reconciliation therefore stops deciding a
+proposal whose cancel is on chain and lets the cancel write `Canceled`; without that, the target
+lands on `Superseded` and the cancel on `Expired`, whichever order the sweep happens to use.
+
 **Known limit, recorded rather than solved:** if the harbour was already active *and* a cancel was
 broadcast entirely outside this application *and* the tip has since passed the activation height, no
-observable ASM state distinguishes the two outcomes. Inside the application the case does not arise,
-because a cancel that enacts writes the target to `Canceled` and terminal proposals are not
-re-evaluated. This is the same class of limit V1's Phase 4 recorded for reveal-block ordering, and
-the [Phase 7 e2e](#test-plan) is what pins the in-band behaviour.
+observable ASM state distinguishes the two outcomes — there is no cancel proposal to defer to. This
+is the same class of limit V1's Phase 4 recorded for reveal-block ordering, and the
+[Phase 7 e2e](#test-plan) is what pins the in-band behaviour.
 
 ### 4. Cancelability is answered by the backend, for every authority
 
