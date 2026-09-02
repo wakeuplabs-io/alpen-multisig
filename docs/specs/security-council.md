@@ -1,6 +1,7 @@
 # Security Council — Master Plan
 
-**Status:** V1 (Defcon 1) shipped end to end; V2–V5 pending, and none of them has a functional contract yet
+**Status:** V1 (Defcon 1) shipped end to end; V2 (Defcon 3, with the cancel absorbed from V5) has a
+functional contract and is in progress; V3–V4 pending and still unwritten
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
@@ -199,10 +200,11 @@ a non-council role. Upstream covers it in `asm/tests/asm/admin_to_bridge.rs`.
 |---|---|---|---|---|
 | §5.5 *Security Council multisig: Defcon 1 transaction* | US-E12 | `UpdateTxType::Defcon1 = 41` | Strata Security Council | V1 |
 | §5.5 *Security Council multisig: Defcon 3 transaction* | US-E13 | `UpdateTxType::Defcon3 = 43` | Strata Security Council | V2 |
+| §5.5 *Security Council multisig: Defcon 3 cancellation* | US-E14 | `MultisigAction::Cancel` over a queued `Defcon3` | Strata Security Council | V2 (was V5) |
 | §5.5 *Strata Administrator: Security Council Signer update* | US-E7 | `StrataSecurityCouncilMultisigUpdate = 15` | **Strata Administrator** | V3 |
 | §5.5 *Strata Administrator: Safe Harbor address update* | US-E5 | `SafeHarbourAddressUpdate = 14` | **Strata Administrator** | V4 |
 | §3.1.4 *Strata Security Council multisig MUST be usable exclusively by all Strata Security Council Signers* | US-C1 | `Role::StrataSecurityCouncil` membership | — | V1 |
-| §5.2.2 *…subsection (b) does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V5 |
+| §5.2.2 *…subsection (b) does not apply to … Strata Security Council multisig **(Defcon 1 transaction)*** | — | Defcon 1 has no Approved/Canceled state; Defcon 3 does — see [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) | — | V2 (was V5) |
 | §5.5 *Strata Administrator: "Soft" bridge update / "Hard" bridge update* | ~~US-E9~~, ~~US-E10~~ | **none — confirmed withdrawn** | — | retired |
 
 ### 4.1 Requirement numbering
@@ -260,7 +262,7 @@ So the split is now explicit in the requirement, and it is exactly what the code
   `defcon3 ≠ 0` (functional tests use 144, the Rust harness 2), so the queued, cancellable window
   genuinely exists and the application must expose it.
 
-One consequence to carry into V5: a cancel's authorizing role is *the role of the update being
+One consequence to carry into V2's cancel: a cancel's authorizing role is *the role of the update being
 cancelled* (`actions/mod.rs:62`), so a Defcon 3 cancel is signed by **the Security Council itself**.
 There is no cross-role veto and no separate canceller role — the same council that raised the alarm
 is the one that stands it down.
@@ -271,7 +273,8 @@ a queued, cancellable window" as ground truth and **drive it from the live `conf
 rather than hardcoding it** — which also means a deployment that did set it to 0 degrades correctly
 rather than showing a cancel affordance that cannot work.
 
-**Slice V5 is confirmed in scope**, no longer conditional.
+**The Defcon 3 cancel is confirmed in scope**, no longer conditional. It was planned as slice V5 and is
+delivered inside V2 — see [§7.3](#73-why-v5-was-absorbed-into-v2).
 
 ### 5.2 The story map said Defcon 3 executes immediately — corrected
 
@@ -283,7 +286,7 @@ timelocked, and it *does* reach an Approved state with a cancel window
 
 **Corrected in Stage 3 close-out** rather than deferred: US-E13 now describes the timelock and the
 cancel window, US-D3 and US-F2 narrow the carve-out to Defcon 1, and **US-E14** carries the Defcon 3
-cancel that slice V5 delivers.
+cancel that V2 delivers.
 
 ### 5.3 The Defcon 3 delay is read from live ASM state, never hardcoded
 
@@ -340,8 +343,8 @@ Neither is an open question any more; both were settled while this document was 
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
-| 4 | Functional specs — Defcon first (V1, V2, V5's cancel), then the rest | In progress — V1 done: [`security-council-defcon.md`](./security-council-defcon.md); V2–V5 unwritten |
-| 5 | Vertical slices V1–V5 | In progress — V1 shipped; V2–V5 pending |
+| 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | In progress — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3–V4 unwritten |
+| 5 | Vertical slices V1–V4 | In progress — V1 shipped; V2 in progress; V3–V4 pending |
 | 6 | Close-out: compliance audit, issue #117 | Pending |
 
 Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
@@ -358,13 +361,29 @@ compliance audit and issue #117.
 | Slice | End-to-end path | Status |
 |---|---|---|
 | V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
-| V2 — Defcon 3 | Same path, timelocked, with an activation countdown | Pending |
+| V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **in progress** |
 | V3 — Security Council signer update | Strata Admin rotates council membership | Pending |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
-| V5 — Defcon 3 cancel | Council cancels its own queued Defcon 3 (US-E14), reusing the existing cancel flow | Pending — **confirmed in scope** |
+| ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2) |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
 codec, action builder, authentication, signer-safety UX), so every later slice is cheap.
+
+### 7.3 Why V5 was absorbed into V2
+
+The cancel was planned as a slice of its own while V2 was still unwritten. Writing V2's contract
+settled that it cannot be: PRD §5.2.2 carves Defcon 1 — and only Defcon 1 — out of the Approved and
+Canceled lifecycle, so a Defcon 3 delivered without its cancel would be a *delayed* irreversible
+lever, which is strictly worse for a signer than the immediate one. The cancel is not an extension of
+Defcon 3; it is half of what Defcon 3 means.
+
+The engineering agrees. The backend gate has been depth-shaped since V1, the cancel screens and the
+activation countdown already exist, and the one desktop blocker — an authority allow-list the
+frontend should not own — has to be removed for Defcon 3's *own* affordance regardless. Splitting
+the slices would mean opening the create menu, the lifecycle gates and their tests twice.
+
+The V5 row is struck through rather than deleted, so the numbering other documents cite does not
+shift.
 
 ### 7.1 Upstream version notes
 
@@ -444,7 +463,7 @@ forgotten gap.
 
 - **Defcon 3 cancellation.** Answered 2026-08-12 by amending the PRD: the §5(b) carve-out now
   applies to the Security Council **only for Defcon 1**, so Defcon 3 has a real Approved state and
-  a real cancel. Slice V5 is confirmed in scope. See
+  a real cancel, delivered inside V2. See
   [§5.1](#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected).
 - **Expiry.** The standard 7-day pending-proposal window applies to Defcon proposals too — no
   emergency carve-out. Neither the PRD nor anything else states an exception, so this is a decision,

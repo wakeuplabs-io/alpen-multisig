@@ -23,6 +23,7 @@ export type DecodedAction =
 	| { kind: 'multisig_update'; role: string; addKeys: string[]; removeKeys: string[]; newThreshold: number }
 	| { kind: 'vk_update'; authority: string; typeId: number; conditionHex: string }
 	| { kind: 'defcon_1' }
+	| { kind: 'defcon_3' }
 	| { kind: 'unknown'; rawHex: string }
 
 export function decodeActionHex(actionHex: string): Promise<ApiResult<DecodedAction>> {

@@ -100,8 +100,10 @@ The replacement does not depend on Defcon and is verifiable before it exists: th
 Two pieces of V1 are correct only because Defcon 1 is currently the only action of its kind. Both
 are noted here rather than in the code alone, because both go wrong quietly.
 
-**The "changed nothing on chain" badge assumes only Defcon 1 sets the flag.**
-`desktop-app/src/lib/redundant-defcon-1.ts` treats the earliest enacted Defcon 1 by sequence number
+**The "changed nothing on chain" badge assumes only Defcon 1 sets the flag.** *(Settled in V2
+Phase 2 — [`security-council-defcon-3-phase-2.md`](./security-council-defcon-3-phase-2.md). The
+module is now `desktop-app/src/lib/safe-harbour-redundancy.ts` and orders by activation height.)*
+`desktop-app/src/lib/redundant-defcon-1.ts` treated the earliest enacted Defcon 1 by sequence number
 as the one that activated the safe harbour. Defcon 3 activates the same flag, on a timelock, so from
 V2 onwards a Defcon 3 that matured first would have been the activation — and this would then name
 the wrong proposal and stay silent about a genuinely redundant one. The answer is the activation

@@ -29,6 +29,8 @@ pub enum DecodedAction {
     },
     #[serde(rename = "defcon_1")]
     Defcon1,
+    #[serde(rename = "defcon_3")]
+    Defcon3,
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -52,6 +54,7 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             condition_hex: hex::encode(&update.condition),
         },
         Ok(Action::Defcon1) => DecodedAction::Defcon1,
+        Ok(Action::Defcon3) => DecodedAction::Defcon3,
         // Still unregistered at this boundary, and unrelated to the council: both predate this
         // slice and both render through the raw-hex fallback today.
         Ok(Action::OperatorSetUpdate(_)) | Ok(Action::SequencerKeyUpdate(_)) | Err(_) => {
@@ -228,6 +231,15 @@ mod tests {
             .expect("build should succeed")
             .action_hex;
         assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon1));
+    }
+
+    /// No builder command yet — Phase 1 makes `defcon_3` readable, not creatable — so the hex
+    /// comes from the codec directly, which is the same hex an externally created Defcon 3
+    /// arrives as.
+    #[test]
+    fn decode_defcon_3_names_the_action() {
+        let hex = action_codec::encode_hex(&Action::Defcon3).expect("encode should succeed");
+        assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon3));
     }
 
     #[test]

@@ -8,7 +8,7 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
-    AlpenAdminMultisigUpdate, Defcon1Update, EeStfVkUpdate, OlStfVkUpdate,
+    AlpenAdminMultisigUpdate, Defcon1Update, Defcon3Update, EeStfVkUpdate, OlStfVkUpdate,
     OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
     StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
@@ -151,6 +151,7 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
             StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
         ))),
         Action::Defcon1 => Ok(MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))),
+        Action::Defcon3 => Ok(MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update))),
     }
 }
 
@@ -244,9 +245,7 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
             CodecError::UnsupportedVariant("StrataSecurityCouncilMultisig"),
         ),
         MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
-        MultisigAction::Update(UpdateAction::Defcon3(_)) => {
-            Err(CodecError::UnsupportedVariant("Defcon3"))
-        }
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => Ok(Action::Defcon3),
         MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
             Err(CodecError::UnsupportedVariant("SafeHarbourAddress"))
         }
@@ -329,6 +328,31 @@ mod tests {
             panic!("Defcon 1 is an update, not a cancel");
         };
         assert_eq!(update.update_tx_type(), UpdateTxType::Defcon1);
+    }
+
+    /// Both Defcon payloads are empty unit structs, so the only thing separating their bytes is
+    /// the SSZ union selector. A codec with the two encode arms crossed would round-trip just as
+    /// happily and hand the council the other lever to sign — which is what the last assertion,
+    /// and not the round trip, is here to catch.
+    #[test]
+    fn defcon_3_round_trips_and_encodes_upstreams_defcon_3_tx_type() {
+        use strata_asm_params::UpdateTxType;
+
+        let encoded = encode(&Action::Defcon3).expect("encode ok");
+
+        assert_eq!(decode(&encoded).expect("decode ok"), Action::Defcon3);
+
+        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
+        let MultisigAction::Update(update) = upstream else {
+            panic!("Defcon 3 is an update, not a cancel");
+        };
+        assert_eq!(update.update_tx_type(), UpdateTxType::Defcon3);
+
+        assert_ne!(
+            encode(&Action::Defcon1).expect("encode ok"),
+            encoded,
+            "the immediate and the timelocked lever must not encode to the same bytes"
+        );
     }
 
     #[test]
