@@ -10,6 +10,13 @@ use crate::{
 // ─── Extended response types ─────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
+pub struct ProposalResponse {
+    #[serde(flatten)]
+    pub proposal: Proposal,
+    pub is_cancelable: bool,
+}
+
+#[derive(Debug, Serialize)]
 pub struct CancelProposalSummary {
     pub action_id: ActionId,
     pub status: ProposalStatus,
@@ -21,6 +28,7 @@ pub struct CancelProposalSummary {
 pub struct ProposalDetailResponse {
     #[serde(flatten)]
     pub proposal: Proposal,
+    pub is_cancelable: bool,
     pub cancel_proposal: Option<CancelProposalSummary>,
 }
 
@@ -66,7 +74,17 @@ pub struct ListProposalsQuery {
 
 #[derive(Debug, Serialize)]
 pub struct ProposalListResponse {
-    pub proposals: Vec<Proposal>,
+    pub proposals: Vec<ProposalResponse>,
+}
+
+fn to_proposal_response(
+    proposal: Proposal,
+    resolver: &asm_role_membership::ConfirmationDepthResolver,
+) -> ProposalResponse {
+    ProposalResponse {
+        is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
+        proposal,
+    }
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
@@ -75,7 +93,7 @@ pub async fn create_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Json(body): Json<CreateProposalRequest>,
-) -> Result<(StatusCode, Json<Proposal>)> {
+) -> Result<(StatusCode, Json<ProposalResponse>)> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -102,7 +120,11 @@ pub async fn create_proposal(
     )
     .await?;
 
-    Ok((StatusCode::CREATED, Json(proposal)))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok((
+        StatusCode::CREATED,
+        Json(to_proposal_response(proposal, &resolver)),
+    ))
 }
 
 pub async fn get_next_seq_no(
@@ -142,7 +164,13 @@ pub async fn list_proposals(
         );
     }
 
-    Ok(Json(ProposalListResponse { proposals: checked }))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    let proposals = checked
+        .into_iter()
+        .map(|p| to_proposal_response(p, &resolver))
+        .collect();
+
+    Ok(Json(ProposalListResponse { proposals }))
 }
 
 #[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
@@ -180,7 +208,9 @@ pub async fn get_proposal(
             required_signatures: c.required_signatures,
         });
 
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
     Ok(Json(ProposalDetailResponse {
+        is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
         proposal,
         cancel_proposal,
     }))
@@ -216,7 +246,7 @@ pub async fn create_cancel_proposal(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<CreateCancelProposalRequest>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
         return Err(AppError::Unauthorized);
     }
@@ -235,7 +265,8 @@ pub async fn create_cancel_proposal(
     )
     .await?;
 
-    Ok(Json(proposal))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok(Json(to_proposal_response(proposal, &resolver)))
 }
 
 #[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
@@ -244,7 +275,7 @@ pub async fn approve_action(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -261,7 +292,8 @@ pub async fn approve_action(
     )
     .await?;
 
-    Ok(Json(proposal))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok(Json(to_proposal_response(proposal, &resolver)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -276,7 +308,7 @@ pub async fn patch_proposal(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<PatchProposalBody>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     if body.proposal_status != "approved" {
         return Err(AppError::BadRequest(format!(
             "unsupported proposal_status: {}",
@@ -295,7 +327,8 @@ pub async fn patch_proposal(
     )
     .await?;
 
-    Ok(Json(proposal))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok(Json(to_proposal_response(proposal, &resolver)))
 }
 
 /// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
@@ -304,7 +337,7 @@ pub async fn claim_broadcast(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let action_id = ActionId(action_id);
     let proposal = proposals::claim_broadcast_coordination(
         state.repo.as_ref(),
@@ -313,7 +346,8 @@ pub async fn claim_broadcast(
         &action_id,
     )
     .await?;
-    Ok(Json(proposal))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok(Json(to_proposal_response(proposal, &resolver)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -332,7 +366,7 @@ pub async fn report_broadcast_progress(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ReportBroadcastProgressBody>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let action_id = ActionId(action_id);
     let proposal = proposals::report_broadcast_progress(
         state.repo.as_ref(),
@@ -349,5 +383,6 @@ pub async fn report_broadcast_progress(
         },
     )
     .await?;
-    Ok(Json(proposal))
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    Ok(Json(to_proposal_response(proposal, &resolver)))
 }
