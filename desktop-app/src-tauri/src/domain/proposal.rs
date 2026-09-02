@@ -36,6 +36,9 @@ pub struct Proposal {
     /// ASM queue UpdateId assigned when the reveal tx confirmed. Used to build CancelAction.
     pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummary>,
+    /// Whether the backend considers this proposal's action cancelable (live confirmation depth).
+    #[serde(default)]
+    pub is_cancelable: bool,
     /// Unix epoch milliseconds when the proposal was created. Used to derive expiry.
     pub created_at: i64,
     /// Unix epoch milliseconds of the last change. Lets a screen say how long a bundle has been

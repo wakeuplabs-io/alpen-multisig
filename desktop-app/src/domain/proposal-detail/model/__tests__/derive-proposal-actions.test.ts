@@ -9,8 +9,8 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 	return {
 		status: 'pending',
 		broadcastStatus: 'idle',
-		authority: 'strata_admin',
 		actionType: 'multisig_update',
+		isCancelable: true,
 		requiredSignatures: 2,
 		signatures: [],
 		...overrides,
@@ -118,19 +118,16 @@ for (const status of ['enacted', 'canceled', 'expired'] as const) {
 	assert.equal(actions.alreadySigned, false, 'no signer cannot have already signed')
 }
 
-// ── AC 10: no cancel affordance for a Defcon 1, written against the V5 future ─
-// The gate used to be an authority allow-list that happened to exclude the
-// council. A test asserting "security_council cannot cancel" would have passed
-// against that code and would go green on the day V5 adds the council to the
-// list for Defcon 3. So the Defcon 1 is given an authority that IS allowed: the
-// only thing that can refuse it then is the action.
+// ── Cancelability is field-driven, not authority-driven ──────────────────────
 {
-	assert.equal(canCancelProposal({ authority: 'strata_admin', actionType: 'defcon_1' }), false)
-	assert.equal(canCancelProposal({ authority: 'strata_admin', actionType: 'multisig_update' }), true)
-	assert.equal(canCancelProposal({ authority: 'security_council', actionType: 'defcon_1' }), false)
+	assert.equal(canCancelProposal({ isCancelable: true }), true)
+	assert.equal(canCancelProposal({ isCancelable: false }), false)
 
-	const actions = deriveProposalActions(proposal({ authority: 'strata_admin', actionType: 'defcon_1' }), SIGNER_A)
-	assert.equal(actions.canCancel, false, 'a Defcon 1 offers no cancel even on a cancellable authority')
+	const actions = deriveProposalActions(proposal({ actionType: 'defcon_3', isCancelable: true }), SIGNER_A)
+	assert.equal(actions.canCancel, true, 'defcon_3 cancel follows the backend field, not authority')
+
+	const defcon1 = deriveProposalActions(proposal({ actionType: 'defcon_1', isCancelable: false }), SIGNER_A)
+	assert.equal(defcon1.canCancel, false, 'defcon_1 with depth 0 offers no cancel')
 }
 
 console.log('derive-proposal-actions: all assertions passed.')

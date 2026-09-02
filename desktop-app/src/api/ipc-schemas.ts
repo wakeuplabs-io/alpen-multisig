@@ -70,6 +70,7 @@ export const proposalSchema = z
 		activationHeight: nullishToNull(z.number()),
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
+		isCancelable: z.boolean(),
 		createdAtMs: z.number(),
 		updatedAtMs: z.number(),
 		expiresAtMs: z.number(),

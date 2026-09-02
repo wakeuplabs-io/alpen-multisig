@@ -6,8 +6,8 @@ import type { ActionType, BroadcastStatus, ProposalStatus } from '@/api/proposal
 export type ProposalActionInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
-	authority: string
 	actionType: ActionType
+	isCancelable: boolean
 	requiredSignatures: number
 	signatures: ReadonlyArray<{ signerPubkey: string }>
 }
@@ -22,26 +22,16 @@ export type ProposalActions = {
 	canCancel: boolean
 }
 
-// Authorities whose queued updates the desktop offers to cancel. Display data:
-// the real gate is `create_cancel_proposal`, which rejects a target whose
-// confirmation depth is zero. Lived in three files until this became one.
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
-
 export type CancelableInput = {
-	authority: string
-	actionType: ActionType
+	isCancelable: boolean
 }
 
 // Whether to offer starting a cancel against this proposal.
 //
-// A Defcon 1 is never cancellable, and the reason is the action rather than the
-// authority it shares with Defcon 3: its confirmation depth is 0, so it is never
-// enqueued and an on-chain cancel fails with `UnknownAction`. The authority term
-// stays because the desktop cannot read a live depth — but it is no longer the
-// only term, so V5 opening the list for Defcon 3 does not grow a Cancel button on
-// every Defcon 1.
+// Answered by the backend from live confirmation depth — the same gate
+// `create_cancel_proposal` uses. The desktop holds no authority allow-list.
 export function canCancelProposal(proposal: CancelableInput): boolean {
-	return CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.actionType !== 'defcon_1'
+	return proposal.isCancelable
 }
 
 // Single source of truth for signer-facing action availability on a proposal.

@@ -58,6 +58,7 @@ export function ManualSignCollect({
 		activationHeight: null,
 		updateIdInQueue: null,
 		cancelProposal: null,
+		isCancelable: false,
 		createdAtMs: 0,
 		updatedAtMs: 0,
 		expiresAtMs: 0,

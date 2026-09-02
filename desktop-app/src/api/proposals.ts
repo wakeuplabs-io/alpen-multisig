@@ -55,6 +55,8 @@ export type Proposal = {
 	activationHeight: number | null
 	updateIdInQueue: number | null
 	cancelProposal: CancelProposalSummary | null
+	/** Whether the backend considers this action cancelable (live confirmation depth). */
+	isCancelable: boolean
 	createdAtMs: number
 	/** Last change of any kind, including every broadcast-status write. */
 	updatedAtMs: number

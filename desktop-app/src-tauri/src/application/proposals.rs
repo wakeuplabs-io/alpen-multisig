@@ -1061,6 +1061,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             };
             *self.last_create_request.lock().unwrap() = Some(request);
             Ok(response)
@@ -1101,6 +1102,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             };
             *self.last_cancel_request.lock().unwrap() =
                 Some((target_action_id.to_string(), request));
@@ -1133,6 +1135,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
 
@@ -1189,6 +1192,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
 
@@ -1227,6 +1231,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
 
@@ -1259,6 +1264,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             }])
         }
 
@@ -1299,6 +1305,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
 
@@ -1336,6 +1343,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
     }
@@ -1798,6 +1806,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
         async fn get_cancel_target_status(
@@ -1856,6 +1865,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
         async fn report_broadcast_progress(
@@ -1883,6 +1893,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 cancel_proposal: None,
+                is_cancelable: false,
             })
         }
         async fn create_cancel_proposal(
