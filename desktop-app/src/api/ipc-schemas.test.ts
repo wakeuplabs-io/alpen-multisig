@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { z } from 'zod'
 import { proposalSchema } from './ipc-schemas.ts'
 
 const proposalWithNullBroadcastFields = {
@@ -158,3 +159,19 @@ assert.equal(defcon1Proposal.success, true, 'proposalSchema must accept actionTy
 assert.equal(decodedActionSchema.safeParse({ kind: 'defcon_1' }).success, true)
 
 console.log('ipc-schemas: Defcon 1 boundaries OK')
+
+// Defcon 3 (V2) Phase 1: the same two boundaries, plus the blast radius that made this phase go
+// first. `listProposals` parses `z.array(proposalSchema)`, so an unregistered `actionType` does
+// not degrade one row — it empties the whole list.
+const defcon3Proposal = proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType: 'defcon_3' })
+assert.equal(defcon3Proposal.success, true, 'proposalSchema must accept actionType defcon_3')
+
+assert.equal(decodedActionSchema.safeParse({ kind: 'defcon_3' }).success, true)
+
+const mixedList = z.array(proposalSchema).safeParse([
+	{ ...proposalWithNullBroadcastFields, actionType: 'defcon_1' },
+	{ ...proposalWithNullBroadcastFields, actionType: 'defcon_3' },
+])
+assert.equal(mixedList.success, true, 'one defcon_3 row must not take down the list beside it')
+
+console.log('ipc-schemas: Defcon 3 boundaries OK')

@@ -149,6 +149,10 @@ pub enum Action {
     /// Activate the bridge safe harbour immediately. Authorized by the Strata Security Council and
     /// payload-less upstream — the sequence number travels with the proposal, not the action.
     Defcon1,
+    /// Activate the bridge safe harbour after `confirmation_depths.defcon3` blocks. Same authority
+    /// and same payload-less shape as `Defcon1`, and the same message relayed to the bridge — the
+    /// delay, during which the council can still cancel it, is the whole difference.
+    Defcon3,
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -195,7 +199,8 @@ mod tests {
             Action::VkUpdate(_)
             | Action::OperatorSetUpdate(_)
             | Action::SequencerKeyUpdate(_)
-            | Action::Defcon1 => {
+            | Action::Defcon1
+            | Action::Defcon3 => {
                 panic!("unexpected variant")
             }
         }

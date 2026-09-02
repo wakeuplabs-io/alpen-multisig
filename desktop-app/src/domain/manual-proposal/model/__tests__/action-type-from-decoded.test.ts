@@ -10,6 +10,8 @@ import assert from 'node:assert/strict'
 import { actionTypeFromDecoded } from '../action-type-from-decoded.ts'
 
 assert.equal(actionTypeFromDecoded({ kind: 'defcon_1' }), 'defcon_1')
+// The `Record` is exhaustive by type, but `defcon_3: 'defcon_1'` would compile.
+assert.equal(actionTypeFromDecoded({ kind: 'defcon_3' }), 'defcon_3')
 assert.equal(
 	actionTypeFromDecoded({ kind: 'vk_update', authority: 'strata_admin', typeId: 1, conditionHex: '' }),
 	'vk_update',
