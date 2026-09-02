@@ -94,6 +94,15 @@ So the frontend takes the bounded error: a missing badge, never a false one. **T
 upstream** — a backend that retries a failed `activation_height` removes the case entirely, and it
 is recorded as debt in the build plan §6 rather than patched around here.
 
+**A second route reaches the same shape, and it is not the height's fault.**
+[`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4.1 accepts that a
+proposal which enacted unobserved, and was then jumped past, resolves as `Superseded`. The filter
+here reads `status === 'enacted'`, so that proposal leaves the candidate set exactly as a null-height
+row does, and the badge behind it is lost the same way. Pre-existing and untouched by this phase —
+V1 filtered on the same status — but it belongs beside the null case, because both are "the
+activation is not in the set" and neither is fixable in this module: the answer has to come from
+whatever decides the label. Recorded in the build plan §6.
+
 **The degenerate case is accepted deliberately.** If every enacted candidate has a null height there
 is no activator and no badge at all. The signer is not left uninformed: the dashboard's
 `SafeHarbourNote` comes from a **live** chain read (`use-safe-harbour-status.ts`) that does not touch

@@ -291,6 +291,15 @@ End to end, once all seven land, on regtest with the local stack
   shape a repair would take. Found in Phase 2, which is the first code to read the field for a
   decision rather than for display. The migration that added the column also has no backfill, so
   pre-2026-05-20 rows are null permanently.
+- **A proposal that enacted but reads `Superseded` drops out of the redundancy answer.**
+  [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4.1 records a residual
+  ambiguity: a proposal that enacted while nothing was reading, and was then jumped past by a later
+  action, resolves as `Superseded` rather than `Enacted`. `changedNothingActionIds` filters on
+  `status === 'enacted'`, so such a proposal leaves the candidate set, the next one is named the
+  activator, and its badge is lost. Same failure shape as a null activation height — an activation
+  that is not in the set — reached by a different route. Pre-existing and unchanged by Phase 2: V1
+  filtered on the same status. Recorded because Phase 2 is what made the two routes visible as one
+  family, and because the fix belongs where the label is decided, not in the badge.
 - **A stored `activation_height` can go stale.** It is `reveal_block + lock_period` with the depth
   read **live at reveal-confirmation time**, so changing `confirmation_depths.defcon3` while an
   update is queued leaves a height the chain no longer agrees with. Pre-existing — the activation
