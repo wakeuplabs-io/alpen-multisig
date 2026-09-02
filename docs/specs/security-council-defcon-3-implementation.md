@@ -7,7 +7,7 @@ for *what* V2 must do. This document is only *how* it gets built, and never over
 
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E13 and US-E14.
 
-**Status:** Phase 1 shipped. Seven phases planned, plus one held in reserve.
+**Status:** Phases 1–2 shipped. Seven phases planned, plus one held in reserve.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -39,7 +39,7 @@ variant, two inherited debts, and the cancel.
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
 | 1 ✅ | `defcon_3` is a readable type — [phase spec](./security-council-defcon-3-phase-1.md) | (none directly — prerequisite) | `src-tauri`, `desktop-app` |
-| 2 | Redundancy by activation height | AC 9; [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) | `desktop-app` |
+| 2 ✅ | Redundancy by activation height — [phase spec](./security-council-defcon-3-phase-2.md) | AC 9; [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) | `desktop-app` |
 | 3 | Cancelability travels on the proposal | AC 13; [Constraint 4](./security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority) | `orchestrator-be`, `src-tauri`, `desktop-app` |
 | 4 | Defcon 3 enactment detection | AC 6, AC 8, AC 12; [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality) and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `orchestrator-be` |
 | 5 | Frontend — create and sign | AC 1, 1a, 2, 3, 4, 5, 15 | `src-tauri`, `desktop-app` |
@@ -133,11 +133,12 @@ assert one would only restate what the codec test owns.
 
 ### Phase 2 — Redundancy by activation height
 
-`redundantDefcon1ActionIds` picks the earliest enacted Defcon 1 *by sequence number* as the proposal
+`redundantDefcon1ActionIds` picked the earliest enacted Defcon 1 *by sequence number* as the proposal
 that activated the safe harbour. Defcon 3 activates the same flag on a timelock, so from this slice
 on the earliest by seqno is not necessarily the one that turned it on. The activator becomes the
 enacted harbour-activating proposal with the **lowest activation height**, over both Defcon types.
-The module is renamed to match what it now answers.
+The module is renamed to match what it now answers — it shipped as
+`desktop-app/src/lib/safe-harbour-redundancy.ts`, exporting `changedNothingActionIds`.
 
 The two heights are comparable because a Defcon 1's lock period is `0`, so its activation height *is*
 its reveal block.
@@ -283,6 +284,17 @@ End to end, once all seven land, on regtest with the local stack
   `ConfirmationDepths` has no `serde(default)` and the example omits `defcon3`,
   `safe_harbour_address_update` and `strata_security_council_multisig_update`. Found while writing
   the contract; unrelated to Defcon 3 behaviour, and a phase that touches params should pick it up.
+- **An `activation_height` that fails to compute is never retried.**
+  `compute_and_store_activation_height` runs once, non-fatally, on the transition to
+  `RevealConfirmed`; `confirm_reveal_if_mined` returns early afterwards, so a transient Bitcoin or
+  ASM failure leaves the height null for the life of the row. `reconcile_update_id_in_queue` is the
+  shape a repair would take. Found in Phase 2, which is the first code to read the field for a
+  decision rather than for display. The migration that added the column also has no backfill, so
+  pre-2026-05-20 rows are null permanently.
+- **A stored `activation_height` can go stale.** It is `reveal_block + lock_period` with the depth
+  read **live at reveal-confirmation time**, so changing `confirmation_depths.defcon3` while an
+  update is queued leaves a height the chain no longer agrees with. Pre-existing — the activation
+  countdown already trusts the same field.
 - **N+1 `strata_asm_getStatus` reads in the reconciliation loop**, recorded at V1 close-out. Phase 3
   adds a per-request depth read and is the natural place to revisit it, but hoisting the whole loop
   requires restructuring mocks keyed by RPC URL and is not this slice's to carry.

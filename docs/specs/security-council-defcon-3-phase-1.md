@@ -138,7 +138,7 @@ false one.
 | `proposal-status.ts:78` `proposalDisplayStatus` | `'approved'`, which is already what the contract wants | 6 (pinning) |
 | `proposal-status.ts:95-97` `showsActivationCountdown` | `true`, already correct — the predicate excludes only `defcon_1` | 6 (pinning) |
 | `derive-proposal-actions.ts:44` `canCancelProposal` | `false`: `security_council` is not in `CANCELABLE_AUTHORITIES` | 3 |
-| `lib/redundant-defcon-1.ts:25` | an enacted Defcon 3 is not considered as the harbour activator | 2 |
+| `lib/redundant-defcon-1.ts:25` (now `lib/safe-harbour-redundancy.ts`) | an enacted Defcon 3 is not considered as the harbour activator | 2 |
 | `manual-proposal/hooks/use-manual-proposal.ts:202,280` | the `kind === 'unknown'` guard lets a Defcon 3 bundle through — **correct, do not "fix"** | — |
 | `proposal-detail/hooks/use-decoded-proposal.ts:93` | clears the signer table for a non-`multisig_update` — correct | — |
 
