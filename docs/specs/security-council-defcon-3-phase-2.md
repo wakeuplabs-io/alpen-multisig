@@ -70,14 +70,29 @@ permanently**:
 - The migration `20260520000000_add_cancel_and_activation_fields.sql:3` adds the column with **no
   backfill**, so every proposal that enacted before it carries `null` forever.
 
-**Null rows are excluded from both roles: never the activator, never redundant.** Treating null as
-the lowest would let one failed RPC name an arbitrary proposal the activator and silence every badge
-after it; treating it as the highest would assert redundancy from an absence of evidence. Both invent
-a fact. The failure is bounded on one side only — excluding costs at most one missing badge, while
-including a null row wrongly can silence all the others.
+**Null rows are excluded from both roles: never the activator, never redundant.**
 
-Exclusion also **fixes** a case the old rule got wrong: a null-height proposal that happened to hold
-the lowest seqno was silently named the activator, muting every genuinely redundant one behind it.
+**This costs a badge V1 used to show, and the trade is deliberate.** V1 never read the height, so a
+proposal whose height failed to compute was still ranked by its sequence number and everything
+behind it was still badged. Concretely: a Defcon 1 at seqNo 1 activates the harbour but its height
+write fails; a Defcon 1 at seqNo 2 then enacts against an already-true flag. V1 badged the second
+one — correctly. Here the first drops out of the ranking, the second becomes the lowest known height
+and is therefore named the activator, and a proposal that burned a sequence number and its fees for
+nothing goes unbadged. That is a false negative, and §8's test 4 is built to show it rather than to
+hide it.
+
+What the exclusion buys is that the badge never says *"changed nothing"* about the activation
+itself. Ranking a null row against one with a real number means guessing its position from the
+sequence number — which is exactly the premise this phase exists to drop. The guess is *sound* for a
+Defcon 1, whose activation height is its reveal block, and *false* for a Defcon 3, whose height is
+the reveal plus a delay nobody recorded. Applying it to one type and not the other would reintroduce
+the V1 bug on a subset, and ordering the two classes honestly needs a partial order rather than a
+sort — a `null` Defcon 1 at a lower seqno precedes everything with a higher seqno but cannot be
+placed against a known height at a lower one.
+
+So the frontend takes the bounded error: a missing badge, never a false one. **The real fix is
+upstream** — a backend that retries a failed `activation_height` removes the case entirely, and it
+is recorded as debt in the build plan §6 rather than patched around here.
 
 **The degenerate case is accepted deliberately.** If every enacted candidate has a null height there
 is no activator and no badge at all. The signer is not left uninformed: the dashboard's
@@ -163,7 +178,7 @@ Seven claims, all pure, no mocks, no I/O, no clock.
 | 1 | Height beats sequence number, across both Defcon types | a `defcon_3` at seqNo 5 / height 120 and a `defcon_1` at seqNo 6 / height 118 — the Defcon 3 was revealed at 100 with `defcon3 = 20`, and a Defcon 1 swept the bridge two blocks before it matured. The set is exactly the Defcon 3. |
 | 2 | V1's answer is preserved for a Defcon-1-only history | the old four-row case, heights monotone in seqno (§4) |
 | 3 | Only harbour-activating types count | the `vk_update` case, now with **non-null** heights — today it passes for the wrong reason |
-| 4 | A null height is neither activator nor redundant | one enacted at `null` beside enacted rows at 100 and 105; the set is exactly the 105 |
+| 4 | A null height is neither activator nor redundant — **and the badge this costs** | one enacted at `null` beside enacted rows at 100 and 105; the set is exactly the 105, so the row at 100 goes unbadged even though the null row may have been the activation (§5) |
 | 5 | All heights null ⇒ empty set | the degenerate case of §5, deliberate |
 | 6 | The tie is broken by `seqNo`, not by arrival order | two rows at the same height, the higher-seqno one placed **first** in the array |
 | 7 | A single enactment is the activation | unchanged from V1 |
@@ -225,8 +240,11 @@ That is the opposite of Phase 1's check, where it had to go up by one.
 
 Three structural checks that the phase stayed inside its scope:
 
+The first is scoped to `desktop-app/` on purpose: the specs keep naming the old symbol in the past
+tense, which is how a phase records what it changed.
+
 ```bash
-git grep -n "redundant-defcon-1\|redundantDefcon1ActionIds"   # nothing left dangling
+git grep -n "redundant-defcon-1\|redundantDefcon1ActionIds" -- desktop-app/   # nothing left
 git grep -n "as unknown as Proposal" desktop-app/src/lib/     # the cast died with the old signature
 git diff --stat -- orchestrator-be/ desktop-app/src-tauri/    # empty: this phase is desktop-only
 ```

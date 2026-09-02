@@ -15,7 +15,7 @@ import {
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { lastChangeLabel } from '@/lib/last-change-label'
-import { redundantDefcon1ActionIds } from '@/lib/redundant-defcon-1'
+import { changedNothingActionIds } from '@/lib/safe-harbour-redundancy'
 import { buildProposalTitle } from '@/lib/proposal-title'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
@@ -67,9 +67,9 @@ export function ProposalsDashboard({
 
 	const activeProposals = [...quorumReached, ...pending]
 	const pastProposals = [...executedOrCanceled, ...expiredOrSkipped]
-	// Over every past proposal, never the current page: which Defcon 1 activated the harbour is a
+	// Over every past proposal, never the current page: which proposal activated the harbour is a
 	// fact about the whole history.
-	const changedNothing = redundantDefcon1ActionIds(pastProposals)
+	const changedNothing = changedNothingActionIds(pastProposals)
 	const totalPastPages = Math.ceil(pastProposals.length / PAGE_SIZE)
 	const pagedPastProposals = pastProposals.slice((pastPage - 1) * PAGE_SIZE, pastPage * PAGE_SIZE)
 
@@ -425,7 +425,7 @@ function ProposalCard({
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
-	/** Enacted, but the safe harbour was already active — see `redundantDefcon1ActionIds`. */
+	/** Enacted, but the safe harbour was already active — see `changedNothingActionIds`. */
 	changedNothing: boolean
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
