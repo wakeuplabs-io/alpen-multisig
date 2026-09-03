@@ -174,6 +174,18 @@ pub fn build_defcon_1_action_hex() -> Result<BuildActionHexResponse, String> {
     Ok(BuildActionHexResponse { action_hex })
 }
 
+/// Build the payload-less Defcon 3 action.
+///
+/// Shaped exactly like Defcon 1's: same authority, same empty payload, same sequence number on the
+/// creation request. The delay is not encoded here — it is `confirmation_depths.defcon3`, resolved
+/// live from the ASM, and this hex would be wrong the moment it carried a copy of it.
+#[tauri::command]
+pub fn build_defcon_3_action_hex() -> Result<BuildActionHexResponse, String> {
+    let action_hex = action_codec::encode_hex(&Action::Defcon3)
+        .map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
 #[tauri::command]
 pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHexResponse, String> {
     let authority = Authority::from_wire(input.authority.trim())
@@ -233,12 +245,14 @@ mod tests {
         assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon1));
     }
 
-    /// No builder command yet — Phase 1 makes `defcon_3` readable, not creatable — so the hex
-    /// comes from the codec directly, which is the same hex an externally created Defcon 3
-    /// arrives as.
+    /// The same round trip for the timelocked lever. Phase 1 could only encode it from the codec
+    /// because no builder existed; going through the command is what proves the flow a council
+    /// signer actually takes ends up at `Defcon3` and not at its neighbour.
     #[test]
     fn decode_defcon_3_names_the_action() {
-        let hex = action_codec::encode_hex(&Action::Defcon3).expect("encode should succeed");
+        let hex = build_defcon_3_action_hex()
+            .expect("build should succeed")
+            .action_hex;
         assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon3));
     }
 

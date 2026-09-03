@@ -37,8 +37,8 @@ export function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: s
 
 /**
  * Selecting an action type is not itself the dangerous step, so every card reads in the neutral
- * selection palette — including Defcon 1. The danger palette is spent once, on the `Irreversible`
- * callout below the form, where it still means something.
+ * selection palette — the Defcon levers included. The danger palette is spent once, on the callout
+ * below the form, where it still means something.
  */
 export function ActionTypeCard({
 	title,

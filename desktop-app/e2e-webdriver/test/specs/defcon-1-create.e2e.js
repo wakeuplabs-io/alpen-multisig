@@ -29,10 +29,13 @@ describe('Strata Multisig proposal — Defcon 1', () => {
 
 		await $('//h1[contains(.,"Create")]').waitForDisplayed({ timeout: 60000 })
 
-		// AC 1 — the council's menu offers Defcon 1, and offers nothing else.
+		// AC 1 — the council's menu offers the two Defcon levers and no other authority's actions.
 		const defconCard = await $('//button[.//p[contains(text(),"DEFCON 1")]]')
 		await defconCard.waitForDisplayed({ timeout: 60000 })
 		await defconCard.click()
+
+		const defcon3Card = await $('//button[.//p[contains(text(),"DEFCON 3")]]')
+		await expect(defcon3Card).toBeExisting()
 
 		const signerUpdateCard = await $('//button[.//p[contains(text(),"Signer update")]]')
 		await expect(signerUpdateCard).not.toBeExisting()
