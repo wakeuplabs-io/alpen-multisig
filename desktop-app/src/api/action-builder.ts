@@ -55,6 +55,11 @@ export function buildDefcon1ActionHex(): Promise<ApiResult<BuildActionHexRespons
 	return tauriCall('build_defcon_1_action_hex', {}, buildActionHexResponseSchema)
 }
 
+/** Defcon 3 is the same payload-less shape; only the delay before it takes effect differs. */
+export function buildDefcon3ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {
+	return tauriCall('build_defcon_3_action_hex', {}, buildActionHexResponseSchema)
+}
+
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_cancel_action_hex', { targetActionHex }, buildActionHexResponseSchema)
 }

@@ -1,16 +1,13 @@
 import { useEffect } from 'react'
 import { useFormContext, useWatch } from 'react-hook-form'
-import { AlertTriangleIcon } from '@/assets/icons'
+import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
-import { useDefcon1ActionHex } from '../hooks/use-defcon-1-action-hex'
+import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
+import { useDefconActionHex } from '../hooks/use-defcon-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
-import { DEFCON_1_CONFIRMATION } from '../model/validators/defcon-1'
-
-const CONFIRM_INPUT_ID = 'defcon-1-confirm'
-const MESSAGE_LABEL_ID = 'defcon-1-signing-message-label'
 
 /** `seqNo` is a free-text field; the signing message can only be resolved for a real number. */
 function parseSeqNo(raw: string | undefined): number | null {
@@ -18,7 +15,15 @@ function parseSeqNo(raw: string | undefined): number | null {
 	return /^\d+$/.test(trimmed) ? Number(trimmed) : null
 }
 
-export function Defcon1FormFields() {
+/**
+ * One form for both Defcon levers. They differ in three strings, all of them read from
+ * `DEFCON_COPY`; everything else here is the safety-critical half — the action-hex resolve, the
+ * canonical message, its mirror into a form value and the gate that depends on it — and a second
+ * copy of that is a place where one gets fixed and the other does not.
+ *
+ * The caller mounts this with `key={level}` so a switch remounts rather than carrying state over.
+ */
+export function DefconFormFields({ level }: { level: DefconLevel }) {
 	const {
 		control,
 		register,
@@ -26,7 +31,12 @@ export function Defcon1FormFields() {
 		formState: { errors },
 	} = useFormContext<CreateProposalFormValues>()
 
-	const { actionHex, error: actionHexError } = useDefcon1ActionHex()
+	const copy = DEFCON_COPY[level]
+	const testIdPrefix = `e2e-${level.replace('_', '-')}`
+	const confirmInputId = `${level.replace('_', '-')}-confirm`
+	const messageLabelId = `${level.replace('_', '-')}-signing-message-label`
+
+	const { actionHex, error: actionHexError } = useDefconActionHex(level)
 	const safeHarbourActivated = useSafeHarbourActivated()
 	const seqNo = parseSeqNo(useWatch({ control, name: 'seqNo' }))
 	// Rendered, never written: the four canonical lines come from the same Rust renderer the
@@ -45,34 +55,19 @@ export function Defcon1FormFields() {
 	return (
 		<div className="flex flex-col gap-5">
 			{/* Told, never enforced: the type-to-confirm gate below stays the only gate. */}
-			{safeHarbourActivated && (
-				<SafeHarbourNote>
-					The bridge is already in safe harbour. Another Defcon 1 does not change that — it consumes a council sequence
-					number, costs fees, and needs a full quorum. Create one only if you have reason to believe this state is
-					wrong.
-				</SafeHarbourNote>
-			)}
+			{safeHarbourActivated && <SafeHarbourNote>{copy.safeHarbourNote}</SafeHarbourNote>}
 
-			<div className="rounded-xl border border-danger-border bg-danger-surface p-4">
-				<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
-					<AlertTriangleIcon width={16} height={16} className="shrink-0 text-danger" />
-					Irreversible
-				</p>
-				<p className="m-0 mt-2 text-body text-danger-deep">
-					DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is
-					confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.
-				</p>
-			</div>
+			<DefconCallout level={level} />
 
 			<div>
-				<p id={MESSAGE_LABEL_ID} className="m-0 text-body font-medium text-emphasis">
+				<p id={messageLabelId} className="m-0 text-body font-medium text-emphasis">
 					Signing message
 				</p>
 				{actionHexError === null ? (
 					<pre
-						aria-labelledby={MESSAGE_LABEL_ID}
+						aria-labelledby={messageLabelId}
 						className="m-0 mt-1.5 overflow-x-auto whitespace-pre rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis"
-						data-testid="e2e-defcon-1-signing-message"
+						data-testid={`${testIdPrefix}-signing-message`}
 					>
 						{message ?? placeholder}
 					</pre>
@@ -97,22 +92,22 @@ export function Defcon1FormFields() {
 			</div>
 
 			<div>
-				<label htmlFor={CONFIRM_INPUT_ID} className="text-body font-medium text-emphasis">
-					Type <span className="font-mono font-semibold text-danger-deep">{DEFCON_1_CONFIRMATION}</span> to confirm
+				<label htmlFor={confirmInputId} className="text-body font-medium text-emphasis">
+					Type <span className="font-mono font-semibold text-danger-deep">{copy.confirmation}</span> to confirm
 				</label>
 				<input
-					id={CONFIRM_INPUT_ID}
+					id={confirmInputId}
 					type="text"
 					className={monoInputDangerClass}
 					{...register('defconConfirm')}
-					data-testid="e2e-defcon-1-confirm"
+					data-testid={`${testIdPrefix}-confirm`}
 					autoComplete="off"
 					spellCheck={false}
 					aria-invalid={errors.defconConfirm !== undefined}
-					aria-describedby={errors.defconConfirm ? `${CONFIRM_INPUT_ID}-error` : undefined}
+					aria-describedby={errors.defconConfirm ? `${confirmInputId}-error` : undefined}
 				/>
 				{errors.defconConfirm?.message && (
-					<p id={`${CONFIRM_INPUT_ID}-error`} role="alert" className={fieldErrorClass}>
+					<p id={`${confirmInputId}-error`} role="alert" className={fieldErrorClass}>
 						{errors.defconConfirm.message}
 					</p>
 				)}

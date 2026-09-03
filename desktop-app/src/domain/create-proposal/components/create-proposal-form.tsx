@@ -20,7 +20,7 @@ import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '..
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
-import { Defcon1FormFields } from './defcon-1-form-fields'
+import { DefconFormFields } from './defcon-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
@@ -233,9 +233,11 @@ export function CreateProposalForm({
 		}
 	}
 
-	// Defcon 1 is irreversible, so its CTAs carry the danger palette all the way through the
-	// review step — the last control the signer touches must not look like every other one.
-	const isDestructive = actionType === 'defcon_1'
+	// Both Defcon levers sweep the same funds, so both carry the danger palette all the way through
+	// the review step — the last control the signer touches must not look like every other one.
+	// Only the copy inside distinguishes them: one is irreversible, the other cancelable until it
+	// activates.
+	const isDestructive = actionType === 'defcon_1' || actionType === 'defcon_3'
 	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
 
 	return (
@@ -325,9 +327,14 @@ export function CreateProposalForm({
 											title={option.title}
 											description={option.description}
 											selected={actionType === option.actionType}
-											onClick={() =>
+											onClick={() => {
+												if (option.actionType === actionType) return
 												form.setValue('actionType', option.actionType, { shouldValidate: true, shouldDirty: true })
-											}
+												// The typed confirmation is evidence that the signer read *this* form. Carrying
+												// it across a switch would hand the next action a gate somebody else passed.
+												// Not validated: an untouched field must not open with an error on it.
+												form.setValue('defconConfirm', '')
+											}}
 										/>
 									))}
 								</div>
@@ -369,8 +376,10 @@ export function CreateProposalForm({
 								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
 							</div>
 
-							{actionType === 'defcon_1' ? (
-								<Defcon1FormFields />
+							{actionType === 'defcon_1' || actionType === 'defcon_3' ? (
+								// Keyed by level: switching between the two remounts rather than carrying one
+								// lever's resolved action hex, and its signing message, into the other's form.
+								<DefconFormFields key={actionType} level={actionType} />
 							) : actionType === 'signer_update' ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}

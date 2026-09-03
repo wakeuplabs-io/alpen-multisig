@@ -610,6 +610,22 @@ mod tests {
         assert!(message.contains("Strata Security Council"), "{message}");
     }
 
+    /// AC 2: the same claim for the timelocked lever. Upstream maps both Defcon levels to the
+    /// council, so this is a tripwire on upstream rather than on a table of ours — and the error
+    /// has to name the role the action requires, since that is what the caller is told.
+    #[test]
+    fn defcon_3_is_authorized_for_the_council_and_refused_for_everyone_else() {
+        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
+
+        require_authorized_for_action(Authority::SecurityCouncil, &defcon3).expect("council signs");
+
+        let err = require_authorized_for_action(Authority::StrataAdmin, &defcon3)
+            .expect_err("the Strata administrator does not");
+        let message = err.to_string();
+        assert!(message.contains("Defcon 3"), "{message}");
+        assert!(message.contains("Strata Security Council"), "{message}");
+    }
+
     /// AC 12: two actions on the Strata Security Council resolve to different depths — the
     /// distinguishing case a per-authority mapping cannot produce.
     #[test]

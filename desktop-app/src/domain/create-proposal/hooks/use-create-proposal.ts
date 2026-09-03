@@ -4,9 +4,11 @@ import type { CurrentVk } from '@/api/asm-state'
 import {
 	buildAdminMultisigUpdateHex,
 	buildDefcon1ActionHex,
+	buildDefcon3ActionHex,
 	buildOperatorSetUpdateHex,
 	buildSequencerKeyUpdateHex,
 	buildVkUpdateHex,
+	type BuildActionHexResponse,
 } from '@/api/action-builder'
 import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
@@ -15,8 +17,15 @@ import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ApiResult } from '@/types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
+
+/** Every builder answers the same shape; a failure here must reach the signer, never a blank hex. */
+function unwrapActionHex(result: ApiResult<BuildActionHexResponse>): string {
+	if (!result.ok) throw new Error(result.error)
+	return result.data.actionHex
+}
 
 export function isSessionExpiredReauthError(error: unknown): boolean {
 	return String(error).includes(SESSION_EXPIRED_REAUTH_MESSAGE)
@@ -71,51 +80,55 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	}
 
 	async function buildActionHex(formData: CreateProposalFormValues): Promise<string> {
-		if (formData.actionType === 'signer_update') {
-			const threshold = Number(formData.threshold)
-			if (!Number.isInteger(threshold) || threshold < 1 || threshold > 255) {
-				throw new Error('Threshold must be an integer between 1 and 255')
+		// Exhaustive on purpose. This used to be an `if` chain whose final `else` built a VK update,
+		// so a missing arm did not fail to compile and did not fail loudly — it made the signer sign
+		// a vk_update sighash under another action's form. The `never` below is that tripwire.
+		switch (formData.actionType) {
+			case 'signer_update': {
+				const threshold = Number(formData.threshold)
+				if (!Number.isInteger(threshold) || threshold < 1 || threshold > 255) {
+					throw new Error('Threshold must be an integer between 1 and 255')
+				}
+				return unwrapActionHex(
+					await buildAdminMultisigUpdateHex({
+						role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin',
+						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
+						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
+						newThreshold: threshold,
+					}),
+				)
 			}
-			const hexResult = await buildAdminMultisigUpdateHex({
-				role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin',
-				addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
-				removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
-				newThreshold: threshold,
-			})
-			if (!hexResult.ok) throw new Error(hexResult.error)
-			return hexResult.data.actionHex
+			case 'sequencer_key_update':
+				return unwrapActionHex(
+					await buildSequencerKeyUpdateHex({ newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex) }),
+				)
+			case 'defcon_1':
+				return unwrapActionHex(await buildDefcon1ActionHex())
+			case 'defcon_3':
+				return unwrapActionHex(await buildDefcon3ActionHex())
+			case 'operator_set_update':
+				return unwrapActionHex(
+					await buildOperatorSetUpdateHex({
+						addOperatorKeys: formData.operatorsToAdd.map((r) => r.value.trim()).filter((k) => k.length > 0),
+						removeOperatorIndices: formData.operatorIndicesToRemove
+							.map((r) => r.value.trim())
+							.filter((v) => v.length > 0)
+							.map(Number),
+					}),
+				)
+			case 'vk_update':
+				return unwrapActionHex(
+					await buildVkUpdateHex({
+						authority: authorityFromRole(selectedRole),
+						typeId: VK_PREDICATE_TYPE_IDS[formData.vkTypeId],
+						conditionHex: formData.newVkHex.trim(),
+					}),
+				)
+			default: {
+				const unhandled: never = formData.actionType
+				throw new Error(`No action builder for ${String(unhandled)}`)
+			}
 		}
-		if (formData.actionType === 'sequencer_key_update') {
-			const hexResult = await buildSequencerKeyUpdateHex({
-				newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex),
-			})
-			if (!hexResult.ok) throw new Error(hexResult.error)
-			return hexResult.data.actionHex
-		}
-		if (formData.actionType === 'defcon_1') {
-			const hexResult = await buildDefcon1ActionHex()
-			if (!hexResult.ok) throw new Error(hexResult.error)
-			return hexResult.data.actionHex
-		}
-		if (formData.actionType === 'operator_set_update') {
-			const hexResult = await buildOperatorSetUpdateHex({
-				addOperatorKeys: formData.operatorsToAdd.map((r) => r.value.trim()).filter((k) => k.length > 0),
-				removeOperatorIndices: formData.operatorIndicesToRemove
-					.map((r) => r.value.trim())
-					.filter((v) => v.length > 0)
-					.map(Number),
-			})
-			if (!hexResult.ok) throw new Error(hexResult.error)
-			return hexResult.data.actionHex
-		}
-		const typeId = VK_PREDICATE_TYPE_IDS[formData.vkTypeId]
-		const hexResult = await buildVkUpdateHex({
-			authority: authorityFromRole(selectedRole),
-			typeId,
-			conditionHex: formData.newVkHex.trim(),
-		})
-		if (!hexResult.ok) throw new Error(hexResult.error)
-		return hexResult.data.actionHex
 	}
 
 	useEffect(() => {
