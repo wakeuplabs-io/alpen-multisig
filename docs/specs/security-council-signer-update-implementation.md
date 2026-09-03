@@ -89,7 +89,7 @@ and neither failure raises an error — see
 `extract_multisig_config_update` encodes at `:327-337` — "action variant does not match proposal
 authority" — stays true for the three self-rotating updates and stops being universal.
 
-**The target stops coming from the session.** `use-create-proposal.ts:80` casts the session authority
+**The target stops coming from the session.** `use-create-proposal.ts:94` casts the session authority
 into the builder's `role`, excluding `security_council` in the cast itself. Widening
 `api/action-builder.ts:6` is what makes the fourth value expressible; the doc comment at
 `desktop-app/src-tauri/src/domain/action.rs:112-113` is what has to stop claiming a role can only
@@ -101,10 +101,11 @@ Every phase: its own branch off `develop`, one atomic commit (never a commit tha
 before it), and the full [`AGENTS.md`](../../AGENTS.md) pre-commit CI checklist green before pushing.
 The phases are **sequential, not parallel**.
 
-**Phase 3 cannot start until V2's Phase 5 has merged.** It touches
-`desktop-app/src/domain/create-proposal/`, which V2 is editing for Defcon 3's create flow. Phases 1,
-2 and 4 do not overlap V2 at all — Phase 4 deliberately writes a new e2e file rather than extending
-`e2e_defcon_probe.rs`, which V2's Phase 7 will edit.
+**The one overlap with V2 is closed.** Phase 3 touches `desktop-app/src/domain/create-proposal/`,
+which V2 edited for Defcon 3's create flow; that shipped as V2's Phase 5 (#530), and V2's remaining
+phases — 6 (the queued lifecycle) and 7 (the cancel and its e2e) — do not edit that domain. Phases
+1, 2 and 4 do not overlap V2 at all — Phase 4 deliberately writes a new e2e file rather than
+extending `e2e_defcon_probe.rs`, which V2's Phase 7 will edit.
 
 ### Phase 1 — `council_signer_update` is a readable type, end to end
 
@@ -184,7 +185,7 @@ would otherwise be discovered on a signer's screen.
 
 **Also in this phase: the no-op update.** The validator requires one *row* in each of add and remove
 (`validators/signer-update.ts:6-11`), but blank rows are discarded downstream
-(`use-create-proposal.ts:81-82`), so an update that changes nothing is buildable today and would be
+(`use-create-proposal.ts:95-96`), so an update that changes nothing is buildable today and would be
 accepted on chain as a no-op. The rule belongs with the retarget because both are about what the
 validator compares against
 ([AC 3b](./security-council-signer-update.md#3b-the-update-must-be-a-real-change)). A threshold-only

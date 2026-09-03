@@ -169,7 +169,7 @@ with the same name and different answers is how the council reaches a wrong arm 
 **Rule:** which authority a multisig update modifies is decided by the action type the signer chose,
 and travels in the action hex. It is never inferred from the session.
 
-**Why:** today it is inferred. `use-create-proposal.ts:80` sends
+**Why:** today it is inferred. `use-create-proposal.ts:94` sends
 `role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin'` — a
 cast that is already untrue, because `selectedRole` can be `security_council`. Every authority
 shipped so far rotates only itself, so the session happened to be the right answer. It stops being
@@ -193,7 +193,7 @@ drive its validation, and render its Before/After preview are the **council's**,
 session's own config never reaches this form.
 
 **Why:** the create-proposal domain carries exactly one config, the session's — it reaches the schema
-as `currentMultisigSigners` (`create-proposal.schema.ts:62-66`), the validator context as one field
+as `currentMultisigSigners` (`create-proposal.schema.ts:69-73`), the validator context as one field
 (`validators/types.ts:6-10`), and the form and preview as `currentSigners`/`currentThreshold`. Two
 of `signer-update.ts`'s rules read it to make a decision: *"Signer already exists in the current set"*
 (`:98-111`) and `threshold <= resultingSignerCount` (`:113-157`). Against the wrong config both give
@@ -447,7 +447,7 @@ discarded, and whose threshold equals the council's current threshold
 
 Today's `signer_update` validator requires one *row* in each of add and remove
 (`validators/signer-update.ts:6-11`), but blank rows are discarded downstream
-(`use-create-proposal.ts:81-82`), so an update that changes nothing is currently buildable. It would
+(`use-create-proposal.ts:95-96`), so an update that changes nothing is currently buildable. It would
 be accepted on chain, consume a sequence number, and apply a no-op. A threshold-only change is a real
 change and stays allowed.
 
