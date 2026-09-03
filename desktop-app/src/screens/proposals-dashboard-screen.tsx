@@ -9,6 +9,7 @@ import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/prop
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE } from '@/lib/defcon-copy'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -107,11 +108,7 @@ export function ProposalsDashboardScreen() {
 		>
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
-				notice={
-					safeHarbourActivated ? (
-						<SafeHarbourNote>The bridge is in safe harbour. Another Defcon 1 does not change that.</SafeHarbourNote>
-					) : null
-				}
+				notice={safeHarbourActivated ? <SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote> : null}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}

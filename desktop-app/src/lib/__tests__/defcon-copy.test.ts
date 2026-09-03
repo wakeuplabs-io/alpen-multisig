@@ -8,7 +8,12 @@
 // regression: someone "deduplicating" the copy by collapsing the two levels onto one string.
 
 import assert from 'node:assert/strict'
-import { DEFCON_COPY, matchesDefconConfirmation, type DefconCopy } from '../defcon-copy.ts'
+import {
+	COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE,
+	DEFCON_COPY,
+	matchesDefconConfirmation,
+	type DefconCopy,
+} from '../defcon-copy.ts'
 
 const fields = Object.keys(DEFCON_COPY.defcon_1) as (keyof DefconCopy)[]
 assert.ok(fields.length > 0, 'the copy table must not be empty')
@@ -37,5 +42,15 @@ for (const level of ['defcon_1', 'defcon_3'] as const) {
 // satisfy the other's gate.
 assert.equal(matchesDefconConfirmation('defcon_3', 'DEFCON 1'), false, 'DEFCON 1 must not arm a Defcon 3')
 assert.equal(matchesDefconConfirmation('defcon_1', 'DEFCON 3'), false, 'DEFCON 3 must not arm a Defcon 1')
+
+// The dashboard banner is not a per-level note (AC 15): it must name both levers and never be
+// Defcon-1-only.
+assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE.includes('Defcon 1'), 'the dashboard note must name Defcon 1')
+assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE.includes('Defcon 3'), 'the dashboard note must name Defcon 3')
+assert.notEqual(
+	COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE,
+	DEFCON_COPY.defcon_1.safeHarbourNote,
+	'the dashboard note must not reuse the Defcon 1 form note',
+)
 
 console.log('defcon-copy: the two levels never share a string')

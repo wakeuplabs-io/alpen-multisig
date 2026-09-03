@@ -85,3 +85,7 @@ export function matchesDefconConfirmation(level: DefconLevel, input: string): bo
 export function defconLevelOf(actionType: string | null | undefined): DefconLevel | null {
 	return actionType === 'defcon_1' || actionType === 'defcon_3' ? actionType : null
 }
+
+/** Council dashboard only — not the create/sign form (AC 15). */
+export const COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE =
+	'The bridge is in safe harbour. Another Defcon 1 or Defcon 3 does not change that.'
