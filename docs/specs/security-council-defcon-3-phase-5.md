@@ -29,10 +29,10 @@ enactment logic — Phase 4 owns that. It writes **no signing-message code**: th
 resolve through the same Rust renderer the device signs over, and a second renderer is precisely the
 defect this phase must not introduce.
 
-It also does not touch [`broadcast-proposal-screen.tsx`](../../desktop-app/src/screens/broadcast-proposal-screen.tsx),
-whose safe-harbour note is keyed to `defcon_1` at lines 54 and 111. AC 15 speaks about the create
-form, so that gap does not block this phase — it is Phase 6 work, and it will be a one-line read of
-`DEFCON_COPY` once this phase lands.
+One thing it does that the build plan does not name: the broadcast screen's safe-harbour note was
+keyed to `defcon_1`, and a Defcon 3 is reachable there the moment this phase ships. Leaving it would
+mean the last screen before the commit and reveal fees are spent says nothing, so it reads its level
+from `DEFCON_COPY` like every other surface.
 
 ## 3. Spec traceability audit
 
@@ -151,6 +151,7 @@ No block count and no hour count appears anywhere: the delay is a live depth
 | `signCalloutBody` | `Signing this approves a delayed Safe Harbor sweep. Until it activates, the council can cancel it. From activation on it cannot be undone.` |
 | `safeHarbourNote` | `The bridge is already in safe harbour. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.` |
 | `signSafeHarbourNote` | `The bridge is already in safe harbour. Signing this does not change that — it waits out its full delay before changing nothing.` |
+| `broadcastSafeHarbourNote` | `The bridge is already in safe harbour. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.` |
 
 Defcon 1's fields keep their current wording verbatim, including the `Irreversible` callout title —
 this phase moves those strings, it does not rewrite them.
@@ -224,7 +225,7 @@ The honest substitute for the untested surfaces is the manual walk in §11.
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cd desktop-app && npm run format:check && npm run lint && npm run build && npm run test:unit
 git grep -n "e2e-defcon-1-confirm" desktop-app/          # still resolves
-git grep -cn "cannot be canceled" desktop-app/src/       # exactly the Defcon 1 copy, in one place
+git grep -ln "cannot be canceled" desktop-app/src/       # only lib/defcon-copy.ts
 ```
 
 Manual walk on regtest (`./scripts/local-stack.sh --clean`), the parts of the build plan's §5 this

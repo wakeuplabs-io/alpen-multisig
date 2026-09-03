@@ -30,6 +30,8 @@ export type DefconCopy = {
 	/** Shown only when the bridge is already in safe harbour. Told, never enforced. */
 	safeHarbourNote: string
 	signSafeHarbourNote: string
+	/** The last screen before the commit and reveal fees are spent. */
+	broadcastSafeHarbourNote: string
 }
 
 export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
@@ -46,6 +48,8 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 			'The bridge is already in safe harbour. Another Defcon 1 does not change that — it consumes a council sequence number, costs fees, and needs a full quorum. Create one only if you have reason to believe this state is wrong.',
 		signSafeHarbourNote:
 			'The bridge is already in safe harbour. Signing this does not change that — it consumes a council sequence number and needs a full quorum.',
+		broadcastSafeHarbourNote:
+			'The bridge is already in safe harbour. Sending this does not change that — it consumes a council sequence number and costs the commit and reveal fees.',
 	},
 	defcon_3: {
 		confirmation: 'DEFCON 3',
@@ -60,6 +64,8 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 			'The bridge is already in safe harbour. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.',
 		signSafeHarbourNote:
 			'The bridge is already in safe harbour. Signing this does not change that — it waits out its full delay before changing nothing.',
+		broadcastSafeHarbourNote:
+			'The bridge is already in safe harbour. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.',
 	},
 }
 
@@ -73,4 +79,9 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
  */
 export function matchesDefconConfirmation(level: DefconLevel, input: string): boolean {
 	return input.toUpperCase() === DEFCON_COPY[level].confirmation
+}
+
+/** Narrows an action type to a Defcon level, for the screens that hold one as loose data. */
+export function defconLevelOf(actionType: string | null | undefined): DefconLevel | null {
+	return actionType === 'defcon_1' || actionType === 'defcon_3' ? actionType : null
 }
