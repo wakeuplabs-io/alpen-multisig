@@ -41,8 +41,8 @@ them made the remaining generic machinery action-shaped rather than authority-sh
 |---|---|---|---|
 | 1 | `council_signer_update` is a readable type | AC 5; [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) (the Rust half) | `src-tauri`, `desktop-app/src/api` |
 | 2 | Enactment reads two roles | AC 7, AC 7a; [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | `orchestrator-be`, `src-tauri` |
-| 3 | The form targets the council | AC 1, 1a, 2, 3, 3a, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
-| 4 | The cancel and the e2e | AC 6, 8, 9, 10, 13 | `e2e-tests`, `desktop-app` |
+| 3 | The form targets the council | AC 1, 1a, 2, 3, 3a, 3b, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
+| 4 | The cancel and the e2e | AC 6, 7b, 8, 9, 10, 13 | `e2e-tests`, `desktop-app` |
 | 5 | Reserve — what the manual walk exposes | — | — |
 
 ## 3. Architecture
@@ -182,10 +182,19 @@ the device signs over. It gets one Rust tripwire: the rendered message names bot
 lines and **differs** from an administrator signer update's — an upstream change that collapsed them
 would otherwise be discovered on a signer's screen.
 
+**Also in this phase: the no-op update.** The validator requires one *row* in each of add and remove
+(`validators/signer-update.ts:6-11`), but blank rows are discarded downstream
+(`use-create-proposal.ts:81-82`), so an update that changes nothing is buildable today and would be
+accepted on chain as a no-op. The rule belongs with the retarget because both are about what the
+validator compares against
+([AC 3b](./security-council-signer-update.md#3b-the-update-must-be-a-real-change)). A threshold-only
+change stays allowed.
+
 **Tests.** The builder (build → decode → `StrataSecurityCouncilMultisig`); the signing-message
-tripwire; pure TS for the per-authority menu and its default; and the validator answering against a
+tripwire; pure TS for the per-authority menu and its default; the validator answering against a
 supplied signer set with a fixture where the council's and the administrator's sets disagree — which
-is the one property the retarget can break silently.
+is the one property the retarget can break silently; and the no-op refusal, with a threshold-only
+change as its counter-case.
 **Not tested:** the form component and the sign view. No DOM runner. The honest substitute is the
 manual walk, budgeted below.
 
@@ -206,6 +215,11 @@ The deliverable is `e2e-tests/tests/e2e_council_rotation.rs`, a **new file**, fo
   real chain.
 - **Cancelled path** — cancel inside the window, mine `depth`, assert the queue is empty **and the
   council's config is still unchanged**.
+- **Membership effect** — after the enacted path, submit a Defcon signed by a quorum of the *new*
+  council and assert it is accepted, then one carrying a removed member's signature and assert it is
+  not ([AC 7b](./security-council-signer-update.md#7b-the-new-council-can-act-and-the-removed-signers-cannot)).
+  A rotation only means something if it changes who can pull the emergency lever, and this is the
+  case §7.2 names as untested anywhere.
 
 This is also the first end-to-end exercise of tx type 15 anywhere, upstream included.
 

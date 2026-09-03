@@ -438,6 +438,19 @@ the administrator is not.
 **When** the signer enters a threshold greater than N
 **Then** the form refuses it, counting the council's resulting members and not the administrator's.
 
+### 3b. The update must be a real change
+
+**Given** a council signer update whose add and remove sets are both empty once blank rows are
+discarded, and whose threshold equals the council's current threshold
+**When** the signer reaches the sign step
+**Then** it is refused as producing no change.
+
+Today's `signer_update` validator requires one *row* in each of add and remove
+(`validators/signer-update.ts:6-11`), but blank rows are discarded downstream
+(`use-create-proposal.ts:81-82`), so an update that changes nothing is currently buildable. It would
+be accepted on chain, consume a sequence number, and apply a no-op. A threshold-only change is a real
+change and stays allowed.
+
 ### 4. The signing message is upstream's, with its details block
 
 **Given** a council signer update carrying one added member and threshold 2, at sequence 7
@@ -482,6 +495,17 @@ removed keys are absent, the threshold matches, and the sequence-number term is 
 
 This is the test that fails if a future refactor collapses the two roles back into one, which is the
 shape the code had before this slice.
+
+### 7b. The new council can act and the removed signers cannot
+
+**Given** an enacted council signer update that removed one member and added another
+**When** a Defcon action is submitted afterwards
+**Then** it verifies against the new council: a quorum drawn from the new set is accepted, and a
+signature from a removed member no longer counts toward it.
+
+This is the case [`security-council.md` §7.2](./security-council.md#72-coverage-upstream-does-not-have)
+names as untested anywhere, upstream included — the rotation is only meaningful if it changes who can
+pull the emergency lever.
 
 ### 8. A cancelled rotation never applies
 
