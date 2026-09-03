@@ -2,12 +2,12 @@ import { useEffect } from 'react'
 import { useFormContext, useWatch } from 'react-hook-form'
 import { AlertTriangleIcon } from '@/assets/icons'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { DEFCON_COPY } from '@/lib/defcon-copy'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useDefcon1ActionHex } from '../hooks/use-defcon-1-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
-import { DEFCON_1_CONFIRMATION } from '../model/validators/defcon-1'
 
 const CONFIRM_INPUT_ID = 'defcon-1-confirm'
 const MESSAGE_LABEL_ID = 'defcon-1-signing-message-label'
@@ -98,7 +98,8 @@ export function Defcon1FormFields() {
 
 			<div>
 				<label htmlFor={CONFIRM_INPUT_ID} className="text-body font-medium text-emphasis">
-					Type <span className="font-mono font-semibold text-danger-deep">{DEFCON_1_CONFIRMATION}</span> to confirm
+					Type <span className="font-mono font-semibold text-danger-deep">{DEFCON_COPY.defcon_1.confirmation}</span> to
+					confirm
 				</label>
 				<input
 					id={CONFIRM_INPUT_ID}
