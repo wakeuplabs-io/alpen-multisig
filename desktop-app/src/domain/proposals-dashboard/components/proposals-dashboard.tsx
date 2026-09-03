@@ -12,12 +12,18 @@ import {
 	SignaturePenMutedIcon,
 	UndoIcon,
 } from '@/assets/icons'
+import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { lastChangeLabel } from '@/lib/last-change-label'
 import { changedNothingActionIds } from '@/lib/safe-harbour-redundancy'
 import { buildProposalTitle } from '@/lib/proposal-title'
-import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
+import {
+	PROPOSAL_STATUS_STYLE,
+	proposalDisplayStatus,
+	showsActivationCountdown,
+	type DisplayStatus,
+} from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
 const PAGE_SIZE = 10
@@ -29,6 +35,7 @@ type Props = {
 	/** Rendered above the header, inside the same column. Nothing is reserved when it is absent. */
 	notice?: ReactNode
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	executedOrCanceled: Proposal[]
@@ -48,6 +55,7 @@ export function ProposalsDashboard({
 	authorityLabel,
 	notice,
 	signerPubkey,
+	currentBlockHeight,
 	quorumReached,
 	pending,
 	executedOrCanceled,
@@ -181,6 +189,7 @@ export function ProposalsDashboard({
 							quorumReached={quorumReached}
 							pending={pending}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
 							onViewProposal={onViewProposal}
@@ -194,6 +203,7 @@ export function ProposalsDashboard({
 							page={pastPage}
 							totalPages={totalPastPages}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
 							onPageChange={setPastPage}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
@@ -211,6 +221,7 @@ function PendingTab({
 	quorumReached,
 	pending,
 	signerPubkey,
+	currentBlockHeight,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -219,6 +230,7 @@ function PendingTab({
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -247,6 +259,7 @@ function PendingTab({
 					groupIcon={<ClockIcon width={14} height={14} className="block text-[#6b7280]" />}
 					proposals={pending}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -260,6 +273,7 @@ function PendingTab({
 					groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
 					proposals={quorumReached}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -276,6 +290,7 @@ function PastTab({
 	page,
 	totalPages,
 	signerPubkey,
+	currentBlockHeight,
 	changedNothing,
 	onPageChange,
 	onSignProposal,
@@ -288,6 +303,7 @@ function PastTab({
 	page: number
 	totalPages: number
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	/** Computed over every past proposal, not this page: pagination must not move the answer. */
 	changedNothing: ReadonlySet<string>
 	onPageChange: (page: number) => void
@@ -315,6 +331,7 @@ function PastTab({
 					key={proposal.actionId}
 					proposal={proposal}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
 					changedNothing={changedNothing.has(proposal.actionId)}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
@@ -353,6 +370,7 @@ function ProposalGroup({
 	groupIcon,
 	proposals,
 	signerPubkey,
+	currentBlockHeight,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -363,6 +381,7 @@ function ProposalGroup({
 	groupIcon: ReactNode
 	proposals: Proposal[]
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -400,6 +419,7 @@ function ProposalGroup({
 							key={proposal.actionId}
 							proposal={proposal}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
 							// Only an enacted proposal can have changed nothing, and this group never holds one.
 							changedNothing={false}
 							onSignProposal={onSignProposal}
@@ -417,6 +437,7 @@ function ProposalGroup({
 function ProposalCard({
 	proposal,
 	signerPubkey,
+	currentBlockHeight,
 	changedNothing,
 	onSignProposal,
 	onBroadcastProposal,
@@ -425,6 +446,7 @@ function ProposalCard({
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	/** Enacted, but the safe harbour was already active — see `changedNothingActionIds`. */
 	changedNothing: boolean
 	onSignProposal: (actionId: string) => void
@@ -577,7 +599,22 @@ function ProposalCard({
 							<p className="m-0 text-body font-medium text-[#0f9d7a]">
 								{sendState.kind === 'confirmed' ? sendState.label : ''}
 							</p>
-							<p className="m-0 mt-1 text-label text-[#6b7280]">Refresh to check whether the ASM has applied it.</p>
+							{/* The tip has to be known as well: this countdown replaces the refresh line, and one
+							    that can only say "activation in block N" tells a signer neither how far away that
+							    is nor what to do next. The detail screen needs no such term — there the countdown
+							    is an extra block and displaces nothing. */}
+							{proposal.activationHeight !== null &&
+							currentBlockHeight !== null &&
+							showsActivationCountdown(proposal) ? (
+								<div className="mt-1">
+									<ActivationCountdown
+										activationHeight={proposal.activationHeight}
+										currentHeight={currentBlockHeight}
+									/>
+								</div>
+							) : (
+								<p className="m-0 mt-1 text-label text-[#6b7280]">Refresh to check whether the ASM has applied it.</p>
+							)}
 						</div>
 						{canCancel && proposal.cancelProposal === null && (
 							<button
