@@ -6,6 +6,7 @@ import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
+import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
@@ -25,6 +26,7 @@ export function ProposalsDashboardScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const panel = useWalletPanelData()
+	const currentBlockHeight = useBlockHeight()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
@@ -108,6 +110,7 @@ export function ProposalsDashboardScreen() {
 		>
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
+				currentBlockHeight={currentBlockHeight}
 				notice={safeHarbourActivated ? <SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote> : null}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}

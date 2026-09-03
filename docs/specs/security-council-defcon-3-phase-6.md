@@ -171,15 +171,26 @@ only because `ProposalCard` is shared. Written down so a reviewer reads it as sy
 Inside the card, the `awaitingEnactment` branch becomes:
 
 ```tsx
-{proposal.activationHeight !== null && showsActivationCountdown(proposal) ? (
+{proposal.activationHeight !== null && currentBlockHeight !== null && showsActivationCountdown(proposal) ? (
 	<ActivationCountdown activationHeight={proposal.activationHeight} currentHeight={currentBlockHeight} />
 ) : (
 	<p className="…">Refresh to check whether the ASM has applied it.</p>
 )}
 ```
 
-The condition is character-for-character the detail screen's — one shared predicate, plus the
-null-check that narrows `activationHeight` to the `number` the prop requires.
+The rule is the shared predicate, plus the null-check that narrows `activationHeight` to the
+`number` the prop requires — and **one term the detail screen does not carry**.
+
+`currentBlockHeight !== null` is there because this countdown *displaces* something.
+`useBlockHeight` answers `null` until its first poll returns and **forever** if
+`getBitcoinBlockHeight` keeps failing — a misconfigured `btc_rpc_user`, a node that is down, the
+offline route — and it surfaces no error. `ActivationCountdown` then renders the activation block
+alone: no current block, no remaining time. A signer would be told *"activation in block 812,345"*
+with no way to know whether that is one block away or a thousand, **and** would have lost the
+sentence telling them what to do next. Trading a working sentence for a countdown that counts
+nothing is a worse card than the one this phase started with. The detail and cancel screens need no
+such term: there the countdown is an extra block that displaces nothing, so a degraded one still
+adds the activation height.
 
 **The countdown replaces the refresh line rather than joining it.** While blocks remain, *"Refresh to
 check"* is advice that cannot pay off, and the countdown answers the question it was standing in for.
@@ -241,13 +252,17 @@ its own: what makes these four claims worth their lines is the left column.
 `@testing-library/react` is not installed (`BLOCKED_BY_DEPENDENCY`) — so it follows
 `screens/__tests__/broadcast-screens-wiring.test.ts`: read the source, assert the wiring. It is
 written against **files**, not components, because `ProposalCard` and `ProposalsDashboard` live in
-one file and no test here parses TSX. Three assertions, no phrasing:
+one file and no test here parses TSX. Four assertions, no phrasing:
 
 - `proposals-dashboard.tsx` contains `showsActivationCountdown(` — the card must not re-derive the
   condition, which is the exact defect §3.2 removes from the other screen;
 - `proposals-dashboard.tsx` contains `<ActivationCountdown` and `currentHeight={currentBlockHeight}`;
-- `proposals-dashboard.tsx` does **not** contain `useBlockHeight`, and
-  `proposals-dashboard-screen.tsx` **does** — one poller for the screen, not one per row.
+- `proposals-dashboard.tsx` gates on `currentBlockHeight !== null` too — an unknown tip keeps the
+  refresh line rather than showing a countdown that counts nothing;
+- `proposals-dashboard.tsx` does **not** call `useBlockHeight(`, and
+  `proposals-dashboard-screen.tsx` **does** — one poller for the screen, not one per row. Matched as
+  a **call** and not as a bare identifier: §6 recommends writing down *why* the hook is not called
+  there, and a comment saying so must not turn this red.
 
 **Not tested:** the rendered card, the detail screen and the cancel screen, for the reason above; the
 cancel affordance, which §4 closes by evidence against tests that already exist; anything backend —
@@ -297,6 +312,14 @@ pinning it afterwards would be a commit that justifies the one before it.
   retried, so a transient RPC failure leaves it `null` for the life of the row. Such a Defcon 3 keeps
   the refresh line and shows no countdown — exactly what a depth-`0` action shows. Pre-existing debt
   (build plan §6); this phase widens where it is observable without changing it.
+- **The block-height poll now runs on the screen a signer leaves open all day.**
+  `get_bitcoin_block_height` builds a fresh `HttpBitcoinRpcClient` per call
+  (`src-tauri/src/commands/asm_state.rs:126`), which was cheap on the detail and cancel screens
+  because they are visited briefly. On the dashboard it is a new client every 15 s, for every
+  authority, with no back-off and no UI feedback when Bitcoin RPC is unreachable. Pre-existing and
+  **deliberately not fixed here**: the fix belongs in `src-tauri`, and `git diff` proving this phase
+  is desktop-only is one of its two structural checks (§10). Recorded as debt for whichever phase
+  next touches that command.
 - **No backend, no `src-tauri`, no new dependency, no new component, no new predicate.**
 
 ## 10. Verification
