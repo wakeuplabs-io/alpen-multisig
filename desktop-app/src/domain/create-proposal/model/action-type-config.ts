@@ -47,7 +47,9 @@ const ACTION_TYPES_BY_AUTHORITY: Record<string, ActionType[]> = {
 	strata_admin: ['signer_update', 'vk_update', 'operator_set_update'],
 	sequencer_manager: ['signer_update', 'sequencer_key_update'],
 	alpen_admin: ['signer_update', 'vk_update'],
-	security_council: ['defcon_1'],
+	// Defcon 1 first, and therefore the council's default selection: the immediate lever is the one
+	// an emergency reaches for, and a default is a decision, not an accident.
+	security_council: ['defcon_1', 'defcon_3'],
 }
 
 /** The action type's display title — the same string the selection card carries. */

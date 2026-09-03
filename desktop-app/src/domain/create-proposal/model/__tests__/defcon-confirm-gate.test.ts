@@ -73,7 +73,7 @@ for (const [actionType, other] of [
 // the first entry is the default selection, and Defcon 1 being the council's default is deliberate.
 assert.deepEqual(
 	getActionTypeOptions('security_council').map((option) => option.actionType),
-	['defcon_1'],
+	['defcon_1', 'defcon_3'],
 )
 
 // AC 1a — no other authority is offered either lever. `getActionTypeOptions` falls back to the
