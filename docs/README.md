@@ -42,6 +42,8 @@ flowchart LR
 | Security Council — Defcon 1 build plan (V1 phases) | [`specs/security-council-defcon-implementation.md`](./specs/security-council-defcon-implementation.md) | Current |
 | Security Council — Defcon 3 functional contract (V2, includes the cancel) | [`specs/security-council-defcon-3.md`](./specs/security-council-defcon-3.md) | Current |
 | Security Council — Defcon 3 build plan (V2 phases) | [`specs/security-council-defcon-3-implementation.md`](./specs/security-council-defcon-3-implementation.md) | Current |
+| Security Council — signer update functional contract (V3) | [`specs/security-council-signer-update.md`](./specs/security-council-signer-update.md) | Current |
+| Security Council — signer update build plan (V3 phases) | [`specs/security-council-signer-update-implementation.md`](./specs/security-council-signer-update-implementation.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |
