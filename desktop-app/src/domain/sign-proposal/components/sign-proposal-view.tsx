@@ -1,9 +1,11 @@
-import { AlertTriangleIcon, PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
+import { PencilWhiteIcon, UsbSessionDefaultIcon } from '@/assets/icons'
 import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
@@ -118,31 +120,21 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
-function Defcon1Details() {
+function DefconDetails({ level }: { level: DefconLevel }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and
-	// the sentence below is written in the future tense, which is wrong once the harbour is up.
+	// the sentences below are written in the future tense, which is wrong once the harbour is up.
 	const safeHarbourActivated = useSafeHarbourActivated()
 
 	return (
 		<>
 			{safeHarbourActivated && (
 				<div className="mt-5">
-					<SafeHarbourNote>
-						The bridge is already in safe harbour. Signing this does not change that — it consumes a council sequence
-						number and needs a full quorum.
-					</SafeHarbourNote>
+					<SafeHarbourNote>{DEFCON_COPY[level].signSafeHarbourNote}</SafeHarbourNote>
 				</div>
 			)}
 
-			<div className="mt-5 rounded-lg border border-danger-border bg-danger-surface p-3.5">
-				<p className="m-0 flex items-center gap-2 text-body font-semibold text-danger-deep">
-					<AlertTriangleIcon width={15} height={15} className="shrink-0 text-danger" />
-					Irreversible
-				</p>
-				<p className="m-0 mt-2 text-label text-danger-deep">
-					DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is
-					confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.
-				</p>
+			<div className="mt-5">
+				<DefconCallout level={level} variant="sign" />
 			</div>
 		</>
 	)
@@ -193,8 +185,8 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
-			) : decodedAction.kind === 'defcon_1' ? (
-				<Defcon1Details />
+			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
+				<DefconDetails level={decodedAction.kind} />
 			) : decodedAction.kind === 'unknown' ? (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
 			) : null}

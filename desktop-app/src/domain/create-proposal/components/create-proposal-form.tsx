@@ -20,7 +20,7 @@ import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '..
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
-import { Defcon1FormFields } from './defcon-1-form-fields'
+import { DefconFormFields } from './defcon-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
@@ -370,7 +370,7 @@ export function CreateProposalForm({
 							</div>
 
 							{actionType === 'defcon_1' ? (
-								<Defcon1FormFields />
+								<DefconFormFields level={actionType} />
 							) : actionType === 'signer_update' ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
