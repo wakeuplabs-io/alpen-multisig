@@ -39,20 +39,28 @@ function issuesOn(
 	return result.error.issues.filter((issue) => issue.path[0] === field).length
 }
 
-// AC 5 — each level's gate accepts its own string...
+// AC 5 — the same accepted/rejected list as the pure matcher in defcon-copy.test.ts, but
+// through the schema: each level accepts its own string (and the case variants), refuses the
+// near-misses the Edge Cases name, and a trim() or a different matcher inside validateDefcon
+// would fail here, not only in the pure-function suite.
 for (const level of ['defcon_1', 'defcon_3'] as const) {
-	assert.equal(
-		issuesOn('defconConfirm', {
-			authority: 'security_council',
-			actionType: level,
-			defconConfirm: DEFCON_COPY[level].confirmation,
-		}),
-		0,
-		`${DEFCON_COPY[level].confirmation} must arm ${level}`,
-	)
+	const confirmation = DEFCON_COPY[level].confirmation
+	for (const accepted of [confirmation, confirmation.toLowerCase(), 'Defcon' + confirmation.slice(6)]) {
+		assert.equal(
+			issuesOn('defconConfirm', { authority: 'security_council', actionType: level, defconConfirm: accepted }),
+			0,
+			`${level} must accept ${JSON.stringify(accepted)} through the schema`,
+		)
+	}
+	for (const rejected of [confirmation.replace(' ', ''), `${confirmation} `, ` ${confirmation}`, 'DEFCON', '']) {
+		assert.ok(
+			issuesOn('defconConfirm', { authority: 'security_council', actionType: level, defconConfirm: rejected }) > 0,
+			`${level} must reject ${JSON.stringify(rejected)} through the schema`,
+		)
+	}
 }
 
-// ...and refuses the other's. Typing DEFCON 1 into a Defcon 3 draft leaves the CTA disabled, and
+// AC 5 — mutual exclusion: typing DEFCON 1 into a Defcon 3 draft leaves the CTA disabled, and
 // the reverse. This is the property a shared form component could break silently: it holds even if
 // the matcher is correct, because it also proves each validator entry carries its own level.
 for (const [actionType, other] of [

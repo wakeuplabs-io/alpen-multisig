@@ -48,7 +48,7 @@ from `DEFCON_COPY` like every other surface.
 
 The two Defcon variants differ in exactly three things: the confirmation string, the destructive
 paragraph, and the safe-harbour note's wording. Everything else in
-[`defcon-1-form-fields.tsx`](../../desktop-app/src/domain/create-proposal/components/defcon-1-form-fields.tsx)
+[`defcon-form-fields.tsx`](../../desktop-app/src/domain/create-proposal/components/defcon-form-fields.tsx)
 is the safety-critical half — the action-hex resolve, the `useDeviceSigningMessage` call, the mirror
 of the resolved message into `defconMessage`, and the CTA gate that depends on it. Duplicating the
 component forks that wiring, and a fork is a place where one copy gets fixed and the other does not.
@@ -109,7 +109,7 @@ Both are introduced *by* the parameterization, and both are closed in code rathe
 
 ### 5.1 A stale action hex under the other level's heading
 
-[`use-defcon-1-action-hex.ts`](../../desktop-app/src/domain/create-proposal/hooks/use-defcon-1-action-hex.ts)
+[`use-defcon-action-hex.ts`](../../desktop-app/src/domain/create-proposal/hooks/use-defcon-action-hex.ts)
 never resets its state: the effect has empty deps and only ever writes in the `.then()`. Parameterized
 to `useDefconActionHex(level)` with `level` in the deps, it keeps the **previous level's hex** for the
 duration of the refetch. The pairing guard in
@@ -187,7 +187,7 @@ to produce — intact until the flow is complete behind it.
 | 1 | `src-tauri` `action_builder.rs` | `build_defcon_3_action_hex` round-trips to `DecodedAction::Defcon3` (a **rewrite** of `decode_defcon_3_names_the_action`, whose "no builder command yet" comment stops being true) |
 | 2 | `src-tauri` `signing.rs` | AC 4 — at one and the same `seqno`, the Defcon 3 message is non-empty and differs from Defcon 1's |
 | 3 | `orchestrator-be` `asm_role_membership.rs` | AC 2 — a Defcon 3 is authorized for the council and refused for every other role, naming the role it requires |
-| 4 | TS `defcon-confirm-gate.test.ts` | AC 5 — per level: the three case variants accepted, and the near-misses the Edge Cases name (`defcon1`, trailing space, leading space, `DEFCON`, empty) rejected |
+| 4 | TS `defcon-confirm-gate.test.ts` | AC 5 — per level, through the schema: case variants accepted; near-misses rejected (`defcon1`, trailing space, leading space, `DEFCON`, empty). The pure matcher stays in `defcon-copy.test.ts` |
 | 5 | TS `defcon-confirm-gate.test.ts` | AC 5 — mutual exclusion, **through the schema**: `DEFCON 1` typed into a `defcon_3` draft raises a `defconConfirm` issue, and vice versa |
 | 6 | TS `defcon-confirm-gate.test.ts` | AC 1 / 1a — `getActionTypeOptions('security_council')` is `['defcon_1', 'defcon_3']` **in that order** (the order is the default), no other authority is offered either, including the unknown-authority fallback, and the schema itself refuses a `defcon_3` drafted under another authority |
 | 7 | TS `defcon-copy.test.ts` | Constraint 5 — every Defcon 3 field differs from its Defcon 1 counterpart |

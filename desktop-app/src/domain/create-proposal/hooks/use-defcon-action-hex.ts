@@ -25,7 +25,18 @@ export function useDefconActionHex(level: DefconLevel): DefconActionHex {
 	useEffect(() => {
 		let cancelled = false
 		setState({ actionHex: null, error: null })
-		const build = level === 'defcon_1' ? buildDefcon1ActionHex : buildDefcon3ActionHex
+		const build = (() => {
+			switch (level) {
+				case 'defcon_1':
+					return buildDefcon1ActionHex
+				case 'defcon_3':
+					return buildDefcon3ActionHex
+				default: {
+					const _exhaustive: never = level
+					return _exhaustive
+				}
+			}
+		})()
 		void build().then((result) => {
 			if (cancelled) return
 			setState(result.ok ? { actionHex: result.data.actionHex, error: null } : { actionHex: null, error: result.error })
