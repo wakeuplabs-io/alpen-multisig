@@ -234,11 +234,13 @@ The DTO gains `Cancel { target_update_id: u32, target_action_hex: String }`, the
 (`commands/action_builder.rs:298-307`), the doc comment says "seq_no", and the two functions only
 read as inverses once the name is honest.
 
-**Deliberately not in this commit:** a `CancelActionDetails` panel on the sign view. The ternary
-chain at `sign-proposal-view.tsx:184-192` ends in `null`, so a cancel renders no details block — the
-header names it *Cancel* and the device still shows the four canonical lines, which come from the
-Rust renderer over the raw hex. If the manual walk says the empty panel confuses anyone, that is
-Phase 8.
+**This needs a `CancelActionDetails` arm, and the first draft of this spec got that wrong.** It
+reasoned that the ternary chain at `sign-proposal-view.tsx:184-192` ending in `null` merely left a
+cancel with less on screen than an update. It is worse than that: today a cancel decodes to
+`unknown` and renders `UnknownActionDetails`, so teaching it a kind of its own **removes** the only
+payload the signer sees, under copy that tells them to *"review the action details above"*. The
+manual walk caught it. The arm shows the queue `UpdateId` and the wrapped update's hex — strictly
+more than the raw cancel hex it replaces.
 
 ## 7. The cancel screen names what it is cancelling
 
@@ -285,7 +287,7 @@ every authority, which is a fix for them too.
   cheap half of that coverage.
 - **Any source-text wiring test.** Nothing here threads a prop.
 
-## 9. Migration — six commits, each atomic
+## 9. Migration — seven commits, each atomic
 
 | # | Commit | Why it is safe on its own |
 |---|---|---|
@@ -295,6 +297,7 @@ every authority, which is a fix for them too.
 | 3 | A cancel decodes end to end, plus the `target_update_id` rename | Emitter and acceptor **must** land together: `decodedActionSchema` is a closed `z.discriminatedUnion`, so a Tauri emitting `kind: 'cancel'` against a schema that rejects it fails the parse — Phase 1's argument, restated |
 | 4 | `CancelTargetSummary` names its target | Swaps a hand-rolled fallback for two functions the repo already tests; nothing else reads the component |
 | 5 | Close-out: the `Status:` headers, the stage and slice boards, row 7 ✅ | Docs only; by Phase 6 precedent this is the commit that ships the phase |
+| 6 | `CancelActionDetails` on the sign view | Found by the manual walk: commit 3 removed the panel a cancel used to get through `UnknownActionDetails`. A regression of this phase, fixed inside it |
 
 Commit 1 precedes commit 2 for Phase 6's reason: the seam is opened first, so the test that uses it
 does not double as the justification for changing a shipped helper. Commit 3 is independent of 1–2;
@@ -309,8 +312,9 @@ it is ordered after so the phase's stated deliverable lands first.
   Mechanical and compiler-checked.
 - **`decode_action_hex` returns a new kind for hexes that previously answered `unknown`.** Consumers:
   `use-decoded-proposal.ts` (reads only `multisig_update`, unchanged), `use-manual-proposal.ts`
-  (**this is the fix**), and `sign-proposal-view.tsx` (falls through to `null`, no details panel). No
-  path regresses; one unblocks.
+  (**this is the fix**), and `sign-proposal-view.tsx`, which gains a `cancel` arm in commit 6 —
+  without it the new kind would have silently removed the raw-hex panel a cancel used to get. One
+  path unblocks; none regresses.
 - **`inferProposalTypeLabel` gains an arm** read by the dashboard, the detail screen and the sign
   header — but only for `actionType === 'cancel'`, which orchestrator-backed cancels already reach
   through `kind === 'cancel'` on the line above. No existing row changes label.
@@ -358,7 +362,9 @@ unchanged.
    `Proposal #N - Defcon 3` — not a bare `Proposal #N`.
 3. Sign and broadcast the cancel inside the window: the target reads **Canceled**, nothing reads
    *Enacted*, the harbour stays off.
-4. Paste the cancel's `actionHex` into `/manual` with the council authority and its seqno: **it
+4. Sign the cancel as the second signer: the sign view names it *Cancel* **and shows the update it
+   cancels**, so the copy telling the signer to review the action details above points at something.
+5. Paste the cancel's `actionHex` into `/manual` with the council authority and its seqno: **it
    imports** — this is the AC 14 regression — the header names it *Cancel*, and it signs and
    broadcasts.
-5. A Defcon 1 created in the same session still offers no countdown and no cancel affordance.
+6. A Defcon 1 created in the same session still offers no countdown and no cancel affordance.

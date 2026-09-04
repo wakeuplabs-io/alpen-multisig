@@ -315,11 +315,6 @@ End to end, once all seven land, on regtest with the local stack
   read **live at reveal-confirmation time**, so changing `confirmation_depths.defcon3` while an
   update is queued leaves a height the chain no longer agrees with. Pre-existing — the activation
   countdown already trusts the same field.
-- **A cancel renders no details panel on the sign view.** Phase 7 taught `decode_action_hex` to
-  answer `Cancel`, but `sign-proposal-view.tsx:184-192` has no arm for it and falls through to
-  `null`. The header names it *Cancel* and the device still shows the four canonical lines, which
-  come from the Rust renderer over the raw hex, so nothing is misleading — there is simply less on
-  the screen than for an update. Phase 8's if the manual walk raises it.
 - **`manual-sign-collect.tsx:56` hardcodes `kind: 'update'`** on the offline route's synthetic
   proposal, so a cancel is a cancel there only by its `actionType`. Phase 7 fixed the consequence at
   the pure-label layer (`inferProposalTypeLabel` gained an `actionType === 'cancel'` arm, which is
