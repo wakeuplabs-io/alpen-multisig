@@ -291,17 +291,13 @@ End to end, once all seven land, on regtest with the local stack
 
 ## 6. Known debt this slice does not take
 
-- **`scripts/asm-params.example.json` no longer deserializes against the current pin.**
-  `ConfirmationDepths` has no `serde(default)` and the example omits `defcon3`,
-  `safe_harbour_address_update` and `strata_security_council_multisig_update`. Found while writing
-  the contract; unrelated to Defcon 3 behaviour, and a phase that touches params should pick it up.
-- **An `activation_height` that fails to compute is never retried.**
-  `compute_and_store_activation_height` runs once, non-fatally, on the transition to
-  `RevealConfirmed`; `confirm_reveal_if_mined` returns early afterwards, so a transient Bitcoin or
-  ASM failure leaves the height null for the life of the row. `reconcile_update_id_in_queue` is the
-  shape a repair would take. Found in Phase 2, which is the first code to read the field for a
-  decision rather than for display. The migration that added the column also has no backfill, so
-  pre-2026-05-20 rows are null permanently.
+Swept on `chore/sweep-recorded-debt` (not repeated here): shared HTTP client across RPC calls in
+both processes; `reconcile_reveal_confirmed_facts` on proposal GET; `scripts/asm-params.example.json`
+deserializes against the pin (with a substituted-placeholder test); honest `kind` on the offline
+route (Phase 7's compensating `actionType === 'cancel'` label arm removed).
+
+Still open — each wants its own slice:
+
 - **A proposal that enacted but reads `Superseded` drops out of the redundancy answer.**
   [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4.1 records a residual
   ambiguity: a proposal that enacted while nothing was reading, and was then jumped past by a later
@@ -315,13 +311,13 @@ End to end, once all seven land, on regtest with the local stack
   read **live at reveal-confirmation time**, so changing `confirmation_depths.defcon3` while an
   update is queued leaves a height the chain no longer agrees with. Pre-existing — the activation
   countdown already trusts the same field.
-- **`manual-sign-collect.tsx:56` hardcodes `kind: 'update'`** on the offline route's synthetic
-  proposal, so a cancel is a cancel there only by its `actionType`. Phase 7 fixed the consequence at
-  the pure-label layer (`inferProposalTypeLabel` gained an `actionType === 'cancel'` arm, which is
-  testable) rather than in the component, which is not.
 - **N+1 `strata_asm_getStatus` reads in the reconciliation loop**, recorded at V1 close-out. Phase 3
   adds a per-request depth read and is the natural place to revisit it, but hoisting the whole loop
   requires restructuring mocks keyed by RPC URL and is not this slice's to carry.
+- **Cancelability has no third wire state when the ASM is down.** Listing succeeds and the
+  affordance collapses to "no" ([phase 3](./security-council-defcon-3-phase-3.md),
+  [phase 6](./security-council-defcon-3-phase-6.md)); distinguishing unknown from false needs a DTO
+  change of its own.
 
 ## 7. Close-out
 

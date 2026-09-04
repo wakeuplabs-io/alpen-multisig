@@ -197,8 +197,13 @@ pub async fn get_proposal(
         &action_id,
     )
     .await?;
-    proposals::reconcile_update_id_in_queue(state.repo.as_ref(), &state.asm_rpc_url, &action_id)
-        .await?;
+    proposals::reconcile_reveal_confirmed_facts(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        state.btc_client.as_ref(),
+        &action_id,
+    )
+    .await?;
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;

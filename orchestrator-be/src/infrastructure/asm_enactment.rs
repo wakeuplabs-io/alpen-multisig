@@ -17,7 +17,7 @@ use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, rpc_timeout};
+use crate::infrastructure::{action_codec, http_client, rpc_timeout};
 
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
@@ -454,7 +454,7 @@ fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = reqwest::Client::new();
+    let client = http_client::shared();
     let payload = json!({
         "jsonrpc": "2.0",
         "id": 1,

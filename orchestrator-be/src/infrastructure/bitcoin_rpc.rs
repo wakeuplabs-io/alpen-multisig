@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::error::AppError;
-use crate::infrastructure::rpc_timeout;
+use crate::infrastructure::{http_client, rpc_timeout};
 
 #[async_trait]
 pub(crate) trait BitcoinRpcClient: Send + Sync {
@@ -34,7 +34,7 @@ impl HttpBitcoinRpcClient {
             url: base_url.trim_end_matches('/').to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
-            client: reqwest::Client::new(),
+            client: http_client::shared(),
         }
     }
 
