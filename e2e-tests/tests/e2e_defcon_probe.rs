@@ -99,7 +99,7 @@ async fn run_defcon1(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
     let seqno_before = council_last_seqno(&harness)?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-    submit_council_action(&harness, fixture, &admin_section, &action).await?;
+    let _ = submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
@@ -137,7 +137,7 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         .await?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-    submit_council_action(&harness, fixture, &admin_section, &action).await?;
+    let _ = submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
@@ -182,17 +182,21 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Sign `action` with both security-council keys and drive it through commit → reveal,
-/// returning once the reveal block has been processed by the ASM worker.
+/// Sign `action` at `seq_no` with both security-council keys, drive it through commit → reveal,
+/// and return the height of the block the reveal landed in.
+///
+/// The height is returned rather than counted by the caller: this function mines one block for the
+/// commit and then up to ten until the reveal confirms, so any arithmetic done from a caller's
+/// guess about the tip is a race.
 async fn submit_council_action(
     harness: &AsmTestHarness,
     fixture: &SignerUpdateEnactedFixture,
     admin_section: &serde_json::Value,
     action: &MultisigAction,
-) -> anyhow::Result<()> {
+    seq_no: u64,
+) -> anyhow::Result<u64> {
     let passphrase = fixture.passphrase;
     let path = format!("{}/0", fixture.derivation_path_prefix);
-    let seq_no = fixture.seq_no;
 
     // The fixture gives the council the same two keys as the administrator, so the demo
     // mnemonic pair can reach the council threshold of 2.
@@ -294,9 +298,10 @@ async fn submit_council_action(
         1_000,
     ))?;
 
-    let _ = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_block_hash = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_height = harness.client.get_block_height(&reveal_block_hash).await?;
 
-    Ok(())
+    Ok(reveal_height)
 }
 
 fn bridge_safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
