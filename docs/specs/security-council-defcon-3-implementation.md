@@ -7,7 +7,7 @@ for *what* V2 must do. This document is only *how* it gets built, and never over
 
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E13 and US-E14.
 
-**Status:** Phases 1–6 shipped. Seven phases planned, plus one held in reserve.
+**Status:** All seven phases shipped. Phase 8 is held in reserve for what the manual walk exposes.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -44,7 +44,7 @@ variant, two inherited debts, and the cancel.
 | 4 ✅ | Defcon 3 enactment detection — [phase spec](./security-council-defcon-3-phase-4.md) | AC 6, AC 8, AC 12; [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality) and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `orchestrator-be` |
 | 5 ✅ | Frontend — create and sign — [phase spec](./security-council-defcon-3-phase-5.md) | AC 1, 1a, 2, 3, 4, 5, 15 | `src-tauri`, `desktop-app` |
 | 6 ✅ | Frontend — queued lifecycle — [phase spec](./security-council-defcon-3-phase-6.md) | AC 7, AC 10 | `desktop-app` |
-| 7 | The cancel, end to end | AC 11, AC 12, AC 14 | `desktop-app`, `e2e-tests` |
+| 7 ✅ | The cancel, end to end — [phase spec](./security-council-defcon-3-phase-7.md) | AC 11, AC 12, AC 14; [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `desktop-app`, `src-tauri`, `e2e-tests` |
 | 8 | Reserve — what the manual walk exposes | — | — |
 
 ## 3. Architecture
@@ -240,13 +240,24 @@ which a queued Defcon 3 has; `create_cancel_proposal` stores the cancel under th
 and requires the session to match, which for a Defcon 3 is the council itself. No new backend code is
 expected — and if the phase discovers otherwise, that discovery is the phase's most valuable output.
 
+**It discovered otherwise, and not in the backend.** The bet held for AC 11 and AC 12: the phase
+added no `orchestrator-be` code at all. It failed for AC 14. The offline route refuses any hex whose
+decoded kind is `unknown`, and a `MultisigAction::Cancel` decoded to exactly that because the
+desktop's domain `Action` enum has no `Cancel` variant — so on the one route built for *"the
+orchestrator is unavailable"*, a council signer could not import, let alone aggregate or broadcast, a
+Defcon 3 cancel. See [the phase spec](./security-council-defcon-3-phase-7.md) §4.1 and §6.
+
 The deliverable is the e2e: `run_defcon3_canceled` in `e2e_defcon_probe.rs`, following the shape of
 `e2e_cancel_proposal.rs` — submit a Defcon 3, assert queued with the harbour off, submit a
-council-signed cancel of its update id, mine exactly `depth` blocks, and assert the queue is empty
-**and the harbour is still off**. That last assertion is the only automated coverage of
+council-signed cancel of its update id, take the tip past the height the Defcon 3 would have
+activated at, and assert the queue is empty **and the harbour is still off**. That last assertion is
+the only automated coverage of
 [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
-**Anti-flake:** reuse the existing `bitcoind`-availability skip and mine an exact depth. Never sleep.
+**Anti-flake:** reuse the existing `bitcoind`-availability skip. *"Mine an exact depth"* turned out
+to be the wrong instruction — `submit_and_mine_tx` mines a variable number of blocks — so
+`submit_council_action` returns the measured reveal height and the test computes the activation
+height from it. Never sleep.
 **Not tested:** the desktop cancel journey. Manual walk.
 
 ### Phase 8 — Reserve
@@ -304,6 +315,10 @@ End to end, once all seven land, on regtest with the local stack
   read **live at reveal-confirmation time**, so changing `confirmation_depths.defcon3` while an
   update is queued leaves a height the chain no longer agrees with. Pre-existing — the activation
   countdown already trusts the same field.
+- **`manual-sign-collect.tsx:56` hardcodes `kind: 'update'`** on the offline route's synthetic
+  proposal, so a cancel is a cancel there only by its `actionType`. Phase 7 fixed the consequence at
+  the pure-label layer (`inferProposalTypeLabel` gained an `actionType === 'cancel'` arm, which is
+  testable) rather than in the component, which is not.
 - **N+1 `strata_asm_getStatus` reads in the reconciliation loop**, recorded at V1 close-out. Phase 3
   adds a per-request depth read and is the natural place to revisit it, but hoisting the whole loop
   requires restructuring mocks keyed by RPC URL and is not this slice's to carry.

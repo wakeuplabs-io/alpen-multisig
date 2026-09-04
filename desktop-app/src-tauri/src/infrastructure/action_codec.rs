@@ -75,11 +75,11 @@ pub fn decode_hex(s: &str) -> Result<Action, CodecError> {
 
 /// Wraps an existing update action hex in a `MultisigAction::Cancel` envelope.
 ///
-/// `target_action_hex` must encode a `MultisigAction::Update`. `target_seq_no` is the
-/// seq_no of the queued update (used as the cancel's `target_id`).
+/// `target_action_hex` must encode a `MultisigAction::Update`. `target_update_id` is the
+/// queue `UpdateId` of the queued update (used as the cancel's `target_id`).
 pub fn encode_cancel_hex_for_target(
     target_action_hex: &str,
-    target_seq_no: u64,
+    target_update_id: u64,
 ) -> Result<String, CodecError> {
     let hex = target_action_hex
         .strip_prefix("0x")
@@ -91,11 +91,35 @@ pub fn encode_cancel_hex_for_target(
         MultisigAction::Update(u) => u,
         MultisigAction::Cancel(_) => return Err(CodecError::UnsupportedVariant("Cancel")),
     };
-    let target_id: u32 = target_seq_no
-        .try_into()
-        .map_err(|_| CodecError::Encode(format!("seq_no {target_seq_no} exceeds u32 range")))?;
+    let target_id: u32 = target_update_id.try_into().map_err(|_| {
+        CodecError::Encode(format!(
+            "target_update_id {target_update_id} exceeds u32 range"
+        ))
+    })?;
     let cancel = MultisigAction::Cancel(CancelAction::new(target_id, update));
     Ok(hex::encode(cancel.as_ssz_bytes()))
+}
+
+/// The `(target_update_id, target update hex)` carried by a cancel action, or `None` when the hex
+/// is not a `MultisigAction::Cancel`.
+///
+/// The inverse of `encode_cancel_hex_for_target`. It decodes at the upstream `MultisigAction`
+/// layer rather than through the domain `Action`, which has no `Cancel` variant: a cancel is an
+/// envelope around an update, not an action the desktop ever builds from a form.
+pub fn decode_cancel_target_hex(action_hex: &str) -> Result<Option<(u32, String)>, CodecError> {
+    let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
+    let bytes = hex::decode(hex).map_err(|e| CodecError::Hex(e.to_string()))?;
+    let action =
+        MultisigAction::from_ssz_bytes(&bytes).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
+    match action {
+        MultisigAction::Cancel(cancel) => {
+            let target_id = *cancel.target_id();
+            let target_hex =
+                hex::encode(MultisigAction::Update(cancel.update().clone()).as_ssz_bytes());
+            Ok(Some((target_id, target_hex)))
+        }
+        MultisigAction::Update(_) => Ok(None),
+    }
 }
 
 // ─── Domain → Strata ────────────────────────────────────────────────────────
@@ -561,5 +585,25 @@ mod tests {
 
         let domain_bytes = encode(&sample_operator_set_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);
+    }
+
+    #[test]
+    fn cancel_hex_round_trips_through_its_target() {
+        let defcon3_hex = encode_hex(&Action::Defcon3).expect("encode ok");
+
+        let cancel_hex = encode_cancel_hex_for_target(&defcon3_hex, 7).expect("cancel encodes ok");
+        assert_eq!(
+            decode_cancel_target_hex(&cancel_hex).expect("cancel decodes ok"),
+            Some((7, defcon3_hex))
+        );
+    }
+
+    #[test]
+    fn decode_cancel_target_hex_is_none_for_a_plain_update() {
+        let defcon3_hex = encode_hex(&Action::Defcon3).expect("encode ok");
+        assert_eq!(
+            decode_cancel_target_hex(&defcon3_hex).expect("decode ok"),
+            None
+        );
     }
 }

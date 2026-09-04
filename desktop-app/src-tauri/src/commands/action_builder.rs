@@ -31,6 +31,11 @@ pub enum DecodedAction {
     Defcon1,
     #[serde(rename = "defcon_3")]
     Defcon3,
+    #[serde(rename = "cancel", rename_all = "camelCase")]
+    Cancel {
+        target_update_id: u32,
+        target_action_hex: String,
+    },
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -41,6 +46,16 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
         .strip_prefix("0x")
         .unwrap_or(&action_hex)
         .to_string();
+    // Tried first: a cancel hex fails `decode_hex` below (the domain `Action` has no `Cancel`
+    // variant) and would otherwise land in the `Err(_) => Unknown` arm.
+    if let Ok(Some((target_update_id, target_action_hex))) =
+        action_codec::decode_cancel_target_hex(&hex)
+    {
+        return DecodedAction::Cancel {
+            target_update_id,
+            target_action_hex,
+        };
+    }
     match action_codec::decode_hex(&hex) {
         Ok(Action::MultisigUpdate(update)) => DecodedAction::MultisigUpdate {
             role: update.role.as_str().to_string(),
@@ -278,6 +293,27 @@ mod tests {
                 assert_eq!(condition_hex, condition);
             }
             other => panic!("expected VkUpdate, got {other:?}"),
+        }
+    }
+
+    /// The exact gate `/manual` fails on today: a cancel hex must decode to `Cancel`, not fall
+    /// through to `Unknown` because the domain `Action` has no `Cancel` variant.
+    #[test]
+    fn decode_cancel_names_the_action() {
+        let target_hex = build_defcon_3_action_hex()
+            .expect("build should succeed")
+            .action_hex;
+        let cancel_hex =
+            action_codec::encode_cancel_hex_for_target(&target_hex, 7).expect("cancel encodes ok");
+        match decode_action_hex(cancel_hex) {
+            DecodedAction::Cancel {
+                target_update_id,
+                target_action_hex,
+            } => {
+                assert_eq!(target_update_id, 7);
+                assert_eq!(target_action_hex, target_hex);
+            }
+            other => panic!("expected Cancel, got {other:?}"),
         }
     }
 }

@@ -145,6 +145,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 	}),
 	z.object({ kind: z.literal('defcon_1') }),
 	z.object({ kind: z.literal('defcon_3') }),
+	z.object({ kind: z.literal('cancel'), targetUpdateId: z.number(), targetActionHex: z.string() }),
 	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
 ])
 

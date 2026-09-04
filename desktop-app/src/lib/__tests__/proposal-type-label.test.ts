@@ -24,6 +24,11 @@ assert.equal(inferProposalTypeLabel(proposal('defcon_1')), 'Defcon 1')
 // once the council can cancel a queued Defcon 3.
 assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
 
+// The offline route's synthetic proposal hardcodes `kind: 'update'` for a cancel imported through
+// `/manual` (`manual-sign-collect.tsx`), so `kind === 'cancel'` never fires there — the
+// `actionType === 'cancel'` arm is what names it on that path.
+assert.equal(inferProposalTypeLabel(proposal('cancel')), 'Cancel')
+
 // The authority still disambiguates a multisig update, and Defcon 3 must not have disturbed it.
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'sequencer_manager')), 'Sequencer update')
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'strata_admin')), 'Signer update')

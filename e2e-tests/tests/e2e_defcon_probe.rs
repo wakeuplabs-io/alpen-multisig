@@ -12,6 +12,8 @@
 //! - Defcon 3 stays queued until its configured depth elapses, then activates.
 //! - The Defcon 1 signing message renders exactly the four canonical lines, with no details
 //!   block.
+//! - A Defcon 3 cancelled by the council while queued leaves the queue and never activates the
+//!   safe harbour, even past the height it would have activated at.
 
 use std::process::Command;
 
@@ -29,7 +31,7 @@ use rand::rngs::OsRng;
 use ssz::Encode;
 use strata_asm_params::Role;
 use strata_asm_txs_admin::actions::updates::{Defcon1Update, Defcon3Update};
-use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::signing_message::SigningMessage;
 
 use desktop_app::domain::proposal::ProposalSignature;
@@ -63,6 +65,19 @@ async fn e2e_defcon3_activates_safe_harbour_only_after_its_depth() {
     run_defcon3(&FAST_ENACTMENT)
         .await
         .expect("defcon 3 activates the safe harbour after its confirmation depth");
+}
+
+/// A Defcon 3 cancelled by the council while it sits in the queue must never activate the safe
+/// harbour, even once the chain passes the height it would have activated at (Constraint 3).
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_defcon3_canceled_never_activates_the_safe_harbour() {
+    if Command::new("bitcoind").arg("--version").output().is_err() {
+        eprintln!("Skipping e2e_defcon3_canceled_never_activates_the_safe_harbour: bitcoind is not available in PATH");
+        return;
+    }
+    run_defcon3_canceled(&FAST_ENACTMENT)
+        .await
+        .expect("a cancelled defcon 3 never activates the safe harbour");
 }
 
 /// The signer sees exactly these four lines. Defcon 1 carries no payload, so the rendered
@@ -99,7 +114,8 @@ async fn run_defcon1(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
     let seqno_before = council_last_seqno(&harness)?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-    submit_council_action(&harness, fixture, &admin_section, &action).await?;
+    let _ =
+        submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
@@ -137,7 +153,8 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         .await?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-    submit_council_action(&harness, fixture, &admin_section, &action).await?;
+    let _ =
+        submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
@@ -182,17 +199,145 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Sign `action` with both security-council keys and drive it through commit → reveal,
-/// returning once the reveal block has been processed by the ASM worker.
+async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()> {
+    let admin_section = parse_admin_section(fixture.admin_section_json);
+    let depth = defcon3_confirmation_depth(&admin_section) as u64;
+    anyhow::ensure!(
+        depth > 0,
+        "the fixture must configure a non-zero defcon3 depth: at 0 there is no window to cancel in"
+    );
+
+    let harness = AsmTestHarnessBuilder::default()
+        .with_admin_config(administration_init_config(&admin_section))
+        .build()
+        .await?;
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(&harness)?,
+        "safe harbour must start deactivated"
+    );
+
+    // 1 — queue a Defcon 3.
+    let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
+    let reveal_height =
+        submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
+    // `process_queued` drains at `activation_height <= tip`, and the activation height is the
+    // reveal height plus the depth.
+    let activation_height = reveal_height + depth;
+
+    let (queued_id, queued_action) = queued_defcon3(&harness)?.ok_or_else(|| {
+        anyhow::anyhow!("Defcon 3 must sit in the admin queue before its depth elapses")
+    })?;
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(&harness)?,
+        "safe harbour must stay off while the Defcon 3 is queued"
+    );
+
+    // 2 — cancel it, signed by the same council.
+    //
+    // A cancel's authorizing role is the role of the update it cancels, so a Defcon 3 cancel is a
+    // council action. Upstream consumed the council seqno when it *accepted* the Defcon 3 at the
+    // reveal — not when the queued entry matures — so the next valid seqno is `+ 1`.
+    //
+    // The queued `UpdateAction` is embedded verbatim rather than reconstructed: the upstream
+    // handler resolves the role from it and checks it for equality against the queue entry.
+    let cancel = MultisigAction::Cancel(CancelAction::new(queued_id, queued_action));
+    let cancel_height = submit_council_action(
+        &harness,
+        fixture,
+        &admin_section,
+        &cancel,
+        fixture.seq_no + 1,
+    )
+    .await?;
+    anyhow::ensure!(
+        cancel_height <= activation_height,
+        "the cancel must land inside the window (landed at {cancel_height}, activation {activation_height}); \
+         past it upstream rejects it as UnknownAction and the queue would be empty because the update enacted"
+    );
+
+    // A cancel has depth 0, so the entry is gone in the cancel's own reveal block.
+    anyhow::ensure!(
+        queued_defcon3(&harness)?.is_none(),
+        "the cancel must remove the Defcon 3 from the queue"
+    );
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(&harness)?,
+        "the cancel must not activate the harbour it removed"
+    );
+
+    // 3 — take the tip past the height the Defcon 3 would have activated at. Measured, not
+    // assumed.
+    let tip = harness.get_chain_tip().await?;
+    let _ = harness
+        .mine_blocks((activation_height + 1).saturating_sub(tip) as usize)
+        .await?;
+    let tip = harness.get_chain_tip().await?;
+    anyhow::ensure!(
+        tip > activation_height,
+        "tip {tip} must have passed the original activation height {activation_height}"
+    );
+
+    // 4 — Constraint 3: leaving the queue is not evidence of enactment.
+    anyhow::ensure!(
+        queued_defcon3(&harness)?.is_none(),
+        "the queue must stay empty past the activation height"
+    );
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(&harness)?,
+        "a cancelled Defcon 3 must never activate the safe harbour"
+    );
+
+    // Both actions were accepted by the council, not silently dropped. Never `==`: the council
+    // may accept further actions, exactly as Constraint 2 says. `last > fixture.seq_no` is
+    // `last >= fixture.seq_no + 1` without tripping clippy's `int_plus_one` lint.
+    let last = council_last_seqno(&harness)?;
+    anyhow::ensure!(
+        last > fixture.seq_no,
+        "the council seqno must have consumed the cancel (is {last})"
+    );
+
+    Ok(())
+}
+
+/// The single queued Defcon 3, if any — its `UpdateId` and the entry's `UpdateAction`.
+///
+/// Asserts that at most one Defcon 3 is queued: two are byte-identical, and the contract records
+/// that as a recorded ambiguity rather than defining resolution order.
+fn queued_defcon3(harness: &AsmTestHarness) -> anyhow::Result<Option<(u32, UpdateAction)>> {
+    let (_, asm_state) = harness
+        .get_latest_asm_state()?
+        .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
+    let admin = decode_administration_subproto(&asm_state)
+        .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
+
+    let mut matches = admin
+        .queued()
+        .iter()
+        .filter(|q| matches!(q.action(), UpdateAction::Defcon3(_)));
+    let first = matches.next();
+    anyhow::ensure!(
+        matches.next().is_none(),
+        "at most one Defcon 3 is expected to be queued at a time"
+    );
+
+    Ok(first.map(|q| (*q.id(), q.action().clone())))
+}
+
+/// Sign `action` at `seq_no` with both security-council keys, drive it through commit → reveal,
+/// and return the height of the block the reveal landed in.
+///
+/// The height is returned rather than counted by the caller: this function mines one block for the
+/// commit and then up to ten until the reveal confirms, so any arithmetic done from a caller's
+/// guess about the tip is a race.
 async fn submit_council_action(
     harness: &AsmTestHarness,
     fixture: &SignerUpdateEnactedFixture,
     admin_section: &serde_json::Value,
     action: &MultisigAction,
-) -> anyhow::Result<()> {
+    seq_no: u64,
+) -> anyhow::Result<u64> {
     let passphrase = fixture.passphrase;
     let path = format!("{}/0", fixture.derivation_path_prefix);
-    let seq_no = fixture.seq_no;
 
     // The fixture gives the council the same two keys as the administrator, so the demo
     // mnemonic pair can reach the council threshold of 2.
@@ -294,9 +439,10 @@ async fn submit_council_action(
         1_000,
     ))?;
 
-    let _ = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_block_hash = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_height = harness.client.get_block_height(&reveal_block_hash).await?;
 
-    Ok(())
+    Ok(reveal_height)
 }
 
 fn bridge_safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
