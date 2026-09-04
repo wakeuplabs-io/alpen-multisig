@@ -21,13 +21,10 @@ assert.notEqual(inferProposalTypeLabel(proposal('defcon_3')), 'Unknown')
 assert.equal(inferProposalTypeLabel(proposal('defcon_1')), 'Defcon 1')
 
 // A cancel is named by what it is, never by the action hex it wraps — the rule Phase 7 leans on
-// once the council can cancel a queued Defcon 3.
+// once the council can cancel a queued Defcon 3. The offline route sets `kind` from the decoded
+// actionType, so the `kind === 'cancel'` arm is enough on every path.
 assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
-
-// The offline route's synthetic proposal hardcodes `kind: 'update'` for a cancel imported through
-// `/manual` (`manual-sign-collect.tsx`), so `kind === 'cancel'` never fires there — the
-// `actionType === 'cancel'` arm is what names it on that path.
-assert.equal(inferProposalTypeLabel(proposal('cancel')), 'Cancel')
+assert.equal(inferProposalTypeLabel(proposal('cancel', 'cancel')), 'Cancel')
 
 // The authority still disambiguates a multisig update, and Defcon 3 must not have disturbed it.
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'sequencer_manager')), 'Sequencer update')

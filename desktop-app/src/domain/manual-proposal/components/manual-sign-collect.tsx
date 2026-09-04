@@ -53,7 +53,7 @@ export function ManualSignCollect({
 		title: null,
 		signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
 		broadcastStatus: 'idle',
-		kind: 'update',
+		kind: importData.actionType === 'cancel' ? 'cancel' : 'update',
 		targetActionId: null,
 		activationHeight: null,
 		updateIdInQueue: null,
