@@ -149,11 +149,10 @@ otherwise depend on the wrong one.
 **This precedes the create flow**, for the same reason V1's and V2's Phase 4 did: never let a signer
 create a proposal that can only park at Approved forever.
 
-**Pick up while here:** `scripts/asm-params.example.json` no longer deserializes against the current
-pin — `ConfirmationDepths` has no `serde(default)` and the example omits
-`strata_security_council_multisig_update`, `defcon3` and `safe_harbour_address_update`.
-`scripts/asm-params.json` and `staging/asm-params.template.json` already carry all three. V2's plan
-(§6) parked this for "a phase that touches params", and this is the phase that reads that depth.
+**Pick up while here (done on `chore/sweep-recorded-debt`):** `scripts/asm-params.example.json`
+now deserializes against the pin — the missing `ConfirmationDepths` keys, `strata_security_council`,
+and Bridge `safe_harbour_address` are present, with a substituted-placeholder regression test in
+`e2e-tests`. V2's plan (§6) had parked this for a params-touching phase.
 
 **Tests.** A truth table with one row per meaningful case, and the two substitution failures as tests
 carrying their own names: one where the administrator's signer set changes and the answer must not,
