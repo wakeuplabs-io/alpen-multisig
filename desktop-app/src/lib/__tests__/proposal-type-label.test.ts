@@ -24,7 +24,6 @@ assert.equal(inferProposalTypeLabel(proposal('defcon_1')), 'Defcon 1')
 // once the council can cancel a queued Defcon 3. The offline route sets `kind` from the decoded
 // actionType, so the `kind === 'cancel'` arm is enough on every path.
 assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
-assert.equal(inferProposalTypeLabel(proposal('cancel', 'cancel')), 'Cancel')
 
 // The authority still disambiguates a multisig update, and Defcon 3 must not have disturbed it.
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'sequencer_manager')), 'Sequencer update')

@@ -643,54 +643,12 @@ pub(crate) async fn reconcile_enacted_for_authority(
     Ok(())
 }
 
-/// Re-populate `update_id_in_queue` on a single proposal if it is still null after RevealConfirmed.
+/// Retry the facts [`record_reveal_confirmed_facts`] stores if they are still null after
+/// RevealConfirmed. A transient Bitcoin or ASM failure at confirm time otherwise leaves the
+/// countdown and queue id blank for the life of the row.
 ///
 /// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
-pub(crate) async fn reconcile_update_id_in_queue(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    action_id: &ActionId,
-) -> Result<(), AppError> {
-    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
-        return Ok(());
-    };
-
-    if proposal.is_cancel()
-        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        || proposal.update_id_in_queue.is_some()
-    {
-        return Ok(());
-    }
-
-    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
-        Ok(Some(id)) => {
-            if let Err(e) = repo.update_update_id_in_queue(action_id, id).await {
-                tracing::warn!(
-                    action_id = %action_id.0,
-                    "reconcile_update_id_in_queue: failed to persist id: {e}"
-                );
-            }
-        }
-        Ok(None) => {}
-        Err(e) => {
-            tracing::warn!(
-                action_id = %action_id.0,
-                "reconcile_update_id_in_queue: ASM lookup failed: {e}"
-            );
-        }
-    }
-
-    Ok(())
-}
-
-/// Re-populate `activation_height` on a single proposal if it is still null after RevealConfirmed.
-///
-/// A transient Bitcoin or ASM failure during `record_reveal_confirmed_facts` leaves the height
-/// null for the life of the row otherwise — countdown and redundancy both go dark. Same shape as
-/// [`reconcile_update_id_in_queue`], with the extra Bitcoin tip read the height computation needs.
-///
-/// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
-pub(crate) async fn reconcile_activation_height(
+pub(crate) async fn reconcile_reveal_confirmed_facts(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
     btc_client: &dyn BitcoinRpcClient,
@@ -700,20 +658,39 @@ pub(crate) async fn reconcile_activation_height(
         return Ok(());
     };
 
-    if proposal.is_cancel()
-        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        || proposal.activation_height.is_some()
-    {
+    if proposal.is_cancel() || proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
         return Ok(());
     }
 
-    if let Err(e) =
-        compute_and_store_activation_height(&proposal, repo, btc_client, asm_rpc_url).await
-    {
-        tracing::warn!(
-            action_id = %action_id.0,
-            "reconcile_activation_height: failed to compute height: {e}"
-        );
+    if proposal.activation_height.is_none() {
+        if let Err(e) =
+            compute_and_store_activation_height(&proposal, repo, btc_client, asm_rpc_url).await
+        {
+            tracing::warn!(
+                action_id = %action_id.0,
+                "reconcile_reveal_confirmed_facts: failed to compute height: {e}"
+            );
+        }
+    }
+
+    if proposal.update_id_in_queue.is_none() {
+        match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+            Ok(Some(id)) => {
+                if let Err(e) = repo.update_update_id_in_queue(action_id, id).await {
+                    tracing::warn!(
+                        action_id = %action_id.0,
+                        "reconcile_reveal_confirmed_facts: failed to persist id: {e}"
+                    );
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %action_id.0,
+                    "reconcile_reveal_confirmed_facts: ASM lookup failed: {e}"
+                );
+            }
+        }
     }
 
     Ok(())
@@ -1813,13 +1790,16 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized));
     }
 
-    async fn save_reveal_confirmed_approved(repo: &InMemoryProposalRepository) -> ActionId {
+    async fn save_reveal_confirmed_approved(
+        repo: &InMemoryProposalRepository,
+        action_hex: &str,
+    ) -> ActionId {
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
-        let created = create_update_action(repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
+        let created = create_update_action(repo, session.clone(), 1, action_hex, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1848,7 +1828,7 @@ mod tests {
     #[tokio::test]
     async fn report_reveal_confirmed_keeps_proposal_approved() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         let updated = report_broadcast_progress(
             &repo,
@@ -1874,7 +1854,7 @@ mod tests {
     #[tokio::test]
     async fn report_enacted_rejected_when_asm_not_enacted() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         let err = report_broadcast_progress(
             &repo,
@@ -1942,58 +1922,17 @@ mod tests {
     /// A height that failed once at RevealConfirmed must not stay null forever — GET retries it
     /// the same way it retries a missing `update_id_in_queue`.
     #[tokio::test]
-    async fn reconcile_activation_height_fills_a_null_after_reveal_confirmed() {
+    async fn reconcile_reveal_confirmed_facts_fills_a_null_height() {
         let repo = new_repo();
         let action_hex = test_fixture_action_hex();
-        let sig = sig_a();
-        let session = SessionContext {
-            authority: Authority::StrataAdmin,
-            signer_pubkey: &sig.signer_pubkey,
-        };
-        let created = create_update_action(&repo, session.clone(), 1, &action_hex, &sig, 2, None)
-            .await
-            .unwrap();
-        let session_b = SessionContext {
-            authority: Authority::StrataAdmin,
-            signer_pubkey: &sig_b().signer_pubkey,
-        };
-        approve_action(&repo, session_b.clone(), &created.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            &repo,
-            session_b,
-            "mock://asm-membership",
-            &created.action_id,
-        )
-        .await
-        .unwrap();
         // Bypass `record_reveal_confirmed_facts` so the height stays null — the failure case.
-        repo.update_broadcast_status(
-            &created.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some("commit"),
-            Some("reveal"),
-            None,
-        )
-        .await
-        .unwrap();
+        let action_id = save_reveal_confirmed_approved(&repo, &action_hex).await;
 
-        reconcile_activation_height(
-            &repo,
-            "mock://asm-membership",
-            &mock_btc(),
-            &created.action_id,
-        )
-        .await
-        .unwrap();
-
-        let proposal = repo
-            .find_by_action_id(&created.action_id)
+        reconcile_reveal_confirmed_facts(&repo, "mock://asm-membership", &mock_btc(), &action_id)
             .await
-            .unwrap()
             .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         // mock BTC height 800_000 + uniform mock lock period 2016 for strata admin update
         assert_eq!(proposal.activation_height, Some(802_016));
     }
@@ -2055,7 +1994,7 @@ mod tests {
     #[tokio::test]
     async fn reconcile_prefers_enactment_over_supersession() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         reconcile_enacted_for_authority(
             &repo,
@@ -2073,7 +2012,7 @@ mod tests {
     #[tokio::test]
     async fn reconcile_promotes_reveal_confirmed_when_asm_enacted() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         reconcile_enacted_for_authority(
             &repo,

@@ -292,7 +292,7 @@ End to end, once all seven land, on regtest with the local stack
 ## 6. Known debt this slice does not take
 
 Swept on `chore/sweep-recorded-debt` (not repeated here): shared HTTP client across RPC calls in
-both processes; `reconcile_activation_height` on proposal GET; `scripts/asm-params.example.json`
+both processes; `reconcile_reveal_confirmed_facts` on proposal GET; `scripts/asm-params.example.json`
 deserializes against the pin (with a substituted-placeholder test); honest `kind` on the offline
 route (Phase 7's compensating `actionType === 'cancel'` label arm removed).
 
