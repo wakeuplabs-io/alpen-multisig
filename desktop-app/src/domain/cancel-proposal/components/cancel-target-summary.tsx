@@ -1,5 +1,6 @@
 import type { Proposal } from '@/api/proposals'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import { buildProposalTitle } from '@/lib/proposal-title'
 import { truncatePubkey } from '@/lib/pubkey'
 
 type Props = {
@@ -29,7 +30,10 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 			</div>
 
 			<div className="px-6 py-5 space-y-1">
-				<p className="m-0 text-body-lg font-medium text-[#0a0a0a]">{changeLabel ?? `Proposal #${proposal.seqNo}`}</p>
+				{/* `changeLabel` only ever resolves for a multisig update, so without the fallback the card
+				    headed "Proposal being cancelled" identified a Defcon 3 as a bare `Proposal #N` — on the
+				    one screen where a council signer decides whether to cancel the sweep of the bridge. */}
+				<p className="m-0 text-body-lg font-medium text-[#0a0a0a]">{changeLabel ?? buildProposalTitle(proposal)}</p>
 				<p className="m-0 text-label text-[#6b7280]">
 					#{proposal.seqNo} · {proposal.authority}
 				</p>
