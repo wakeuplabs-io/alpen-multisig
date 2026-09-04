@@ -18,6 +18,7 @@ const ACTION_TYPE_BY_KIND: Record<DecodedAction['kind'], ActionType> = {
 	vk_update: 'vk_update',
 	defcon_1: 'defcon_1',
 	defcon_3: 'defcon_3',
+	cancel: 'cancel',
 	unknown: 'unknown',
 }
 

@@ -21,5 +21,6 @@ assert.equal(
 	'multisig_update',
 )
 assert.equal(actionTypeFromDecoded({ kind: 'unknown', rawHex: 'ff' }), 'unknown')
+assert.equal(actionTypeFromDecoded({ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' }), 'cancel')
 
 console.log('action-type-from-decoded: all assertions passed.')

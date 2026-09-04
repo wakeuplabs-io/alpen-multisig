@@ -182,3 +182,14 @@ delete (withoutCancelable as { isCancelable?: boolean }).isCancelable
 assert.equal(proposalSchema.safeParse(withoutCancelable).success, false, 'proposalSchema must require isCancelable')
 
 console.log('ipc-schemas: isCancelable field OK')
+
+// Defcon 3 (V2) Phase 7: `decodedActionSchema` gains the `cancel` member, closing the gap the
+// emitter side (action_builder.rs) requires — a Tauri emitting `kind: 'cancel'` against a schema
+// that rejects it would fail the parse.
+assert.equal(
+	decodedActionSchema.safeParse({ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' }).success,
+	true,
+	'decodedActionSchema must accept a well-formed cancel member',
+)
+
+console.log('ipc-schemas: cancel decoded-action member OK')
