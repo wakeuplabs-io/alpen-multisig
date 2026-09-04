@@ -244,3 +244,32 @@ pub fn checkpoint_ol_stf_vk_type(asm_state: &AsmState) -> Option<PredicateTypeId
     let state = decode_checkpoint_subproto(asm_state)?;
     PredicateTypeId::try_from(state.checkpoint_predicate().id()).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use strata_asm_params::AsmParams;
+
+    /// The repo example must deserialize against the pinned `AsmParams` shape. Substituting the
+    /// blkid placeholder is what an operator does before bootstrapping; the test does the same so
+    /// a future pin bump that adds required fields fails here instead of in someone's first
+    /// `asm-params.json` edit.
+    #[test]
+    fn asm_params_example_deserializes_after_blkid_placeholder_substituted() {
+        const PLACEHOLDER: &str = "REPLACE_WITH_64_HEX_CHARS_FROM_getblockhash_101";
+        const DUMMY_BLKID: &str =
+            "0000000000000000000000000000000000000000000000000000000000000000";
+
+        let raw = include_str!("../../../scripts/asm-params.example.json");
+        assert!(
+            raw.contains(PLACEHOLDER),
+            "example must keep the operator-facing blkid placeholder"
+        );
+        let filled = raw.replace(PLACEHOLDER, DUMMY_BLKID);
+        let params: AsmParams = serde_json::from_str(&filled)
+            .expect("asm-params.example.json deserializes as AsmParams");
+        assert!(
+            params.admin_config().is_some(),
+            "example must carry an Admin subprotocol"
+        );
+    }
+}
