@@ -166,10 +166,11 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
     anyhow::ensure!(queued_defcon3(&harness)?.is_none(), "the queue must stay empty past the activation height");
     anyhow::ensure!(!bridge_safe_harbour_activated(&harness)?, "a cancelled Defcon 3 must never activate the safe harbour");
 
-    // Both actions were accepted by the council, not silently dropped. `>=`, never `==`: the
-    // council may accept further actions, exactly as Constraint 2 says.
+    // Both actions were accepted by the council, not silently dropped. Never `==`: the council may
+    // accept further actions, exactly as Constraint 2 says. Written `last > fixture.seq_no` rather
+    // than `last >= fixture.seq_no + 1`, which clippy's `int_plus_one` rejects; same predicate.
     let last = council_last_seqno(&harness)?;
-    anyhow::ensure!(last >= fixture.seq_no + 1, "the council seqno must have consumed the cancel (is {last})");
+    anyhow::ensure!(last > fixture.seq_no, "the council seqno must have consumed the cancel (is {last})");
 
     Ok(())
 }
@@ -263,7 +264,7 @@ every authority, which is a fix for them too.
 | 2 | …and never activates the harbour (Constraint 3) | `!safe_harbour().is_activated()` while queued, right after the cancel, and with `tip > activation_height` — the third is what the test exists for |
 | 3 | The cancel really landed inside the window | `cancel_height <= activation_height`; without it an empty queue could mean the opposite outcome |
 | 4 | The tip really passed the original activation height | `tip > reveal_height + depth`, both terms measured |
-| 5 | The council itself authorised the cancel (AC 11) | signed by the same two council mnemonics at `seq_no + 1`, and `council_last_seqno() >= seq_no + 1` afterwards |
+| 5 | The council itself authorised the cancel (AC 11) | signed by the same two council mnemonics at `seq_no + 1`, and `council_last_seqno() > seq_no` afterwards |
 | 6 | A cancel hex decodes back to the update it wraps | `decode_cancel_target_hex(encode_cancel_hex_for_target(defcon3_hex, 7))` is `Some((7, defcon3_hex))`; the same call on a plain Defcon 3 hex is `None` |
 | 7 | `decode_action_hex` answers `Cancel`, not `Unknown` | the exact gate `/manual` fails on today |
 | 8 | The Zod schema accepts the new kind | `decodedActionSchema` parses a `cancel` member in `src/api/ipc-schemas.test.ts` — the Rust/TS divergence guard |

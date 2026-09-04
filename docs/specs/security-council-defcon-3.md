@@ -1,6 +1,6 @@
 # Spec: Security Council — Defcon 3
 
-**Status:** In progress — Phases 1–5 shipped. This document is the functional contract; the build
+**Status:** Shipped — all seven phases. This document is the functional contract; the build
 plan is [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md),
 whose phase board says what has landed.
 
