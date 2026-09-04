@@ -683,6 +683,42 @@ pub(crate) async fn reconcile_update_id_in_queue(
     Ok(())
 }
 
+/// Re-populate `activation_height` on a single proposal if it is still null after RevealConfirmed.
+///
+/// A transient Bitcoin or ASM failure during `record_reveal_confirmed_facts` leaves the height
+/// null for the life of the row otherwise — countdown and redundancy both go dark. Same shape as
+/// [`reconcile_update_id_in_queue`], with the extra Bitcoin tip read the height computation needs.
+///
+/// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
+pub(crate) async fn reconcile_activation_height(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
+        return Ok(());
+    };
+
+    if proposal.is_cancel()
+        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
+        || proposal.activation_height.is_some()
+    {
+        return Ok(());
+    }
+
+    if let Err(e) =
+        compute_and_store_activation_height(&proposal, repo, btc_client, asm_rpc_url).await
+    {
+        tracing::warn!(
+            action_id = %action_id.0,
+            "reconcile_activation_height: failed to compute height: {e}"
+        );
+    }
+
+    Ok(())
+}
+
 /// Reconcile a single proposal before returning it to the client.
 pub(crate) async fn reconcile_enacted_for_action(
     repo: &dyn ProposalRepository,
@@ -1901,6 +1937,65 @@ mod tests {
 
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Superseded);
+    }
+
+    /// A height that failed once at RevealConfirmed must not stay null forever — GET retries it
+    /// the same way it retries a missing `update_id_in_queue`.
+    #[tokio::test]
+    async fn reconcile_activation_height_fills_a_null_after_reveal_confirmed() {
+        let repo = new_repo();
+        let action_hex = test_fixture_action_hex();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(&repo, session.clone(), 1, &action_hex, &sig, 2, None)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(
+            &repo,
+            session_b,
+            "mock://asm-membership",
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+        // Bypass `record_reveal_confirmed_facts` so the height stays null — the failure case.
+        repo.update_broadcast_status(
+            &created.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        reconcile_activation_height(
+            &repo,
+            "mock://asm-membership",
+            &mock_btc(),
+            &created.action_id,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo
+            .find_by_action_id(&created.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        // mock BTC height 800_000 + uniform mock lock period 2016 for strata admin update
+        assert_eq!(proposal.activation_height, Some(802_016));
     }
 
     /// The desktop's confirmation task dies with its send screen. A reveal mined afterwards has to

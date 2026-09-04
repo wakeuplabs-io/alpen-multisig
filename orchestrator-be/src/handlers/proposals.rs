@@ -199,6 +199,13 @@ pub async fn get_proposal(
     .await?;
     proposals::reconcile_update_id_in_queue(state.repo.as_ref(), &state.asm_rpc_url, &action_id)
         .await?;
+    proposals::reconcile_activation_height(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        state.btc_client.as_ref(),
+        &action_id,
+    )
+    .await?;
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
