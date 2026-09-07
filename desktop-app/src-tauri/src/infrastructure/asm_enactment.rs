@@ -26,25 +26,34 @@ pub fn is_multisig_update_enacted_in_admin_state(
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ MultisigAction: {e:?}"))?;
 
+    // A cancel carries no config to compare against, and answering `Ok(false)` for one would be
+    // an answer where there is none — the direction this module must never take, since a caller
+    // reads `Ok(false)` as "not enacted" and retires the proposal on it.
+    let MultisigAction::Update(update) = &action else {
+        return Err(
+            "cancel actions are not supported for enactment post-condition checks".to_string(),
+        );
+    };
+
+    // The target lookup runs before the authorization guard: reversed, an `AsmStfVk` under an
+    // authority that does not authorize it would go from `Ok(false)` to `Err`.
+    // See docs/specs/security-council-signer-update-phase-2.md §10.3.
     let Some((target_role, config_update)) = multisig_config_update_target(&action) else {
         return Ok(false);
     };
-    let MultisigAction::Update(update) = &action else {
-        unreachable!("multisig_config_update_target only answers Some for MultisigAction::Update");
-    };
 
+    let authorizing_role = update.required_role();
     let session_role = authority_to_role(authority)?;
-    if session_role != update.required_role() {
+    if session_role != authorizing_role {
         return Err(format!(
-            "action `{}` must be authorized by `{}`, but the session is `{session_role}`",
+            "action `{}` must be authorized by `{authorizing_role}`, but the session is `{session_role}`",
             update.update_tx_type().name(),
-            update.required_role(),
         ));
     }
 
     multisig_update_enacted(
         target_role,
-        update.required_role(),
+        authorizing_role,
         seq_no,
         config_update,
         |role| {
@@ -306,7 +315,8 @@ mod tests {
 
     use crate::infrastructure::action_codec;
     use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths};
-    use strata_asm_txs_admin::actions::updates::AlpenAdminMultisigUpdate;
+    use strata_asm_txs_admin::actions::updates::{AlpenAdminMultisigUpdate, AsmStfVkUpdate};
+    use strata_asm_txs_admin::actions::CancelAction;
     use strata_crypto::keys::compressed::CompressedPublicKey;
 
     fn key_hex(byte: u8) -> String {
@@ -314,6 +324,43 @@ mod tests {
         bytes[0] = 0x02;
         bytes[32] = byte;
         hex::encode(bytes)
+    }
+
+    /// A four-role admin state with one signer and threshold 1 everywhere, built through
+    /// upstream's own constructors — real state, no mock, no chain, no I/O.
+    ///
+    /// Every `last_seqno` in it is zero and cannot be anything else: upstream's
+    /// `update_last_seqno` demands a token no outside crate can construct. That is exactly why
+    /// the two-role tests above go through the `multisig_update_enacted` seam instead, and why
+    /// the tests using this helper assert about wiring rather than about sequence numbers.
+    fn single_signer_admin_state() -> AdministrationSubprotoState {
+        let key = CompressedPublicKey::from_slice(&hex::decode(key_hex(1)).unwrap()).unwrap();
+        let threshold = NonZeroU8::new(1).unwrap();
+        let single_signer_config = || {
+            strata_crypto::threshold_signature::ThresholdConfig::try_new(vec![key], threshold)
+                .unwrap()
+        };
+
+        AdministrationSubprotoState::new(&AdministrationInitConfig::new(
+            single_signer_config(),
+            single_signer_config(),
+            single_signer_config(),
+            single_signer_config(),
+            ConfirmationDepths {
+                strata_admin_multisig_update: 0,
+                strata_seq_manager_multisig_update: 0,
+                alpen_admin_multisig_update: 0,
+                strata_security_council_multisig_update: 0,
+                operator_update: 0,
+                sequencer_update: 0,
+                ol_stf_vk_update: 0,
+                asm_stf_vk_update: 0,
+                ee_stf_vk_update: 0,
+                defcon3: 0,
+                safe_harbour_address_update: 0,
+            },
+            NonZeroU8::new(1).unwrap(),
+        ))
     }
 
     /// A `snapshot_of` for exactly two roles — the simplest lookup that still lets a test say
@@ -408,46 +455,22 @@ mod tests {
         );
     }
 
-    /// T9 — §4.4's bug, made concrete. `extract_multisig_config_update` mapped only
-    /// `StrataAdmin` and `SequencerManager`, so an `AlpenAdminMultisig` update authored under
-    /// `Authority::AlpenAdmin` had no matching arm for its own authority and could never resolve
-    /// through this predicate. `multisig_config_update_target` resolves the target from the
-    /// variant alone, so the same proposal now answers a real `Ok(bool)` — which is what makes
-    /// this commit a `fix`, not a `refactor`.
+    /// The bug this file shipped with, made concrete. `extract_multisig_config_update` mapped
+    /// only `StrataAdmin` and `SequencerManager`, so an `AlpenAdminMultisig` update authored
+    /// under `Authority::AlpenAdmin` matched neither of the two real arms nor the mismatch arm
+    /// beside them — it fell through to `(_, MultisigAction::Update(_)) => Ok(None)`, and this
+    /// predicate answered `Ok(false)` for it. Permanently, and without complaint.
+    ///
+    /// `Ok(false)` is the worse of the two failures: an `Err` is logged and retried, while
+    /// `Ok(false)` is an answer a caller acts on. Resolving the target from the variant alone is
+    /// what makes the same proposal answer the real question.
     #[test]
     fn alpen_admin_rotation_is_no_longer_refused() {
-        let key = CompressedPublicKey::from_slice(&hex::decode(key_hex(1)).unwrap()).unwrap();
-        let threshold = NonZeroU8::new(1).unwrap();
-        let single_signer_config = || {
-            strata_crypto::threshold_signature::ThresholdConfig::try_new(vec![key], threshold)
-                .unwrap()
-        };
+        let admin = single_signer_admin_state();
 
-        let init_config = AdministrationInitConfig::new(
-            single_signer_config(),
-            single_signer_config(),
-            single_signer_config(),
-            single_signer_config(),
-            ConfirmationDepths {
-                strata_admin_multisig_update: 0,
-                strata_seq_manager_multisig_update: 0,
-                alpen_admin_multisig_update: 0,
-                strata_security_council_multisig_update: 0,
-                operator_update: 0,
-                sequencer_update: 0,
-                ol_stf_vk_update: 0,
-                asm_stf_vk_update: 0,
-                ee_stf_vk_update: 0,
-                defcon3: 0,
-                safe_harbour_address_update: 0,
-            },
-            NonZeroU8::new(1).unwrap(),
-        );
-        let admin = AdministrationSubprotoState::new(&init_config);
-
-        // A no-op relative to the config just installed: add nothing, remove nothing, same
-        // threshold. Only the wiring is under test, not the arithmetic.
-        let config_update = ThresholdConfigUpdate::new(vec![], vec![], threshold);
+        // A no-op relative to the config the state was built with: add nothing, remove nothing,
+        // same threshold. Only the wiring is under test, not the arithmetic.
+        let config_update = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(1).unwrap());
         let action = MultisigAction::Update(UpdateAction::AlpenAdminMultisig(
             AlpenAdminMultisigUpdate::new(config_update),
         ));
@@ -461,6 +484,57 @@ mod tests {
         );
 
         assert_eq!(result, Ok(true));
+    }
+
+    /// The target lookup runs before the authorization guard, and only a test can hold that
+    /// order in place — swapping the two lines compiles, passes every other test, and turns this
+    /// case from `Ok(false)` into `Err`. A caller logs an `Err` and retries it forever, so the
+    /// swap costs a per-proposal warning that never resolves. See this phase's spec §10.3.
+    ///
+    /// `AsmStfVk` is the variant that reaches the guard without being a multisig config update,
+    /// and `SecurityCouncil` is an authority that does not authorize it.
+    #[test]
+    fn an_action_that_is_not_a_multisig_update_answers_before_the_guard() {
+        let action = MultisigAction::Update(UpdateAction::AsmStfVk(AsmStfVkUpdate::new(
+            strata_predicate::PredicateKey::new(
+                strata_predicate::PredicateTypeId::Bip340Schnorr,
+                vec![7u8; 32],
+            ),
+        )));
+        let action_hex = hex::encode(ssz::Encode::as_ssz_bytes(&action));
+
+        assert_eq!(
+            is_multisig_update_enacted_in_admin_state(
+                &single_signer_admin_state(),
+                Authority::SecurityCouncil,
+                0,
+                &action_hex,
+            ),
+            Ok(false)
+        );
+    }
+
+    /// A cancel has no config to compare against, so there is no answer to give — and `Ok(false)`
+    /// would be one. The distinction is the module's whole degradation rule: a caller treats
+    /// `Ok(false)` as "not enacted" and retires the proposal on it, while an `Err` is logged and
+    /// asked again next cycle.
+    #[test]
+    fn a_cancel_has_no_post_conditions_to_check() {
+        let cancel = MultisigAction::Cancel(CancelAction::new(
+            0,
+            UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(
+                ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(1).unwrap()),
+            )),
+        ));
+        let cancel_hex = hex::encode(ssz::Encode::as_ssz_bytes(&cancel));
+
+        assert!(is_multisig_update_enacted_in_admin_state(
+            &single_signer_admin_state(),
+            Authority::AlpenAdmin,
+            0,
+            &cancel_hex,
+        )
+        .is_err());
     }
 
     #[tokio::test]
