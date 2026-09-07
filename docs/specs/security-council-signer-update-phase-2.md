@@ -167,9 +167,19 @@ textually identical, so "both copies moved together" is checkable in review rath
 ### 4.4 The desktop copy moves with it
 
 `desktop-app/src-tauri/src/infrastructure/asm_enactment.rs` carries the same shape and is behind:
-`extract_multisig_config_update:79-103` maps only `StrataAdmin` and `SequencerManager`, so **an
-`AlpenAdminMultisig` update under `Authority::AlpenAdmin` falls into the mismatch arm and errors
-today**. That is a live bug, not merely a missing council arm, and it is why that commit reads `fix`.
+`extract_multisig_config_update:79-103` maps only `StrataAdmin` and `SequencerManager`. An
+`AlpenAdminMultisig` update under `Authority::AlpenAdmin` matches neither of the two real arms nor
+the mismatch arm beside them — it falls through to `(_, MultisigAction::Update(_)) => Ok(None)`,
+and **the predicate answers `Ok(false)` for it, permanently and without complaint**.
+
+`Ok(false)` is the worse of the two failures available, for §6's reason: an `Err` is logged and
+retried, while `Ok(false)` is an answer a caller acts on. It is the same silent failure mode
+Constraint 1 describes for the council, reached by a different route — which is a live bug for an
+authority shipped long ago, not merely a missing council arm, and it is why that commit reads `fix`.
+
+> Corrected after implementation. This section first said the update "falls into the mismatch arm
+> and errors". It does not: the mismatch arm only ever listed `StrataAdminMultisig` and
+> `StrataSeqManagerMultisig`. The distinction matters because it is the one §6 is about.
 
 `authority_to_role` there (`:139-153`) is already exhaustive and already maps the council. Nothing to
 unify on this side; the guard is written inline against it, since this crate has no
@@ -189,7 +199,7 @@ kept textually identical instead, which is what makes a review able to see them 
 | `multisig_config_update_target` — variants | **`E0004`.** `UpdateAction` has no wildcard here if written exhaustively; a new upstream variant stops the build | T7 |
 | The outer `match action` arm at `:173-179` | **`E0004`**, and it must stay an explicit variant list. Collapsing it to `MultisigAction::Update(update)` to pass a `&UpdateAction` would trade that net for nothing | — |
 | Deleting `authority_to_role` | **`E0425`** at its one call site | — |
-| The order of the guard vs the target lookup | **none** — both compile either way, and the wrong order silently changes `AsmStfVk`'s answer | T6, §10.3 |
+| The order of the guard vs the target lookup | **none** — both compile either way, and the wrong order silently changes `AsmStfVk`'s answer | T10 |
 | Which role feeds which term inside `multisig_update_enacted` | **none** — both roles are `Role`, so a swap type-checks | T1, T2, T3 |
 
 The last row is the whole phase. Two arguments of the same type, and the compiler is indifferent to
@@ -242,31 +252,48 @@ a real chain. Fixing it there would mean Phase 4 discovering it while writing a 
 
 ## 8. Tests
 
-Nine claims. **No mocks, no I/O, no clock** — every one is a pure function or a two-entry lookup.
+Eleven claims. **No mocks, no I/O, no clock** — each is a pure function, a two-entry lookup, or an
+`AdministrationSubprotoState` built through upstream's own constructors.
 
 | # | Claim | Assertion | Where |
 |---|---|---|---|
-| T1 | AC 7 — the two roles, wired correctly | council snapshot carries the added key and the new threshold; administrator snapshot carries `last_seqno >= seq_no` → `true` | `orchestrator-be/.../asm_enactment.rs` |
-| T2 | **AC 7a, half one** — the administrator's signer set is not the target's | same council snapshot; the administrator's keys and threshold are changed to disagree → the answer **does not change** | same |
-| T3 | **AC 7a, half two** — the council's seqno is not the authorizing one | council `last_seqno` far ahead, administrator's below `seq_no` → `false` | same |
+| T1 | AC 7 — the happy path, and only that | **both** snapshots satisfy every term, so this answers `true` under the real wiring and under either substitution. A control, not a third detector | `orchestrator-be/.../asm_enactment.rs` |
+| T2 | **AC 7a, half one** — the administrator's signer set is not the target's | the administrator's keys and threshold disagree with `config`; both roles share a `last_seqno` → the **only** test red when keys/threshold are read off the authorizing role | same |
+| T3 | **AC 7a, half two** — the council's seqno is not the authorizing one | council `last_seqno` far ahead, administrator's below `seq_no` → the **only** test red when the seqno is read off the target | same |
 | T4 | The three shipped authorities read one role for all three terms | an administrator rotation where target == authorizing still answers as before | same |
 | T5 | A missing role is an absence, not a negative | `snapshot_of` answers `None` for the council → `Err`, never `Ok(false)` (§6) | same |
 | T6 | `AsmStfVk` is not a multisig config update | `multisig_config_update_target` answers `None`, so the arm still answers `Ok(false)` | same |
 | T7 | Every multisig variant names its own target role | the four-row truth table of `multisig_config_update_target`, council included | same |
-| T8 | The desktop predicate reads the same two roles | T1 + T3 against `is_multisig_update_enacted_in_admin_state`'s seam | `src-tauri/.../asm_enactment.rs` |
-| T9 | An Alpen Administrator rotation is no longer refused | the variant that fell into the desktop's mismatch arm now resolves (§4.4) | same |
+| T8 | The desktop predicate reads the same two roles | T1's and T3's claims against the shared `multisig_update_enacted` seam | `src-tauri/.../asm_enactment.rs` |
+| T9 | An Alpen Administrator rotation stops answering `Ok(false)` for ever | end to end through `is_multisig_update_enacted_in_admin_state` against a real `AdministrationSubprotoState` (§4.4) | same |
+| T10 | The target lookup answers before the guard | an `AsmStfVk` under an authority that does not authorize it is `Ok(false)`, not `Err` — the only test that holds §10.3's ordering in place | same |
+| T11 | A cancel is an absence, not a negative | a cancel hex through the same entry point is `Err` | same |
 
 **T3 is the test that fails if a future refactor collapses the two roles back into one**, which is
 the shape the code had before this phase. Its name says which role each term came from, and that name
 is the documentation.
 
-**T2 and T3 are not two halves of one test.** They fail in opposite directions: T2 catches reading
-keys from the authorizing role, T3 catches reading the seqno from the target. A single test asserting
-both would still pass with one of the two swaps in place.
+**T1's fixture is the load-bearing part of all three.** Give the two roles anything to disagree
+about and T1 alone goes red under both substitutions — at which point T2 and T3 assert something
+already proven one test above them, and their names become claims about coverage they do not own.
+So T1's administrator snapshot agrees with `config` on every term and both roles stand at the same
+`last_seqno`. Each of T2 and T3 then reddens for exactly one substitution and stays green for the
+other, which is what lets a failure name which one happened.
+
+> **Verified by mutation, not by reading.** Reading keys and threshold off the authorizing role
+> reddens T2 and nothing else; reading the seqno off the target reddens T3 and nothing else;
+> swapping the guard and the target lookup reddens T10 and nothing else. Three one-line edits, three
+> single failures. The claim in this paragraph is the kind that is wrong by default, and it was
+> wrong here on the first attempt — see §9's sixth commit.
 
 **T7 is not restating the enum.** A codec with two arms crossed would round-trip happily — Phase 1's
 own finding, for the same reason: a council rotation and an administrator rotation carry a
 byte-identical `ThresholdConfigUpdate` and are separated only by the SSZ union selector.
+
+**T10 and T11 run through the entry point, not the helper.** `is_multisig_update_enacted_in_admin_state`
+takes an already-decoded `&AdministrationSubprotoState`, so the desktop copy can be tested end to
+end without a chain — hex to action, action to target, guard, and the lookup off real state. The
+backend has no such seam (§10.2), which is why its equivalent of T10 does not exist.
 
 **Not tested, deliberately:**
 
@@ -288,8 +315,11 @@ byte-identical `ThresholdConfigUpdate` and are separated only by the SSZ union s
 | 0 | This spec | Docs only |
 | 1 | `refactor(orchestrator-be)`: enactment stops carrying its own `authority_to_role` | Behaviour-preserving for the three shipped authorities: the guard is exactly as strict as the mismatch arm it replaces, and tx type 15 still hits the "not implemented" `Err` one line later. No test of its own, deliberately — the delegated function is already covered (§8) |
 | 2 | `feat(orchestrator-be)`: enactment reads the target role's config and the authorizing role's seqno | The behaviour change, alone, with T1–T7. Arrives with no renames or table moves to dilute its review |
-| 3 | `fix(desktop-app)`: the desktop predicate reads two roles, and stops refusing Alpen Admin rotations | Different crate, no consumer in production (§7.2), signature unchanged so the e2e is untouched. T8, T9 |
-| 4 | `docs`: the phase board, the master plan, and the audit | Docs only. By V2's precedent this is the commit that ships the phase |
+| 3 | `fix(desktop-app)`: the desktop predicate reads two roles, and stops silently refusing Alpen Admin | Different crate, no consumer in production (§7.2), signature unchanged so the e2e is untouched. T8, T9 |
+| 4 | `refactor(orchestrator-be)`: one `authority_to_role`, and it stops at a catch-all | Found reviewing commit 1. Behaviour-constant: `PayoutAdmin` was the only authority the wildcard ever caught (§10.4) |
+| 5 | `test(orchestrator-be)`: each role substitution reddens exactly one test | Found reviewing commit 2 — T1's fixture made T2 redundant (§8) |
+| 6 | `fix(desktop-app)`: a cancel is an absence again, and the guard order has a test | Found reviewing commit 3: a cancel had become `Ok(false)`, and §10.3's ordering had no net (§10.5) |
+| 7 | `docs`: the corrections, the debt, the phase board and the master plan | Docs only. By V2's precedent this is the commit that ships the phase |
 
 Commit 1 precedes commit 2 as a **rule**: the deletion and the delegation are behaviour-constant, and
 commit 2 is the only one that changes an answer. Bundling them would put the phase's one reviewable
@@ -336,13 +366,56 @@ other site wants the **authorizing** role, and for a council rotation the propos
   break `e2e_enactment_predicate.rs` for no gain.
 - **Tx type 15 has no chain-level coverage until Phase 4.** `e2e_enactment_predicate.rs` exercises
   `StrataAdmin` only.
+- **The backend has no synchronous seam, and the desktop does.** `is_proposal_enacted_on_asm`
+  (`asm_enactment.rs:41`) makes its RPC call before the `match`, so the whole multisig arm — the
+  guard/target ordering, the target-role resolution, the integration with
+  `require_authorized_for_action` — is untestable without a chain. The desktop copy exposes
+  `is_multisig_update_enacted_in_admin_state(&admin, …)`, which is exactly why T9, T10 and T11 can
+  exercise the real path there and have no backend counterpart. Extracting the equivalent would
+  close that gap and give tx type 15 real coverage before Phase 4. Not done here: it is a change to
+  a function every arm shares, and this phase's one reviewable decision should not arrive beside it.
+- **The variant→applied-role table has no tripwire against upstream changing the mapping.**
+  `multisig_config_update_target` (both copies) restates what upstream does inside `apply_multisig`
+  (`handler.rs:145-147`), which publishes no function for it. The `E0004` net catches a **new**
+  variant; it does not catch a **changed** mapping. If upstream ever applied tx type 15 to another
+  role, both copies would compile and answer wrongly in silence. The honest tripwire is chain-level
+  and belongs to Phase 4's e2e, which observes which role's config actually moved.
 
 ### 10.3 One ordering that must not be "simplified"
 
 `multisig_config_update_target` runs **before** `require_authorized_for_action`. Reversed, an
 `AsmStfVk` under a non-administrator authority goes from `Ok(false)` to `Err`, which
 `reconcile_one` turns into a per-proposal warning that never resolves. The code says so in a comment
-at the call site, because otherwise it is a review comment twice.
+at both call sites, because otherwise it is a review comment twice.
+
+A comment is not a net, and this one is carried by T10 in the desktop copy. The backend has no
+equivalent, and cannot have one until it grows the synchronous seam §10.2 records.
+
+### 10.4 `authority_to_role` had two more leftovers than Constraint 1 names
+
+Found reviewing commit 1, fixed in commit 4. `asm_role_membership.rs` held `authority_to_role` as a
+one-line wrapper over `authority_to_role_impl` — a split introduced by a rustfmt-and-clippy sweep
+(`a707120`) rather than by a decision, and enough to make the contract's *"only one
+`authority_to_role` answers for the backend"* false to `git grep`, which is the form a later reader
+checks it in.
+
+It also caught its fifth authority with `_`. Its desktop twin lists all five and says why, in a
+comment written after the fact: *"a catch-all is how the council reached the error arm here long
+after `orchestrator-be` had mapped it."* This phase is the second instance of that same sentence —
+the enactment module's own copy mapped three authorities behind a wildcard and would have compared a
+council rotation against the administrator's signer set. Both times the missing arm was invisible
+because the wildcard answered for it. `PayoutAdmin` is now named, and the next authority upstream
+adds stops the build.
+
+### 10.5 Two things the desktop commit got wrong about `Ok(false)` vs `Err`
+
+Found reviewing commit 3, fixed in commit 6. Replacing the old pair-match with a let-else turned a
+cancel from an explicit `Err` into `Ok(false)` — the direction §6 exists to forbid. And §10.3's
+ordering was carried by a comment alone: swapping the two lines compiled and passed every test.
+
+Both are recorded rather than quietly fixed because they are the same mistake in two costumes, and
+it is the mistake this module is most exposed to: `Ok(false)` and `Err` are both plausible-looking
+answers, and only one of them is an answer at all.
 
 ## 11. Verification
 
