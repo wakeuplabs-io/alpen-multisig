@@ -775,8 +775,14 @@ mod tests {
         assert!(!predicate_keys_match(&matching, &different));
     }
 
-    /// AC 7 — the two roles, wired correctly: the council's config carries the rotation's
-    /// post-conditions, the administrator's `last_seqno` carries whether it was authorized.
+    /// AC 7 — the happy path, and nothing else.
+    ///
+    /// Both snapshots satisfy every term deliberately: the administrator's keys and threshold
+    /// agree with `config`, and both roles stand at the same `last_seqno`. So this test answers
+    /// `true` under the real wiring *and* under either role substitution, which is what makes it a
+    /// control rather than a second copy of the two that follow. A fixture where the two roles
+    /// happen to disagree would let this one test catch both swaps, and the named tests below
+    /// would then be asserting something already proven — see this phase's spec §8.
     #[test]
     fn council_rotation_targets_the_council_and_the_administrator_authorizes_it() {
         let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
@@ -785,11 +791,11 @@ mod tests {
         let council = AuthoritySnapshot {
             keys: vec![key_hex(1), key_hex(3)],
             threshold: 3,
-            last_seqno: 0,
+            last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(2)],
-            threshold: 1,
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 3,
             last_seqno: 1,
         };
         let snapshot_of = snapshot_of_two(
@@ -811,9 +817,13 @@ mod tests {
         );
     }
 
-    /// AC 7a, half one. The administrator's own keys and threshold are set to disagree with
-    /// `config` on purpose — if the wiring ever read the target's keys/threshold from the
-    /// authorizing role instead, this would flip to `false` and catch it.
+    /// AC 7a, half one — and the **only** test that goes red if `keys` and `threshold` are ever
+    /// read off the authorizing role. The administrator's set disagrees with `config` on both
+    /// terms, so the swap answers `false` where `true` is expected.
+    ///
+    /// Both roles stand at the same `last_seqno` on purpose: that is the term the other half owns,
+    /// and leaving it able to fail here would make the two tests fail together and stop telling a
+    /// reader which substitution happened.
     #[test]
     fn council_rotation_ignores_the_administrators_signer_set() {
         let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
@@ -822,7 +832,7 @@ mod tests {
         let council = AuthoritySnapshot {
             keys: vec![key_hex(1), key_hex(3)],
             threshold: 3,
-            last_seqno: 0,
+            last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
             keys: vec![key_hex(5)],
