@@ -256,6 +256,40 @@ mod tests {
         assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon3));
     }
 
+    /// `decode_action_hex` needs no production change for a council rotation — it already emits
+    /// `update.role.as_str()` for every `MultisigUpdate`, regardless of authority. That fact is
+    /// load-bearing for decision 5.2 (no new `DecodedAction` kind; the target travels in `role`),
+    /// and nothing currently pins it. This test exists to pin it.
+    #[test]
+    fn decode_council_signer_update_names_the_target_role() {
+        let pk = CompressedPubKey::from_hex(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .unwrap();
+        let action = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::SecurityCouncil,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        });
+        let hex = action_codec::encode_hex(&action).expect("encode ok");
+
+        match decode_action_hex(hex) {
+            DecodedAction::MultisigUpdate {
+                role,
+                add_keys,
+                remove_keys,
+                new_threshold,
+            } => {
+                assert_eq!(role, "security_council");
+                assert_eq!(add_keys.len(), 1);
+                assert!(remove_keys.is_empty());
+                assert_eq!(new_threshold, 2);
+            }
+            other => panic!("expected MultisigUpdate, got {other:?}"),
+        }
+    }
+
     #[test]
     fn decode_vk_update_with_condition_hex() {
         let condition = "ab".repeat(32);
