@@ -1,5 +1,6 @@
 import type { ActionType } from '@/api/proposals'
 import type { DecodedAction } from '@/api/signing'
+import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 
 /**
  * The action type a decoded action belongs to.
@@ -11,7 +12,9 @@ import type { DecodedAction } from '@/api/signing'
  *
  * Written as an exhaustive `Record` with no default arm on purpose: a mapping is
  * exactly where the next guess gets written, and this way a fifth decoded kind is
- * a compile error rather than a silent `multisig_update`.
+ * a compile error rather than a silent `multisig_update`. It still owns *kinds* —
+ * it no longer owns *targets*: distinguishing a council rotation happens in the
+ * function body below, since `kind` alone does not carry the role.
  */
 const ACTION_TYPE_BY_KIND: Record<DecodedAction['kind'], ActionType> = {
 	multisig_update: 'multisig_update',
@@ -22,5 +25,9 @@ const ACTION_TYPE_BY_KIND: Record<DecodedAction['kind'], ActionType> = {
 }
 
 export function actionTypeFromDecoded(action: DecodedAction): ActionType {
+	// AC 5: the target lives in the action, and for tx type 15 it is not the authorizing
+	// authority. Not expressible in ACTION_TYPE_BY_KIND — `kind` does not carry the role — so
+	// this branch is guarded by a test rather than by the type system.
+	if (multisigUpdateTargetAuthority(action) === 'security_council') return 'council_signer_update'
 	return ACTION_TYPE_BY_KIND[action.kind]
 }

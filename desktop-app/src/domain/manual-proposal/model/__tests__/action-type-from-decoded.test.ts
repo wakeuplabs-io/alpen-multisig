@@ -22,4 +22,27 @@ assert.equal(
 )
 assert.equal(actionTypeFromDecoded({ kind: 'unknown', rawHex: 'ff' }), 'unknown')
 
+// Security Council signer update (V3) Phase 1 — `kind` alone does not carry the role, so the
+// distinction is made in the function body, not in the ACTION_TYPE_BY_KIND Record.
+assert.equal(
+	actionTypeFromDecoded({
+		kind: 'multisig_update',
+		role: 'security_council',
+		addKeys: [],
+		removeKeys: [],
+		newThreshold: 2,
+	}),
+	'council_signer_update',
+)
+assert.equal(
+	actionTypeFromDecoded({
+		kind: 'multisig_update',
+		role: 'strata_admin',
+		addKeys: [],
+		removeKeys: [],
+		newThreshold: 2,
+	}),
+	'multisig_update',
+)
+
 console.log('action-type-from-decoded: all assertions passed.')
