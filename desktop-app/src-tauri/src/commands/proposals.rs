@@ -172,7 +172,16 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
     }
     let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
     match desktop_app::infrastructure::action_codec::decode_hex(hex) {
-        Ok(desktop_app::domain::action::Action::MultisigUpdate(_)) => "multisig_update".to_string(),
+        // A council rotation is the one multisig update whose target authority is not the
+        // proposal's own (`MultisigUpdate.role`, see `domain/action.rs`). Collapsing every
+        // `MultisigUpdate` to one string would hide that from the list, the detail view, the
+        // sign header and the manual bundle (AC 5).
+        Ok(desktop_app::domain::action::Action::MultisigUpdate(update)) => match update.role {
+            desktop_app::domain::authority::Authority::SecurityCouncil => {
+                "council_signer_update".to_string()
+            }
+            _ => "multisig_update".to_string(),
+        },
         Ok(desktop_app::domain::action::Action::VkUpdate(_)) => "vk_update".to_string(),
         Ok(desktop_app::domain::action::Action::OperatorSetUpdate(_)) => {
             "operator_set_update".to_string()
@@ -1123,5 +1132,48 @@ mod tests {
             action_type_from_hex(&Some("target".to_string()), "not-valid-hex"),
             "cancel"
         );
+    }
+
+    const VALID_HEX: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+
+    /// The DTO boundary must name a council rotation for what it is, not collapse it into the
+    /// generic `"multisig_update"` that hides its target from the list, the detail view, the
+    /// sign header and the manual bundle.
+    #[test]
+    fn action_type_from_hex_names_a_council_signer_update() {
+        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let update = desktop_app::domain::action::Action::MultisigUpdate(
+            desktop_app::domain::action::MultisigUpdate {
+                role: desktop_app::domain::authority::Authority::SecurityCouncil,
+                add_keys: vec![pk],
+                remove_keys: vec![],
+                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
+            },
+        );
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
+            .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "council_signer_update");
+    }
+
+    /// Not a duplicate of `action_type_from_hex_names_a_council_signer_update`: that test proves
+    /// the new value is emitted, this one proves the old one still is. The change binds a field
+    /// the function previously ignored (`update.role`), so the regression it guards — every
+    /// multisig update suddenly answering the council's name — is real.
+    #[test]
+    fn action_type_from_hex_still_names_an_administrator_signer_update() {
+        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let update = desktop_app::domain::action::Action::MultisigUpdate(
+            desktop_app::domain::action::MultisigUpdate {
+                role: desktop_app::domain::authority::Authority::StrataAdmin,
+                add_keys: vec![pk],
+                remove_keys: vec![],
+                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
+            },
+        );
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
+            .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "multisig_update");
     }
 }
