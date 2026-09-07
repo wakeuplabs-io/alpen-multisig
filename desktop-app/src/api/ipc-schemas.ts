@@ -50,6 +50,7 @@ export const proposalSchema = z
 			'vk_update',
 			'operator_set_update',
 			'sequencer_key_update',
+			'council_signer_update',
 			'defcon_1',
 			'defcon_3',
 			'cancel',

@@ -177,6 +177,28 @@ assert.equal(mixedList.success, true, 'one defcon_3 row must not take down the l
 
 console.log('ipc-schemas: Defcon 3 boundaries OK')
 
+// Security Council signer update (V3) Phase 1: `council_signer_update` widens the closed enum
+// before the Rust emitter lands (commit order per spec §3) — this is deliberately inert: nothing
+// produces the value yet, but the boundary must already accept it or the emitter's commit would
+// arrive first and one row would take down the whole list, per the wire argument in §3.
+//
+// No `decodedActionSchema.safeParse` assertion here: decision 5.2 adds no new decoded-action kind,
+// so asserting one would be tautological — `role` is already `z.string()` and the object already
+// parses. That is where spec §6's amendment to the build plan is pinned at the code level.
+const councilSignerUpdateProposal = proposalSchema.safeParse({
+	...proposalWithNullBroadcastFields,
+	actionType: 'council_signer_update',
+})
+assert.equal(councilSignerUpdateProposal.success, true, 'proposalSchema must accept actionType council_signer_update')
+
+const mixedCouncilList = z.array(proposalSchema).safeParse([
+	{ ...proposalWithNullBroadcastFields, actionType: 'council_signer_update' },
+	{ ...proposalWithNullBroadcastFields, actionType: 'multisig_update' },
+])
+assert.equal(mixedCouncilList.success, true, 'one council_signer_update row must not take down the list beside it')
+
+console.log('ipc-schemas: council_signer_update boundary OK')
+
 const withoutCancelable = { ...proposalWithNullBroadcastFields }
 delete (withoutCancelable as { isCancelable?: boolean }).isCancelable
 assert.equal(proposalSchema.safeParse(withoutCancelable).success, false, 'proposalSchema must require isCancelable')
