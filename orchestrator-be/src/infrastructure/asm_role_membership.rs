@@ -19,7 +19,7 @@ pub(crate) enum AuthorityAsmSupport {
 }
 
 pub(crate) fn authority_asm_support(authority: Authority) -> AuthorityAsmSupport {
-    match authority_to_role_impl(authority) {
+    match authority_to_role(authority) {
         Ok(_) => AuthorityAsmSupport::Supported,
         Err(_) => AuthorityAsmSupport::Unsupported,
     }
@@ -263,17 +263,21 @@ pub(crate) fn require_authorized_for_action(
     Ok(())
 }
 
+/// The one answer this crate gives to "which ASM role is this authority".
+///
+/// Listed exhaustively rather than caught by `_`, for the reason its desktop twin already
+/// records: a catch-all is how the council reached an error arm long after it had been mapped
+/// everywhere else, and it is how the enactment module kept a third, staler answer of its own
+/// until slice V3. The next authority added upstream should stop the build rather than surface
+/// as a runtime refusal.
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
-    authority_to_role_impl(authority)
-}
-
-fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
         Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
-        _ => Err(format!(
+        // No ASM role upstream.
+        Authority::PayoutAdmin => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
     }
