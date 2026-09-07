@@ -29,4 +29,15 @@ assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'sequencer_manager')), 'Sequencer update')
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'strata_admin')), 'Signer update')
 
+// Security Council signer update (V3) Phase 1 — the highest-value assertion in the phase. A
+// council rotation's proposal authority IS `strata_admin` (the existing `multisig_update` arm
+// above derives its label from that same authority), so passing `strata_admin` explicitly here
+// proves the new label comes from `actionType`, not from a copy of the authority-branching logic.
+assert.equal(
+	inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')),
+	'Security Council signer update',
+)
+assert.notEqual(inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')), 'Unknown')
+assert.notEqual(inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')), 'Signer update')
+
 console.log('proposal-type-label: all assertions passed.')

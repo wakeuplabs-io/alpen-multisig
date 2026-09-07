@@ -9,6 +9,7 @@ import {
 import { computeSighash, decodeActionHex } from '@/api/signing'
 import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { actionTypeFromDecoded } from '@/domain/manual-proposal/model/action-type-from-decoded'
+import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
@@ -104,7 +105,12 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 					isLoading: false,
 					allSigners: configRes.ok ? configRes.data.signers : [],
 					signerSetChange: (() => {
+						// The kind check narrows `actionRes.data` for TypeScript below; the target
+						// check is the actual guard — a council rotation's target authority
+						// (`role`) differs from the proposal's own, so the table is suppressed
+						// rather than showing the wrong authority's signers (Constraint 2, §5.3).
 						if (!actionRes.ok || actionRes.data.kind !== 'multisig_update') return null
+						if (multisigUpdateTargetAuthority(actionRes.data) !== importData.authority) return null
 						const decoded = actionRes.data
 						const signers = configRes.ok ? configRes.data.signers : []
 						const removeSet = new Set(decoded.removeKeys.map((k) => k.toLowerCase()))

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Proposal } from '@/api/proposals'
 import { getMultisigConfig } from '@/api/asm-state'
 import { decodeActionHex } from '@/api/signing'
+import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 
 export type SignerRow = {
 	pubkey: string
@@ -47,7 +48,15 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setAllSigners(configRes.data.signers)
 				}
 
-				if (actionRes.ok && actionRes.data.kind === 'multisig_update' && configRes.ok) {
+				// The Before/After table is suppressed, not retargeted, for a decoded action whose
+				// target authority differs from the proposal's own (a council rotation, whose
+				// proposal authority is strata_admin) — see docs/specs/security-council-signer-update-phase-1.md §5.3.
+				const tableApplies = actionRes.ok && multisigUpdateTargetAuthority(actionRes.data) === proposal.authority
+
+				// `actionRes.data.kind === 'multisig_update'` is implied by `tableApplies` (see
+				// multisig-update-target.ts) but is kept explicit here so TypeScript narrows
+				// `actionRes.data` to the variant carrying addKeys/removeKeys/newThreshold below.
+				if (actionRes.ok && actionRes.data.kind === 'multisig_update' && tableApplies && configRes.ok) {
 					const decoded = actionRes.data
 					const config = configRes.data
 					const isEnacted = proposal.status === 'enacted'
@@ -92,7 +101,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						thresholdBefore,
 						thresholdAfter,
 					})
-				} else if (actionRes.ok && actionRes.data.kind !== 'multisig_update') {
+				} else if (actionRes.ok && !tableApplies) {
 					// A decoded view must not outlive the action it decoded. Without this the
 					// table survives into a proposal that has no signer-set change — and
 					// `deriveProposalTitle` would then title a Defcon 1 "Add 2 signers".

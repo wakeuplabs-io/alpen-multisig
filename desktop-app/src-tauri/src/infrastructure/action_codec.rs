@@ -10,7 +10,7 @@ use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
     AlpenAdminMultisigUpdate, Defcon1Update, Defcon3Update, EeStfVkUpdate, OlStfVkUpdate,
     OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
-    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -142,6 +142,15 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                 Authority::AlpenAdmin => Ok(MultisigAction::Update(
                     UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(config_update)),
                 )),
+                // The one update whose target authority differs from the authority that
+                // authorizes it: upstream's `authorized_role()` for tx type 15 is
+                // `Role::StrataAdministrator`, but it is applied to `Role::StrataSecurityCouncil`
+                // — the council's own signer set is rotated by the administrator, not by itself.
+                Authority::SecurityCouncil => Ok(MultisigAction::Update(
+                    UpdateAction::StrataSecurityCouncilMultisig(
+                        StrataSecurityCouncilMultisigUpdate::new(config_update),
+                    ),
+                )),
                 other => Err(CodecError::UnsupportedAuthority(format!(
                     "encoding not implemented for authority `{other:?}`"
                 ))),
@@ -262,12 +271,11 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
         }
-        // Security Council actions — decoded explicitly so a future upstream variant fails to
-        // compile here instead of silently falling through. Each becomes a real arm as its
-        // slice lands; see docs/specs/security-council.md.
-        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(_)) => Err(
-            CodecError::UnsupportedVariant("StrataSecurityCouncilMultisig"),
-        ),
+        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(update)) => {
+            let domain_update =
+                multisig_update_from_threshold_config(Authority::SecurityCouncil, update.config())?;
+            Ok(Action::MultisigUpdate(domain_update))
+        }
         MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Ok(Action::Defcon3),
         MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
@@ -410,6 +418,71 @@ mod tests {
         let direct_bytes = strata_action.as_ssz_bytes();
 
         let domain_bytes = encode(&sample_action()).unwrap();
+        assert_eq!(domain_bytes, direct_bytes);
+    }
+
+    fn sample_council_signer_update_action() -> Action {
+        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::SecurityCouncil,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        })
+    }
+
+    /// Unlike the two Defcon payloads, which are empty unit structs, a council rotation and an
+    /// administrator rotation carry a byte-identical `ThresholdConfigUpdate` and are separated
+    /// only by the SSZ union selector. A codec with the two encode arms crossed would round-trip
+    /// happily and send the wrong authority to a hardware signer — the third assertion below is
+    /// the one that would catch that, where the round trip alone would not.
+    #[test]
+    fn council_signer_update_round_trips_and_encodes_upstreams_tx_type_15() {
+        use strata_asm_params::UpdateTxType;
+
+        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let action = sample_council_signer_update_action();
+        let encoded = encode(&action).expect("encode ok");
+
+        assert_eq!(decode(&encoded).expect("decode ok"), action);
+
+        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
+        let MultisigAction::Update(update) = upstream else {
+            panic!("council signer update is an update, not a cancel");
+        };
+        assert_eq!(
+            update.update_tx_type(),
+            UpdateTxType::StrataSecurityCouncilMultisigUpdate
+        );
+
+        let admin_action = Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_keys: vec![pk],
+            remove_keys: vec![],
+            new_threshold: NonZeroU8::new(2).unwrap(),
+        });
+        let admin_encoded = encode(&admin_action).expect("encode ok");
+        assert_ne!(
+            encoded, admin_encoded,
+            "an identical ThresholdConfigUpdate must not encode the same way for two authorities"
+        );
+    }
+
+    /// The positive counterpart to the round trip above: our encoding is not merely
+    /// self-consistent, it matches what upstream's own type produces for the same config.
+    #[test]
+    fn council_signer_update_encode_matches_direct_strata_ssz() {
+        let pk_bytes = hex::decode(VALID_HEX).unwrap();
+        let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
+        let strata_pk = CompressedPublicKey::from(secp_pk);
+        let config_update =
+            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_update = StrataSecurityCouncilMultisigUpdate::new(config_update);
+        let strata_action =
+            MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(strata_update));
+        let direct_bytes = strata_action.as_ssz_bytes();
+
+        let domain_bytes = encode(&sample_council_signer_update_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);
     }
 
