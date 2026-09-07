@@ -159,6 +159,13 @@ retarget will hand to `getMultisigConfig`, so that phase changes the call sites 
 
 The three guards — **`allSigners` is untouched in all three**:
 
+> **One redundancy is compiler-forced.** `multisigUpdateTargetAuthority` returns `string | null`
+> rather than acting as a type predicate, so TypeScript cannot narrow a `DecodedAction` through it
+> to the variant carrying `addKeys`/`removeKeys`/`newThreshold`. The two hooks therefore keep an
+> explicit `kind === 'multisig_update'` check beside the target check. It is logically implied by a
+> matching target authority and exists only for the narrowing; both sites say so in a comment, so it
+> does not read as a belt-and-braces condition a later reader might "simplify" away.
+
 1. **`use-decoded-proposal.ts:50,95`** — introduce
    `const tableApplies = actionRes.ok && multisigUpdateTargetAuthority(actionRes.data) === proposal.authority`.
    The building branch becomes `tableApplies && configRes.ok`; the blanking branch becomes
