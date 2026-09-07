@@ -352,3 +352,52 @@ application can produce one*, which is false here.
 - **One intermediate window inside the branch:** between commits 2 and 6 a council bundle imports and
   renders a false Before/After table. The phase squash-merges as a single commit, so that state never
   exists on `develop` — which is what the build plan's *"one atomic commit"* rule buys.
+
+## 11. Two findings this phase records rather than fixes
+
+Both came out of the review of this phase's own diff. Neither is repaired here, and both name the
+phase that owns the repair.
+
+### 11.1 `/manual` does not tie a bundle's authority to the action's authorizing role
+
+`AUTHORITIES` (`use-manual-proposal.ts:27`) admits `security_council`, and nothing checks a bundle's
+declared authority against the role upstream would require for the action it carries. So a
+council-rotation bundle authored with `"authority": "security_council"` — the natural-looking label
+for an action that rotates the council — imports cleanly: the membership gate passes (a council
+member *is* a council signer), and this phase's guard passes too, because the decoded target and the
+declared authority agree. Signatures are then collected from the council for an action whose
+`authorized_role()` is `StrataAdministrator`, and the reveal is rejected on chain.
+
+**Severity is bounded by the artifact the signer actually reviews.** Upstream renders
+`Authorized By: Strata Administrator` on the same screen the device displays
+(`strata_security_council_multisig.rs:52-75`), so a council signer is told, in the one place that
+counts, that this is not theirs to authorize. The cost is a wasted transaction, not a signature over
+something unreviewable — and the Before/After table in that scenario is *correct*, since the config
+read and the target coincide.
+
+**The hole is pre-existing and not council-specific** — no action type has its bundle authority
+checked against its authorizing role. What this phase changes is that tx type 15 now reaches the
+flow at all, which is why it is recorded here.
+
+**Owner: Phase 4**, which holds AC 13 (the manual fallback). The honest fix derives the authorizing
+role from the decoded action rather than trusting the bundle, and that derivation is exactly what
+**Phase 2** builds for enactment ([Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one)).
+Writing it here would mean writing it twice.
+
+### 11.2 The encode arm removes the last backstop on `build_admin_multisig_update_hex`
+
+`build_admin_multisig_update_hex` (`commands/action_builder.rs:82-113`) resolves its role through
+`Authority::from_wire` with no allow-list. Until commit 2 the codec's catch-all refused
+`security_council` with `UnsupportedAuthority`; now it encodes. The Tauri command is therefore
+*capable* of building a council rotation, and the only remaining barriers are on the TypeScript side
+(§9).
+
+One of those barriers is a cast rather than a type: `use-create-proposal.ts:94` writes
+`authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin'`, which is
+already untrue today because `selectedRole` can be the council. It is unreachable only because
+`ACTION_TYPES_BY_AUTHORITY.security_council` offers no signer update.
+
+**Owner: Phase 3**, and it is already in that slice's contract — its Verification checklist requires
+that *"no `as` cast decides which authority a multisig update targets"*
+([Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session)).
+Recorded here because this phase is what made the cast load-bearing rather than merely untidy.
