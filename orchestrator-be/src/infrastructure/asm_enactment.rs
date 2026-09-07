@@ -17,7 +17,7 @@ use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, http_client, rpc_timeout};
+use crate::infrastructure::{action_codec, asm_role_membership, http_client, rpc_timeout};
 
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
@@ -122,8 +122,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 .queued()
                 .iter()
                 .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
-            // The role is named literally rather than resolved through `authority_to_role`, which
-            // does not map the council: an arm that matches one action variant knows its role.
+            // The role is named literally: an arm that matches one action variant knows its role.
             let council = admin
                 .authority(Role::StrataSecurityCouncil)
                 .ok_or_else(|| {
@@ -180,7 +179,11 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
                 return Ok(false);
             };
-            let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+            asm_role_membership::require_authorized_for_action(authority, &action)?;
+            let role = match &action {
+                MultisigAction::Update(update) => update.required_role(),
+                _ => unreachable!("outer arm already matched MultisigAction::Update"),
+            };
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             let authority_config = admin.authority(role).ok_or_else(|| {
                 AppError::BadRequest(format!(
@@ -418,17 +421,6 @@ fn operator_set_post_conditions_met(
         }
         // No-op (neither add nor remove): treat as already enacted (vacuous).
         (true, true) => true,
-    }
-}
-
-fn authority_to_role(authority: Authority) -> Result<Role, String> {
-    match authority {
-        Authority::StrataAdmin => Ok(Role::StrataAdministrator),
-        Authority::SequencerManager => Ok(Role::StrataSequencerManager),
-        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        _ => Err(format!(
-            "authority `{authority:?}` is not mapped to ASM role authorization yet"
-        )),
     }
 }
 
