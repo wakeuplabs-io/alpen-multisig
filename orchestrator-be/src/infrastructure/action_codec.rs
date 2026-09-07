@@ -51,6 +51,26 @@ pub(crate) fn test_fixture_defcon_3_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
+/// Valid `action_hex` for a Security Council rotation — the variant this codec must round-trip
+/// distinctly from an administrator rotation even though both carry a byte-identical
+/// `ThresholdConfigUpdate`. Test-only: no path in the application builds this action until Phase 3.
+#[cfg(test)]
+pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
+    use std::num::NonZeroU8;
+
+    use ssz::Encode;
+    use strata_asm_txs_admin::actions::updates::StrataSecurityCouncilMultisigUpdate;
+    use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+
+    let config_update =
+        ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+    let action = MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
+        StrataSecurityCouncilMultisigUpdate::new(config_update),
+    ));
+    hex::encode(action.as_ssz_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +88,10 @@ mod tests {
     #[test]
     fn accepts_defcon_3_fixture_action() {
         decode_multisig_action_hex(&test_fixture_defcon_3_action_hex()).unwrap();
+    }
+
+    #[test]
+    fn accepts_council_rotation_fixture_action() {
+        decode_multisig_action_hex(&test_fixture_council_rotation_action_hex()).unwrap();
     }
 }
