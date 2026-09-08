@@ -81,5 +81,15 @@ export function getActionTypeOptions(authority: string): ActionTypeOption[] {
 }
 
 export function getDefaultActionType(authority: string): ActionType {
-	return getActionTypeOptions(authority)[0].actionType
+	const options = getActionTypeOptions(authority)
+	const first = options[0]
+	// The unknown-authority fallback (§4.6) is an empty list, not the administrator's — correct,
+	// but it makes this reachable for an authority nobody enumerated. Today no caller can actually
+	// get here (every session authority that reaches this form is one of the four wired above),
+	// so this is a backstop, not a repair: it fails with a message that names the authority
+	// instead of a cryptic `Cannot read properties of undefined` that would take down the screen.
+	if (first === undefined) {
+		throw new Error(`No action types are configured for authority \`${authority}\``)
+	}
+	return first.actionType
 }

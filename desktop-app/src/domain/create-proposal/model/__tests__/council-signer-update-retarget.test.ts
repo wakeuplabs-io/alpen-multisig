@@ -80,6 +80,17 @@ for (const authority of [...OTHER_AUTHORITIES, 'not_an_authority']) {
 	assert.ok(!actionTypes.includes('council_signer_update'), `claim 2: ${authority} must not be offered the entry`)
 }
 
+// §4.6's fallback is an empty list, not the administrator's menu — which makes
+// `getDefaultActionType` reachable with nothing to pick a first entry from. Unreachable today (no
+// caller passes an authority absent from the map), but it must fail with a message naming the
+// authority rather than a bare `Cannot read properties of undefined` that would take the screen
+// down with it.
+assert.throws(
+	() => getDefaultActionType('not_an_authority'),
+	/not_an_authority/,
+	'an authority with no configured action types fails legibly, not with a TypeError',
+)
+
 // Claim 3 (AC 1a, through the schema) — the half the menu does not cover: stale form state or a
 // direct route still cannot author the action against a session the schema itself refuses.
 assert.equal(
