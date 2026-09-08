@@ -190,6 +190,17 @@ fn require_proposal_authority(proposal: &Proposal, authority: Authority) -> Resu
     Ok(())
 }
 
+/// Scope a read without revealing whether another authority owns the requested id.
+fn require_visible_proposal_authority(
+    proposal: &Proposal,
+    authority: Authority,
+) -> Result<(), AppError> {
+    if proposal.authority != authority {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 /// Refuse broadcast when the proposal snapshot disagrees with live ASM threshold (P-035).
 pub(crate) async fn ensure_threshold_snapshot_current(
     proposal: &Proposal,
@@ -215,7 +226,7 @@ pub(crate) async fn get_update_action(
         .find_by_action_id(action_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    require_proposal_authority(&proposal, authority)?;
+    require_visible_proposal_authority(&proposal, authority)?;
     Ok(proposal)
 }
 
@@ -707,7 +718,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     let Some(proposal) = repo.find_by_action_id(action_id).await? else {
         return Ok(());
     };
-    require_proposal_authority(&proposal, authority)?;
+    require_visible_proposal_authority(&proposal, authority)?;
 
     if proposal.status != ProposalStatus::Approved {
         return Ok(());
@@ -1614,7 +1625,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_update_action_rejects_wrong_authority() {
+    async fn test_get_update_action_conceals_foreign_authority() {
         let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
@@ -1628,7 +1639,7 @@ mod tests {
 
         let result = get_update_action(&repo, Authority::AlpenAdmin, &created.action_id).await;
 
-        assert!(matches!(result.unwrap_err(), AppError::Unauthorized));
+        assert!(matches!(result.unwrap_err(), AppError::NotFound));
     }
 
     #[tokio::test]
@@ -1769,8 +1780,8 @@ mod tests {
             let council_get =
                 get_update_action(&repo, Authority::SecurityCouncil, &proposal.action_id).await;
             assert!(
-                matches!(council_get.unwrap_err(), AppError::Unauthorized),
-                "{status} council rotation detail must refuse the council"
+                matches!(council_get.unwrap_err(), AppError::NotFound),
+                "{status} council rotation detail must conceal its existence from the council"
             );
 
             let admin_visible = list_proposals(&repo, Authority::StrataAdmin, Some(status))
