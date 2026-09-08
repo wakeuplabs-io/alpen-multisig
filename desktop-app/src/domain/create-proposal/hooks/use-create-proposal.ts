@@ -91,7 +91,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				}
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
-						role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin',
+						role: authorityFromRole(selectedRole),
 						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						newThreshold: threshold,
