@@ -16,6 +16,7 @@ import {
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
 import { useMultisigConfig } from '../hooks/use-multisig-config'
+import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
 import type { ProposalPreview } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
@@ -128,7 +129,7 @@ export function CreateProposalForm({
 	const actionType = watchedValues?.actionType ?? getDefaultActionType(authority)
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
-	const isSignerUpdateActionType = actionType === 'signer_update' || actionType === 'council_signer_update'
+	const isSignerUpdate = isSignerUpdateActionType(actionType)
 
 	// Constraint 2: the target is decided by the action, never the session. `authority` here is
 	// the session the screen already resolved, not a fresh `useSession()` call (§4.3).
@@ -138,7 +139,7 @@ export function CreateProposalForm({
 	// §4.8: if the read failed, `isLoadingConfig` goes false and `multisigConfig` stays null — the
 	// schema would then validate against nothing, which the contract forbids. Both buttons must
 	// stay disabled until the read either succeeds or the signer switches to a different target.
-	const isConfigUnavailable = isSignerUpdateActionType && !isLoadingConfig && multisigConfig === null
+	const isConfigUnavailable = isSignerUpdate && !isLoadingConfig && multisigConfig === null
 
 	const createProposalSchema = useMemo(
 		() =>
@@ -154,7 +155,7 @@ export function CreateProposalForm({
 		setResolver(() => zodResolver(createProposalSchema))
 	}, [createProposalSchema])
 
-	const signerKeysDigest = isSignerUpdateActionType
+	const signerKeysDigest = isSignerUpdate
 		? [
 				multisigConfigVersion,
 				JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
@@ -163,9 +164,9 @@ export function CreateProposalForm({
 		: ''
 
 	useEffect(() => {
-		if (!isSignerUpdateActionType || signerKeysDigest === '') return
+		if (!isSignerUpdate || signerKeysDigest === '') return
 		void trigger('threshold')
-	}, [isSignerUpdateActionType, signerKeysDigest, trigger])
+	}, [isSignerUpdate, signerKeysDigest, trigger])
 
 	// Separates a target switch from a same-target refetch (§4.5): `keysToRemove` and `threshold`
 	// already mirror the target's config on every version bump, but `keysToAdd` must only be
@@ -423,7 +424,7 @@ export function CreateProposalForm({
 								// Keyed by level: switching between the two remounts rather than carrying one
 								// lever's resolved action hex, and its signing message, into the other's form.
 								<DefconFormFields key={actionType} level={actionType} />
-							) : actionType === 'signer_update' || actionType === 'council_signer_update' ? (
+							) : isSignerUpdateActionType(actionType) ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}

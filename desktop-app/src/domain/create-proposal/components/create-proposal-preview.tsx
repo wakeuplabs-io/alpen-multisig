@@ -7,6 +7,7 @@ import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { actionTypeTitle } from '../model/action-type-config'
+import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import type { ActionType } from '../model/create-proposal.types'
 import {
 	countSignersAfterUpdate,
@@ -174,7 +175,7 @@ export function CreateProposalPreview({
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
 				</div>
-			) : actionType === 'signer_update' || actionType === 'council_signer_update' ? (
+			) : isSignerUpdateActionType(actionType) ? (
 				<div>
 					<p className="m-0 mb-3 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						Signer Set Change

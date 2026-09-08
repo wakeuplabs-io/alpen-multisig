@@ -11,6 +11,7 @@ import assert from 'node:assert/strict'
 import { getActionTypeOptions, getDefaultActionType } from '../action-type-config.ts'
 import { buildCreateProposalFormSchema } from '../create-proposal.schema.ts'
 import { multisigTargetAuthority } from '../multisig-target.ts'
+import { isSignerUpdateActionType } from '../action-type-predicates.ts'
 import { removesCurrentMembers } from '../validators/signer-update.ts'
 
 const KEY_A = `02${'a'.repeat(64)}`
@@ -206,5 +207,19 @@ assert.equal(
 // administrator's.
 assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_X }]), true, 'claim 8: X is a current council member')
 assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_A }]), false, 'claim 8: A is not on the council')
+
+// Claim 9 — `isSignerUpdateActionType` is the one predicate every form-fields/preview branch
+// shares: true for both signer-set action types, false for everything else.
+assert.equal(isSignerUpdateActionType('signer_update'), true, 'claim 9: signer_update is a signer-update action type')
+assert.equal(
+	isSignerUpdateActionType('council_signer_update'),
+	true,
+	'claim 9: council_signer_update is a signer-update action type',
+)
+assert.equal(isSignerUpdateActionType('vk_update'), false, 'claim 9: vk_update is not')
+assert.equal(isSignerUpdateActionType('operator_set_update'), false, 'claim 9: operator_set_update is not')
+assert.equal(isSignerUpdateActionType('sequencer_key_update'), false, 'claim 9: sequencer_key_update is not')
+assert.equal(isSignerUpdateActionType('defcon_1'), false, 'claim 9: defcon_1 is not')
+assert.equal(isSignerUpdateActionType('defcon_3'), false, 'claim 9: defcon_3 is not')
 
 console.log('council signer update retarget: all assertions passed')
