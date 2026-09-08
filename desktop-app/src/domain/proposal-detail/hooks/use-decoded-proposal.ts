@@ -18,6 +18,10 @@ export type DecodedProposalData = {
 	isLoading: boolean
 }
 
+type KeyedDecodedProposalData = DecodedProposalData & {
+	proposalKey: string | null
+}
+
 /**
  * Builds the Before/After table from a decoded action and the config it should read against, or
  * suppresses it (returns `null`) rather than guess. Suppression is Phase 1 behaviour, preserved
@@ -42,19 +46,22 @@ function buildTableOrNull(
 }
 
 export function useDecodedProposal(proposal: Proposal | null): DecodedProposalData {
-	const [signerSetChange, setSignerSetChange] = useState<SignerSetChange | null>(null)
-	const [allSigners, setAllSigners] = useState<string[]>([])
-	const [isLoading, setIsLoading] = useState(false)
+	const proposalKey = proposal === null ? null : `${proposal.actionId}:${proposal.status}`
+	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
+		proposalKey: null,
+		signerSetChange: null,
+		allSigners: [],
+		isLoading: false,
+	})
 
 	useEffect(() => {
 		if (proposal === null) {
-			setSignerSetChange(null)
-			setAllSigners([])
+			setDecodedData({ proposalKey: null, signerSetChange: null, allSigners: [], isLoading: false })
 			return
 		}
 
 		let cancelled = false
-		setIsLoading(true)
+		setDecodedData({ proposalKey, signerSetChange: null, allSigners: [], isLoading: true })
 
 		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
 		// always read the proposal's own authority, never the target of the action it decodes to
@@ -64,17 +71,12 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 			([actionRes, ownConfigRes]) => {
 				if (cancelled) return
 
-				if (ownConfigRes.ok) {
-					setAllSigners(ownConfigRes.data.signers)
-				}
+				const allSigners = ownConfigRes.ok ? ownConfigRes.data.signers : []
 
 				const target = actionRes.ok ? multisigUpdateTargetAuthority(actionRes.data) : null
 
-				// A failed decode leaves the table alone. It says nothing about whether this proposal
-				// has a signer-set change, and blanking on a transient RPC error would lose
-				// information rather than correct it.
 				if (!actionRes.ok) {
-					setIsLoading(false)
+					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
 					return
 				}
 
@@ -82,8 +84,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// action that carries no signer-set change (a Defcon lever, a VK update) blanks the
 				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
 				if (target === null) {
-					setIsLoading(false)
-					setSignerSetChange(null)
+					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
 					return
 				}
 
@@ -91,8 +92,12 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 				if (target === proposal.authority) {
 					// No retarget: the config already read above for `allSigners` is also the target's.
-					setIsLoading(false)
-					setSignerSetChange(buildTableOrNull(action, ownConfigRes, proposal))
+					setDecodedData({
+						proposalKey,
+						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
+						allSigners,
+						isLoading: false,
+					})
 					return
 				}
 
@@ -102,8 +107,12 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// re-checks `cancelled` on its own — `allSigners` above is untouched by it.
 				void getMultisigConfig(target).then((targetConfigRes) => {
 					if (cancelled) return
-					setIsLoading(false)
-					setSignerSetChange(buildTableOrNull(action, targetConfigRes, proposal))
+					setDecodedData({
+						proposalKey,
+						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
+						allSigners,
+						isLoading: false,
+					})
 				})
 			},
 		)
@@ -115,5 +124,10 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [proposal?.actionId, proposal?.status])
 
-	return { signerSetChange, allSigners, isLoading }
+	// Effects run after paint. Keying the state makes the render immediately following a proposal
+	// change return an empty loading view instead of exposing the previous proposal's signer data.
+	if (decodedData.proposalKey !== proposalKey) {
+		return { signerSetChange: null, allSigners: [], isLoading: proposal !== null }
+	}
+	return decodedData
 }

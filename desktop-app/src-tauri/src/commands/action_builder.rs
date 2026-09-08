@@ -306,7 +306,7 @@ mod tests {
 
         let admin_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
             role: "strata_admin".to_string(),
-            add_keys: vec![pk],
+            add_keys: vec![pk.clone()],
             remove_keys: vec![],
             new_threshold: 2,
         })
@@ -318,14 +318,24 @@ mod tests {
         let admin_message =
             render_signing_message(seqno, &admin_hex).expect("administrator message renders");
 
-        let council_lines: Vec<&str> = council_message.lines().collect();
-        assert!(
-            council_lines.contains(&"Action: Strata Security Council Multisig Update"),
-            "{council_message}"
-        );
-        assert!(
-            council_lines.contains(&"Authorized By: Strata Administrator"),
-            "{council_message}"
+        assert_eq!(
+            council_message,
+            format!(
+                concat!(
+                    "Strata ASM Administration v1\n",
+                    "Action: Strata Security Council Multisig Update\n",
+                    "Authorized By: Strata Administrator\n",
+                    "Sequence: {seqno}\n",
+                    "Action Details:\n",
+                    "  New Threshold: 2\n",
+                    "  Members to Add: 1\n",
+                    "  1. Add Member: {pk}\n",
+                    "  Members to Remove: 0"
+                ),
+                seqno = seqno,
+                pk = pk
+            ),
+            "the signer must see the exact canonical nine-line message"
         );
 
         assert_ne!(

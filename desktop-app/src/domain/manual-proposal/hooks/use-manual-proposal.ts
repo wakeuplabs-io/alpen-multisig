@@ -10,6 +10,7 @@ import {
 import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { actionTypeFromDecoded } from '@/domain/manual-proposal/model/action-type-from-decoded'
+import { decodedActionAuthorizingAuthority } from '@/domain/manual-proposal/model/authorizing-authority'
 import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
@@ -226,6 +227,13 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 				setImportErrors({ actionHex: 'Unknown action kind — cannot decode this hex' })
 				return
 			}
+			const authorizingAuthority = decodedActionAuthorizingAuthority(decodeRes.data)
+			if (authorizingAuthority !== null && authorizingAuthority !== importForm.authority) {
+				setImportErrors({
+					authority: `This action must be authorized by ${authorizingAuthority}, not ${importForm.authority}`,
+				})
+				return
+			}
 			if (!sighashRes.ok) {
 				setImportErrors({ actionHex: `Sighash computation failed: ${sighashRes.error}` })
 				return
@@ -302,6 +310,13 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 			}
 			if (decodeRes.data.kind === 'unknown') {
 				setImportErrors({ actionHex: 'Unknown action kind — cannot decode this hex' })
+				return
+			}
+			const authorizingAuthority = decodedActionAuthorizingAuthority(decodeRes.data)
+			if (authorizingAuthority !== null && authorizingAuthority !== bundle.authority) {
+				setImportErrors({
+					authority: `This action must be authorized by ${authorizingAuthority}, not ${bundle.authority}`,
+				})
 				return
 			}
 			if (!sighashRes.ok) {
