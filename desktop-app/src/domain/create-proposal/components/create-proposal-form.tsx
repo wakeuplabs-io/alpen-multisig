@@ -49,6 +49,15 @@ type Props = {
 	onReauthenticate: () => Promise<void>
 }
 
+// Names the target in the unavailable-config message (§4.8) — a signer told "the config could
+// not be read" with no target named has no idea which read to retry.
+const TARGET_AUTHORITY_LABELS: Record<MultisigTargetAuthority, string> = {
+	strata_admin: 'Strata Administrator',
+	sequencer_manager: 'Strata Sequencer Manager',
+	alpen_admin: 'Alpen Administrator',
+	security_council: 'Security Council',
+}
+
 const defaultFormValues: CreateProposalFormValues = {
 	actionType: 'signer_update',
 	seqNo: '',
@@ -125,6 +134,11 @@ export function CreateProposalForm({
 	// the session the screen already resolved, not a fresh `useSession()` call (§4.3).
 	const targetAuthority = multisigTargetAuthority(actionType, authority)
 	const { multisigConfig, multisigConfigVersion, isLoadingConfig } = useMultisigConfig(targetAuthority)
+
+	// §4.8: if the read failed, `isLoadingConfig` goes false and `multisigConfig` stays null — the
+	// schema would then validate against nothing, which the contract forbids. Both buttons must
+	// stay disabled until the read either succeeds or the signer switches to a different target.
+	const isConfigUnavailable = isSignerUpdateActionType && !isLoadingConfig && multisigConfig === null
 
 	const createProposalSchema = useMemo(
 		() =>
@@ -426,6 +440,13 @@ export function CreateProposalForm({
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
+
+							{isConfigUnavailable && (
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
+									Could not load the signer set for {TARGET_AUTHORITY_LABELS[targetAuthority]}. Try again before
+									continuing.
+								</div>
+							)}
 						</div>
 					)}
 
@@ -455,7 +476,7 @@ export function CreateProposalForm({
 											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
 												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
 											}`}
-											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+											disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
 											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
@@ -480,7 +501,7 @@ export function CreateProposalForm({
 												? 'border-danger text-danger-deep hover:bg-danger-surface'
 												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
 										}`}
-										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+										disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
 										onClick={() => void handlePreviewClick()}
 									>
 										<EyeGrayIcon width={15} height={15} className="block shrink-0" />

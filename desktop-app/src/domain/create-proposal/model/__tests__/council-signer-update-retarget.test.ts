@@ -11,8 +11,7 @@ import assert from 'node:assert/strict'
 import { getActionTypeOptions, getDefaultActionType } from '../action-type-config.ts'
 import { buildCreateProposalFormSchema } from '../create-proposal.schema.ts'
 import { multisigTargetAuthority } from '../multisig-target.ts'
-// Claim 8 needs `removesCurrentMembers`, which lands in SDD §8 commit 6 — see the marker below.
-// import { removesCurrentMembers } from '../validators/signer-update.ts'
+import { removesCurrentMembers } from '../validators/signer-update.ts'
 
 const KEY_A = `02${'a'.repeat(64)}`
 const KEY_B = `02${'b'.repeat(64)}`
@@ -194,8 +193,7 @@ assert.equal(
 
 // Claim 8 (AC 11) — the consequence-stating predicate reads the council's roster, not the
 // administrator's.
-// TODO(commit 6): uncomment once `removesCurrentMembers` exists.
-// assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_X }]), true, 'claim 8: X is a current council member')
-// assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_A }]), false, 'claim 8: A is not on the council')
+assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_X }]), true, 'claim 8: X is a current council member')
+assert.equal(removesCurrentMembers(COUNCIL.signers, [{ value: KEY_A }]), false, 'claim 8: A is not on the council')
 
 console.log('council signer update retarget: all assertions passed')

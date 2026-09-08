@@ -181,3 +181,18 @@ export const validateSignerUpdate: ActionValidator = ({
 		}
 	}
 }
+
+/**
+ * AC 11: does this removal actually take a current member off the target's roster? An
+ * intersection, not a count — a remove row naming a key that is not on the target changes
+ * nothing about who can authorize the target's actions, and must not trigger the callout that
+ * says otherwise. Blank rows are ignored, matching every other rule in this file.
+ */
+export function removesCurrentMembers(currentTargetSigners: string[], keysToRemove: { value: string }[]): boolean {
+	const currentNormalized = new Set(currentTargetSigners.map(normalizeSignerKey))
+	return keysToRemove.some((row) => {
+		const key = row.value.trim()
+		if (key.length === 0) return false
+		return currentNormalized.has(normalizeSignerKey(key))
+	})
+}
