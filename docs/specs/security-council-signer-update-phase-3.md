@@ -364,6 +364,12 @@ with a space would pass a `contains` and fail a signer. And at the same seqno, w
 threshold, it differs from an administrator signer update's — same seqno for both, so "differs" can only mean
 the action.
 
+It lives in `desktop-app/src-tauri/src/commands/action_builder.rs`, next to the tests it makes redundant, and
+not in `infrastructure/signing.rs`. `render_signing_message` is reachable from both — `signing.rs` compiles
+into the `desktop_app` **library** crate (`lib.rs`) — but `build_admin_multisig_update_hex` lives in
+`commands/`, which `main.rs` pulls in as `mod commands` and the library crate does not re-export. A test that
+needs the builder can only run from the **binary** crate's own test tree.
+
 Its doc comment says why literals are pinned here when the neighbouring Defcon tripwire
 (`signing.rs:453-458`) explicitly declines to pin upstream's: the new coverage is the *pair* of lines naming
 two different roles, which is the wire-level expression of the segregation invariant.
