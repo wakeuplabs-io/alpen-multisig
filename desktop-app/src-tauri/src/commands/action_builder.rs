@@ -271,38 +271,77 @@ mod tests {
         assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon3));
     }
 
-    /// `decode_action_hex` needs no production change for a council rotation — it already emits
-    /// `update.role.as_str()` for every `MultisigUpdate`, regardless of authority. That fact is
-    /// load-bearing for decision 5.2 (no new `DecodedAction` kind; the target travels in `role`),
-    /// and nothing currently pins it. This test exists to pin it.
+    /// The wire-level expression of the segregation invariant (AC 2): a council rotation names
+    /// itself in `Action:` but names the administrator in `Authorized By:` — two distinct lines,
+    /// never merged. Runs the path the device actually signs over, out of the builder rather than
+    /// a hand-built `Action`, because the claim this side can make is that *our* mapping
+    /// (`Authority::SecurityCouncil` -> `UpdateAction::StrataSecurityCouncilMultisig`, wired in
+    /// `action_codec.rs`) lands on the variant upstream renders as tx 15. Upstream's own nine
+    /// lines are already pinned byte-for-byte in `strata_security_council_multisig.rs`, and
+    /// restating them here would only test upstream's test.
+    ///
+    /// Asserts on `message.lines()`, not `contains()` over the whole string: a renderer that
+    /// joined the two lines with a space would still pass a `contains` check and still put the
+    /// wrong words in front of a signer. Literals are pinned here — unlike the neighbouring
+    /// Defcon tripwire (`signing.rs:453-458`, which explicitly declines to pin upstream's)
+    /// — because the new coverage *is* the pair of lines naming two different roles, the
+    /// wire-level shape of the segregation invariant. This test replaces
+    /// `decode_council_signer_update_names_the_target_role`, which built the `Action` by hand and
+    /// asserted a subset of what this asserts.
     #[test]
-    fn decode_council_signer_update_names_the_target_role() {
-        let pk = CompressedPubKey::from_hex(
-            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        )
-        .unwrap();
-        let action = Action::MultisigUpdate(MultisigUpdate {
-            role: Authority::SecurityCouncil,
-            add_keys: vec![pk],
-            remove_keys: vec![],
-            new_threshold: NonZeroU8::new(2).unwrap(),
-        });
-        let hex = action_codec::encode_hex(&action).expect("encode ok");
+    fn council_signer_update_signing_message_names_both_roles_on_separate_lines() {
+        use desktop_app::infrastructure::signing::render_signing_message;
 
-        match decode_action_hex(hex) {
-            DecodedAction::MultisigUpdate {
-                role,
-                add_keys,
-                remove_keys,
-                new_threshold,
-            } => {
-                assert_eq!(role, "security_council");
-                assert_eq!(add_keys.len(), 1);
-                assert!(remove_keys.is_empty());
-                assert_eq!(new_threshold, 2);
-            }
-            other => panic!("expected MultisigUpdate, got {other:?}"),
-        }
+        let pk = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5".to_string();
+        let seqno = 7;
+
+        let council_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
+            role: "security_council".to_string(),
+            add_keys: vec![pk.clone()],
+            remove_keys: vec![],
+            new_threshold: 2,
+        })
+        .expect("build should succeed")
+        .action_hex;
+
+        let admin_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
+            role: "strata_admin".to_string(),
+            add_keys: vec![pk.clone()],
+            remove_keys: vec![],
+            new_threshold: 2,
+        })
+        .expect("build should succeed")
+        .action_hex;
+
+        let council_message =
+            render_signing_message(seqno, &council_hex).expect("council message renders");
+        let admin_message =
+            render_signing_message(seqno, &admin_hex).expect("administrator message renders");
+
+        assert_eq!(
+            council_message,
+            format!(
+                concat!(
+                    "Strata ASM Administration v1\n",
+                    "Action: Strata Security Council Multisig Update\n",
+                    "Authorized By: Strata Administrator\n",
+                    "Sequence: {seqno}\n",
+                    "Action Details:\n",
+                    "  New Threshold: 2\n",
+                    "  Members to Add: 1\n",
+                    "  1. Add Member: {pk}\n",
+                    "  Members to Remove: 0"
+                ),
+                seqno = seqno,
+                pk = pk
+            ),
+            "the signer must see the exact canonical nine-line message"
+        );
+
+        assert_ne!(
+            council_message, admin_message,
+            "same seqno, same keys, same threshold — only the action differs, and the signer must see that"
+        );
     }
 
     #[test]

@@ -7,6 +7,7 @@ import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { actionTypeTitle } from '../model/action-type-config'
+import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import type { ActionType } from '../model/create-proposal.types'
 import {
 	countSignersAfterUpdate,
@@ -14,6 +15,7 @@ import {
 	VK_PREDICATE_TYPE_LABELS,
 	type VkPredicateType,
 } from '../model/create-proposal.schema'
+import { removesCurrentMembers } from '../model/validators/signer-update'
 
 type Props = {
 	title: string
@@ -80,6 +82,12 @@ export function CreateProposalPreview({
 
 	const newThreshold = Number(threshold)
 	const thresholdChanged = newThreshold !== currentThreshold || afterSignerCount !== beforeSignerCount
+
+	// AC 11: states the consequence, does not block it — Constraint 5 keeps this off the danger
+	// palette. Only meaningful for the council's own rotation: an administrator signer update
+	// removing an administrator signer has no bearing on who may authorize the Council's actions.
+	const showsCouncilMembershipLossCallout =
+		actionType === 'council_signer_update' && removesCurrentMembers(currentSigners, keysToRemoveRows)
 
 	const signatureHex = createdProposal?.signatures[0]?.signatureHex ?? null
 
@@ -167,7 +175,7 @@ export function CreateProposalPreview({
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
 				</div>
-			) : actionType === 'signer_update' ? (
+			) : isSignerUpdateActionType(actionType) ? (
 				<div>
 					<p className="m-0 mb-3 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						Signer Set Change
@@ -210,6 +218,15 @@ export function CreateProposalPreview({
 							</div>
 						</div>
 					</div>
+					{showsCouncilMembershipLossCallout && (
+						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
+							<p className="m-0 text-body font-semibold text-[#111827]">Removes a current Council member</p>
+							<p className="m-0 mt-2 text-body text-[#6b7280]">
+								This rotation removes at least one current Security Council member. Once enacted, that signer can no
+								longer authorize Council actions, including Defcon 1 and Defcon 3.
+							</p>
+						</div>
+					)}
 				</div>
 			) : (
 				<div>

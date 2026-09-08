@@ -30,7 +30,11 @@ function issuesOn(
 	field: 'actionType' | 'defconConfirm',
 	{ authority, actionType, defconConfirm }: { authority: string; actionType: ActionType; defconConfirm: string },
 ): number {
-	const result = buildCreateProposalFormSchema({ currentMultisigSigners: [], authority }).safeParse({
+	const result = buildCreateProposalFormSchema({
+		currentMultisigSigners: [],
+		currentMultisigThreshold: null,
+		authority,
+	}).safeParse({
 		...draft,
 		actionType,
 		defconConfirm,

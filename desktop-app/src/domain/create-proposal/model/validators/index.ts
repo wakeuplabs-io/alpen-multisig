@@ -9,6 +9,9 @@ import { validateDefcon3 } from './defcon-3'
 
 const actionValidators: Record<CreateProposalFormValues['actionType'], ActionValidator> = {
 	signer_update: validateSignerUpdate,
+	// Reused, not duplicated: the rules are identical, and only the signer set they answer against
+	// changes — that set is supplied via `currentMultisigSigners`, retargeted in `create-proposal-form.tsx`.
+	council_signer_update: validateSignerUpdate,
 	operator_set_update: validateOperatorSetUpdate,
 	sequencer_key_update: validateSequencerKeyUpdate,
 	vk_update: validateVkUpdate,

@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { getMultisigConfig } from '@/api/asm-state'
+import type { ApiResult } from '@/types'
+import { getMultisigConfig, type MultisigConfig } from '@/api/asm-state'
 import {
 	broadcastManualProposal,
 	prepareBroadcastManual,
 	type BroadcastManualInput,
 	type PrepareBroadcastResult,
 } from '@/api/proposals'
-import { computeSighash, decodeActionHex } from '@/api/signing'
+import { computeSighash, decodeActionHex, type DecodedAction } from '@/api/signing'
 import { deriveBroadcastError } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { actionTypeFromDecoded } from '@/domain/manual-proposal/model/action-type-from-decoded'
+import { decodedActionAuthorizingAuthority } from '@/domain/manual-proposal/model/authorizing-authority'
 import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
+import { buildSignerSetChange, type SignerSetChange } from '@/domain/proposal-detail/model/build-signer-set-change'
 import type {
 	ManualBundleJson,
 	ManualImportData,
@@ -36,6 +39,28 @@ function normalizeHex(s: string): string {
 }
 
 export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting' | 'done' | 'error'
+
+/**
+ * The manual/imported bundle path has no `Proposal` and no `enacted` status to reconstruct
+ * around — every bundle reviewed here is unsigned, pre-broadcast — so `buildSignerSetChange` is
+ * always called with `isEnacted: false`. A failed config read for the target falls back to
+ * suppression, matching `useDecodedProposal` (§4.9): never render against some other config.
+ */
+function buildManualTableOrNull(
+	action: Extract<DecodedAction, { kind: 'multisig_update' }>,
+	configRes: ApiResult<MultisigConfig>,
+): SignerSetChange | null {
+	if (!configRes.ok) return null
+
+	return buildSignerSetChange({
+		signers: configRes.data.signers,
+		threshold: configRes.data.threshold,
+		addKeys: action.addKeys,
+		removeKeys: action.removeKeys,
+		newThreshold: action.newThreshold,
+		isEnacted: false,
+	})
+}
 
 /** `feeRateSatPerKvb === null` while fee presets load — the broadcast step stays blocked until ready. */
 export function useManualProposal(initialBundle: ManualBundleJson | null, feeRateSatPerKvb: number | null) {
@@ -96,64 +121,57 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		let cancelled = false
 		setDecodedData((prev) => ({ ...prev, isLoading: true }))
 
+		// `allSigners` and `requiredSignatures` must always read the declared authority — never the
+		// target of the decoded action — mirroring `useDecodedProposal` (§4.9). This first read is
+		// unchanged by the retarget below: same request, same timing.
 		void Promise.all([decodeActionHex(importData.actionHex), getMultisigConfig(importData.authority)]).then(
-			([actionRes, configRes]) => {
+			([actionRes, ownConfigRes]) => {
 				if (cancelled) return
 
-				setDecodedData((prev) => ({
-					...prev,
-					isLoading: false,
-					allSigners: configRes.ok ? configRes.data.signers : [],
-					signerSetChange: (() => {
-						// The kind check narrows `actionRes.data` for TypeScript below; the target
-						// check is the actual guard — a council rotation's target authority
-						// (`role`) differs from the proposal's own, so the table is suppressed
-						// rather than showing the wrong authority's signers (Constraint 2, §5.3).
-						if (!actionRes.ok || actionRes.data.kind !== 'multisig_update') return null
-						if (multisigUpdateTargetAuthority(actionRes.data) !== importData.authority) return null
-						const decoded = actionRes.data
-						const signers = configRes.ok ? configRes.data.signers : []
-						const removeSet = new Set(decoded.removeKeys.map((k) => k.toLowerCase()))
-						const beforeSigners = signers
-						const afterSigners = [...signers.filter((k) => !removeSet.has(k.toLowerCase())), ...decoded.addKeys]
-
-						const rowMap = new Map<
-							string,
-							{ pubkey: string; inBefore: boolean; inAfter: boolean; isAdded: boolean; isRemoved: boolean }
-						>()
-						for (const k of beforeSigners) {
-							rowMap.set(k.toLowerCase(), {
-								pubkey: k,
-								inBefore: true,
-								inAfter: false,
-								isAdded: false,
-								isRemoved: false,
-							})
-						}
-						for (const k of afterSigners) {
-							const lower = k.toLowerCase()
-							const existing = rowMap.get(lower)
-							if (existing) {
-								existing.inAfter = true
-							} else {
-								rowMap.set(lower, { pubkey: k, inBefore: false, inAfter: true, isAdded: true, isRemoved: false })
-							}
-						}
-						for (const row of rowMap.values()) {
-							if (row.inBefore && !row.inAfter) row.isRemoved = true
-						}
-
-						return {
-							rows: Array.from(rowMap.values()),
-							thresholdBefore: configRes.ok ? configRes.data.threshold : null,
-							thresholdAfter: decoded.newThreshold,
-						}
-					})(),
-				}))
-
-				if (configRes.ok) {
-					setRequiredSignatures(configRes.data.threshold)
+				const allSigners = ownConfigRes.ok ? ownConfigRes.data.signers : []
+				if (ownConfigRes.ok) {
+					setRequiredSignatures(ownConfigRes.data.threshold)
 				}
+
+				// The kind check narrows `actionRes.data` below; the target check is the actual guard —
+				// a council rotation's target authority (`role`) differs from the declared one.
+				if (!actionRes.ok || actionRes.data.kind !== 'multisig_update') {
+					setDecodedData((prev) => ({ ...prev, isLoading: false, allSigners, signerSetChange: null }))
+					return
+				}
+				const action = actionRes.data
+				const target = multisigUpdateTargetAuthority(action)
+				if (target === null) {
+					// Unreachable: `kind` is already narrowed to 'multisig_update' above, so the helper
+					// can only return `action.role` here. Kept as a real check, not a cast, so the
+					// compiler — not this comment — is what stays honest if that ever changes.
+					setDecodedData((prev) => ({ ...prev, isLoading: false, allSigners, signerSetChange: null }))
+					return
+				}
+
+				if (target === importData.authority) {
+					// No retarget: the config already read above for `allSigners` is also the target's.
+					setDecodedData((prev) => ({
+						...prev,
+						isLoading: false,
+						allSigners,
+						signerSetChange: buildManualTableOrNull(action, ownConfigRes),
+					}))
+					return
+				}
+
+				// Retarget (§4.9): the decoded action modifies an authority other than the one declared
+				// on import — a council rotation. The table renders against the *target's* config, read
+				// here, conditionally, only when it differs.
+				void getMultisigConfig(target).then((targetConfigRes) => {
+					if (cancelled) return
+					setDecodedData((prev) => ({
+						...prev,
+						isLoading: false,
+						allSigners,
+						signerSetChange: buildManualTableOrNull(action, targetConfigRes),
+					}))
+				})
 			},
 		)
 
@@ -207,6 +225,13 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 			}
 			if (decodeRes.data.kind === 'unknown') {
 				setImportErrors({ actionHex: 'Unknown action kind — cannot decode this hex' })
+				return
+			}
+			const authorizingAuthority = decodedActionAuthorizingAuthority(decodeRes.data)
+			if (authorizingAuthority !== null && authorizingAuthority !== importForm.authority) {
+				setImportErrors({
+					authority: `This action must be authorized by ${authorizingAuthority}, not ${importForm.authority}`,
+				})
 				return
 			}
 			if (!sighashRes.ok) {
@@ -285,6 +310,13 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 			}
 			if (decodeRes.data.kind === 'unknown') {
 				setImportErrors({ actionHex: 'Unknown action kind — cannot decode this hex' })
+				return
+			}
+			const authorizingAuthority = decodedActionAuthorizingAuthority(decodeRes.data)
+			if (authorizingAuthority !== null && authorizingAuthority !== bundle.authority) {
+				setImportErrors({
+					authority: `This action must be authorized by ${authorizingAuthority}, not ${bundle.authority}`,
+				})
 				return
 			}
 			if (!sighashRes.ok) {

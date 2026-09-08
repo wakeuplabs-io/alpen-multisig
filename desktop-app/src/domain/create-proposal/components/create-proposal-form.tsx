@@ -4,19 +4,23 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
+import type { MultisigTargetAuthority } from '@/api/action-builder'
 import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import {
 	isSessionExpiredReauthError,
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
+import { useMultisigConfig } from '../hooks/use-multisig-config'
+import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
-import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ProposalPreview } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
+import { multisigTargetAuthority } from '../model/multisig-target'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
@@ -28,12 +32,9 @@ import { VkUpdateFormFields } from './vk-update-form-fields'
 
 type Props = {
 	authorityLabel: string
-	authority: string
+	authority: MultisigTargetAuthority
 	/** Signer connected in this session — drives the device-specific signing copy. */
 	walletVendor: WalletVendor
-	multisigConfig: MultisigConfigSnapshot | null
-	multisigConfigVersion: number
-	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
@@ -47,6 +48,15 @@ type Props = {
 	onPreviewValid: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	onSubmitValid: (data: CreateProposalFormValues) => Promise<void>
 	onReauthenticate: () => Promise<void>
+}
+
+// Names the target in the unavailable-config message (§4.8) — a signer told "the config could
+// not be read" with no target named has no idea which read to retry.
+const TARGET_AUTHORITY_LABELS: Record<MultisigTargetAuthority, string> = {
+	strata_admin: 'Strata Administrator',
+	sequencer_manager: 'Strata Sequencer Manager',
+	alpen_admin: 'Alpen Administrator',
+	security_council: 'Security Council',
 }
 
 const defaultFormValues: CreateProposalFormValues = {
@@ -69,9 +79,6 @@ export function CreateProposalForm({
 	authorityLabel,
 	authority,
 	walletVendor,
-	multisigConfig,
-	multisigConfigVersion,
-	isLoadingConfig,
 	nextSeqNo,
 	isLoadingSeqNo,
 	currentVk,
@@ -94,18 +101,19 @@ export function CreateProposalForm({
 	const [isReauthenticating, setIsReauthenticating] = useState(false)
 	const [pendingAction, setPendingAction] = useState<'preview' | 'submit' | null>(null)
 
-	const createProposalSchema = useMemo(
-		() =>
-			buildCreateProposalFormSchema({
-				currentMultisigSigners: multisigConfig?.signers ?? null,
-				authority,
-			}),
-		[multisigConfig, authority],
-	)
-
-	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])
-
 	const actionTypeOptions = useMemo(() => getActionTypeOptions(authority), [authority])
+
+	// react-hook-form needs a `resolver` at the `useForm()` call below, but the *correct* one
+	// depends on `actionType` — a value only available from `useWatch(form.control)`, which needs
+	// `form` to already exist. State bridges the one-render gap: `useForm()` reads whatever
+	// resolver the *previous* render committed, and the layout effect after `useWatch` (below)
+	// commits this render's fresh one before the browser paints the loaded config. A passive effect
+	// would expose one frame where the buttons could use a resolver for the previous target.
+	const [resolver, setResolver] = useState(() =>
+		zodResolver(
+			buildCreateProposalFormSchema({ currentMultisigSigners: null, currentMultisigThreshold: null, authority }),
+		),
+	)
 
 	const form = useForm<CreateProposalFormValues, unknown, CreateProposalFormValues>({
 		resolver,
@@ -116,32 +124,66 @@ export function CreateProposalForm({
 
 	const { handleSubmit, reset, formState, getValues, control, trigger } = form
 	const watchedValues = useWatch({ control })
-	const actionType = watchedValues?.actionType
+	const actionType = watchedValues?.actionType ?? getDefaultActionType(authority)
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
-	const signerKeysDigest =
-		actionType === 'signer_update'
-			? [
-					multisigConfigVersion,
-					JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
-					JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
-				].join('|')
-			: ''
+	const isSignerUpdate = isSignerUpdateActionType(actionType)
+
+	// Constraint 2: the target is decided by the action, never the session. `authority` here is
+	// the session the screen already resolved, not a fresh `useSession()` call (§4.3).
+	const targetAuthority = multisigTargetAuthority(actionType, authority)
+	const { multisigConfig, multisigConfigVersion, isLoadingConfig } = useMultisigConfig(targetAuthority)
+
+	// §4.8: if the read failed, `isLoadingConfig` goes false and `multisigConfig` stays null — the
+	// schema would then validate against nothing, which the contract forbids. Both buttons must
+	// stay disabled until the read either succeeds or the signer switches to a different target.
+	const isConfigUnavailable = isSignerUpdate && !isLoadingConfig && multisigConfig === null
+
+	const createProposalSchema = useMemo(
+		() =>
+			buildCreateProposalFormSchema({
+				currentMultisigSigners: multisigConfig?.signers ?? null,
+				currentMultisigThreshold: multisigConfig?.threshold ?? null,
+				authority,
+			}),
+		[multisigConfig, authority],
+	)
+
+	useLayoutEffect(() => {
+		setResolver(() => zodResolver(createProposalSchema))
+	}, [createProposalSchema])
+
+	const signerKeysDigest = isSignerUpdate
+		? [
+				multisigConfigVersion,
+				JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
+				JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
+			].join('|')
+		: ''
 
 	useEffect(() => {
-		if (actionType !== 'signer_update' || signerKeysDigest === '') return
+		if (!isSignerUpdate || signerKeysDigest === '') return
 		void trigger('threshold')
-	}, [actionType, signerKeysDigest, trigger])
+	}, [isSignerUpdate, signerKeysDigest, trigger])
+
+	// Separates a target switch from a same-target refetch (§4.5): `keysToRemove` and `threshold`
+	// already mirror the target's config on every version bump, but `keysToAdd` must only be
+	// cleared when the target actually changed — otherwise keys a signer chose against the
+	// previous target would silently be reinterpreted as adds against the new one.
+	const lastAppliedTargetRef = useRef<MultisigTargetAuthority | null>(null)
 
 	useEffect(() => {
 		if (multisigConfigVersion === 0 || multisigConfig === null) return
+		const targetChanged = lastAppliedTargetRef.current !== targetAuthority
+		lastAppliedTargetRef.current = targetAuthority
 		const current = getValues()
 		reset({
 			...current,
+			keysToAdd: targetChanged ? [{ value: '' }] : current.keysToAdd,
 			keysToRemove: [{ value: '' }],
 			threshold: String(multisigConfig.threshold),
 		})
-	}, [multisigConfigVersion, multisigConfig, reset, getValues])
+	}, [multisigConfigVersion, multisigConfig, targetAuthority, reset, getValues])
 
 	useEffect(() => {
 		if (nextSeqNo === null) return
@@ -380,7 +422,7 @@ export function CreateProposalForm({
 								// Keyed by level: switching between the two remounts rather than carrying one
 								// lever's resolved action hex, and its signing message, into the other's form.
 								<DefconFormFields key={actionType} level={actionType} />
-							) : actionType === 'signer_update' ? (
+							) : isSignerUpdateActionType(actionType) ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}
@@ -396,6 +438,13 @@ export function CreateProposalForm({
 								<SequencerKeyUpdateFormFields />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
+							)}
+
+							{isConfigUnavailable && (
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
+									Could not load the signer set for {TARGET_AUTHORITY_LABELS[targetAuthority]}. Try again before
+									continuing.
+								</div>
 							)}
 						</div>
 					)}
@@ -426,7 +475,7 @@ export function CreateProposalForm({
 											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
 												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
 											}`}
-											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+											disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
 											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
@@ -451,7 +500,7 @@ export function CreateProposalForm({
 												? 'border-danger text-danger-deep hover:bg-danger-surface'
 												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
 										}`}
-										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+										disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
 										onClick={() => void handlePreviewClick()}
 									>
 										<EyeGrayIcon width={15} height={15} className="block shrink-0" />

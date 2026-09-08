@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-state'
+import { getCurrentOperators, getCurrentVk } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
 import {
 	buildAdminMultisigUpdateHex,
@@ -16,7 +16,8 @@ import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
-import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ProposalPreview } from '../model/create-proposal.types'
+import { multisigTargetAuthority } from '../model/multisig-target'
 import type { ApiResult } from '@/types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
@@ -38,9 +39,6 @@ function normalizePubKeyHex(value: string): string {
 }
 
 export type UseCreateProposalReturn = {
-	multisigConfig: MultisigConfigSnapshot | null
-	multisigConfigVersion: number
-	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
@@ -58,9 +56,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const { adapter } = useWalletSession()
 	const { selectedRole } = useSession()
 
-	const [multisigConfig, setMultisigConfig] = useState<MultisigConfigSnapshot | null>(null)
-	const [multisigConfigVersion, setMultisigConfigVersion] = useState(0)
-	const [isLoadingConfig, setIsLoadingConfig] = useState(true)
 	const [nextSeqNo, setNextSeqNo] = useState<number | null>(null)
 	const [isLoadingSeqNo, setIsLoadingSeqNo] = useState(true)
 	const [currentVk, setCurrentVk] = useState<CurrentVk | null>(null)
@@ -80,18 +75,27 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	}
 
 	async function buildActionHex(formData: CreateProposalFormValues): Promise<string> {
+		const sessionAuthority = authorityFromRole(selectedRole)
+		if (sessionAuthority === 'payout_admin') {
+			throw new Error('Payout Administrator cannot create ASM proposals')
+		}
+
 		// Exhaustive on purpose. This used to be an `if` chain whose final `else` built a VK update,
 		// so a missing arm did not fail to compile and did not fail loudly — it made the signer sign
 		// a vk_update sighash under another action's form. The `never` below is that tripwire.
 		switch (formData.actionType) {
-			case 'signer_update': {
+			// Byte-for-byte the same payload shape; only `role` differs, and it is derived from the
+			// action rather than chosen (Constraint 2), so the council's rotation cannot drift from
+			// the administrator's in how it is built.
+			case 'signer_update':
+			case 'council_signer_update': {
 				const threshold = Number(formData.threshold)
 				if (!Number.isInteger(threshold) || threshold < 1 || threshold > 255) {
 					throw new Error('Threshold must be an integer between 1 and 255')
 				}
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
-						role: authorityFromRole(selectedRole) as 'strata_admin' | 'sequencer_manager' | 'alpen_admin',
+						role: multisigTargetAuthority(formData.actionType, sessionAuthority),
 						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						newThreshold: threshold,
@@ -119,7 +123,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			case 'vk_update':
 				return unwrapActionHex(
 					await buildVkUpdateHex({
-						authority: authorityFromRole(selectedRole),
+						authority: sessionAuthority,
 						typeId: VK_PREDICATE_TYPE_IDS[formData.vkTypeId],
 						conditionHex: formData.newVkHex.trim(),
 					}),
@@ -130,24 +134,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			}
 		}
 	}
-
-	useEffect(() => {
-		let cancelled = false
-		setIsLoadingConfig(true)
-		getMultisigConfig(authorityFromRole(selectedRole)).then((result) => {
-			if (cancelled) return
-			setIsLoadingConfig(false)
-			if (!result.ok) return
-			setMultisigConfig({
-				signers: result.data.signers,
-				threshold: result.data.threshold,
-			})
-			setMultisigConfigVersion((v) => v + 1)
-		})
-		return () => {
-			cancelled = true
-		}
-	}, [selectedRole])
 
 	useEffect(() => {
 		let cancelled = false
@@ -259,9 +245,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	}
 
 	return {
-		multisigConfig,
-		multisigConfigVersion,
-		isLoadingConfig,
 		nextSeqNo,
 		isLoadingSeqNo,
 		currentVk,

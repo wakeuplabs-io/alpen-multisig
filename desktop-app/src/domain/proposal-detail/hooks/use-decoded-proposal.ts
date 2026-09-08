@@ -1,22 +1,16 @@
 import { useEffect, useState } from 'react'
+import type { ApiResult } from '@/types'
 import type { Proposal } from '@/api/proposals'
-import { getMultisigConfig } from '@/api/asm-state'
-import { decodeActionHex } from '@/api/signing'
+import { getMultisigConfig, type MultisigConfig } from '@/api/asm-state'
+import { decodeActionHex, type DecodedAction } from '@/api/signing'
 import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
+import {
+	buildSignerSetChange,
+	type SignerRow,
+	type SignerSetChange,
+} from '@/domain/proposal-detail/model/build-signer-set-change'
 
-export type SignerRow = {
-	pubkey: string
-	inBefore: boolean
-	inAfter: boolean
-	isAdded: boolean
-	isRemoved: boolean
-}
-
-export type SignerSetChange = {
-	rows: SignerRow[]
-	thresholdBefore: number | null
-	thresholdAfter: number
-}
+export type { SignerRow, SignerSetChange }
 
 export type DecodedProposalData = {
 	signerSetChange: SignerSetChange | null
@@ -24,94 +18,102 @@ export type DecodedProposalData = {
 	isLoading: boolean
 }
 
+type KeyedDecodedProposalData = DecodedProposalData & {
+	proposalKey: string | null
+}
+
+/**
+ * Builds the Before/After table from a decoded action and the config it should read against, or
+ * suppresses it (returns `null`) rather than guess. Suppression is Phase 1 behaviour, preserved
+ * on purpose (§4.9): a failed config read for the *target* falls back here too, never to
+ * rendering against some other config.
+ */
+function buildTableOrNull(
+	action: DecodedAction,
+	configRes: ApiResult<MultisigConfig>,
+	proposal: Proposal,
+): SignerSetChange | null {
+	if (!configRes.ok || action.kind !== 'multisig_update') return null
+
+	return buildSignerSetChange({
+		signers: configRes.data.signers,
+		threshold: configRes.data.threshold,
+		addKeys: action.addKeys,
+		removeKeys: action.removeKeys,
+		newThreshold: action.newThreshold,
+		isEnacted: proposal.status === 'enacted',
+	})
+}
+
 export function useDecodedProposal(proposal: Proposal | null): DecodedProposalData {
-	const [signerSetChange, setSignerSetChange] = useState<SignerSetChange | null>(null)
-	const [allSigners, setAllSigners] = useState<string[]>([])
-	const [isLoading, setIsLoading] = useState(false)
+	const proposalKey = proposal === null ? null : `${proposal.actionId}:${proposal.status}`
+	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
+		proposalKey: null,
+		signerSetChange: null,
+		allSigners: [],
+		isLoading: false,
+	})
 
 	useEffect(() => {
 		if (proposal === null) {
-			setSignerSetChange(null)
-			setAllSigners([])
+			setDecodedData({ proposalKey: null, signerSetChange: null, allSigners: [], isLoading: false })
 			return
 		}
 
 		let cancelled = false
-		setIsLoading(true)
+		setDecodedData({ proposalKey, signerSetChange: null, allSigners: [], isLoading: true })
 
+		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
+		// always read the proposal's own authority, never the target of the action it decodes to
+		// (§4.9). This call is unchanged by the retarget below: same request, same timing, so the
+		// approval surface carries zero regression risk from this commit.
 		void Promise.all([decodeActionHex(proposal.actionHex), getMultisigConfig(proposal.authority)]).then(
-			([actionRes, configRes]) => {
+			([actionRes, ownConfigRes]) => {
 				if (cancelled) return
-				setIsLoading(false)
 
-				if (configRes.ok) {
-					setAllSigners(configRes.data.signers)
+				const allSigners = ownConfigRes.ok ? ownConfigRes.data.signers : []
+
+				const target = actionRes.ok ? multisigUpdateTargetAuthority(actionRes.data) : null
+
+				if (!actionRes.ok) {
+					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
+					return
 				}
 
-				// The Before/After table is suppressed, not retargeted, for a decoded action whose
-				// target authority differs from the proposal's own (a council rotation, whose
-				// proposal authority is strata_admin) — see docs/specs/security-council-signer-update-phase-1.md §5.3.
-				const tableApplies = actionRes.ok && multisigUpdateTargetAuthority(actionRes.data) === proposal.authority
+				// A decoded view must not outlive the action it decoded: a successful decode of an
+				// action that carries no signer-set change (a Defcon lever, a VK update) blanks the
+				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
+				if (target === null) {
+					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
+					return
+				}
 
-				// `actionRes.data.kind === 'multisig_update'` is implied by `tableApplies` (see
-				// multisig-update-target.ts) but is kept explicit here so TypeScript narrows
-				// `actionRes.data` to the variant carrying addKeys/removeKeys/newThreshold below.
-				if (actionRes.ok && actionRes.data.kind === 'multisig_update' && tableApplies && configRes.ok) {
-					const decoded = actionRes.data
-					const config = configRes.data
-					const isEnacted = proposal.status === 'enacted'
+				const action = actionRes.data
 
-					const addSet = new Set(decoded.addKeys.map((k) => k.toLowerCase()))
-					const removeSet = new Set(decoded.removeKeys.map((k) => k.toLowerCase()))
-
-					let beforeSigners: string[]
-					let afterSigners: string[]
-
-					if (isEnacted) {
-						afterSigners = config.signers
-						beforeSigners = [...config.signers.filter((k) => !addSet.has(k.toLowerCase())), ...decoded.removeKeys]
-					} else {
-						beforeSigners = config.signers
-						afterSigners = [...config.signers.filter((k) => !removeSet.has(k.toLowerCase())), ...decoded.addKeys]
-					}
-
-					const rowMap = new Map<string, SignerRow>()
-					for (const k of beforeSigners) {
-						rowMap.set(k.toLowerCase(), { pubkey: k, inBefore: true, inAfter: false, isAdded: false, isRemoved: false })
-					}
-					for (const k of afterSigners) {
-						const lower = k.toLowerCase()
-						const existing = rowMap.get(lower)
-						if (existing) {
-							existing.inAfter = true
-						} else {
-							rowMap.set(lower, { pubkey: k, inBefore: false, inAfter: true, isAdded: true, isRemoved: false })
-						}
-					}
-					for (const row of rowMap.values()) {
-						if (row.inBefore && !row.inAfter) row.isRemoved = true
-						if (!row.inBefore && row.inAfter) row.isAdded = true
-					}
-
-					const thresholdBefore = isEnacted ? null : config.threshold
-					const thresholdAfter = isEnacted ? config.threshold : decoded.newThreshold
-
-					setSignerSetChange({
-						rows: Array.from(rowMap.values()),
-						thresholdBefore,
-						thresholdAfter,
+				if (target === proposal.authority) {
+					// No retarget: the config already read above for `allSigners` is also the target's.
+					setDecodedData({
+						proposalKey,
+						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
+						allSigners,
+						isLoading: false,
 					})
-				} else if (actionRes.ok && !tableApplies) {
-					// A decoded view must not outlive the action it decoded. Without this the
-					// table survives into a proposal that has no signer-set change — and
-					// `deriveProposalTitle` would then title a Defcon 1 "Add 2 signers".
-					//
-					// Narrowed to a successful decode of another action on purpose: a failed
-					// decode or a failed config read says nothing about whether this proposal
-					// has a signer-set change, and blanking the table on a transient RPC error
-					// would lose information rather than correct it.
-					setSignerSetChange(null)
+					return
 				}
+
+				// Retarget (§4.9): the decoded action modifies an authority other than the proposal's
+				// own (a council rotation, authored and persisted under `strata_admin`). The target is
+				// only known after the decode, so this second read is issued here, conditionally, and
+				// re-checks `cancelled` on its own — `allSigners` above is untouched by it.
+				void getMultisigConfig(target).then((targetConfigRes) => {
+					if (cancelled) return
+					setDecodedData({
+						proposalKey,
+						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
+						allSigners,
+						isLoading: false,
+					})
+				})
 			},
 		)
 
@@ -122,5 +124,10 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [proposal?.actionId, proposal?.status])
 
-	return { signerSetChange, allSigners, isLoading }
+	// Effects run after paint. Keying the state makes the render immediately following a proposal
+	// change return an empty loading view instead of exposing the previous proposal's signer data.
+	if (decodedData.proposalKey !== proposalKey) {
+		return { signerSetChange: null, allSigners: [], isLoading: proposal !== null }
+	}
+	return decodedData
 }

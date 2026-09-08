@@ -2,8 +2,13 @@ import type { ApiResult } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
 import { buildActionHexResponseSchema } from '@/api/ipc-schemas'
 
+// The four authorities a multisig config update can target. `payout_admin` is deliberately not a
+// member: it has no ASM role (orchestrator-be/src/infrastructure/asm_role_membership.rs:277-280)
+// and dies in the codec (desktop-app/src-tauri/src/infrastructure/action_codec.rs:154-156).
+export type MultisigTargetAuthority = 'strata_admin' | 'sequencer_manager' | 'alpen_admin' | 'security_council'
+
 export type BuildAdminMultisigUpdateHexInput = {
-	role: 'strata_admin' | 'sequencer_manager' | 'alpen_admin'
+	role: MultisigTargetAuthority
 	addKeys: string[]
 	removeKeys: string[]
 	newThreshold: number
