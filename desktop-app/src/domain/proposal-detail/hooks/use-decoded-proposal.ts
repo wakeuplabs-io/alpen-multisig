@@ -70,12 +70,18 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 				const target = actionRes.ok ? multisigUpdateTargetAuthority(actionRes.data) : null
 
-				// A decoded view must not outlive the action it decoded. Narrowed to a successful
-				// decode with a target on purpose: a failed decode says nothing about whether this
-				// proposal has a signer-set change, and blanking the table on a transient RPC error
-				// would lose information rather than correct it — see `buildTableOrNull` for the
-				// matching narrowing on the config side.
-				if (!actionRes.ok || target === null) {
+				// A failed decode leaves the table alone. It says nothing about whether this proposal
+				// has a signer-set change, and blanking on a transient RPC error would lose
+				// information rather than correct it.
+				if (!actionRes.ok) {
+					setIsLoading(false)
+					return
+				}
+
+				// A decoded view must not outlive the action it decoded: a successful decode of an
+				// action that carries no signer-set change (a Defcon lever, a VK update) blanks the
+				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
+				if (target === null) {
 					setIsLoading(false)
 					setSignerSetChange(null)
 					return
