@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_proposal_wrong_authority_returns_unauthorized() {
+    async fn test_get_proposal_wrong_authority_is_indistinguishable_from_missing() {
         use crate::application::traits::ProposalRepository;
         use crate::domain::authority::Authority;
         use crate::domain::proposal::{
@@ -420,7 +420,7 @@ mod tests {
             Some(&token),
         );
         let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

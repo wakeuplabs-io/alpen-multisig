@@ -250,9 +250,9 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
     )
     .await?;
     anyhow::ensure!(
-        cancel_height <= activation_height,
+        cancel_height < activation_height,
         "the cancel must land inside the window (landed at {cancel_height}, activation {activation_height}); \
-         past it upstream rejects it as UnknownAction and the queue would be empty because the update enacted"
+         at or past it upstream rejects it as UnknownAction and the queue would be empty because the update enacted"
     );
 
     // A cancel has depth 0, so the entry is gone in the cancel's own reveal block.

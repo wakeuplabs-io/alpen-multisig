@@ -7,7 +7,8 @@ the SSOT for *what* V3 must do. This document is only *how* it gets built, and n
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E7.
 
-**Status:** Phases 1, 2 and 3 shipped. Four phases planned, plus one held in reserve.
+**Status:** All four planned phases implemented and automated checks green. AC 13 manual/external-RPC
+validation remains before V3 close-out; Phase 5 stays held in reserve.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -42,7 +43,7 @@ them made the remaining generic machinery action-shaped rather than authority-sh
 | 1 ✅ | `council_signer_update` is a readable type — [phase spec](./security-council-signer-update-phase-1.md) | AC 5; [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) (the Rust half) | `src-tauri`, `desktop-app/src/api` |
 | 2 ✅ | Enactment reads two roles — [phase spec](./security-council-signer-update-phase-2.md) | AC 7, AC 7a; [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | `orchestrator-be`, `src-tauri` |
 | 3 ✅ | The form targets the council — [phase spec](./security-council-signer-update-phase-3.md) | AC 1, 1a, 2, 3, 3a, 3b, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
-| 4 | The cancel and the e2e | AC 6, 7b, 8, 9, 10, 13 | `e2e-tests`, `desktop-app` |
+| 4 ✅ | The cancel and the e2e — [phase spec](./security-council-signer-update-phase-4.md) | AC 6, 7b, 8, 9, 10; AC 13 implementation ready, manual evidence pending | `e2e-tests`, `orchestrator-be` |
 | 5 | Reserve — what the manual walk exposes | — | — |
 
 ## 3. Architecture

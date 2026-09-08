@@ -147,9 +147,9 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
     let cancel = MultisigAction::Cancel(CancelAction::new(queued_id, queued_action));
     let cancel_height = submit_council_action(&harness, fixture, &admin_section, &cancel, fixture.seq_no + 1).await?;
     anyhow::ensure!(
-        cancel_height <= activation_height,
-        "the cancel must land inside the window (landed at {cancel_height}, activation {activation_height}); \
-         past it upstream rejects it as UnknownAction and the queue would be empty because the update enacted"
+        cancel_height < activation_height,
+        "the cancel must land before activation (landed at {cancel_height}, activation {activation_height}); \
+         at or past it upstream has already processed the queue and rejects the cancel as UnknownAction"
     );
 
     // A cancel has depth 0, so the entry is gone in the cancel's own reveal block.
@@ -186,8 +186,8 @@ With `FAST_ENACTMENT`, `confirmation_depths.defcon3 = 5`
 (`e2e-tests/src/fixtures/signer_update_enacted.rs:139`).
 
 - The Defcon 3 reveal lands at measured height `H`; upstream sets `activation_height = H + 5`.
-- The cancel is submitted immediately: commit at `H+1`, reveal at `H+2`. `H+2 ≤ H+5` holds with three
-  blocks to spare, and the `cancel_height <= activation_height` assertion is what turns a future
+- The cancel is submitted immediately: commit at `H+1`, reveal at `H+2`. `H+2 < H+5` holds with three
+  blocks to spare, and the `cancel_height < activation_height` assertion is what turns a future
   depth reduction into a readable failure instead of a flake.
 - Then mine `(H + 6) − tip` blocks, normally `4`, reaching `tip = H + 6 > H + 5` — one block past the
   height the entry would have drained at.
@@ -264,7 +264,7 @@ every authority, which is a fix for them too.
 |---|---|---|
 | 1 | A cancelled Defcon 3 leaves the queue (AC 12) | no `UpdateAction::Defcon3` in `admin.queued()`, checked after the cancel's reveal **and** past the activation height |
 | 2 | …and never activates the harbour (Constraint 3) | `!safe_harbour().is_activated()` while queued, right after the cancel, and with `tip > activation_height` — the third is what the test exists for |
-| 3 | The cancel really landed inside the window | `cancel_height <= activation_height`; without it an empty queue could mean the opposite outcome |
+| 3 | The cancel really landed inside the window | `cancel_height < activation_height`; the queue matures before same-block transactions, so equality is already too late |
 | 4 | The tip really passed the original activation height | `tip > reveal_height + depth`, both terms measured |
 | 5 | The council itself authorised the cancel (AC 11) | signed by the same two council mnemonics at `seq_no + 1`, and `council_last_seqno() > seq_no` afterwards |
 | 6 | A cancel hex decodes back to the update it wraps | `decode_cancel_target_hex(encode_cancel_hex_for_target(defcon3_hex, 7))` is `Some((7, defcon3_hex))`; the same call on a plain Defcon 3 hex is `None` |

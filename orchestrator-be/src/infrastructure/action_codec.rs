@@ -26,6 +26,24 @@ pub(crate) fn test_fixture_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
+/// Valid tx type 15 fixture: a Security Council signer update authorized by Strata Admin.
+#[cfg(test)]
+pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
+    use std::num::NonZeroU8;
+
+    use ssz::Encode;
+    use strata_asm_txs_admin::actions::updates::StrataSecurityCouncilMultisigUpdate;
+    use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
+
+    let config_update =
+        ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+    let action = MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
+        StrataSecurityCouncilMultisigUpdate::new(config_update),
+    ));
+    hex::encode(action.as_ssz_bytes())
+}
+
 /// Valid `action_hex` for a Defcon 1 update — the action upstream hardcodes to depth `0`.
 ///
 /// Test-only: the desktop cannot build this action until Phase 3. See
