@@ -15,6 +15,7 @@ import { createProposal, getNextSeqNo, type Proposal } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
+import { normalizePubkey } from '@/lib/pubkey'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import type { ProposalPreview } from '../model/create-proposal.types'
 import { multisigTargetAuthority } from '../model/multisig-target'
@@ -30,12 +31,6 @@ function unwrapActionHex(result: ApiResult<BuildActionHexResponse>): string {
 
 export function isSessionExpiredReauthError(error: unknown): boolean {
 	return String(error).includes(SESSION_EXPIRED_REAUTH_MESSAGE)
-}
-
-function normalizePubKeyHex(value: string): string {
-	const trimmed = value.trim()
-	const no0x = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
-	return no0x.toLowerCase()
 }
 
 export type UseCreateProposalReturn = {
@@ -96,15 +91,15 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
 						role: multisigTargetAuthority(formData.actionType, sessionAuthority),
-						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
-						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
+						addKeys: formData.keysToAdd.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
+						removeKeys: formData.keysToRemove.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
 						newThreshold: threshold,
 					}),
 				)
 			}
 			case 'sequencer_key_update':
 				return unwrapActionHex(
-					await buildSequencerKeyUpdateHex({ newPubKey: normalizePubKeyHex(formData.newSequencerKeyHex) }),
+					await buildSequencerKeyUpdateHex({ newPubKey: normalizePubkey(formData.newSequencerKeyHex) }),
 				)
 			case 'defcon_1':
 				return unwrapActionHex(await buildDefcon1ActionHex())

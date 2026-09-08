@@ -6,15 +6,12 @@ import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
+import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
+import { buildSignerSetChange } from '@/domain/signer-set-change/model/build-signer-set-change'
 import { actionTypeTitle } from '../model/action-type-config'
 import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import type { ActionType } from '../model/create-proposal.types'
-import {
-	countSignersAfterUpdate,
-	normalizeSignerKey,
-	VK_PREDICATE_TYPE_LABELS,
-	type VkPredicateType,
-} from '../model/create-proposal.schema'
+import { VK_PREDICATE_TYPE_LABELS, type VkPredicateType } from '../model/create-proposal.schema'
 import { removesCurrentMembers } from '../model/validators/signer-update'
 
 type Props = {
@@ -60,28 +57,15 @@ export function CreateProposalPreview({
 }: Props) {
 	const signerCopy = deviceCopy(walletVendor)
 	const actionTypeLabel = actionTypeTitle(actionType)
-
-	const removeNorm = new Set(
-		keysToRemove
-			.map((k) => k.trim())
-			.filter((k) => k.length > 0)
-			.map(normalizeSignerKey),
-	)
 	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
-	const keysToAddRows = keysToAdd.map((k) => ({ value: k }))
-	const afterSignerCount = countSignersAfterUpdate(currentSigners, keysToRemoveRows, keysToAddRows)
-	const beforeSignerCount = new Set(currentSigners.map((s) => normalizeSignerKey(s))).size
-
-	const tableRows = [
-		...currentSigners.map((s) => ({
-			before: s,
-			after: removeNorm.has(normalizeSignerKey(s)) ? null : s,
-		})),
-		...keysToAdd.filter((k) => k.trim().length > 0).map((k) => ({ before: null, after: k })),
-	]
-
-	const newThreshold = Number(threshold)
-	const thresholdChanged = newThreshold !== currentThreshold || afterSignerCount !== beforeSignerCount
+	const signerSetChange = buildSignerSetChange({
+		signers: currentSigners,
+		threshold: currentThreshold,
+		addKeys: keysToAdd.filter((key) => key.trim().length > 0),
+		removeKeys: keysToRemove.filter((key) => key.trim().length > 0),
+		newThreshold: Number(threshold),
+		isEnacted: false,
+	})
 
 	// AC 11: states the consequence, does not block it — Constraint 5 keeps this off the danger
 	// palette. Only meaningful for the council's own rotation: an administrator signer update
@@ -181,42 +165,7 @@ export function CreateProposalPreview({
 						Signer Set Change
 					</p>
 					<div className="overflow-hidden rounded-xl border border-[#e5e7eb]">
-						<div className="grid grid-cols-2">
-							<div className="border-b border-r border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
-								<span className="text-label font-semibold uppercase tracking-widest text-[#9ca3af]">Before</span>
-							</div>
-							<div className="border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
-								<span className="text-label font-semibold uppercase tracking-widest text-[#9ca3af]">After</span>
-							</div>
-						</div>
-						{tableRows.map((row, i) => (
-							<div key={i} className="grid grid-cols-2 border-b border-[#e5e7eb] last:border-b-0">
-								<div className="border-r border-[#e5e7eb] px-4 py-3">
-									<span className="break-all font-mono text-body text-[#374151]">{row.before ?? ''}</span>
-								</div>
-								<div className="px-4 py-3">
-									<span className="break-all font-mono text-body text-[#374151]">{row.after ?? ''}</span>
-								</div>
-							</div>
-						))}
-						<div className="grid grid-cols-2">
-							<div className="border-r border-[#e5e7eb] px-4 py-3">
-								<span className="text-body text-[#9ca3af]">
-									Threshold{' '}
-									<span className="font-semibold text-[#374151]">
-										{currentThreshold} of {beforeSignerCount}
-									</span>
-								</span>
-							</div>
-							<div className="px-4 py-3">
-								<span className={`text-body ${thresholdChanged ? 'text-[#059669]' : 'text-[#9ca3af]'}`}>
-									Threshold{' '}
-									<span className="font-semibold">
-										{threshold} of {afterSignerCount}
-									</span>
-								</span>
-							</div>
-						</div>
+						<SignerSetChangeTable change={signerSetChange} />
 					</div>
 					{showsCouncilMembershipLossCallout && (
 						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">

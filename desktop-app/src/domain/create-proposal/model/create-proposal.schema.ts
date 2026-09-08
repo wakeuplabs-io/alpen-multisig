@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { VK_PREDICATE_TYPES } from '@/lib/vk-predicate'
+import { normalizePubkey } from '@/lib/pubkey'
 import { getActionTypeOptions } from './action-type-config'
 import { getActionValidator } from './validators'
 
@@ -10,11 +11,7 @@ const keyRowSchema = z.object({
 	value: z.string(),
 })
 
-export function normalizeSignerKey(value: string): string {
-	const trimmed = value.trim()
-	const withoutPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X') ? trimmed.slice(2) : trimmed
-	return withoutPrefix.toLowerCase()
-}
+export const normalizeSignerKey = normalizePubkey
 
 const createProposalFormObjectSchema = z.object({
 	actionType: z.enum([
