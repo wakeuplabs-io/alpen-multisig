@@ -976,7 +976,8 @@ async fn record_reveal_confirmed_facts(
 mod tests {
     use super::*;
     use crate::infrastructure::action_codec::{
-        test_fixture_action_hex, test_fixture_defcon_1_action_hex,
+        test_fixture_action_hex, test_fixture_council_rotation_action_hex,
+        test_fixture_defcon_1_action_hex,
     };
     use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
     use crate::infrastructure::memory_repo::InMemoryProposalRepository;
@@ -1723,6 +1724,74 @@ mod tests {
         assert_eq!(approved.len(), 0);
     }
 
+    /// AC 10: rotating the council is an administrator proposal even though the action modifies
+    /// the council. Authority scoping must hold independently of lifecycle status.
+    #[tokio::test]
+    async fn test_council_rotation_visibility_is_strata_admin_scoped_for_contract_statuses() {
+        let repo = new_repo();
+        let action_hex = test_fixture_council_rotation_action_hex();
+        let statuses = [
+            ProposalStatus::Pending,
+            ProposalStatus::Approved,
+            ProposalStatus::Enacted,
+        ];
+
+        for (index, status) in statuses.into_iter().enumerate() {
+            let seq_no = index as u64 + 1;
+            let proposal = Proposal {
+                action_id: compute_action_id(seq_no, &action_hex).unwrap(),
+                seq_no,
+                authority: Authority::StrataAdmin,
+                status,
+                required_signatures: 2,
+                action_hex: action_hex.clone(),
+                title: None,
+                signatures: vec![sig_a()],
+                broadcast_status: BroadcastStatus::default(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            repo.save_proposal(proposal.clone()).await.unwrap();
+
+            let council_visible = list_proposals(&repo, Authority::SecurityCouncil, Some(status))
+                .await
+                .unwrap();
+            assert!(
+                council_visible.is_empty(),
+                "{status} council rotation must be absent from the council list"
+            );
+            let council_get =
+                get_update_action(&repo, Authority::SecurityCouncil, &proposal.action_id).await;
+            assert!(
+                matches!(council_get.unwrap_err(), AppError::Unauthorized),
+                "{status} council rotation detail must refuse the council"
+            );
+
+            let admin_visible = list_proposals(&repo, Authority::StrataAdmin, Some(status))
+                .await
+                .unwrap();
+            assert_eq!(
+                admin_visible.len(),
+                1,
+                "{status} council rotation must remain visible to Strata Admin"
+            );
+            assert_eq!(admin_visible[0].action_id, proposal.action_id);
+            let admin_get = get_update_action(&repo, Authority::StrataAdmin, &proposal.action_id)
+                .await
+                .unwrap();
+            assert_eq!(admin_get.action_id, proposal.action_id);
+            assert_eq!(admin_get.action_hex, action_hex);
+            assert_eq!(admin_get.authority, Authority::StrataAdmin);
+            assert_eq!(admin_get.status, status);
+        }
+    }
+
     #[tokio::test]
     async fn test_broadcast_rejects_threshold_drift() {
         let proposal = Proposal {
@@ -2279,13 +2348,22 @@ mod tests {
         seq_no: SeqNo,
     ) -> Proposal {
         let action_hex = test_fixture_action_hex();
+        save_approved_proposal_with_action(repo, authority, seq_no, &action_hex).await
+    }
+
+    async fn save_approved_proposal_with_action(
+        repo: &InMemoryProposalRepository,
+        authority: Authority,
+        seq_no: SeqNo,
+        action_hex: &str,
+    ) -> Proposal {
         let sig = sig_a();
         let session = SessionContext {
             authority,
             signer_pubkey: &sig.signer_pubkey,
         };
         let created =
-            create_update_action(repo, session.clone(), seq_no, &action_hex, &sig, 2, None)
+            create_update_action(repo, session.clone(), seq_no, action_hex, &sig, 2, None)
                 .await
                 .unwrap();
         let session_b = SessionContext {
@@ -2405,20 +2483,21 @@ mod tests {
         assert!(matches!(err, AppError::BadRequest(_)));
     }
 
-    /// A cancel is stored under the *target's* authority, so the session that files it has to be
-    /// that authority. Without the check, a signer of any authority could put a proposal carrying
-    /// their own signature into someone else's queue. The second half is the one that matters:
-    /// nothing is persisted, so the refusal is not merely a status code.
+    /// AC 9: tx type 15 modifies the council but belongs to Strata Admin. The council cannot file
+    /// its cancel, and the refusal must happen without persisting a proposal.
     #[tokio::test]
-    async fn test_create_cancel_proposal_refuses_a_foreign_authority_session() {
+    async fn test_council_rotation_cancel_requires_strata_admin_session() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+        let action_hex = test_fixture_council_rotation_action_hex();
+        let target =
+            save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
+        assert_eq!(target.authority, Authority::StrataAdmin);
 
         let err = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
             SessionContext {
-                authority: Authority::SequencerManager,
+                authority: Authority::SecurityCouncil,
                 signer_pubkey: &sig_a().signer_pubkey,
             },
             target.action_id.clone(),
