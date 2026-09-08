@@ -3,7 +3,10 @@ import { getMultisigConfig } from '@/api/asm-state'
 import type { MultisigTargetAuthority } from '@/api/action-builder'
 import type { MultisigConfigSnapshot } from '../model/create-proposal.types'
 
-type LoadedConfig = { authority: MultisigTargetAuthority; config: MultisigConfigSnapshot }
+type ConfigLoadState =
+	| { authority: MultisigTargetAuthority; status: 'loading' }
+	| { authority: MultisigTargetAuthority; status: 'unavailable' }
+	| { authority: MultisigTargetAuthority; status: 'loaded'; config: MultisigConfigSnapshot }
 
 export type UseMultisigConfigReturn = {
 	multisigConfig: MultisigConfigSnapshot | null
@@ -25,31 +28,35 @@ export type UseMultisigConfigReturn = {
  * target has actually landed.
  */
 export function useMultisigConfig(authority: MultisigTargetAuthority): UseMultisigConfigReturn {
-	const [loaded, setLoaded] = useState<LoadedConfig | null>(null)
+	const [loadState, setLoadState] = useState<ConfigLoadState>(() => ({ authority, status: 'loading' }))
 	const [version, setVersion] = useState(0)
-	const [inFlight, setInFlight] = useState(true)
 
 	useEffect(() => {
 		let cancelled = false
-		setInFlight(true)
+		setLoadState({ authority, status: 'loading' })
 		getMultisigConfig(authority).then((result) => {
 			if (cancelled) return
-			setInFlight(false)
-			if (!result.ok) return
-			setLoaded({ authority, config: { signers: result.data.signers, threshold: result.data.threshold } })
+			if (!result.ok) {
+				setLoadState({ authority, status: 'unavailable' })
+				return
+			}
+			setLoadState({
+				authority,
+				status: 'loaded',
+				config: { signers: result.data.signers, threshold: result.data.threshold },
+			})
 			setVersion((v) => v + 1)
 		})
-		// Cancellation only stops a stale response from landing — it must not lower `isLoadingConfig`,
-		// or it would re-open exactly the lying frame the freshness check above closes.
 		return () => {
 			cancelled = true
 		}
 	}, [authority])
 
-	const isFresh = loaded !== null && loaded.authority === authority
+	const isCurrent = loadState.authority === authority
+	const isLoaded = isCurrent && loadState.status === 'loaded'
 	return {
-		multisigConfig: isFresh ? loaded.config : null,
+		multisigConfig: isLoaded ? loadState.config : null,
 		multisigConfigVersion: version,
-		isLoadingConfig: inFlight || !isFresh,
+		isLoadingConfig: !isCurrent || loadState.status === 'loading',
 	}
 }

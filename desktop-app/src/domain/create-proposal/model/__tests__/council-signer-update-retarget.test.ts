@@ -1,11 +1,8 @@
 // V3 Phase 3 — the create-proposal form retargets to the Security Council (Constraint 2).
 //
-// Eight claims, pinned in `docs/specs/security-council-signer-update-phase-3.md` §7.1. The
+// Nine claims, pinned in `docs/specs/security-council-signer-update-phase-3.md` §7.1 and §5. The
 // fixture's two signer sets differ in both membership and cardinality on purpose: with equal
 // sizes, half of these assertions would pass by accident.
-//
-// Red at HEAD: neither `council_signer_update` (the form's ActionType) nor `multisigTargetAuthority`
-// exists yet. Both land in the vocabulary commit that follows this one.
 
 import assert from 'node:assert/strict'
 import { getActionTypeOptions, getDefaultActionType } from '../action-type-config.ts'
@@ -25,7 +22,7 @@ const KEY_W = `02${'4'.repeat(64)}`
 const ADMIN = { signers: [KEY_A, KEY_B, KEY_C], threshold: 3 }
 const COUNCIL = { signers: [KEY_X, KEY_Y, KEY_Z, KEY_W], threshold: 2 }
 
-const OTHER_AUTHORITIES = ['security_council', 'sequencer_manager', 'alpen_admin'] as const
+const OTHER_AUTHORITIES = ['security_council', 'sequencer_manager', 'alpen_admin', 'payout_admin'] as const
 const ALL_AUTHORITIES = ['strata_admin', 'security_council', 'sequencer_manager', 'alpen_admin'] as const
 
 const draft = {
@@ -147,11 +144,6 @@ function removeIssues(currentMultisigSigners: string[], removeKeys: string[], th
 }
 assert.ok(removeIssues(COUNCIL.signers, [KEY_X, KEY_Y], 3) > 0, 'claim 6: 2 of 4 council members removed, threshold 3')
 assert.equal(removeIssues(ADMIN.signers, [KEY_X, KEY_Y], 3), 0, 'claim 6: same names, read against the administrator')
-
-// ---------------------------------------------------------------------------------------------
-// Claims 7 and 8 stay red on purpose past this commit — see SDD §8, commits 5 and 6. Uncomment
-// each block (and its import above, for claim 8) once its commit lands.
-// ---------------------------------------------------------------------------------------------
 
 // Claim 7 (AC 3b) — the no-op rule reads the target's *current* threshold, not any other one.
 function noOpIssues(

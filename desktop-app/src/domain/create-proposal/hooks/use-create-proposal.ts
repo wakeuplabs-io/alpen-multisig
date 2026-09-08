@@ -75,6 +75,11 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	}
 
 	async function buildActionHex(formData: CreateProposalFormValues): Promise<string> {
+		const sessionAuthority = authorityFromRole(selectedRole)
+		if (sessionAuthority === 'payout_admin') {
+			throw new Error('Payout Administrator cannot create ASM proposals')
+		}
+
 		// Exhaustive on purpose. This used to be an `if` chain whose final `else` built a VK update,
 		// so a missing arm did not fail to compile and did not fail loudly — it made the signer sign
 		// a vk_update sighash under another action's form. The `never` below is that tripwire.
@@ -90,7 +95,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				}
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
-						role: multisigTargetAuthority(formData.actionType, authorityFromRole(selectedRole)),
+						role: multisigTargetAuthority(formData.actionType, sessionAuthority),
 						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						newThreshold: threshold,
@@ -118,7 +123,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			case 'vk_update':
 				return unwrapActionHex(
 					await buildVkUpdateHex({
-						authority: authorityFromRole(selectedRole),
+						authority: sessionAuthority,
 						typeId: VK_PREDICATE_TYPE_IDS[formData.vkTypeId],
 						conditionHex: formData.newVkHex.trim(),
 					}),

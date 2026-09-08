@@ -9,7 +9,7 @@ import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import {
 	isSessionExpiredReauthError,
@@ -106,11 +106,9 @@ export function CreateProposalForm({
 	// react-hook-form needs a `resolver` at the `useForm()` call below, but the *correct* one
 	// depends on `actionType` — a value only available from `useWatch(form.control)`, which needs
 	// `form` to already exist. State bridges the one-render gap: `useForm()` reads whatever
-	// resolver the *previous* render committed, and the effect after `useWatch` (below) commits
-	// this render's fresh one for the *next*. No user interaction can land inside that gap — RHF
-	// applies a `resolver` change synchronously, and §4.8's `isLoadingConfig` gate keeps both
-	// buttons disabled for as long as a retarget's fetch is in flight — so this never validates a
-	// signer-visible draft against the wrong signer set.
+	// resolver the *previous* render committed, and the layout effect after `useWatch` (below)
+	// commits this render's fresh one before the browser paints the loaded config. A passive effect
+	// would expose one frame where the buttons could use a resolver for the previous target.
 	const [resolver, setResolver] = useState(() =>
 		zodResolver(
 			buildCreateProposalFormSchema({ currentMultisigSigners: null, currentMultisigThreshold: null, authority }),
@@ -151,7 +149,7 @@ export function CreateProposalForm({
 		[multisigConfig, authority],
 	)
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		setResolver(() => zodResolver(createProposalSchema))
 	}, [createProposalSchema])
 
