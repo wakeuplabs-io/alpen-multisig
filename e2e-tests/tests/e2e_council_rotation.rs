@@ -12,10 +12,10 @@ use alpen_multisig_e2e_tests::test_harness::{AsmTestHarness, AsmTestHarnessBuild
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoind_async_client::traits::Reader;
 use ssz::{Decode, Encode};
-use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role};
+use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role, UpdateTxType};
 use strata_asm_proto_admin::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::updates::Defcon1Update;
-use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::test_utils::create_signature_set;
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -28,6 +28,7 @@ use desktop_app::infrastructure::action_codec;
 const COUNCIL_UPDATE_DEPTH: u16 = 5;
 const ADMIN_UPDATE_DEPTH: u16 = 9;
 const ROTATION_SEQNO: u64 = 7;
+const CANCEL_SEQNO: u64 = 8;
 const COUNCIL_ACTION_SEQNO: u64 = 1;
 const FIRST_UPDATE_ID: u32 = 0;
 
@@ -110,6 +111,21 @@ async fn e2e_council_rotation_enacts_and_changes_who_can_trigger_defcon() {
         .expect("council rotation must enact at its configured depth");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn e2e_council_rotation_cancelled_never_changes_the_council() {
+    if Command::new("bitcoind").arg("--version").output().is_err() {
+        eprintln!(
+            "Skipping e2e_council_rotation_cancelled_never_changes_the_council: \
+             bitcoind is not available in PATH"
+        );
+        return;
+    }
+
+    run_cancelled_rotation()
+        .await
+        .expect("cancelled council rotation must never enact");
+}
+
 async fn run_enacted_rotation() -> anyhow::Result<()> {
     let fixture = RotationFixture::new();
     let harness = AsmTestHarnessBuilder::default()
@@ -117,6 +133,7 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
         .build()
         .await?;
     let initial = administration_state(&harness)?;
+    assert_fixture_depths(&initial)?;
     let (initial_admin_config, initial_admin_seqno) =
         authority_snapshot(&initial, Role::StrataAdministrator)?;
     let (initial_council_config, initial_council_seqno) =
@@ -189,6 +206,127 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
     );
 
     prove_rotated_membership_controls_defcon(&harness, &fixture, initial_council_seqno).await?;
+
+    Ok(())
+}
+
+async fn run_cancelled_rotation() -> anyhow::Result<()> {
+    let fixture = RotationFixture::new();
+    let harness = AsmTestHarnessBuilder::default()
+        .with_admin_config(fixture.admin_config.clone())
+        .build()
+        .await?;
+    let initial = administration_state(&harness)?;
+    assert_fixture_depths(&initial)?;
+    let (initial_admin_config, _) = authority_snapshot(&initial, Role::StrataAdministrator)?;
+    let (initial_council_config, initial_council_seqno) =
+        authority_snapshot(&initial, Role::StrataSecurityCouncil)?;
+
+    let rotation = fixture.rotation_action()?;
+    let admin_indices = signer_indices(&initial_admin_config, &fixture.admin_keys)?;
+    let reveal_height = submit_action(
+        &harness,
+        &rotation,
+        ROTATION_SEQNO,
+        &fixture.admin_keys,
+        &admin_indices,
+    )
+    .await?;
+    let activation_height = reveal_height + u64::from(COUNCIL_UPDATE_DEPTH);
+
+    let queued_state = administration_state(&harness)?;
+    let expected_update = match &rotation {
+        MultisigAction::Update(update) => update,
+        MultisigAction::Cancel(_) => anyhow::bail!("rotation must be an update"),
+    };
+    let queued_matches: Vec<_> = queued_state
+        .queued()
+        .iter()
+        .filter(|queued| queued.action() == expected_update)
+        .collect();
+    anyhow::ensure!(
+        queued_matches.len() == 1,
+        "exactly one matching rotation must be queued before cancellation"
+    );
+    let queued_id = *queued_matches[0].id();
+    let queued_action = queued_matches[0].action().clone();
+    anyhow::ensure!(
+        queued_id == FIRST_UPDATE_ID,
+        "fresh harness rotation must have UpdateId 0"
+    );
+    let next_update_id_after_rotation = queued_state.next_update_id();
+    anyhow::ensure!(
+        next_update_id_after_rotation == FIRST_UPDATE_ID + 1,
+        "accepted rotation must advance the global next UpdateId once"
+    );
+
+    let cancel = MultisigAction::Cancel(CancelAction::new(queued_id, queued_action));
+    let cancel_height = submit_action(
+        &harness,
+        &cancel,
+        CANCEL_SEQNO,
+        &fixture.admin_keys,
+        &admin_indices,
+    )
+    .await?;
+    anyhow::ensure!(
+        cancel_height < activation_height,
+        "cancel must land before activation ({cancel_height} < {activation_height})"
+    );
+
+    let cancelled = administration_state(&harness)?;
+    anyhow::ensure!(
+        cancelled.queued().is_empty(),
+        "cancel must remove the exact queued rotation"
+    );
+    anyhow::ensure!(
+        cancelled.next_update_id() == next_update_id_after_rotation,
+        "cancel must not increment the global next UpdateId"
+    );
+    anyhow::ensure!(
+        authority_snapshot(&cancelled, Role::StrataAdministrator)?.1 == CANCEL_SEQNO,
+        "administrator sequence must advance to 8 for the accepted cancel"
+    );
+    anyhow::ensure!(
+        authority_snapshot(&cancelled, Role::StrataSecurityCouncil)?.1 == initial_council_seqno,
+        "administrator-authorized cancel must not consume council sequence"
+    );
+
+    mine_to(&harness, activation_height + 1).await?;
+    let tip = harness.get_chain_tip().await?;
+    anyhow::ensure!(
+        tip > activation_height,
+        "tip {tip} must pass original activation {activation_height}"
+    );
+    let final_state = administration_state(&harness)?;
+    let (final_council_config, final_council_seqno) =
+        authority_snapshot(&final_state, Role::StrataSecurityCouncil)?;
+    anyhow::ensure!(
+        final_state.queued().is_empty(),
+        "queue must remain empty past original activation"
+    );
+    anyhow::ensure!(
+        final_council_config == initial_council_config,
+        "cancelled rotation must leave council config unchanged"
+    );
+    anyhow::ensure!(
+        !final_council_config
+            .keys()
+            .contains(&compressed_key(&fixture.replacement_key)),
+        "cancelled replacement signer must remain absent"
+    );
+    anyhow::ensure!(
+        final_council_seqno == initial_council_seqno,
+        "cancelled rotation must leave council sequence unchanged"
+    );
+    anyhow::ensure!(
+        authority_snapshot(&final_state, Role::StrataAdministrator)?.1 == CANCEL_SEQNO,
+        "administrator sequence must remain 8 past original activation"
+    );
+    anyhow::ensure!(
+        final_state.next_update_id() == next_update_id_after_rotation,
+        "cancel must never consume a global UpdateId"
+    );
 
     Ok(())
 }
@@ -344,6 +482,20 @@ fn administration_state(harness: &AsmTestHarness) -> anyhow::Result<Administrati
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     decode_administration_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("administration section must be present"))
+}
+
+fn assert_fixture_depths(state: &AdministrationSubprotoState) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        state.confirmation_depth(UpdateTxType::StrataSecurityCouncilMultisigUpdate)
+            == Some(COUNCIL_UPDATE_DEPTH),
+        "tx15 must use council-update depth 5"
+    );
+    anyhow::ensure!(
+        state.confirmation_depth(UpdateTxType::StrataAdminMultisigUpdate)
+            == Some(ADMIN_UPDATE_DEPTH),
+        "administrator self-update must retain distinct depth 9"
+    );
+    Ok(())
 }
 
 fn authority_snapshot(
