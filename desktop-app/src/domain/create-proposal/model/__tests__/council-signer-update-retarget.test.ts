@@ -51,7 +51,11 @@ function issuesOn(
 		overrides,
 	}: { authority: string; currentMultisigSigners: string[] | null; overrides: Record<string, unknown> },
 ): number {
-	const result = buildCreateProposalFormSchema({ currentMultisigSigners, authority }).safeParse({
+	const result = buildCreateProposalFormSchema({
+		currentMultisigSigners,
+		currentMultisigThreshold: null,
+		authority,
+	}).safeParse({
 		...draft,
 		actionType: 'council_signer_update',
 		...overrides,
@@ -139,55 +143,54 @@ assert.equal(removeIssues(ADMIN.signers, [KEY_X, KEY_Y], 3), 0, 'claim 6: same n
 // ---------------------------------------------------------------------------------------------
 
 // Claim 7 (AC 3b) — the no-op rule reads the target's *current* threshold, not any other one.
-// TODO(commit 5): uncomment once `currentMultisigThreshold` reaches the schema builder.
-// function noOpIssues(
-// 	currentMultisigSigners: string[],
-// 	currentMultisigThreshold: number,
-// 	overrides: Record<string, unknown>,
-// ): number {
-// 	const result = buildCreateProposalFormSchema({
-// 		currentMultisigSigners,
-// 		currentMultisigThreshold,
-// 		authority: 'strata_admin',
-// 	}).safeParse({ ...draft, actionType: 'council_signer_update', ...overrides })
-// 	if (result.success) return 0
-// 	return result.error.issues.filter((issue) => issue.path[0] === 'keysToAdd').length
-// }
-// assert.ok(
-// 	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
-// 		keysToAdd: [{ value: '' }],
-// 		keysToRemove: [{ value: '' }],
-// 		threshold: String(COUNCIL.threshold),
-// 	}) > 0,
-// 	'claim 7: blank rows and an unchanged threshold is a no-op',
-// )
-// assert.equal(
-// 	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
-// 		keysToAdd: [{ value: '' }],
-// 		keysToRemove: [{ value: '' }],
-// 		threshold: String(COUNCIL.threshold + 1),
-// 	}),
-// 	0,
-// 	'claim 7: blank rows, threshold actually changes — the mandatory counter-case',
-// )
-// assert.equal(
-// 	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
-// 		keysToAdd: [{ value: KEY_A }],
-// 		keysToRemove: [{ value: '' }],
-// 		threshold: String(COUNCIL.threshold),
-// 	}),
-// 	0,
-// 	'claim 7: a real add with an unchanged threshold is allowed',
-// )
-// assert.equal(
-// 	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
-// 		keysToAdd: [{ value: '' }],
-// 		keysToRemove: [{ value: '' }],
-// 		threshold: String(ADMIN.threshold),
-// 	}),
-// 	0,
-// 	"claim 7: blank rows at the administrator's threshold, not the council's, is allowed",
-// )
+function noOpIssues(
+	currentMultisigSigners: string[],
+	currentMultisigThreshold: number,
+	overrides: Record<string, unknown>,
+): number {
+	const result = buildCreateProposalFormSchema({
+		currentMultisigSigners,
+		currentMultisigThreshold,
+		authority: 'strata_admin',
+	}).safeParse({ ...draft, actionType: 'council_signer_update', ...overrides })
+	if (result.success) return 0
+	return result.error.issues.filter((issue) => issue.path[0] === 'keysToAdd').length
+}
+assert.ok(
+	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
+		keysToAdd: [{ value: '' }],
+		keysToRemove: [{ value: '' }],
+		threshold: String(COUNCIL.threshold),
+	}) > 0,
+	'claim 7: blank rows and an unchanged threshold is a no-op',
+)
+assert.equal(
+	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
+		keysToAdd: [{ value: '' }],
+		keysToRemove: [{ value: '' }],
+		threshold: String(COUNCIL.threshold + 1),
+	}),
+	0,
+	'claim 7: blank rows, threshold actually changes — the mandatory counter-case',
+)
+assert.equal(
+	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
+		keysToAdd: [{ value: KEY_A }],
+		keysToRemove: [{ value: '' }],
+		threshold: String(COUNCIL.threshold),
+	}),
+	0,
+	'claim 7: a real add with an unchanged threshold is allowed',
+)
+assert.equal(
+	noOpIssues(COUNCIL.signers, COUNCIL.threshold, {
+		keysToAdd: [{ value: '' }],
+		keysToRemove: [{ value: '' }],
+		threshold: String(ADMIN.threshold),
+	}),
+	0,
+	"claim 7: blank rows at the administrator's threshold, not the council's, is allowed",
+)
 
 // Claim 8 (AC 11) — the consequence-stating predicate reads the council's roster, not the
 // administrator's.

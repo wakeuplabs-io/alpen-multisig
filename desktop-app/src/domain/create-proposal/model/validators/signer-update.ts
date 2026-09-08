@@ -2,7 +2,20 @@ import { normalizeSignerKey, countSignersAfterUpdate } from '../create-proposal.
 import type { ActionValidator } from './types'
 import { compressedPubKeyHexPattern } from './types'
 
-export const validateSignerUpdate: ActionValidator = ({ data, ctx, currentMultisigSigners }) => {
+// Upstream accepts an empty update: every rejection in `validate_update` passes with empty add
+// and remove sets, `apply_update` retains the same signers and re-sets the same threshold, and
+// `handle_action` advances `last_seqno` regardless. The on-chain result is a *successful* no-op —
+// post-conditions match, and the proposal reports `Enacted` for an update that changed nothing.
+// That is what makes this a safety rule rather than hygiene (§4.7).
+export const NO_OP_UPDATE_MESSAGE =
+	'This update does not change the signer set or the threshold. A no-op still enacts successfully on chain.'
+
+export const validateSignerUpdate: ActionValidator = ({
+	data,
+	ctx,
+	currentMultisigSigners,
+	currentMultisigThreshold,
+}) => {
 	if (data.keysToAdd.length < 1) {
 		ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for keys to add' })
 	}
@@ -154,6 +167,17 @@ export const validateSignerUpdate: ActionValidator = ({ data, ctx, currentMultis
 					`Threshold cannot be greater than the number of signers after this update ` +
 					`(${resultingSignerCount}: ${remainingCurrentSigners} current + ${addedSignersNotRemoved} added not removed).`,
 			})
+		}
+
+		// AC 3b: a set question, not a count question — counting members before and after cannot
+		// tell "nothing changed" from "removed one, added another". `addKeyIndexes` and
+		// `removeKeyIndexes` are already keyed by normalized key with blank rows discarded, which
+		// is exactly the AC's wording. Goes last, after the threshold has parsed, and only when
+		// the target's current threshold is actually known (`currentMultisigThreshold === null`
+		// means the config read is unavailable, and §4.8 blocks submission in that state).
+		const changesKeys = addKeyIndexes.size > 0 || removeKeyIndexes.size > 0
+		if (!changesKeys && currentMultisigThreshold !== null && thN === currentMultisigThreshold) {
+			ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: NO_OP_UPDATE_MESSAGE })
 		}
 	}
 }

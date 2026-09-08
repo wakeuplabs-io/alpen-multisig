@@ -7,6 +7,7 @@ export type ActionValidatorContext = {
 	data: CreateProposalFormValues
 	ctx: z.RefinementCtx
 	currentMultisigSigners: string[] | null
+	currentMultisigThreshold: number | null
 }
 
 export type ActionValidator = (context: ActionValidatorContext) => void

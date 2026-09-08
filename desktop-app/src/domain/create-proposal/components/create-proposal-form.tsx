@@ -102,7 +102,9 @@ export function CreateProposalForm({
 	// buttons disabled for as long as a retarget's fetch is in flight — so this never validates a
 	// signer-visible draft against the wrong signer set.
 	const [resolver, setResolver] = useState(() =>
-		zodResolver(buildCreateProposalFormSchema({ currentMultisigSigners: null, authority })),
+		zodResolver(
+			buildCreateProposalFormSchema({ currentMultisigSigners: null, currentMultisigThreshold: null, authority }),
+		),
 	)
 
 	const form = useForm<CreateProposalFormValues, unknown, CreateProposalFormValues>({
@@ -128,6 +130,7 @@ export function CreateProposalForm({
 		() =>
 			buildCreateProposalFormSchema({
 				currentMultisigSigners: multisigConfig?.signers ?? null,
+				currentMultisigThreshold: multisigConfig?.threshold ?? null,
 				authority,
 			}),
 		[multisigConfig, authority],

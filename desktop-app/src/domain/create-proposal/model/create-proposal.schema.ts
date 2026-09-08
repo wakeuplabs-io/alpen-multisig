@@ -69,12 +69,17 @@ export function countSignersAfterUpdate(
 
 export type BuildCreateProposalFormSchemaArgs = {
 	currentMultisigSigners: string[] | null
+	/** Twinned with `currentMultisigSigners`: both are null exactly together, both come off one
+	 * optional chain at the call site. The no-op rule (AC 3b) needs the target's *current*
+	 * threshold to tell a genuine threshold-only change apart from an unchanged one. */
+	currentMultisigThreshold: number | null
 	/** The session's authority. Decides which action types this form may produce at all. */
 	authority: string
 }
 
 export function buildCreateProposalFormSchema({
 	currentMultisigSigners,
+	currentMultisigThreshold,
 	authority,
 }: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
@@ -108,6 +113,6 @@ export function buildCreateProposalFormSchema({
 		}
 
 		const validate = getActionValidator(data.actionType)
-		validate({ data, ctx, currentMultisigSigners })
+		validate({ data, ctx, currentMultisigSigners, currentMultisigThreshold })
 	})
 }
