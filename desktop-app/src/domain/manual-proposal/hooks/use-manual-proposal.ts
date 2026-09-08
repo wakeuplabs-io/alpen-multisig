@@ -15,7 +15,7 @@ import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import { deviceSigningDisplay, type DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
-import { buildSignerSetChange, type SignerSetChange } from '@/domain/proposal-detail/model/build-signer-set-change'
+import { buildSignerSetChange, type SignerSetChange } from '@/domain/signer-set-change/model/build-signer-set-change'
 import type {
 	ManualBundleJson,
 	ManualImportData,

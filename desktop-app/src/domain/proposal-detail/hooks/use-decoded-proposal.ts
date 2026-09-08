@@ -8,7 +8,7 @@ import {
 	buildSignerSetChange,
 	type SignerRow,
 	type SignerSetChange,
-} from '@/domain/proposal-detail/model/build-signer-set-change'
+} from '@/domain/signer-set-change/model/build-signer-set-change'
 
 export type { SignerRow, SignerSetChange }
 
