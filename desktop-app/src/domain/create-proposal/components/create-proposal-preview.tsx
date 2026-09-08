@@ -167,7 +167,7 @@ export function CreateProposalPreview({
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
 				</div>
-			) : actionType === 'signer_update' ? (
+			) : actionType === 'signer_update' || actionType === 'council_signer_update' ? (
 				<div>
 					<p className="m-0 mb-3 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						Signer Set Change

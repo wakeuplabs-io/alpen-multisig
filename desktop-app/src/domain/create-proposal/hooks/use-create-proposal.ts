@@ -17,6 +17,7 @@ import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
 import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import { multisigTargetAuthority } from '../model/multisig-target'
 import type { ApiResult } from '@/types'
 
 export const SESSION_EXPIRED_REAUTH_MESSAGE = 'Session expired. Re-authenticate to continue.'
@@ -84,14 +85,18 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		// so a missing arm did not fail to compile and did not fail loudly — it made the signer sign
 		// a vk_update sighash under another action's form. The `never` below is that tripwire.
 		switch (formData.actionType) {
-			case 'signer_update': {
+			// Byte-for-byte the same payload shape; only `role` differs, and it is derived from the
+			// action rather than chosen (Constraint 2), so the council's rotation cannot drift from
+			// the administrator's in how it is built.
+			case 'signer_update':
+			case 'council_signer_update': {
 				const threshold = Number(formData.threshold)
 				if (!Number.isInteger(threshold) || threshold < 1 || threshold > 255) {
 					throw new Error('Threshold must be an integer between 1 and 255')
 				}
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
-						role: authorityFromRole(selectedRole),
+						role: multisigTargetAuthority(formData.actionType, authorityFromRole(selectedRole)),
 						addKeys: formData.keysToAdd.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						removeKeys: formData.keysToRemove.map((row) => normalizePubKeyHex(row.value)).filter((k) => k.length > 0),
 						newThreshold: threshold,

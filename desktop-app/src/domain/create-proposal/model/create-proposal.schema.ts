@@ -20,6 +20,7 @@ const createProposalFormObjectSchema = z.object({
 	actionType: z.enum([
 		'vk_update',
 		'signer_update',
+		'council_signer_update',
 		'operator_set_update',
 		'sequencer_key_update',
 		'defcon_1',

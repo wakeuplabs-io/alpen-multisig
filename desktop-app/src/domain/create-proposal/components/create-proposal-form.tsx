@@ -119,19 +119,19 @@ export function CreateProposalForm({
 	const actionType = watchedValues?.actionType
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
-	const signerKeysDigest =
-		actionType === 'signer_update'
-			? [
-					multisigConfigVersion,
-					JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
-					JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
-				].join('|')
-			: ''
+	const isSignerUpdateActionType = actionType === 'signer_update' || actionType === 'council_signer_update'
+	const signerKeysDigest = isSignerUpdateActionType
+		? [
+				multisigConfigVersion,
+				JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
+				JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
+			].join('|')
+		: ''
 
 	useEffect(() => {
-		if (actionType !== 'signer_update' || signerKeysDigest === '') return
+		if (!isSignerUpdateActionType || signerKeysDigest === '') return
 		void trigger('threshold')
-	}, [actionType, signerKeysDigest, trigger])
+	}, [isSignerUpdateActionType, signerKeysDigest, trigger])
 
 	useEffect(() => {
 		if (multisigConfigVersion === 0 || multisigConfig === null) return
@@ -380,7 +380,7 @@ export function CreateProposalForm({
 								// Keyed by level: switching between the two remounts rather than carrying one
 								// lever's resolved action hex, and its signing message, into the other's form.
 								<DefconFormFields key={actionType} level={actionType} />
-							) : actionType === 'signer_update' ? (
+							) : actionType === 'signer_update' || actionType === 'council_signer_update' ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}
