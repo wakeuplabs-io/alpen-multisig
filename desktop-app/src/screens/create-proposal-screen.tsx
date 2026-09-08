@@ -62,9 +62,6 @@ export function CreateProposalScreen() {
 					authorityLabel={authorityLabel}
 					authority={authority}
 					walletVendor={adapter.vendor}
-					multisigConfig={createProposal.multisigConfig}
-					multisigConfigVersion={createProposal.multisigConfigVersion}
-					isLoadingConfig={createProposal.isLoadingConfig}
 					nextSeqNo={createProposal.nextSeqNo}
 					isLoadingSeqNo={createProposal.isLoadingSeqNo}
 					currentVk={createProposal.currentVk}

@@ -4,19 +4,22 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
+import type { MultisigTargetAuthority } from '@/api/action-builder'
 import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import {
 	isSessionExpiredReauthError,
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
+import { useMultisigConfig } from '../hooks/use-multisig-config'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
-import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ProposalPreview } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
+import { multisigTargetAuthority } from '../model/multisig-target'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
@@ -28,12 +31,9 @@ import { VkUpdateFormFields } from './vk-update-form-fields'
 
 type Props = {
 	authorityLabel: string
-	authority: string
+	authority: MultisigTargetAuthority
 	/** Signer connected in this session — drives the device-specific signing copy. */
 	walletVendor: WalletVendor
-	multisigConfig: MultisigConfigSnapshot | null
-	multisigConfigVersion: number
-	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
@@ -69,9 +69,6 @@ export function CreateProposalForm({
 	authorityLabel,
 	authority,
 	walletVendor,
-	multisigConfig,
-	multisigConfigVersion,
-	isLoadingConfig,
 	nextSeqNo,
 	isLoadingSeqNo,
 	currentVk,
@@ -94,18 +91,19 @@ export function CreateProposalForm({
 	const [isReauthenticating, setIsReauthenticating] = useState(false)
 	const [pendingAction, setPendingAction] = useState<'preview' | 'submit' | null>(null)
 
-	const createProposalSchema = useMemo(
-		() =>
-			buildCreateProposalFormSchema({
-				currentMultisigSigners: multisigConfig?.signers ?? null,
-				authority,
-			}),
-		[multisigConfig, authority],
-	)
-
-	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])
-
 	const actionTypeOptions = useMemo(() => getActionTypeOptions(authority), [authority])
+
+	// react-hook-form needs a `resolver` at the `useForm()` call below, but the *correct* one
+	// depends on `actionType` — a value only available from `useWatch(form.control)`, which needs
+	// `form` to already exist. State bridges the one-render gap: `useForm()` reads whatever
+	// resolver the *previous* render committed, and the effect after `useWatch` (below) commits
+	// this render's fresh one for the *next*. No user interaction can land inside that gap — RHF
+	// applies a `resolver` change synchronously, and §4.8's `isLoadingConfig` gate keeps both
+	// buttons disabled for as long as a retarget's fetch is in flight — so this never validates a
+	// signer-visible draft against the wrong signer set.
+	const [resolver, setResolver] = useState(() =>
+		zodResolver(buildCreateProposalFormSchema({ currentMultisigSigners: null, authority })),
+	)
 
 	const form = useForm<CreateProposalFormValues, unknown, CreateProposalFormValues>({
 		resolver,
@@ -116,10 +114,29 @@ export function CreateProposalForm({
 
 	const { handleSubmit, reset, formState, getValues, control, trigger } = form
 	const watchedValues = useWatch({ control })
-	const actionType = watchedValues?.actionType
+	const actionType = watchedValues?.actionType ?? getDefaultActionType(authority)
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
 	const isSignerUpdateActionType = actionType === 'signer_update' || actionType === 'council_signer_update'
+
+	// Constraint 2: the target is decided by the action, never the session. `authority` here is
+	// the session the screen already resolved, not a fresh `useSession()` call (§4.3).
+	const targetAuthority = multisigTargetAuthority(actionType, authority)
+	const { multisigConfig, multisigConfigVersion, isLoadingConfig } = useMultisigConfig(targetAuthority)
+
+	const createProposalSchema = useMemo(
+		() =>
+			buildCreateProposalFormSchema({
+				currentMultisigSigners: multisigConfig?.signers ?? null,
+				authority,
+			}),
+		[multisigConfig, authority],
+	)
+
+	useEffect(() => {
+		setResolver(() => zodResolver(createProposalSchema))
+	}, [createProposalSchema])
+
 	const signerKeysDigest = isSignerUpdateActionType
 		? [
 				multisigConfigVersion,
@@ -133,15 +150,24 @@ export function CreateProposalForm({
 		void trigger('threshold')
 	}, [isSignerUpdateActionType, signerKeysDigest, trigger])
 
+	// Separates a target switch from a same-target refetch (§4.5): `keysToRemove` and `threshold`
+	// already mirror the target's config on every version bump, but `keysToAdd` must only be
+	// cleared when the target actually changed — otherwise keys a signer chose against the
+	// previous target would silently be reinterpreted as adds against the new one.
+	const lastAppliedTargetRef = useRef<MultisigTargetAuthority | null>(null)
+
 	useEffect(() => {
 		if (multisigConfigVersion === 0 || multisigConfig === null) return
+		const targetChanged = lastAppliedTargetRef.current !== targetAuthority
+		lastAppliedTargetRef.current = targetAuthority
 		const current = getValues()
 		reset({
 			...current,
+			keysToAdd: targetChanged ? [{ value: '' }] : current.keysToAdd,
 			keysToRemove: [{ value: '' }],
 			threshold: String(multisigConfig.threshold),
 		})
-	}, [multisigConfigVersion, multisigConfig, reset, getValues])
+	}, [multisigConfigVersion, multisigConfig, targetAuthority, reset, getValues])
 
 	useEffect(() => {
 		if (nextSeqNo === null) return

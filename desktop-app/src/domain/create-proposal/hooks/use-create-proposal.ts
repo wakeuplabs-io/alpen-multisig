@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getCurrentOperators, getCurrentVk, getMultisigConfig } from '@/api/asm-state'
+import { getCurrentOperators, getCurrentVk } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
 import {
 	buildAdminMultisigUpdateHex,
@@ -16,7 +16,7 @@ import { computeSighash } from '@/api/signing'
 import { useSession } from '@/hooks/use-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
 import { VK_PREDICATE_TYPE_IDS, type CreateProposalFormValues } from '../model/create-proposal.schema'
-import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ProposalPreview } from '../model/create-proposal.types'
 import { multisigTargetAuthority } from '../model/multisig-target'
 import type { ApiResult } from '@/types'
 
@@ -39,9 +39,6 @@ function normalizePubKeyHex(value: string): string {
 }
 
 export type UseCreateProposalReturn = {
-	multisigConfig: MultisigConfigSnapshot | null
-	multisigConfigVersion: number
-	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
@@ -59,9 +56,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const { adapter } = useWalletSession()
 	const { selectedRole } = useSession()
 
-	const [multisigConfig, setMultisigConfig] = useState<MultisigConfigSnapshot | null>(null)
-	const [multisigConfigVersion, setMultisigConfigVersion] = useState(0)
-	const [isLoadingConfig, setIsLoadingConfig] = useState(true)
 	const [nextSeqNo, setNextSeqNo] = useState<number | null>(null)
 	const [isLoadingSeqNo, setIsLoadingSeqNo] = useState(true)
 	const [currentVk, setCurrentVk] = useState<CurrentVk | null>(null)
@@ -135,24 +129,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			}
 		}
 	}
-
-	useEffect(() => {
-		let cancelled = false
-		setIsLoadingConfig(true)
-		getMultisigConfig(authorityFromRole(selectedRole)).then((result) => {
-			if (cancelled) return
-			setIsLoadingConfig(false)
-			if (!result.ok) return
-			setMultisigConfig({
-				signers: result.data.signers,
-				threshold: result.data.threshold,
-			})
-			setMultisigConfigVersion((v) => v + 1)
-		})
-		return () => {
-			cancelled = true
-		}
-	}, [selectedRole])
 
 	useEffect(() => {
 		let cancelled = false
@@ -264,9 +240,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	}
 
 	return {
-		multisigConfig,
-		multisigConfigVersion,
-		isLoadingConfig,
 		nextSeqNo,
 		isLoadingSeqNo,
 		currentVk,
