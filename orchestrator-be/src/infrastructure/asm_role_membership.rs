@@ -574,6 +574,7 @@ mod tests {
 
     use strata_asm_txs_admin::actions::updates::{
         Defcon1Update, Defcon3Update, OperatorSetUpdate, StrataAdminMultisigUpdate,
+        StrataSecurityCouncilMultisigUpdate,
     };
     use strata_asm_txs_admin::actions::{CancelAction, UpdateAction};
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
@@ -589,6 +590,18 @@ mod tests {
             ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
         MultisigAction::Update(UpdateAction::StrataAdminMultisig(
             StrataAdminMultisigUpdate::new(config_update),
+        ))
+    }
+
+    /// Tx type 15 — rotates the *council's* membership, but is created and authorized by the
+    /// Strata administrator (upstream's own segregation invariant: the council does not rotate
+    /// itself). The pair `signer_update()` / `council_signer_update()` is what AC 12 needs: both
+    /// created by the same authority, so only the action can tell them apart.
+    fn council_signer_update() -> MultisigAction {
+        let config_update =
+            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
+            StrataSecurityCouncilMultisigUpdate::new(config_update),
         ))
     }
 
@@ -630,6 +643,28 @@ mod tests {
         assert!(message.contains("Strata Security Council"), "{message}");
     }
 
+    /// AC 2, both directions, over the *same* tx-15 action: the segregation invariant is that
+    /// the administrator authorizes a council rotation and the council does not authorize its
+    /// own — the one direction that matters, since a council that could rotate itself could also
+    /// lock itself out. Nothing pinned this before this test; the only authorization tests until
+    /// now were Defcon's, above.
+    #[test]
+    fn council_signer_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
+        let update = council_signer_update();
+
+        require_authorized_for_action(Authority::StrataAdmin, &update)
+            .expect("the Strata administrator signs a council rotation");
+
+        let err = require_authorized_for_action(Authority::SecurityCouncil, &update)
+            .expect_err("the council does not authorize its own rotation");
+        let message = err.to_string();
+        assert!(
+            message.contains("Strata Security Council Multisig Update"),
+            "{message}"
+        );
+        assert!(message.contains("Strata Administrator"), "{message}");
+    }
+
     /// AC 12: two actions on the Strata Security Council resolve to different depths — the
     /// distinguishing case a per-authority mapping cannot produce.
     #[test]
@@ -662,6 +697,22 @@ mod tests {
         assert_eq!(
             depth_for_action(&operator_set_update(), |t| depths.get(t)),
             23
+        );
+    }
+
+    /// AC 12, the discriminating pair: tx 10 (the administrator's own signer update) against
+    /// tx 15 (the council's, also created by the administrator) — both authorized by the same
+    /// role, so a mapping keyed on authority rather than action cannot tell them apart.
+    #[test]
+    fn strata_admin_and_council_signer_updates_resolve_to_their_own_depths() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.strata_admin_multisig_update = 11;
+        depths.strata_security_council_multisig_update = 19;
+
+        assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
+        assert_eq!(
+            depth_for_action(&council_signer_update(), |t| depths.get(t)),
+            19
         );
     }
 
