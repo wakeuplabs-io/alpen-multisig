@@ -7,14 +7,15 @@
 use std::num::{NonZero, NonZeroU8};
 use std::process::Command;
 
-use alpen_multisig_e2e_tests::fixtures::decode_administration_subproto;
+use alpen_multisig_e2e_tests::fixtures::{decode_administration_subproto, decode_bridge_subproto};
 use alpen_multisig_e2e_tests::test_harness::{AsmTestHarness, AsmTestHarnessBuilder};
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoind_async_client::traits::Reader;
 use ssz::{Decode, Encode};
 use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role};
 use strata_asm_proto_admin::AdministrationSubprotoState;
-use strata_asm_txs_admin::actions::MultisigAction;
+use strata_asm_txs_admin::actions::updates::Defcon1Update;
+use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::test_utils::create_signature_set;
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -27,6 +28,7 @@ use desktop_app::infrastructure::action_codec;
 const COUNCIL_UPDATE_DEPTH: u16 = 5;
 const ADMIN_UPDATE_DEPTH: u16 = 9;
 const ROTATION_SEQNO: u64 = 7;
+const COUNCIL_ACTION_SEQNO: u64 = 1;
 const FIRST_UPDATE_ID: u32 = 0;
 
 struct RotationFixture {
@@ -186,6 +188,88 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
         "council sequence must remain unchanged after enactment"
     );
 
+    prove_rotated_membership_controls_defcon(&harness, &fixture, initial_council_seqno).await?;
+
+    Ok(())
+}
+
+async fn prove_rotated_membership_controls_defcon(
+    harness: &AsmTestHarness,
+    fixture: &RotationFixture,
+    initial_council_seqno: u64,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        initial_council_seqno == 0,
+        "fresh council sequence must begin at zero"
+    );
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(harness)?,
+        "safe harbour must start deactivated"
+    );
+
+    let live = administration_state(harness)?;
+    let (live_council, _) = authority_snapshot(&live, Role::StrataSecurityCouncil)?;
+    let c0_index = signer_index(&live_council, &fixture.council_keys[0])?;
+    let c3_index = signer_index(&live_council, &fixture.replacement_key)?;
+    let mut live_indices = vec![c0_index, c3_index];
+    live_indices.sort_unstable();
+
+    let defcon = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
+
+    // Put removed C1's signature in the canonical slot now occupied by C3. The envelope and
+    // SignatureSet are structurally valid, so rejection occurs inside ASM threshold verification.
+    let mut invalid_old_quorum = vec![fixed_key(8); live_council.len()];
+    invalid_old_quorum[c0_index as usize] = fixture.council_keys[0];
+    invalid_old_quorum[c3_index as usize] = fixture.council_keys[1];
+    let _ = submit_action(
+        harness,
+        &defcon,
+        COUNCIL_ACTION_SEQNO,
+        &invalid_old_quorum,
+        &live_indices,
+    )
+    .await?;
+
+    let after_rejected = administration_state(harness)?;
+    anyhow::ensure!(
+        !bridge_safe_harbour_activated(harness)?,
+        "removed-signer quorum must not activate safe harbour"
+    );
+    anyhow::ensure!(
+        !after_rejected
+            .queued()
+            .iter()
+            .any(|queued| matches!(queued.action(), UpdateAction::Defcon1(_))),
+        "rejected Defcon 1 must not appear in the queue"
+    );
+    anyhow::ensure!(
+        authority_snapshot(&after_rejected, Role::StrataSecurityCouncil)?.1
+            == initial_council_seqno,
+        "rejected old quorum must not consume council sequence 1"
+    );
+
+    let mut valid_new_quorum = vec![fixed_key(8); live_council.len()];
+    valid_new_quorum[c0_index as usize] = fixture.council_keys[0];
+    valid_new_quorum[c3_index as usize] = fixture.replacement_key;
+    let _ = submit_action(
+        harness,
+        &defcon,
+        COUNCIL_ACTION_SEQNO,
+        &valid_new_quorum,
+        &live_indices,
+    )
+    .await?;
+
+    anyhow::ensure!(
+        bridge_safe_harbour_activated(harness)?,
+        "valid new quorum must activate safe harbour at the same sequence"
+    );
+    let after_accepted = administration_state(harness)?;
+    anyhow::ensure!(
+        authority_snapshot(&after_accepted, Role::StrataSecurityCouncil)?.1 == COUNCIL_ACTION_SEQNO,
+        "valid new quorum must advance council sequence to 1"
+    );
+
     Ok(())
 }
 
@@ -275,17 +359,28 @@ fn authority_snapshot(
 fn signer_indices(config: &ThresholdConfig, signer_keys: &[SecretKey]) -> anyhow::Result<Vec<u8>> {
     signer_keys
         .iter()
-        .map(|secret_key| {
-            let public_key = compressed_key(secret_key);
-            config
-                .keys()
-                .iter()
-                .position(|candidate| candidate == &public_key)
-                .ok_or_else(|| anyhow::anyhow!("signer is absent from live authority config"))?
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("signer index exceeds u8"))
-        })
+        .map(|secret_key| signer_index(config, secret_key))
         .collect()
+}
+
+fn signer_index(config: &ThresholdConfig, secret_key: &SecretKey) -> anyhow::Result<u8> {
+    let public_key = compressed_key(secret_key);
+    config
+        .keys()
+        .iter()
+        .position(|candidate| candidate == &public_key)
+        .ok_or_else(|| anyhow::anyhow!("signer is absent from live authority config"))?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("signer index exceeds u8"))
+}
+
+fn bridge_safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
+    let (_, asm_state) = harness
+        .get_latest_asm_state()?
+        .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
+    let bridge = decode_bridge_subproto(&asm_state)
+        .ok_or_else(|| anyhow::anyhow!("bridge section must be present"))?;
+    Ok(bridge.safe_harbour().is_activated())
 }
 
 fn fixed_key(byte: u8) -> SecretKey {
