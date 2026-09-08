@@ -1,6 +1,7 @@
 # Spec: Security Council — Signer Update
 
-**Status:** In progress — phases 1, 2 and 3 shipped. This document is the functional contract; the build plan is
+**Status:** Implementation complete — all four planned phases and automated checks are green;
+AC 13 manual/external-RPC validation is pending. This document is the functional contract; the build plan is
 [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md),
 whose phase board says what has landed.
 

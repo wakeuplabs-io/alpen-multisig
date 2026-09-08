@@ -9,10 +9,11 @@ the SSOT for *what* V3 must do. This document never overrides it.
 **Closes:** [AC 6](./security-council-signer-update.md#6-it-is-queued-not-enacted-on-broadcast),
 [AC 7b](./security-council-signer-update.md#7b-the-new-council-can-act-and-the-removed-signers-cannot),
 [AC 8](./security-council-signer-update.md#8-a-cancelled-rotation-never-applies),
-[AC 9](./security-council-signer-update.md#9-the-cancel-is-signed-by-the-strata-administrator),
-[AC 10](./security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it)
-and [AC 13](./security-council-signer-update.md#13-the-manual-fallback-works); Constraint 1 against a
-real regtest ASM.
+[AC 9](./security-council-signer-update.md#9-the-cancel-is-signed-by-the-strata-administrator) and
+[AC 10](./security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it);
+Constraint 1 against a real regtest ASM. The implementation path for
+[AC 13](./security-council-signer-update.md#13-the-manual-fallback-works) is structurally covered,
+but its manual/external-RPC execution evidence remains pending (§10).
 
 **Story:** US-E7 — a Strata Administrator signer rotates the Security Council's membership and
 threshold, with a cancellable activation window.
@@ -38,8 +39,8 @@ implement V4.
 
 It does not add an ASM-backed test inside `orchestrator-be`: Phase 2 deliberately kept the
 two-role truth table pure, and this phase supplies the real-chain evidence once, at the e2e layer.
-It adds no DOM or source-text test. The desktop cancel journey, countdown and manual route are
-walked by hand in §10.
+It adds no DOM or source-text test. The desktop cancel journey, countdown and manual route remain
+the explicit manual validation in §10.
 
 The deliverable is a new `e2e-tests/tests/e2e_council_rotation.rs`. It does not extend
 `e2e_defcon_probe.rs`, whose helper and fixture assume the administrator and council have the same
@@ -72,11 +73,12 @@ lose that proof and make the suite more expensive.
 | AC 8 — cancel never applies | Generic administrator cancel e2e | Tx 15 cancel, then a measured tip past its original activation height, with council config unchanged |
 | AC 9 — administrator cancels | Generic `create_cancel_proposal` authority-scope tests; upstream derives a cancel role from its embedded update | Tx 15 cancel is signed by the administrator and advances only its sequence counter |
 | AC 10 — council cannot see it | Generic list and detail authority-scope tests | One explicit application test uses a Strata Admin proposal and a Security Council read |
-| AC 13 — manual fallback | Phase 1 decode/type coverage; V2 Phase 7 made cancels decodable | Structural audit in §4.3; manual walk, no second copy of the route |
+| AC 13 — manual fallback | Phase 1 decode/type coverage; V2 Phase 7 made cancels decodable | Structural audit in §4.3; execution evidence remains pending in §10 |
 
 ## 4. The build plan's “no new backend code” bet
 
-The bet holds. No production change is required in `orchestrator-be` or `desktop-app`.
+The protocol bet holds: tx type 15 needs no new production branch. The AC 10 audit did expose one
+pre-existing coordination-layer security gap, fixed in §4.4.
 
 ### 4.1 Cancel creation is already action-generic
 
@@ -92,11 +94,11 @@ nothing is persisted.
 
 ### 4.2 Proposal visibility is already authority-generic
 
-`list_proposals` queries by the authenticated authority and `get_update_action` applies
-`require_proposal_authority`. Existing tests use other authority pairs. AC 10 explicitly says
+`list_proposals` queries by the authenticated authority and `get_update_action` scopes the read.
+Existing tests use other authority pairs. AC 10 explicitly says
 “asserted rather than assumed”, so one test inserts a Strata Admin tx type 15 proposal and proves
-that a Security Council list is empty and direct detail access is unauthorized. It tests the two
-driving reads in one setup; no HTTP copy of the same rule is added.
+that a Security Council list is empty and direct detail access is indistinguishable from a missing
+id. It tests the two driving reads in one setup.
 
 ### 4.3 The manual fallback already accepts tx type 15
 
@@ -109,8 +111,20 @@ aggregation and broadcast functions operate on the upstream `MultisigAction`.
 
 Those pure seams already have discriminating tx type 15 tests. Another unit test would repeat a
 mapping, while a hook test would require mocking every Tauri boundary and pin orchestration rather
-than behaviour. AC 13 therefore closes with the existing tests plus the manual walk. If the walk
-finds a rejection, it is a Phase 4 regression and is fixed here before close-out.
+than behaviour. They establish implementation readiness, not the external-RPC execution evidence
+AC 13 requires. If the manual walk finds a rejection, it is a Phase 4 regression and is fixed before
+V3 is marked fully validated.
+
+### 4.4 Audit finding: foreign detail reads must not be an existence oracle
+
+Before this phase, an authenticated signer received `Unauthorized` for an existing proposal owned
+by another authority and `NotFound` for an unknown id. Those 401/404 responses revealed whether a
+guessed action id existed, contrary to the backend non-enumerability rule.
+
+Read paths now use a narrow visibility guard that returns `NotFound` for both cases. Write paths
+retain `Unauthorized`, where naming an authority mismatch is appropriate. The handler and
+application tests pin the public response and the tx type 15 council case. This is the phase's only
+production behaviour change; it does not implement protocol validity.
 
 ## 5. E2E design
 
@@ -252,7 +266,8 @@ the one before it.
 | 2 | `test(e2e): prove rotated council membership takes effect` | Removed-member rejection plus valid-new-quorum counter-case |
 | 3 | `test(e2e): add cancelled council rotation path` | Exact queued action, measured heights and unchanged-config assertions |
 | 4 | `test(orchestrator): pin council rotation isolation` | Tx 15 test fixture; AC 9 cancel refusal and AC 10 list/detail isolation |
-| 5 | `docs(security-council): close V3 Phase 4` | Status header, phase board, stage board and slice board |
+| 5 | `fix(orchestrator): conceal foreign proposal existence` | AC 10 audit finding: foreign and missing ids both return `NotFound`; correct V2 cancel diagnostic |
+| 6 | `docs(security-council): close V3 Phase 4` | Honest pending-manual status, phase board, stage board and slice board |
 
 The e2e is test-only but it is not “red until production appears”: Phases 1–3 are the production
 implementation. Its first run is the acceptance RED/GREEN gate for their composition. Any failure
@@ -263,17 +278,19 @@ this document is updated first with the discovered gap and the new GREEN commit.
 
 - One new e2e file, two independent regtest harnesses and roughly a few dozen processed blocks.
 - One test-only tx type 15 fixture and two focused application tests.
-- No non-test behaviour change in `orchestrator-be`; its inline `#[cfg(test)]` module and a
-  test-only action fixture change. Zero diff in `desktop-app` and the pinned ASM.
+- One narrow read-side behaviour change in `orchestrator-be`: foreign proposal ids now return
+  `NotFound`, matching unknown ids. Write-side authority errors are unchanged.
+- Inline backend tests and a test-only action fixture change. Zero diff in `desktop-app` and the
+  pinned ASM.
 - No dependency, schema, route, DTO or persisted-data change.
 
 The invalid Defcon transaction is still mined on Bitcoin; “rejected” means the administration
 subprotocol does not mutate its state or consume the council sequence. This is expected SPS-50
 behaviour and the test asserts state, not mempool acceptance.
 
-The cost budget is two harness boots, two rotations, one cancel and two Defcon submissions. Record
-the focused test's elapsed time and run it three consecutive times before close-out; the spec does
-not invent a latency or pass-rate baseline before the test exists.
+The cost budget is two harness boots, two rotations, one cancel and two Defcon submissions. Three
+consecutive focused runs passed in **10.22 s, 7.24 s and 8.10 s** (mean 8.52 s); the full workspace
+suite also passed. This is the initial runtime baseline, not a permanent timing assertion.
 
 ## 9. Verification
 
@@ -305,8 +322,9 @@ git diff --stat develop -- desktop-app/src desktop-app/src-tauri/src
 git grep -n 'sleep\\|tokio::time' -- e2e-tests/tests/e2e_council_rotation.rs
 ```
 
-Review the backend hunks: every addition is below `#[cfg(test)]`. The desktop diff is empty and the
-anti-flake search returns no match.
+Review the backend hunks: the only production addition is the narrow read-visibility guard in §4.4;
+the rest is below `#[cfg(test)]`. The desktop diff is empty and the anti-flake search returns no
+match.
 
 ## 10. Manual walk and close-out
 
