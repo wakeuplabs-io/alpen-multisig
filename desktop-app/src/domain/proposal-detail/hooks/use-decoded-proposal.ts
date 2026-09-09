@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ApiResult } from '@/types'
 import type { Proposal } from '@/api/proposals'
-import { getMultisigConfig, type MultisigConfig } from '@/api/asm-state'
+import { getMultisigConfig, getSafeHarbourStatus, type MultisigConfig } from '@/api/asm-state'
 import { decodeActionHex, type DecodedAction } from '@/api/signing'
+import {
+	buildSafeHarbourChange,
+	type SafeHarbourChange,
+} from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
 import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import {
 	buildSignerSetChange,
@@ -11,9 +15,16 @@ import {
 } from '@/domain/signer-set-change/model/build-signer-set-change'
 
 export type { SignerRow, SignerSetChange }
+export type { SafeHarbourChange }
 
 export type DecodedProposalData = {
 	signerSetChange: SignerSetChange | null
+	/**
+	 * Where the bridge sweeps to, and where this proposal would send it instead. Null for every
+	 * action that is not a safe harbour rotation, and also when the installed destination could not
+	 * be read — see `buildSafeHarbourChange`.
+	 */
+	safeHarbourChange: SafeHarbourChange | null
 	allSigners: string[]
 	isLoading: boolean
 }
@@ -50,18 +61,31 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
 		proposalKey: null,
 		signerSetChange: null,
+		safeHarbourChange: null,
 		allSigners: [],
 		isLoading: false,
 	})
 
 	useEffect(() => {
 		if (proposal === null) {
-			setDecodedData({ proposalKey: null, signerSetChange: null, allSigners: [], isLoading: false })
+			setDecodedData({
+				proposalKey: null,
+				signerSetChange: null,
+				safeHarbourChange: null,
+				allSigners: [],
+				isLoading: false,
+			})
 			return
 		}
 
 		let cancelled = false
-		setDecodedData({ proposalKey, signerSetChange: null, allSigners: [], isLoading: true })
+		setDecodedData({
+			proposalKey,
+			signerSetChange: null,
+			safeHarbourChange: null,
+			allSigners: [],
+			isLoading: true,
+		})
 
 		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
 		// always read the proposal's own authority, never the target of the action it decodes to
@@ -76,7 +100,41 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				const target = actionRes.ok ? multisigUpdateTargetAuthority(actionRes.data) : null
 
 				if (!actionRes.ok) {
-					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
+					setDecodedData({
+						proposalKey,
+						signerSetChange: null,
+						safeHarbourChange: null,
+						allSigners,
+						isLoading: false,
+					})
+					return
+				}
+
+				// The destination change, issued only for the action that has one. A second read for
+				// the same reason the retarget below is: the answer is only known after the decode,
+				// so one `Promise.all` cannot cover both. It re-checks `cancelled` on its own, and
+				// `allSigners` above is untouched by it.
+				if (actionRes.data.kind === 'safe_harbour_address_update') {
+					const proposed = {
+						address: actionRes.data.address,
+						addressHex: actionRes.data.addressHex,
+					}
+					void getSafeHarbourStatus().then((harbourRes) => {
+						if (cancelled) return
+						setDecodedData({
+							proposalKey,
+							signerSetChange: null,
+							safeHarbourChange: buildSafeHarbourChange({
+								installed: harbourRes.ok
+									? { address: harbourRes.data.address, addressHex: harbourRes.data.addressHex }
+									: null,
+								proposed,
+								isEnacted: proposal.status === 'enacted',
+							}),
+							allSigners,
+							isLoading: false,
+						})
+					})
 					return
 				}
 
@@ -84,7 +142,13 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// action that carries no signer-set change (a Defcon lever, a VK update) blanks the
 				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
 				if (target === null) {
-					setDecodedData({ proposalKey, signerSetChange: null, allSigners, isLoading: false })
+					setDecodedData({
+						proposalKey,
+						signerSetChange: null,
+						safeHarbourChange: null,
+						allSigners,
+						isLoading: false,
+					})
 					return
 				}
 
@@ -95,6 +159,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
+						safeHarbourChange: null,
 						allSigners,
 						isLoading: false,
 					})
@@ -110,6 +175,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
+						safeHarbourChange: null,
 						allSigners,
 						isLoading: false,
 					})
@@ -127,7 +193,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	// Effects run after paint. Keying the state makes the render immediately following a proposal
 	// change return an empty loading view instead of exposing the previous proposal's signer data.
 	if (decodedData.proposalKey !== proposalKey) {
-		return { signerSetChange: null, allSigners: [], isLoading: proposal !== null }
+		return { signerSetChange: null, safeHarbourChange: null, allSigners: [], isLoading: proposal !== null }
 	}
 	return decodedData
 }

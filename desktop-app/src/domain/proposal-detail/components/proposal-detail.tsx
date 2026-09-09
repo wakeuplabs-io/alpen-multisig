@@ -5,6 +5,7 @@ import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
+import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
@@ -53,6 +54,10 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 	// summary of the decoded change stays as the fallback for untitled proposals.
 	const authored = proposal.title?.trim()
 	if (authored) return authored
+
+	// Named by what it does, like every other action: a bare `Proposal #N` on a list of pending
+	// approvals says nothing about which of them moves the bridge's sweep destination.
+	if (decodedData.safeHarbourChange !== null) return 'Change sweep destination'
 
 	const change = decodedData.signerSetChange
 	if (change === null) return `Proposal #${proposal.seqNo}`
@@ -155,6 +160,19 @@ export function ProposalDetail({
 					)}
 				</div>
 			</div>
+
+			{/* ── Sweep destination change ──
+			    The detail screen is where every approver after the author decides: they never saw the
+			    create form, so without this section they are asked to authorize where the bridge sweeps
+			    to from a screen that does not name it. */}
+			{decodedData.safeHarbourChange !== null && (
+				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+					<div className="border-b border-[#f3f4f6] px-6 py-4">
+						<SectionLabel>Sweep destination</SectionLabel>
+					</div>
+					<SafeHarbourChangeTable change={decodedData.safeHarbourChange} />
+				</div>
+			)}
 
 			{/* ── Signer set change ── */}
 			{decodedData.signerSetChange !== null && (

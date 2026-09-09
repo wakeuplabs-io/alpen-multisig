@@ -1,6 +1,7 @@
 import type { Proposal } from '@/api/proposals'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
+import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
 import { buildProposalTitle } from '@/lib/proposal-title'
 
 type Props = {
@@ -12,6 +13,8 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 	const change = decodedData.signerSetChange
 
 	const changeLabel = (() => {
+		// The screen where an administrator stands a rotation down has to name what it installs.
+		if (decodedData.safeHarbourChange !== null) return 'Change sweep destination'
 		if (change === null) return null
 		const added = change.rows.filter((r) => r.isAdded).length
 		const removed = change.rows.filter((r) => r.isRemoved).length
@@ -48,6 +51,12 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 			{!decodedData.isLoading && change !== null && (
 				<div className="overflow-hidden border-t border-[#f3f4f6]">
 					<SignerSetChangeTable change={change} />
+				</div>
+			)}
+
+			{!decodedData.isLoading && decodedData.safeHarbourChange !== null && (
+				<div className="overflow-hidden border-t border-[#f3f4f6]">
+					<SafeHarbourChangeTable change={decodedData.safeHarbourChange} />
 				</div>
 			)}
 		</div>
