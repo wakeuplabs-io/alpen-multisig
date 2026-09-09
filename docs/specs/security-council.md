@@ -1,8 +1,8 @@
 # Security Council — Master Plan
 
 **Status:** V1 (Defcon 1) and V2 (Defcon 3, with the cancel absorbed from V5) shipped end to end;
-V3 implementation and automated checks complete, with AC 13 manual validation pending; V4 pending
-and still unwritten
+V3 implementation and automated checks complete, with AC 13 manual validation pending; V4 written
+and planned, implementation pending
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
@@ -161,7 +161,7 @@ does have a dedicated method, `strata_asm_getSafeHarbour(block_hash) -> Option<S
 |---|---|---|
 | Defcon 1 | bridge `.safe_harbour().is_activated()` | `true` **in the submission block**; admin `queued()` never grows |
 | Defcon 3 | same | `false` until `submit_height + defcon3`, `true` after; entry leaves `queued()` |
-| Safe Harbour address | bridge `.safe_harbour().address()` | equals the new address after depth; `is_activated()` **unchanged** |
+| Safe Harbour address | bridge `.safe_harbour().address()` | equals the new address after depth; `is_activated()` **unchanged**. But only while the harbour is deactivated: once activated the address is frozen and the rotation is accepted and silently discarded — see [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md) Constraint 1 |
 | Council rotation | `state.authority(Role::StrataSecurityCouncil).config()` | keys/threshold changed after depth |
 | any action accepted | `state.authority(role).last_seqno()` | advanced to the payload seqno |
 
@@ -344,8 +344,8 @@ Neither is an open question any more; both were settled while this document was 
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
-| 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | In progress — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4 unwritten |
-| 5 | Vertical slices V1–V4 | In progress — V1 and V2 shipped; V3 implementation complete with manual AC 13 evidence pending; V4 pending |
+| 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md) |
+| 5 | Vertical slices V1–V4 | In progress — V1 and V2 shipped; V3 implementation complete with manual AC 13 evidence pending; V4 planned, implementation pending |
 | 6 | Close-out: compliance audit, issue #117 | Pending |
 
 Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
@@ -364,7 +364,7 @@ compliance audit and issue #117.
 | V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
 | V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **shipped**, all seven phases (PRs #524–#527 and #530–#532, plus this one), Phase 8 held in reserve |
 | V3 — Security Council signer update | A Strata Admin signer rotates the council's membership and threshold (US-E7), with the standard Approved state and cancel | Spec — [`security-council-signer-update.md`](./security-council-signer-update.md); build plan — [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md); **implementation complete**, automated checks green, AC 13 manual/external-RPC evidence pending |
-| V4 — Safe Harbour address update | Strata Admin sets the sweep destination | Pending |
+| V4 — Safe Harbour address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md); build plan — [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md); **planned**, implementation pending |
 | ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2); delivered in V2's Phase 7 |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
