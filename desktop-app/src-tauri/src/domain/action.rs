@@ -556,4 +556,3 @@ mod tests {
         assert_eq!(update.remove_members, vec![5u32]);
     }
 }
-

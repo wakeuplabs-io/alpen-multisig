@@ -205,9 +205,9 @@ fn safe_harbour_address_enacted(
 Three things about that signature are deliberate:
 
 - **`&[u8]`, not `SafeHarbourAddress`.** `bridge.safe_harbour().address().as_descriptor().to_bytes()`
-  is a chain of inherent methods, so nothing has to be named — which is why `orchestrator-be` needs
-  **no new dependency at all** (§9.1). It also makes the truth table writable with byte literals and
-  no protocol types.
+  is a chain of inherent methods, so production code names no protocol type for this — which keeps
+  the two new crates out of `orchestrator-be`'s `[dependencies]` (§9.1). It also makes the truth
+  table writable with byte literals and no protocol types at all.
 - **`>=` on the seqno**, for the reason Defcon 3 records at `:256-260`: the action carries a non-zero
   depth, so a later administrator action may jump `last_seqno` past this proposal before it matures,
   and `==` would mark a successfully enacted rotation `Superseded`.
@@ -366,9 +366,16 @@ Per commit, only what that commit touched:
 cargo test -p desktop-app --lib domain::action           # commit 3
 cargo test -p desktop-app --lib action_codec             # commit 4
 cargo test -p desktop-app --bin desktop-app action_bui   # commit 4 — see §5.3
-cargo test -p orchestrator-be --lib asm_enactment        # commit 7
+cargo test -p orchestrator-be safe_harbour               # commit 7
 cd desktop-app && npm run test:unit                      # commits 2, 6
 ```
+
+`orchestrator-be` has **no lib target** — everything is the `server` binary — so `--lib` there is an
+error rather than a narrower run.
+
+`npm run build` is not the same check as `npx tsc --noEmit -p tsconfig.json`: the build runs `tsc`
+under the project's own target, and caught an `Array.prototype.at` this phase would otherwise have
+pushed. Run the build, not just a type-check.
 
 The full `AGENTS.md` checklist runs **once**, before committing the series and before pushing — not
 per commit. `npm run test:unit` is absent from that checklist and present in CI; it runs too.
@@ -414,12 +421,16 @@ None repairs the one before it. Every one compiles, lints and leaves the suite g
 
 ## 9. Where this phase departs from the build plan, and why
 
-**9.1 `orchestrator-be` gets no new dependency.** The build plan implies both crates need
-`bitcoin-bosd` and `strata-asm-proto-bridge-v1-types`. The backend only *reads*, and the read is a
-chain of inherent methods whose result is `Vec<u8>`; with the predicate taking `&[u8]`, no protocol
-type is ever named there. The two dependencies stay confined to `desktop-app/src-tauri`, and within
-it to `action_codec.rs` — so the module that was already the only importer of protocol crates stays
-that way.
+**9.1 `orchestrator-be` gets the two crates as `[dev-dependencies]`, not as dependencies.** The
+build plan implies both crates are needed on both sides; the design note that replaced it claimed
+the backend needed neither. Building it settled the difference: production only *reads*, through a
+chain of inherent methods whose result is `Vec<u8>`, so with the predicate taking `&[u8]` no
+protocol type is named there — but the **authorization and depth fixtures** have to construct a
+`SafeHarbourAddress`, and its only constructor is `TryFrom<Descriptor>`.
+
+Dev-dependencies is the honest expression of that: the binary links neither crate, and the tests
+that need a constructor get one. The claim worth keeping is the one about the binary, and it is now
+enforced by where the declaration sits rather than asserted in prose.
 
 **9.2 The desktop's enactment copy is not touched** (§4.6), against the build plan's "both move
 together". The plan's reason does not apply to an action that copy never answers for and no desktop

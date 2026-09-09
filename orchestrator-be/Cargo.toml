@@ -49,3 +49,8 @@ strata-l1-envelope-fmt = { workspace = true }
 [dev-dependencies]
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
+# Test-only: building a `SafeHarbourAddress` fixture needs the constructor, while production only
+# reads the installed one through inherent methods and compares bytes. Keeping these out of
+# `[dependencies]` is what keeps that true.
+bitcoin-bosd = { workspace = true }
+strata-asm-proto-bridge-v1-types = { workspace = true }

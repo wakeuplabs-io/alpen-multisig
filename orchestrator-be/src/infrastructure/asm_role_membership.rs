@@ -573,8 +573,8 @@ mod tests {
     use std::num::NonZeroU8;
 
     use strata_asm_txs_admin::actions::updates::{
-        Defcon1Update, Defcon3Update, OperatorSetUpdate, StrataAdminMultisigUpdate,
-        StrataSecurityCouncilMultisigUpdate,
+        Defcon1Update, Defcon3Update, OperatorSetUpdate, SafeHarbourAddressUpdate,
+        StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate,
     };
     use strata_asm_txs_admin::actions::{CancelAction, UpdateAction};
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
@@ -602,6 +602,24 @@ mod tests {
             ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
         MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
             StrataSecurityCouncilMultisigUpdate::new(config_update),
+        ))
+    }
+
+    /// Tx type 14 — sets the bridge's sweep destination, authorized by the Strata administrator
+    /// for the same segregation reason as tx 15: the council fires the sweep, the administrator
+    /// picks where the funds land.
+    fn safe_harbour_address_update() -> MultisigAction {
+        // x-only key of the secp256k1 generator point, the destination the local stack ships with.
+        let payload = [
+            0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87,
+            0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B,
+            0x16, 0xF8, 0x17, 0x98,
+        ];
+        let descriptor = bitcoin_bosd::Descriptor::new_p2tr(&payload).expect("valid x-only key");
+        let address = strata_asm_proto_bridge_v1_types::SafeHarbourAddress::try_from(descriptor)
+            .expect("p2tr descriptor accepted");
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(
+            SafeHarbourAddressUpdate::new(address),
         ))
     }
 
@@ -665,6 +683,23 @@ mod tests {
         assert!(message.contains("Strata Administrator"), "{message}");
     }
 
+    /// The segregation invariant at its sharpest: the authority that can fire the sweep must not
+    /// be the one that chooses where it lands. The refusal comes from upstream's
+    /// `authorized_role()`, not from a list this application maintains.
+    #[test]
+    fn safe_harbour_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
+        let update = safe_harbour_address_update();
+
+        require_authorized_for_action(Authority::StrataAdmin, &update)
+            .expect("the Strata administrator sets the sweep destination");
+
+        let err = require_authorized_for_action(Authority::SecurityCouncil, &update)
+            .expect_err("the council must not choose where the sweep lands");
+        let message = err.to_string();
+        assert!(message.contains("Safe Harbour Address Update"), "{message}");
+        assert!(message.contains("Strata Administrator"), "{message}");
+    }
+
     /// AC 12: two actions on the Strata Security Council resolve to different depths — the
     /// distinguishing case a per-authority mapping cannot produce.
     #[test]
@@ -713,6 +748,22 @@ mod tests {
         assert_eq!(
             depth_for_action(&council_signer_update(), |t| depths.get(t)),
             19
+        );
+    }
+
+    /// AC 12 for tx 14, with the same discriminating shape: the administrator's own signer update
+    /// (tx 10) against the safe harbour rotation (tx 14). Both are created by the administrator,
+    /// so only the action can separate their depths.
+    #[test]
+    fn strata_admin_and_safe_harbour_updates_resolve_to_their_own_depths() {
+        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
+        depths.strata_admin_multisig_update = 11;
+        depths.safe_harbour_address_update = 23;
+
+        assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
+        assert_eq!(
+            depth_for_action(&safe_harbour_address_update(), |t| depths.get(t)),
+            23
         );
     }
 
