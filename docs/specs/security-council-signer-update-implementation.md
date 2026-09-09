@@ -7,8 +7,11 @@ the SSOT for *what* V3 must do. This document is only *how* it gets built, and n
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E7.
 
-**Status:** All four planned phases implemented and automated checks green. AC 13 manual/external-RPC
-validation remains before V3 close-out; Phase 5 stays held in reserve.
+**Status:** Closed. All four planned phases implemented, automated checks green, and the manual walk
+run on 2026-09-09 for both the enacted and the cancelled path. Phase 5 was **not spent as code**: the
+walk found no defect in what V3 shipped, and the copy and signer-safety hardening it surfaced is
+recorded as debt in [§6](#6-known-debt-this-slice-does-not-take) rather than fixed here. AC 13's
+manual/external-RPC evidence is deferred there too, and does not block V4.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -43,8 +46,8 @@ them made the remaining generic machinery action-shaped rather than authority-sh
 | 1 ✅ | `council_signer_update` is a readable type — [phase spec](./security-council-signer-update-phase-1.md) | AC 5; [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) (the Rust half) | `src-tauri`, `desktop-app/src/api` |
 | 2 ✅ | Enactment reads two roles — [phase spec](./security-council-signer-update-phase-2.md) | AC 7, AC 7a; [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | `orchestrator-be`, `src-tauri` |
 | 3 ✅ | The form targets the council — [phase spec](./security-council-signer-update-phase-3.md) | AC 1, 1a, 2, 3, 3a, 3b, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
-| 4 ✅ | The cancel and the e2e — [phase spec](./security-council-signer-update-phase-4.md) | AC 6, 7b, 8, 9, 10; AC 13 implementation ready, manual evidence pending | `e2e-tests`, `orchestrator-be` |
-| 5 | Reserve — what the manual walk exposes | — | — |
+| 4 ✅ | The cancel and the e2e — [phase spec](./security-council-signer-update-phase-4.md) | AC 6, 7b, 8, 9, 10; AC 13 implemented, its manual evidence deferred to [§6](#6-known-debt-this-slice-does-not-take) | `e2e-tests`, `orchestrator-be` |
+| 5 — | Reserve, not spent — the manual walk found no defect in what V3 shipped; the hardening it surfaced is recorded in [§6](#6-known-debt-this-slice-does-not-take) | — | — |
 
 ## 3. Architecture
 
@@ -281,6 +284,58 @@ a four-key council at threshold 2 and a depth of 30 for tx type 15
 
 ## 6. Known debt this slice does not take
 
+### Recorded by the 2026-09-09 manual walk
+
+The walk exercised both journeys end to end and found nothing wrong with what V3 built: the rotation
+enacted, the cancel held, and neither role was substituted for the other. What it did surface is
+copy and signer-safety hardening on surfaces V3 only passes through. Each is recorded with the line
+that owns it, because a debt item without one does not get picked up.
+
+- **The sign screen does not repeat the consequence of removing a Council member.**
+  `MultisigUpdateDetails` (`desktop-app/src/domain/sign-proposal/components/sign-proposal-view.tsx:40-105`)
+  dispatches on `decodedAction.kind`, and `kind` does not carry the role, so a council rotation
+  renders the generic *Multisig configuration change* with add/remove lists. The
+  [Constraint 5](./security-council-signer-update.md#5-a-rotation-can-disable-the-emergency-lever-and-nothing-on-chain-prevents-it)
+  callout exists only in the create preview
+  (`desktop-app/src/domain/create-proposal/components/create-proposal-preview.tsx:162-178`), so the
+  **second** signer of the quorum approves the removal without seeing it. This is hardening, not a
+  gap against [AC 11](./security-council-signer-update.md#11-a-rotation-that-removes-current-members-states-the-consequence),
+  which is keyed to the confirmation step of creation — and the sign screen's title and breadcrumb do
+  name *Security Council signer update*, so the target is never hidden. The fix reuses what exists:
+  `multisigUpdateTargetAuthority` (`desktop-app/src/lib/multisig-update-target.ts:16`) plus the
+  preview's copy.
+- **The cancel summary does not name the target.**
+  `desktop-app/src/domain/cancel-proposal/components/cancel-target-summary.tsx:14-22` renders
+  *"Remove 1 signer"* with no authority, and `:36-39` prints the proposal's raw authority beside it.
+  V3 is the first slice where two signer-update entries coexist, so this is the first screen where
+  "which signer set?" has more than one answer.
+- **The UI prints the raw authority slug.** `proposal-detail.tsx:125-126` and
+  `cancel-target-summary.tsx:36-39` interpolate `proposal.authority` directly, so a signer reads
+  `strata_admin`. `authorityLabelForRole` (`desktop-app/src/lib/authority-label.ts:3-19`) already
+  humanizes the *session* `AuthRole`; what is missing is an adapter from the DTO slug, not a second
+  map. The sign screen is already correct — it labels through `authorityLabelForRole`.
+- **A cancel's sign screen shows only `Queue update ID N` and raw hex.**
+  `sign-proposal-view.tsx:143-160`; the `cancel` variant of `DecodedAction` carries only
+  `targetUpdateId` and `targetActionHex`, while the cancel's own detail screen decodes the target's
+  signer-set change. Pre-existing since V1's cancel, not introduced here.
+- **An enacted cancel renders the green *Enacted* badge.** `proposalDisplayStatus`
+  (`desktop-app/src/lib/proposal-status.ts:75-79`) branches on `actionType` for `defcon_1` only,
+  never on `proposal.kind`. It is literally true — the cancel did enact — and pre-existing; recorded
+  because *Past* now shows "Cancel #4 — Enacted" directly above "Proposal #3 — Canceled", which reads
+  as a contradiction until you know it is not.
+- **[AC 13](./security-council-signer-update.md#13-the-manual-fallback-works) has no manual
+  evidence.** The route is implemented and named end to end
+  (`desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts:29-32`,
+  `desktop-app/src/lib/proposal-type-label.ts:10`, both under test), and the criterion is unchanged.
+  Three steps of the phase-4 spec's §10 remain unwalked: a Security Council session confirming it
+  sees neither rotation (asserted by backend tests for
+  [AC 10](./security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it),
+  not by hand), the export/import of a quorum bundle on `/manual`, and the external-RPC recovery via
+  `bitcoin-cli sendrawtransaction`. Deferred deliberately: it is a walk, not a build, and V4 does not
+  depend on it.
+
+### Carried in from before this slice
+
 - **Acceptance is not application.** `apply_multisig`
   (`asm/crates/subprotocols/admin/subprotocol/src/handler.rs:174-182`) logs and swallows a failed
   `validate_update` after the seqno is consumed and the queue entry drained, so a rotation can be
@@ -303,7 +358,7 @@ a four-key council at threshold 2 and a depth of 30 for tx type 15
 
 ## 7. Close-out
 
-Four places do not update themselves, and both V1 and V2 needed a follow-up PR for exactly this
-drift: the `Status:` header of
+**Done in this PR**, on 2026-09-09. Four places do not update themselves, and both V1 and V2 needed a
+follow-up PR for exactly this drift: the `Status:` header of
 [`security-council-signer-update.md`](./security-council-signer-update.md), the header of
 [`security-council.md`](./security-council.md), its §6 Stage board and its §7 Slice board.
