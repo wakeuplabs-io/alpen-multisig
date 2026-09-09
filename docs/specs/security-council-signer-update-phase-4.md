@@ -347,6 +347,24 @@ Run the enacted and cancelled journeys from separate clean-stack resets:
 Findings introduced by this phase are fixed here. UX improvements or pre-existing copy/selector
 debt are recorded for Phase 5 rather than smuggled into the e2e PR.
 
+**Walked 2026-09-09.** Steps 1–4 ran against the local stack in one session rather than two resets,
+which is a stronger arrangement than the one written above: the cancelled path was walked with the
+enacted rotation's result already on chain. Observed —
+
+- Proposal #2 (remove one member, add one, threshold 2 → 3): quorum 2/2, commit `6ec5a685…` and
+  reveal `7358173c…` confirmed, *Awaiting enactment* with the countdown to `reveal + 30`, then
+  **Enacted** with the new council config on chain.
+- Proposal #3 (remove one member, threshold 3): approved, then cancelled inside its window by
+  `Cancel #4`. The target read **Canceled**, `Cancel #4` enacted, and the council was left holding
+  four keys at threshold 3 — the pre-rotation set, unchanged past the original activation height.
+- The create form for a fresh rotation then auto-detected sequence 5 and listed exactly those four
+  council keys, which is the read-side confirmation that the cancel changed nothing.
+
+Steps **5, 6 and 7 are deferred**, with the reasoning and the outstanding work in the build plan's
+[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take). The
+walk introduced no finding against what this phase built; the copy and signer-safety hardening it
+surfaced is recorded in that same section rather than fixed, so Phase 5 closes unspent.
+
 Close-out updates:
 
 - this build plan's status and Phase 4 row;

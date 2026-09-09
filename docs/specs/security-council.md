@@ -1,8 +1,9 @@
 # Security Council — Master Plan
 
-**Status:** V1 (Defcon 1) and V2 (Defcon 3, with the cancel absorbed from V5) shipped end to end;
-V3 implementation and automated checks complete, with AC 13 manual validation pending; V4 written
-and planned, implementation pending
+**Status:** V1 (Defcon 1), V2 (Defcon 3, with the cancel absorbed from V5) and V3 (Security Council
+signer update) shipped end to end, V3's manual walk run on 2026-09-09 for both the enacted and the
+cancelled path with AC 13's external-RPC evidence deferred as recorded debt; V4 written and planned,
+implementation pending
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
@@ -345,7 +346,7 @@ Neither is an open question any more; both were settled while this document was 
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
 | 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md) |
-| 5 | Vertical slices V1–V4 | In progress — V1 and V2 shipped; V3 implementation complete with manual AC 13 evidence pending; V4 planned, implementation pending |
+| 5 | Vertical slices V1–V4 | In progress — V1, V2 and V3 shipped, V3 closed out after its manual walk with AC 13 evidence deferred; V4 planned, implementation pending |
 | 6 | Close-out: compliance audit, issue #117 | Pending |
 
 Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
@@ -363,7 +364,7 @@ compliance audit and issue #117.
 |---|---|---|
 | V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
 | V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **shipped**, all seven phases (PRs #524–#527 and #530–#532, plus this one), Phase 8 held in reserve |
-| V3 — Security Council signer update | A Strata Admin signer rotates the council's membership and threshold (US-E7), with the standard Approved state and cancel | Spec — [`security-council-signer-update.md`](./security-council-signer-update.md); build plan — [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md); **implementation complete**, automated checks green, AC 13 manual/external-RPC evidence pending |
+| V3 — Security Council signer update | A Strata Admin signer rotates the council's membership and threshold (US-E7), with the standard Approved state and cancel | Spec — [`security-council-signer-update.md`](./security-council-signer-update.md); build plan — [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md); **shipped**, all four phases (PRs #536, #541, #542, #544) with Phase 5's reserve unspent; manual walk run 2026-09-09 on both the enacted and the cancelled path, AC 13's manual/external-RPC evidence deferred to the build plan's [§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take) |
 | V4 — Safe Harbour address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md); build plan — [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md); **planned**, implementation pending |
 | ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2); delivered in V2's Phase 7 |
 

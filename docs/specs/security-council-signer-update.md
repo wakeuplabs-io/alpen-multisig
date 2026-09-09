@@ -1,7 +1,14 @@
 # Spec: Security Council — Signer Update
 
-**Status:** Implementation complete — all four planned phases and automated checks are green;
-AC 13 manual/external-RPC validation is pending. This document is the functional contract; the build plan is
+**Status:** Shipped. All four planned phases and automated checks are green, and the manual walk ran
+on 2026-09-09 against the local stack: the enacted path (create → quorum → broadcast → Awaiting
+enactment → **Enacted**, with the council's new config on chain) and the cancelled path (a second
+rotation cancelled inside its window, target **Canceled**, council config unchanged, nothing
+`Enacted`). [AC 13](#13-the-manual-fallback-works) is deferred as recorded debt — the route is
+implemented and covered structurally, its manual/external-RPC evidence is not, and it does not block
+V4. See the build plan's
+[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take).
+This document is the functional contract; the build plan is
 [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md),
 whose phase board says what has landed.
 
@@ -551,6 +558,16 @@ from every other depth
 **Then** it broadcasts through the existing manual route and through an external Bitcoin RPC, with
 no council-specific handling.
 
+**Status: deferred, with the route in place.** A council rotation already reaches `/manual` under its
+own name — `actionTypeFromDecoded` derives `council_signer_update` from the decoded action's target
+rather than from its kind
+(`desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts:29-32`), and
+`inferProposalTypeLabel` names it (`desktop-app/src/lib/proposal-type-label.ts:10`), both under test.
+What is not evidenced is the walk itself: exporting the quorum bundle, importing it under
+`strata_admin`, and broadcasting the raw commit and reveal with `bitcoin-cli sendrawtransaction`.
+The criterion stands unchanged; only its evidence is outstanding, recorded in the build plan's
+[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take).
+
 ---
 
 ## Edge Cases
@@ -634,18 +651,21 @@ Code review checks that:
 - [ ] Every new frontend test file falls inside CI's `src/**/*.test.ts(x)` glob.
 
 Post-merge validation on regtest, with the local stack
-(`./scripts/local-stack.sh --clean` if any state predates the ASM pin bump):
+(`./scripts/local-stack.sh --clean` if any state predates the ASM pin bump). Walked 2026-09-09;
+each step carries what was observed:
 
-1. A Strata Administrator signer sees two signer-update entries and reaches the council one; a
-   Security Council signer sees neither.
-2. The form shows the council's four current signers and threshold 2 — not the administrator's.
-3. The rendered message matches the signer's screen, names both roles on separate lines, and carries
-   the details block.
-4. Quorum, broadcast — Approved, then Awaiting enactment with a countdown to `reveal + 30`, and the
-   council's config unchanged.
-5. Path A: mine 30 blocks → `Enacted`, and `strata_asm_getAnchorState` shows the council's new
-   config.
-6. Path B: cancel inside the window → the target reads `Canceled`, the council's config is unchanged,
-   and nothing reads `Enacted`.
-7. A Security Council session sees none of the above at any point.
-8. `cargo test -p alpen-multisig-e2e-tests` green, including `e2e_council_rotation`.
+1. ✅ A Strata Administrator signer sees two signer-update entries and reaches the council one.
+   The negative half — a Security Council signer sees neither — was not walked; see step 7.
+2. ✅ The form shows the council's current signers and threshold — not the administrator's.
+3. ✅ The rendered message matches the signer's screen, names both roles on separate lines, and
+   carries the details block.
+4. ✅ Quorum, broadcast — Approved, then Awaiting enactment with a countdown to `reveal + 30`, and
+   the council's config unchanged.
+5. ✅ Path A: mined to activation → `Enacted`, with the council's new config on chain (proposal #2:
+   one member removed, one added, threshold 2 → 3).
+6. ✅ Path B: proposal #3 cancelled inside its window by `Cancel #4` → the target reads `Canceled`,
+   the council still holds four keys at threshold 3, and nothing reads `Enacted`.
+7. ⏸ A Security Council session sees none of the above at any point. Asserted by
+   [AC 10](#10-the-council-never-sees-the-proposal-that-rotates-it) in the backend, not walked by
+   hand; deferred with AC 13.
+8. ✅ `cargo test -p alpen-multisig-e2e-tests` green, including `e2e_council_rotation`.
