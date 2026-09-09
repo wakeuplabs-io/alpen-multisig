@@ -302,6 +302,11 @@ pub enum Action {
     VkUpdate(VkUpdate),
     OperatorSetUpdate(OperatorSetUpdate),
     SequencerKeyUpdate(SequencerKeyUpdate),
+    /// Set the bridge's safe harbour destination. Authorized by the **Strata Administrator**, not
+    /// by the council: the council decides when the sweep fires, the administrator decides where
+    /// the funds land, and one authority holding both could trigger a sweep and pick its
+    /// destination. See `docs/specs/security-council-safe-harbour-address.md`.
+    SafeHarbourAddressUpdate(SafeHarbourDescriptor),
     /// Activate the bridge safe harbour immediately. Authorized by the Strata Security Council and
     /// payload-less upstream — the sequence number travels with the proposal, not the action.
     Defcon1,
@@ -355,6 +360,7 @@ mod tests {
             Action::VkUpdate(_)
             | Action::OperatorSetUpdate(_)
             | Action::SequencerKeyUpdate(_)
+            | Action::SafeHarbourAddressUpdate(_)
             | Action::Defcon1
             | Action::Defcon3 => {
                 panic!("unexpected variant")

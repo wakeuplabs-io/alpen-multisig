@@ -6,11 +6,14 @@
 
 use std::num::NonZeroU8;
 
+use bitcoin_bosd::Descriptor;
 use ssz::{Decode, Encode};
+use strata_asm_proto_bridge_v1_types::SafeHarbourAddress;
 use strata_asm_txs_admin::actions::updates::{
     AlpenAdminMultisigUpdate, Defcon1Update, Defcon3Update, EeStfVkUpdate, OlStfVkUpdate,
-    OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
-    StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    OperatorSetUpdate as StrataOperatorSetUpdate, SafeHarbourAddressUpdate,
+    SequencerUpdate as StrataSequencerUpdate, StrataAdminMultisigUpdate,
+    StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -21,7 +24,7 @@ use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::action::{
     Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError,
-    SequencerKeyUpdate, VkUpdate,
+    SafeHarbourDescriptor, SafeHarbourDescriptorError, SequencerKeyUpdate, VkUpdate,
 };
 use crate::domain::authority::Authority;
 
@@ -38,6 +41,14 @@ pub enum CodecError {
     UnsupportedVariant(&'static str),
     #[error("invalid public key: {0}")]
     PubKey(#[from] PubKeyError),
+    #[error("invalid safe harbour address: {0}")]
+    SafeHarbourAddress(#[from] SafeHarbourDescriptorError),
+    /// Upstream refused the descriptor. Unreachable for a value this application built — the
+    /// domain already checked the curve and the P2TR type — and reachable for an action hex that
+    /// arrived from anywhere else, which is the reason this gate stays even though it is a third
+    /// check of the same two properties.
+    #[error("upstream rejected the safe harbour descriptor: {0}")]
+    SafeHarbourRejectedUpstream(String),
     #[error("invalid threshold: value must be non-zero")]
     InvalidThreshold,
     #[error("unsupported authority: {0}")]
@@ -183,6 +194,16 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
         Action::SequencerKeyUpdate(update) => Ok(MultisigAction::Update(UpdateAction::Sequencer(
             StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
         ))),
+        Action::SafeHarbourAddressUpdate(destination) => {
+            let descriptor = Descriptor::new_p2tr(destination.as_key()).map_err(|e| {
+                CodecError::SafeHarbourRejectedUpstream(format!("not a valid P2TR payload: {e}"))
+            })?;
+            let address = SafeHarbourAddress::try_from(descriptor)
+                .map_err(|e| CodecError::SafeHarbourRejectedUpstream(e.to_string()))?;
+            Ok(MultisigAction::Update(UpdateAction::SafeHarbourAddress(
+                SafeHarbourAddressUpdate::new(address),
+            )))
+        }
         Action::Defcon1 => Ok(MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))),
         Action::Defcon3 => Ok(MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update))),
     }
@@ -278,8 +299,12 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         }
         MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Ok(Action::Defcon3),
-        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
-            Err(CodecError::UnsupportedVariant("SafeHarbourAddress"))
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(update)) => {
+            // `to_bytes()` is the BOSD wire form — the type tag plus the payload — which is also
+            // the string the signing message renders and the device displays.
+            let hex = hex::encode(update.address().as_descriptor().to_bytes());
+            let destination = SafeHarbourDescriptor::from_hex(&hex)?;
+            Ok(Action::SafeHarbourAddressUpdate(destination))
         }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
@@ -360,6 +385,44 @@ mod tests {
             panic!("Defcon 1 is an update, not a cancel");
         };
         assert_eq!(update.update_tx_type(), UpdateTxType::Defcon1);
+    }
+
+    /// The SSZ union selector is not the SPS-50 byte, and neither is the variant's position in our
+    /// own enum. This pins the one that reaches the chain: a codec that mapped the destination onto
+    /// a neighbouring variant would round-trip through itself just as happily, and the transaction
+    /// would be rejected — or worse, accepted as another action.
+    #[test]
+    fn safe_harbour_round_trips_and_encodes_upstreams_tx_type_14() {
+        use strata_asm_params::UpdateTxType;
+
+        // x-only key of the generator point G, the destination the local stack ships with.
+        let destination = SafeHarbourDescriptor::from_hex(
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .expect("valid P2TR descriptor");
+        let action = Action::SafeHarbourAddressUpdate(destination.clone());
+
+        let encoded = encode(&action).expect("encode ok");
+        assert_eq!(decode(&encoded).expect("decode ok"), action);
+
+        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
+        let MultisigAction::Update(update) = upstream else {
+            panic!("a safe harbour rotation is an update, not a cancel");
+        };
+        assert_eq!(
+            update.update_tx_type(),
+            UpdateTxType::SafeHarbourAddressUpdate
+        );
+
+        // The destination survives the trip unchanged, which is the half of the round trip that
+        // matters: a payload dropped or truncated here would sweep the bridge somewhere else.
+        let UpdateAction::SafeHarbourAddress(installed) = update else {
+            panic!("decoded as the wrong update variant");
+        };
+        assert_eq!(
+            hex::encode(installed.address().as_descriptor().to_bytes()),
+            destination.to_bosd_hex()
+        );
     }
 
     /// Both Defcon payloads are empty unit structs, so the only thing separating their bytes is

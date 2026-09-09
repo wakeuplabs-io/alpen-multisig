@@ -1,13 +1,14 @@
 use std::num::NonZeroU8;
 
 use desktop_app::domain::action::{
-    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SequencerKeyUpdate,
-    VkUpdate,
+    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SafeHarbourDescriptor,
+    SequencerKeyUpdate, VkUpdate,
 };
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::asm_status_rpc;
 use desktop_app::infrastructure::broadcast_env;
+use desktop_app::infrastructure::network_env;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,14 @@ pub enum DecodedAction {
         authority: String,
         type_id: u8,
         condition_hex: String,
+    },
+    /// Both forms of one destination: `addressHex` is the BOSD descriptor, which is what the
+    /// device displays and therefore what a signer compares; `address` is the same value rendered
+    /// for the process's active network, which is what an operator recognises.
+    #[serde(rename = "safe_harbour_address_update", rename_all = "camelCase")]
+    SafeHarbourAddressUpdate {
+        address_hex: String,
+        address: String,
     },
     #[serde(rename = "defcon_1")]
     Defcon1,
@@ -68,6 +77,17 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             type_id: update.type_id,
             condition_hex: hex::encode(&update.condition),
         },
+        Ok(Action::SafeHarbourAddressUpdate(destination)) => {
+            // A network that cannot be resolved must not blank the destination: the hex is the
+            // value the device shows, so it is rendered either way and only the address degrades.
+            let address = network_env::network_from_env()
+                .map(|network| destination.to_address(network))
+                .unwrap_or_default();
+            DecodedAction::SafeHarbourAddressUpdate {
+                address_hex: destination.to_bosd_hex(),
+                address,
+            }
+        }
         Ok(Action::Defcon1) => DecodedAction::Defcon1,
         Ok(Action::Defcon3) => DecodedAction::Defcon3,
         // Still unregistered at this boundary, and unrelated to the council: both predate this
@@ -221,6 +241,34 @@ pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHe
     Ok(BuildActionHexResponse { action_hex })
 }
 
+/// Input for [`build_safe_harbour_address_update_hex`].
+///
+/// The address, not the descriptor hex: an operator holds an address, and nobody distributes a
+/// safe harbour as a BOSD string. The conversion is the application's, and the rendered signing
+/// message is what exposes its result for the signer to check.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildSafeHarbourAddressUpdateHexInput {
+    pub address: String,
+}
+
+/// Build a safe harbour address update from a bech32m P2TR address.
+///
+/// The network is the process's, resolved once through `network_env` — the canonical resolution in
+/// this repository, which deliberately does not live in `NodeConfig`.
+#[tauri::command]
+pub fn build_safe_harbour_address_update_hex(
+    input: BuildSafeHarbourAddressUpdateHexInput,
+) -> Result<BuildActionHexResponse, String> {
+    let network = network_env::network_from_env().map_err(|e| e.to_string())?;
+    let destination =
+        SafeHarbourDescriptor::from_address(&input.address, network).map_err(|e| e.to_string())?;
+    let action = Action::SafeHarbourAddressUpdate(destination);
+    let action_hex =
+        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,6 +389,137 @@ mod tests {
         assert_ne!(
             council_message, admin_message,
             "same seqno, same keys, same threshold — only the action differs, and the signer must see that"
+        );
+    }
+
+    /// The claim upstream cannot make for us: that the address a signer typed reaches the variant
+    /// that renders tx type 14, and that what the device shows is the **descriptor hex** rather
+    /// than the address the signer entered. Run out of the builder rather than a hand-built
+    /// `Action`, so it covers the mapping the device actually signs over.
+    ///
+    /// Asserts on `lines()`, not `contains()`: a renderer that joined two lines would still pass a
+    /// `contains` check and still put the wrong thing in front of a signer.
+    #[test]
+    fn safe_harbour_signing_message_shows_the_descriptor_hex_not_the_address() {
+        use desktop_app::infrastructure::signing::render_signing_message;
+
+        // x-only key of the generator point G, the destination the local stack ships with.
+        let descriptor_hex = "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let network = network_env::network_from_env().expect("a valid network");
+        let address = SafeHarbourDescriptor::from_hex(descriptor_hex)
+            .expect("valid descriptor")
+            .to_address(network);
+        let seqno = 17;
+
+        let action_hex =
+            build_safe_harbour_address_update_hex(BuildSafeHarbourAddressUpdateHexInput {
+                address: address.clone(),
+            })
+            .expect("build should succeed")
+            .action_hex;
+
+        let message = render_signing_message(seqno, &action_hex).expect("message renders");
+        let lines: Vec<&str> = message.lines().collect();
+
+        assert_eq!(
+            lines,
+            vec![
+                "Strata ASM Administration v1",
+                "Action: Safe Harbour Address Update",
+                "Authorized By: Strata Administrator",
+                "Sequence: 17",
+                "Action Details:",
+                &format!("  New Safe Harbour Address: {descriptor_hex}"),
+            ],
+            "the signer must see the exact canonical six-line message"
+        );
+
+        // The address is what the signer typed; it is deliberately *not* what they will be asked
+        // to confirm. A surface that showed only the address would leave nothing to compare
+        // against the device screen.
+        assert!(
+            !message.contains(&address),
+            "the device shows the descriptor, never the address"
+        );
+    }
+
+    /// `Authorized By` names the Strata Administrator even though the action reaches into the
+    /// bridge. That line is the wire-level shape of the segregation invariant — the council
+    /// triggers the sweep, the administrator picks the destination — and a change that moved it
+    /// would be an upstream break worth catching here rather than on a signer's screen.
+    #[test]
+    fn safe_harbour_update_is_authorized_by_the_administrator_not_the_council() {
+        use desktop_app::infrastructure::signing::render_signing_message;
+
+        let network = network_env::network_from_env().expect("a valid network");
+        let address = SafeHarbourDescriptor::from_hex(
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .expect("valid descriptor")
+        .to_address(network);
+
+        let action_hex =
+            build_safe_harbour_address_update_hex(BuildSafeHarbourAddressUpdateHexInput {
+                address,
+            })
+            .expect("build should succeed")
+            .action_hex;
+
+        let message = render_signing_message(3, &action_hex).expect("message renders");
+        assert!(
+            message
+                .lines()
+                .any(|line| line == "Authorized By: Strata Administrator"),
+            "expected the administrator to authorize tx type 14, got:\n{message}"
+        );
+    }
+
+    /// The decode side of the same action, which is what every read surface renders from.
+    #[test]
+    fn decode_safe_harbour_update_carries_both_forms_of_the_destination() {
+        let descriptor_hex = "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let network = network_env::network_from_env().expect("a valid network");
+        let address = SafeHarbourDescriptor::from_hex(descriptor_hex)
+            .expect("valid descriptor")
+            .to_address(network);
+
+        let action_hex =
+            build_safe_harbour_address_update_hex(BuildSafeHarbourAddressUpdateHexInput {
+                address: address.clone(),
+            })
+            .expect("build should succeed")
+            .action_hex;
+
+        match decode_action_hex(action_hex) {
+            DecodedAction::SafeHarbourAddressUpdate {
+                address_hex,
+                address: rendered,
+            } => {
+                assert_eq!(address_hex, descriptor_hex);
+                assert_eq!(rendered, address);
+            }
+            other => panic!("expected SafeHarbourAddressUpdate, got {other:?}"),
+        }
+    }
+
+    /// A destination that is not taproot never becomes an action: the form explains, the domain
+    /// decides, and upstream refuses last. This pins the first of the three.
+    #[test]
+    fn build_safe_harbour_update_refuses_a_non_taproot_address() {
+        let network = network_env::network_from_env().expect("a valid network");
+        let mut raw = vec![0x00, 0x14];
+        raw.extend_from_slice(&[0xAA; 20]);
+        let p2wpkh =
+            bitcoin::Address::from_script(bitcoin::ScriptBuf::from_bytes(raw).as_script(), network)
+                .expect("a valid P2WPKH address");
+
+        let err = build_safe_harbour_address_update_hex(BuildSafeHarbourAddressUpdateHexInput {
+            address: p2wpkh.to_string(),
+        })
+        .expect_err("a P2WPKH destination must be refused");
+        assert!(
+            err.contains("taproot"),
+            "the error must name what was wrong, got: {err}"
         );
     }
 
