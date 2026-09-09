@@ -221,8 +221,10 @@ the tip, so no other action starts paying that RPC.
 
 ### 4.8 Where the compiler insists, and where it does not
 
-Insists — four sites, each a `Record` or an exhaustive match:
-`validators/index.ts:10`, `action-type-from-decoded.ts:19`, the `const unhandled: never` at
+Insists — five sites, each a `Record`, a `switch` with no default, or an exhaustive match:
+`validators/index.ts:10`, `action-type-from-decoded.ts:19`,
+`manual-proposal/model/authorizing-authority.ts:10` (a `switch` whose missing arm makes the function
+lack a return, which is how it fails), the `const unhandled: never` at
 `use-create-proposal.ts:126-129`, and Rust's matches over `Action` and `UpdateAction`.
 
 Does not — five, three of which a signer sees:
@@ -379,7 +381,7 @@ None repairs the one before it. Every one compiles, lints and leaves the suite g
 |---|---|---|
 | 0 | 📄 | This document. The phase is designed before it is built, and reviewed before it is implemented. |
 | 1 | 🟢 | `bitcoin-bosd` (git, tag `v0.11.0`) and `strata-asm-proto-bridge-v1-types` (rev `b84eb28…`) in `[workspace.dependencies]` and in `desktop-app/src-tauri`. No behaviour change. |
-| 2 | 🟢 | TypeScript vocabulary: both `ActionType` unions, the `z.enum`, the `decodedActionSchema` member, `DecodedAction`, `ACTION_TYPE_BY_KIND`, the label. Inert — nothing emits the value yet. |
+| 2 | 🟢 | TypeScript **read-side** vocabulary: the transport `ActionType`, the `z.enum`, the `decodedActionSchema` member, `DecodedAction`, `ACTION_TYPE_BY_KIND`, the authorizing-authority `switch`, the label. Inert — nothing emits the value yet. The **form's** `ActionType` is a different union and stays in commit 6: widening it makes `ACTION_TYPE_OPTIONS` and `actionValidators` fail to compile, and both belong with the card and the validator. Same split V3 made between its Phase 1 and Phase 3. |
 | 3 | 🔴🟢 | `SafeHarbourDescriptor` and its conversion table (§5.1). |
 | 4 | 🟢 | The codec both ways, `build_safe_harbour_address_update_hex` registered in **both** `invoke.rs` lists, `action_type_from_hex`, the `DecodedAction` variant, and the tests of §5.2 and §5.3. |
 | 5 | 🟢 | The bridge's current destination: `fetch_safe_harbour` → DTO → Zod schema → `api/asm-state.ts`. |

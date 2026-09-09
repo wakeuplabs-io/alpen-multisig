@@ -51,6 +51,7 @@ export const proposalSchema = z
 			'operator_set_update',
 			'sequencer_key_update',
 			'council_signer_update',
+			'safe_harbour_address_update',
 			'defcon_1',
 			'defcon_3',
 			'cancel',
@@ -143,6 +144,13 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		authority: z.string(),
 		typeId: z.number(),
 		conditionHex: z.string(),
+	}),
+	// `address` is rendered with the process's active network; `addressHex` is the BOSD
+	// descriptor, which is what the device displays and therefore what a signer compares.
+	z.object({
+		kind: z.literal('safe_harbour_address_update'),
+		addressHex: z.string(),
+		address: z.string(),
 	}),
 	z.object({ kind: z.literal('defcon_1') }),
 	z.object({ kind: z.literal('defcon_3') }),

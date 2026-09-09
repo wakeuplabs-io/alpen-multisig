@@ -21,6 +21,7 @@ export type ActionType =
 	| 'operator_set_update'
 	| 'sequencer_key_update'
 	| 'council_signer_update'
+	| 'safe_harbour_address_update'
 	| 'defcon_1'
 	| 'defcon_3'
 	| 'cancel'
