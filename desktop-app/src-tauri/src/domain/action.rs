@@ -135,9 +135,12 @@ const BOSD_P2TR_TAG: u8 = 0x04;
 /// them to paste it again unchanged.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum SafeHarbourDescriptorError {
-    #[error("not a valid Bitcoin address: {0}")]
+    /// The inner parser message is kept for logs and dropped from `Display`: `bitcoin`'s own
+    /// wording ("legacy address base58 string" and the like) is written for someone reading a
+    /// stack trace, and it reached a signer's screen under a half-typed address.
+    #[error("not a valid Bitcoin address")]
     Address(String),
-    #[error("address is for {found}, but this deployment is on {expected}")]
+    #[error("this address is for {found}; this deployment is on {expected}")]
     WrongNetwork { expected: Network, found: Network },
     #[error("safe harbour must be a taproot (P2TR) address")]
     NotP2tr,
@@ -468,6 +471,21 @@ mod tests {
             SafeHarbourDescriptor::from_address(&address.to_string(), bitcoin::Network::Regtest)
                 .expect_err("a P2WPKH address must not be accepted");
         assert_eq!(err, SafeHarbourDescriptorError::NotP2tr);
+    }
+
+    /// The message a signer reads must not be the parser's. `bitcoin` reports things like "legacy
+    /// address base58 string", which reached the create form's signing-message panel verbatim under
+    /// a half-typed address — proposing a wrong cause in words written for a stack trace.
+    #[test]
+    fn safe_harbour_address_error_does_not_leak_the_parser_message() {
+        // The half-typed value from the manual walk: the regtest destination with its last
+        // character changed, so the checksum fails.
+        let err = SafeHarbourDescriptor::from_address(
+            "bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqc8gma7",
+            bitcoin::Network::Regtest,
+        )
+        .expect_err("a broken checksum is not an address");
+        assert_eq!(err.to_string(), "not a valid Bitcoin address");
     }
 
     #[test]

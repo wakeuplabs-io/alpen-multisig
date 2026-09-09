@@ -6,6 +6,7 @@ import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
 import { useDefconActionHex } from '../hooks/use-defcon-action-hex'
+import { SigningMessagePanel, SIGNING_MESSAGE_UNRESOLVED } from './signing-message-panel'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
 
@@ -60,34 +61,21 @@ export function DefconFormFields({ level }: { level: DefconLevel }) {
 			<DefconCallout level={level} />
 
 			<div>
-				<p id={messageLabelId} className="m-0 text-body font-medium text-emphasis">
-					Signing message
-				</p>
-				{actionHexError === null ? (
-					<pre
-						aria-labelledby={messageLabelId}
-						className="m-0 mt-1.5 overflow-x-auto whitespace-pre rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis"
-						data-testid={`${testIdPrefix}-signing-message`}
-					>
-						{message ?? placeholder}
-					</pre>
-				) : (
-					<p
-						role="alert"
-						className="mt-1.5 rounded-lg border border-danger-border bg-danger-surface px-3 py-2.5 text-body text-danger-deep"
-					>
-						The signing message could not be resolved, so there is nothing to compare against your signer. Reconnect and
-						try again. ({actionHexError})
-					</p>
-				)}
+				{/* Defcon's action hex is a constant, so a failure here is always infrastructural —
+				    which is the one case the red line can honestly diagnose. */}
+				<SigningMessagePanel
+					message={message}
+					placeholder={placeholder}
+					error={actionHexError === null ? null : SIGNING_MESSAGE_UNRESOLVED}
+					testId={`${testIdPrefix}-signing-message`}
+					labelId={messageLabelId}
+				/>
 				{/* Only once the (constant) action hex is in hand: before that the box is still doing
 				    its first fetch, and an error there would flash on every mount. */}
-				{actionHex !== null && errors.defconMessage?.message ? (
+				{actionHex !== null && errors.defconMessage?.message && (
 					<p role="alert" className={fieldErrorClass}>
 						{errors.defconMessage.message} Nothing can be signed until it does.
 					</p>
-				) : (
-					<p className="mt-1 text-label text-emphasis-soft">This is exactly what you will see on your signer screen.</p>
 				)}
 			</div>
 
