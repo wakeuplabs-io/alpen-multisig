@@ -259,10 +259,13 @@ which returns the first entry — keeps answering `signer_update`.
 The already-activated note reuses `SafeHarbourNote` with its own wording, on the form, the preview
 and the sign view. Amber, never red: it is a fact about the chain, not an error by the signer.
 
-**`screens/__tests__/safe-harbour-note-gating.test.ts` scans `screens/` sources only.** The new
-render sites live under `domain/`, where `defcon-form-fields.tsx` already sits unscanned. This phase
-widens that test's reach to cover both rather than adding a third unguarded site — the value of that
-test is precisely that it covers *every* site, and it silently stopped doing so.
+**`screens/__tests__/safe-harbour-note-gating.test.ts` needed widening, but not the way §9.3 first
+claimed.** Its reach was never the problem — it walks all of `src/`, so `domain/` was covered. What
+it pinned was one *hook name*: `useSafeHarbourActivated(`. This phase adds a second reader,
+`useSafeHarbour`, for the surface that needs the destination as well as the flag, and a site that
+receives the result as a prop. The property worth guarding is "a live read stands behind the note",
+so the test now accepts any of the three shapes and keys the guard on `activated` rather than on one
+variable name. An unguarded mount still fails it, which is the case it exists for.
 
 ## 5. Tests
 
@@ -422,8 +425,10 @@ that way.
 together". The plan's reason does not apply to an action that copy never answers for and no desktop
 caller asks about.
 
-**9.3 The gating test is widened** (§4.9). Not in the build plan at all: it is a hole this phase
-would otherwise widen, so this phase closes it.
+**9.3 The gating test is generalized** (§4.9). Not in the build plan at all. The design note that
+prompted it was wrong about the cause — the test walks all of `src/` and was not blind to `domain/`
+— but right that it would fail here: it pinned one hook name, and this phase adds a second reader.
+Fixing the assertion to match the property rather than the name is the correction.
 
 **9.4 Eight commits, not one.** The build plan asks for one atomic commit per phase, and its reason
 is about what reaches `develop`. One pull request satisfies that reason exactly as well while making

@@ -26,6 +26,9 @@ type Props = {
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
 	newSequencerKeyHex: string
+	newSafeHarbourAddress: string
+	/** The bridge's destination this rotation replaces, and whether it is already frozen. */
+	currentSafeHarbour: { address: string; addressHex: string; activated: boolean } | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
 	authorityLabel: string
@@ -48,6 +51,8 @@ export function CreateProposalPreview({
 	operatorsToAdd,
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
+	newSafeHarbourAddress,
+	currentSafeHarbour,
 	deviceDisplay,
 	authorityLabel,
 	walletVendor,
@@ -158,6 +163,29 @@ export function CreateProposalPreview({
 					<div className="rounded-lg border border-[#e5e7eb] px-4 py-3">
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
+				</div>
+			) : actionType === 'safe_harbour_address_update' ? (
+				<div>
+					<p className="m-0 mb-2 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
+						New Sweep Destination
+					</p>
+					<div className="flex flex-col gap-1 rounded-lg border border-[#e5e7eb] px-4 py-3">
+						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarbourAddress.trim() || '—'}</span>
+						{currentSafeHarbour !== null && (
+							<span className="text-label text-[#6b7280]">
+								Replacing <span className="font-mono">{currentSafeHarbour.address}</span>
+							</span>
+						)}
+					</div>
+					{currentSafeHarbour?.activated === true && (
+						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
+							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbour is already active</p>
+							<p className="m-0 mt-2 text-body text-[#6b7280]">
+								The destination is frozen once safe harbour is active. This update will be accepted on chain and change
+								nothing, and it will not report as Enacted.
+							</p>
+						</div>
+					)}
 				</div>
 			) : isSignerUpdateActionType(actionType) ? (
 				<div>

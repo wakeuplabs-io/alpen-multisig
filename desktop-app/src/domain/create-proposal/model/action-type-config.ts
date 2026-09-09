@@ -27,6 +27,13 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 		title: 'Security Council signer update',
 		description: 'Add / remove council keys or change threshold.',
 	},
+	// "Safe Harbour" rather than "Safe Harbor": the label follows the protocol's spelling, which is
+	// what the signing message and the device show.
+	safe_harbour_address_update: {
+		actionType: 'safe_harbour_address_update',
+		title: 'Safe Harbour address update',
+		description: 'Change where the bridge sweeps funds to.',
+	},
 	operator_set_update: {
 		actionType: 'operator_set_update',
 		title: 'Bridge Operator update',
@@ -55,7 +62,13 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 const ACTION_TYPES_BY_AUTHORITY: Record<string, ActionType[]> = {
 	// council_signer_update sits after signer_update and before vk_update, so the default
 	// selection (the first entry) does not move.
-	strata_admin: ['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update'],
+	strata_admin: [
+		'signer_update',
+		'council_signer_update',
+		'vk_update',
+		'operator_set_update',
+		'safe_harbour_address_update',
+	],
 	sequencer_manager: ['signer_update', 'sequencer_key_update'],
 	alpen_admin: ['signer_update', 'vk_update'],
 	// Defcon 1 first, and therefore the council's default selection: the immediate lever is the one

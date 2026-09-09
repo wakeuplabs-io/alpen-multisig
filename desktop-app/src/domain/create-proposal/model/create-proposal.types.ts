@@ -6,6 +6,7 @@ export type ActionType =
 	| 'council_signer_update'
 	| 'operator_set_update'
 	| 'sequencer_key_update'
+	| 'safe_harbour_address_update'
 	| 'defcon_1'
 	| 'defcon_3'
 
