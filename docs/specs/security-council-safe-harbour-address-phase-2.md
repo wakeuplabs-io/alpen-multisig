@@ -9,6 +9,7 @@
 > **Predecessor:** [Phase 1](./security-council-safe-harbour-address-phase-1.md), merged in #548.
 > **Closes:** AC 6 (the countdown half), AC 7a, AC 9, AC 10, AC 13; and the two findings of the
 > Phase 1 manual walk (§4, §5).
+> **Status:** implemented; automated checks green, including the three e2e paths against regtest.
 
 ## 1. The change in one sentence
 
