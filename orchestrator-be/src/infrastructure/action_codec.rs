@@ -44,6 +44,30 @@ pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
+/// Valid tx type 14 fixture: a safe harbour address update, authorized by Strata Admin.
+///
+/// The destination is the taproot output for the secp256k1 generator point — the same one the
+/// local stack ships with, and the one upstream pins in its own signing-message test.
+#[cfg(test)]
+pub(crate) fn test_fixture_safe_harbour_address_action_hex() -> String {
+    use ssz::Encode;
+    use strata_asm_txs_admin::actions::updates::SafeHarbourAddressUpdate;
+    use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
+
+    let payload = [
+        0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B,
+        0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8,
+        0x17, 0x98,
+    ];
+    let descriptor = bitcoin_bosd::Descriptor::new_p2tr(&payload).expect("valid x-only key");
+    let address = strata_asm_proto_bridge_v1_types::SafeHarbourAddress::try_from(descriptor)
+        .expect("p2tr descriptor accepted");
+    let action = MultisigAction::Update(UpdateAction::SafeHarbourAddress(
+        SafeHarbourAddressUpdate::new(address),
+    ));
+    hex::encode(action.as_ssz_bytes())
+}
+
 /// Valid `action_hex` for a Defcon 1 update — the action upstream hardcodes to depth `0`.
 ///
 /// Test-only: the desktop cannot build this action until Phase 3. See
