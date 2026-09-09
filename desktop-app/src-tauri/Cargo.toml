@@ -36,6 +36,7 @@ strata-asm-common = { workspace = true }
 strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-proto-bridge-v1 = { workspace = true }
+strata-asm-proto-bridge-v1-types = { workspace = true }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }
 strata-identifiers = { workspace = true }
@@ -45,6 +46,8 @@ strata-l1-envelope-fmt = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
+# Only `action_codec` imports it: the safe harbour payload is a P2TR BOSD descriptor.
+bitcoin-bosd = { workspace = true }
 ssz = { workspace = true }
 secp256k1 = { workspace = true }
 rand = "0.8"

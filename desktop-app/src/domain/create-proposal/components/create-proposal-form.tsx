@@ -16,6 +16,7 @@ import {
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
 import { useMultisigConfig } from '../hooks/use-multisig-config'
+import { useSafeHarbour } from '@/hooks/use-safe-harbour-status'
 import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
 import type { ProposalPreview } from '../model/create-proposal.types'
@@ -27,6 +28,7 @@ import { CreateProposalPreview } from './create-proposal-preview'
 import { DefconFormFields } from './defcon-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
+import { SafeHarbourAddressFormFields } from './safe-harbour-address-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
@@ -71,6 +73,7 @@ const defaultFormValues: CreateProposalFormValues = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
+	newSafeHarbourAddress: '',
 	defconConfirm: '',
 	defconMessage: '',
 }
@@ -111,7 +114,12 @@ export function CreateProposalForm({
 	// would expose one frame where the buttons could use a resolver for the previous target.
 	const [resolver, setResolver] = useState(() =>
 		zodResolver(
-			buildCreateProposalFormSchema({ currentMultisigSigners: null, currentMultisigThreshold: null, authority }),
+			buildCreateProposalFormSchema({
+				currentMultisigSigners: null,
+				currentMultisigThreshold: null,
+				authority,
+				currentSafeHarbourAddress: null,
+			}),
 		),
 	)
 
@@ -139,14 +147,22 @@ export function CreateProposalForm({
 	// stay disabled until the read either succeeds or the signer switches to a different target.
 	const isConfigUnavailable = isSignerUpdate && !isLoadingConfig && multisigConfig === null
 
+	// Same shape, same reason, for the destination this action replaces: without it the form can
+	// neither show what is being replaced nor refuse a rotation to the address already installed,
+	// and that second rule is what keeps a no-op from reporting as Enacted.
+	const isSafeHarbourAction = actionType === 'safe_harbour_address_update'
+	const { safeHarbour, isLoading: isLoadingSafeHarbour } = useSafeHarbour(isSafeHarbourAction)
+	const isSafeHarbourUnavailable = isSafeHarbourAction && !isLoadingSafeHarbour && safeHarbour === null
+
 	const createProposalSchema = useMemo(
 		() =>
 			buildCreateProposalFormSchema({
 				currentMultisigSigners: multisigConfig?.signers ?? null,
 				currentMultisigThreshold: multisigConfig?.threshold ?? null,
 				authority,
+				currentSafeHarbourAddress: safeHarbour?.address ?? null,
 			}),
-		[multisigConfig, authority],
+		[multisigConfig, authority, safeHarbour],
 	)
 
 	useLayoutEffect(() => {
@@ -346,6 +362,8 @@ export function CreateProposalForm({
 							threshold={previewData.threshold}
 							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
+							newSafeHarbourAddress={previewData.newSafeHarbourAddress}
+							currentSafeHarbour={safeHarbour}
 							operatorsToAdd={previewData.operatorsToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)}
 							operatorIndicesToRemove={previewData.operatorIndicesToRemove
 								.map((r) => r.value.trim())
@@ -436,6 +454,8 @@ export function CreateProposalForm({
 								/>
 							) : actionType === 'sequencer_key_update' ? (
 								<SequencerKeyUpdateFormFields />
+							) : isSafeHarbourAction ? (
+								<SafeHarbourAddressFormFields safeHarbour={safeHarbour} isLoadingSafeHarbour={isLoadingSafeHarbour} />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
@@ -444,6 +464,13 @@ export function CreateProposalForm({
 								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
 									Could not load the signer set for {TARGET_AUTHORITY_LABELS[targetAuthority]}. Try again before
 									continuing.
+								</div>
+							)}
+
+							{isSafeHarbourUnavailable && (
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
+									Could not load the current safe harbour destination. Try again before continuing — without it this
+									form cannot tell a real change from one that would do nothing.
 								</div>
 							)}
 						</div>
@@ -475,7 +502,14 @@ export function CreateProposalForm({
 											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
 												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
 											}`}
-											disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
+											disabled={
+												isSubmitting ||
+												isLoadingConfig ||
+												isConfigUnavailable ||
+												isLoadingSafeHarbour ||
+												isSafeHarbourUnavailable ||
+												!formState.isValid
+											}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
 											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
@@ -500,7 +534,14 @@ export function CreateProposalForm({
 												? 'border-danger text-danger-deep hover:bg-danger-surface'
 												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
 										}`}
-										disabled={isSubmitting || isLoadingConfig || isConfigUnavailable || !formState.isValid}
+										disabled={
+											isSubmitting ||
+											isLoadingConfig ||
+											isConfigUnavailable ||
+											isLoadingSafeHarbour ||
+											isSafeHarbourUnavailable ||
+											!formState.isValid
+										}
 										onClick={() => void handlePreviewClick()}
 									>
 										<EyeGrayIcon width={15} height={15} className="block shrink-0" />

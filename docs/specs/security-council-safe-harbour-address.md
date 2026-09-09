@@ -1,6 +1,7 @@
 # Spec: Security Council — Safe Harbour Address Update
 
-**Status:** Contract written; implementation pending. This document is the functional contract; the
+**Status:** Phase 1 implemented — the action is creatable, signable and detected as enacted, with
+automated checks green and the manual walk pending. Phase 2 (the cancel and the e2e) is pending. This document is the functional contract; the
 build plan is
 [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md),
 whose phase board says what has landed.

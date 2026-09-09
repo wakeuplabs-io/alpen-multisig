@@ -12,6 +12,10 @@ export function decodedActionAuthorizingAuthority(action: DecodedAction): string
 			return action.role === 'security_council' ? 'strata_admin' : action.role
 		case 'vk_update':
 			return action.authority
+		// Upstream's `authorized_role()` for tx type 14 is `StrataAdministrator`: the council can
+		// sweep to the safe harbour but must not also pick where the funds land.
+		case 'safe_harbour_address_update':
+			return 'strata_admin'
 		case 'defcon_1':
 		case 'defcon_3':
 			return 'security_council'

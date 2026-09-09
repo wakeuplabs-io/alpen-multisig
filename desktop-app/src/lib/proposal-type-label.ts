@@ -8,6 +8,7 @@ export function inferProposalTypeLabel(proposal: Proposal): string {
 	if (proposal.actionType === 'defcon_1') return 'Defcon 1'
 	if (proposal.actionType === 'defcon_3') return 'Defcon 3'
 	if (proposal.actionType === 'council_signer_update') return 'Security Council signer update'
+	if (proposal.actionType === 'safe_harbour_address_update') return 'Safe Harbour address update'
 	if (proposal.actionType === 'multisig_update') {
 		return proposal.authority.toLowerCase().includes('sequencer') ? 'Sequencer update' : 'Signer update'
 	}

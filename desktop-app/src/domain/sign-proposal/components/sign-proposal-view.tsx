@@ -120,6 +120,42 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
+function SafeHarbourAddressDetails({
+	action,
+}: {
+	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
+}) {
+	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
+	// rotation submitted after activation is accepted on chain and discarded.
+	const safeHarbourActivated = useSafeHarbourActivated()
+
+	return (
+		<>
+			{safeHarbourActivated && (
+				<div className="mt-5">
+					<SafeHarbourNote>
+						The destination is frozen once safe harbour is active, so this update will be accepted and change nothing.
+					</SafeHarbourNote>
+				</div>
+			)}
+
+			<div className="mt-5">
+				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+					New sweep destination
+				</p>
+				<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2.5">
+					{action.address.length > 0 && (
+						<span className="break-all font-mono text-[12px] leading-5 text-[#111827]">{action.address}</span>
+					)}
+					{/* The descriptor, not the address, is what the device renders — so it is what a
+					    signer can actually compare against the screen in front of them. */}
+					<code className="block break-all font-mono text-[12px] leading-5 text-[#6b7280]">{action.addressHex}</code>
+				</div>
+			</div>
+		</>
+	)
+}
+
 function DefconDetails({ level }: { level: DefconLevel }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and
 	// the sentences below are written in the future tense, which is wrong once the harbour is up.
@@ -204,6 +240,8 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
+			) : decodedAction.kind === 'safe_harbour_address_update' ? (
+				<SafeHarbourAddressDetails action={decodedAction} />
 			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
 				<DefconDetails level={decodedAction.kind} />
 			) : decodedAction.kind === 'cancel' ? (

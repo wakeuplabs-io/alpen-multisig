@@ -189,6 +189,9 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
         Ok(desktop_app::domain::action::Action::SequencerKeyUpdate(_)) => {
             "sequencer_key_update".to_string()
         }
+        Ok(desktop_app::domain::action::Action::SafeHarbourAddressUpdate(_)) => {
+            "safe_harbour_address_update".to_string()
+        }
         Ok(desktop_app::domain::action::Action::Defcon1) => "defcon_1".to_string(),
         Ok(desktop_app::domain::action::Action::Defcon3) => "defcon_3".to_string(),
         Err(_) => "unknown".to_string(),
@@ -1123,6 +1126,26 @@ mod tests {
         .expect("encode should succeed");
 
         assert_eq!(action_type_from_hex(&None, &hex), "defcon_3");
+    }
+
+    /// AC 5: every read surface derives its label from this string, and `"unknown"` is what it
+    /// answered before the codec learned the variant — a proposal listed as *Unknown* with its raw
+    /// payload, on the screen a signer uses to decide.
+    #[test]
+    fn action_type_from_hex_names_a_safe_harbour_address_update() {
+        let destination = desktop_app::domain::action::SafeHarbourDescriptor::from_hex(
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .expect("valid P2TR descriptor");
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(
+            &desktop_app::domain::action::Action::SafeHarbourAddressUpdate(destination),
+        )
+        .expect("encode should succeed");
+
+        assert_eq!(
+            action_type_from_hex(&None, &hex),
+            "safe_harbour_address_update"
+        );
     }
 
     /// A cancel is identified by its target, never by decoding its own payload.

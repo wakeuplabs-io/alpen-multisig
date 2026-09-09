@@ -36,6 +36,7 @@ const draft = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
+	newSafeHarbourAddress: '',
 	defconConfirm: '',
 	defconMessage: '',
 }
@@ -52,6 +53,7 @@ function issuesOn(
 		currentMultisigSigners,
 		currentMultisigThreshold: null,
 		authority,
+		currentSafeHarbourAddress: null,
 	}).safeParse({
 		...draft,
 		actionType: 'council_signer_update',
@@ -63,9 +65,11 @@ function issuesOn(
 
 // Claim 1 (AC 1) — the council entry joins the administrator's menu, after signer_update and
 // before vk_update, and the default selection does not move: it is the first entry, unchanged.
+// V4 appended `safe_harbour_address_update` at the end for the same reason, which is why the whole
+// order is asserted rather than only the council entry's presence.
 assert.deepEqual(
 	getActionTypeOptions('strata_admin').map((option) => option.actionType),
-	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update'],
+	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update', 'safe_harbour_address_update'],
 	'claim 1: strata_admin menu order',
 )
 assert.equal(getDefaultActionType('strata_admin'), 'signer_update', 'claim 1: default selection unchanged')
@@ -155,6 +159,7 @@ function noOpIssues(
 		currentMultisigSigners,
 		currentMultisigThreshold,
 		authority: 'strata_admin',
+		currentSafeHarbourAddress: null,
 	}).safeParse({ ...draft, actionType: 'council_signer_update', ...overrides })
 	if (result.success) return 0
 	return result.error.issues.filter((issue) => issue.path[0] === 'keysToAdd').length

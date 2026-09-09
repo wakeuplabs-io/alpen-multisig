@@ -20,6 +20,7 @@ const createProposalFormObjectSchema = z.object({
 		'council_signer_update',
 		'operator_set_update',
 		'sequencer_key_update',
+		'safe_harbour_address_update',
 		'defcon_1',
 		'defcon_3',
 	]),
@@ -33,6 +34,7 @@ const createProposalFormObjectSchema = z.object({
 	operatorsToAdd: z.array(keyRowSchema),
 	operatorIndicesToRemove: z.array(keyRowSchema),
 	newSequencerKeyHex: z.string(),
+	newSafeHarbourAddress: z.string(),
 	defconConfirm: z.string(),
 	/** The canonical signing message, resolved from Rust and mirrored here so that
 	 * "the signer can see what they are signing" gates submission like any other field. */
@@ -72,12 +74,20 @@ export type BuildCreateProposalFormSchemaArgs = {
 	currentMultisigThreshold: number | null
 	/** The session's authority. Decides which action types this form may produce at all. */
 	authority: string
+	/**
+	 * The bridge's current safe harbour destination, as an address on the active network. Needed to
+	 * refuse a rotation to the destination already installed — which the chain accepts and reports
+	 * as `Enacted`, indistinguishable from one that changed something. Null when the read failed,
+	 * which is safe only because the form also blocks submission in that state.
+	 */
+	currentSafeHarbourAddress: string | null
 }
 
 export function buildCreateProposalFormSchema({
 	currentMultisigSigners,
 	currentMultisigThreshold,
 	authority,
+	currentSafeHarbourAddress,
 }: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
 		// The action-type menu is display data. This is the rule: an authority can only draft the
@@ -110,6 +120,6 @@ export function buildCreateProposalFormSchema({
 		}
 
 		const validate = getActionValidator(data.actionType)
-		validate({ data, ctx, currentMultisigSigners, currentMultisigThreshold })
+		validate({ data, ctx, currentMultisigSigners, currentMultisigThreshold, currentSafeHarbourAddress })
 	})
 }

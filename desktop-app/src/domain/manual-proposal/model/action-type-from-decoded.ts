@@ -19,6 +19,7 @@ import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 const ACTION_TYPE_BY_KIND: Record<DecodedAction['kind'], ActionType> = {
 	multisig_update: 'multisig_update',
 	vk_update: 'vk_update',
+	safe_harbour_address_update: 'safe_harbour_address_update',
 	defcon_1: 'defcon_1',
 	defcon_3: 'defcon_3',
 	cancel: 'cancel',

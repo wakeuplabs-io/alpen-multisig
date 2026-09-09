@@ -51,6 +51,7 @@ export const proposalSchema = z
 			'operator_set_update',
 			'sequencer_key_update',
 			'council_signer_update',
+			'safe_harbour_address_update',
 			'defcon_1',
 			'defcon_3',
 			'cancel',
@@ -144,6 +145,13 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		typeId: z.number(),
 		conditionHex: z.string(),
 	}),
+	// `address` is rendered with the process's active network; `addressHex` is the BOSD
+	// descriptor, which is what the device displays and therefore what a signer compares.
+	z.object({
+		kind: z.literal('safe_harbour_address_update'),
+		addressHex: z.string(),
+		address: z.string(),
+	}),
 	z.object({ kind: z.literal('defcon_1') }),
 	z.object({ kind: z.literal('defcon_3') }),
 	z.object({ kind: z.literal('cancel'), targetUpdateId: z.number(), targetActionHex: z.string() }),
@@ -176,8 +184,13 @@ export const currentVkSchema = z.object({
 	conditionHex: z.string(),
 })
 
+// Zod strips what it does not declare, so a field added on the Rust side alone would vanish here
+// in silence. `addressHex` is the BOSD descriptor the device displays; `address` is the same
+// destination rendered for the active network, and is empty when that could not be resolved.
 export const safeHarbourStatusSchema = z.object({
 	activated: z.boolean(),
+	addressHex: z.string(),
+	address: z.string(),
 })
 
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())
