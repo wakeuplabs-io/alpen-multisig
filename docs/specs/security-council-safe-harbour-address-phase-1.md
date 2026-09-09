@@ -7,6 +7,7 @@
 > supersedes it.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
 > **Closes:** AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7.
+> **Status:** implemented; automated checks green, manual walk pending.
 
 ## 1. The change in one sentence
 
