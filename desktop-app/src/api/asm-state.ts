@@ -17,6 +17,10 @@ export type AuthorityMemberships = Record<string, boolean>
 
 export type SafeHarbourStatus = {
 	activated: boolean
+	/** BOSD descriptor of the current destination — what a signer's device displays. */
+	addressHex: string
+	/** The same destination as an address on the active network; empty if it could not be rendered. */
+	address: string
 }
 
 export type CurrentVk = {

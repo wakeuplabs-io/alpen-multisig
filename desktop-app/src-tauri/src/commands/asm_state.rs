@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use serde::Serialize;
 use tauri::State;
 
+use desktop_app::domain::action::SafeHarbourDescriptor;
 use desktop_app::domain::auth::AuthRole;
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::asm_status_rpc;
 use desktop_app::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
+use desktop_app::infrastructure::network_env;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
 #[derive(Debug, Serialize)]
@@ -17,10 +19,19 @@ pub struct MultisigConfigDto {
     pub threshold: u8,
 }
 
+/// The bridge's safe harbour, in both the form a signer recognises and the form their device
+/// shows.
+///
+/// `address_hex` is the BOSD descriptor — what upstream renders into the signing message — and
+/// `address` is the same destination written for the active network. Both travel because they
+/// answer different questions: one is comparable against a device screen, the other against a
+/// wallet.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SafeHarbourStatusDto {
     pub activated: bool,
+    pub address_hex: String,
+    pub address: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,8 +102,22 @@ pub async fn get_safe_harbour_status(
         .map_err(|e| format!("lock error: {e}"))?
         .strata_rpc_url()
         .to_string();
-    let activated = asm_status_rpc::fetch_safe_harbour_activated(&rpc_url).await?;
-    Ok(SafeHarbourStatusDto { activated })
+    let safe_harbour = asm_status_rpc::fetch_safe_harbour(&rpc_url).await?;
+    // A network that cannot be resolved blanks only the address: the hex is what the device shows
+    // and what the no-op rule compares, so it must survive a misconfigured environment.
+    let address = network_env::network_from_env()
+        .ok()
+        .and_then(|network| {
+            SafeHarbourDescriptor::from_hex(&safe_harbour.address_hex)
+                .ok()
+                .map(|d| d.to_address(network))
+        })
+        .unwrap_or_default();
+    Ok(SafeHarbourStatusDto {
+        activated: safe_harbour.activated,
+        address_hex: safe_harbour.address_hex,
+        address,
+    })
 }
 
 #[tauri::command]

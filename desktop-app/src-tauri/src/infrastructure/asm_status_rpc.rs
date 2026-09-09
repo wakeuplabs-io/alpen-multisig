@@ -117,11 +117,24 @@ pub async fn fetch_current_operators(rpc_url: &str) -> Result<Vec<String>, Strin
 /// Read straight from the node like the other live ASM facts this module serves: the desktop
 /// decodes the bridge section it already decodes for the operator set. The address is not
 /// returned — nothing in the app renders it.
-pub async fn fetch_safe_harbour_activated(rpc_url: &str) -> Result<bool, String> {
+/// The bridge's safe harbour: whether it is activated, and where it currently points.
+///
+/// The address is the BOSD wire form — a type tag plus the payload — which is also the string the
+/// signing message renders and the device displays.
+pub struct SafeHarbour {
+    pub activated: bool,
+    pub address_hex: String,
+}
+
+pub async fn fetch_safe_harbour(rpc_url: &str) -> Result<SafeHarbour, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let bridge = decode_bridge_state(&anchor)?;
-    Ok(bridge.safe_harbour().is_activated())
+    let safe_harbour = bridge.safe_harbour();
+    Ok(SafeHarbour {
+        activated: safe_harbour.is_activated(),
+        address_hex: hex::encode(safe_harbour.address().as_descriptor().to_bytes()),
+    })
 }
 
 /// Search the live ASM queue for the `UpdateId` matching `action_hex`.
