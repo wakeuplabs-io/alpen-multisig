@@ -46,7 +46,7 @@ answers for tx type 14 with no new branch
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
 | 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbour-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
-| 2 | The cancel, the detail and the e2e | AC 9, 10, 13 | `e2e-tests`, `desktop-app`, `orchestrator-be` |
+| 2 | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbour-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
 | 3 | Reserve — what the manual walk exposes | — | — |
 
 Each phase is its own pull request against `develop`, branched from a freshly pulled `develop`.
