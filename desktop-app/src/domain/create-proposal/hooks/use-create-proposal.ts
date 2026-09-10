@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getCurrentOperators, getCurrentVk } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
 import {
@@ -46,6 +46,7 @@ export type UseCreateProposalReturn = {
 	createdProposal: Proposal | null
 	computeProposalPreview: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	submitCreateProposal: (data: CreateProposalFormValues) => Promise<void>
+	clearError: () => void
 }
 
 export function useCreateProposal(): UseCreateProposalReturn {
@@ -60,6 +61,11 @@ export function useCreateProposal(): UseCreateProposalReturn {
 	const [isLoadingOperators, setIsLoadingOperators] = useState(true)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+
+	// Stable, because the form subscribes to its own changes with it — see the form's effect. A
+	// rejected preview or submit is a verdict about the values it was given, so it stops being
+	// about anything the moment those values change.
+	const clearError = useCallback(() => setError(null), [])
 	const [createdProposal, setCreatedProposal] = useState<Proposal | null>(null)
 
 	async function assertValidSessionForProposalCreation() {
@@ -257,5 +263,6 @@ export function useCreateProposal(): UseCreateProposalReturn {
 		createdProposal,
 		computeProposalPreview,
 		submitCreateProposal,
+		clearError,
 	}
 }

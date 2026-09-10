@@ -45,6 +45,8 @@ type Props = {
 	isLoadingOperators: boolean
 	isSubmitting: boolean
 	error: string | null
+	/** Clears the error above, called whenever a field changes — see the effect that uses it. */
+	onClearError: () => void
 	createdProposal: Proposal | null
 	onCancel: () => void
 	onPreviewValid: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
@@ -90,6 +92,7 @@ export function CreateProposalForm({
 	isLoadingOperators,
 	isSubmitting,
 	error,
+	onClearError,
 	createdProposal,
 	onCancel,
 	onPreviewValid,
@@ -131,7 +134,18 @@ export function CreateProposalForm({
 	})
 
 	const { handleSubmit, reset, formState, getValues, control, trigger } = form
+
 	const watchedValues = useWatch({ control })
+
+	// The error under the buttons is a verdict on the values a rejected preview or submit was
+	// given, and it used to survive until the next one — so it stayed on screen under a field the
+	// signer had already corrected, contradicting the resolved signing message two fields above.
+	// Keyed on the values themselves, serialized: setting the error re-renders the form without
+	// changing them, and that must not clear the error it just set.
+	const watchedValuesKey = JSON.stringify(watchedValues)
+	useEffect(() => {
+		onClearError()
+	}, [watchedValuesKey, onClearError])
 	const actionType = watchedValues?.actionType ?? getDefaultActionType(authority)
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
