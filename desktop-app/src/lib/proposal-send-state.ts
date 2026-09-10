@@ -20,7 +20,7 @@ export type ProposalSendState =
 	| { kind: 'confirmed'; label: string; detail: string }
 	/** Broadcast failed. The button comes back as a retry — the backend allows it. */
 	| { kind: 'failed'; label: string; detail: string }
-	/** The chain moved past this proposal's sequence number. Nothing to press, ever again. */
+	/** This proposal's sequence number is spent. Nothing to press, ever again. */
 	| { kind: 'superseded'; label: string; detail: string }
 
 type SendStateInput = {
@@ -28,6 +28,12 @@ type SendStateInput = {
 	broadcastStatus: BroadcastStatus
 	requiredSignatures: number
 	signatures: ReadonlyArray<unknown>
+	/**
+	 * A safe harbour rotation the bridge accepted and applied nowhere, because the harbour was
+	 * already up. Decided by the caller — see `harbourFrozeDestination` — since answering it needs
+	 * a live chain read and this module is pure.
+	 */
+	harbourFrozeDestination?: boolean
 }
 
 /**
@@ -78,6 +84,23 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
 		'This transaction was mined, but another action had already used its sequence number, so the ASM did not apply it. The signatures are bound to that number, so it cannot be sent again — a replacement has to be created and signed. The commit and reveal fees were spent.',
 }
 
+/**
+ * The third way, and the only one where a replacement is the wrong advice.
+ *
+ * A safe harbour rotation submitted after the harbour is activated is accepted on chain in full:
+ * the signature verifies, the sequence number is consumed and the queue entry drains.
+ * `SafeHarbour::update_address` then refuses the change and returns a boolean the bridge
+ * subprotocol discards — no log, no error. So the sequence number is gone for the same reason as
+ * above, but nothing raced this proposal, and nothing will do better: there is no de-escalation
+ * upstream, so a replacement meets the same frozen destination. Constraint 1 in
+ * docs/specs/security-council-safe-harbour-address.md.
+ */
+const SUPERSEDED_BY_FROZEN_HARBOUR = {
+	label: 'Superseded',
+	detail:
+		'The safe harbour is already active, so the bridge\u2019s destination is frozen: this transaction was mined and the ASM accepted it, and nothing changed. The signatures are bound to a sequence number that is now spent, and a replacement would be discarded the same way while the harbour is up. The commit and reveal fees were spent.',
+}
+
 const SUPERSEDED_BEFORE_CONFIRMATION = {
 	label: 'Superseded',
 	detail:
@@ -89,8 +112,14 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 	// something of its own to say — including which of the two ways it got there. Quorum never
 	// enters into it: the sequence number is gone either way.
 	if (proposal.status === 'superseded') {
+		// Being swallowed by the harbour requires reaching a block, so the frozen variant is a
+		// refinement of the confirmed one and never of the other.
 		const stage =
-			proposal.broadcastStatus === 'reveal_confirmed' ? SUPERSEDED_AFTER_CONFIRMATION : SUPERSEDED_BEFORE_CONFIRMATION
+			proposal.broadcastStatus === 'reveal_confirmed'
+				? proposal.harbourFrozeDestination === true
+					? SUPERSEDED_BY_FROZEN_HARBOUR
+					: SUPERSEDED_AFTER_CONFIRMATION
+				: SUPERSEDED_BEFORE_CONFIRMATION
 		return { kind: 'superseded', ...stage }
 	}
 

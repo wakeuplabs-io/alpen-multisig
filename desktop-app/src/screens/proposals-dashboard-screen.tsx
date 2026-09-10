@@ -115,6 +115,7 @@ export function ProposalsDashboardScreen() {
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
 				currentBlockHeight={currentBlockHeight}
+				safeHarbourActivated={safeHarbourActivated}
 				notice={
 					isCouncil && safeHarbourActivated ? (
 						<SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote>

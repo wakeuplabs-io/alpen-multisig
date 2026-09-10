@@ -16,7 +16,7 @@ import { ActivationCountdown } from '@/domain/cancel-proposal/components/activat
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { lastChangeLabel } from '@/lib/last-change-label'
-import { changedNothingActionIds } from '@/lib/safe-harbour-redundancy'
+import { changedNothingActionIds, harbourFrozeDestination } from '@/lib/safe-harbour-redundancy'
 import { buildProposalTitle } from '@/lib/proposal-title'
 import {
 	PROPOSAL_STATUS_STYLE,
@@ -36,6 +36,11 @@ type Props = {
 	notice?: ReactNode
 	signerPubkey: string | null
 	currentBlockHeight: number | null
+	/**
+	 * The bridge's live safe harbour flag. Read on the two dashboards whose authority holds a lever
+	 * that answers it; `false` elsewhere, which is also how a failed read degrades.
+	 */
+	safeHarbourActivated: boolean
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	executedOrCanceled: Proposal[]
@@ -56,6 +61,7 @@ export function ProposalsDashboard({
 	notice,
 	signerPubkey,
 	currentBlockHeight,
+	safeHarbourActivated,
 	quorumReached,
 	pending,
 	executedOrCanceled,
@@ -199,6 +205,7 @@ export function ProposalsDashboard({
 						<PastTab
 							proposals={pagedPastProposals}
 							changedNothing={changedNothing}
+							safeHarbourActivated={safeHarbourActivated}
 							totalProposals={pastProposals.length}
 							page={pastPage}
 							totalPages={totalPastPages}
@@ -292,6 +299,7 @@ function PastTab({
 	signerPubkey,
 	currentBlockHeight,
 	changedNothing,
+	safeHarbourActivated,
 	onPageChange,
 	onSignProposal,
 	onBroadcastProposal,
@@ -306,6 +314,7 @@ function PastTab({
 	currentBlockHeight: number | null
 	/** Computed over every past proposal, not this page: pagination must not move the answer. */
 	changedNothing: ReadonlySet<string>
+	safeHarbourActivated: boolean
 	onPageChange: (page: number) => void
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
@@ -333,6 +342,7 @@ function PastTab({
 					signerPubkey={signerPubkey}
 					currentBlockHeight={currentBlockHeight}
 					changedNothing={changedNothing.has(proposal.actionId)}
+					safeHarbourActivated={safeHarbourActivated}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -422,6 +432,8 @@ function ProposalGroup({
 							currentBlockHeight={currentBlockHeight}
 							// Only an enacted proposal can have changed nothing, and this group never holds one.
 							changedNothing={false}
+							// Nor a superseded one, which is the only status the flag says anything about here.
+							safeHarbourActivated={false}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
 							onViewProposal={onViewProposal}
@@ -439,6 +451,7 @@ function ProposalCard({
 	signerPubkey,
 	currentBlockHeight,
 	changedNothing,
+	safeHarbourActivated,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -449,6 +462,8 @@ function ProposalCard({
 	currentBlockHeight: number | null
 	/** Enacted, but the safe harbour was already active — see `changedNothingActionIds`. */
 	changedNothing: boolean
+	/** The bridge's live flag, which decides why a superseded rotation is superseded. */
+	safeHarbourActivated: boolean
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -462,7 +477,10 @@ function ProposalCard({
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
 	const { hasQuorum, canSign, canBroadcast, canCancel } = deriveProposalActions(proposal, signerPubkey)
-	const sendState = proposalSendState(proposal)
+	const sendState = proposalSendState({
+		...proposal,
+		harbourFrozeDestination: harbourFrozeDestination(proposal, safeHarbourActivated),
+	})
 	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 	const awaitingEnactment = sendState.kind === 'confirmed'
 

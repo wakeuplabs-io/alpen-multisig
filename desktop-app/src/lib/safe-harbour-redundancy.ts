@@ -71,3 +71,27 @@ export function changedNothingActionIds(proposals: readonly HarbourActivationCan
 		.sort((a, b) => a.activationHeight - b.activationHeight || a.seqNo - b.seqNo)
 	return new Set(activations.slice(1).map((proposal) => proposal.actionId))
 }
+
+/**
+ * Whether a superseded proposal is one the harbour swallowed rather than one that lost a race.
+ *
+ * The two are indistinguishable in the proposal's own record — both end with the sequence number
+ * consumed and the action gone from the queue — so the answer needs the bridge's live state, which
+ * is why it takes the flag rather than reading it. Live is sound: activation is a `set_activated(true)`
+ * on a flag with no reset and no de-escalating action upstream, so a harbour that is up now was up
+ * when the rotation was mined, or came up after it.
+ *
+ * That "or came up after it" is the residual ambiguity: a rotation genuinely superseded by a rival
+ * action, with the harbour raised afterwards, reads as swallowed. The attribution is then wrong and
+ * the advice still right — a replacement really would be discarded — which is the trade recorded in
+ * docs/specs/security-council-safe-harbour-address-phase-3.md §4.1.
+ *
+ * The action type is load-bearing and not a formality: every other action is applied whatever the
+ * harbour is doing, and a superseded Defcon really did lose its sequence number to something else.
+ */
+export function harbourFrozeDestination(
+	proposal: { actionType: ActionType; status: ProposalStatus },
+	harbourActivated: boolean,
+): boolean {
+	return harbourActivated && proposal.status === 'superseded' && proposal.actionType === 'safe_harbour_address_update'
+}

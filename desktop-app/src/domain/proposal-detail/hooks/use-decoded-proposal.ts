@@ -25,6 +25,13 @@ export type DecodedProposalData = {
 	 * be read — see `buildSafeHarbourChange`.
 	 */
 	safeHarbourChange: SafeHarbourChange | null
+	/**
+	 * The bridge's live safe harbour flag, read only where it is already being read: the same
+	 * `getSafeHarbourStatus` call the rotation's change table comes from. `false` everywhere else,
+	 * which no consumer can mistake for a claim, since every one of them also asks whether the
+	 * action is a rotation.
+	 */
+	safeHarbourActivated: boolean
 	allSigners: string[]
 	isLoading: boolean
 }
@@ -62,6 +69,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 		proposalKey: null,
 		signerSetChange: null,
 		safeHarbourChange: null,
+		safeHarbourActivated: false,
 		allSigners: [],
 		isLoading: false,
 	})
@@ -72,6 +80,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				proposalKey: null,
 				signerSetChange: null,
 				safeHarbourChange: null,
+				safeHarbourActivated: false,
 				allSigners: [],
 				isLoading: false,
 			})
@@ -83,6 +92,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 			proposalKey,
 			signerSetChange: null,
 			safeHarbourChange: null,
+			safeHarbourActivated: false,
 			allSigners: [],
 			isLoading: true,
 		})
@@ -104,6 +114,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						proposalKey,
 						signerSetChange: null,
 						safeHarbourChange: null,
+						safeHarbourActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -124,6 +135,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						setDecodedData({
 							proposalKey,
 							signerSetChange: null,
+							safeHarbourActivated: harbourRes.ok && harbourRes.data.activated,
 							safeHarbourChange: buildSafeHarbourChange({
 								installed: harbourRes.ok
 									? { address: harbourRes.data.address, addressHex: harbourRes.data.addressHex }
@@ -146,6 +158,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						proposalKey,
 						signerSetChange: null,
 						safeHarbourChange: null,
+						safeHarbourActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -160,6 +173,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
 						safeHarbourChange: null,
+						safeHarbourActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -176,6 +190,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
 						safeHarbourChange: null,
+						safeHarbourActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -193,7 +208,13 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	// Effects run after paint. Keying the state makes the render immediately following a proposal
 	// change return an empty loading view instead of exposing the previous proposal's signer data.
 	if (decodedData.proposalKey !== proposalKey) {
-		return { signerSetChange: null, safeHarbourChange: null, allSigners: [], isLoading: proposal !== null }
+		return {
+			signerSetChange: null,
+			safeHarbourChange: null,
+			safeHarbourActivated: false,
+			allSigners: [],
+			isLoading: proposal !== null,
+		}
 	}
 	return decodedData
 }
