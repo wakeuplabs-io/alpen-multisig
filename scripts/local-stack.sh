@@ -34,8 +34,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="$SCRIPT_DIR/../staging"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.local.yml"
-COMPOSE_PROJECT=$(basename "$COMPOSE_DIR" | tr '[:lower:]' '[:upper:]')
-CONTAINER_PREFIX="${COMPOSE_PROJECT,,}"
+COMPOSE_PROJECT=$(basename "$COMPOSE_DIR" | tr '[:upper:]' '[:lower:]')
+CONTAINER_PREFIX="${COMPOSE_PROJECT}"
 
 CLEAN=0
 CLEAN_ORCHESTRATOR=0
