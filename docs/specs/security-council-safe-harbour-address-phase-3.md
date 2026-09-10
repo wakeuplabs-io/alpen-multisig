@@ -11,7 +11,7 @@
 > [Phase 2](./security-council-safe-harbour-address-phase-2.md) (#549).
 > **Source:** the manual walk on regtest, 2026-09-10 — three runs: an enactment, a cancel followed
 > by an enactment, and a rotation submitted with the harbour already up.
-> **Status:** implemented; automated checks green. A walk over this phase's own surfaces is pending.
+> **Status:** implemented; automated checks green, and walked on regtest 2026-09-10 (§13).
 
 ## 1. The change in one sentence
 
@@ -217,3 +217,35 @@ The `AGENTS.md` checklist plus `npm run test:unit`. Then, on the local stack, th
 phase changes: an untitled proposal's preview, a rejected preview followed by a corrected address, a
 co-signer's sign view for a rotation, and — with the harbour already up — the detail of a rotation
 that reached `Superseded`, which is the sentence this phase exists for.
+
+## 13. The second walk
+
+Run the same day, over this phase's own surfaces, on the branch. Four of the five findings are
+directly evidenced; the fifth is consistent with the fix and was not captured at the moment that
+would prove it.
+
+| Finding | Evidence |
+|---|---|
+| §4 the frozen-destination detail | The detail and the dashboard card of a swallowed rotation both carry the new sentence. That it appears on the **administrator's** dashboard is also §3's evidence: under the old gate that copy was unreachable there. |
+| §5 the sign view's before/after | Current and Proposed, with both descriptors, on the screen where the signature is given. |
+| §7 the note's last sentence | "It will not report as Enacted" now on all three surfaces. |
+| §7 the untitled draft | Previews as "Proposal #5 - Safe Harbour address update". |
+| §6 the signing message | The 66-character descriptor rendered whole, on its own wrapped line. |
+| §6 the stale form error | **Not evidenced.** The walk captured the error while the address was genuinely invalid, which is correct, and the next form seen was already clean but belonged to a different proposal. Nothing contradicts the fix; nothing captured proves it either. |
+
+Two observations, neither a regression:
+
+- An enacted rotation's detail shows a single `Destination` column. That is `buildSafeHarbourChange`
+  working as designed — the live value *is* what the rotation installed, so two identical columns
+  would read as a rotation that changed nothing.
+- "⚠ Expiring soon — 23 h 59 m" is still on every pending surface. That is §8's finding, filed
+  separately and deliberately out of this phase.
+
+**One nit this phase leaves.** An invalid address states its verdict twice — under the field and in
+the box below the buttons. They now appear and disappear together, so neither contradicts the other,
+but saying it twice is still noise. Not taken here; it is a one-line change whenever the box is
+revisited.
+
+The three items of §2 that no walk has exercised — the council's inability to reach the entry, the
+P2WPKH and wrong-network refusals read off the screen, and the manual bundle round-trip — are
+unchanged and still open.
