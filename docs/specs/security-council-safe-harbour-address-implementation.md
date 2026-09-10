@@ -7,8 +7,9 @@
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E5.
 
-**Status:** Phase 1 implemented and automated checks green; the manual walk is pending. Phase 2
-(the cancel, the detail view and the e2e) is next.
+**Status:** Phases 1 and 2 implemented, automated checks green. The Phase 1 manual walk produced
+two findings, both fixed in Phase 2; a second walk over Phase 2's own surfaces is pending. Phase 3
+is the reserve.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -46,7 +47,7 @@ answers for tx type 14 with no new branch
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
 | 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbour-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
-| 2 | The cancel, the detail and the e2e | AC 9, 10, 13 | `e2e-tests`, `desktop-app`, `orchestrator-be` |
+| 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbour-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
 | 3 | Reserve — what the manual walk exposes | — | — |
 
 Each phase is its own pull request against `develop`, branched from a freshly pulled `develop`.

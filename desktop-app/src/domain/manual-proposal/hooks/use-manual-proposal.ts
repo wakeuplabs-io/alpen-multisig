@@ -77,6 +77,9 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 	// Step 2
 	const [decodedData, setDecodedData] = useState<DecodedProposalData>({
 		signerSetChange: null,
+		// The manual bundle carries no live chain read, so it never has an installed destination to
+		// compare against — the detail view's section is absent here by construction, not by failure.
+		safeHarbourChange: null,
 		allSigners: [],
 		isLoading: false,
 	})
@@ -454,7 +457,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		setImportErrors({})
 		setIsValidating(false)
 		setImportData(null)
-		setDecodedData({ signerSetChange: null, allSigners: [], isLoading: false })
+		setDecodedData({ signerSetChange: null, safeHarbourChange: null, allSigners: [], isLoading: false })
 		setLocalSignatures([])
 		setRequiredSignatures(null)
 		setIsSigning(false)

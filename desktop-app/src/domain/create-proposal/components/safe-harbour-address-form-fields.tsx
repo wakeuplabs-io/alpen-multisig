@@ -3,6 +3,7 @@ import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { SafeHarbourStatus } from '@/api/asm-state'
 import { useSafeHarbourActionHex } from '../hooks/use-safe-harbour-action-hex'
+import { SigningMessagePanel } from './signing-message-panel'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
 
@@ -10,6 +11,12 @@ type Props = {
 	safeHarbour: SafeHarbourStatus | null
 	isLoadingSafeHarbour: boolean
 }
+
+/**
+ * Below this length a string cannot be a taproot address yet, so a rejection of it is a *not yet*
+ * rather than a verdict. Deliberately loose: its only job is to keep red off a field mid-edit.
+ */
+const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
 
 /** `seqNo` is a free-text field; the signing message can only be resolved for a real number. */
 function parseSeqNo(raw: string | undefined): number | null {
@@ -35,11 +42,19 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 
 	const address = useWatch({ control, name: 'newSafeHarbourAddress' }) ?? ''
 	const seqNo = parseSeqNo(useWatch({ control, name: 'seqNo' }))
-	// Only resolved once the address is well formed: the builder is an IPC round trip, and while the
-	// field is invalid its own error is what the signer needs to read.
-	const resolvableAddress = errors.newSafeHarbourAddress === undefined ? address : ''
-	const { actionHex, error: actionHexError } = useSafeHarbourActionHex(resolvableAddress)
+	// Attempted whenever the Zod rules pass. The earlier version read as if that guard filtered
+	// invalid addresses; it never could, because the address is validated in Rust and the validator
+	// has no opinion about it.
+	const { actionHex, error: buildError } = useSafeHarbourActionHex(
+		errors.newSafeHarbourAddress === undefined ? address : '',
+	)
 	const { message } = useDeviceSigningMessage(seqNo, actionHex)
+
+	// The builder's rejection answers "is this a destination I can use", which is the question the
+	// field asks — so it belongs under the field, and only once the signer has typed something long
+	// enough to be a whole address. Before that it is a *not yet*, and red is for errors.
+	const looksComplete = address.trim().length >= MIN_PLAUSIBLE_ADDRESS_LENGTH
+	const addressError = errors.newSafeHarbourAddress?.message ?? (looksComplete ? (buildError ?? undefined) : undefined)
 
 	const placeholder =
 		address.trim().length === 0
@@ -90,11 +105,11 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 					placeholder="Taproot address (bc1p… / bcrt1p…)"
 					autoComplete="off"
 					spellCheck={false}
-					aria-invalid={errors.newSafeHarbourAddress !== undefined}
+					aria-invalid={addressError !== undefined}
 				/>
-				{errors.newSafeHarbourAddress?.message ? (
+				{addressError !== undefined ? (
 					<p role="alert" className={fieldErrorClass}>
-						{errors.newSafeHarbourAddress.message}
+						{addressError}
 					</p>
 				) : (
 					<p className="mt-1 text-label text-emphasis-soft">
@@ -103,32 +118,17 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 				)}
 			</div>
 
-			<div>
-				<p id="safe-harbour-signing-message-label" className="m-0 text-body font-medium text-emphasis">
-					Signing message
-				</p>
-				{actionHexError === null ? (
-					<pre
-						aria-labelledby="safe-harbour-signing-message-label"
-						className="m-0 mt-1.5 overflow-x-auto whitespace-pre rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis"
-						data-testid="e2e-safe-harbour-signing-message"
-					>
-						{message ?? placeholder}
-					</pre>
-				) : (
-					<p
-						role="alert"
-						className="mt-1.5 rounded-lg border border-danger-border bg-danger-surface px-3 py-2.5 text-body text-danger-deep"
-					>
-						The signing message could not be resolved, so there is nothing to compare against your signer. Reconnect and
-						try again. ({actionHexError})
-					</p>
-				)}
-				<p className="mt-1 text-label text-emphasis-soft">
-					This is exactly what you will see on your signer screen. The destination appears there as a descriptor, not as
-					an address — compare that line.
-				</p>
-			</div>
+			{/* The panel never carries the address's rejection: an unfinished address leaves it waiting,
+			    not shouting. Red here is reserved for a failure that finishing the field cannot fix,
+			    which is why it is `null` while the input is still the thing that is wrong. */}
+			<SigningMessagePanel
+				message={message}
+				placeholder={placeholder}
+				error={null}
+				testId="e2e-safe-harbour-signing-message"
+				labelId="safe-harbour-signing-message-label"
+				hint="This is exactly what you will see on your signer screen. The destination appears there as a descriptor, not as an address — compare that line."
+			/>
 		</div>
 	)
 }
