@@ -210,14 +210,14 @@ show_status() {
 
   check_service "bitcoin" "18443"
   check_service "electrs" "60401"
-  check_service "asm" "8080" "/"
+  check_service "asm" "8080"
   check_service "postgres" "5432"
   if [[ "$NO_ORCHESTRATOR" == "1" ]]; then
     printf "  %-20s %-12s %s\n" "orchestrator" "— skipped" "(--no-orchestrator)"
   else
     check_service "orchestrator" "3000" "/api/v1/health"
   fi
-  check_service "regtest-dev-api" "3001" "/mine"
+  check_service "regtest-dev-api" "3001"
 }
 
 do_stop() {
