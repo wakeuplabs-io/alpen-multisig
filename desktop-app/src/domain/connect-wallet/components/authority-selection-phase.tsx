@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react'
 import type { AuthRole } from '@/types'
-import { AuthorityShieldIcon, AuthorityLayersIcon, AuthorityServerIcon } from '@/assets/icons'
+import {
+	AuthorityShieldIcon,
+	AuthorityLayersIcon,
+	AuthorityServerIcon,
+	AuthorityHaltIcon,
+	AuthorityUnknownIcon,
+} from '@/assets/icons'
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
 import { ConnectAdminIdCard } from '@/domain/connect-wallet/components/connect-admin-id-card'
 import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
@@ -32,6 +38,7 @@ const AUTHORITY_ICONS: Record<string, ReactNode> = {
 	'alpen-administrator': <AuthorityShieldIcon width={22} height={22} />,
 	'strata-administrator': <AuthorityLayersIcon width={22} height={22} />,
 	'strata-sequencer-manager': <AuthorityServerIcon width={22} height={22} />,
+	'strata-security-council': <AuthorityHaltIcon width={22} height={22} />,
 }
 
 export function AuthoritySelectionPhase({
@@ -112,7 +119,7 @@ export function AuthoritySelectionPhase({
 						>
 							<div className="flex items-start gap-4">
 								<div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBgClass}`}>
-									{AUTHORITY_ICONS[option.id] ?? <AuthorityShieldIcon width={22} height={22} />}
+									{AUTHORITY_ICONS[option.id] ?? <AuthorityUnknownIcon width={22} height={22} />}
 								</div>
 								<div className="min-w-0 flex-1">
 									<div className="flex items-start justify-between gap-3">

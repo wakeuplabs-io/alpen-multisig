@@ -11,7 +11,7 @@ use crate::domain::proposal::{
 };
 use crate::error::AppError;
 use crate::infrastructure::asm_role_membership::{
-    last_seqno_for_authority, lock_period_for_authority, threshold_for_authority,
+    last_seqno_for_authority, lock_period_for_action, threshold_for_authority,
     update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -57,6 +57,18 @@ pub(crate) async fn create_update_action(
 
     let action_id = compute_action_id(seq_no, action_hex)?;
 
+    // PRD 02 §3.4: a duplicate `(action, seq_no)` MUST be rejected and MUST NOT mutate the
+    // existing proposal. The rejection names the proposal that already holds this `ActionId`, so
+    // the second creator can reach the one they meant to sign — and signs it through
+    // `approve_action`, because a creation call is not an approval.
+    if repo.find_by_action_id(&action_id).await?.is_some() {
+        return Err(AppError::Conflict(format!(
+            "a proposal for this action and seq_no already exists: `{}` — approve it instead of \
+             creating it again",
+            action_id.0
+        )));
+    }
+
     let mut first_sig = sig.clone();
     first_sig.signer_pubkey = normalize_signer_pubkey_hex(&sig.signer_pubkey);
 
@@ -77,6 +89,7 @@ pub(crate) async fn create_update_action(
         activation_height: None,
         update_id_in_queue: None,
         created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -177,6 +190,17 @@ fn require_proposal_authority(proposal: &Proposal, authority: Authority) -> Resu
     Ok(())
 }
 
+/// Scope a read without revealing whether another authority owns the requested id.
+fn require_visible_proposal_authority(
+    proposal: &Proposal,
+    authority: Authority,
+) -> Result<(), AppError> {
+    if proposal.authority != authority {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 /// Refuse broadcast when the proposal snapshot disagrees with live ASM threshold (P-035).
 pub(crate) async fn ensure_threshold_snapshot_current(
     proposal: &Proposal,
@@ -202,7 +226,7 @@ pub(crate) async fn get_update_action(
         .find_by_action_id(action_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    require_proposal_authority(&proposal, authority)?;
+    require_visible_proposal_authority(&proposal, authority)?;
     Ok(proposal)
 }
 
@@ -329,32 +353,234 @@ pub(crate) async fn claim_broadcast_coordination(
 
     let proposal = require_approved(raw)?;
     ensure_threshold_snapshot_current(&proposal, asm_rpc_url).await?;
+    ensure_seq_no_still_open(&proposal, asm_rpc_url).await?;
 
     repo.claim_broadcast(action_id).await
 }
 
-/// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions.
-pub(crate) async fn reconcile_enacted_for_authority(
+/// Refuse to broadcast a bundle the ASM will refuse.
+///
+/// Upstream accepts an action only when its seqno is strictly above the role's `last_seqno`, so a
+/// proposal the role has already passed is a commit fee, a reveal fee and a destroyed ephemeral
+/// key spent on a transaction that cannot execute. Not an ordering rule (PRD 02 §4.3): nothing
+/// here stops a higher seqno from going first, and the proposal being refused is one no ordering
+/// could rescue. Best-effort, like the threshold snapshot beside it — the chain can move between
+/// this check and the block.
+async fn ensure_seq_no_still_open(proposal: &Proposal, asm_rpc_url: &str) -> Result<(), AppError> {
+    let last_seqno = last_seqno_for_authority(asm_rpc_url, proposal.authority).await?;
+    if proposal.seq_no > last_seqno {
+        return Ok(());
+    }
+    Err(AppError::Conflict(format!(
+        "sequence number {} was already used on chain (the authority is at {}); \
+         this proposal can no longer be broadcast and needs to be recreated",
+        proposal.seq_no, last_seqno
+    )))
+}
+
+/// Notice a reveal that confirmed while nothing was watching.
+///
+/// The desktop reports `reveal_confirmed` from a task that lives with its send screen: close the
+/// screen and nobody asks again. A reveal mined afterwards left the proposal reading *Reveal sent*
+/// forever — and invisible to both the enactment check and the supersession sweep, which is what
+/// made a bundle that had executed indistinguishable from one that was dead.
+///
+/// Returns the proposal as it now stands. Any failure — an unmined reveal is one — leaves it alone.
+async fn confirm_reveal_if_mined(
+    repo: &dyn ProposalRepository,
+    proposal: Proposal,
+    btc_client: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+) -> Proposal {
+    if proposal.broadcast_status != BroadcastStatus::RevealBroadcasted {
+        return proposal;
+    }
+    let Some(reveal_txid) = proposal.reveal_txid.clone() else {
+        return proposal;
+    };
+    if btc_client
+        .get_block_height_for_txid(&reveal_txid)
+        .await
+        .is_err()
+    {
+        return proposal;
+    }
+    let updated = repo
+        .update_broadcast_status(
+            &proposal.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
+    match updated {
+        Ok(Some(updated)) => {
+            if !updated.is_cancel() {
+                record_reveal_confirmed_facts(repo, &updated, btc_client, asm_rpc_url).await;
+            }
+            updated
+        }
+        Ok(None) => proposal,
+        Err(e) => {
+            tracing::warn!(
+                action_id = %proposal.action_id.0,
+                "failed to persist reveal confirmation: {e}"
+            );
+            proposal
+        }
+    }
+}
+
+/// The role's live sequence number, or `None` when the ASM cannot answer.
+///
+/// Supersession is a cleanup, never a reason to fail a read: a node that is down must not turn a
+/// proposal list into an error.
+async fn live_last_seqno(asm_rpc_url: &str, authority: Authority) -> Option<u64> {
+    match last_seqno_for_authority(asm_rpc_url, authority).await {
+        Ok(seqno) => Some(seqno),
+        Err(e) => {
+            tracing::warn!("supersession: last_seqno lookup failed for {authority:?}: {e}");
+            None
+        }
+    }
+}
+
+/// Retire a proposal the chain has moved past.
+///
+/// Upstream accepts an action only when its seqno is strictly above the role's `last_seqno`, and
+/// the seqno is inside the signed message — so once the role stands past it, the proposal cannot
+/// be sent, and cannot be relabelled without a fresh quorum. Only reached after the enactment
+/// check, so a proposal that did enact is never swept.
+/// See docs/specs/proposal-lifecycle-seqno-truth.md §4.
+///
+/// The comparison is `<=`, matching upstream's rejection rule exactly: it refuses
+/// `payload.seqno <= last_seqno`, so a proposal whose seqno *equals* the role's is as dead as one
+/// below it. Only reached when the proposal did not enact, and enactment is what claims equality
+/// legitimately.
+///
+/// A queued update is the exception, and it is not a small one: upstream consumes the seqno when
+/// it *accepts* an action, and an action with a confirmation depth waits in the admin queue for
+/// its activation height. So a perfectly healthy update maturing over 2016 blocks has its seqno
+/// passed by the next action of the same role, and would be swept while it is still on its way.
+/// Presence in the live queue is proof the ASM accepted it; that outranks the seqno.
+async fn supersede_if_seq_no_consumed(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
-    authority: Authority,
+    proposal: &Proposal,
+    last_seqno: Option<u64>,
 ) -> Result<(), AppError> {
-    let approved = repo
-        .list_by_status(authority, Some(ProposalStatus::Approved))
-        .await?;
+    if last_seqno.is_none_or(|last| proposal.seq_no > last) {
+        return Ok(());
+    }
+    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+        Ok(Some(_)) => return Ok(()),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!(
+                action_id = %proposal.action_id.0,
+                "supersession: queue lookup failed, leaving the proposal alone: {e}"
+            );
+            return Ok(());
+        }
+    }
+    tracing::info!(
+        action_id = %proposal.action_id.0,
+        seq_no = proposal.seq_no,
+        "superseding proposal: the role's sequence number has passed it"
+    );
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        proposal.broadcast_status,
+        Some(ProposalStatus::Superseded),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    Ok(())
+}
 
-    for proposal in approved {
-        if proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
-            continue;
-        }
-        if proposal.reveal_txid.is_none() {
-            continue;
-        }
-        let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
+async fn bitcoin_tip_for_enactment(
+    action_hex: &str,
+    btc_client: &dyn BitcoinRpcClient,
+) -> Result<Option<u64>, AppError> {
+    if !crate::infrastructure::asm_enactment::action_needs_chain_tip(action_hex) {
+        return Ok(None);
+    }
+    btc_client.get_chain_tip().await.map(Some)
+}
+
+/// Whether a cancel of this proposal already reached the chain, so the sweep must not decide the
+/// target's lifecycle this cycle.
+///
+/// A cancel that confirms takes its target out of the admin queue while the target's seqno is
+/// already consumed — the exact shape `supersede_if_seq_no_consumed` reads as "dead". Left alone,
+/// a cancelled Defcon 3 would land on `Superseded` instead of `Canceled`, and `enact_cancel` would
+/// then refuse (it requires an Approved target) and retire the cancel as `Expired`. The other
+/// ordering loses too: the cancel writes `Canceled`, and this sweep's copy — read before that
+/// write — puts the target back. Only the cancel decides a cancelled target.
+///
+/// An `Expired` cancel is the case where the target enacted first, so it holds nothing up.
+async fn cancel_reached_chain(
+    repo: &dyn ProposalRepository,
+    target_action_id: &ActionId,
+) -> Result<bool, AppError> {
+    let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
+        return Ok(false);
+    };
+    Ok(cancel.broadcast_status == BroadcastStatus::RevealConfirmed
+        && cancel.status != ProposalStatus::Expired)
+}
+
+/// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
+///
+/// `last_seqno` is the role's live sequence number, or `None` when the ASM could not answer —
+/// supersession is a cleanup, never a reason to fail a read.
+///
+/// An ASM enactment check that fails — including a Defcon 3 whose height or tip is missing —
+/// leaves the proposal exactly where it is: the next cycle asks again. `Ok(false)` is "not
+/// enacted"; inconclusive must be `Err`.
+async fn reconcile_one(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    proposal: Proposal,
+    last_seqno: Option<u64>,
+) -> Result<(), AppError> {
+    // First: did its reveal confirm while nobody was watching? Both the enactment check and the
+    // sweep below read the broadcast status, so a missed confirmation would make an executed
+    // proposal look dead.
+    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
+
+    // A cancel that is already on chain owns this proposal's outcome — see `cancel_reached_chain`.
+    if !proposal.is_cancel() && cancel_reached_chain(repo, &proposal.action_id).await? {
+        return Ok(());
+    }
+
+    // Only a confirmed reveal can have enacted; everything else goes straight to the supersession
+    // check, which is what retires a bundle that never made it on chain.
+    let awaiting_enactment = proposal.broadcast_status == BroadcastStatus::RevealConfirmed
+        && proposal.reveal_txid.is_some();
+    let enacted = if awaiting_enactment {
+        let bitcoin_tip = match bitcoin_tip_for_enactment(&proposal.action_hex, btc_client).await {
+            Ok(tip) => tip,
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "reconcile: bitcoin tip lookup failed: {e}"
+                );
+                return Ok(());
+            }
+        };
+        match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
             asm_rpc_url,
             proposal.authority,
             proposal.seq_no,
             &proposal.action_hex,
+            proposal.activation_height,
+            bitcoin_tip,
         )
         .await
         {
@@ -362,130 +588,26 @@ pub(crate) async fn reconcile_enacted_for_authority(
             Err(e) => {
                 tracing::warn!(
                     action_id = %proposal.action_id.0,
-                    "reconcile_enacted_for_authority: ASM enactment check failed: {e}"
+                    "reconcile: ASM enactment check failed: {e}"
                 );
-                continue;
-            }
-        };
-        if !enacted {
-            continue;
-        }
-        if let Some(target_action_id) = &proposal.target_action_id {
-            let applied = repo
-                .enact_cancel(&proposal.action_id, target_action_id)
-                .await?;
-            if !applied {
-                repo.update_broadcast_status(
-                    &proposal.action_id,
-                    BroadcastStatus::RevealConfirmed,
-                    Some(ProposalStatus::Expired),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-            }
-            continue;
-        }
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await?;
-        cascade_enact_associated_cancel(repo, &proposal.action_id).await?;
-    }
-    Ok(())
-}
-
-/// Re-populate `update_id_in_queue` on a single proposal if it is still null after RevealConfirmed.
-///
-/// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
-pub(crate) async fn reconcile_update_id_in_queue(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    action_id: &ActionId,
-) -> Result<(), AppError> {
-    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
-        return Ok(());
-    };
-
-    if proposal.is_cancel()
-        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        || proposal.update_id_in_queue.is_some()
-    {
-        return Ok(());
-    }
-
-    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
-        Ok(Some(id)) => {
-            if let Err(e) = repo.update_update_id_in_queue(action_id, id).await {
-                tracing::warn!(
-                    action_id = %action_id.0,
-                    "reconcile_update_id_in_queue: failed to persist id: {e}"
-                );
+                return Ok(());
             }
         }
-        Ok(None) => {}
-        Err(e) => {
-            tracing::warn!(
-                action_id = %action_id.0,
-                "reconcile_update_id_in_queue: ASM lookup failed: {e}"
-            );
-        }
-    }
-
-    Ok(())
-}
-
-/// Reconcile a single proposal before returning it to the client.
-pub(crate) async fn reconcile_enacted_for_action(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    authority: Authority,
-    action_id: &ActionId,
-) -> Result<(), AppError> {
-    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
-        return Ok(());
+    } else {
+        false
     };
-    require_proposal_authority(&proposal, authority)?;
 
-    if proposal.status != ProposalStatus::Approved
-        || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        || proposal.reveal_txid.is_none()
-    {
-        return Ok(());
-    }
-
-    let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-        asm_rpc_url,
-        proposal.authority,
-        proposal.seq_no,
-        &proposal.action_hex,
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!(
-                action_id = %action_id.0,
-                "reconcile_enacted_for_action: ASM enactment check failed: {e}"
-            );
-            return Ok(());
-        }
-    };
     if !enacted {
-        return Ok(());
+        return supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await;
     }
 
     if let Some(target_action_id) = &proposal.target_action_id {
-        let applied = repo.enact_cancel(action_id, target_action_id).await?;
+        let applied = repo
+            .enact_cancel(&proposal.action_id, target_action_id)
+            .await?;
         if !applied {
             repo.update_broadcast_status(
-                action_id,
+                &proposal.action_id,
                 BroadcastStatus::RevealConfirmed,
                 Some(ProposalStatus::Expired),
                 None,
@@ -498,7 +620,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     }
 
     repo.update_broadcast_status(
-        action_id,
+        &proposal.action_id,
         BroadcastStatus::RevealConfirmed,
         Some(ProposalStatus::Enacted),
         None,
@@ -506,8 +628,107 @@ pub(crate) async fn reconcile_enacted_for_action(
         None,
     )
     .await?;
-    cascade_enact_associated_cancel(repo, action_id).await?;
+    cascade_enact_associated_cancel(repo, &proposal.action_id).await
+}
+
+/// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions,
+/// and retire the ones whose sequence number the chain has already consumed.
+pub(crate) async fn reconcile_enacted_for_authority(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    authority: Authority,
+) -> Result<(), AppError> {
+    let approved = repo
+        .list_by_status(authority, Some(ProposalStatus::Approved))
+        .await?;
+
+    if approved.is_empty() {
+        return Ok(());
+    }
+    let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
+
+    for proposal in approved {
+        reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await?;
+    }
     Ok(())
+}
+
+/// Retry the facts [`record_reveal_confirmed_facts`] stores if they are still null after
+/// RevealConfirmed. A transient Bitcoin or ASM failure at confirm time otherwise leaves the
+/// countdown and queue id blank for the life of the row.
+///
+/// Non-fatal: logs and returns Ok(()) on any lookup failure so callers can proceed.
+pub(crate) async fn reconcile_reveal_confirmed_facts(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
+        return Ok(());
+    };
+
+    if proposal.is_cancel() || proposal.broadcast_status != BroadcastStatus::RevealConfirmed {
+        return Ok(());
+    }
+
+    if proposal.activation_height.is_none() {
+        if let Err(e) =
+            compute_and_store_activation_height(&proposal, repo, btc_client, asm_rpc_url).await
+        {
+            tracing::warn!(
+                action_id = %action_id.0,
+                "reconcile_reveal_confirmed_facts: failed to compute height: {e}"
+            );
+        }
+    }
+
+    if proposal.update_id_in_queue.is_none() {
+        match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+            Ok(Some(id)) => {
+                if let Err(e) = repo.update_update_id_in_queue(action_id, id).await {
+                    tracing::warn!(
+                        action_id = %action_id.0,
+                        "reconcile_reveal_confirmed_facts: failed to persist id: {e}"
+                    );
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(
+                    action_id = %action_id.0,
+                    "reconcile_reveal_confirmed_facts: ASM lookup failed: {e}"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Reconcile a single proposal before returning it to the client.
+pub(crate) async fn reconcile_enacted_for_action(
+    repo: &dyn ProposalRepository,
+    asm_rpc_url: &str,
+    btc_client: &dyn BitcoinRpcClient,
+    authority: Authority,
+    action_id: &ActionId,
+) -> Result<(), AppError> {
+    let Some(proposal) = repo.find_by_action_id(action_id).await? else {
+        return Ok(());
+    };
+    require_visible_proposal_authority(&proposal, authority)?;
+
+    if proposal.status != ProposalStatus::Approved {
+        return Ok(());
+    }
+
+    // Read up front rather than only on the supersession branch: it costs one extra RPC on the
+    // cycle where the proposal enacts — once, since an enacted proposal returns above — and it is
+    // what lets this share `reconcile_one` with the sweep.
+    let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
+    reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await
 }
 
 /// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
@@ -544,16 +765,23 @@ async fn cascade_enact_associated_cancel(
 pub(crate) async fn create_cancel_proposal(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
+    session: SessionContext<'_>,
     target_action_id: ActionId,
     seq_no: SeqNo,
     action_hex: &str,
-    signer_pubkey: &str,
     signature_hex: &str,
 ) -> Result<Proposal, AppError> {
     let target = repo
         .find_by_action_id(&target_action_id)
         .await?
         .ok_or(AppError::NotFound)?;
+
+    // The cancel is stored under the *target's* authority, so without this a session of any
+    // authority could file one — with its own signature as the first — into another authority's
+    // queue. It could never be enacted (the signature is outside the target's key set), but a
+    // session is bound to exactly one authority and this is the write path that forgot it. The
+    // read path beside it, `get_cancel_target_status`, has always checked.
+    require_proposal_authority(&target, session.authority)?;
 
     if target.status != ProposalStatus::Approved {
         return Err(AppError::BadRequest(format!(
@@ -562,13 +790,15 @@ pub(crate) async fn create_cancel_proposal(
         )));
     }
 
-    if !matches!(
-        target.authority,
-        Authority::AlpenAdmin | Authority::StrataAdmin
-    ) {
+    // Cancelability is the target action's confirmation depth, never its authority: the Security
+    // Council signs both Defcon 1 (depth 0) and Defcon 3 (timelocked). A zero-depth action is never
+    // enqueued, so an on-chain cancel would fail with `UnknownAction`.
+    // See docs/specs/security-council-defcon-phase-2.md.
+    let target_depth = lock_period_for_action(asm_rpc_url, &target.action_hex).await?;
+    if target_depth == 0 {
         return Err(AppError::BadRequest(format!(
-            "cancel is only supported for AlpenAdmin and StrataAdmin (got: {:?})",
-            target.authority
+            "cancel is not possible: this action has a confirmation depth of {target_depth}, so it \
+             is never enqueued and an on-chain cancel would fail with UnknownAction"
         )));
     }
 
@@ -578,7 +808,7 @@ pub(crate) async fn create_cancel_proposal(
 
     let required_signatures = threshold_for_authority(asm_rpc_url, target.authority).await?;
     let action_id = compute_action_id(seq_no, action_hex)?;
-    let normalized_pubkey = normalize_signer_pubkey_hex(signer_pubkey);
+    let normalized_pubkey = normalize_signer_pubkey_hex(session.signer_pubkey);
 
     let proposal = Proposal {
         action_id,
@@ -601,6 +831,7 @@ pub(crate) async fn create_cancel_proposal(
         activation_height: None,
         update_id_in_queue: None,
         created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -620,7 +851,7 @@ async fn compute_and_store_activation_height(
         return Ok(());
     };
     let reveal_confirm_block = btc_client.get_block_height_for_txid(reveal_txid).await?;
-    let lock_period = lock_period_for_authority(asm_rpc_url, proposal.authority).await?;
+    let lock_period = lock_period_for_action(asm_rpc_url, &proposal.action_hex).await?;
     let activation_height = reveal_confirm_block + lock_period;
     repo.update_activation_height(&proposal.action_id, activation_height)
         .await
@@ -666,6 +897,8 @@ pub(crate) async fn report_broadcast_progress(
                     raw.authority,
                     raw.seq_no,
                     &raw.action_hex,
+                    raw.activation_height,
+                    bitcoin_tip_for_enactment(&raw.action_hex, btc_client).await?,
                 )
                 .await?
                 {
@@ -698,44 +931,65 @@ pub(crate) async fn report_broadcast_progress(
         .ok_or(AppError::NotFound)?;
 
     if updated.broadcast_status == BroadcastStatus::RevealConfirmed && !updated.is_cancel() {
-        if let Err(e) =
-            compute_and_store_activation_height(&updated, repo, btc_client, asm_rpc_url).await
-        {
-            tracing::warn!(
-                action_id = %updated.action_id.0,
-                "failed to compute activation_height: {e}"
-            );
-        }
-        match update_id_in_queue_for_action(asm_rpc_url, &updated.action_hex).await {
-            Ok(Some(id)) => {
-                if let Err(e) = repo.update_update_id_in_queue(&updated.action_id, id).await {
-                    tracing::warn!(
-                        action_id = %updated.action_id.0,
-                        "failed to store update_id_in_queue: {e}"
-                    );
-                }
-            }
-            Ok(None) => {
-                tracing::warn!(
-                    action_id = %updated.action_id.0,
-                    "update not found in ASM queue after RevealConfirmed"
-                );
-            }
-            Err(e) => {
-                tracing::warn!(
-                    action_id = %updated.action_id.0,
-                    "failed to query ASM for update_id_in_queue: {e}"
-                );
-            }
-        }
+        record_reveal_confirmed_facts(repo, &updated, btc_client, asm_rpc_url).await;
     }
 
     Ok(updated)
 }
 
+/// The two facts a confirmed reveal makes available: when the update activates, and the id the ASM
+/// queued it under. Both non-fatal — a proposal is never held back because a lookup failed.
+///
+/// Shared by the desktop's progress report and by the reconciliation that notices a reveal the
+/// desktop never got to report.
+async fn record_reveal_confirmed_facts(
+    repo: &dyn ProposalRepository,
+    proposal: &Proposal,
+    btc_client: &dyn BitcoinRpcClient,
+    asm_rpc_url: &str,
+) {
+    if let Err(e) =
+        compute_and_store_activation_height(proposal, repo, btc_client, asm_rpc_url).await
+    {
+        tracing::warn!(
+            action_id = %proposal.action_id.0,
+            "failed to compute activation_height: {e}"
+        );
+    }
+    match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
+        Ok(Some(id)) => {
+            if let Err(e) = repo
+                .update_update_id_in_queue(&proposal.action_id, id)
+                .await
+            {
+                tracing::warn!(
+                    action_id = %proposal.action_id.0,
+                    "failed to store update_id_in_queue: {e}"
+                );
+            }
+        }
+        Ok(None) => {
+            tracing::warn!(
+                action_id = %proposal.action_id.0,
+                "update not found in ASM queue after RevealConfirmed"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                action_id = %proposal.action_id.0,
+                "failed to query ASM for update_id_in_queue: {e}"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::action_codec::{
+        test_fixture_action_hex, test_fixture_council_rotation_action_hex,
+        test_fixture_defcon_1_action_hex,
+    };
     use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
     use crate::infrastructure::memory_repo::InMemoryProposalRepository;
 
@@ -745,6 +999,7 @@ mod tests {
 
     struct MockBitcoinRpcClient {
         block_height: u64,
+        chain_tip: u64,
     }
 
     #[async_trait::async_trait]
@@ -759,11 +1014,16 @@ mod tests {
         async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
             Ok(self.block_height)
         }
+
+        async fn get_chain_tip(&self) -> Result<u64, AppError> {
+            Ok(self.chain_tip)
+        }
     }
 
     fn mock_btc() -> MockBitcoinRpcClient {
         MockBitcoinRpcClient {
             block_height: 800_000,
+            chain_tip: 800_000,
         }
     }
 
@@ -927,21 +1187,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_duplicate_action_rejected() {
+    /// PRD 02 §3.4: the duplicate is rejected and the existing proposal is left alone — including
+    /// the signature the second creator arrived with. The rejection names the `ActionId` they
+    /// should approve instead. A second *different* signer is what makes this a test of the rule
+    /// rather than of equality.
+    async fn test_create_duplicate_action_rejected_naming_the_existing_proposal() {
         let repo = new_repo();
-        let sig = sig_a();
-        let session = SessionContext {
-            authority: Authority::StrataAdmin,
-            signer_pubkey: &sig.signer_pubkey,
-        };
+        let first = sig_a();
+        let second = sig_b();
 
-        create_update_action(&repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
-            .await
-            .unwrap();
+        let created = create_update_action(
+            &repo,
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &first.signer_pubkey,
+            },
+            1,
+            ACTION_HEX,
+            &first,
+            2,
+            None,
+        )
+        .await
+        .unwrap();
 
-        let result = create_update_action(&repo, session, 1, ACTION_HEX, &sig, 2, None).await;
+        let err = create_update_action(
+            &repo,
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &second.signer_pubkey,
+            },
+            1,
+            ACTION_HEX,
+            &second,
+            2,
+            None,
+        )
+        .await
+        .expect_err("the duplicate is rejected");
 
-        assert!(matches!(result.unwrap_err(), AppError::Conflict(_)));
+        assert!(matches!(err, AppError::Conflict(_)));
+        assert!(err.to_string().contains(&created.action_id.0));
+
+        let stored = repo.find_by_action_id(&created.action_id).await.unwrap();
+        let stored = stored.expect("the first proposal survives");
+        assert_eq!(stored.signatures.len(), 1);
+        assert_eq!(stored.signatures[0].signer_pubkey, first.signer_pubkey);
     }
 
     #[tokio::test]
@@ -1110,6 +1401,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1155,6 +1447,34 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, AppError::Conflict(_)));
+    }
+
+    /// The bundle would be refused on chain, so the fee is spent for nothing and the ephemeral
+    /// envelope key is destroyed in the attempt.
+    #[tokio::test]
+    async fn claim_refuses_a_sequence_number_the_chain_already_used() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+
+        let err = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &action_id,
+        )
+        .await
+        .unwrap_err();
+
+        let AppError::Conflict(message) = err else {
+            panic!("expected a conflict naming the sequence number");
+        };
+        assert!(
+            message.contains('1'),
+            "message should name the sequence: {message}"
+        );
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.broadcast_status, BroadcastStatus::Idle);
     }
 
     #[tokio::test]
@@ -1305,7 +1625,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_update_action_rejects_wrong_authority() {
+    async fn test_get_update_action_conceals_foreign_authority() {
         let repo = new_repo();
         let sig = sig_a();
         let session = SessionContext {
@@ -1319,7 +1639,7 @@ mod tests {
 
         let result = get_update_action(&repo, Authority::AlpenAdmin, &created.action_id).await;
 
-        assert!(matches!(result.unwrap_err(), AppError::Unauthorized));
+        assert!(matches!(result.unwrap_err(), AppError::NotFound));
     }
 
     #[tokio::test]
@@ -1373,6 +1693,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -1414,6 +1735,74 @@ mod tests {
         assert_eq!(approved.len(), 0);
     }
 
+    /// AC 10: rotating the council is an administrator proposal even though the action modifies
+    /// the council. Authority scoping must hold independently of lifecycle status.
+    #[tokio::test]
+    async fn test_council_rotation_visibility_is_strata_admin_scoped_for_contract_statuses() {
+        let repo = new_repo();
+        let action_hex = test_fixture_council_rotation_action_hex();
+        let statuses = [
+            ProposalStatus::Pending,
+            ProposalStatus::Approved,
+            ProposalStatus::Enacted,
+        ];
+
+        for (index, status) in statuses.into_iter().enumerate() {
+            let seq_no = index as u64 + 1;
+            let proposal = Proposal {
+                action_id: compute_action_id(seq_no, &action_hex).unwrap(),
+                seq_no,
+                authority: Authority::StrataAdmin,
+                status,
+                required_signatures: 2,
+                action_hex: action_hex.clone(),
+                title: None,
+                signatures: vec![sig_a()],
+                broadcast_status: BroadcastStatus::default(),
+                commit_txid: None,
+                reveal_txid: None,
+                broadcast_error: None,
+                target_action_id: None,
+                activation_height: None,
+                update_id_in_queue: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            repo.save_proposal(proposal.clone()).await.unwrap();
+
+            let council_visible = list_proposals(&repo, Authority::SecurityCouncil, Some(status))
+                .await
+                .unwrap();
+            assert!(
+                council_visible.is_empty(),
+                "{status} council rotation must be absent from the council list"
+            );
+            let council_get =
+                get_update_action(&repo, Authority::SecurityCouncil, &proposal.action_id).await;
+            assert!(
+                matches!(council_get.unwrap_err(), AppError::NotFound),
+                "{status} council rotation detail must conceal its existence from the council"
+            );
+
+            let admin_visible = list_proposals(&repo, Authority::StrataAdmin, Some(status))
+                .await
+                .unwrap();
+            assert_eq!(
+                admin_visible.len(),
+                1,
+                "{status} council rotation must remain visible to Strata Admin"
+            );
+            assert_eq!(admin_visible[0].action_id, proposal.action_id);
+            let admin_get = get_update_action(&repo, Authority::StrataAdmin, &proposal.action_id)
+                .await
+                .unwrap();
+            assert_eq!(admin_get.action_id, proposal.action_id);
+            assert_eq!(admin_get.action_hex, action_hex);
+            assert_eq!(admin_get.authority, Authority::StrataAdmin);
+            assert_eq!(admin_get.status, status);
+        }
+    }
+
     #[tokio::test]
     async fn test_broadcast_rejects_threshold_drift() {
         let proposal = Proposal {
@@ -1433,6 +1822,7 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
@@ -1480,13 +1870,16 @@ mod tests {
         assert!(matches!(err, AppError::Unauthorized));
     }
 
-    async fn save_reveal_confirmed_approved(repo: &InMemoryProposalRepository) -> ActionId {
+    async fn save_reveal_confirmed_approved(
+        repo: &InMemoryProposalRepository,
+        action_hex: &str,
+    ) -> ActionId {
         let sig = sig_a();
         let session = SessionContext {
             authority: Authority::StrataAdmin,
             signer_pubkey: &sig.signer_pubkey,
         };
-        let created = create_update_action(repo, session.clone(), 1, ACTION_HEX, &sig, 2, None)
+        let created = create_update_action(repo, session.clone(), 1, action_hex, &sig, 2, None)
             .await
             .unwrap();
         let session_b = SessionContext {
@@ -1515,7 +1908,7 @@ mod tests {
     #[tokio::test]
     async fn report_reveal_confirmed_keeps_proposal_approved() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         let updated = report_broadcast_progress(
             &repo,
@@ -1541,7 +1934,7 @@ mod tests {
     #[tokio::test]
     async fn report_enacted_rejected_when_asm_not_enacted() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
         let err = report_broadcast_progress(
             &repo,
@@ -1563,14 +1956,152 @@ mod tests {
         assert!(matches!(err, AppError::Conflict(_)));
     }
 
+    /// Setup for the supersession tests: approved, quorum reached, nothing broadcast.
+    async fn save_approved(repo: &InMemoryProposalRepository, seq_no: u64) -> ActionId {
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(repo, session, seq_no, ACTION_HEX, &sig, 2, None)
+            .await
+            .unwrap();
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(repo, session_b.clone(), &created.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(repo, session_b, "mock://asm-membership", &created.action_id)
+            .await
+            .unwrap();
+        created.action_id
+    }
+
+    /// The chain's sequence number has passed the proposal, so its transaction can never be
+    /// accepted — whether or not it was ever broadcast.
+    #[tokio::test]
+    async fn reconcile_supersedes_a_proposal_the_chain_moved_past() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Superseded);
+    }
+
+    /// A height that failed once at RevealConfirmed must not stay null forever — GET retries it
+    /// the same way it retries a missing `update_id_in_queue`.
+    #[tokio::test]
+    async fn reconcile_reveal_confirmed_facts_fills_a_null_height() {
+        let repo = new_repo();
+        let action_hex = test_fixture_action_hex();
+        // Bypass `record_reveal_confirmed_facts` so the height stays null — the failure case.
+        let action_id = save_reveal_confirmed_approved(&repo, &action_hex).await;
+
+        reconcile_reveal_confirmed_facts(&repo, "mock://asm-membership", &mock_btc(), &action_id)
+            .await
+            .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        // mock BTC height 800_000 + uniform mock lock period 2016 for strata admin update
+        assert_eq!(proposal.activation_height, Some(802_016));
+    }
+
+    /// The desktop's confirmation task dies with its send screen. A reveal mined afterwards has to
+    /// be noticed here, or the proposal is invisible to both the enactment check and the sweep.
+    #[tokio::test]
+    async fn reconcile_notices_a_reveal_that_confirmed_unwatched() {
+        let repo = new_repo();
+        // Seqno 6 is above the fixture's 5, so nothing supersedes it and the promotion stands alone.
+        let action_id = save_approved(&repo, 6).await;
+        repo.update_broadcast_status(
+            &action_id,
+            BroadcastStatus::RevealBroadcasted,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.broadcast_status, BroadcastStatus::RevealConfirmed);
+        assert_eq!(proposal.status, ProposalStatus::Approved);
+    }
+
+    /// Upstream refuses `payload.seqno <= last_seqno`, so a proposal whose seqno *equals* the
+    /// role's is as dead as one below it.
+    #[tokio::test]
+    async fn reconcile_supersedes_a_proposal_whose_seq_no_equals_the_role() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 5).await;
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Superseded);
+    }
+
+    /// Enactment is decided first, so a proposal that did enact is never swept even though the
+    /// same chain state would supersede it.
+    #[tokio::test]
+    async fn reconcile_prefers_enactment_over_supersession() {
+        let repo = new_repo();
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(proposal.status, ProposalStatus::Enacted);
+    }
+
     #[tokio::test]
     async fn reconcile_promotes_reveal_confirmed_when_asm_enacted() {
         let repo = new_repo();
-        let action_id = save_reveal_confirmed_approved(&repo).await;
+        let action_id = save_reveal_confirmed_approved(&repo, ACTION_HEX).await;
 
-        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
-            .await
-            .unwrap();
+        reconcile_enacted_for_authority(
+            &repo,
+            "mock://asm-enacted",
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
 
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.status, ProposalStatus::Enacted);
@@ -1579,15 +2110,18 @@ mod tests {
     #[tokio::test]
     async fn reconcile_marks_target_canceled_when_cancel_enacted() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -1614,9 +2148,14 @@ mod tests {
         .await
         .unwrap();
 
-        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
-            .await
-            .unwrap();
+        reconcile_enacted_for_authority(
+            &repo,
+            "mock://asm-enacted",
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
 
         let cancel = repo
             .find_by_action_id(&cancel.action_id)
@@ -1633,18 +2172,96 @@ mod tests {
         assert_eq!(target.status, ProposalStatus::Canceled);
     }
 
+    /// A cancel that reached the chain takes its target out of the ASM queue while the target's
+    /// seqno is already consumed — the exact shape the supersession sweep reads as "dead". The
+    /// target belongs to the cancel: it must stay put until the cancel's own enactment writes
+    /// `Canceled`, or a cancelled Defcon 3 would end on `Superseded` and its cancel on `Expired`.
+    /// See docs/specs/security-council-defcon-3.md Constraint 3 and AC 12.
     #[tokio::test]
-    async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
+    async fn reconcile_leaves_a_target_alone_once_its_cancel_reached_the_chain() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+        repo.update_broadcast_status(
+            &target.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
 
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
+            "cancel_sig",
+        )
+        .await
+        .unwrap();
+
+        let session_b = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig_b().signer_pubkey,
+        };
+        approve_action(&repo, session_b.clone(), &cancel.action_id, &sig_b())
+            .await
+            .unwrap();
+        transition_to_approved(&repo, session_b, "mock://asm-membership", &cancel.action_id)
+            .await
+            .unwrap();
+        repo.update_broadcast_status(
+            &cancel.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        // A chain that has moved past both seqnos and shows neither in the queue: without the
+        // guard this is what supersedes the target.
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let target = repo
+            .find_by_action_id(&target.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.status, ProposalStatus::Approved);
+    }
+
+    #[tokio::test]
+    async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
+        let repo = new_repo();
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+
+        let cancel = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
+            target.action_id.clone(),
+            2,
+            "cafebabe",
             "cancel_sig",
         )
         .await
@@ -1677,9 +2294,14 @@ mod tests {
         )
         .await
         .unwrap();
-        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
-            .await
-            .unwrap();
+        reconcile_enacted_for_authority(
+            &repo,
+            "mock://asm-enacted",
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
 
         let target = repo
             .find_by_action_id(&target.action_id)
@@ -1701,9 +2323,14 @@ mod tests {
         )
         .await
         .unwrap();
-        reconcile_enacted_for_authority(&repo, "mock://asm-enacted", Authority::StrataAdmin)
-            .await
-            .unwrap();
+        reconcile_enacted_for_authority(
+            &repo,
+            "mock://asm-enacted",
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
 
         let cancel = repo
             .find_by_action_id(&cancel.action_id)
@@ -1724,7 +2351,18 @@ mod tests {
     // create_cancel_proposal tests
     // ---------------------------------------------------------------------------
 
+    /// An approved target for the cancel tests. Its `action_hex` must decode: the cancel gate
+    /// resolves the target's confirmation depth from it.
     async fn save_approved_proposal(
+        repo: &InMemoryProposalRepository,
+        authority: Authority,
+        seq_no: SeqNo,
+    ) -> Proposal {
+        let action_hex = test_fixture_action_hex();
+        save_approved_proposal_with_action(repo, authority, seq_no, &action_hex).await
+    }
+
+    async fn save_approved_proposal_with_action(
         repo: &InMemoryProposalRepository,
         authority: Authority,
         seq_no: SeqNo,
@@ -1759,15 +2397,18 @@ mod tests {
     async fn test_create_cancel_proposal_happy_path() {
         let repo = new_repo();
         // StrataAdmin has a mock threshold of 2; use it for cancel creation
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let cancel = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -1783,15 +2424,18 @@ mod tests {
     #[tokio::test]
     async fn test_create_cancel_proposal_idempotent() {
         let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1, ACTION_HEX).await;
+        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
         let first = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -1800,10 +2444,13 @@ mod tests {
         let second = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_b().signer_pubkey,
+            },
             target.action_id.clone(),
             2,
             "cafebabe",
-            &sig_b().signer_pubkey,
             "cancel_sig_2",
         )
         .await
@@ -1832,10 +2479,13 @@ mod tests {
         let err = create_cancel_proposal(
             &repo,
             "mock://asm-membership",
+            SessionContext {
+                authority: Authority::StrataAdmin,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
             pending.action_id,
             2,
             "cafebabe",
-            &sig_a().signer_pubkey,
             "cancel_sig",
         )
         .await
@@ -1844,59 +2494,92 @@ mod tests {
         assert!(matches!(err, AppError::BadRequest(_)));
     }
 
+    /// AC 9: tx type 15 modifies the council but belongs to Strata Admin. The council cannot file
+    /// its cancel, and the refusal must happen without persisting a proposal.
     #[tokio::test]
-    async fn test_create_cancel_proposal_rejects_unsupported_authority() {
-        // Insert approved proposals directly to avoid threshold_for_authority calls during setup.
-        let cases = [
-            (
-                Authority::SequencerManager,
-                ActionId("seq_target".to_string()),
-            ),
-            (
-                Authority::SecurityCouncil,
-                ActionId("sec_target".to_string()),
-            ),
-        ];
+    async fn test_council_rotation_cancel_requires_strata_admin_session() {
+        let repo = new_repo();
+        let action_hex = test_fixture_council_rotation_action_hex();
+        let target =
+            save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
+        assert_eq!(target.authority, Authority::StrataAdmin);
 
-        for (authority, target_action_id) in cases {
-            let repo = new_repo();
-            let target = Proposal {
-                action_id: target_action_id.clone(),
-                seq_no: 1,
-                authority,
-                status: ProposalStatus::Approved,
-                required_signatures: 2,
-                action_hex: ACTION_HEX.to_string(),
-                title: None,
-                signatures: vec![sig_a(), sig_b()],
-                broadcast_status: BroadcastStatus::Idle,
-                commit_txid: None,
-                reveal_txid: None,
-                broadcast_error: None,
-                target_action_id: None,
-                activation_height: None,
-                update_id_in_queue: None,
-                created_at: chrono::Utc::now(),
-            };
-            repo.save_proposal(target).await.unwrap();
+        let err = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            SessionContext {
+                authority: Authority::SecurityCouncil,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
+            target.action_id.clone(),
+            2,
+            "cafebabe",
+            "cancel_sig",
+        )
+        .await
+        .unwrap_err();
 
-            let err = create_cancel_proposal(
-                &repo,
-                "mock://asm-membership",
-                target_action_id,
-                99,
-                "cafebabe",
-                &sig_a().signer_pubkey,
-                "cancel_sig",
-            )
-            .await
-            .unwrap_err();
+        assert!(matches!(err, AppError::Unauthorized), "{err:?}");
+        assert!(
+            repo.find_cancel_for_target(&target.action_id)
+                .await
+                .unwrap()
+                .is_none(),
+            "a refused cancel must leave nothing behind"
+        );
+    }
 
-            assert!(
-                matches!(err, AppError::BadRequest(_)),
-                "expected BadRequest for authority {authority:?}"
-            );
-        }
+    /// AC 11: the gate is the action's confirmation depth, and the rejection names it. Defcon 1 is
+    /// the zero-depth case — never enqueued, so an on-chain cancel would fail with `UnknownAction`.
+    #[tokio::test]
+    async fn test_create_cancel_proposal_rejects_zero_depth_action() {
+        // Inserted directly: the Security Council has no ASM role mapping until Phase 3, so
+        // `create_update_action` cannot build this target.
+        let repo = new_repo();
+        let target_action_id = ActionId("defcon_1_target".to_string());
+        let target = Proposal {
+            action_id: target_action_id.clone(),
+            seq_no: 1,
+            authority: Authority::SecurityCouncil,
+            status: ProposalStatus::Approved,
+            required_signatures: 2,
+            action_hex: test_fixture_defcon_1_action_hex(),
+            title: None,
+            signatures: vec![sig_a(), sig_b()],
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+        repo.save_proposal(target).await.unwrap();
+
+        let err = create_cancel_proposal(
+            &repo,
+            "mock://asm-membership",
+            SessionContext {
+                authority: Authority::SecurityCouncil,
+                signer_pubkey: &sig_a().signer_pubkey,
+            },
+            target_action_id,
+            99,
+            "cafebabe",
+            "cancel_sig",
+        )
+        .await
+        .unwrap_err();
+
+        let AppError::BadRequest(message) = err else {
+            panic!("expected BadRequest");
+        };
+        assert!(
+            message.contains("depth") && message.contains('0'),
+            "the rejection must name the depth, not the authority: {message}"
+        );
     }
 
     /// P-032 (race): concurrent duplicate approve results in exactly one signature stored.

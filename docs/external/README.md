@@ -45,7 +45,7 @@ All external documents follow these principles:
 1. **PRD Traceability** — Each document references the specific PRD requirement or proposal deliverable it satisfies
 2. **Client-Focused** — Written for a technical audience at Alpen Labs
 3. **Self-Contained** — Each document can be read independently without requiring access to internal development documentation
-4. **Current Scope** — Documentation reflects the current implementation status. Some features (e.g., Alpen Administrator VK update enactment detection, Security Council support) depend on upstream protocol work or later phases — see [Architecture Overview](./architecture-overview.md) limitations and open items described there.
+4. **Current Scope** — Documentation reflects the current implementation status. Some features (e.g., Alpen Administrator VK update enactment detection, Security Council support) are planned for later phases — see [Architecture Overview](./architecture-overview.md) limitations and open items described there.
 5. **No Internal References** — No references to internal development phases, tracking codes, or working documents
 
 ## Quick Start

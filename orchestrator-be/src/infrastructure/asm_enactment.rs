@@ -9,27 +9,41 @@ use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
-use strata_asm_proto_checkpoint::state::CheckpointState;
-use strata_asm_proto_checkpoint::subprotocol::CheckpointSubprotocol;
+use strata_asm_proto_checkpoint::CheckpointState;
+use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, rpc_timeout};
+use crate::infrastructure::{action_codec, asm_role_membership, http_client, rpc_timeout};
 
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
 #[cfg(any(test, feature = "dev-mocks"))]
-const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+pub(crate) const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
+/// Enacts *and* stands past the proposal's seqno: the fixture that proves enactment is decided
+/// before supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_ENACTED_AHEAD_URL: &str = "mock://asm-enacted-ahead";
+/// A chain whose role sequence number has moved past the proposals under test: nothing enacts, and
+/// `last_seqno` answers 5. The fixture for supersession.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_SEQNO_AHEAD_URL: &str = "mock://asm-seqno-ahead";
 
 /// Returns true when live ASM canonical state satisfies the post-conditions of `action_hex`.
+///
+/// `activation_height` and `bitcoin_tip` are only read by the Defcon 3 arm. Other variants ignore
+/// them. Missing values there are inconclusive (`Err`), not "not enacted" — `Ok(false)` would fall
+/// through to supersession.
 pub(crate) async fn is_proposal_enacted_on_asm(
     rpc_url: &str,
     authority: Authority,
     seq_no: u64,
     action_hex: &str,
+    activation_height: Option<u64>,
+    bitcoin_tip: Option<u64>,
 ) -> Result<bool, AppError> {
     if let Some(enacted) = mock_is_enacted(rpc_url) {
         return Ok(enacted);
@@ -95,35 +109,107 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 &remove_members,
             ))
         }
-        MultisigAction::Update(_) => {
-            let Some(config_update) = extract_multisig_config_update(&action, authority)? else {
+        // Security Council actions. Explicit arms rather than a catch-all: without them these
+        // would fall through to the multisig-config branch, which returns `Ok(false)` for an
+        // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. Defcon 1
+        // and Defcon 3 have post-conditions; SafeHarbourAddress waits on slice V4. See
+        // docs/specs/security-council.md and docs/specs/security-council-defcon-3-phase-4.md.
+        MultisigAction::Update(UpdateAction::Defcon1(_)) => {
+            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let safe_harbour_activated = bridge.safe_harbour().is_activated();
+            let defcon1_queued = admin
+                .queued()
+                .iter()
+                .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
+            // The role is named literally: an arm that matches one action variant knows its role.
+            let council = admin
+                .authority(Role::StrataSecurityCouncil)
+                .ok_or_else(|| {
+                    AppError::BadRequest(
+                        "admin state missing authority for role `StrataSecurityCouncil`"
+                            .to_string(),
+                    )
+                })?;
+            Ok(defcon1_enacted(
+                safe_harbour_activated,
+                defcon1_queued,
+                council.last_seqno(),
+                seq_no,
+            ))
+        }
+        MultisigAction::Update(UpdateAction::Defcon3(_)) => {
+            let (activation_height, bitcoin_tip) =
+                defcon3_observations(activation_height, bitcoin_tip)?;
+            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            // Payload is empty, so this is the same question as equality against `this` action —
+            // two in-flight Defcon 3s share queue state (contract edge case). Same shape as Defcon 1.
+            let still_queued = admin
+                .queued()
+                .iter()
+                .any(|q| matches!(q.action(), UpdateAction::Defcon3(_)));
+            let council = admin
+                .authority(Role::StrataSecurityCouncil)
+                .ok_or_else(|| {
+                    AppError::BadRequest(
+                        "admin state missing authority for role `StrataSecurityCouncil`"
+                            .to_string(),
+                    )
+                })?;
+            Ok(defcon3_enacted(
+                council.last_seqno(),
+                seq_no,
+                still_queued,
+                bridge.safe_harbour().is_activated(),
+                bitcoin_tip,
+                activation_height,
+            ))
+        }
+        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => Err(AppError::BadRequest(
+            "SafeHarbourAddress enactment detection is not implemented yet".to_string(),
+        )),
+        MultisigAction::Update(
+            UpdateAction::StrataAdminMultisig(_)
+            | UpdateAction::StrataSeqManagerMultisig(_)
+            | UpdateAction::AlpenAdminMultisig(_)
+            | UpdateAction::StrataSecurityCouncilMultisig(_)
+            | UpdateAction::AsmStfVk(_),
+        ) => {
+            // The target lookup runs before the authorization guard: reversed, an `AsmStfVk`
+            // under a non-administrator authority would go from `Ok(false)` to `Err`, and
+            // `reconcile_one` turns every `Err` into a per-proposal warning that never resolves.
+            // See docs/specs/security-council-signer-update-phase-2.md §10.3.
+            let Some((target_role, config_update)) = multisig_config_update_target(&action) else {
                 return Ok(false);
             };
-            let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
+            asm_role_membership::require_authorized_for_action(authority, &action)?;
+            let authorizing_role = match &action {
+                MultisigAction::Update(update) => update.required_role(),
+                _ => unreachable!("outer arm already matched MultisigAction::Update"),
+            };
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let authority_config = admin.authority(role).ok_or_else(|| {
-                AppError::BadRequest(format!(
-                    "admin state missing authority for role `{:?}`",
-                    role
-                ))
-            })?;
 
-            let canonical_keys: Vec<String> = authority_config
-                .config()
-                .keys()
-                .iter()
-                .map(|k| hex::encode(k.serialize()))
-                .collect();
-            let threshold = authority_config.config().threshold();
-            let last_seqno = authority_config.last_seqno();
-
-            Ok(multisig_update_post_conditions_met(
-                &canonical_keys,
-                threshold,
-                last_seqno,
+            multisig_update_enacted(
+                target_role,
+                authorizing_role,
                 seq_no,
                 config_update,
-            ))
+                |role| {
+                    let authority_config = admin.authority(role)?;
+                    Some(AuthoritySnapshot {
+                        keys: authority_config
+                            .config()
+                            .keys()
+                            .iter()
+                            .map(|k| hex::encode(k.serialize()))
+                            .collect(),
+                        threshold: authority_config.config().threshold(),
+                        last_seqno: authority_config.last_seqno(),
+                    })
+                },
+            )
+            .map_err(AppError::BadRequest)
         }
         MultisigAction::Cancel(cancel) => {
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
@@ -142,42 +228,158 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
     last_seqno >= seq_no && !still_queued
 }
 
-/// Returns `Some(config)` for known multisig-update authority/variant pairs, `None` for
-/// non-multisig-update action variants, and an error for genuine authority/variant mismatches.
-fn extract_multisig_config_update(
+/// Defcon 1 executes at depth 0: it activates the safe harbour in the reveal block and never
+/// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
+/// proposal enacted.
+///
+/// The seqno term is what makes the answer this proposal's: `safe_harbour().is_activated()` is
+/// never reset, so the other two terms hold for every Defcon 1 once any of them has enacted.
+///
+/// It is an equality, not `>=`, and this arm is the only one in the module that needs it.
+/// `update_last_seqno` jumps to whatever seqno upstream accepted, for any action of the role, so
+/// `>=` asks "has the role moved past this point" — a question another proposal can answer. `==`
+/// asks whether the role is standing exactly where this proposal would have left it. The
+/// config-carrying arms keep `>=` because their remaining terms name the keys, threshold or VK the
+/// action was supposed to install, which a jumped seqno does not supply.
+///
+/// See docs/specs/proposal-lifecycle-seqno-truth.md §3.1 and §4.1, including what stays ambiguous.
+fn defcon1_enacted(
+    safe_harbour_activated: bool,
+    defcon1_queued: bool,
+    last_seqno: u64,
+    seq_no: u64,
+) -> bool {
+    last_seqno == seq_no && safe_harbour_activated && !defcon1_queued
+}
+
+/// Defcon 3 matures after `activation_height` blocks. A cancel removes the queue entry before that
+/// height; the tip term is what separates "matured" from "taken out early".
+///
+/// Uses `>=` on the seqno, not `==`: upstream consumes the seqno at reveal acceptance, and a
+/// later council action may jump `last_seqno` past this proposal before it matures. Equality would
+/// leave a successfully enacted Defcon 3 marked `Superseded`. See Constraint 2 in
+/// docs/specs/security-council-defcon-3.md.
+fn defcon3_enacted(
+    last_seqno: u64,
+    seq_no: u64,
+    still_queued: bool,
+    safe_harbour_activated: bool,
+    bitcoin_tip: u64,
+    activation_height: u64,
+) -> bool {
+    last_seqno >= seq_no
+        && !still_queued
+        && safe_harbour_activated
+        && bitcoin_tip >= activation_height
+}
+
+/// Missing height or tip is inconclusive: the caller must not treat that as `not enacted`.
+///
+/// `Conflict`, not `BadRequest`: nothing about the request is wrong — the answer is not available
+/// yet. The reconciliation cycle logs any `Err` and retries; the broadcast endpoint already answers
+/// a not-yet-enacted proposal with the same status.
+fn defcon3_observations(
+    activation_height: Option<u64>,
+    bitcoin_tip: Option<u64>,
+) -> Result<(u64, u64), AppError> {
+    let activation_height = activation_height.ok_or_else(|| {
+        AppError::Conflict(
+            "Defcon 3 enactment is inconclusive: activation_height is missing".to_string(),
+        )
+    })?;
+    let bitcoin_tip = bitcoin_tip.ok_or_else(|| {
+        AppError::Conflict(
+            "Defcon 3 enactment is inconclusive: bitcoin tip is unavailable".to_string(),
+        )
+    })?;
+    Ok((activation_height, bitcoin_tip))
+}
+
+/// Defcon 3 is the only arm that compares against chain tip. Other actions must not pay that RPC.
+pub(crate) fn action_needs_chain_tip(action_hex: &str) -> bool {
+    matches!(
+        action_codec::decode_multisig_action_hex(action_hex),
+        Ok(MultisigAction::Update(UpdateAction::Defcon3(_)))
+    )
+}
+
+/// The role a multisig-config update *modifies*, and the config it installs.
+///
+/// The target belongs to the action variant and to nothing else — see Constraint 2. Upstream
+/// applies tx type 15 to `Role::StrataSecurityCouncil` (`handler.rs:145-147`) while authorizing it
+/// with `Role::StrataAdministrator` (`updates.rs:64`); for the three self-rotating updates the two
+/// coincide, which is why nothing needed this distinction before V3.
+///
+/// `None` for every action that is not a multisig config update — the caller answers `Ok(false)`,
+/// which is what `AsmStfVk` has always relied on.
+fn multisig_config_update_target(
     action: &MultisigAction,
-    authority: Authority,
-) -> Result<Option<&ThresholdConfigUpdate>, AppError> {
-    match (authority, action) {
-        (
-            Authority::StrataAdmin,
-            MultisigAction::Update(UpdateAction::StrataAdminMultisig(update)),
-        ) => Ok(Some(update.config())),
-        (
-            Authority::SequencerManager,
-            MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(update)),
-        ) => Ok(Some(update.config())),
-        (
-            Authority::AlpenAdmin,
-            MultisigAction::Update(UpdateAction::AlpenAdminMultisig(update)),
-        ) => Ok(Some(update.config())),
-        // MultisigUpdate variant present but wrong authority — data integrity issue.
-        (
-            _,
-            MultisigAction::Update(
-                UpdateAction::StrataAdminMultisig(_)
-                | UpdateAction::StrataSeqManagerMultisig(_)
-                | UpdateAction::AlpenAdminMultisig(_),
-            ),
-        ) => Err(AppError::BadRequest(
-            "action variant does not match proposal authority for enactment check".to_string(),
-        )),
-        // Non-multisig-update variants — not handled here; caller routes them.
-        (_, MultisigAction::Update(_)) => Ok(None),
-        (_, MultisigAction::Cancel(_)) => Err(AppError::BadRequest(
-            "cancel actions are not supported for enactment post-condition checks".to_string(),
-        )),
+) -> Option<(Role, &ThresholdConfigUpdate)> {
+    let MultisigAction::Update(update) = action else {
+        return None;
+    };
+    match update {
+        UpdateAction::StrataAdminMultisig(update) => {
+            Some((Role::StrataAdministrator, update.config()))
+        }
+        UpdateAction::StrataSeqManagerMultisig(update) => {
+            Some((Role::StrataSequencerManager, update.config()))
+        }
+        UpdateAction::AlpenAdminMultisig(update) => {
+            Some((Role::AlpenAdministrator, update.config()))
+        }
+        UpdateAction::StrataSecurityCouncilMultisig(update) => {
+            Some((Role::StrataSecurityCouncil, update.config()))
+        }
+        UpdateAction::OperatorSet(_)
+        | UpdateAction::Sequencer(_)
+        | UpdateAction::OlStfVk(_)
+        | UpdateAction::AsmStfVk(_)
+        | UpdateAction::EeStfVk(_)
+        | UpdateAction::Defcon1(_)
+        | UpdateAction::Defcon3(_)
+        | UpdateAction::SafeHarbourAddress(_) => None,
     }
+}
+
+/// The three terms an enactment check reads off one role, at one instant.
+///
+/// `keys` is hex of `CompressedPublicKey::serialize()` — 33 bytes, compressed. Not x-only: the
+/// `OperatorSet` arm next door uses 32-byte x-only hex, and the two are not interchangeable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AuthoritySnapshot {
+    keys: Vec<String>,
+    threshold: u8,
+    last_seqno: u64,
+}
+
+/// `keys` and `threshold` come from the **target** role; `last_seqno` from the **authorizing**
+/// role. Neither term is derived from the other, and collapsing the two roles into one is the
+/// regression AC 7a exists to catch.
+///
+/// `snapshot_of` is a parameter for the same reason `depth_for_action` takes its lookup: it is the
+/// only seam at which the two-role wiring is observable without a chain.
+///
+/// A role the state does not carry is `Err`, never `Ok(false)` — see §6.
+fn multisig_update_enacted(
+    target_role: Role,
+    authorizing_role: Role,
+    seq_no: u64,
+    config: &ThresholdConfigUpdate,
+    snapshot_of: impl Fn(Role) -> Option<AuthoritySnapshot>,
+) -> Result<bool, String> {
+    let target = snapshot_of(target_role)
+        .ok_or_else(|| format!("admin state missing authority for role `{target_role:?}`"))?;
+    let authorizing = snapshot_of(authorizing_role)
+        .ok_or_else(|| format!("admin state missing authority for role `{authorizing_role:?}`"))?;
+
+    Ok(multisig_update_post_conditions_met(
+        &target.keys,
+        target.threshold,
+        authorizing.last_seqno,
+        seq_no,
+        config,
+    ))
 }
 
 fn multisig_update_post_conditions_met(
@@ -246,25 +448,18 @@ fn operator_set_post_conditions_met(
     }
 }
 
-fn authority_to_role(authority: Authority) -> Result<Role, String> {
-    match authority {
-        Authority::StrataAdmin => Ok(Role::StrataAdministrator),
-        Authority::SequencerManager => Ok(Role::StrataSequencerManager),
-        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        _ => Err(format!(
-            "authority `{authority:?}` is not mapped to ASM role authorization yet"
-        )),
-    }
-}
-
 // In-process ASM enactment mock — compiled only under `cfg(test)` or `dev-mocks`.
 // In production builds this is an inert stub returning `None`, so a `mock://` URL
 // never short-circuits the real enactment post-condition check.
+//
+// Keyed on the URL, never on the action: unlike `mock_lock_period`, which resolves a table and so
+// can delegate to the real lookup, enactment is a fact about chain state that no in-process mock
+// can derive. Every action — Defcon 1 included — enacts vacuously under `mock://asm-enacted`.
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
-        MOCK_ENACTED_URL => Some(true),
-        MOCK_MEMBERSHIP_URL => Some(false),
+        MOCK_ENACTED_URL | MOCK_ENACTED_AHEAD_URL => Some(true),
+        MOCK_MEMBERSHIP_URL | MOCK_SEQNO_AHEAD_URL => Some(false),
         _ => None,
     }
 }
@@ -275,7 +470,7 @@ fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = reqwest::Client::new();
+    let client = http_client::shared();
     let payload = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -399,6 +594,25 @@ mod tests {
         hex::encode(even_pubkey_from_scalar(n).x_only_public_key().0.serialize())
     }
 
+    /// A `snapshot_of` for exactly two roles — the simplest lookup that still lets a test say
+    /// "this role is present, that one isn't".
+    fn snapshot_of_two(
+        role_a: Role,
+        snap_a: AuthoritySnapshot,
+        role_b: Role,
+        snap_b: AuthoritySnapshot,
+    ) -> impl Fn(Role) -> Option<AuthoritySnapshot> {
+        move |role| {
+            if role == role_a {
+                Some(snap_a.clone())
+            } else if role == role_b {
+                Some(snap_b.clone())
+            } else {
+                None
+            }
+        }
+    }
+
     #[test]
     fn post_conditions_require_last_seqno_at_least_proposal_seq() {
         let config = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
@@ -467,11 +681,86 @@ mod tests {
         assert!(operator_set_post_conditions_met(&current, &[], &[]));
     }
 
+    /// The seqno term is what makes the answer per proposal: `safe_harbour().is_activated()` is
+    /// never reset, so without it every later Defcon 1 reads as enacted on the strength of the
+    /// first one's activation.
+    #[test]
+    fn defcon1_enacted_requires_this_proposals_seqno_consumed() {
+        assert!(!defcon1_enacted(true, false, 1, 2));
+        assert!(defcon1_enacted(true, false, 2, 2));
+    }
+
+    /// Upstream jumps `last_seqno` to whatever it accepted, so a role standing past this
+    /// proposal's seqno is another action's doing, not this one's. Equality is the whole
+    /// difference between "the role moved on" and "this proposal moved it".
+    #[test]
+    fn defcon1_not_enacted_when_a_later_action_consumed_the_seqno() {
+        assert!(!defcon1_enacted(true, false, 2, 1));
+    }
+
+    #[test]
+    fn defcon1_enacted_requires_safe_harbour_active_and_queue_clear() {
+        assert!(!defcon1_enacted(false, false, 2, 2));
+        assert!(!defcon1_enacted(true, true, 2, 2));
+        assert!(defcon1_enacted(true, false, 2, 2));
+    }
+
     #[test]
     fn ee_stf_vk_enacted_requires_seqno_consumed_and_not_queued() {
         assert!(!ee_stf_vk_enacted(2, 3, false));
         assert!(!ee_stf_vk_enacted(3, 3, true));
         assert!(ee_stf_vk_enacted(3, 3, false));
+    }
+
+    /// Constraint 2: the seqno term is `>=`. Defcon 1 answers the same observation with `==` and
+    /// says "not enacted" — which for a Defcon 3 would end in `Superseded`.
+    #[test]
+    fn defcon3_enacted_when_a_later_action_consumed_the_seqno() {
+        assert!(defcon3_enacted(5, 2, false, true, 120, 100));
+        assert!(!defcon1_enacted(true, false, 5, 2));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_when_seqno_still_below() {
+        assert!(!defcon3_enacted(1, 2, false, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_while_still_queued() {
+        assert!(!defcon3_enacted(2, 2, true, true, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_when_harbour_off() {
+        assert!(!defcon3_enacted(2, 2, false, false, 120, 100));
+    }
+
+    #[test]
+    fn defcon3_not_enacted_before_activation_height() {
+        assert!(!defcon3_enacted(2, 2, false, true, 99, 100));
+    }
+
+    #[test]
+    fn defcon3_enacted_at_exact_activation_height() {
+        assert!(defcon3_enacted(2, 2, false, true, 100, 100));
+    }
+
+    #[test]
+    fn defcon3_missing_observations_are_inconclusive() {
+        assert!(defcon3_observations(None, Some(100)).is_err());
+        assert!(defcon3_observations(Some(100), None).is_err());
+        assert!(defcon3_observations(Some(100), Some(120)).is_ok());
+    }
+
+    #[test]
+    fn only_defcon_3_needs_chain_tip() {
+        assert!(action_needs_chain_tip(
+            &crate::infrastructure::action_codec::test_fixture_defcon_3_action_hex()
+        ));
+        assert!(!action_needs_chain_tip(
+            &crate::infrastructure::action_codec::test_fixture_defcon_1_action_hex()
+        ));
+        assert!(!action_needs_chain_tip("deadbeef"));
     }
 
     /// `UpdateAction::Sequencer` enactment is detected by comparing the proposed key
@@ -484,5 +773,234 @@ mod tests {
 
         assert!(predicate_keys_match(&matching, &matching));
         assert!(!predicate_keys_match(&matching, &different));
+    }
+
+    /// AC 7 — the happy path, and nothing else.
+    ///
+    /// Both snapshots satisfy every term deliberately: the administrator's keys and threshold
+    /// agree with `config`, and both roles stand at the same `last_seqno`. So this test answers
+    /// `true` under the real wiring *and* under either role substitution, which is what makes it a
+    /// control rather than a second copy of the two that follow. A fixture where the two roles
+    /// happen to disagree would let this one test catch both swaps, and the named tests below
+    /// would then be asserting something already proven — see this phase's spec §8.
+    #[test]
+    fn council_rotation_targets_the_council_and_the_administrator_authorizes_it() {
+        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
+        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+
+        let council = AuthoritySnapshot {
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 3,
+            last_seqno: 1,
+        };
+        let administrator = AuthoritySnapshot {
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 3,
+            last_seqno: 1,
+        };
+        let snapshot_of = snapshot_of_two(
+            Role::StrataSecurityCouncil,
+            council,
+            Role::StrataAdministrator,
+            administrator,
+        );
+
+        assert_eq!(
+            multisig_update_enacted(
+                Role::StrataSecurityCouncil,
+                Role::StrataAdministrator,
+                1,
+                &config,
+                snapshot_of,
+            ),
+            Ok(true)
+        );
+    }
+
+    /// AC 7a, half one — and the **only** test that goes red if `keys` and `threshold` are ever
+    /// read off the authorizing role. The administrator's set disagrees with `config` on both
+    /// terms, so the swap answers `false` where `true` is expected.
+    ///
+    /// Both roles stand at the same `last_seqno` on purpose: that is the term the other half owns,
+    /// and leaving it able to fail here would make the two tests fail together and stop telling a
+    /// reader which substitution happened.
+    #[test]
+    fn council_rotation_ignores_the_administrators_signer_set() {
+        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
+        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+
+        let council = AuthoritySnapshot {
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 3,
+            last_seqno: 1,
+        };
+        let administrator = AuthoritySnapshot {
+            keys: vec![key_hex(5)],
+            threshold: 7,
+            last_seqno: 1,
+        };
+        let snapshot_of = snapshot_of_two(
+            Role::StrataSecurityCouncil,
+            council,
+            Role::StrataAdministrator,
+            administrator,
+        );
+
+        assert_eq!(
+            multisig_update_enacted(
+                Role::StrataSecurityCouncil,
+                Role::StrataAdministrator,
+                1,
+                &config,
+                snapshot_of,
+            ),
+            Ok(true)
+        );
+    }
+
+    /// AC 7a, half two — and the test that fails if a future refactor collapses the two roles
+    /// back into one, which is the shape the code had before this phase. The council's own
+    /// `last_seqno` races ahead of `seq_no`; only the administrator's `last_seqno` may decide
+    /// whether the rotation was authorized.
+    #[test]
+    fn council_rotation_ignores_the_councils_own_seqno() {
+        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
+        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+
+        let council = AuthoritySnapshot {
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 3,
+            last_seqno: 100,
+        };
+        let administrator = AuthoritySnapshot {
+            keys: vec![key_hex(2)],
+            threshold: 1,
+            last_seqno: 1,
+        };
+        let snapshot_of = snapshot_of_two(
+            Role::StrataSecurityCouncil,
+            council,
+            Role::StrataAdministrator,
+            administrator,
+        );
+
+        assert_eq!(
+            multisig_update_enacted(
+                Role::StrataSecurityCouncil,
+                Role::StrataAdministrator,
+                5,
+                &config,
+                snapshot_of,
+            ),
+            Ok(false)
+        );
+    }
+
+    /// The three authorities shipped before V3 self-rotate: target and authorizing role coincide,
+    /// so reading both from one role must answer exactly as it always did.
+    #[test]
+    fn an_administrator_signer_update_reads_one_role_for_all_three_terms() {
+        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
+        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(2).unwrap());
+
+        let administrator = AuthoritySnapshot {
+            keys: vec![key_hex(1), key_hex(3)],
+            threshold: 2,
+            last_seqno: 1,
+        };
+        let snapshot_of =
+            move |role: Role| (role == Role::StrataAdministrator).then(|| administrator.clone());
+
+        assert_eq!(
+            multisig_update_enacted(
+                Role::StrataAdministrator,
+                Role::StrataAdministrator,
+                1,
+                &config,
+                snapshot_of,
+            ),
+            Ok(true)
+        );
+    }
+
+    /// §6: a role the state does not carry is an absence, never a negative answer — `Ok(false)`
+    /// here would tell `reconcile_one` to supersede a rotation that may still be live.
+    #[test]
+    fn a_missing_target_authority_is_an_error_not_a_negative_answer() {
+        let config = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
+        let administrator = AuthoritySnapshot {
+            keys: vec![key_hex(1)],
+            threshold: 1,
+            last_seqno: 1,
+        };
+        // The council — the target — is absent; the administrator — the authorizer — is present.
+        let snapshot_of =
+            move |role: Role| (role == Role::StrataAdministrator).then(|| administrator.clone());
+
+        let result = multisig_update_enacted(
+            Role::StrataSecurityCouncil,
+            Role::StrataAdministrator,
+            1,
+            &config,
+            snapshot_of,
+        );
+        assert!(result.is_err());
+    }
+
+    /// `AsmStfVk` rides in the multisig arm by inheritance but has no config to target — the
+    /// caller must keep answering `Ok(false)` for it, not fall into this lookup.
+    #[test]
+    fn asm_stf_vk_is_not_a_multisig_config_update() {
+        use strata_asm_txs_admin::actions::updates::AsmStfVkUpdate;
+        use strata_predicate::{PredicateKey, PredicateTypeId};
+
+        let action = MultisigAction::Update(UpdateAction::AsmStfVk(AsmStfVkUpdate::new(
+            PredicateKey::new(PredicateTypeId::Bip340Schnorr, vec![0u8; 32]),
+        )));
+        assert_eq!(multisig_config_update_target(&action), None);
+    }
+
+    /// Not restating the enum: a codec with two arms crossed would still round-trip, so this
+    /// pins the role each variant names, council included, rather than merely that four exist.
+    #[test]
+    fn every_multisig_variant_names_its_own_target_role() {
+        use strata_asm_txs_admin::actions::updates::{
+            AlpenAdminMultisigUpdate, StrataAdminMultisigUpdate,
+            StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
+        };
+
+        let config = || ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
+
+        let cases = [
+            (
+                MultisigAction::Update(UpdateAction::StrataAdminMultisig(
+                    StrataAdminMultisigUpdate::new(config()),
+                )),
+                Role::StrataAdministrator,
+            ),
+            (
+                MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(
+                    StrataSeqManagerMultisigUpdate::new(config()),
+                )),
+                Role::StrataSequencerManager,
+            ),
+            (
+                MultisigAction::Update(UpdateAction::AlpenAdminMultisig(
+                    AlpenAdminMultisigUpdate::new(config()),
+                )),
+                Role::AlpenAdministrator,
+            ),
+            (
+                MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
+                    StrataSecurityCouncilMultisigUpdate::new(config()),
+                )),
+                Role::StrataSecurityCouncil,
+            ),
+        ];
+
+        for (action, expected_role) in &cases {
+            let (role, _) = multisig_config_update_target(action).expect("multisig config update");
+            assert_eq!(role, *expected_role);
+        }
     }
 }

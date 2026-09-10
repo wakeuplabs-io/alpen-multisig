@@ -41,7 +41,7 @@ RUN cargo build --release -p regtest-dev-api
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 \
+    ca-certificates libssl3 curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /build/target/release/regtest-dev-api /usr/local/bin/regtest-dev-api

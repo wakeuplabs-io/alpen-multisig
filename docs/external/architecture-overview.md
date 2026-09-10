@@ -156,10 +156,10 @@ state ExecutedImmediate {
 | **Quorum Met** | Off-chain | Threshold of signatures collected. "Send" button available. Still within the 7-day window — if no one broadcasts before it elapses, transitions to Expired. | Signers of that authority only |
 | **Approved** | On-chain | Bitcoin tx confirmed in a block. Update is queued in the ASM waiting for its activation height. Can still be canceled during this window. | Signers of that authority only |
 | **Enacted** | On-chain | `activation_height` reached. ASM applied the governance change. Irreversible. | Signers — Past view |
-| **Executed (immediate)** | On-chain | Applies only to Sequencer Manager and Security Council updates. No confirmation queue — change takes effect in the same block the tx is mined. | Signers — Past view |
+| **Executed (immediate)** | On-chain | Applies to Sequencer Manager updates and to Defcon 1. No confirmation queue — change takes effect in the same block the tx is mined. Defcon 3 is *not* immediate: it is queued and cancelable like any other update. | Signers — Past view |
 | **Expired** | Off-chain | 7-day window elapsed before the tx was broadcast. | Signers — Past view |
 | **Canceled (off-chain)** | Off-chain | Manually canceled by a signer before the Bitcoin tx was ever broadcast. No on-chain record. | Signers — Past view |
-| **Canceled (on-chain)** | On-chain | A `Cancel` tx (signed by the same authority) was broadcast and confirmed during the ~2016 block wait window after Approved. Not available for Sequencer Manager or Security Council. | Signers — Past view |
+| **Canceled (on-chain)** | On-chain | A `Cancel` tx (signed by the same authority) was broadcast and confirmed during the wait window after Approved. Not available for Sequencer Manager or Defcon 1, which execute immediately and have no wait window. | Signers — Past view |
 
 ### 2. Desktop Application
 

@@ -1,6 +1,7 @@
 import type { Proposal } from '@/api/proposals'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
-import { truncatePubkey } from '@/lib/pubkey'
+import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
+import { buildProposalTitle } from '@/lib/proposal-title'
 
 type Props = {
 	proposal: Proposal
@@ -29,7 +30,10 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 			</div>
 
 			<div className="px-6 py-5 space-y-1">
-				<p className="m-0 text-body-lg font-medium text-[#0a0a0a]">{changeLabel ?? `Proposal #${proposal.seqNo}`}</p>
+				{/* `changeLabel` only ever resolves for a multisig update, so without the fallback the card
+				    headed "Proposal being cancelled" identified a Defcon 3 as a bare `Proposal #N` — on the
+				    one screen where a council signer decides whether to cancel the sweep of the bridge. */}
+				<p className="m-0 text-body-lg font-medium text-[#0a0a0a]">{changeLabel ?? buildProposalTitle(proposal)}</p>
 				<p className="m-0 text-label text-[#6b7280]">
 					#{proposal.seqNo} · {proposal.authority}
 				</p>
@@ -42,67 +46,8 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 			)}
 
 			{!decodedData.isLoading && change !== null && (
-				<div className="border-t border-[#f3f4f6] overflow-x-auto">
-					<table className="w-full border-collapse text-label">
-						<thead>
-							<tr className="border-b border-[#f3f4f6] bg-[#f9fafb]">
-								<th className="px-6 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
-									Before
-								</th>
-								<th className="px-6 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
-									After
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{change.rows.map((row, i) => (
-								<tr key={i} className="border-b border-[#f3f4f6] last:border-0">
-									<td className="px-6 py-3">
-										{row.inBefore ? (
-											<span
-												className={`font-mono leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
-											>
-												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
-												{truncatePubkey(row.pubkey)}
-											</span>
-										) : (
-											<span className="text-[#9ca3af]">—</span>
-										)}
-									</td>
-									<td className="px-6 py-3">
-										{row.inAfter ? (
-											<span
-												className={`font-mono leading-relaxed ${row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'}`}
-											>
-												{row.isAdded && <span className="mr-1 text-[#0f9d7a]">+</span>}
-												{truncatePubkey(row.pubkey)}
-											</span>
-										) : (
-											<span className="text-[#9ca3af]">—</span>
-										)}
-									</td>
-								</tr>
-							))}
-							<tr className="border-t border-[#e5e7eb] bg-[#f9fafb]">
-								<td className="px-6 py-3">
-									<span className="text-mono-sm font-medium uppercase tracking-wide text-[#9ca3af]">Threshold </span>
-									{change.thresholdBefore !== null ? (
-										<span className="font-medium text-[#374151]">
-											{change.thresholdBefore} of {change.rows.filter((r) => r.inBefore).length}
-										</span>
-									) : (
-										<span className="text-[#9ca3af]">—</span>
-									)}
-								</td>
-								<td className="px-6 py-3">
-									<span className="text-mono-sm font-medium uppercase tracking-wide text-[#9ca3af]">Threshold </span>
-									<span className="font-medium text-[#374151]">
-										{change.thresholdAfter} of {change.rows.filter((r) => r.inAfter).length}
-									</span>
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<div className="overflow-hidden border-t border-[#f3f4f6]">
+					<SignerSetChangeTable change={change} />
 				</div>
 			)}
 		</div>

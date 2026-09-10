@@ -50,6 +50,7 @@ fn status_to_db(status: ProposalStatus) -> &'static str {
         ProposalStatus::Enacted => "enacted",
         ProposalStatus::Canceled => "canceled",
         ProposalStatus::Expired => "expired",
+        ProposalStatus::Superseded => "superseded",
     }
 }
 
@@ -60,6 +61,7 @@ fn status_from_db(status: &str) -> Result<ProposalStatus, AppError> {
         "enacted" => Ok(ProposalStatus::Enacted),
         "canceled" => Ok(ProposalStatus::Canceled),
         "expired" => Ok(ProposalStatus::Expired),
+        "superseded" => Ok(ProposalStatus::Superseded),
         _ => Err(AppError::Internal(anyhow::anyhow!(
             "invalid status in database: {status}"
         ))),
@@ -103,6 +105,7 @@ fn row_to_proposal_no_sigs(
     let activation_height: Option<i64> = row.get("activation_height");
     let update_id_in_queue: Option<i32> = row.get("update_id_in_queue");
     let created_at: DateTime<Utc> = row.get("created_at");
+    let updated_at: DateTime<Utc> = row.get("updated_at");
     Ok(Proposal {
         action_id: ActionId(action_id),
         seq_no: row.get::<i64, _>("seq_no") as u64,
@@ -120,13 +123,14 @@ fn row_to_proposal_no_sigs(
         activation_height: activation_height.map(|h| h as u64),
         update_id_in_queue: update_id_in_queue.map(|id| id as u32),
         created_at,
+        updated_at,
     })
 }
 
 const SELECT_PROPOSAL_COLS: &str = r#"
     action_id, seq_no, authority, status, action_hex, required_signatures,
     broadcast_status, commit_txid, reveal_txid, broadcast_error,
-    target_action_id, activation_height, update_id_in_queue, created_at, title
+    target_action_id, activation_height, update_id_in_queue, created_at, updated_at, title
 "#;
 
 #[async_trait::async_trait]

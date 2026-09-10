@@ -5,6 +5,7 @@ import { ActivationCountdown } from '@/domain/cancel-proposal/components/activat
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
 import { useCancelProposalDetails } from '@/domain/cancel-proposal/hooks/use-cancel-proposal-details'
+import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
@@ -15,10 +16,9 @@ import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
+import { showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -49,7 +49,7 @@ export function CancelProposalScreen() {
 	if (proposal !== null && proposal.status !== 'approved') {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
-	if (proposal !== null && !CANCELABLE_AUTHORITIES.includes(proposal.authority)) {
+	if (proposal !== null && !canCancelProposal(proposal)) {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
 
@@ -115,8 +115,9 @@ export function CancelProposalScreen() {
 								</div>
 							)}
 
-							{/* Activation countdown */}
-							{proposal.activationHeight !== null && proposal.status === 'approved' && (
+							{/* Activation countdown. The null check narrows the prop below; the rule itself
+							    lives in `lib` (shared with the detail screen). */}
+							{proposal.activationHeight !== null && showsActivationCountdown(proposal) && (
 								<div className="rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<ActivationCountdown
 										activationHeight={proposal.activationHeight}

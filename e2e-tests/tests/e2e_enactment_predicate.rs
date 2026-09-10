@@ -175,7 +175,11 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         "predicate must be false before activation_height is reached"
     );
 
-    let _ = harness.mine_blocks(confirmation_depth as usize + 1).await?;
+    // Exactly `confirmation_depth` blocks, not one more. The reveal is queued at
+    // `activation_height = reveal_height + depth` (`handler.rs`) and released once
+    // `activation_height <= tip` (`state.rs`), so the depth-th block after the reveal is
+    // already the activating one.
+    let _ = harness.mine_blocks(confirmation_depth as usize).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
