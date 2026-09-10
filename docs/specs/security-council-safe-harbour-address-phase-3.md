@@ -11,7 +11,7 @@
 > [Phase 2](./security-council-safe-harbour-address-phase-2.md) (#549).
 > **Source:** the manual walk on regtest, 2026-09-10 — three runs: an enactment, a cancel followed
 > by an enactment, and a rotation submitted with the harbour already up.
-> **Status:** designed.
+> **Status:** implemented; automated checks green. A walk over this phase's own surfaces is pending.
 
 ## 1. The change in one sentence
 
