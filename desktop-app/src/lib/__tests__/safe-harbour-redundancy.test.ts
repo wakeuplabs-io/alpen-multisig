@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
-import { changedNothingActionIds, type HarbourActivationCandidate } from '../safe-harbour-redundancy.ts'
+import {
+	changedNothingActionIds,
+	harbourFrozeDestination,
+	type HarbourActivationCandidate,
+} from '../safe-harbour-redundancy.ts'
 
 function proposal(overrides: Partial<HarbourActivationCandidate> = {}): HarbourActivationCandidate {
 	return {
@@ -103,5 +107,24 @@ assert.equal(
 
 // ── A single enactment is the activation itself ─────────────────────────────
 assert.equal(changedNothingActionIds([proposal({ actionId: 'solo', seqNo: 7 })]).size, 0)
+
+// ── Which superseded proposals the harbour swallowed ───────────────────────
+// The frozen-destination detail is only true of a rotation, and only while the harbour is up.
+// The action type is the tripwire: a superseded Defcon really did lose its sequence number to
+// something else, and telling its signer the harbour froze a destination would be nonsense.
+
+const rotation = { actionType: 'safe_harbour_address_update', status: 'superseded' } as const
+assert.equal(harbourFrozeDestination(rotation, true), true)
+assert.equal(harbourFrozeDestination(rotation, false), false, 'with the harbour down it lost a race')
+assert.equal(
+	harbourFrozeDestination({ actionType: 'defcon_1', status: 'superseded' }, true),
+	false,
+	'a Defcon is applied whatever the harbour is doing',
+)
+assert.equal(
+	harbourFrozeDestination({ actionType: 'safe_harbour_address_update', status: 'enacted' }, true),
+	false,
+	'an enacted rotation installed its destination — the harbour cannot have been up',
+)
 
 console.log('safe-harbour-redundancy: all assertions passed')

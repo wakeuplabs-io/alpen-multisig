@@ -76,6 +76,7 @@ export function CreateProposalScreen() {
 					isLoadingOperators={createProposal.isLoadingOperators}
 					isSubmitting={createProposal.isSubmitting}
 					error={createProposal.error}
+					onClearError={createProposal.clearError}
 					createdProposal={createProposal.createdProposal}
 					onCancel={() => navigate('/proposals')}
 					onPreviewValid={(data) => createProposal.computeProposalPreview(data)}

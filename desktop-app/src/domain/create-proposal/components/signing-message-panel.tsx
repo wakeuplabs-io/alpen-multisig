@@ -38,7 +38,12 @@ export function SigningMessagePanel({ message, placeholder, error, testId, label
 			{error === null ? (
 				<pre
 					aria-labelledby={labelId}
-					className="m-0 mt-1.5 overflow-x-auto whitespace-pre rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis"
+					// Wraps instead of scrolling. Defcon's lines are short and never reached the edge;
+					// the safe harbour message carries a 66-character descriptor that never fits, so
+					// the one value a signer has to compare against their device was the one value
+					// hidden past the right edge. `pre-wrap` keeps the line breaks and the indent that
+					// make the message readable; `break-words` only breaks a token that cannot fit.
+					className="m-0 mt-1.5 whitespace-pre-wrap break-words rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis"
 					data-testid={testId}
 				>
 					{message ?? placeholder}

@@ -112,4 +112,42 @@ assert.equal(
 // quorum is just as dead, and must not fall through to `unavailable`.
 assert.equal(proposalSendState(proposal('superseded', 'idle', 0)).kind, 'superseded')
 
+// ── Superseded because the harbour froze the destination, not because of a race ──
+//
+// The one path V4 exists to describe. A rotation submitted after the safe harbour is up is
+// accepted on chain -- the signature verifies, the sequence number is consumed, the queue entry
+// drains -- and `SafeHarbour::update_address` refuses the change and returns a boolean the bridge
+// subprotocol discards. Nothing raced it. Saying otherwise sends the signer to build a
+// replacement that would be discarded exactly the same way.
+
+const frozen = proposalSendState({ ...proposal('superseded', 'reveal_confirmed'), harbourFrozeDestination: true })
+assert.equal(frozen.kind, 'superseded')
+assert.equal(showsSendButton(frozen), false)
+const frozenDetail = frozen.kind === 'superseded' ? frozen.detail : ''
+assert.match(frozenDetail, /safe harbour is already active/i, 'the frozen detail must name the reason')
+assert.doesNotMatch(frozenDetail, /another action/i, 'nothing else used this sequence number')
+assert.match(frozenDetail, /fees were spent/i, 'the bundle reached a block, so it cost both fees')
+
+// The pair that proves the arm is conditional rather than a relabelling: the same rotation with
+// the harbour down is a genuine race and keeps the sequence-number detail.
+assert.match(
+	supersededAfter.kind === 'superseded' ? supersededAfter.detail : '',
+	/another action/i,
+	'without the harbour, a superseded bundle is still a lost race',
+)
+
+// Being swallowed requires reaching a block. A bundle that never confirmed never got that far,
+// whatever the harbour was doing.
+const frozenBefore = proposalSendState({ ...proposal('superseded', 'idle'), harbourFrozeDestination: true })
+assert.equal(frozenBefore.kind, 'superseded')
+assert.doesNotMatch(
+	frozenBefore.kind === 'superseded' ? frozenBefore.detail : '',
+	/safe harbour is already active/i,
+	'an unconfirmed bundle cannot have been accepted and discarded',
+)
+
+// Unlike the other two, this variant prescribes no replacement -- here a replacement is the wrong
+// move, and that is the whole difference the copy has to carry.
+assert.doesNotMatch(frozenDetail, /has to be created and signed/i)
+
 console.log('proposal-send-state: all assertions passed')

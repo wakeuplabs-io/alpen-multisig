@@ -6,7 +6,9 @@ import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
-import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
+import { useSafeHarbour, useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
+import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
+import { buildSafeHarbourChange } from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -126,15 +128,24 @@ function SafeHarbourAddressDetails({
 	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
 }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
-	// rotation submitted after activation is accepted on chain and discarded.
-	const safeHarbourActivated = useSafeHarbourActivated()
+	// rotation submitted after activation is accepted on chain and discarded. One read for both
+	// answers — whether the harbour is up, and what it currently sweeps to.
+	const { safeHarbour } = useSafeHarbour()
+
+	// `isEnacted` is a constant on this screen: nothing enacted is ever signed.
+	const change = buildSafeHarbourChange({
+		installed: safeHarbour === null ? null : { address: safeHarbour.address, addressHex: safeHarbour.addressHex },
+		proposed: { address: action.address, addressHex: action.addressHex },
+		isEnacted: false,
+	})
 
 	return (
 		<>
-			{safeHarbourActivated && (
+			{safeHarbour?.activated === true && (
 				<div className="mt-5">
 					<SafeHarbourNote>
 						The destination is frozen once safe harbour is active, so this update will be accepted and change nothing.
+						It will not report as Enacted.
 					</SafeHarbourNote>
 				</div>
 			)}
@@ -143,13 +154,25 @@ function SafeHarbourAddressDetails({
 				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
 					New sweep destination
 				</p>
-				<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] px-3 py-2.5">
-					{action.address.length > 0 && (
-						<span className="break-all font-mono text-[12px] leading-5 text-[#111827]">{action.address}</span>
+				{/* The comparison the create form gave the signer who drafted this, on the screen every
+				    other signer commits from. Each destination carries its descriptor as well as its
+				    address: the descriptor is what the device renders, so it is the one a signer can
+				    actually check. When the installed destination cannot be read there is no
+				    comparison to make, and the proposed one is shown alone rather than in a column
+				    whose header would claim more than is known. */}
+				<div className="mt-2 overflow-hidden rounded-lg border border-[#e5e7eb]">
+					{change === null ? (
+						<div className="flex flex-col gap-2 px-3 py-2.5">
+							{action.address.length > 0 && (
+								<span className="break-all font-mono text-[12px] leading-5 text-[#111827]">{action.address}</span>
+							)}
+							<code className="block break-all font-mono text-[12px] leading-5 text-[#6b7280]">
+								{action.addressHex}
+							</code>
+						</div>
+					) : (
+						<SafeHarbourChangeTable change={change} />
 					)}
-					{/* The descriptor, not the address, is what the device renders — so it is what a
-					    signer can actually compare against the screen in front of them. */}
-					<code className="block break-all font-mono text-[12px] leading-5 text-[#6b7280]">{action.addressHex}</code>
 				</div>
 			</div>
 		</>

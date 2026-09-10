@@ -112,7 +112,11 @@ export function CreateProposalPreview({
 		<div className="flex flex-col gap-6">
 			<div>
 				<p className="m-0 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">Proposal</p>
-				<p className="m-0 mt-2 font-display text-[1.75rem] font-normal leading-tight text-[#0a0a0a]">{title || '—'}</p>
+				{/* An untitled draft previews under the heading it will actually carry once created —
+				    `derivedProposalLabel`'s shape — rather than under a dash that says nothing. */}
+				<p className="m-0 mt-2 font-display text-[1.75rem] font-normal leading-tight text-[#0a0a0a]">
+					{title || `Proposal #${seqNo} - ${actionTypeLabel}`}
+				</p>
 				<p className="m-0 mt-2 text-body text-[#6b7280]">
 					#{seqNo} · {authorityLabel} · {actionTypeLabel}
 				</p>
