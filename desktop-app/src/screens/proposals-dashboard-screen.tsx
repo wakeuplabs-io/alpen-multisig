@@ -30,10 +30,14 @@ export function ProposalsDashboardScreen() {
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
-	// The council only: no other authority has a lever that answers a bridge-wide state, so no
-	// other session reads it either.
+	// Read by both authorities that hold a lever answering this bridge-wide state, and by no
+	// other session. The council's Defcon levers set the flag; the administrator's safe harbour
+	// rotation is decided by it, since a rotation submitted after activation is accepted on chain
+	// and applied nowhere. V2 wrote this gate when the council was the only such authority; V4
+	// added the second, which left every rotation on this screen judged against a false flag.
 	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
-	const safeHarbourActivated = useSafeHarbourActivated(isCouncil)
+	const isStrataAdmin = selectedRole === AuthRole.StrataAdministrator
+	const safeHarbourActivated = useSafeHarbourActivated(isCouncil || isStrataAdmin)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -111,7 +115,11 @@ export function ProposalsDashboardScreen() {
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
 				currentBlockHeight={currentBlockHeight}
-				notice={safeHarbourActivated ? <SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote> : null}
+				notice={
+					isCouncil && safeHarbourActivated ? (
+						<SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote>
+					) : null
+				}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}
