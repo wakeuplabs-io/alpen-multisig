@@ -12,7 +12,7 @@ function nullishToNull<T extends z.ZodType>(schema: T) {
 	return schema.nullish().transform((v) => v ?? null)
 }
 
-export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired', 'superseded'])
+export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
 
 export const broadcastStatusSchema = z.enum([
 	'idle',
@@ -50,9 +50,6 @@ export const proposalSchema = z
 			'vk_update',
 			'operator_set_update',
 			'sequencer_key_update',
-			'council_signer_update',
-			'defcon_1',
-			'defcon_3',
 			'cancel',
 			'unknown',
 		]),
@@ -71,9 +68,7 @@ export const proposalSchema = z
 		activationHeight: nullishToNull(z.number()),
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
-		isCancelable: z.boolean(),
 		createdAtMs: z.number(),
-		updatedAtMs: z.number(),
 		expiresAtMs: z.number(),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
@@ -144,9 +139,6 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		typeId: z.number(),
 		conditionHex: z.string(),
 	}),
-	z.object({ kind: z.literal('defcon_1') }),
-	z.object({ kind: z.literal('defcon_3') }),
-	z.object({ kind: z.literal('cancel'), targetUpdateId: z.number(), targetActionHex: z.string() }),
 	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
 ])
 
@@ -174,10 +166,6 @@ export const currentVkSchema = z.object({
 	typeId: z.number(),
 	typeName: z.string(),
 	conditionHex: z.string(),
-})
-
-export const safeHarbourStatusSchema = z.object({
-	activated: z.boolean(),
 })
 
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())

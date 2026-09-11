@@ -27,15 +27,6 @@ pub enum DecodedAction {
         type_id: u8,
         condition_hex: String,
     },
-    #[serde(rename = "defcon_1")]
-    Defcon1,
-    #[serde(rename = "defcon_3")]
-    Defcon3,
-    #[serde(rename = "cancel", rename_all = "camelCase")]
-    Cancel {
-        target_update_id: u32,
-        target_action_hex: String,
-    },
     #[serde(rename = "unknown", rename_all = "camelCase")]
     Unknown { raw_hex: String },
 }
@@ -46,16 +37,6 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
         .strip_prefix("0x")
         .unwrap_or(&action_hex)
         .to_string();
-    // Tried first: a cancel hex fails `decode_hex` below (the domain `Action` has no `Cancel`
-    // variant) and would otherwise land in the `Err(_) => Unknown` arm.
-    if let Ok(Some((target_update_id, target_action_hex))) =
-        action_codec::decode_cancel_target_hex(&hex)
-    {
-        return DecodedAction::Cancel {
-            target_update_id,
-            target_action_hex,
-        };
-    }
     match action_codec::decode_hex(&hex) {
         Ok(Action::MultisigUpdate(update)) => DecodedAction::MultisigUpdate {
             role: update.role.as_str().to_string(),
@@ -68,10 +49,6 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
             type_id: update.type_id,
             condition_hex: hex::encode(&update.condition),
         },
-        Ok(Action::Defcon1) => DecodedAction::Defcon1,
-        Ok(Action::Defcon3) => DecodedAction::Defcon3,
-        // Still unregistered at this boundary, and unrelated to the council: both predate this
-        // slice and both render through the raw-hex fallback today.
         Ok(Action::OperatorSetUpdate(_)) | Ok(Action::SequencerKeyUpdate(_)) | Err(_) => {
             DecodedAction::Unknown { raw_hex: hex }
         }
@@ -178,29 +155,6 @@ pub fn build_sequencer_key_update_hex(
     Ok(BuildActionHexResponse { action_hex })
 }
 
-/// Build the payload-less Defcon 1 action.
-///
-/// No input: the action carries nothing, and the sequence number is a field of the proposal
-/// creation request, as it is for every other action type.
-#[tauri::command]
-pub fn build_defcon_1_action_hex() -> Result<BuildActionHexResponse, String> {
-    let action_hex = action_codec::encode_hex(&Action::Defcon1)
-        .map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
-}
-
-/// Build the payload-less Defcon 3 action.
-///
-/// Shaped exactly like Defcon 1's: same authority, same empty payload, same sequence number on the
-/// creation request. The delay is not encoded here — it is `confirmation_depths.defcon3`, resolved
-/// live from the ASM, and this hex would be wrong the moment it carried a copy of it.
-#[tauri::command]
-pub fn build_defcon_3_action_hex() -> Result<BuildActionHexResponse, String> {
-    let action_hex = action_codec::encode_hex(&Action::Defcon3)
-        .map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
-}
-
 #[tauri::command]
 pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHexResponse, String> {
     let authority = Authority::from_wire(input.authority.trim())
@@ -249,101 +203,6 @@ mod tests {
         }
     }
 
-    /// The proposal DTO's `actionType` and this command are the two IPC boundaries Phase 3
-    /// parked on `Unknown`; both are closed schemas on the TypeScript side, so this asserts the
-    /// Rust half emits the value `decodedActionSchema` was taught to accept.
-    #[test]
-    fn decode_defcon_1_names_the_action() {
-        let hex = build_defcon_1_action_hex()
-            .expect("build should succeed")
-            .action_hex;
-        assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon1));
-    }
-
-    /// The same round trip for the timelocked lever. Phase 1 could only encode it from the codec
-    /// because no builder existed; going through the command is what proves the flow a council
-    /// signer actually takes ends up at `Defcon3` and not at its neighbour.
-    #[test]
-    fn decode_defcon_3_names_the_action() {
-        let hex = build_defcon_3_action_hex()
-            .expect("build should succeed")
-            .action_hex;
-        assert!(matches!(decode_action_hex(hex), DecodedAction::Defcon3));
-    }
-
-    /// The wire-level expression of the segregation invariant (AC 2): a council rotation names
-    /// itself in `Action:` but names the administrator in `Authorized By:` — two distinct lines,
-    /// never merged. Runs the path the device actually signs over, out of the builder rather than
-    /// a hand-built `Action`, because the claim this side can make is that *our* mapping
-    /// (`Authority::SecurityCouncil` -> `UpdateAction::StrataSecurityCouncilMultisig`, wired in
-    /// `action_codec.rs`) lands on the variant upstream renders as tx 15. Upstream's own nine
-    /// lines are already pinned byte-for-byte in `strata_security_council_multisig.rs`, and
-    /// restating them here would only test upstream's test.
-    ///
-    /// Asserts on `message.lines()`, not `contains()` over the whole string: a renderer that
-    /// joined the two lines with a space would still pass a `contains` check and still put the
-    /// wrong words in front of a signer. Literals are pinned here — unlike the neighbouring
-    /// Defcon tripwire (`signing.rs:453-458`, which explicitly declines to pin upstream's)
-    /// — because the new coverage *is* the pair of lines naming two different roles, the
-    /// wire-level shape of the segregation invariant. This test replaces
-    /// `decode_council_signer_update_names_the_target_role`, which built the `Action` by hand and
-    /// asserted a subset of what this asserts.
-    #[test]
-    fn council_signer_update_signing_message_names_both_roles_on_separate_lines() {
-        use desktop_app::infrastructure::signing::render_signing_message;
-
-        let pk = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5".to_string();
-        let seqno = 7;
-
-        let council_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
-            role: "security_council".to_string(),
-            add_keys: vec![pk.clone()],
-            remove_keys: vec![],
-            new_threshold: 2,
-        })
-        .expect("build should succeed")
-        .action_hex;
-
-        let admin_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
-            role: "strata_admin".to_string(),
-            add_keys: vec![pk.clone()],
-            remove_keys: vec![],
-            new_threshold: 2,
-        })
-        .expect("build should succeed")
-        .action_hex;
-
-        let council_message =
-            render_signing_message(seqno, &council_hex).expect("council message renders");
-        let admin_message =
-            render_signing_message(seqno, &admin_hex).expect("administrator message renders");
-
-        assert_eq!(
-            council_message,
-            format!(
-                concat!(
-                    "Strata ASM Administration v1\n",
-                    "Action: Strata Security Council Multisig Update\n",
-                    "Authorized By: Strata Administrator\n",
-                    "Sequence: {seqno}\n",
-                    "Action Details:\n",
-                    "  New Threshold: 2\n",
-                    "  Members to Add: 1\n",
-                    "  1. Add Member: {pk}\n",
-                    "  Members to Remove: 0"
-                ),
-                seqno = seqno,
-                pk = pk
-            ),
-            "the signer must see the exact canonical nine-line message"
-        );
-
-        assert_ne!(
-            council_message, admin_message,
-            "same seqno, same keys, same threshold — only the action differs, and the signer must see that"
-        );
-    }
-
     #[test]
     fn decode_vk_update_with_condition_hex() {
         let condition = "ab".repeat(32);
@@ -366,27 +225,6 @@ mod tests {
                 assert_eq!(condition_hex, condition);
             }
             other => panic!("expected VkUpdate, got {other:?}"),
-        }
-    }
-
-    /// The exact gate `/manual` fails on today: a cancel hex must decode to `Cancel`, not fall
-    /// through to `Unknown` because the domain `Action` has no `Cancel` variant.
-    #[test]
-    fn decode_cancel_names_the_action() {
-        let target_hex = build_defcon_3_action_hex()
-            .expect("build should succeed")
-            .action_hex;
-        let cancel_hex =
-            action_codec::encode_cancel_hex_for_target(&target_hex, 7).expect("cancel encodes ok");
-        match decode_action_hex(cancel_hex) {
-            DecodedAction::Cancel {
-                target_update_id,
-                target_action_hex,
-            } => {
-                assert_eq!(target_update_id, 7);
-                assert_eq!(target_action_hex, target_hex);
-            }
-            other => panic!("expected Cancel, got {other:?}"),
         }
     }
 }

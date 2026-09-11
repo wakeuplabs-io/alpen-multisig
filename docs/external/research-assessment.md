@@ -33,16 +33,20 @@ The `AdminTxType` enum defines the supported update types:
 | Sequencer update | Sequencer Manager | Immediate |
 | Cancel action | Admin / Sequencer Manager | Consumes a seqno; removes a queued update |
 
-### 1.3 Update Types Not Yet Built
+### 1.3 Update Types Requiring Upstream Additions
 
-**Defined upstream, implementation planned:**
-- Security Council updates — Defcon 1, Defcon 3, Security Council signer update, and Safe Harbour address update. All four exist in the admin subprotocol as of ASM `v0.1-alpha.11`, and the roles, wire format and confirmation-depth semantics have been exercised end to end against a regtest ASM. The application does not surface them yet.
+The following update types require additional role definitions or protocol specifications from Alpen Labs:
+
+**Missing role definitions:**
+- Security Council updates (signer update, Defcon 1 transaction, Defcon 3 transaction)
 
 **Partially supported:**
 - Alpen Administrator VK update (`EeStfVk`) — Action encoding and signing supported; enactment detection on ASM not yet implemented. Signer updates (`AlpenAdminMultisigUpdate`) are fully supported.
 
-**Withdrawn:**
-- Soft bridge update and hard bridge update — no longer relevant concepts; they have no counterpart upstream at any revision.
+**Undefined protocol concepts:**
+- Safe Harbor address update
+- Soft bridge update
+- Hard bridge update
 
 **Separate protocol:**
 - `block_payout` — This is a native Bitcoin UTXO spend requiring PSBT construction, bridge script knowledge, and Bitcoin RPC integration. It operates independently from the admin subprotocol.
@@ -54,7 +58,7 @@ The `AdminTxType` enum defines the supported update types:
 | Strata Sequencer Manager | 2/2 |
 | Strata Administrator | 3/3 (signer, VK, operator) |
 | Alpen Administrator | 1/2 (signer supported; VK update pending enactment detection) |
-| Security Council | Not implemented yet — upstream support confirmed at ASM `v0.1-alpha.11` |
+| Security Council | Requires upstream role definition |
 | Payout Administrator | Separate protocol implementation |
 
 ## 2. Hardware Wallet Compatibility

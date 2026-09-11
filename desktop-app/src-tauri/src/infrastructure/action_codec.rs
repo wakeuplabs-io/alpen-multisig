@@ -8,9 +8,9 @@ use std::num::NonZeroU8;
 
 use ssz::{Decode, Encode};
 use strata_asm_txs_admin::actions::updates::{
-    AlpenAdminMultisigUpdate, Defcon1Update, Defcon3Update, EeStfVkUpdate, OlStfVkUpdate,
+    AlpenAdminMultisigUpdate, EeStfVkUpdate, OlStfVkUpdate,
     OperatorSetUpdate as StrataOperatorSetUpdate, SequencerUpdate as StrataSequencerUpdate,
-    StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
+    StrataAdminMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_crypto::keys::compressed::CompressedPublicKey;
@@ -75,11 +75,11 @@ pub fn decode_hex(s: &str) -> Result<Action, CodecError> {
 
 /// Wraps an existing update action hex in a `MultisigAction::Cancel` envelope.
 ///
-/// `target_action_hex` must encode a `MultisigAction::Update`. `target_update_id` is the
-/// queue `UpdateId` of the queued update (used as the cancel's `target_id`).
+/// `target_action_hex` must encode a `MultisigAction::Update`. `target_seq_no` is the
+/// seq_no of the queued update (used as the cancel's `target_id`).
 pub fn encode_cancel_hex_for_target(
     target_action_hex: &str,
-    target_update_id: u64,
+    target_seq_no: u64,
 ) -> Result<String, CodecError> {
     let hex = target_action_hex
         .strip_prefix("0x")
@@ -91,35 +91,11 @@ pub fn encode_cancel_hex_for_target(
         MultisigAction::Update(u) => u,
         MultisigAction::Cancel(_) => return Err(CodecError::UnsupportedVariant("Cancel")),
     };
-    let target_id: u32 = target_update_id.try_into().map_err(|_| {
-        CodecError::Encode(format!(
-            "target_update_id {target_update_id} exceeds u32 range"
-        ))
-    })?;
+    let target_id: u32 = target_seq_no
+        .try_into()
+        .map_err(|_| CodecError::Encode(format!("seq_no {target_seq_no} exceeds u32 range")))?;
     let cancel = MultisigAction::Cancel(CancelAction::new(target_id, update));
     Ok(hex::encode(cancel.as_ssz_bytes()))
-}
-
-/// The `(target_update_id, target update hex)` carried by a cancel action, or `None` when the hex
-/// is not a `MultisigAction::Cancel`.
-///
-/// The inverse of `encode_cancel_hex_for_target`. It decodes at the upstream `MultisigAction`
-/// layer rather than through the domain `Action`, which has no `Cancel` variant: a cancel is an
-/// envelope around an update, not an action the desktop ever builds from a form.
-pub fn decode_cancel_target_hex(action_hex: &str) -> Result<Option<(u32, String)>, CodecError> {
-    let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
-    let bytes = hex::decode(hex).map_err(|e| CodecError::Hex(e.to_string()))?;
-    let action =
-        MultisigAction::from_ssz_bytes(&bytes).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
-    match action {
-        MultisigAction::Cancel(cancel) => {
-            let target_id = *cancel.target_id();
-            let target_hex =
-                hex::encode(MultisigAction::Update(cancel.update().clone()).as_ssz_bytes());
-            Ok(Some((target_id, target_hex)))
-        }
-        MultisigAction::Update(_) => Ok(None),
-    }
 }
 
 // ─── Domain → Strata ────────────────────────────────────────────────────────
@@ -141,15 +117,6 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
                 )),
                 Authority::AlpenAdmin => Ok(MultisigAction::Update(
                     UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(config_update)),
-                )),
-                // The one update whose target authority differs from the authority that
-                // authorizes it: upstream's `authorized_role()` for tx type 15 is
-                // `Role::StrataAdministrator`, but it is applied to `Role::StrataSecurityCouncil`
-                // — the council's own signer set is rotated by the administrator, not by itself.
-                Authority::SecurityCouncil => Ok(MultisigAction::Update(
-                    UpdateAction::StrataSecurityCouncilMultisig(
-                        StrataSecurityCouncilMultisigUpdate::new(config_update),
-                    ),
                 )),
                 other => Err(CodecError::UnsupportedAuthority(format!(
                     "encoding not implemented for authority `{other:?}`"
@@ -183,8 +150,6 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
         Action::SequencerKeyUpdate(update) => Ok(MultisigAction::Update(UpdateAction::Sequencer(
             StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
         ))),
-        Action::Defcon1 => Ok(MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))),
-        Action::Defcon3 => Ok(MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update))),
     }
 }
 
@@ -271,16 +236,6 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         MultisigAction::Update(UpdateAction::AsmStfVk(_)) => {
             Err(CodecError::UnsupportedVariant("AsmStfVk"))
         }
-        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(update)) => {
-            let domain_update =
-                multisig_update_from_threshold_config(Authority::SecurityCouncil, update.config())?;
-            Ok(Action::MultisigUpdate(domain_update))
-        }
-        MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
-        MultisigAction::Update(UpdateAction::Defcon3(_)) => Ok(Action::Defcon3),
-        MultisigAction::Update(UpdateAction::SafeHarbourAddress(_)) => {
-            Err(CodecError::UnsupportedVariant("SafeHarbourAddress"))
-        }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
 }
@@ -344,49 +299,6 @@ mod tests {
         })
     }
 
-    /// The round trip alone would pass on a codec that agreed with itself and with nobody else —
-    /// mapping both arms to Defcon *3* round-trips just as happily. The tx type is what pins the
-    /// bytes to the action the Security Council means to sign.
-    #[test]
-    fn defcon_1_round_trips_and_encodes_upstreams_defcon_1_tx_type() {
-        use strata_asm_params::UpdateTxType;
-
-        let encoded = encode(&Action::Defcon1).expect("encode ok");
-
-        assert_eq!(decode(&encoded).expect("decode ok"), Action::Defcon1);
-
-        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
-        let MultisigAction::Update(update) = upstream else {
-            panic!("Defcon 1 is an update, not a cancel");
-        };
-        assert_eq!(update.update_tx_type(), UpdateTxType::Defcon1);
-    }
-
-    /// Both Defcon payloads are empty unit structs, so the only thing separating their bytes is
-    /// the SSZ union selector. A codec with the two encode arms crossed would round-trip just as
-    /// happily and hand the council the other lever to sign — which is what the last assertion,
-    /// and not the round trip, is here to catch.
-    #[test]
-    fn defcon_3_round_trips_and_encodes_upstreams_defcon_3_tx_type() {
-        use strata_asm_params::UpdateTxType;
-
-        let encoded = encode(&Action::Defcon3).expect("encode ok");
-
-        assert_eq!(decode(&encoded).expect("decode ok"), Action::Defcon3);
-
-        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
-        let MultisigAction::Update(update) = upstream else {
-            panic!("Defcon 3 is an update, not a cancel");
-        };
-        assert_eq!(update.update_tx_type(), UpdateTxType::Defcon3);
-
-        assert_ne!(
-            encode(&Action::Defcon1).expect("encode ok"),
-            encoded,
-            "the immediate and the timelocked lever must not encode to the same bytes"
-        );
-    }
-
     #[test]
     fn test_roundtrip_hex() {
         let action = sample_action();
@@ -418,71 +330,6 @@ mod tests {
         let direct_bytes = strata_action.as_ssz_bytes();
 
         let domain_bytes = encode(&sample_action()).unwrap();
-        assert_eq!(domain_bytes, direct_bytes);
-    }
-
-    fn sample_council_signer_update_action() -> Action {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
-        Action::MultisigUpdate(MultisigUpdate {
-            role: Authority::SecurityCouncil,
-            add_keys: vec![pk],
-            remove_keys: vec![],
-            new_threshold: NonZeroU8::new(2).unwrap(),
-        })
-    }
-
-    /// Unlike the two Defcon payloads, which are empty unit structs, a council rotation and an
-    /// administrator rotation carry a byte-identical `ThresholdConfigUpdate` and are separated
-    /// only by the SSZ union selector. A codec with the two encode arms crossed would round-trip
-    /// happily and send the wrong authority to a hardware signer — the third assertion below is
-    /// the one that would catch that, where the round trip alone would not.
-    #[test]
-    fn council_signer_update_round_trips_and_encodes_upstreams_tx_type_15() {
-        use strata_asm_params::UpdateTxType;
-
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
-        let action = sample_council_signer_update_action();
-        let encoded = encode(&action).expect("encode ok");
-
-        assert_eq!(decode(&encoded).expect("decode ok"), action);
-
-        let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
-        let MultisigAction::Update(update) = upstream else {
-            panic!("council signer update is an update, not a cancel");
-        };
-        assert_eq!(
-            update.update_tx_type(),
-            UpdateTxType::StrataSecurityCouncilMultisigUpdate
-        );
-
-        let admin_action = Action::MultisigUpdate(MultisigUpdate {
-            role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
-            new_threshold: NonZeroU8::new(2).unwrap(),
-        });
-        let admin_encoded = encode(&admin_action).expect("encode ok");
-        assert_ne!(
-            encoded, admin_encoded,
-            "an identical ThresholdConfigUpdate must not encode the same way for two authorities"
-        );
-    }
-
-    /// The positive counterpart to the round trip above: our encoding is not merely
-    /// self-consistent, it matches what upstream's own type produces for the same config.
-    #[test]
-    fn council_signer_update_encode_matches_direct_strata_ssz() {
-        let pk_bytes = hex::decode(VALID_HEX).unwrap();
-        let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
-        let strata_pk = CompressedPublicKey::from(secp_pk);
-        let config_update =
-            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
-        let strata_update = StrataSecurityCouncilMultisigUpdate::new(config_update);
-        let strata_action =
-            MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(strata_update));
-        let direct_bytes = strata_action.as_ssz_bytes();
-
-        let domain_bytes = encode(&sample_council_signer_update_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);
     }
 
@@ -658,25 +505,5 @@ mod tests {
 
         let domain_bytes = encode(&sample_operator_set_action()).unwrap();
         assert_eq!(domain_bytes, direct_bytes);
-    }
-
-    #[test]
-    fn cancel_hex_round_trips_through_its_target() {
-        let defcon3_hex = encode_hex(&Action::Defcon3).expect("encode ok");
-
-        let cancel_hex = encode_cancel_hex_for_target(&defcon3_hex, 7).expect("cancel encodes ok");
-        assert_eq!(
-            decode_cancel_target_hex(&cancel_hex).expect("cancel decodes ok"),
-            Some((7, defcon3_hex))
-        );
-    }
-
-    #[test]
-    fn decode_cancel_target_hex_is_none_for_a_plain_update() {
-        let defcon3_hex = encode_hex(&Action::Defcon3).expect("encode ok");
-        assert_eq!(
-            decode_cancel_target_hex(&defcon3_hex).expect("decode ok"),
-            None
-        );
     }
 }

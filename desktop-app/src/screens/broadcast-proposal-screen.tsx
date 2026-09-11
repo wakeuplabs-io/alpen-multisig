@@ -1,7 +1,6 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { ShieldAccentIcon } from '@/assets/icons'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { BroadcastDetailsCard } from '@/domain/broadcast-proposal/components/broadcast-details-card'
 import { BroadcastFundingSignerBanner } from '@/domain/broadcast-proposal/components/broadcast-funding-signer-banner'
 import { BroadcastPhaseProgress } from '@/domain/broadcast-proposal/components/broadcast-phase-progress'
@@ -18,8 +17,6 @@ import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
-import { DEFCON_COPY, defconLevelOf } from '@/lib/defcon-copy'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -48,12 +45,6 @@ export function BroadcastProposalScreen() {
 		signerKind,
 		adapter,
 	)
-
-	// Read live from the node, exactly like the create and sign screens: the note states a fact
-	// about the chain, so rendering it on a bridge that is *not* in safe harbour tells the council
-	// the emergency lever they are about to pull is pointless when it is not.
-	const defconLevel = defconLevelOf(proposal?.actionType)
-	const safeHarbourActivated = useSafeHarbourActivated(defconLevel !== null)
 
 	async function handleBack() {
 		await disconnectSession()
@@ -108,12 +99,6 @@ export function BroadcastProposalScreen() {
 				<div className="mt-6 space-y-4">
 					<BroadcastFundingSignerBanner backendSignerKind={backendSignerKind} connectVendor={adapter.vendor} />
 
-					{/* The last screen before the fees are spent. The Defcon levers only: no other action
-					    reads on a bridge-wide state, and only when the chain says the harbour is up. */}
-					{defconLevel !== null && safeHarbourActivated && (
-						<SafeHarbourNote>{DEFCON_COPY[defconLevel].broadcastSafeHarbourNote}</SafeHarbourNote>
-					)}
-
 					{isLoading && (
 						<div className="animate-pulse space-y-3 rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
 							<div className="h-7 w-48 rounded-lg bg-[#f3f4f6]" />
@@ -163,7 +148,7 @@ export function BroadcastProposalScreen() {
 							<p className="m-0 text-body font-medium text-[#065f46]">
 								{proposal?.status === 'enacted' || result?.proposalStatus === 'enacted'
 									? 'Proposal enacted on-chain.'
-									: 'Reveal confirmed on-chain. Nothing left to send — the ASM applies the change if it accepts the action.'}{' '}
+									: 'Reveal confirmed on-chain. Proposal stays approved until ASM enactment; refresh the dashboard after the confirmation delay.'}{' '}
 								({proposal?.broadcastStatus ?? result?.broadcastStatus ?? '—'}).
 							</p>
 							<button

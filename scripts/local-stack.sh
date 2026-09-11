@@ -34,8 +34,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="$SCRIPT_DIR/../staging"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.local.yml"
-COMPOSE_PROJECT=$(basename "$COMPOSE_DIR" | tr '[:upper:]' '[:lower:]')
-CONTAINER_PREFIX="${COMPOSE_PROJECT}"
+COMPOSE_PROJECT=$(basename "$COMPOSE_DIR" | tr '[:lower:]' '[:upper:]')
+CONTAINER_PREFIX="${COMPOSE_PROJECT,,}"
 
 CLEAN=0
 CLEAN_ORCHESTRATOR=0
@@ -210,14 +210,14 @@ show_status() {
 
   check_service "bitcoin" "18443"
   check_service "electrs" "60401"
-  check_service "asm" "8080"
+  check_service "asm" "8080" "/"
   check_service "postgres" "5432"
   if [[ "$NO_ORCHESTRATOR" == "1" ]]; then
     printf "  %-20s %-12s %s\n" "orchestrator" "— skipped" "(--no-orchestrator)"
   else
     check_service "orchestrator" "3000" "/api/v1/health"
   fi
-  check_service "regtest-dev-api" "3001"
+  check_service "regtest-dev-api" "3001" "/mine"
 }
 
 do_stop() {

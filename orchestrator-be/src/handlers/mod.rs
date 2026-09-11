@@ -221,16 +221,13 @@ mod tests {
         assert!(!token.is_empty());
     }
 
-    /// The Payout Admin is the remaining authority with no ASM role upstream, and so the one this
-    /// invariant can still be stated with — the Security Council, which used to stand here, is
-    /// mapped as of Phase 3.
     #[tokio::test]
     async fn test_auth_verify_unmapped_authority_is_fail_closed() {
         let app = test_app();
         let req = json_request(
             "POST",
             "/auth/challenge",
-            Some(json!({ "authority": "payout_admin" })),
+            Some(json!({ "authority": "security_council" })),
             None,
         );
         let resp = app.clone().oneshot(req).await.unwrap();
@@ -294,30 +291,6 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    /// AC 17: the Defcon 1 gate holds against a caller that never touches the UI. The second half —
-    /// that nothing was persisted — is what the criterion actually asks for.
-    #[tokio::test]
-    async fn test_create_defcon_1_refused_for_a_non_council_session() {
-        let app = test_app();
-        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
-
-        let body = json!({
-            "seq_no": 1,
-            "action_hex": crate::infrastructure::action_codec::test_fixture_defcon_1_action_hex(),
-            "signer_pubkey": SIGNER_A_PK,
-            "signature_hex": "sig_a"
-        });
-        let req = json_request("POST", "/proposals", Some(body), Some(&token));
-        let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-
-        let req = json_request("GET", "/proposals", None, Some(&token));
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        let listed = response_json(resp).await;
-        assert!(listed["proposals"].as_array().unwrap().is_empty());
-    }
-
     #[tokio::test]
     async fn test_create_and_get_with_bearer() {
         let app = test_app();
@@ -359,7 +332,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_proposal_wrong_authority_is_indistinguishable_from_missing() {
+    async fn test_get_proposal_wrong_authority_returns_unauthorized() {
         use crate::application::traits::ProposalRepository;
         use crate::domain::authority::Authority;
         use crate::domain::proposal::{
@@ -389,7 +362,6 @@ mod tests {
             activation_height: None,
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
         })
         .await
         .unwrap();
@@ -420,7 +392,7 @@ mod tests {
             Some(&token),
         );
         let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

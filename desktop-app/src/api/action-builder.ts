@@ -2,13 +2,8 @@ import type { ApiResult } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
 import { buildActionHexResponseSchema } from '@/api/ipc-schemas'
 
-// The four authorities a multisig config update can target. `payout_admin` is deliberately not a
-// member: it has no ASM role (orchestrator-be/src/infrastructure/asm_role_membership.rs:277-280)
-// and dies in the codec (desktop-app/src-tauri/src/infrastructure/action_codec.rs:154-156).
-export type MultisigTargetAuthority = 'strata_admin' | 'sequencer_manager' | 'alpen_admin' | 'security_council'
-
 export type BuildAdminMultisigUpdateHexInput = {
-	role: MultisigTargetAuthority
+	role: 'strata_admin' | 'sequencer_manager' | 'alpen_admin'
 	addKeys: string[]
 	removeKeys: string[]
 	newThreshold: number
@@ -53,16 +48,6 @@ export function buildSequencerKeyUpdateHex(
 	input: BuildSequencerKeyUpdateHexInput,
 ): Promise<ApiResult<BuildActionHexResponse>> {
 	return tauriCall('build_sequencer_key_update_hex', { input }, buildActionHexResponseSchema)
-}
-
-/** Defcon 1 carries no payload, so its action hex is a constant the Rust side encodes. */
-export function buildDefcon1ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {
-	return tauriCall('build_defcon_1_action_hex', {}, buildActionHexResponseSchema)
-}
-
-/** Defcon 3 is the same payload-less shape; only the delay before it takes effect differs. */
-export function buildDefcon3ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {
-	return tauriCall('build_defcon_3_action_hex', {}, buildActionHexResponseSchema)
 }
 
 export function buildCancelActionHex(targetActionHex: string): Promise<ApiResult<BuildActionHexResponse>> {

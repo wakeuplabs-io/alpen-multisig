@@ -4,16 +4,14 @@ import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon, SendIcon } from '@/assets/icons'
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
-import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
-import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
-import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
 
 type Props = {
@@ -90,9 +88,11 @@ export function ProposalDetail({
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState(proposal)
-	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 
-	const displayStatus = proposalDisplayStatus(proposal)
+	const displayStatus: DisplayStatus =
+		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
+			? 'awaiting_enactment'
+			: proposal.status
 
 	const [bundleCopied, setBundleCopied] = useState(false)
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)
@@ -162,7 +162,69 @@ export function ProposalDetail({
 					<div className="border-b border-[#f3f4f6] px-6 py-4">
 						<SectionLabel>Signer set change</SectionLabel>
 					</div>
-					<SignerSetChangeTable change={decodedData.signerSetChange} />
+					<table className="w-full table-fixed border-collapse">
+						<thead>
+							<tr className="border-b border-[#f3f4f6] bg-[#f9fafb]">
+								<th className="w-1/2 px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+									Before
+								</th>
+								<th className="w-1/2 border-l border-[#f3f4f6] px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
+									After
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{decodedData.signerSetChange.rows.map((row, i) => (
+								<tr key={i} className="border-b border-[#f3f4f6] last:border-0">
+									<td className="px-4 py-2.5 align-top">
+										{row.inBefore ? (
+											<span
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
+											>
+												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
+												{row.pubkey}
+											</span>
+										) : (
+											<span className="text-[#9ca3af]">—</span>
+										)}
+									</td>
+									<td className="border-l border-[#f3f4f6] px-4 py-2.5 align-top">
+										{row.inAfter ? (
+											<span
+												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'}`}
+											>
+												{row.isAdded && <span className="mr-1 text-[#0f9d7a]">+</span>}
+												{row.pubkey}
+											</span>
+										) : (
+											<span className="text-[#9ca3af]">—</span>
+										)}
+									</td>
+								</tr>
+							))}
+							{/* Threshold row */}
+							<tr className="border-t border-[#e5e7eb] bg-[#f9fafb]">
+								<td className="px-4 py-2.5 text-label">
+									<span className="text-[#9ca3af]">Threshold </span>
+									{decodedData.signerSetChange.thresholdBefore !== null ? (
+										<span className="font-mono font-medium text-[#374151]">
+											{decodedData.signerSetChange.thresholdBefore} of{' '}
+											{decodedData.signerSetChange.rows.filter((r) => r.inBefore).length}
+										</span>
+									) : (
+										<span className="text-[#9ca3af]">—</span>
+									)}
+								</td>
+								<td className="border-l border-[#f3f4f6] px-4 py-2.5 text-label">
+									<span className="text-[#9ca3af]">Threshold </span>
+									<span className="font-mono font-medium text-[#374151]">
+										{decodedData.signerSetChange.thresholdAfter} of{' '}
+										{decodedData.signerSetChange.rows.filter((r) => r.inAfter).length}
+									</span>
+								</td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
 			)}
 
@@ -233,14 +295,13 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"
 						>
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
-							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 						</div>
 					)}
 

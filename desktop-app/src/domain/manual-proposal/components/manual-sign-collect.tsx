@@ -1,6 +1,6 @@
 import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
-import type { Proposal } from '@/api/proposals'
+import type { ActionType, Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/assets/icons'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
@@ -23,6 +23,12 @@ type Props = {
 	onSign: () => void
 	onBroadcast: () => void
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
+}
+
+function derivedActionType(actionHex: string): ActionType {
+	const h = actionHex.toLowerCase()
+	if (h.startsWith('01')) return 'vk_update'
+	return 'multisig_update'
 }
 
 export function ManualSignCollect({
@@ -48,19 +54,17 @@ export function ManualSignCollect({
 		status: 'pending',
 		requiredSignatures: requiredSignatures ?? 0,
 		actionHex: importData.actionHex,
-		actionType: importData.actionType,
+		actionType: derivedActionType(importData.actionHex),
 		// The manual bundle carries no title: it is rebuilt from the sighash payload alone.
 		title: null,
 		signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
 		broadcastStatus: 'idle',
-		kind: importData.actionType === 'cancel' ? 'cancel' : 'update',
+		kind: 'update',
 		targetActionId: null,
 		activationHeight: null,
 		updateIdInQueue: null,
 		cancelProposal: null,
-		isCancelable: false,
 		createdAtMs: 0,
-		updatedAtMs: 0,
 		expiresAtMs: 0,
 	}
 

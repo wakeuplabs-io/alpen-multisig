@@ -4,14 +4,9 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
-import { useBlockHeight } from '@/hooks/use-block-height'
-import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
-import { COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE } from '@/lib/defcon-copy'
-import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
@@ -26,14 +21,8 @@ export function ProposalsDashboardScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const panel = useWalletPanelData()
-	const currentBlockHeight = useBlockHeight()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
-
-	// The council only: no other authority has a lever that answers a bridge-wide state, so no
-	// other session reads it either.
-	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
-	const safeHarbourActivated = useSafeHarbourActivated(isCouncil)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -77,11 +66,7 @@ export function ProposalsDashboardScreen() {
 		() => proposals.filter((proposal) => proposal.status === 'enacted' || proposal.status === 'canceled'),
 		[proposals],
 	)
-	// Superseded sits with expired: both ran out of a window rather than failing at anything.
-	const expiredOrSkipped = useMemo(
-		() => proposals.filter((proposal) => proposal.status === 'expired' || proposal.status === 'superseded'),
-		[proposals],
-	)
+	const expiredOrSkipped = useMemo(() => proposals.filter((proposal) => proposal.status === 'expired'), [proposals])
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -110,8 +95,6 @@ export function ProposalsDashboardScreen() {
 		>
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
-				currentBlockHeight={currentBlockHeight}
-				notice={safeHarbourActivated ? <SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote> : null}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}
