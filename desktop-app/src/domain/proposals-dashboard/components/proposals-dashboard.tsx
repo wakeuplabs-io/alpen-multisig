@@ -164,7 +164,7 @@ export function ProposalsDashboard({
 								}
 								onClick={() => handleTabChange(tab)}
 							>
-								{tab === 'pending' ? 'Pending' : 'Past'}
+								{tab === 'pending' ? 'In progress' : 'Past'}
 								{tab === 'pending' && activeProposals.length > 0 && (
 									<span
 										className={[
