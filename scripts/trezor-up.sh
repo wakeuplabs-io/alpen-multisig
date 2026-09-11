@@ -15,10 +15,6 @@ set -euo pipefail
 #   ./scripts/trezor-up.sh --build
 #   ./scripts/trezor-up.sh --model T3T1
 #   ./scripts/trezor-up.sh
-#
-# Build environment: --build needs nightly Rust and, on macOS, tolerant CFLAGS.
-# Both are resolved automatically. Override the toolchain with RUSTUP_TOOLCHAIN
-# in the environment or a "rust_toolchain" key in config.json.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 
@@ -115,58 +111,6 @@ sleep 1
 
 if [[ "$BUILD_FLAG" == "--build" ]]; then
 	echo "[3/6] Building firmware for model $MODEL..."
-
-	# trezor-firmware needs nightly Rust for the `panic-immediate-abort` cargo
-	# feature, but ships no rust-toolchain.toml: the pin lives in its shell.nix,
-	# which only Nix users ever read. Resolve it here so a plain --build works.
-	# Precedence: caller's RUSTUP_TOOLCHAIN, then config.json, then shell.nix.
-	if [[ -n "${RUSTUP_TOOLCHAIN:-}" ]]; then
-		echo "      Rust toolchain: $RUSTUP_TOOLCHAIN (from environment)"
-	else
-		TOOLCHAIN=""
-
-		if [[ -f "$CONFIG_FILE" ]]; then
-			TOOLCHAIN="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('rust_toolchain',''))" "$CONFIG_FILE" 2>/dev/null || true)"
-		fi
-
-		if [[ -z "$TOOLCHAIN" && -f "$TREZOR_REPO/shell.nix" ]]; then
-			NIGHTLY_DATE="$(python3 -c 'import sys
-from itertools import takewhile
-text = open(sys.argv[1]).read()
-key = "rust-bin.nightly."
-at = text.find(key)
-print("" if at < 0 else "".join(takewhile(lambda c: c.isdigit() or c == "-", text[at + len(key) + 1:])))' "$TREZOR_REPO/shell.nix" 2>/dev/null || true)"
-
-			if [[ -n "$NIGHTLY_DATE" ]]; then
-				TOOLCHAIN="nightly-$NIGHTLY_DATE"
-			fi
-		fi
-
-		if [[ -n "$TOOLCHAIN" ]]; then
-			if ! command -v rustup >/dev/null 2>&1; then
-				echo "      rustup not found; building with the cargo already on PATH."
-			elif rustup toolchain list 2>/dev/null | python3 -c 'import sys
-wanted = sys.argv[1]
-names = [line.split()[0] for line in sys.stdin if line.strip()]
-sys.exit(0 if any(n == wanted or n.startswith(wanted + "-") for n in names) else 1)' "$TOOLCHAIN"; then
-				export RUSTUP_TOOLCHAIN="$TOOLCHAIN"
-				echo "      Rust toolchain: $TOOLCHAIN"
-			else
-				echo "Required Rust toolchain '$TOOLCHAIN' is not installed."
-				echo "Install it with:"
-				echo "  rustup toolchain install $TOOLCHAIN --component rust-src --profile minimal"
-				exit 1
-			fi
-		fi
-	fi
-
-	# Apple clang is stricter than the GCC the firmware is developed against and
-	# rejects vendor/trezor-crypto under -Werror (-Wgnu-folding-constant).
-	# Warnings stay visible, they just stop being fatal.
-	if [[ "$(uname -s)" == "Darwin" ]]; then
-		export CFLAGS="${CFLAGS:-} -Wno-error"
-	fi
-
 	(
 		cd "$CORE_DIR"
 		uv run make build_unix TREZOR_MODEL="$MODEL"

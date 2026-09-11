@@ -1,4 +1,3 @@
-import type { ActionType } from '@/api/proposals'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 export type ManualStep = 'import' | 'sign-collect' | 'broadcast'
@@ -22,8 +21,6 @@ export type ManualImportData = {
 	seqNo: number
 	authority: string
 	sighashHex: string
-	/** Resolved by Rust's decoder at import time, never guessed from the hex. */
-	actionType: ActionType
 }
 
 export type ManualBundleJson = {

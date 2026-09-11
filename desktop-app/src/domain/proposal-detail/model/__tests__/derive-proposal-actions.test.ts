@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { canCancelProposal, deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
+import { deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
 
 const SIGNER_A = '02aaaa'
 const SIGNER_B = '02bbbb'
@@ -9,8 +9,6 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 	return {
 		status: 'pending',
 		broadcastStatus: 'idle',
-		actionType: 'multisig_update',
-		isCancelable: true,
 		requiredSignatures: 2,
 		signatures: [],
 		...overrides,
@@ -116,18 +114,6 @@ for (const status of ['enacted', 'canceled', 'expired'] as const) {
 	const actions = deriveProposalActions(proposal(), null)
 	assert.equal(actions.canSign, false, 'no signerPubkey means no sign affordance')
 	assert.equal(actions.alreadySigned, false, 'no signer cannot have already signed')
-}
-
-// ── Cancelability is field-driven, not authority-driven ──────────────────────
-{
-	assert.equal(canCancelProposal({ isCancelable: true }), true)
-	assert.equal(canCancelProposal({ isCancelable: false }), false)
-
-	const actions = deriveProposalActions(proposal({ actionType: 'defcon_3', isCancelable: true }), SIGNER_A)
-	assert.equal(actions.canCancel, true, 'defcon_3 cancel follows the backend field, not authority')
-
-	const defcon1 = deriveProposalActions(proposal({ actionType: 'defcon_1', isCancelable: false }), SIGNER_A)
-	assert.equal(defcon1.canCancel, false, 'defcon_1 with depth 0 offers no cancel')
 }
 
 console.log('derive-proposal-actions: all assertions passed.')

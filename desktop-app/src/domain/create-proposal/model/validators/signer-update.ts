@@ -2,20 +2,7 @@ import { normalizeSignerKey, countSignersAfterUpdate } from '../create-proposal.
 import type { ActionValidator } from './types'
 import { compressedPubKeyHexPattern } from './types'
 
-// Upstream accepts an empty update: every rejection in `validate_update` passes with empty add
-// and remove sets, `apply_update` retains the same signers and re-sets the same threshold, and
-// `handle_action` advances `last_seqno` regardless. The on-chain result is a *successful* no-op —
-// post-conditions match, and the proposal reports `Enacted` for an update that changed nothing.
-// That is what makes this a safety rule rather than hygiene (§4.7).
-export const NO_OP_UPDATE_MESSAGE =
-	'This update does not change the signer set or the threshold. A no-op still enacts successfully on chain.'
-
-export const validateSignerUpdate: ActionValidator = ({
-	data,
-	ctx,
-	currentMultisigSigners,
-	currentMultisigThreshold,
-}) => {
+export const validateSignerUpdate: ActionValidator = ({ data, ctx, currentMultisigSigners }) => {
 	if (data.keysToAdd.length < 1) {
 		ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for keys to add' })
 	}
@@ -168,31 +155,5 @@ export const validateSignerUpdate: ActionValidator = ({
 					`(${resultingSignerCount}: ${remainingCurrentSigners} current + ${addedSignersNotRemoved} added not removed).`,
 			})
 		}
-
-		// AC 3b: a set question, not a count question — counting members before and after cannot
-		// tell "nothing changed" from "removed one, added another". `addKeyIndexes` and
-		// `removeKeyIndexes` are already keyed by normalized key with blank rows discarded, which
-		// is exactly the AC's wording. Goes last, after the threshold has parsed, and only when
-		// the target's current threshold is actually known (`currentMultisigThreshold === null`
-		// means the config read is unavailable, and §4.8 blocks submission in that state).
-		const changesKeys = addKeyIndexes.size > 0 || removeKeyIndexes.size > 0
-		if (!changesKeys && currentMultisigThreshold !== null && thN === currentMultisigThreshold) {
-			ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: NO_OP_UPDATE_MESSAGE })
-		}
 	}
-}
-
-/**
- * AC 11: does this removal actually take a current member off the target's roster? An
- * intersection, not a count — a remove row naming a key that is not on the target changes
- * nothing about who can authorize the target's actions, and must not trigger the callout that
- * says otherwise. Blank rows are ignored, matching every other rule in this file.
- */
-export function removesCurrentMembers(currentTargetSigners: string[], keysToRemove: { value: string }[]): boolean {
-	const currentNormalized = new Set(currentTargetSigners.map(normalizeSignerKey))
-	return keysToRemove.some((row) => {
-		const key = row.value.trim()
-		if (key.length === 0) return false
-		return currentNormalized.has(normalizeSignerKey(key))
-	})
 }

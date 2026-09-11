@@ -9,7 +9,7 @@ use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, http_client, rpc_timeout};
+use crate::infrastructure::{action_codec, rpc_timeout};
 
 /// Whether this authority has a wired ASM `Role` mapping (P-037).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub(crate) enum AuthorityAsmSupport {
 }
 
 pub(crate) fn authority_asm_support(authority: Authority) -> AuthorityAsmSupport {
-    match authority_to_role(authority) {
+    match authority_to_role_impl(authority) {
         Ok(_) => AuthorityAsmSupport::Supported,
         Err(_) => AuthorityAsmSupport::Unsupported,
     }
@@ -102,21 +102,14 @@ pub(crate) async fn threshold_for_authority(
     Ok(u16::from(authority_config.config().threshold()))
 }
 
-/// Return the confirmation depth (in blocks) before the update in `action_hex` activates.
+/// Return the confirmation depth (in blocks) before an update for `authority` activates.
 ///
-/// Resolved from the action, never from the authority: the Security Council signs both Defcon 1
-/// (immediate) and Defcon 3 (timelocked), so no per-authority mapping can answer for it. Read live
-/// on every call — see docs/specs/security-council-defcon-phase-1.md.
-///
-/// Returns `0` for actions that bypass the queue and apply immediately.
-pub(crate) async fn lock_period_for_action(
+/// Returns `0` when the authority is configured for immediate activation (no queue).
+pub(crate) async fn lock_period_for_authority(
     rpc_url: &str,
-    action_hex: &str,
+    authority: Authority,
 ) -> Result<u64, AppError> {
-    let action =
-        action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
-
-    if let Some(period) = mock_lock_period(rpc_url, &action) {
+    if let Some(period) = mock_lock_period(rpc_url, authority) {
         return Ok(period);
     }
 
@@ -125,77 +118,9 @@ pub(crate) async fn lock_period_for_action(
         .map_err(AppError::BadRequest)?;
     let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
     let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-
-    Ok(depth_for_action(&action, |tx_type| {
-        admin.confirmation_depth(tx_type)
-    }))
-}
-
-/// Resolve `action`'s confirmation depth through `depth_of`, upstream's per-tx-type lookup.
-///
-/// The lookup is a parameter so the decision is testable without an ASM. Upstream owns the table
-/// (`UpdateAction::update_tx_type` and `ConfirmationDepths::get`); this only dispatches into it.
-///
-/// A cancel resolves to `0`: it is never enqueued, it applies when it confirms. Deliberately not
-/// the depth of the update it targets, which would be a plausible-looking wrong number.
-fn depth_for_action(
-    action: &MultisigAction,
-    depth_of: impl Fn(UpdateTxType) -> Option<u16>,
-) -> u64 {
-    match action {
-        MultisigAction::Update(update) => u64::from(depth_of(update.update_tx_type()).unwrap_or(0)),
-        MultisigAction::Cancel(_) => 0,
-    }
-}
-
-/// Live confirmation depths for one HTTP request — one `strata_asm_getStatus` per fetch.
-pub(crate) enum ConfirmationDepthResolver {
-    Live(AdministrationSubprotoState),
-    #[cfg(any(test, feature = "dev-mocks"))]
-    Mock(strata_asm_params::ConfirmationDepths),
-    Unavailable,
-}
-
-impl ConfirmationDepthResolver {
-    pub async fn fetch(rpc_url: &str) -> Self {
-        #[cfg(any(test, feature = "dev-mocks"))]
-        if rpc_url == "mock://asm-membership" {
-            return Self::Mock(uniform_confirmation_depths(2016));
-        }
-
-        match fetch_admin_state(rpc_url).await {
-            Ok(admin) => Self::Live(admin),
-            Err(e) => {
-                tracing::warn!("cancelability: confirmation depth lookup failed: {e}");
-                Self::Unavailable
-            }
-        }
-    }
-
-    fn depth(&self, tx_type: UpdateTxType) -> Option<u16> {
-        match self {
-            Self::Live(admin) => admin.confirmation_depth(tx_type),
-            #[cfg(any(test, feature = "dev-mocks"))]
-            Self::Mock(depths) => depths.get(tx_type),
-            Self::Unavailable => None,
-        }
-    }
-
-    /// Whether the action can be cancelled on chain — the same gate `create_cancel_proposal`
-    /// applies: a non-zero confirmation depth means the update is enqueued and a cancel can reach
-    /// it. An action nobody can decode, and an ASM nobody could reach, both answer "no affordance".
-    pub fn is_cancelable_for_hex(&self, action_hex: &str) -> bool {
-        let Ok(action) = action_codec::decode_multisig_action_hex(action_hex) else {
-            return false;
-        };
-        depth_for_action(&action, |tx_type| self.depth(tx_type)) > 0
-    }
-}
-
-async fn fetch_admin_state(rpc_url: &str) -> Result<AdministrationSubprotoState, String> {
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    decode_admin_state(&anchor)
+    let tx_type = authority_to_update_tx_type(authority).map_err(AppError::BadRequest)?;
+    let depth = admin.confirmation_depth(tx_type).unwrap_or(0);
+    Ok(depth as u64)
 }
 
 /// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
@@ -233,51 +158,27 @@ pub(crate) async fn update_id_in_queue_for_action(
     Ok(found)
 }
 
-/// Refuse an action the session's authority is not allowed to sign (AC 17).
-///
-/// The role that may sign an update is upstream's table (`UpdateTxType::authorized_role`), not a
-/// copy of ours, so a new update variant is gated correctly here the moment it exists. Reads no
-/// chain state — hence sync, unlike its neighbours in this module.
-///
-/// See docs/specs/security-council-defcon-phase-3.md §5.
-pub(crate) fn require_authorized_for_action(
-    authority: Authority,
-    action: &MultisigAction,
-) -> Result<(), AppError> {
-    // A cancel carries no `UpdateTxType` and so no authorized role. Cancels are created through
-    // their own endpoint, gated on the target's confirmation depth (Phase 2).
-    let MultisigAction::Update(update) = action else {
-        return Ok(());
-    };
-
-    let tx_type = update.update_tx_type();
-    let required = tx_type.authorized_role();
-    let session_role = authority_to_role(authority).map_err(AppError::BadRequest)?;
-
-    if session_role != required {
-        return Err(AppError::BadRequest(format!(
-            "action `{}` must be authorized by `{required}`, but the session is `{session_role}`",
-            tx_type.name()
-        )));
+fn authority_to_update_tx_type(authority: Authority) -> Result<UpdateTxType, String> {
+    match authority {
+        Authority::StrataAdmin => Ok(UpdateTxType::StrataAdminMultisigUpdate),
+        Authority::AlpenAdmin => Ok(UpdateTxType::AlpenAdminMultisigUpdate),
+        Authority::SequencerManager => Ok(UpdateTxType::StrataSeqManagerMultisigUpdate),
+        _ => Err(format!(
+            "authority `{authority:?}` has no UpdateTxType mapping"
+        )),
     }
-    Ok(())
 }
 
-/// The one answer this crate gives to "which ASM role is this authority".
-///
-/// Listed exhaustively rather than caught by `_`, for the reason its desktop twin already
-/// records: a catch-all is how the council reached an error arm long after it had been mapped
-/// everywhere else, and it is how the enactment module kept a third, staler answer of its own
-/// until slice V3. The next authority added upstream should stop the build rather than surface
-/// as a runtime refusal.
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
+    authority_to_role_impl(authority)
+}
+
+fn authority_to_role_impl(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
-        // No ASM role upstream.
-        Authority::PayoutAdmin => Err(format!(
+        _ => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
     }
@@ -288,31 +189,25 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let admin = decode_admin_state(&anchor)?;
 
-    // A role the chain does not carry is "not a member", never "membership unknowable". This is
-    // read for every authority on every auth challenge, so one authority missing from an older
-    // genesis must not refuse the login of the three that are there.
     let mut role_to_keys = HashMap::new();
-    for role in [
+    role_to_keys.insert(
         Role::StrataAdministrator,
+        authority_keys_hex(&admin, Role::StrataAdministrator)?,
+    );
+    role_to_keys.insert(
         Role::StrataSequencerManager,
+        authority_keys_hex(&admin, Role::StrataSequencerManager)?,
+    );
+    role_to_keys.insert(
         Role::AlpenAdministrator,
-        Role::StrataSecurityCouncil,
-    ] {
-        match authority_keys_hex(&admin, role) {
-            Ok(keys) => {
-                role_to_keys.insert(role, keys);
-            }
-            Err(e) => {
-                tracing::warn!(role = ?role, error = %e, "skipping authority absent from admin state")
-            }
-        }
-    }
+        authority_keys_hex(&admin, Role::AlpenAdministrator)?,
+    );
 
     Ok(role_to_keys)
 }
 
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = http_client::shared();
+    let client = reqwest::Client::new();
     let payload = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -421,10 +316,7 @@ fn authority_keys_hex(
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn is_mock_url(rpc_url: &str) -> bool {
-    rpc_url == "mock://asm-membership"
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_URL
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
+    rpc_url == "mock://asm-membership" || rpc_url == "mock://asm-enacted"
 }
 
 #[cfg(not(any(test, feature = "dev-mocks")))]
@@ -460,14 +352,6 @@ fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> 
         Authority::AlpenAdmin => signer_pubkey.eq_ignore_ascii_case(
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         ),
-        // Same signer pair as the Strata admin: the local stack authenticates the two
-        // roles with one wallet, and a council-only key would only add a second mnemonic
-        // to every manual test of the Defcon flow.
-        Authority::SecurityCouncil => {
-            signer_pubkey.eq_ignore_ascii_case(
-                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            ) || mock_strata_signer_b_pk_matches(signer_pubkey)
-        }
         Authority::SequencerManager => false,
         _ => return None,
     };
@@ -481,12 +365,6 @@ fn mock_membership(_rpc_url: &str, _authority: Authority, _signer_pubkey: &str) 
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
-    // Two chains that have moved past the proposals under test: one enacts them, one does not.
-    if rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL
-    {
-        return Some(5);
-    }
     if rpc_url != "mock://asm-membership" {
         return None;
     }
@@ -494,7 +372,6 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
         Authority::StrataAdmin => Some(0),
         Authority::SequencerManager => Some(0),
         Authority::AlpenAdmin => Some(0),
-        Authority::SecurityCouncil => Some(0),
         _ => None,
     }
 }
@@ -506,12 +383,7 @@ fn mock_last_seqno(_rpc_url: &str, _authority: Authority) -> Option<u64> {
 
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
-    // The seqno fixtures answer the same threshold as the membership one: they exist to move
-    // `last_seqno`, not to drift the snapshot.
-    let known = rpc_url == "mock://asm-membership"
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
-        || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL;
-    if !known {
+    if rpc_url != "mock://asm-membership" {
         return None;
     }
 
@@ -519,7 +391,6 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
         Authority::StrataAdmin => Some(2),
         Authority::SequencerManager => Some(2),
         Authority::AlpenAdmin => Some(2),
-        Authority::SecurityCouncil => Some(2),
         _ => None,
     }
 }
@@ -529,205 +400,25 @@ fn mock_threshold(_rpc_url: &str, _authority: Authority) -> Option<u16> {
     None
 }
 
-/// Every depth set to `depth`. Upstream's `get` still overrides the variants it hardcodes, which is
-/// the point: a fixture cannot give Defcon 1 a lock period.
 #[cfg(any(test, feature = "dev-mocks"))]
-fn uniform_confirmation_depths(depth: u16) -> strata_asm_params::ConfirmationDepths {
-    strata_asm_params::ConfirmationDepths {
-        strata_admin_multisig_update: depth,
-        strata_seq_manager_multisig_update: depth,
-        alpen_admin_multisig_update: depth,
-        strata_security_council_multisig_update: depth,
-        operator_update: depth,
-        sequencer_update: depth,
-        ol_stf_vk_update: depth,
-        asm_stf_vk_update: depth,
-        ee_stf_vk_update: depth,
-        defcon3: depth,
-        safe_harbour_address_update: depth,
-    }
-}
-
-/// Uniform 2016-block depths, dispatched through `depth_for_action` rather than answered directly.
-///
-/// Going through the real dispatch is what keeps the mock honest: upstream forces Defcon 1 to `0`
-/// whatever the fixture says, so the dev stack cannot show a lock period for an action that applies
-/// immediately.
-#[cfg(any(test, feature = "dev-mocks"))]
-fn mock_lock_period(rpc_url: &str, action: &MultisigAction) -> Option<u64> {
+fn mock_lock_period(rpc_url: &str, authority: Authority) -> Option<u64> {
     if rpc_url != "mock://asm-membership" {
         return None;
     }
-
-    let depths = uniform_confirmation_depths(2016);
-    Some(depth_for_action(action, |tx_type| depths.get(tx_type)))
+    match authority {
+        Authority::StrataAdmin | Authority::AlpenAdmin | Authority::SequencerManager => Some(2016),
+        _ => None,
+    }
 }
 
 #[cfg(not(any(test, feature = "dev-mocks")))]
-fn mock_lock_period(_rpc_url: &str, _action: &MultisigAction) -> Option<u64> {
+fn mock_lock_period(_rpc_url: &str, _authority: Authority) -> Option<u64> {
     None
 }
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZeroU8;
-
-    use strata_asm_txs_admin::actions::updates::{
-        Defcon1Update, Defcon3Update, OperatorSetUpdate, StrataAdminMultisigUpdate,
-        StrataSecurityCouncilMultisigUpdate,
-    };
-    use strata_asm_txs_admin::actions::{CancelAction, UpdateAction};
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
-
     use super::*;
-
-    /// Fixtures start from a non-zero depth for every variant, so a `0` in an assertion can only
-    /// come from upstream's hardcoded arm and never from an unset field.
-    const NON_ZERO_BASELINE: u16 = 1;
-
-    fn signer_update() -> MultisigAction {
-        let config_update =
-            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
-        MultisigAction::Update(UpdateAction::StrataAdminMultisig(
-            StrataAdminMultisigUpdate::new(config_update),
-        ))
-    }
-
-    /// Tx type 15 — rotates the *council's* membership, but is created and authorized by the
-    /// Strata administrator (upstream's own segregation invariant: the council does not rotate
-    /// itself). The pair `signer_update()` / `council_signer_update()` is what AC 12 needs: both
-    /// created by the same authority, so only the action can tell them apart.
-    fn council_signer_update() -> MultisigAction {
-        let config_update =
-            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
-        MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
-            StrataSecurityCouncilMultisigUpdate::new(config_update),
-        ))
-    }
-
-    fn operator_set_update() -> MultisigAction {
-        MultisigAction::Update(UpdateAction::OperatorSet(OperatorSetUpdate::new(
-            vec![],
-            vec![],
-        )))
-    }
-
-    /// The gate reads the action, not the authority: one Defcon 1 action, opposite answers for two
-    /// sessions. Both directions in one test — apart they are halves of a single claim.
-    #[test]
-    fn defcon_1_is_authorized_for_the_council_and_refused_for_everyone_else() {
-        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-
-        require_authorized_for_action(Authority::SecurityCouncil, &defcon1).expect("council signs");
-
-        let err = require_authorized_for_action(Authority::StrataAdmin, &defcon1)
-            .expect_err("the Strata administrator does not");
-        let message = err.to_string();
-        assert!(message.contains("Defcon 1"), "{message}");
-        assert!(message.contains("Strata Security Council"), "{message}");
-    }
-
-    /// AC 2: the same claim for the timelocked lever. Upstream maps both Defcon levels to the
-    /// council, so this is a tripwire on upstream rather than on a table of ours — and the error
-    /// has to name the role the action requires, since that is what the caller is told.
-    #[test]
-    fn defcon_3_is_authorized_for_the_council_and_refused_for_everyone_else() {
-        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-
-        require_authorized_for_action(Authority::SecurityCouncil, &defcon3).expect("council signs");
-
-        let err = require_authorized_for_action(Authority::StrataAdmin, &defcon3)
-            .expect_err("the Strata administrator does not");
-        let message = err.to_string();
-        assert!(message.contains("Defcon 3"), "{message}");
-        assert!(message.contains("Strata Security Council"), "{message}");
-    }
-
-    /// AC 2, both directions, over the *same* tx-15 action: the segregation invariant is that
-    /// the administrator authorizes a council rotation and the council does not authorize its
-    /// own — the one direction that matters, since a council that could rotate itself could also
-    /// lock itself out. Nothing pinned this before this test; the only authorization tests until
-    /// now were Defcon's, above.
-    #[test]
-    fn council_signer_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
-        let update = council_signer_update();
-
-        require_authorized_for_action(Authority::StrataAdmin, &update)
-            .expect("the Strata administrator signs a council rotation");
-
-        let err = require_authorized_for_action(Authority::SecurityCouncil, &update)
-            .expect_err("the council does not authorize its own rotation");
-        let message = err.to_string();
-        assert!(
-            message.contains("Strata Security Council Multisig Update"),
-            "{message}"
-        );
-        assert!(message.contains("Strata Administrator"), "{message}");
-    }
-
-    /// AC 12: two actions on the Strata Security Council resolve to different depths — the
-    /// distinguishing case a per-authority mapping cannot produce.
-    #[test]
-    fn defcon_1_and_defcon_3_resolve_to_different_depths_on_one_authority() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.defcon3 = 7;
-
-        // Tripwire for the composition in docs/specs/security-council-defcon-phase-1.md §4: we hold
-        // no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
-        // configurable depth. Every field is non-zero, so `None` here can only come from the
-        // hardcoded arm.
-        assert!(depths.get(UpdateTxType::Defcon1).is_none());
-
-        let defcon1 = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-        let defcon3 = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-
-        assert_eq!(depth_for_action(&defcon1, |t| depths.get(t)), 0);
-        assert_eq!(depth_for_action(&defcon3, |t| depths.get(t)), 7);
-    }
-
-    /// The depth follows the action, not the authority: both of these are created by the Strata
-    /// administrator, and the retired per-authority mapping gave them the same answer.
-    #[test]
-    fn two_actions_of_one_authority_resolve_to_their_own_depths() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.strata_admin_multisig_update = 11;
-        depths.operator_update = 23;
-
-        assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
-        assert_eq!(
-            depth_for_action(&operator_set_update(), |t| depths.get(t)),
-            23
-        );
-    }
-
-    /// AC 12, the discriminating pair: tx 10 (the administrator's own signer update) against
-    /// tx 15 (the council's, also created by the administrator) — both authorized by the same
-    /// role, so a mapping keyed on authority rather than action cannot tell them apart.
-    #[test]
-    fn strata_admin_and_council_signer_updates_resolve_to_their_own_depths() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.strata_admin_multisig_update = 11;
-        depths.strata_security_council_multisig_update = 19;
-
-        assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
-        assert_eq!(
-            depth_for_action(&council_signer_update(), |t| depths.get(t)),
-            19
-        );
-    }
-
-    /// A cancel is never enqueued — it applies when it confirms — so it carries no lock period,
-    /// not the lock period of the update it targets.
-    #[test]
-    fn cancel_resolves_to_zero() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.defcon3 = 7;
-
-        let cancel =
-            MultisigAction::Cancel(CancelAction::new(0, UpdateAction::Defcon3(Defcon3Update)));
-
-        assert_eq!(depth_for_action(&cancel, |t| depths.get(t)), 0);
-    }
 
     #[test]
     fn all_five_authorities_have_explicit_asm_mapping_status() {
@@ -746,7 +437,7 @@ mod tests {
         );
         assert_eq!(
             authority_asm_support(SecurityCouncil),
-            AuthorityAsmSupport::Supported
+            AuthorityAsmSupport::Unsupported
         );
         assert_eq!(
             authority_asm_support(PayoutAdmin),
@@ -762,23 +453,5 @@ mod tests {
             "0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
         );
         assert_eq!(is_member, Some(true));
-    }
-
-    /// The answer the proposal DTO carries, through the function the handlers actually call. The
-    /// depth mapping itself is pinned by the tests above; this pins the wire answer and the two
-    /// ways it degrades — neither of which may produce a cancel affordance.
-    #[test]
-    fn cancelability_follows_the_depth_and_degrades_to_no_affordance() {
-        let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
-        depths.defcon3 = 7;
-        let resolver = ConfirmationDepthResolver::Mock(depths);
-
-        let defcon3 = action_codec::test_fixture_defcon_3_action_hex();
-        let defcon1 = action_codec::test_fixture_defcon_1_action_hex();
-
-        assert!(resolver.is_cancelable_for_hex(&defcon3));
-        assert!(!resolver.is_cancelable_for_hex(&defcon1));
-        assert!(!resolver.is_cancelable_for_hex("not-an-action"));
-        assert!(!ConfirmationDepthResolver::Unavailable.is_cancelable_for_hex(&defcon3));
     }
 }

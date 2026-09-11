@@ -3,7 +3,6 @@ import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { authorityFromRole, orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { authorityLabelForRole } from '@/lib/authority-label'
-import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { buildProposalTitle } from '@/lib/proposal-title'
 import { approveProposal, getProposalByActionId, type Proposal } from '@/api/proposals'
@@ -77,15 +76,9 @@ export function SignScreen() {
 		proposal?.seqNo ?? null,
 		decodedActionHex || null,
 	)
-	// Despite its name, useCurrentThreshold reads the TARGET's threshold, not the signing
-	// threshold — its only consumer compares it to action.newThreshold (multisig-update-changes.ts).
-	// For a council rotation the target authority (action.role) differs from the signing role, so
-	// this must be disabled rather than compare the council's proposed threshold against the
-	// administrator's current one. Disabled yields null, which multisig-update-changes.ts:20-23
-	// documents as the safe direction: the "New threshold" row is then always shown.
 	const currentThreshold = useCurrentThreshold(
 		authorityFromRole(selectedRole),
-		multisigUpdateTargetAuthority(decodedAction) === authorityFromRole(selectedRole),
+		decodedAction?.kind === 'multisig_update',
 	)
 	const deviceDisplay = deviceSigningDisplay(adapter.vendor, {
 		message: deviceMessage,

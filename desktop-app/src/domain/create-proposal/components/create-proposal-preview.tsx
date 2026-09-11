@@ -5,18 +5,16 @@ import { deviceCopy } from '@/lib/device-copy'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
-import { DefconCallout } from '@/components/defcon-callout'
-import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
-import { buildSignerSetChange } from '@/domain/signer-set-change/model/build-signer-set-change'
-import { actionTypeTitle } from '../model/action-type-config'
-import { isSignerUpdateActionType } from '../model/action-type-predicates'
-import type { ActionType } from '../model/create-proposal.types'
-import { VK_PREDICATE_TYPE_LABELS, type VkPredicateType } from '../model/create-proposal.schema'
-import { removesCurrentMembers } from '../model/validators/signer-update'
+import {
+	countSignersAfterUpdate,
+	normalizeSignerKey,
+	VK_PREDICATE_TYPE_LABELS,
+	type VkPredicateType,
+} from '../model/create-proposal.schema'
 
 type Props = {
 	title: string
-	actionType: ActionType
+	actionType: 'signer_update' | 'vk_update' | 'operator_set_update' | 'sequencer_key_update'
 	seqNo: string
 	keysToAdd: string[]
 	keysToRemove: string[]
@@ -56,22 +54,36 @@ export function CreateProposalPreview({
 	createdProposal,
 }: Props) {
 	const signerCopy = deviceCopy(walletVendor)
-	const actionTypeLabel = actionTypeTitle(actionType)
-	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
-	const signerSetChange = buildSignerSetChange({
-		signers: currentSigners,
-		threshold: currentThreshold,
-		addKeys: keysToAdd.filter((key) => key.trim().length > 0),
-		removeKeys: keysToRemove.filter((key) => key.trim().length > 0),
-		newThreshold: Number(threshold),
-		isEnacted: false,
-	})
+	const actionTypeLabel =
+		actionType === 'signer_update'
+			? 'Signer update'
+			: actionType === 'operator_set_update'
+				? 'Bridge Operator update'
+				: actionType === 'sequencer_key_update'
+					? 'Sequencer key update'
+					: 'Verification key update'
 
-	// AC 11: states the consequence, does not block it — Constraint 5 keeps this off the danger
-	// palette. Only meaningful for the council's own rotation: an administrator signer update
-	// removing an administrator signer has no bearing on who may authorize the Council's actions.
-	const showsCouncilMembershipLossCallout =
-		actionType === 'council_signer_update' && removesCurrentMembers(currentSigners, keysToRemoveRows)
+	const removeNorm = new Set(
+		keysToRemove
+			.map((k) => k.trim())
+			.filter((k) => k.length > 0)
+			.map(normalizeSignerKey),
+	)
+	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
+	const keysToAddRows = keysToAdd.map((k) => ({ value: k }))
+	const afterSignerCount = countSignersAfterUpdate(currentSigners, keysToRemoveRows, keysToAddRows)
+	const beforeSignerCount = new Set(currentSigners.map((s) => normalizeSignerKey(s))).size
+
+	const tableRows = [
+		...currentSigners.map((s) => ({
+			before: s,
+			after: removeNorm.has(normalizeSignerKey(s)) ? null : s,
+		})),
+		...keysToAdd.filter((k) => k.trim().length > 0).map((k) => ({ before: null, after: k })),
+	]
+
+	const newThreshold = Number(threshold)
+	const thresholdChanged = newThreshold !== currentThreshold || afterSignerCount !== beforeSignerCount
 
 	const signatureHex = createdProposal?.signatures[0]?.signatureHex ?? null
 
@@ -115,9 +127,7 @@ export function CreateProposalPreview({
 
 			<div className="border-t border-[#e5e7eb]" />
 
-			{actionType === 'defcon_1' || actionType === 'defcon_3' ? (
-				<DefconCallout level={actionType} />
-			) : actionType === 'operator_set_update' ? (
+			{actionType === 'operator_set_update' ? (
 				<div className="flex flex-col gap-4">
 					{operatorsToAdd.length > 0 && (
 						<div>
@@ -159,23 +169,49 @@ export function CreateProposalPreview({
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
 				</div>
-			) : isSignerUpdateActionType(actionType) ? (
+			) : actionType === 'signer_update' ? (
 				<div>
 					<p className="m-0 mb-3 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						Signer Set Change
 					</p>
 					<div className="overflow-hidden rounded-xl border border-[#e5e7eb]">
-						<SignerSetChangeTable change={signerSetChange} />
-					</div>
-					{showsCouncilMembershipLossCallout && (
-						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
-							<p className="m-0 text-body font-semibold text-[#111827]">Removes a current Council member</p>
-							<p className="m-0 mt-2 text-body text-[#6b7280]">
-								This rotation removes at least one current Security Council member. Once enacted, that signer can no
-								longer authorize Council actions, including Defcon 1 and Defcon 3.
-							</p>
+						<div className="grid grid-cols-2">
+							<div className="border-b border-r border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
+								<span className="text-label font-semibold uppercase tracking-widest text-[#9ca3af]">Before</span>
+							</div>
+							<div className="border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-2.5">
+								<span className="text-label font-semibold uppercase tracking-widest text-[#9ca3af]">After</span>
+							</div>
 						</div>
-					)}
+						{tableRows.map((row, i) => (
+							<div key={i} className="grid grid-cols-2 border-b border-[#e5e7eb] last:border-b-0">
+								<div className="border-r border-[#e5e7eb] px-4 py-3">
+									<span className="break-all font-mono text-body text-[#374151]">{row.before ?? ''}</span>
+								</div>
+								<div className="px-4 py-3">
+									<span className="break-all font-mono text-body text-[#374151]">{row.after ?? ''}</span>
+								</div>
+							</div>
+						))}
+						<div className="grid grid-cols-2">
+							<div className="border-r border-[#e5e7eb] px-4 py-3">
+								<span className="text-body text-[#9ca3af]">
+									Threshold{' '}
+									<span className="font-semibold text-[#374151]">
+										{currentThreshold} of {beforeSignerCount}
+									</span>
+								</span>
+							</div>
+							<div className="px-4 py-3">
+								<span className={`text-body ${thresholdChanged ? 'text-[#059669]' : 'text-[#9ca3af]'}`}>
+									Threshold{' '}
+									<span className="font-semibold">
+										{threshold} of {afterSignerCount}
+									</span>
+								</span>
+							</div>
+						</div>
+					</div>
 				</div>
 			) : (
 				<div>

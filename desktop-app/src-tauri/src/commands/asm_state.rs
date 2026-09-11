@@ -19,12 +19,6 @@ pub struct MultisigConfigDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SafeHarbourStatusDto {
-    pub activated: bool,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CurrentVkDto {
     pub type_id: u8,
     pub type_name: String,
@@ -43,10 +37,7 @@ pub async fn get_multisig_config(
         Authority::StrataAdmin => AuthRole::StrataAdministrator,
         Authority::SequencerManager => AuthRole::StrataSequencerManager,
         Authority::AlpenAdmin => AuthRole::AlpenAdministrator,
-        Authority::SecurityCouncil => AuthRole::StrataSecurityCouncil,
-        // Listed rather than caught by `_`: a catch-all is how the council reached this arm
-        // silently in the first place, and the next authority added should be a compile error.
-        Authority::PayoutAdmin => {
+        _ => {
             return Err(format!(
                 "authority `{}` is not supported in the desktop app yet",
                 parsed.as_str()
@@ -79,20 +70,6 @@ pub async fn get_current_operators(
         .strata_rpc_url()
         .to_string();
     asm_status_rpc::fetch_current_operators(&rpc_url).await
-}
-
-#[tauri::command]
-pub async fn get_safe_harbour_status(
-    node_config: State<'_, NodeConfigState>,
-) -> Result<SafeHarbourStatusDto, String> {
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
-    let activated = asm_status_rpc::fetch_safe_harbour_activated(&rpc_url).await?;
-    Ok(SafeHarbourStatusDto { activated })
 }
 
 #[tauri::command]

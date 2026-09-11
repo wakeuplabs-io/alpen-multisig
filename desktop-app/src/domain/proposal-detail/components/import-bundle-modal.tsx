@@ -38,7 +38,7 @@ const BROADCAST_ORDER: BroadcastStatus[] = [
 	'reveal_confirmed',
 ]
 
-const PROPOSAL_STATUSES: ProposalStatus[] = ['pending', 'approved', 'enacted', 'canceled', 'expired', 'superseded']
+const PROPOSAL_STATUSES: ProposalStatus[] = ['pending', 'approved', 'enacted', 'canceled', 'expired']
 
 function parseBundleJson(
 	raw: string,

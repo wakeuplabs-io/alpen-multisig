@@ -1,5 +1,4 @@
-import { HexCopyRow } from './hex-copy-row'
-import { SendManuallyPanel } from './send-manually-panel'
+import { CopyButton } from '@/components/copy-button'
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 
 type Props = {
@@ -20,6 +19,18 @@ const STEPS: Step[] = [
 
 /** Commit (0) + Reveal (1) are broadcast together as one package. */
 const BROADCAST_GROUP_LAST_INDEX = 1
+
+function TxidRow({ label, txid }: { label: string; txid: string }) {
+	return (
+		<div>
+			<p className="mb-1.5 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">{label}</p>
+			<div className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+				<span className="min-w-0 flex-1 truncate font-mono text-label text-[#111827]">{txid}</span>
+				<CopyButton text={txid} />
+			</div>
+		</div>
+	)
+}
 
 export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, revealTxid, error }: Props) {
 	const isError = phase === 'error'
@@ -44,8 +55,7 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 	function stepDetail(index: number, fallback: string): string {
 		if (index === STEPS.length - 1 && isAwaitingConfirmation) {
-			// Not "safe to leave": the confirmation poll is this screen's, and it stops on unmount.
-			return 'Reveal broadcast — waiting for a block. This screen is what watches for it.'
+			return 'Reveal is in the mempool — confirming on Bitcoin. Safe to leave; it keeps confirming.'
 		}
 		return fallback
 	}
@@ -115,8 +125,8 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 
 				{showTxids && (
 					<div className="space-y-3">
-						{commitTxid && <HexCopyRow label="Commit TXID" value={commitTxid} />}
-						{revealTxid && <HexCopyRow label="Reveal TXID" value={revealTxid} />}
+						{commitTxid && <TxidRow label="Commit TXID" txid={commitTxid} />}
+						{revealTxid && <TxidRow label="Reveal TXID" txid={revealTxid} />}
 					</div>
 				)}
 
@@ -125,7 +135,17 @@ export function BroadcastPhaseProgress({ phase, proposalStatus, commitTxid, reve
 						<div className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3">
 							<p className="m-0 text-body-sm text-danger-strong">{error.message}</p>
 						</div>
-						<SendManuallyPanel error={error} />
+						{error.recovery === 'manual-broadcast' && error.commitTxHex != null && error.revealTxHex != null && (
+							<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-4 space-y-3">
+								<p className="m-0 text-body-sm font-medium text-[#111827]">Send manually</p>
+								<p className="m-0 text-label text-[#6b7280]">
+									Send the commit first, then the reveal, via any Bitcoin node (
+									<code className="font-mono text-mono-sm">sendrawtransaction</code>).
+								</p>
+								<TxidRow label="Commit TX (send first)" txid={error.commitTxHex} />
+								<TxidRow label="Reveal TX (send second)" txid={error.revealTxHex} />
+							</div>
+						)}
 					</div>
 				)}
 			</div>

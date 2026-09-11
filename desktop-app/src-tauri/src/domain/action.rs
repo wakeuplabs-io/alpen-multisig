@@ -109,13 +109,8 @@ impl CompressedPubKey {
 /// A change to a multisig authority's signer set and/or threshold.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultisigUpdate {
-    /// The authority being **modified** — the target, which travels in the action and is never
-    /// inferred from the session. For the three self-rotating updates this equals the
-    /// `Authority` of the `Proposal` that carries the action, but for
-    /// `StrataSecurityCouncilMultisigUpdate` it does not: the council's membership is rotated by
-    /// the Strata Administrator, so the proposal's authority is `StrataAdmin` while this field is
-    /// `SecurityCouncil`. Deriving the authorizing role from this field is upstream's job, and it
-    /// already does it. See `docs/specs/security-council-signer-update.md` Constraint 2.
+    /// Which authority is being updated. Protocol rule: must equal the `Authority` of
+    /// the `Proposal` that carries this action (a role can only modify its own config).
     pub role: Authority,
     pub add_keys: Vec<CompressedPubKey>,
     pub remove_keys: Vec<CompressedPubKey>,
@@ -151,13 +146,6 @@ pub enum Action {
     VkUpdate(VkUpdate),
     OperatorSetUpdate(OperatorSetUpdate),
     SequencerKeyUpdate(SequencerKeyUpdate),
-    /// Activate the bridge safe harbour immediately. Authorized by the Strata Security Council and
-    /// payload-less upstream — the sequence number travels with the proposal, not the action.
-    Defcon1,
-    /// Activate the bridge safe harbour after `confirmation_depths.defcon3` blocks. Same authority
-    /// and same payload-less shape as `Defcon1`, and the same message relayed to the bridge — the
-    /// delay, during which the council can still cancel it, is the whole difference.
-    Defcon3,
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -201,11 +189,7 @@ mod tests {
         let action = Action::MultisigUpdate(update.clone());
         match action {
             Action::MultisigUpdate(u) => assert_eq!(u, update),
-            Action::VkUpdate(_)
-            | Action::OperatorSetUpdate(_)
-            | Action::SequencerKeyUpdate(_)
-            | Action::Defcon1
-            | Action::Defcon3 => {
+            Action::VkUpdate(_) | Action::OperatorSetUpdate(_) | Action::SequencerKeyUpdate(_) => {
                 panic!("unexpected variant")
             }
         }

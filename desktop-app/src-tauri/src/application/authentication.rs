@@ -268,7 +268,6 @@ fn role_wire(role: AuthRole) -> &'static str {
         AuthRole::StrataAdministrator => "strata_admin",
         AuthRole::StrataSequencerManager => "sequencer_manager",
         AuthRole::AlpenAdministrator => "alpen_admin",
-        AuthRole::StrataSecurityCouncil => "security_council",
     }
 }
 

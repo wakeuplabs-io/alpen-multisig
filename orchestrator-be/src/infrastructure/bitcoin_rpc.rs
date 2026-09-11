@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use crate::error::AppError;
-use crate::infrastructure::{http_client, rpc_timeout};
+use crate::infrastructure::rpc_timeout;
 
 #[async_trait]
 pub(crate) trait BitcoinRpcClient: Send + Sync {
@@ -16,9 +16,6 @@ pub(crate) trait BitcoinRpcClient: Send + Sync {
     ///
     /// Fails if the transaction is not yet in a block.
     async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError>;
-
-    /// Return the current chain tip height (`getblockcount`).
-    async fn get_chain_tip(&self) -> Result<u64, AppError>;
 }
 
 pub(crate) struct HttpBitcoinRpcClient {
@@ -34,7 +31,7 @@ impl HttpBitcoinRpcClient {
             url: base_url.trim_end_matches('/').to_string(),
             user: user.to_string(),
             pass: pass.to_string(),
-            client: http_client::shared(),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -142,12 +139,5 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
                     "getblockheader: missing `height` for blockhash {blockhash}"
                 ))
             })
-    }
-
-    async fn get_chain_tip(&self) -> Result<u64, AppError> {
-        let result = self.call("getblockcount", json!([])).await?;
-        result.as_u64().ok_or_else(|| {
-            AppError::BadRequest("bitcoin rpc `getblockcount` did not return a u64".to_string())
-        })
     }
 }
