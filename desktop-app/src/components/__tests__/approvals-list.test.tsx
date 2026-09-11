@@ -27,7 +27,10 @@ const cardSource = readFileSync(
 
 // ── 2. The three row states the signer reads the list for ───────────────────
 assert.ok(listSource.includes('>Signed<'), 'signed rows must be labelled Signed')
-assert.ok(listSource.includes('>Pending<'), 'missing signers must be listed as Pending')
+assert.ok(
+	listSource.includes("isPending ? 'Pending' : 'No signature'"),
+	'missing signers must read Pending while pending and No signature otherwise (#540)',
+)
 assert.ok(listSource.includes('YOU'), 'the connected signer must be marked with a YOU badge')
 assert.ok(listSource.includes('No signatures yet.'), 'an empty list must say so instead of rendering nothing')
 console.log('ApprovalsList: signed / pending / you / empty states OK')
@@ -53,5 +56,18 @@ assert.ok(
 	'proposal-detail.tsx must not keep a duplicate copy of the approvals markup',
 )
 console.log('ApprovalsList: single implementation shared by both screens OK')
+
+// ── 5. The label is keyed off the status, not off a constant ────────────────
+// Without this, a caller passing `isPending={true}` would keep #540 fully reproducible on screen
+// while the component's own ternary still looked right.
+assert.ok(
+	detailSource.includes("isPending={displayStatus === 'pending'}"),
+	'the proposal screen must key the label off the proposal status (#540)',
+)
+assert.ok(
+	cardSource.includes("isPending={cancelProposal.status === 'pending'}"),
+	'the cancel card must key the label off the cancellation status (#540)',
+)
+console.log('ApprovalsList: missing-signer label keyed off proposal status OK')
 
 console.log('All ApprovalsList contract tests passed.')

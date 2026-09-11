@@ -156,6 +156,7 @@ export function CancelDetailsCard({
 				signerPubkey={signerPubkey}
 				requiredSignatures={required}
 				title="Cancel approvals"
+				isPending={cancelProposal.status === 'pending'}
 			/>
 		</div>
 	)

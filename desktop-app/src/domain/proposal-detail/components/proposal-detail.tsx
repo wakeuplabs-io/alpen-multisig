@@ -194,6 +194,7 @@ export function ProposalDetail({
 				allSigners={decodedData.allSigners}
 				signerPubkey={signerPubkey}
 				requiredSignatures={requiredSignatures}
+				isPending={displayStatus === 'pending'}
 			/>
 
 			{/* ── Broadcast TXIDs ── */}
