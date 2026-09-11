@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { z } from 'zod'
 import { proposalSchema } from './ipc-schemas.ts'
 
 const proposalWithNullBroadcastFields = {
@@ -14,7 +15,9 @@ const proposalWithNullBroadcastFields = {
 	commitTxid: null,
 	revealTxid: null,
 	broadcastError: null,
+	isCancelable: false,
 	createdAtMs: 1000000,
+	updatedAtMs: 1000000,
 	expiresAtMs: 2000000,
 }
 
@@ -147,3 +150,68 @@ if (!_typeCheck.ok) {
 }
 
 console.log('ipc-schemas: P-023 errorCode field on ApiResult OK')
+
+// Security Council Phase 5: both IPC boundaries accept Defcon 1. Each is a closed schema, so an
+// unregistered value is a parse error rather than an unknown-action fallback — and for
+// `actionType` that takes down the parse of every proposal in the same list.
+const defcon1Proposal = proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType: 'defcon_1' })
+assert.equal(defcon1Proposal.success, true, 'proposalSchema must accept actionType defcon_1')
+
+assert.equal(decodedActionSchema.safeParse({ kind: 'defcon_1' }).success, true)
+
+console.log('ipc-schemas: Defcon 1 boundaries OK')
+
+// Defcon 3 (V2) Phase 1: the same two boundaries, plus the blast radius that made this phase go
+// first. `listProposals` parses `z.array(proposalSchema)`, so an unregistered `actionType` does
+// not degrade one row — it empties the whole list.
+const defcon3Proposal = proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType: 'defcon_3' })
+assert.equal(defcon3Proposal.success, true, 'proposalSchema must accept actionType defcon_3')
+
+assert.equal(decodedActionSchema.safeParse({ kind: 'defcon_3' }).success, true)
+
+const mixedList = z.array(proposalSchema).safeParse([
+	{ ...proposalWithNullBroadcastFields, actionType: 'defcon_1' },
+	{ ...proposalWithNullBroadcastFields, actionType: 'defcon_3' },
+])
+assert.equal(mixedList.success, true, 'one defcon_3 row must not take down the list beside it')
+
+console.log('ipc-schemas: Defcon 3 boundaries OK')
+
+// Security Council signer update (V3) Phase 1: `council_signer_update` widens the closed enum
+// before the Rust emitter lands (commit order per spec §3) — this is deliberately inert: nothing
+// produces the value yet, but the boundary must already accept it or the emitter's commit would
+// arrive first and one row would take down the whole list, per the wire argument in §3.
+//
+// No `decodedActionSchema.safeParse` assertion here: decision 5.2 adds no new decoded-action kind,
+// so asserting one would be tautological — `role` is already `z.string()` and the object already
+// parses. That is where spec §6's amendment to the build plan is pinned at the code level.
+const councilSignerUpdateProposal = proposalSchema.safeParse({
+	...proposalWithNullBroadcastFields,
+	actionType: 'council_signer_update',
+})
+assert.equal(councilSignerUpdateProposal.success, true, 'proposalSchema must accept actionType council_signer_update')
+
+const mixedCouncilList = z.array(proposalSchema).safeParse([
+	{ ...proposalWithNullBroadcastFields, actionType: 'council_signer_update' },
+	{ ...proposalWithNullBroadcastFields, actionType: 'multisig_update' },
+])
+assert.equal(mixedCouncilList.success, true, 'one council_signer_update row must not take down the list beside it')
+
+console.log('ipc-schemas: council_signer_update boundary OK')
+
+const withoutCancelable = { ...proposalWithNullBroadcastFields }
+delete (withoutCancelable as { isCancelable?: boolean }).isCancelable
+assert.equal(proposalSchema.safeParse(withoutCancelable).success, false, 'proposalSchema must require isCancelable')
+
+console.log('ipc-schemas: isCancelable field OK')
+
+// Defcon 3 (V2) Phase 7: `decodedActionSchema` gains the `cancel` member, closing the gap the
+// emitter side (action_builder.rs) requires — a Tauri emitting `kind: 'cancel'` against a schema
+// that rejects it would fail the parse.
+assert.equal(
+	decodedActionSchema.safeParse({ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' }).success,
+	true,
+	'decodedActionSchema must accept a well-formed cancel member',
+)
+
+console.log('ipc-schemas: cancel decoded-action member OK')

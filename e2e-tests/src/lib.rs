@@ -3,3 +3,6 @@
 pub mod fixtures;
 pub mod test_harness;
 mod worker_context;
+
+#[cfg(test)]
+mod asm_params_example;

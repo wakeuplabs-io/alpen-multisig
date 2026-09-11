@@ -26,11 +26,16 @@ pub async fn ordered_keys_for_authority(
 }
 
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
+    // Listed exhaustively rather than caught by `_`: a catch-all is how the council reached the
+    // error arm here long after `orchestrator-be` had mapped it, and the next authority added
+    // upstream should be a compile error rather than a broadcast that fails at the last step.
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
         Authority::SequencerManager => Ok(Role::StrataSequencerManager),
         Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        _ => Err(format!(
+        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
+        // No ASM role upstream.
+        Authority::PayoutAdmin => Err(format!(
             "authority `{authority:?}` is not mapped to ASM role authorization yet"
         )),
     }
@@ -153,6 +158,12 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
             "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
         ]),
+        // Same signer pair as the Strata admin above, for the reason the orchestrator's
+        // council mock gives: the local stack authenticates both roles with one wallet.
+        Authority::SecurityCouncil => Some(vec![
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
+        ]),
         _ => None,
     }
 }
@@ -160,4 +171,41 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
 #[cfg(not(any(test, feature = "dev-mocks")))]
 fn mock_ordered_keys(_rpc_url: &str, _authority: Authority) -> Option<Vec<String>> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn security_council_maps_to_its_asm_role() {
+        assert_eq!(
+            authority_to_role(Authority::SecurityCouncil),
+            Ok(Role::StrataSecurityCouncil)
+        );
+    }
+
+    #[test]
+    fn payout_admin_is_the_only_unmapped_authority() {
+        for authority in [
+            Authority::StrataAdmin,
+            Authority::SequencerManager,
+            Authority::AlpenAdmin,
+            Authority::SecurityCouncil,
+        ] {
+            assert!(
+                authority_to_role(authority).is_ok(),
+                "{authority:?} must resolve an ASM role: broadcast reads the signer set through it"
+            );
+        }
+        assert!(authority_to_role(Authority::PayoutAdmin).is_err());
+    }
+
+    #[tokio::test]
+    async fn mock_stack_answers_the_council_signer_set() {
+        let keys = ordered_keys_for_authority("mock://asm-membership", Authority::SecurityCouncil)
+            .await
+            .expect("the council is a mock authority");
+        assert_eq!(keys.len(), 2);
+    }
 }

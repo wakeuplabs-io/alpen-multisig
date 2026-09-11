@@ -71,6 +71,11 @@ pub enum ProposalStatus {
     Canceled,
     /// Expired before reaching threshold.
     Expired,
+    /// The role's on-chain sequence number passed this proposal's, so the ASM will refuse its
+    /// transaction from here on. Terminal, and independent of whether it was ever broadcast: the
+    /// seqno is inside the signed message, so the proposal cannot be relabelled and resent.
+    /// See docs/specs/proposal-lifecycle-seqno-truth.md.
+    Superseded,
 }
 
 impl std::fmt::Display for ProposalStatus {
@@ -81,6 +86,7 @@ impl std::fmt::Display for ProposalStatus {
             Self::Enacted => "enacted",
             Self::Canceled => "canceled",
             Self::Expired => "expired",
+            Self::Superseded => "superseded",
         };
         write!(f, "{s}")
     }
@@ -115,6 +121,10 @@ pub struct Proposal {
     /// When the proposal was created. Used to enforce the 7-day expiry TTL.
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub created_at: DateTime<Utc>,
+    /// When the proposal last changed. Every broadcast-status write bumps it, which is what lets a
+    /// screen say how long a bundle has been sitting where it is instead of only that it is there.
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Proposal {

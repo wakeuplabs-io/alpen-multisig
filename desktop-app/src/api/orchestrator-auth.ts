@@ -3,9 +3,11 @@ import { AuthRole } from '@/types'
 import type { SignatureFormat } from '@/wallet/types'
 import { tauriCall } from '@/api/tauri-bridge'
 import { rawOrchestratorAuthChallengeSchema, rawOrchestratorAuthSessionSchema } from '@/api/ipc-schemas'
+import type { MultisigTargetAuthority } from '@/api/action-builder'
 import { z } from 'zod'
 
 export const ORCHESTRATOR_BASE_URL = import.meta.env.VITE_ORCHESTRATOR_BASE_URL ?? 'http://127.0.0.1:3000/api/v1'
+export type OrchestratorAuthority = MultisigTargetAuthority | 'payout_admin'
 
 let orchestratorBaseUrlOverride: string | null = null
 
@@ -66,7 +68,7 @@ type CompleteOrchestratorAuthInput = {
 	signatureFormat: SignatureFormat
 }
 
-export function authorityFromRole(role: AuthRole): string {
+export function authorityFromRole(role: AuthRole): OrchestratorAuthority {
 	switch (role) {
 		case AuthRole.StrataAdministrator:
 			return 'strata_admin'
@@ -74,8 +76,14 @@ export function authorityFromRole(role: AuthRole): string {
 			return 'sequencer_manager'
 		case AuthRole.AlpenAdministrator:
 			return 'alpen_admin'
-		default:
-			return 'strata_admin'
+		case AuthRole.StrataSecurityCouncil:
+			return 'security_council'
+		case AuthRole.PayoutAdministrator:
+			return 'payout_admin'
+		default: {
+			const unhandled: never = role
+			throw new Error(`No authority mapping for role ${String(unhandled)}`)
+		}
 	}
 }
 

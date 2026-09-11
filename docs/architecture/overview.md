@@ -196,10 +196,10 @@ state ExecutedImmediate {
 | **Quorum Met** | Off-chain (`orchestrator-be`) | Threshold of signatures collected. "Send" button available. Still within the 7-day window — if no one broadcasts before it elapses, transitions to Expired. | Signers of that authority only |
 | **Approved** | On-chain (Bitcoin + ASM queue) | Bitcoin tx confirmed in a block. Update is queued in the ASM waiting for its activation height. Can still be canceled during this window. | Signers of that authority only |
 | **Enacted** | On-chain (ASM final state) | `activation_height` reached. ASM applied the governance change. Irreversible. | Signers — Past view |
-| **Executed (immediate)** | On-chain (ASM) | Applies only to Sequencer Manager and Security Council updates. No confirmation queue — change takes effect in the same block the tx is mined. No Approved or on-chain Canceled states exist for these roles. | Signers — Past view |
+| **Executed (immediate)** | On-chain (ASM) | Applies to Sequencer Manager updates and to Defcon 1. No confirmation queue — change takes effect in the same block the tx is mined, so no Approved or on-chain Canceled state exists for them. Defcon 3 is *not* immediate: it is queued and cancelable like any other update ([security-council.md](../specs/security-council.md#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected)). | Signers — Past view |
 | **Expired** | Off-chain (terminal) | 7-day window elapsed before the tx was broadcast. Applies whether quorum was reached or not. | Signers — Past view |
 | **Canceled (off-chain)** | Off-chain (terminal) | Manually canceled by a signer before the Bitcoin tx was ever broadcast. No on-chain record. | Signers — Past view |
-| **Canceled (on-chain)** | On-chain (terminal) | A `Cancel` tx (signed by the same authority) was broadcast and confirmed during the ~2016 block wait window after Approved. Not available for Sequencer Manager or Security Council (they execute immediately, no wait window). | Signers — Past view |
+| **Canceled (on-chain)** | On-chain (terminal) | A `Cancel` tx (signed by the same authority) was broadcast and confirmed during the wait window after Approved. Not available for Sequencer Manager or Defcon 1, which execute immediately and have no wait window. | Signers — Past view |
 
 ### 2. Desktop App (`desktop-app`)
 
@@ -367,7 +367,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - **CI / release:** GitHub Actions (ADR-004), signed releases, Tier-1 reproducible builds.
 
 **Open / deferred (see specs and [`deferred-backlog.md`](../assessment/deferred-backlog.md)):**
-- Security Council and some PRD update types blocked on upstream Alpen crates.
+- Security Council (Defcon 1/3, Safe Harbour address, Security Council signer update) — not built yet. Upstream support is confirmed and proven against a regtest ASM at pin `v0.1-alpha.11`; see [ADR-007](adrs/007-asm-pin-for-security-council.md) and [`specs/security-council.md`](../specs/security-council.md).
 - Payout Administrator full product line (partial `block_payout` coverage).
 - Shared Send UX unifying wallet Send and governance broadcast (Phase 9).
 - US-H5 manual-fallback export/reconcile polish when orchestrator is down.

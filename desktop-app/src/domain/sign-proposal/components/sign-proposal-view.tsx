@@ -3,6 +3,10 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { DefconCallout } from '@/components/defcon-callout'
+import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
+import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -116,6 +120,45 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
+function DefconDetails({ level }: { level: DefconLevel }) {
+	// Read here and not only on the dashboard: this is the screen where the signer commits, and
+	// the sentences below are written in the future tense, which is wrong once the harbour is up.
+	const safeHarbourActivated = useSafeHarbourActivated()
+
+	return (
+		<>
+			{safeHarbourActivated && (
+				<div className="mt-5">
+					<SafeHarbourNote>{DEFCON_COPY[level].signSafeHarbourNote}</SafeHarbourNote>
+				</div>
+			)}
+
+			<div className="mt-5">
+				<DefconCallout level={level} variant="sign" />
+			</div>
+		</>
+	)
+}
+
+function CancelActionDetails({ action }: { action: Extract<DecodedAction, { kind: 'cancel' }> }) {
+	// Before a cancel decoded to its own kind it fell through to `UnknownActionDetails`, so the
+	// signer at least saw the payload they were signing. Without an arm here the view would render
+	// nothing at all, under copy that tells them to review the action details above.
+	return (
+		<div className="mt-5">
+			<p className="m-0 text-mono-sm font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+				Update being cancelled
+			</p>
+			<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3">
+				<span className="shrink-0 self-start rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-[11px] font-medium text-emphasis">
+					Queue update ID {action.targetUpdateId}
+				</span>
+				<code className="block break-all font-mono text-label leading-5 text-[#6b7280]">{action.targetActionHex}</code>
+			</div>
+		</div>
+	)
+}
+
 function UnknownActionDetails({ rawHex }: { rawHex: string }) {
 	return (
 		<div className="mt-5">
@@ -142,6 +185,10 @@ export function SignProposalView({
 	onSign,
 }: SignProposalViewProps) {
 	const { label, isHardware } = deviceCopy(walletVendor)
+	// Both Defcon levers relay the same message to the bridge and sweep the same funds; only the
+	// delay differs. Keying the destructive treatment on one of them would put the other behind a
+	// neutral CTA — and this is a palette token, not the copy that Phase 5 owns.
+	const isDestructive = decodedAction?.kind === 'defcon_1' || decodedAction?.kind === 'defcon_3'
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-bg-surface p-4">
@@ -157,9 +204,13 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
-			) : (
+			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
+				<DefconDetails level={decodedAction.kind} />
+			) : decodedAction.kind === 'cancel' ? (
+				<CancelActionDetails action={decodedAction} />
+			) : decodedAction.kind === 'unknown' ? (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
-			)}
+			) : null}
 
 			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-bg-surface p-3.5">
 				<div className="flex items-start gap-2.5">
@@ -184,7 +235,11 @@ export function SignProposalView({
 				<button
 					type="button"
 					data-testid="e2e-sign-proposal-submit"
-					className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+					className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-body font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+						isDestructive
+							? 'border-danger bg-danger hover:bg-danger-strong'
+							: 'border-[#0a0a0a] bg-[#0a0a0a] hover:bg-[#232323]'
+					}`}
 					onClick={onSign}
 					disabled={isSigning}
 				>

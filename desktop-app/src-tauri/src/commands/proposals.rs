@@ -111,7 +111,9 @@ pub struct ProposalDto {
     pub activation_height: Option<u64>,
     pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummaryDto>,
+    pub is_cancelable: bool,
     pub created_at_ms: u64,
+    pub updated_at_ms: u64,
     pub expires_at_ms: u64,
 }
 
@@ -170,7 +172,16 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
     }
     let hex = action_hex.strip_prefix("0x").unwrap_or(action_hex);
     match desktop_app::infrastructure::action_codec::decode_hex(hex) {
-        Ok(desktop_app::domain::action::Action::MultisigUpdate(_)) => "multisig_update".to_string(),
+        // A council rotation is the one multisig update whose target authority is not the
+        // proposal's own (`MultisigUpdate.role`, see `domain/action.rs`). Collapsing every
+        // `MultisigUpdate` to one string would hide that from the list, the detail view, the
+        // sign header and the manual bundle (AC 5).
+        Ok(desktop_app::domain::action::Action::MultisigUpdate(update)) => match update.role {
+            desktop_app::domain::authority::Authority::SecurityCouncil => {
+                "council_signer_update".to_string()
+            }
+            _ => "multisig_update".to_string(),
+        },
         Ok(desktop_app::domain::action::Action::VkUpdate(_)) => "vk_update".to_string(),
         Ok(desktop_app::domain::action::Action::OperatorSetUpdate(_)) => {
             "operator_set_update".to_string()
@@ -178,6 +189,8 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
         Ok(desktop_app::domain::action::Action::SequencerKeyUpdate(_)) => {
             "sequencer_key_update".to_string()
         }
+        Ok(desktop_app::domain::action::Action::Defcon1) => "defcon_1".to_string(),
+        Ok(desktop_app::domain::action::Action::Defcon3) => "defcon_3".to_string(),
         Err(_) => "unknown".to_string(),
     }
 }
@@ -201,6 +214,7 @@ fn map_cancel_summary(summary: CancelProposalSummary) -> CancelProposalSummaryDt
 fn map_proposal(proposal: Proposal) -> ProposalDto {
     let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     let created_at_ms = proposal.created_at as u64;
+    let updated_at_ms = proposal.updated_at as u64;
     let expires_at_ms = created_at_ms + PROPOSAL_EXPIRY_DAYS * 24 * 3600 * 1000;
     ProposalDto {
         action_id: proposal.action_id,
@@ -220,7 +234,9 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         activation_height: proposal.activation_height,
         update_id_in_queue: proposal.update_id_in_queue,
         cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
+        is_cancelable: proposal.is_cancelable,
         created_at_ms,
+        updated_at_ms,
         expires_at_ms,
     }
 }
@@ -327,7 +343,7 @@ mod broadcast_error_code_tests {
     /// matrix is covered by `broadcast_error_code_maps_all_10_codes` (step 01-10).
     #[test]
     fn test_broadcast_error_orchestrator_unauthorized() {
-        let error = BroadcastError::ProposalFetch(OrchestratorError::Backend {
+        let error = BroadcastError::Orchestrator(OrchestratorError::Backend {
             status: 401,
             message: "unauthorized".to_string(),
         });
@@ -340,7 +356,7 @@ mod broadcast_error_code_tests {
         let cases = [
             // OrchestratorUnauthorized: 401 from proposal fetch
             (
-                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                BroadcastError::Orchestrator(OrchestratorError::Backend {
                     status: 401,
                     message: "unauthorized".to_string(),
                 }),
@@ -387,9 +403,9 @@ mod broadcast_error_code_tests {
                 false,
                 "Unknown",
             ),
-            // ProposalFetch non-401 → Unknown
+            // Orchestrator non-401 → Unknown
             (
-                BroadcastError::ProposalFetch(OrchestratorError::Backend {
+                BroadcastError::Orchestrator(OrchestratorError::Backend {
                     status: 500,
                     message: "server error".to_string(),
                 }),
@@ -519,7 +535,7 @@ fn broadcast_error_code(
     _has_pending: bool,
 ) -> &'static str {
     match error {
-        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+        BroadcastError::Orchestrator(OrchestratorError::Backend { status: 401, .. }) => {
             "OrchestratorUnauthorized"
         }
         BroadcastError::NoPendingReveal { .. } => "NoPendingReveal",
@@ -527,7 +543,7 @@ fn broadcast_error_code(
         BroadcastError::Timeout { .. } => "Timeout",
         BroadcastError::AllBroadcastersFailed { .. } => "broadcast_unavailable",
         BroadcastError::Setup(_) => "Unknown",
-        BroadcastError::ProposalFetch(_) => "Unknown",
+        BroadcastError::Orchestrator(_) => "Unknown",
     }
 }
 
@@ -568,7 +584,7 @@ fn map_broadcast_error_with_boundary(
     let code = broadcast_error_code(&error, broadcast_reached, has_pending);
     let can_resubmit = broadcast_reached && has_pending;
     let message = match &error {
-        BroadcastError::ProposalFetch(OrchestratorError::Backend { status: 401, .. }) => {
+        BroadcastError::Orchestrator(OrchestratorError::Backend { status: 401, .. }) => {
             "orchestrator session unauthorized (401). Re-authenticate on this screen and retry."
                 .to_string()
         }
@@ -588,7 +604,7 @@ fn map_broadcast_error_with_boundary(
         // Handled by the early return above; kept non-panicking per backend standards.
         BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
         BroadcastError::Setup(msg) => msg.clone(),
-        BroadcastError::ProposalFetch(e) => e.to_string(),
+        BroadcastError::Orchestrator(e) => e.to_string(),
     };
     serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
 }
@@ -1080,4 +1096,84 @@ pub async fn proposals_broadcast_manual(
         commit_txid,
         reveal_txid,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `actionType` is a closed zod enum on the other side of this boundary, and a value it does
+    /// not know fails the parse of every proposal in the same list — so what this function emits
+    /// has to stay in step with `decodedActionSchema`'s sibling enum in `ipc-schemas.ts`.
+    #[test]
+    fn action_type_from_hex_names_defcon_1() {
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(
+            &desktop_app::domain::action::Action::Defcon1,
+        )
+        .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "defcon_1");
+    }
+
+    #[test]
+    fn action_type_from_hex_names_defcon_3() {
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(
+            &desktop_app::domain::action::Action::Defcon3,
+        )
+        .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "defcon_3");
+    }
+
+    /// A cancel is identified by its target, never by decoding its own payload.
+    #[test]
+    fn action_type_from_hex_prefers_the_cancel_target() {
+        assert_eq!(
+            action_type_from_hex(&Some("target".to_string()), "not-valid-hex"),
+            "cancel"
+        );
+    }
+
+    const VALID_HEX: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+
+    /// The DTO boundary must name a council rotation for what it is, not collapse it into the
+    /// generic `"multisig_update"` that hides its target from the list, the detail view, the
+    /// sign header and the manual bundle.
+    #[test]
+    fn action_type_from_hex_names_a_council_signer_update() {
+        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let update = desktop_app::domain::action::Action::MultisigUpdate(
+            desktop_app::domain::action::MultisigUpdate {
+                role: desktop_app::domain::authority::Authority::SecurityCouncil,
+                add_keys: vec![pk],
+                remove_keys: vec![],
+                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
+            },
+        );
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
+            .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "council_signer_update");
+    }
+
+    /// Not a duplicate of `action_type_from_hex_names_a_council_signer_update`: that test proves
+    /// the new value is emitted, this one proves the old one still is. The change binds a field
+    /// the function previously ignored (`update.role`), so the regression it guards — every
+    /// multisig update suddenly answering the council's name — is real.
+    #[test]
+    fn action_type_from_hex_still_names_an_administrator_signer_update() {
+        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let update = desktop_app::domain::action::Action::MultisigUpdate(
+            desktop_app::domain::action::MultisigUpdate {
+                role: desktop_app::domain::authority::Authority::StrataAdmin,
+                add_keys: vec![pk],
+                remove_keys: vec![],
+                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
+            },
+        );
+        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
+            .expect("encode should succeed");
+
+        assert_eq!(action_type_from_hex(&None, &hex), "multisig_update");
+    }
 }

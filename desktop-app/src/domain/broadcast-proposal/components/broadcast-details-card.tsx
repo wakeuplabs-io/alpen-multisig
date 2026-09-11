@@ -143,7 +143,6 @@ export function BroadcastDetailsCard({
 						<span className="min-w-0 flex-1 break-all font-mono text-label leading-relaxed text-[#111827]">
 							{bundle.commitAddress}
 						</span>
-						<CopyButton text={bundle.commitAddress} />
 					</div>
 					{deviceCopy(walletVendor).isHardware && showsForeignPrefix && (
 						<p className="mt-2 text-mono-sm leading-[1.45] text-[#9ca3af]">

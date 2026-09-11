@@ -66,7 +66,7 @@ Tests the coordination flow between the desktop application and orchestrator bac
 | Cancel action | Admin / Sequencer Manager | **Covered** |
 | Alpen Administrator Signer update | Alpen Admin | **Covered** |
 | Alpen Administrator VK update | Alpen Admin | Not yet supported (enactment detection pending) |
-| Security Council updates | Security Council | Pending upstream role definition |
+| Security Council updates | Security Council | Not implemented yet (upstream support confirmed) |
 | block_payout | Payout Admin | Separate test suite (Bitcoin-native flow) |
 
 ### Multisig Role Coverage
@@ -76,7 +76,7 @@ Tests the coordination flow between the desktop application and orchestrator bac
 | **Strata Administrator** | Full | All supported update types tested |
 | **Strata Sequencer Manager** | Full | Immediate execution path tested |
 | **Alpen Administrator** | Partial | Signer updates supported; VK update pending enactment detection |
-| **Security Council** | Partial | Blocked on upstream role definition |
+| **Security Council** | None | Not implemented yet; upstream support confirmed at ASM `v0.1-alpha.11` |
 | **Payout Administrator** | Separate | `block_payout` has dedicated test suite |
 
 ## Test Results

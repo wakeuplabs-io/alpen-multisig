@@ -32,6 +32,12 @@ export function CreateProposalScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const authority = authorityFromRole(selectedRole)
 
+	// Payout proposals have their own transaction flow and no ASM role. A direct navigation to
+	// this generic ASM form must not inherit the Strata Administrator's action menu.
+	if (authority === 'payout_admin') {
+		return <Navigate to="/block-payouts" replace />
+	}
+
 	async function handleDisconnect() {
 		await disconnectSession()
 	}
@@ -62,9 +68,6 @@ export function CreateProposalScreen() {
 					authorityLabel={authorityLabel}
 					authority={authority}
 					walletVendor={adapter.vendor}
-					multisigConfig={createProposal.multisigConfig}
-					multisigConfigVersion={createProposal.multisigConfigVersion}
-					isLoadingConfig={createProposal.isLoadingConfig}
 					nextSeqNo={createProposal.nextSeqNo}
 					isLoadingSeqNo={createProposal.isLoadingSeqNo}
 					currentVk={createProposal.currentVk}
