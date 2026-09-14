@@ -11,7 +11,11 @@ type Props = {
 	/** The connected signer, highlighted with a YOU badge. */
 	signerPubkey: string | null
 	requiredSignatures: number
-	/** Whether the proposal is still pending — missing signers read "Pending" only then, "No signature" otherwise (#540). */
+	/**
+	 * True only while the proposal is still pending AND below quorum — missing signers read "Pending" then,
+	 * "No signature" otherwise (#540). Quorum is checked too because the backend leaves a quorum-full proposal at
+	 * `pending` until the desktop PATCHes it to `approved`; if that call fails, nothing is left for them to do either.
+	 */
 	isPending: boolean
 	/** Section heading — 'Approvals' for a proposal, 'Cancel approvals' for a cancellation. */
 	title?: string

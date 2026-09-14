@@ -57,17 +57,19 @@ assert.ok(
 )
 console.log('ApprovalsList: single implementation shared by both screens OK')
 
-// ── 5. The label is keyed off the status, not off a constant ────────────────
+// ── 5. The label is keyed off status AND quorum, not off a constant ─────────
 // Without this, a caller passing `isPending={true}` would keep #540 fully reproducible on screen
-// while the component's own ternary still looked right.
+// while the component's own ternary still looked right. Status alone is not enough either: a quorum-full
+// proposal stays `pending` until the desktop's PATCH to `approved` lands, and the dashboard already calls
+// that state "Quorum reached", so the list must agree with it.
 assert.ok(
-	detailSource.includes("isPending={displayStatus === 'pending'}"),
-	'the proposal screen must key the label off the proposal status (#540)',
+	detailSource.includes("isPending={displayStatus === 'pending' && !hasQuorum}"),
+	'the proposal screen must key the label off the proposal status and quorum (#540)',
 )
 assert.ok(
-	cardSource.includes("isPending={cancelProposal.status === 'pending'}"),
-	'the cancel card must key the label off the cancellation status (#540)',
+	cardSource.includes("isPending={cancelProposal.status === 'pending' && !hasQuorum}"),
+	'the cancel card must key the label off the cancellation status and quorum (#540)',
 )
-console.log('ApprovalsList: missing-signer label keyed off proposal status OK')
+console.log('ApprovalsList: missing-signer label keyed off proposal status and quorum OK')
 
 console.log('All ApprovalsList contract tests passed.')
