@@ -300,7 +300,7 @@ export function ProposalDetail({
 								<ImportJsonIcon width={12} height={12} className="text-current" />
 							</button>
 							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-mono-sm text-white opacity-0 transition-opacity group-hover:opacity-100">
-								Import signatures
+								Import bundle
 							</span>
 						</div>
 					)}
