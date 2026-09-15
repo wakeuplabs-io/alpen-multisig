@@ -8,7 +8,7 @@
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E5.
 
 **Status:** All four phases implemented, automated checks green. Phase 4 answers the two review
-comments on #547; its manual walk is pending. The Phase 1 manual walk produced
+comments on #547; walked on 2026-09-15. The Phase 1 manual walk produced
 two findings, both fixed in Phase 2; the walk of 2026-09-10 over Phase 2's surfaces produced seven,
 five of which Phase 3 closes — the remaining two are recorded in
 [Phase 3 §8](./security-council-safe-harbor-address-phase-3.md#8-what-the-walk-found-and-this-phase-does-not-take).

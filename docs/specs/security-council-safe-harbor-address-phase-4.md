@@ -8,7 +8,7 @@
 > **Predecessors:** [Phase 1](./security-council-safe-harbor-address-phase-1.md) (#548),
 > [Phase 2](./security-council-safe-harbor-address-phase-2.md) (#549),
 > [Phase 3](./security-council-safe-harbor-address-phase-3.md) (#550).
-> **Status:** implemented; automated checks green. Walked on regtest 2026-09-15 with a software signer (§9); the hardware-signer sign view and two harbor-active surfaces remain.
+> **Status:** implemented; automated checks green; walked on regtest 2026-09-15 with a software signer and a Trezor (§9).
 
 ## 1. The change in one sentence
 
@@ -134,17 +134,15 @@ The same walk is the chance to close the three `## Verification` items Phase 3 l
 
 ## 9. The walk
 
-Run on regtest on 2026-09-15, on the branch, with a software signer.
+Run on regtest on 2026-09-15, on the branch, with a software signer and then a Trezor (emulator).
 
 | §8 item | Evidence |
 |---|---|
 | 1 — create form | No *Signing message* panel. *Your signer will display* shows `042db7…c75b` under the address, and the menu reads *Safe Harbor address update*. Both renamed Tauri commands answered: the current destination loaded, and the descriptor resolved. |
-| 2 — preview | The *Signing message* section appears once, reading *Safe Harbour Address Update*, and its descriptor matches the one the create form showed. The *Confirm before signing* box does not repeat it. |
-| 3 — sign view | A co-signer's view, software signer: Current/Proposed with both descriptors, then the message once, then the sign box. **Not evidenced with a hardware signer.** |
-| 4 — harbor active | *Safe harbor is already active* on the council dashboard, on the Defcon 1 and Defcon 3 forms, and on the safe harbor create form. **Not evidenced on the safe harbor preview and sign view.** |
+| 2 — preview | With the software signer, the *Signing message* section appears once, reading *Safe Harbour Address Update*, and its descriptor matches the one the create form showed. The *Confirm before signing* box does not repeat it. With the Trezor, there is no separate section: the message appears only inside *Verify on Trezor*, and the device shows the same text page by page, ending in `…043a81e2…5e84bcd` before *Confirm*. |
+| 3 — sign view | A co-signer's view with the software signer: Current/Proposed with both descriptors, then the message once, then the sign box. The hardware branch was walked on the preview, not on the sign view; both screens decide it through the same `signingMessageSection`. |
+| 4 — harbor active | *Safe harbor is already active* on the council dashboard, on the Defcon 1 and Defcon 3 forms, on the safe harbor create form, and on the safe harbor preview. The sign view's note was walked in Phase 3 §13 and this phase changed only its wording. |
 | 5 — Defcon | Defcon 1 and Defcon 3 still render their signing message on the create form, with the type-to-confirm gate; their copy reads *safe harbor*. |
 
-Still open: the hardware-signer sign view, where the message should appear only inside the device
-hint, and the harbor-active note on the safe harbor preview and sign view. The *Expiring soon* badge
-seen during the walk is Phase 3 §8's separately filed finding. The three `## Verification` items
-Phase 3 left open (1, 3, 10) were not exercised.
+The *Expiring soon* badge seen during the walk is Phase 3 §8's separately filed finding. The three
+`## Verification` items Phase 3 left open (1, 3, 10) were not exercised and stay open.
