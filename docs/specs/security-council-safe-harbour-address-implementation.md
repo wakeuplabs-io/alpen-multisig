@@ -51,6 +51,7 @@ answers for tx type 14 with no new branch
 | 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbour-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
 | 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbour-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
 | 3 ✅ | What the manual walk exposed — [phase spec](./security-council-safe-harbour-address-phase-3.md) | The five findings of the 2026-09-10 walk that belong to this slice | `desktop-app` |
+| 4 | What the ticket review asked for — [phase spec](./security-council-safe-harbour-address-phase-4.md) | The two review comments on #547: the signing message on the signing screens, and "Harbor" on screen | `desktop-app`, `src-tauri` |
 
 Each phase is its own pull request against `develop`, branched from a freshly pulled `develop`.
 Phases are sequential, not parallel.

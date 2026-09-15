@@ -343,8 +343,10 @@ carries three things and no more:
 
 1. **The bridge's current safe harbour address**, rendered as an address and as its descriptor hex.
 2. **One input** taking a bech32m P2TR address, validated per Constraints 4, 5 and 6.
-3. **The descriptor hex the device will display**, resolved as the signer types, so the comparison
-   the signer must make is possible before they reach the device.
+3. **The descriptor hex the device will display**, resolved as the signer types and shown under the
+   input, so the comparison the signer must make is possible before they reach the device. The full
+   signing message is **not** on this form: nothing is signed here, so it lives on the preview and
+   the sign view ([Phase 4 §2](./security-council-safe-harbour-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
 
 The safe-harbour note appears here when the harbour is already active
 ([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)),
@@ -353,7 +355,15 @@ reusing `SafeHarbourNote` with its own wording.
 ### The signing message
 
 Resolved from Rust through the same renderer the device signs over, exactly as every other action.
-No TypeScript composes it.
+No TypeScript composes it. It is shown on the screens where the signature is given — the creator's
+preview and every co-signer's sign view — once per screen: inside `DeviceSigningHint` for a hardware
+signer, as its own section otherwise.
+
+### Terminology
+
+On-screen copy spells the feature **Safe Harbor**. The signing message keeps upstream's
+`Safe Harbour`, which is byte-frozen, and identifiers, wire values and these documents keep
+`harbour` ([Phase 4 §4](./security-council-safe-harbour-address-phase-4.md#4-terminology-harbor-on-screen-harbour-on-the-wire)).
 
 ### Lifecycle display
 
@@ -370,8 +380,8 @@ goes if the council ever pulls the lever. Nothing about it looks urgent, and tha
 a routine-looking form whose blast radius equals the bridge's balance.
 
 1. **The rendered message is the reviewable artifact, and it is a hex string.** The form shows that
-   same hex next to the address the signer typed, so the device screen can be compared against
-   something other than itself
+   same hex next to the address the signer typed, and the preview and sign view show the whole
+   message, so the device screen can be compared against something other than itself
    ([Constraint 3](#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)).
 2. **The conversion is ours, so it is shown.** Address → descriptor is the only step in this slice
    where a defect is invisible, and exposing its output is what makes it checkable.
