@@ -3,7 +3,7 @@ import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { SafeHarbourStatus } from '@/api/asm-state'
 import { useSafeHarbourActionHex } from '../hooks/use-safe-harbour-action-hex'
-import { SigningMessagePanel } from './signing-message-panel'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
 

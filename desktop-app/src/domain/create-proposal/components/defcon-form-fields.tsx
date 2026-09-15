@@ -6,7 +6,7 @@ import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
 import { useDefconActionHex } from '../hooks/use-defcon-action-hex'
-import { SigningMessagePanel, SIGNING_MESSAGE_UNRESOLVED } from './signing-message-panel'
+import { SigningMessagePanel, SIGNING_MESSAGE_UNRESOLVED } from '@/components/signing-message-panel'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputDangerClass } from '../model/create-proposal-form-styles'
 
