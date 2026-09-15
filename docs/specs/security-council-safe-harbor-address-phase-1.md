@@ -1,8 +1,8 @@
 # V4 Phase 1 — From the screen to `Enacted`
 
-> **Functional contract:** [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 > §4 Phase 1. This document is that phase at implementation detail, and §9 records where it
 > supersedes it.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
@@ -11,7 +11,7 @@
 
 ## 1. The change in one sentence
 
-A Strata Administrator can author a safe harbour address update from a Taproot address, see the
+A Strata Administrator can author a safe harbor address update from a Taproot address, see the
 exact value their device will display while filling the form in, and the proposal reaches `Enacted`
 only when the **bridge's** address actually equals the one proposed.
 
@@ -24,13 +24,13 @@ It is not a new signing message. The six canonical lines resolve through the sam
 device signs over, and this phase adds a tripwire, not a renderer (§7.3).
 
 It is not a protocol rule. Nothing added here refuses an action the chain would accept: the
-already-activated harbour is stated, never blocked
-([Constraint 1](./security-council-safe-harbour-address.md#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
+already-activated harbor is stated, never blocked
+([Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
 
 It is not a change to the desktop's copy of `asm_enactment.rs` (§4.6), and it is not a change to any
 generic mechanism — depth, cancelability, authorization and the lifecycle already answer for tx type
 14, and this phase only adds the tests that pin that
-([Constraint 7](./security-council-safe-harbour-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
+([Constraint 7](./security-council-safe-harbor-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
 
 ## 3. Why the screen and the enactment ship together
 
@@ -49,14 +49,14 @@ never be split across pull requests.
 
 ### 4.1 The domain learns a destination, not a descriptor format
 
-`desktop-app/src-tauri/src/domain/action.rs` gains `SafeHarbourDescriptor`, shaped like `EvenPubKey`
+`desktop-app/src-tauri/src/domain/action.rs` gains `SafeHarborDescriptor`, shaped like `EvenPubKey`
 (`:17-57`) — a newtype over `[u8; 32]` holding the **x-only key of the P2TR output**, with a typed
 error per rejection:
 
 ```rust
-pub struct SafeHarbourDescriptor([u8; 32]);
+pub struct SafeHarborDescriptor([u8; 32]);
 
-pub enum SafeHarbourDescriptorError {
+pub enum SafeHarborDescriptorError {
     Address(String),          // not parseable as a Bitcoin address
     WrongNetwork { expected: Network, found: Network },
     NotP2tr(String),          // parsed, but the output is not a taproot key-path output
@@ -81,10 +81,10 @@ cannot break on a version bump because there is no shared type in it.
 
 **Why validation lives in the domain and not in the form.** The form's job is to explain; the
 domain's is to decide. Upstream decides last, via `SafeHarbourAddress::try_from`
-([Constraint 5](./security-council-safe-harbour-address.md#5-p2tr-and-nothing-else)) — three gates,
+([Constraint 5](./security-council-safe-harbor-address.md#5-p2tr-and-nothing-else)) — three gates,
 narrowing, with the authoritative one at the end.
 
-`Action::SafeHarbourAddressUpdate(SafeHarbourDescriptor)` joins the enum. Rust's exhaustive matches
+`Action::SafeHarbourAddressUpdate(SafeHarborDescriptor)` joins the enum. Rust's exhaustive matches
 name the rest.
 
 ### 4.2 The network is the process's, resolved once
@@ -95,7 +95,7 @@ repository — its own doc comment says the active network is process-wide and d
 builder command calls it once and passes it down.
 
 A wrong-network address is refused
-([Constraint 4](./security-council-safe-harbour-address.md#4-network-is-a-signal-not-a-protection))
+([Constraint 4](./security-council-safe-harbor-address.md#4-network-is-a-signal-not-a-protection))
 even though it is not dangerous: BOSD carries no network, so the same key yields the same descriptor
 bytes everywhere and only the HRP differs. It is refused because it is near-conclusive evidence that
 the operator took the address from the wrong wallet.
@@ -122,8 +122,8 @@ the action hex, feeds `useDeviceSigningMessage(seqNo, actionHex)`, and renders t
 inside the form. V4 reuses the pair with one difference — the hex depends on what the signer typed:
 
 ```ts
-// domain/create-proposal/hooks/use-safe-harbour-action-hex.ts
-export function useSafeHarbourActionHex(address: string): SafeHarbourActionHex
+// domain/create-proposal/hooks/use-safe-harbor-action-hex.ts
+export function useSafeHarborActionHex(address: string): SafeHarborActionHex
 ```
 
 shaped like `use-defcon-action-hex.ts`, with two rules taken from it verbatim:
@@ -151,20 +151,20 @@ such mirror — would be an asymmetry with no reason behind it.
 
 ### 4.5 The current destination is read once, and is load-bearing
 
-`SafeHarbourStatusDto` (`commands/asm_state.rs:20-24`) gains `address_hex` and `address`;
-`fetch_safe_harbour_activated` (`infrastructure/asm_status_rpc.rs:120-125`) becomes
-`fetch_safe_harbour` and returns all three, from the same single `strata_asm_getStatus` it already
+`SafeHarborStatusDto` (`commands/asm_state.rs:20-24`) gains `address_hex` and `address`;
+`fetch_safe_harbor_activated` (`infrastructure/asm_status_rpc.rs:120-125`) becomes
+`fetch_safe_harbor` and returns all three, from the same single `strata_asm_getStatus` it already
 makes. The address is rendered with `network_from_env()`, so the form shows the destination the way
 this deployment writes addresses.
 
-`safeHarbourStatusSchema` (`api/ipc-schemas.ts:179-181`) declares both new fields. **Zod strips what
+`safeHarborStatusSchema` (`api/ipc-schemas.ts:179-181`) declares both new fields. **Zod strips what
 it does not declare**, so adding them in Rust alone would drop them in silence — the same failure the
 `title` field's comment records at `:47`.
 
-`useSafeHarbourActivated` keeps its current shape and its deliberate degradation to `false`: a node
+`useSafeHarborActivated` keeps its current shape and its deliberate degradation to `false`: a node
 that cannot answer must not stand between the council and the emergency lever. The **address**, in
 contrast, is load-bearing: without it neither the Before/After nor the no-op rule of
-[Constraint 6](./security-council-safe-harbour-address.md#6-rotating-to-the-address-already-installed-enacts-and-changes-nothing)
+[Constraint 6](./security-council-safe-harbor-address.md#6-rotating-to-the-address-already-installed-enacts-and-changes-nothing)
 can answer, so the create form blocks submission while it is unavailable, with a message naming what
 could not be read. Two reads, two different failure policies, because they answer two different
 questions.
@@ -192,7 +192,7 @@ action in `queued()` by `UpdateAction` equality, read `last_seqno` off `Role::St
 delegate to a free function beside `defcon3_enacted`:
 
 ```rust
-fn safe_harbour_address_enacted(
+fn safe_harbor_address_enacted(
     last_seqno: u64,
     seq_no: u64,
     still_queued: bool,
@@ -213,7 +213,7 @@ Three things about that signature are deliberate:
   depth, so a later administrator action may jump `last_seqno` past this proposal before it matures,
   and `==` would mark a successfully enacted rotation `Superseded`.
 - **The address term is what makes it this proposal's answer**, and it is what makes
-  [Constraint 1](./security-council-safe-harbour-address.md#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)
+  [Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
   hold: a rotation the bridge swallowed leaves the queue with the seqno consumed and the address
   unchanged, so this returns `false` and the proposal resolves as `Superseded`, never `Enacted`.
 
@@ -232,7 +232,7 @@ Does not — five, three of which a signer sees:
 
 | Site | If missed |
 |---|---|
-| `create-proposal-form.tsx:440` — the fields ternary ends in `VkUpdateFormFields` | the safe harbour form renders **VK fields** |
+| `create-proposal-form.tsx:440` — the fields ternary ends in `VkUpdateFormFields` | the safe harbor form renders **VK fields** |
 | `create-proposal-preview.tsx:180` — same chain, same `else` | the signer reviews a rotation under **"New Verification Key"** |
 | `sign-proposal-view.tsx:203-213` — the details switch | the sign view falls back to the raw-hex block |
 | `lib/proposal-type-label.ts:3-15` — an `if` chain ending in `'Unknown'` | the dashboard says *Unknown* |
@@ -249,7 +249,7 @@ nobody exercises while developing.
 
 ### 4.9 Copy
 
-The card's title is `'Safe Harbour address update'`. It must not contain the exact substring
+The card's title is `'Safe Harbor address update'`. It must not contain the exact substring
 `"Signer update"`: three WebDriver specs select the administrator's card by that text and
 `ActionTypeCard` renders title and description as two `<p>` inside the button (V3 Phase 3 §6). It
 does not.
@@ -257,13 +257,13 @@ does not.
 The entry goes **last** in `ACTION_TYPES_BY_AUTHORITY.strata_admin`, so `getDefaultActionType` —
 which returns the first entry — keeps answering `signer_update`.
 
-The already-activated note reuses `SafeHarbourNote` with its own wording, on the form, the preview
+The already-activated note reuses `SafeHarborNote` with its own wording, on the form, the preview
 and the sign view. Amber, never red: it is a fact about the chain, not an error by the signer.
 
-**`screens/__tests__/safe-harbour-note-gating.test.ts` needed widening, but not the way §9.3 first
+**`screens/__tests__/safe-harbor-note-gating.test.ts` needed widening, but not the way §9.3 first
 claimed.** Its reach was never the problem — it walks all of `src/`, so `domain/` was covered. What
-it pinned was one *hook name*: `useSafeHarbourActivated(`. This phase adds a second reader,
-`useSafeHarbour`, for the surface that needs the destination as well as the flag, and a site that
+it pinned was one *hook name*: `useSafeHarborActivated(`. This phase adds a second reader,
+`useSafeHarbor`, for the surface that needs the destination as well as the flag, and a site that
 receives the result as a prop. The property worth guarding is "a live read stands behind the note",
 so the test now accepts any of the three shapes and keys the guard on `activated` rather than on one
 variable name. An unguarded mount still fails it, which is the case it exists for.
@@ -317,9 +317,9 @@ Beside `defcon3_enacted`'s tests, in the same style: bare `assert!` over a free 
 literals for the two descriptors. Two rows carry their own names, because they are the two ways this
 predicate can be wrong in opposite directions:
 
-- `safe_harbour_not_enacted_when_the_seqno_advanced_but_the_address_did_not` — AC 8, the swallowed
+- `safe_harbor_not_enacted_when_the_seqno_advanced_but_the_address_did_not` — AC 8, the swallowed
   rotation. This is the defect the whole slice turns on.
-- `safe_harbour_not_enacted_when_the_address_matches_but_the_seqno_has_not_reached_it` — AC 7b, the
+- `safe_harbor_not_enacted_when_the_address_matches_but_the_seqno_has_not_reached_it` — AC 7b, the
   rotation somebody else installed.
 
 Plus the queue term, and `>=` accepting a jumped seqno (the counter-case to `==`).
@@ -334,7 +334,7 @@ Depth: tx 14 against tx 10, modelled on `two_actions_of_one_authority_resolve_to
 Both are created by the administrator, which makes them exactly the pair an authority-shaped mapping
 cannot separate.
 
-### 5.6 TypeScript — `model/__tests__/safe-harbour-address-update.test.ts`
+### 5.6 TypeScript — `model/__tests__/safe-harbor-address-update.test.ts`
 
 House style: top-level `assert` from `node:assert/strict`, no runner, no mocks, relative imports
 with explicit `.ts` extensions, discovered by filesystem
@@ -346,7 +346,7 @@ with explicit `.ts` extensions, discovered by filesystem
    `sequencer_manager` and `alpen_admin`. The council case is the one that matters.
 3. **AC 3a/3b** — the validator over the five address forms.
 4. **AC 3c** — the address already installed is refused; a different one is not; and the rule is off
-   when `currentSafeHarbourAddress` is null, which is safe only because §4.5 blocks submission in
+   when `currentSafeHarborAddress` is null, which is safe only because §4.5 blocks submission in
    that state.
 
 ### 5.7 Not tested, deliberately
@@ -367,7 +367,7 @@ Per commit, only what that commit touched:
 cargo test -p desktop-app --lib domain::action           # commit 3
 cargo test -p desktop-app --lib action_codec             # commit 4
 cargo test -p desktop-app --bin desktop-app action_bui   # commit 4 — see §5.3
-cargo test -p orchestrator-be safe_harbour               # commit 7
+cargo test -p orchestrator-be safe_harbor               # commit 7
 cd desktop-app && npm run test:unit                      # commits 2, 6
 ```
 
@@ -393,17 +393,17 @@ None repairs the one before it. Every one compiles, lints and leaves the suite g
 | 0 | 📄 | This document. The phase is designed before it is built, and reviewed before it is implemented. |
 | 1 | 🟢 | `bitcoin-bosd` (git, tag `v0.11.0`) and `strata-asm-proto-bridge-v1-types` (rev `b84eb28…`) in `[workspace.dependencies]` and in `desktop-app/src-tauri`. No behaviour change. |
 | 2 | 🟢 | TypeScript **read-side** vocabulary: the transport `ActionType`, the `z.enum`, the `decodedActionSchema` member, `DecodedAction`, `ACTION_TYPE_BY_KIND`, the authorizing-authority `switch`, the label. Inert — nothing emits the value yet. The **form's** `ActionType` is a different union and stays in commit 6: widening it makes `ACTION_TYPE_OPTIONS` and `actionValidators` fail to compile, and both belong with the card and the validator. Same split V3 made between its Phase 1 and Phase 3. |
-| 3 | 🔴🟢 | `SafeHarbourDescriptor` and its conversion table (§5.1). |
-| 4 | 🟢 | The codec both ways, `build_safe_harbour_address_update_hex` registered in **both** `invoke.rs` lists, `action_type_from_hex`, the `DecodedAction` variant, and the tests of §5.2 and §5.3. |
-| 5 | 🟢 | The bridge's current destination: `fetch_safe_harbour` → DTO → Zod schema → `api/asm-state.ts`. |
-| 6 | 🟢 | Menu entry, validator with the no-op rule, `use-safe-harbour-action-hex.ts`, the fields component, the preview arm, the sign-view arm, the note on all three surfaces, the widened gating test (§4.9), and §5.6. |
-| 7 | 🟢 | The enactment arm, `safe_harbour_address_enacted`, its truth table, §5.5, and the stale comment at `asm_enactment.rs:113-116`. |
+| 3 | 🔴🟢 | `SafeHarborDescriptor` and its conversion table (§5.1). |
+| 4 | 🟢 | The codec both ways, `build_safe_harbor_address_update_hex` registered in **both** `invoke.rs` lists, `action_type_from_hex`, the `DecodedAction` variant, and the tests of §5.2 and §5.3. |
+| 5 | 🟢 | The bridge's current destination: `fetch_safe_harbor` → DTO → Zod schema → `api/asm-state.ts`. |
+| 6 | 🟢 | Menu entry, validator with the no-op rule, `use-safe-harbor-action-hex.ts`, the fields component, the preview arm, the sign-view arm, the note on all three surfaces, the widened gating test (§4.9), and §5.6. |
+| 7 | 🟢 | The enactment arm, `safe_harbor_address_enacted`, its truth table, §5.5, and the stale comment at `asm_enactment.rs:113-116`. |
 
 ## 8. Blast radius, and debt recorded rather than fixed
 
 1. **The form wiring is untested** (§5.7) — the same debt V1, V2 and V3 accepted; the manual walk
    covers it.
-2. **`ActionValidatorContext` grows a third field.** `currentSafeHarbourAddress` joins
+2. **`ActionValidatorContext` grows a third field.** `currentSafeHarborAddress` joins
    `currentMultisigSigners` and `currentMultisigThreshold`, and the three could in principle diverge.
    They cannot in practice — one call site, one optional chain each. Collapsing them into one
    snapshot object touches every validator and is not worth this phase's diff. Recorded in V3's
@@ -470,12 +470,12 @@ predates the ASM pin bump):
    and the bridge's destination unchanged.
 6. Mine 30 blocks → `Enacted`, and `strata_asm_getSafeHarbour` shows the new address with
    `activated` unchanged (AC 7a).
-7. With the harbour already activated: the note appears on the form, the preview and the sign view;
+7. With the harbor already activated: the note appears on the form, the preview and the sign view;
    the action can still be signed; and it resolves as `Superseded`, never `Enacted` (AC 8, AC 11).
 8. An administrator signer update created in the same session still behaves as before — the
    regression that proves the menu and validator changes did not leak.
 9. The manual bundle exports and imports the action without reporting it as unknown (AC 5).
 
 **Close-out** — three edits that do not update themselves:
-`security-council-safe-harbour-address-implementation.md`'s `Status:` header and its `| 1 ✅ |` row,
+`security-council-safe-harbor-address-implementation.md`'s `Status:` header and its `| 1 ✅ |` row,
 and the contract's `Status:` header.

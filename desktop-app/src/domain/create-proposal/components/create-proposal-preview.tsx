@@ -4,6 +4,7 @@ import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
@@ -26,11 +27,16 @@ type Props = {
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
 	newSequencerKeyHex: string
-	newSafeHarbourAddress: string
+	newSafeHarborAddress: string
 	/** The bridge's destination this rotation replaces, and whether it is already frozen. */
-	currentSafeHarbour: { address: string; addressHex: string; activated: boolean } | null
+	currentSafeHarbor: { address: string; addressHex: string; activated: boolean } | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
+	/**
+	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
+	 * not already print it. Resolved by the caller from the Rust renderer the device signs over.
+	 */
+	signingMessage: string | null
 	authorityLabel: string
 	/** Signer connected in this session — drives the device-specific confirmation copy. */
 	walletVendor: WalletVendor
@@ -51,9 +57,10 @@ export function CreateProposalPreview({
 	operatorsToAdd,
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
-	newSafeHarbourAddress,
-	currentSafeHarbour,
+	newSafeHarborAddress,
+	currentSafeHarbor,
 	deviceDisplay,
+	signingMessage,
 	authorityLabel,
 	walletVendor,
 	currentSigners,
@@ -174,18 +181,30 @@ export function CreateProposalPreview({
 						New Sweep Destination
 					</p>
 					<div className="flex flex-col gap-1 rounded-lg border border-[#e5e7eb] px-4 py-3">
-						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarbourAddress.trim() || '—'}</span>
-						{currentSafeHarbour !== null && (
+						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarborAddress.trim() || '—'}</span>
+						{currentSafeHarbor !== null && (
 							<span className="text-label text-[#6b7280]">
-								Replacing <span className="font-mono">{currentSafeHarbour.address}</span>
+								Replacing <span className="font-mono">{currentSafeHarbor.address}</span>
 							</span>
 						)}
 					</div>
-					{currentSafeHarbour?.activated === true && (
+					{signingMessage !== null && (
+						<div className="mt-4">
+							<SigningMessagePanel
+								message={signingMessage}
+								placeholder=""
+								error={null}
+								testId="e2e-safe-harbor-signing-message"
+								labelId="safe-harbor-preview-signing-message-label"
+								hint="This is exactly what you will be asked to sign. The destination appears in it as a descriptor, not as an address."
+							/>
+						</div>
+					)}
+					{currentSafeHarbor?.activated === true && (
 						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
-							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbour is already active</p>
+							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbor is already active</p>
 							<p className="m-0 mt-2 text-body text-[#6b7280]">
-								The destination is frozen once safe harbour is active. This update will be accepted on chain and change
+								The destination is frozen once safe harbor is active. This update will be accepted on chain and change
 								nothing, and it will not report as Enacted.
 							</p>
 						</div>

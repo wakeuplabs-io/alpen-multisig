@@ -37,7 +37,7 @@ Phase 1's resolution function. Each phase leaves the tree green and carries the 
 - Defcon 3 (V2) and its cancel flow (V5). They appear here only as the reason the two refactors are
   shaped the way they are. `lock_period_for_action` gains its Defcon 3 arm in this slice because the
   function cannot be written correctly without it, but no Defcon 3 product flow ships.
-- Security Council signer update (V3) and Safe Harbour address update (V4) — both authorized by the
+- Security Council signer update (V3) and Safe Harbor address update (V4) — both authorized by the
   Strata Administrator.
 - Any protocol validity rule. The orchestrator stays coordination-only.
 
@@ -51,7 +51,7 @@ Phase 1's resolution function. Each phase leaves the tree green and carries the 
 | 4 | Enactment detection | AC 8 | `orchestrator-be` |
 | 5 | Frontend — create and sign | AC 1, AC 1a, AC 4, AC 5, AC 14 | `desktop-app`, `src-tauri` |
 | 6 | Frontend — lifecycle | AC 6, AC 7, AC 9, AC 10, AC 13, AC 15/15a/15b, AC 16 | `desktop-app` |
-| 7 | Safe harbour visible, enactment per proposal | AC 8 (tightened), AC 18, AC 19, AC 20 | `orchestrator-be`, `desktop-app`, `src-tauri` |
+| 7 | Safe harbor visible, enactment per proposal | AC 8 (tightened), AC 18, AC 19, AC 20 | `orchestrator-be`, `desktop-app`, `src-tauri` |
 | 8 | The sequence number tells the truth | [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) AC A–E; AC 18 tightened | `orchestrator-be`, `desktop-app`, `src-tauri` |
 
 ## 3. Architecture
@@ -221,7 +221,7 @@ left open:
   depth, which would start enqueuing it; without the check a proposal would be marked `Enacted`
   while its update was still pending and still cancellable.
 - **The post-condition reads a value, and the reveal-block ordering is never checked.** The
-  contract requires a Defcon 1 to enact even when the safe harbour was already activated
+  contract requires a Defcon 1 to enact even when the safe harbor was already activated
   beforehand, so no transition-watching design is admissible. It also asks for the activation to be
   observed at or after the reveal block — and no height comparison exists anywhere in this module,
   for any action. The phase records that as an explicit V1 constraint rather than building a
@@ -288,23 +288,23 @@ had wrong:
   irreversible action.
 
 **Known divergence:** the contract's *Lifecycle Display* wireframe draws an enacted proposal with a
-block number and a `Safe harbour activated: ✓` line. Neither is rendered and neither is required by
-an acceptance criterion; the safe-harbour read does not exist in the desktop until Phase 7, which
+block number and a `Safe harbor activated: ✓` line. Neither is rendered and neither is required by
+an acceptance criterion; the safe-harbor read does not exist in the desktop until Phase 7, which
 spends it on the dashboard banner and the create-form warning.
 
-### Phase 7 — The safe harbour is visible, and enactment is per proposal ✅
+### Phase 7 — The safe harbor is visible, and enactment is per proposal ✅
 
 **Detail spec:** [`security-council-defcon-phase-7.md`](./security-council-defcon-phase-7.md).
 
 Not in this plan's original six. It exists because running the finished flow produced a second
-Defcon 1 on a chain whose safe harbour was already active, and neither half of the system
-distinguished it: the enactment predicate reduces to "the safe harbour is active" on any honest
+Defcon 1 on a chain whose safe harbor was already active, and neither half of the system
+distinguished it: the enactment predicate reduces to "the safe harbor is active" on any honest
 chain, so the second proposal read as `Enacted` on the strength of the first one's activation; and
 the app that creates the state cannot read it, so the council had nothing on screen saying the
-bridge was already in safe harbour.
+bridge was already in safe harbor.
 
 The predicate gains the sequence-number term every other action's post-condition already carries,
-which makes the answer per-proposal. The desktop gains a safe-harbour read, a note on the council
+which makes the answer per-proposal. The desktop gains a safe-harbor read, a note on the council
 dashboard and the same note on the Defcon 1 form — a warning, never a block: refusing the emergency
 lever on the strength of a state read is the worse failure.
 
@@ -318,7 +318,7 @@ before writing any:
   `src-tauri`. The Rust read composes three functions `fetch_current_operators` already exercises,
   so the honest coverage is the predicate's unit tests plus the manual run; §6.2 now says that with
   evidence instead of listing tests nobody could write.
-- **The read carries `activated` and nothing else.** It first returned the safe-harbour address
+- **The read carries `activated` and nothing else.** It first returned the safe-harbor address
   too, which §8 puts out of scope and which would have added a `bitcoin_bosd` dependency to the
   desktop for a field no caller has.
 - **The note is amber, not the `Irreversible` callout's red**, which the spec first asked it to
@@ -358,7 +358,7 @@ same rules and the same new terminal state apply to every authority and every ac
 Defcon 1 by hand is only what exposed them.
 
 Two symptoms from a manual session — two proposals stuck at *Reveal sent* and never enacting, and an
-older proposal still signable with the safe harbour already active — turned out to be surface
+older proposal still signable with the safe harbor already active — turned out to be surface
 effects of one upstream fact nothing here modelled: the ASM accepts an action only when its seqno is
 strictly above the role's `last_seqno`, `update_last_seqno` **jumps** to the accepted value, and the
 seqno is inside the signed message. So a proposal whose seqno is passed is finished, and a rejected
@@ -378,7 +378,7 @@ What Phase 8 changed, and what it deliberately did not:
   depth-bearing update then waits in the queue for its activation height.
 - **The claim refuses a consumed sequence number**, which is hygiene on a transaction the chain will
   reject, not the ordering enforcement PRD 02 §4.3 forbids.
-- **Four screens stopped asserting what they had not checked**, and the safe-harbour note reached
+- **Four screens stopped asserting what they had not checked**, and the safe-harbor note reached
   the sign and send screens — the two places where the second symptom's decisions were actually
   taken, and where the copy was still in the future tense.
 - **The broadcast engine was left alone, on purpose.** §9 of the contract records the finding most

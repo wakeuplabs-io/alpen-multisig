@@ -3,12 +3,13 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
-import { useSafeHarbour, useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
-import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
-import { buildSafeHarbourChange } from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
+import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
+import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
+import { buildSafeHarborChange } from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -24,6 +25,11 @@ type SignProposalViewProps = {
 	currentThreshold: number | null
 	/** What the connected device displays for this signature (Ledger hash / Trezor text). */
 	deviceDisplay: DeviceSigningDisplay
+	/**
+	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
+	 * not already print it. Rendered for a safe harbor rotation only (V4 Phase 4 §2.2).
+	 */
+	signingMessage: string | null
 	signResult: SignSighashResult | null
 	isSigning: boolean
 	error: string | null
@@ -122,31 +128,33 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
-function SafeHarbourAddressDetails({
+function SafeHarborAddressDetails({
 	action,
+	signingMessage,
 }: {
 	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
+	signingMessage: string | null
 }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
 	// rotation submitted after activation is accepted on chain and discarded. One read for both
-	// answers — whether the harbour is up, and what it currently sweeps to.
-	const { safeHarbour } = useSafeHarbour()
+	// answers — whether the harbor is up, and what it currently sweeps to.
+	const { safeHarbor } = useSafeHarbor()
 
 	// `isEnacted` is a constant on this screen: nothing enacted is ever signed.
-	const change = buildSafeHarbourChange({
-		installed: safeHarbour === null ? null : { address: safeHarbour.address, addressHex: safeHarbour.addressHex },
+	const change = buildSafeHarborChange({
+		installed: safeHarbor === null ? null : { address: safeHarbor.address, addressHex: safeHarbor.addressHex },
 		proposed: { address: action.address, addressHex: action.addressHex },
 		isEnacted: false,
 	})
 
 	return (
 		<>
-			{safeHarbour?.activated === true && (
+			{safeHarbor?.activated === true && (
 				<div className="mt-5">
-					<SafeHarbourNote>
-						The destination is frozen once safe harbour is active, so this update will be accepted and change nothing.
-						It will not report as Enacted.
-					</SafeHarbourNote>
+					<SafeHarborNote>
+						The destination is frozen once safe harbor is active, so this update will be accepted and change nothing. It
+						will not report as Enacted.
+					</SafeHarborNote>
 				</div>
 			)}
 
@@ -171,24 +179,39 @@ function SafeHarbourAddressDetails({
 							</code>
 						</div>
 					) : (
-						<SafeHarbourChangeTable change={change} />
+						<SafeHarborChangeTable change={change} />
 					)}
 				</div>
 			</div>
+
+			{/* The message this signature authorizes, on the screen where it is given. A hardware
+			    signer already sees it in the device hint below, so it is set only when there is none. */}
+			{signingMessage !== null && (
+				<div className="mt-5">
+					<SigningMessagePanel
+						message={signingMessage}
+						placeholder=""
+						error={null}
+						testId="e2e-sign-safe-harbor-signing-message"
+						labelId="sign-safe-harbor-signing-message-label"
+						hint="This is exactly what you are signing. The destination appears in it as a descriptor, not as an address."
+					/>
+				</div>
+			)}
 		</>
 	)
 }
 
 function DefconDetails({ level }: { level: DefconLevel }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and
-	// the sentences below are written in the future tense, which is wrong once the harbour is up.
-	const safeHarbourActivated = useSafeHarbourActivated()
+	// the sentences below are written in the future tense, which is wrong once the harbor is up.
+	const safeHarborActivated = useSafeHarborActivated()
 
 	return (
 		<>
-			{safeHarbourActivated && (
+			{safeHarborActivated && (
 				<div className="mt-5">
-					<SafeHarbourNote>{DEFCON_COPY[level].signSafeHarbourNote}</SafeHarbourNote>
+					<SafeHarborNote>{DEFCON_COPY[level].signSafeHarborNote}</SafeHarborNote>
 				</div>
 			)}
 
@@ -237,6 +260,7 @@ export function SignProposalView({
 	decodedAction,
 	currentThreshold,
 	deviceDisplay,
+	signingMessage,
 	signResult,
 	isSigning,
 	error,
@@ -264,7 +288,7 @@ export function SignProposalView({
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
 			) : decodedAction.kind === 'safe_harbour_address_update' ? (
-				<SafeHarbourAddressDetails action={decodedAction} />
+				<SafeHarborAddressDetails action={decodedAction} signingMessage={signingMessage} />
 			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
 				<DefconDetails level={decodedAction.kind} />
 			) : decodedAction.kind === 'cancel' ? (

@@ -13,7 +13,7 @@ import { assertWalletPubkeyBinding } from '@/domain/sign-proposal/wallet-binding
 import { SignProposalView } from '@/domain/sign-proposal/components/sign-proposal-view'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { useCurrentThreshold } from '@/domain/sign-proposal/hooks/use-current-threshold'
-import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { deviceSigningDisplay, signingMessageSection } from '@/lib/device-signing-display'
 import { deviceCopy } from '@/lib/device-copy'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
@@ -343,6 +343,7 @@ export function SignScreen() {
 							decodedAction={decodedAction}
 							currentThreshold={currentThreshold}
 							deviceDisplay={deviceDisplay}
+							signingMessage={signingMessageSection(deviceDisplay, deviceMessage)}
 							signResult={signResult}
 							isSigning={isSigning}
 							error={signError}

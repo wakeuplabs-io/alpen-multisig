@@ -5,7 +5,7 @@ import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
-import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
+import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
@@ -16,7 +16,7 @@ import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-pro
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
-import { harbourFrozeDestination } from '@/lib/safe-harbour-redundancy'
+import { harborFrozeDestination } from '@/lib/safe-harbor-redundancy'
 
 type Props = {
 	proposal: Proposal
@@ -58,7 +58,7 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 
 	// Named by what it does, like every other action: a bare `Proposal #N` on a list of pending
 	// approvals says nothing about which of them moves the bridge's sweep destination.
-	if (decodedData.safeHarbourChange !== null) return 'Change sweep destination'
+	if (decodedData.safeHarborChange !== null) return 'Change sweep destination'
 
 	const change = decodedData.signerSetChange
 	if (change === null) return `Proposal #${proposal.seqNo}`
@@ -97,7 +97,7 @@ export function ProposalDetail({
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState({
 		...proposal,
-		harbourFrozeDestination: harbourFrozeDestination(proposal, decodedData.safeHarbourActivated),
+		harborFrozeDestination: harborFrozeDestination(proposal, decodedData.safeHarborActivated),
 	})
 	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 
@@ -169,12 +169,12 @@ export function ProposalDetail({
 			    The detail screen is where every approver after the author decides: they never saw the
 			    create form, so without this section they are asked to authorize where the bridge sweeps
 			    to from a screen that does not name it. */}
-			{decodedData.safeHarbourChange !== null && (
+			{decodedData.safeHarborChange !== null && (
 				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 					<div className="border-b border-[#f3f4f6] px-6 py-4">
 						<SectionLabel>Sweep destination</SectionLabel>
 					</div>
-					<SafeHarbourChangeTable change={decodedData.safeHarbourChange} />
+					<SafeHarborChangeTable change={decodedData.safeHarborChange} />
 				</div>
 			)}
 

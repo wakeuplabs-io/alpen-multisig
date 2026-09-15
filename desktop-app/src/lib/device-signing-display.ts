@@ -39,3 +39,14 @@ export function deviceSigningDisplay(
 	}
 	return { kind: 'none' }
 }
+
+/**
+ * The signing message a signing screen must print as its own section, or `null` when it must not.
+ *
+ * A hardware hint already prints the message, so printing it again would ask the signer to compare
+ * two copies instead of one; a software signer has no hint, so without this section the message they
+ * authorize would appear nowhere on the screen where they authorize it.
+ */
+export function signingMessageSection(display: DeviceSigningDisplay, message: string | null): string | null {
+	return display.kind === 'none' ? message : null
+}

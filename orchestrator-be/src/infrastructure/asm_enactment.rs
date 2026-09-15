@@ -114,11 +114,11 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. All
         // four have post-conditions now. See docs/specs/security-council.md,
         // docs/specs/security-council-defcon-3-phase-4.md and
-        // docs/specs/security-council-safe-harbour-address-phase-1.md.
+        // docs/specs/security-council-safe-harbor-address-phase-1.md.
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let safe_harbour_activated = bridge.safe_harbour().is_activated();
+            let safe_harbor_activated = bridge.safe_harbour().is_activated();
             let defcon1_queued = admin
                 .queued()
                 .iter()
@@ -133,7 +133,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                     )
                 })?;
             Ok(defcon1_enacted(
-                safe_harbour_activated,
+                safe_harbor_activated,
                 defcon1_queued,
                 council.last_seqno(),
                 seq_no,
@@ -174,13 +174,13 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             let still_queued = admin.queued().iter().any(|q| q.action() == &target);
             // The role is named literally: an arm that matches one action variant knows its role,
             // and for tx type 14 upstream's `authorized_role()` is the administrator — the council
-            // sweeps to the safe harbour but must not also pick where the funds land.
+            // sweeps to the safe harbor but must not also pick where the funds land.
             let administrator = admin.authority(Role::StrataAdministrator).ok_or_else(|| {
                 AppError::BadRequest(
                     "admin state missing authority for role `StrataAdministrator`".to_string(),
                 )
             })?;
-            Ok(safe_harbour_address_enacted(
+            Ok(safe_harbor_address_enacted(
                 administrator.last_seqno(),
                 seq_no,
                 still_queued,
@@ -247,7 +247,7 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
     last_seqno >= seq_no && !still_queued
 }
 
-/// Defcon 1 executes at depth 0: it activates the safe harbour in the reveal block and never
+/// Defcon 1 executes at depth 0: it activates the safe harbor in the reveal block and never
 /// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
 /// proposal enacted.
 ///
@@ -263,12 +263,12 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
 ///
 /// See docs/specs/proposal-lifecycle-seqno-truth.md §3.1 and §4.1, including what stays ambiguous.
 fn defcon1_enacted(
-    safe_harbour_activated: bool,
+    safe_harbor_activated: bool,
     defcon1_queued: bool,
     last_seqno: u64,
     seq_no: u64,
 ) -> bool {
-    last_seqno == seq_no && safe_harbour_activated && !defcon1_queued
+    last_seqno == seq_no && safe_harbor_activated && !defcon1_queued
 }
 
 /// Defcon 3 matures after `activation_height` blocks. A cancel removes the queue entry before that
@@ -282,25 +282,25 @@ fn defcon3_enacted(
     last_seqno: u64,
     seq_no: u64,
     still_queued: bool,
-    safe_harbour_activated: bool,
+    safe_harbor_activated: bool,
     bitcoin_tip: u64,
     activation_height: u64,
 ) -> bool {
     last_seqno >= seq_no
         && !still_queued
-        && safe_harbour_activated
+        && safe_harbor_activated
         && bitcoin_tip >= activation_height
 }
 
-/// A safe harbour rotation is enacted when the destination the bridge actually holds is the one
+/// A safe harbor rotation is enacted when the destination the bridge actually holds is the one
 /// the action proposed — never on the strength of the sequence number alone.
 ///
 /// That distinction is the whole point. `SafeHarbour::update_address` refuses the change while the
-/// harbour is activated, and the bridge subprotocol **discards** the boolean it returns: no log, no
+/// harbor is activated, and the bridge subprotocol **discards** the boolean it returns: no log, no
 /// error, and by then the signature has verified, the seqno is consumed and the queue entry is
 /// drained. Such a rotation is accepted on chain and changes nothing, so the address term is what
 /// keeps it out of `Enacted` — it resolves as `Superseded` instead. See Constraint 1 in
-/// docs/specs/security-council-safe-harbour-address.md.
+/// docs/specs/security-council-safe-harbor-address.md.
 ///
 /// Takes bytes rather than `SafeHarbourAddress` so this crate names no protocol type for it: the
 /// caller reads the installed destination through inherent methods, and the truth table below can
@@ -309,7 +309,7 @@ fn defcon3_enacted(
 /// `>=` on the seqno, not `==`, for the reason Defcon 3 states: the action carries a non-zero
 /// depth, so a later administrator action may jump `last_seqno` past this proposal before it
 /// matures, and equality would mark a successfully enacted rotation `Superseded`.
-fn safe_harbour_address_enacted(
+fn safe_harbor_address_enacted(
     last_seqno: u64,
     seq_no: u64,
     still_queued: bool,
@@ -745,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    fn defcon1_enacted_requires_safe_harbour_active_and_queue_clear() {
+    fn defcon1_enacted_requires_safe_harbor_active_and_queue_clear() {
         assert!(!defcon1_enacted(false, false, 2, 2));
         assert!(!defcon1_enacted(true, true, 2, 2));
         assert!(defcon1_enacted(true, false, 2, 2));
@@ -758,54 +758,48 @@ mod tests {
         assert!(ee_stf_vk_enacted(3, 3, false));
     }
 
-    // ─── Safe harbour address update (tx type 14) ───────────────────────────
+    // ─── Safe harbor address update (tx type 14) ───────────────────────────
 
     /// BOSD descriptors for two different destinations: `04` plus an x-only key.
-    const HARBOUR_A: &[u8] = &[0x04; 33];
-    const HARBOUR_B: &[u8] = &[0x05; 33];
+    const HARBOR_A: &[u8] = &[0x04; 33];
+    const HARBOR_B: &[u8] = &[0x05; 33];
 
     /// The defect this whole slice turns on. `SafeHarbour::update_address` refuses the change once
-    /// the harbour is activated and the bridge subprotocol drops the `false` it returns — so the
+    /// the harbor is activated and the bridge subprotocol drops the `false` it returns — so the
     /// transaction is accepted, the seqno is consumed, the queue entry drains, and the destination
     /// is exactly what it was. Answering from the seqno alone would report that as `Enacted`.
     #[test]
-    fn safe_harbour_not_enacted_when_the_seqno_advanced_but_the_address_did_not() {
-        assert!(!safe_harbour_address_enacted(
-            5, 5, false, HARBOUR_A, HARBOUR_B
+    fn safe_harbor_not_enacted_when_the_seqno_advanced_but_the_address_did_not() {
+        assert!(!safe_harbor_address_enacted(
+            5, 5, false, HARBOR_A, HARBOR_B
         ));
     }
 
     /// The mirror image: the destination matches, but this proposal's sequence number has not been
     /// consumed. Somebody else installed that address, and this proposal has not enacted.
     #[test]
-    fn safe_harbour_not_enacted_when_the_address_matches_but_the_seqno_has_not_reached_it() {
-        assert!(!safe_harbour_address_enacted(
-            4, 5, false, HARBOUR_A, HARBOUR_A
+    fn safe_harbor_not_enacted_when_the_address_matches_but_the_seqno_has_not_reached_it() {
+        assert!(!safe_harbor_address_enacted(
+            4, 5, false, HARBOR_A, HARBOR_A
         ));
     }
 
     #[test]
-    fn safe_harbour_enacted_when_the_address_is_installed_and_the_seqno_consumed() {
-        assert!(safe_harbour_address_enacted(
-            5, 5, false, HARBOUR_A, HARBOUR_A
-        ));
+    fn safe_harbor_enacted_when_the_address_is_installed_and_the_seqno_consumed() {
+        assert!(safe_harbor_address_enacted(5, 5, false, HARBOR_A, HARBOR_A));
     }
 
     /// Still in the queue is still pending, whatever the bridge currently holds.
     #[test]
-    fn safe_harbour_not_enacted_while_still_queued() {
-        assert!(!safe_harbour_address_enacted(
-            5, 5, true, HARBOUR_A, HARBOUR_A
-        ));
+    fn safe_harbor_not_enacted_while_still_queued() {
+        assert!(!safe_harbor_address_enacted(5, 5, true, HARBOR_A, HARBOR_A));
     }
 
     /// A later administrator action may jump `last_seqno` past this proposal before it matures.
     /// `==` would mark a rotation that did install its destination as `Superseded`.
     #[test]
-    fn safe_harbour_enacted_when_a_later_action_consumed_the_seqno() {
-        assert!(safe_harbour_address_enacted(
-            9, 5, false, HARBOUR_A, HARBOUR_A
-        ));
+    fn safe_harbor_enacted_when_a_later_action_consumed_the_seqno() {
+        assert!(safe_harbor_address_enacted(9, 5, false, HARBOR_A, HARBOR_A));
     }
 
     /// Constraint 2: the seqno term is `>=`. Defcon 1 answers the same observation with `==` and
@@ -827,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn defcon3_not_enacted_when_harbour_off() {
+    fn defcon3_not_enacted_when_harbor_off() {
         assert!(!defcon3_enacted(2, 2, false, false, 120, 100));
     }
 

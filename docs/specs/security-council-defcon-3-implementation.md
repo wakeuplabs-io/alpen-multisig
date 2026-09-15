@@ -30,7 +30,7 @@ variant, two inherited debts, and the cancel.
 
 **Not in scope**
 
-- Security Council signer update (V3) and Safe Harbour address update (V4) — both authorized by the
+- Security Council signer update (V3) and Safe Harbor address update (V4) — both authorized by the
   Strata Administrator.
 - Any protocol validity rule. The orchestrator stays coordination-only.
 
@@ -61,7 +61,7 @@ variant, two inherited debts, and the cancel.
 | `defcon1_enacted` | `orchestrator-be/src/infrastructure/asm_enactment.rs` | The shape Phase 4's predicate follows — a free function over plain observations |
 | `showsActivationCountdown`, `activation-countdown.tsx` | `desktop-app/src/lib/proposal-status.ts`, `domain/cancel-proposal/components/` | Already correct for Defcon 3: the predicate excludes only `defcon_1` |
 | `SigningMessage::for_action` via `render_signing_message` | `desktop-app/src-tauri/src/infrastructure/signing.rs` | The four canonical lines come out for free |
-| `SafeHarbourNote`, `useSafeHarbourActivated` | `desktop-app/src/components`, `src/hooks` | The already-in-harbour warning is a component, not a Defcon 1 detail |
+| `SafeHarborNote`, `useSafeHarborActivated` | `desktop-app/src/components`, `src/hooks` | The already-in-harbor warning is a component, not a Defcon 1 detail |
 | `run_defcon3` | `e2e-tests/tests/e2e_defcon_probe.rs` | Proves queue → depth → activation on a real regtest ASM |
 | `e2e_cancel_proposal.rs` | `e2e-tests/tests/` | The shape Phase 7's cancelled-path e2e follows |
 
@@ -72,7 +72,7 @@ gets no route of its own. The domain already dispatches by action type, so Defco
 in `ACTION_TYPES_BY_AUTHORITY` and one more fields component.
 
 **The form component is parameterized, not duplicated.** The two variants differ in exactly three
-things: the confirmation string, the destructive paragraph, and the safe-harbour note's wording.
+things: the confirmation string, the destructive paragraph, and the safe-harbor note's wording.
 Duplicating would fork the signing-message wiring — the resolve, the mirror into a form value, and
 the CTA gate that depends on it — which is the safety-critical half. The validator entries stay
 separate, because the schema enum is per action type.
@@ -134,11 +134,11 @@ assert one would only restate what the codec test owns.
 ### Phase 2 — Redundancy by activation height
 
 `redundantDefcon1ActionIds` picked the earliest enacted Defcon 1 *by sequence number* as the proposal
-that activated the safe harbour. Defcon 3 activates the same flag on a timelock, so from this slice
+that activated the safe harbor. Defcon 3 activates the same flag on a timelock, so from this slice
 on the earliest by seqno is not necessarily the one that turned it on. The activator becomes the
-enacted harbour-activating proposal with the **lowest activation height**, over both Defcon types.
+enacted harbor-activating proposal with the **lowest activation height**, over both Defcon types.
 The module is renamed to match what it now answers — it shipped as
-`desktop-app/src/lib/safe-harbour-redundancy.ts`, exporting `changedNothingActionIds`.
+`desktop-app/src/lib/safe-harbor-redundancy.ts`, exporting `changedNothingActionIds`.
 
 The two heights are comparable because a Defcon 1's lock period is `0`, so its activation height *is*
 its reveal block.
@@ -180,7 +180,7 @@ the allow-list", accepting one PR where the field is served and unused.
 
 The `Defcon3` arm of `is_proposal_enacted_on_asm` stops returning `BadRequest` and becomes a free
 predicate over four observations — seqno consumed, gone from the queue, tip past the activation
-height, harbour active — shaped like `defcon1_enacted` so its truth table is testable without an ASM.
+height, harbor active — shaped like `defcon1_enacted` so its truth table is testable without an ASM.
 
 The two traps are [Constraint 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)
 (`>=`, never `==`, or a successfully enacted proposal is marked `Superseded`) and
@@ -206,7 +206,7 @@ predicate encodes.
 The builder command registered in **both** lists in `invoke.rs`; `security_council` offering
 `['defcon_1', 'defcon_3']`, which also makes Defcon 1 the council's default deliberately rather than
 by accident; the `DEFCON 3` validator; and the parameterized form variant with its own destructive
-copy and its own safe-harbour wording.
+copy and its own safe-harbor wording.
 
 **The signing message needs no code and must not get any.** It resolves through the same Rust
 renderer the device signs over. It gets exactly one Rust tripwire: the Defcon 3 message is non-empty
@@ -248,9 +248,9 @@ orchestrator is unavailable"*, a council signer could not import, let alone aggr
 Defcon 3 cancel. See [the phase spec](./security-council-defcon-3-phase-7.md) §4.1 and §6.
 
 The deliverable is the e2e: `run_defcon3_canceled` in `e2e_defcon_probe.rs`, following the shape of
-`e2e_cancel_proposal.rs` — submit a Defcon 3, assert queued with the harbour off, submit a
+`e2e_cancel_proposal.rs` — submit a Defcon 3, assert queued with the harbor off, submit a
 council-signed cancel of its update id, take the tip past the height the Defcon 3 would have
-activated at, and assert the queue is empty **and the harbour is still off**. That last assertion is
+activated at, and assert the queue is empty **and the harbor is still off**. That last assertion is
 the only automated coverage of
 [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
@@ -282,9 +282,9 @@ End to end, once all seven land, on regtest with the local stack
 2. The rendered four-line message matches the signer's screen, has no `Action Details:` block, and
    differs from Defcon 1's.
 3. Quorum, broadcast — the proposal shows Approved, then Awaiting enactment with a countdown to the
-   right block, and the harbour stays off.
-4. Path A: mine `depth` blocks → `Enacted`, harbour on.
-5. Path B: cancel inside the window → the target reads `Canceled`, the harbour stays off, and nothing
+   right block, and the harbor stays off.
+4. Path A: mine `depth` blocks → `Enacted`, harbor on.
+5. Path B: cancel inside the window → the target reads `Canceled`, the harbor stays off, and nothing
    reads `Enacted`.
 6. A Defcon 1 created in the same session still shows no countdown and no cancel affordance.
 7. `cargo test -p alpen-multisig-e2e-tests` green, including `run_defcon3_canceled`.

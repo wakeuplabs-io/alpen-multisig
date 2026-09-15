@@ -1,4 +1,4 @@
-# Security Council — Defcon 1 (V1), Phase 7: The safe harbour is visible, and enactment is per proposal
+# Security Council — Defcon 1 (V1), Phase 7: The safe harbor is visible, and enactment is per proposal
 
 **Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it; §10 records the two places it corrects.
@@ -16,7 +16,7 @@ dashboard, and Phase 6 owns that screen's labels and lists first.
 Manual testing of the finished Defcon 1 flow produced two Defcon 1 proposals on one regtest chain.
 Both are correct — the second carries `seq_no = 2`, so the duplicate rule (AC 3, keyed on
 `(action, seq_no)`) does not apply to it, upstream accepts it, and the contract's own Edge Cases
-already say a Defcon 1 broadcast against an activated safe harbour "still reaches `enacted` status
+already say a Defcon 1 broadcast against an activated safe harbor "still reaches `enacted` status
 correctly" (`security-council-defcon.md:464`).
 
 What the run exposed is not that the second proposal was possible. It is that **nothing in the
@@ -24,7 +24,7 @@ system distinguishes it**:
 
 - The dashboard showed both as *Enacted*, and the second one's *Enacted* is not evidence that its
   transaction did anything (§3).
-- The council had no way to see, anywhere in the app, that the bridge was already in safe harbour
+- The council had no way to see, anywhere in the app, that the bridge was already in safe harbor
   (§4). `grep -rn "safe_harbour" desktop-app/` returns nothing: the app can create the state and
   cannot read it.
 
@@ -39,7 +39,7 @@ the strength of a state read that may be stale, or served by a node that is behi
 failure than allowing a redundant one. Everything below **warns**, and the type-to-confirm gate
 that already exists is what the warning is attached to.
 
-It is not Defcon 3, and it is not the safe-harbour address update (V2/V4). It adds no new
+It is not Defcon 3, and it is not the safe-harbor address update (V2/V4). It adds no new
 lifecycle state: the states are the four the contract already names.
 
 ## 3. The defect — the Defcon 1 enactment predicate collapses
@@ -47,15 +47,15 @@ lifecycle state: the states are the four the contract already names.
 `defcon1_enacted` (`orchestrator-be/src/infrastructure/asm_enactment.rs:175`) is:
 
 ```rust
-fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool) -> bool {
-    safe_harbour_activated && !defcon1_queued
+fn defcon1_enacted(safe_harbor_activated: bool, defcon1_queued: bool) -> bool {
+    safe_harbor_activated && !defcon1_queued
 }
 ```
 
 Phase 4 §3.1 established, correctly, that the queue term is a tripwire against upstream drift
 rather than a discriminator: Defcon 1 executes at depth 0 and never enters the queue, so
 `defcon1_queued` is `false` on every honest chain. **On every honest chain the predicate therefore
-reduces to `safe_harbour_activated`** — a fact about the bridge, not about this proposal.
+reduces to `safe_harbor_activated`** — a fact about the bridge, not about this proposal.
 
 `safe_harbour.is_activated()` is never reset to `false` (the contract says so at `:296`). So once
 any Defcon 1 has enacted, the predicate answers `true` for every Defcon 1 proposal that reaches it,
@@ -79,8 +79,8 @@ given a post-condition and never given the seqno term, which is the whole differ
 The predicate becomes:
 
 ```rust
-fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool, last_seqno: u64, seq_no: u64) -> bool {
-    last_seqno >= seq_no && safe_harbour_activated && !defcon1_queued
+fn defcon1_enacted(safe_harbor_activated: bool, defcon1_queued: bool, last_seqno: u64, seq_no: u64) -> bool {
+    last_seqno >= seq_no && safe_harbor_activated && !defcon1_queued
 }
 ```
 
@@ -152,10 +152,10 @@ the desktop can already decode.
 
 | Piece | Where |
 |---|---|
-| `fetch_safe_harbour_activated(rpc_url) -> Result<bool, String>` | `infrastructure/asm_status_rpc.rs` — decode bridge state, return `safe_harbour().is_activated()` |
-| `get_safe_harbour_status` IPC command | `commands/asm_state.rs`, beside `get_current_operators` |
-| `useSafeHarbourStatus` | `desktop-app/src/hooks/` — both consumers are outside `create-proposal`, so it sits with `use-device-signing-message.ts` rather than inside one domain |
-| `SafeHarbourNote` | `desktop-app/src/components/` — one presentational primitive for both surfaces, taking the caller's sentence as `children`; the read stays in the hook, as the frontend rules require of anything in `components/` |
+| `fetch_safe_harbor_activated(rpc_url) -> Result<bool, String>` | `infrastructure/asm_status_rpc.rs` — decode bridge state, return `safe_harbour().is_activated()` |
+| `get_safe_harbor_status` IPC command | `commands/asm_state.rs`, beside `get_current_operators` |
+| `useSafeHarborStatus` | `desktop-app/src/hooks/` — both consumers are outside `create-proposal`, so it sits with `use-device-signing-message.ts` rather than inside one domain |
+| `SafeHarborNote` | `desktop-app/src/components/` — one presentational primitive for both surfaces, taking the caller's sentence as `children`; the read stays in the hook, as the frontend rules require of anything in `components/` |
 | Dashboard banner (council session only) | `desktop-app/src/screens/proposals-dashboard-screen.tsx` reads the state and passes the note to `ProposalsDashboard`'s `notice` slot, so it lands in the same column as the heading and the *Create proposal* button rather than at the shell's full width |
 | Create-form warning | `desktop-app/src/domain/create-proposal/components/defcon-1-form-fields.tsx` |
 
@@ -166,7 +166,7 @@ Two corrections to that table, both found by reading the code the phase was abou
   and, because `SafeHarbourAddress` wraps a `bitcoin_bosd::Descriptor` the desktop does not depend
   on, a new crate dependency for the privilege. `is_activated()` is an inherent method on the
   decoded state, so the boolean costs no dependency at all.
-- **The command is named for its neighbours.** `asm_safe_harbour_status` was this document's
+- **The command is named for its neighbours.** `asm_safe_harbor_status` was this document's
   invention; the three commands already in that file are `get_multisig_config`,
   `get_current_operators` and `get_current_vk`.
 
@@ -181,7 +181,7 @@ that says nothing about provenance. **The banner and the warning state the fact 
 
 The warning is about cost and about meaning, not about danger:
 
-> **Safe harbour is already active.** The bridge is already in safe harbour. Another Defcon 1 does
+> **Safe harbor is already active.** The bridge is already in safe harbor. Another Defcon 1 does
 > not change that — it consumes a council sequence number, costs fees, and needs a full quorum.
 > Create one only if you have reason to believe this state is wrong.
 
@@ -214,18 +214,18 @@ Commit B of this document's first draft — "the Rust read, the IPC command, the
 banner and the create-form warning" — is three commits, not one. It spans two languages and four
 layers, and the read is useful and reviewable before either surface consumes it:
 
-**Commit B1 — the read reaches the API layer.** `fetch_safe_harbour_activated`, the
-`get_safe_harbour_status` command in both `invoke.rs` handler lists, the Zod schema and the
+**Commit B1 — the read reaches the API layer.** `fetch_safe_harbor_activated`, the
+`get_safe_harbor_status` command in both `invoke.rs` handler lists, the Zod schema and the
 `api/asm-state.ts` wrapper. No UI change; `npm run test:ipc-schemas` and `npm run build` cover it.
 
-**Commit B2 — the warning on the Defcon 1 form.** `useSafeHarbourStatus` and the amber note in
+**Commit B2 — the warning on the Defcon 1 form.** `useSafeHarborStatus` and the amber note in
 `defcon-1-form-fields.tsx`. This is where the decision is made, so it lands before the banner.
 
 **Commit B3 — the dashboard banner.** The council-only banner in `proposals-dashboard-screen.tsx`,
 which is the same note in a second place and depends on nothing B2 introduced beyond the hook.
 
 Two commits followed the review of B1–B3. The two amber blocks were the same container, heading
-and conditional read differing only in prose, so they became one `SafeHarbourNote` taking that
+and conditional read differing only in prose, so they became one `SafeHarborNote` taking that
 prose as `children`, with `role="status"` so a note that appears after an async read is announced.
 Then the dashboard copy was found rendering at the shell's full width, a column wider than every
 surface below it, which made a note about the proposals read as an alarm about the app: it moved
@@ -255,7 +255,7 @@ not have, and the honest answer is that the UI half of this phase is verified by
 - **The fixture anchor does not exist.** `desktop-app/src-tauri` contains no `AnchorState` fixture
   and no builder for one — `asm_status_rpc.rs`'s own tests cover `decode_state_bytes_from_status`
   over hand-written JSON and stop there, because constructing a valid SSZ `AnchorState` with a
-  bridge section means constructing upstream's whole state. `fetch_safe_harbour_activated` adds no
+  bridge section means constructing upstream's whole state. `fetch_safe_harbor_activated` adds no
   decoding of its own: it composes `rpc_call`, `decode_anchor_state_from_status` and
   `decode_bridge_state`, all three already exercised by `fetch_current_operators`. A test worth
   its fixture would be testing upstream's SSZ, not this function.
@@ -286,14 +286,14 @@ council and the emergency lever.
 
 - A sweeper for the proposal of §3.3.
 - Defcon 3, its maturation, and its cancel (V2/V5).
-- Showing the safe-harbour address, or verifying it against the deployment's configuration (V4).
+- Showing the safe-harbor address, or verifying it against the deployment's configuration (V4).
 - Surfacing the state to non-council authorities.
 
 ## 9. Manual verification
 
 On regtest with the local stack, continuing from a chain where one Defcon 1 has already enacted:
 
-1. The council dashboard shows the safe-harbour banner; another authority's dashboard does not.
+1. The council dashboard shows the safe-harbor banner; another authority's dashboard does not.
 2. `/proposals/create` shows the warning above the type-to-confirm gate, and the submit control
    still enables once the text matches.
 3. Create, sign and broadcast a second Defcon 1. It reaches `Enacted` only after the council's
@@ -308,12 +308,12 @@ Two edits, in the back-propagation commit, in the style Phases 3 and 5 used:
 - **Edge Cases (`security-council-defcon.md:464`).** The row today reads that the activation is
   idempotent and the proposal "still reaches `enacted` status correctly". That is true of the
   chain and was read as a licence for the predicate. It gains the second half: the proposal reaches
-  `enacted` **on its own sequence number**, and the app says the safe harbour is already active
+  `enacted` **on its own sequence number**, and the app says the safe harbor is already active
   before the signer commits to a second lever.
 - **Acceptance Criteria.** Three new criteria after AC 17:
   - **AC 18** — a Defcon 1 proposal whose reveal has confirmed while the council's `last_seqno` is
-    still below its `seq_no` is **not** marked `Enacted`, even with the safe harbour active.
-  - **AC 19** — a council session whose chain has the safe harbour active sees that state on the
+    still below its `seq_no` is **not** marked `Enacted`, even with the safe harbor active.
+  - **AC 19** — a council session whose chain has the safe harbor active sees that state on the
     proposals dashboard and on the Defcon 1 create form, before signing.
   - **AC 20** — the state being active never disables creation: the type-to-confirm gate remains
     the only gate.

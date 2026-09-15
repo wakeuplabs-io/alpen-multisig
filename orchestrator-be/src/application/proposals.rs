@@ -988,7 +988,7 @@ mod tests {
     use super::*;
     use crate::infrastructure::action_codec::{
         test_fixture_action_hex, test_fixture_council_rotation_action_hex,
-        test_fixture_defcon_1_action_hex, test_fixture_safe_harbour_address_action_hex,
+        test_fixture_defcon_1_action_hex, test_fixture_safe_harbor_address_action_hex,
     };
     use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
     use crate::infrastructure::memory_repo::InMemoryProposalRepository;
@@ -2529,13 +2529,13 @@ mod tests {
         );
     }
 
-    /// AC 10: a safe harbour rotation belongs to Strata Admin, and its cancel does too. Nothing in
+    /// AC 10: a safe harbor rotation belongs to Strata Admin, and its cancel does too. Nothing in
     /// the cancel path knows about tx type 14 — this asserts that generic path lands on the right
     /// answer rather than that someone wrote an arm for it.
     #[tokio::test]
-    async fn test_safe_harbour_cancel_is_created_by_the_strata_administrator() {
+    async fn test_safe_harbor_cancel_is_created_by_the_strata_administrator() {
         let repo = new_repo();
-        let action_hex = test_fixture_safe_harbour_address_action_hex();
+        let action_hex = test_fixture_safe_harbor_address_action_hex();
         let target =
             save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
 
@@ -2562,9 +2562,9 @@ mod tests {
     /// a change to where it lands — not by authoring one, and not by cancelling one either. The
     /// segregation invariant on the cancel path, which nothing pinned for this action.
     #[tokio::test]
-    async fn test_safe_harbour_cancel_requires_strata_admin_session() {
+    async fn test_safe_harbor_cancel_requires_strata_admin_session() {
         let repo = new_repo();
-        let action_hex = test_fixture_safe_harbour_address_action_hex();
+        let action_hex = test_fixture_safe_harbor_address_action_hex();
         let target =
             save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
 

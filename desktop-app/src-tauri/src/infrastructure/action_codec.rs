@@ -24,7 +24,7 @@ use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::action::{
     Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError,
-    SafeHarbourDescriptor, SafeHarbourDescriptorError, SequencerKeyUpdate, VkUpdate,
+    SafeHarborDescriptor, SafeHarborDescriptorError, SequencerKeyUpdate, VkUpdate,
 };
 use crate::domain::authority::Authority;
 
@@ -41,14 +41,14 @@ pub enum CodecError {
     UnsupportedVariant(&'static str),
     #[error("invalid public key: {0}")]
     PubKey(#[from] PubKeyError),
-    #[error("invalid safe harbour address: {0}")]
-    SafeHarbourAddress(#[from] SafeHarbourDescriptorError),
+    #[error("invalid safe harbor address: {0}")]
+    SafeHarborAddress(#[from] SafeHarborDescriptorError),
     /// Upstream refused the descriptor. Unreachable for a value this application built — the
     /// domain already checked the curve and the P2TR type — and reachable for an action hex that
     /// arrived from anywhere else, which is the reason this gate stays even though it is a third
     /// check of the same two properties.
-    #[error("upstream rejected the safe harbour descriptor: {0}")]
-    SafeHarbourRejectedUpstream(String),
+    #[error("upstream rejected the safe harbor descriptor: {0}")]
+    SafeHarborRejectedUpstream(String),
     #[error("invalid threshold: value must be non-zero")]
     InvalidThreshold,
     #[error("unsupported authority: {0}")]
@@ -194,12 +194,12 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
         Action::SequencerKeyUpdate(update) => Ok(MultisigAction::Update(UpdateAction::Sequencer(
             StrataSequencerUpdate::new(Buf32(*update.new_pub_key.as_bytes())),
         ))),
-        Action::SafeHarbourAddressUpdate(destination) => {
+        Action::SafeHarborAddressUpdate(destination) => {
             let descriptor = Descriptor::new_p2tr(destination.as_key()).map_err(|e| {
-                CodecError::SafeHarbourRejectedUpstream(format!("not a valid P2TR payload: {e}"))
+                CodecError::SafeHarborRejectedUpstream(format!("not a valid P2TR payload: {e}"))
             })?;
             let address = SafeHarbourAddress::try_from(descriptor)
-                .map_err(|e| CodecError::SafeHarbourRejectedUpstream(e.to_string()))?;
+                .map_err(|e| CodecError::SafeHarborRejectedUpstream(e.to_string()))?;
             Ok(MultisigAction::Update(UpdateAction::SafeHarbourAddress(
                 SafeHarbourAddressUpdate::new(address),
             )))
@@ -303,8 +303,8 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
             // `to_bytes()` is the BOSD wire form — the type tag plus the payload — which is also
             // the string the signing message renders and the device displays.
             let hex = hex::encode(update.address().as_descriptor().to_bytes());
-            let destination = SafeHarbourDescriptor::from_hex(&hex)?;
-            Ok(Action::SafeHarbourAddressUpdate(destination))
+            let destination = SafeHarborDescriptor::from_hex(&hex)?;
+            Ok(Action::SafeHarborAddressUpdate(destination))
         }
         MultisigAction::Cancel(_) => Err(CodecError::UnsupportedVariant("Cancel")),
     }
@@ -392,22 +392,22 @@ mod tests {
     /// a neighbouring variant would round-trip through itself just as happily, and the transaction
     /// would be rejected — or worse, accepted as another action.
     #[test]
-    fn safe_harbour_round_trips_and_encodes_upstreams_tx_type_14() {
+    fn safe_harbor_round_trips_and_encodes_upstreams_tx_type_14() {
         use strata_asm_params::UpdateTxType;
 
         // x-only key of the generator point G, the destination the local stack ships with.
-        let destination = SafeHarbourDescriptor::from_hex(
+        let destination = SafeHarborDescriptor::from_hex(
             "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         )
         .expect("valid P2TR descriptor");
-        let action = Action::SafeHarbourAddressUpdate(destination.clone());
+        let action = Action::SafeHarborAddressUpdate(destination.clone());
 
         let encoded = encode(&action).expect("encode ok");
         assert_eq!(decode(&encoded).expect("decode ok"), action);
 
         let upstream = MultisigAction::from_ssz_bytes(&encoded).expect("upstream decodes it");
         let MultisigAction::Update(update) = upstream else {
-            panic!("a safe harbour rotation is an update, not a cancel");
+            panic!("a safe harbor rotation is an update, not a cancel");
         };
         assert_eq!(
             update.update_tx_type(),

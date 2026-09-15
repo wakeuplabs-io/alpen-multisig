@@ -43,7 +43,7 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 		id: 'strata-security-council',
 		role: AuthRole.StrataSecurityCouncil,
 		label: 'Security Council',
-		description: 'Emergency bridge authority (Defcon 1 safe-harbour activation).',
+		description: 'Emergency bridge authority (Defcon 1 safe-harbor activation).',
 		signerSetSource: 'Strata ASM state',
 		availabilityLabel: 'Available',
 		enabled: true,

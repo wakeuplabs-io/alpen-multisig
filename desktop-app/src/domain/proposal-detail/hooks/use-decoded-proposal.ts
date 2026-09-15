@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ApiResult } from '@/types'
 import type { Proposal } from '@/api/proposals'
-import { getMultisigConfig, getSafeHarbourStatus, type MultisigConfig } from '@/api/asm-state'
+import { getMultisigConfig, getSafeHarborStatus, type MultisigConfig } from '@/api/asm-state'
 import { decodeActionHex, type DecodedAction } from '@/api/signing'
 import {
-	buildSafeHarbourChange,
-	type SafeHarbourChange,
-} from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
+	buildSafeHarborChange,
+	type SafeHarborChange,
+} from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
 import { multisigUpdateTargetAuthority } from '@/lib/multisig-update-target'
 import {
 	buildSignerSetChange,
@@ -15,23 +15,23 @@ import {
 } from '@/domain/signer-set-change/model/build-signer-set-change'
 
 export type { SignerRow, SignerSetChange }
-export type { SafeHarbourChange }
+export type { SafeHarborChange }
 
 export type DecodedProposalData = {
 	signerSetChange: SignerSetChange | null
 	/**
 	 * Where the bridge sweeps to, and where this proposal would send it instead. Null for every
-	 * action that is not a safe harbour rotation, and also when the installed destination could not
-	 * be read — see `buildSafeHarbourChange`.
+	 * action that is not a safe harbor rotation, and also when the installed destination could not
+	 * be read — see `buildSafeHarborChange`.
 	 */
-	safeHarbourChange: SafeHarbourChange | null
+	safeHarborChange: SafeHarborChange | null
 	/**
-	 * The bridge's live safe harbour flag, read only where it is already being read: the same
-	 * `getSafeHarbourStatus` call the rotation's change table comes from. `false` everywhere else,
+	 * The bridge's live safe harbor flag, read only where it is already being read: the same
+	 * `getSafeHarborStatus` call the rotation's change table comes from. `false` everywhere else,
 	 * which no consumer can mistake for a claim, since every one of them also asks whether the
 	 * action is a rotation.
 	 */
-	safeHarbourActivated: boolean
+	safeHarborActivated: boolean
 	allSigners: string[]
 	isLoading: boolean
 }
@@ -68,8 +68,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
 		proposalKey: null,
 		signerSetChange: null,
-		safeHarbourChange: null,
-		safeHarbourActivated: false,
+		safeHarborChange: null,
+		safeHarborActivated: false,
 		allSigners: [],
 		isLoading: false,
 	})
@@ -79,8 +79,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 			setDecodedData({
 				proposalKey: null,
 				signerSetChange: null,
-				safeHarbourChange: null,
-				safeHarbourActivated: false,
+				safeHarborChange: null,
+				safeHarborActivated: false,
 				allSigners: [],
 				isLoading: false,
 			})
@@ -91,8 +91,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 		setDecodedData({
 			proposalKey,
 			signerSetChange: null,
-			safeHarbourChange: null,
-			safeHarbourActivated: false,
+			safeHarborChange: null,
+			safeHarborActivated: false,
 			allSigners: [],
 			isLoading: true,
 		})
@@ -113,8 +113,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: null,
-						safeHarbourChange: null,
-						safeHarbourActivated: false,
+						safeHarborChange: null,
+						safeHarborActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -130,15 +130,15 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 						address: actionRes.data.address,
 						addressHex: actionRes.data.addressHex,
 					}
-					void getSafeHarbourStatus().then((harbourRes) => {
+					void getSafeHarborStatus().then((harborRes) => {
 						if (cancelled) return
 						setDecodedData({
 							proposalKey,
 							signerSetChange: null,
-							safeHarbourActivated: harbourRes.ok && harbourRes.data.activated,
-							safeHarbourChange: buildSafeHarbourChange({
-								installed: harbourRes.ok
-									? { address: harbourRes.data.address, addressHex: harbourRes.data.addressHex }
+							safeHarborActivated: harborRes.ok && harborRes.data.activated,
+							safeHarborChange: buildSafeHarborChange({
+								installed: harborRes.ok
+									? { address: harborRes.data.address, addressHex: harborRes.data.addressHex }
 									: null,
 								proposed,
 								isEnacted: proposal.status === 'enacted',
@@ -157,8 +157,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: null,
-						safeHarbourChange: null,
-						safeHarbourActivated: false,
+						safeHarborChange: null,
+						safeHarborActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -172,8 +172,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
-						safeHarbourChange: null,
-						safeHarbourActivated: false,
+						safeHarborChange: null,
+						safeHarborActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -189,8 +189,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					setDecodedData({
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
-						safeHarbourChange: null,
-						safeHarbourActivated: false,
+						safeHarborChange: null,
+						safeHarborActivated: false,
 						allSigners,
 						isLoading: false,
 					})
@@ -210,8 +210,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	if (decodedData.proposalKey !== proposalKey) {
 		return {
 			signerSetChange: null,
-			safeHarbourChange: null,
-			safeHarbourActivated: false,
+			safeHarborChange: null,
+			safeHarborActivated: false,
 			allSigners: [],
 			isLoading: proposal !== null,
 		}

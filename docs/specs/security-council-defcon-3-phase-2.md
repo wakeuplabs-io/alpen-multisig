@@ -12,8 +12,8 @@ against this exact module.
 
 ## 1. The change in one sentence
 
-The proposal that activated the safe harbour stops being *the earliest enacted Defcon 1 by sequence
-number* and becomes *the enacted harbour-activating proposal with the lowest activation height*, over
+The proposal that activated the safe harbor stops being *the earliest enacted Defcon 1 by sequence
+number* and becomes *the enacted harbor-activating proposal with the lowest activation height*, over
 both Defcon types.
 
 ## 2. What this phase is not
@@ -74,7 +74,7 @@ permanently**:
 
 **This costs a badge V1 used to show, and the trade is deliberate.** V1 never read the height, so a
 proposal whose height failed to compute was still ranked by its sequence number and everything
-behind it was still badged. Concretely: a Defcon 1 at seqNo 1 activates the harbour but its height
+behind it was still badged. Concretely: a Defcon 1 at seqNo 1 activates the harbor but its height
 write fails; a Defcon 1 at seqNo 2 then enacts against an already-true flag. V1 badged the second
 one — correctly. Here the first drops out of the ranking, the second becomes the lowest known height
 and is therefore named the activator, and a proposal that burned a sequence number and its fees for
@@ -105,8 +105,8 @@ whatever decides the label. Recorded in the build plan §6.
 
 **The degenerate case is accepted deliberately.** If every enacted candidate has a null height there
 is no activator and no badge at all. The signer is not left uninformed: the dashboard's
-`SafeHarbourNote` comes from a **live** chain read (`use-safe-harbour-status.ts`) that does not touch
-`activationHeight`, so the app still says the bridge is in safe harbour — it just stops attributing
+`SafeHarborNote` comes from a **live** chain read (`use-safe-harbor-status.ts`) that does not touch
+`activationHeight`, so the app still says the bridge is in safe harbor — it just stops attributing
 the activation to a row. Test 5 pins this, so that a later author who "fixes" it by falling back to
 the sequence number goes red.
 
@@ -140,7 +140,7 @@ order, and that is the whole claim.
 The function takes a structural subset instead of the transport DTO:
 
 ```ts
-type HarbourActivationCandidate = {
+type HarborActivationCandidate = {
 	actionId: string
 	actionType: ActionType
 	status: ProposalStatus
@@ -186,7 +186,7 @@ Seven claims, all pure, no mocks, no I/O, no clock.
 |---|---|---|
 | 1 | Height beats sequence number, across both Defcon types | a `defcon_3` at seqNo 5 / height 120 and a `defcon_1` at seqNo 6 / height 118 — the Defcon 3 was revealed at 100 with `defcon3 = 20`, and a Defcon 1 swept the bridge two blocks before it matured. The set is exactly the Defcon 3. |
 | 2 | V1's answer is preserved for a Defcon-1-only history | the old four-row case, heights monotone in seqno (§4) |
-| 3 | Only harbour-activating types count | the `vk_update` case, now with **non-null** heights — today it passes for the wrong reason |
+| 3 | Only harbor-activating types count | the `vk_update` case, now with **non-null** heights — today it passes for the wrong reason |
 | 4 | A null height is neither activator nor redundant — **and the badge this costs** | one enacted at `null` beside enacted rows at 100 and 105; the set is exactly the 105, so the row at 100 goes unbadged even though the null row may have been the activation (§5) |
 | 5 | All heights null ⇒ empty set | the degenerate case of §5, deliberate |
 | 6 | The tie is broken by `seqNo`, not by arrival order | two rows at the same height, the higher-seqno one placed **first** in the array |
@@ -197,7 +197,7 @@ old implementation: wrong activator, and a genuinely redundant Defcon 3 left unb
 are asserted separately so they fail with separate messages.
 
 **Not tested: the dashboard.** There is no DOM runner, and a `readFileSync` component test pins a
-phrasing rather than a behaviour — the precedent is `safe-harbour-note-gating.test.ts`, which is
+phrasing rather than a behaviour — the precedent is `safe-harbor-note-gating.test.ts`, which is
 structural for a reason that does not apply here. The call site is one function call whose behaviour
 is fully covered.
 
@@ -205,7 +205,7 @@ is fully covered.
 
 Checked sentence by sentence against `proposals-dashboard.tsx:537-541`:
 
-> **Changed nothing on chain.** The bridge was already in safe harbour when this executed. It
+> **Changed nothing on chain.** The bridge was already in safe harbor when this executed. It
 > consumed a council sequence number and its fees, and left the state as it found it.
 
 A Defcon 3 consumes the council sequence number (at its reveal, on the acceptance path both depths
@@ -227,7 +227,7 @@ now*. No copy change in this phase.
   `create-proposal/components/defcon-1-form-fields.tsx:50` both say *"Another Defcon 1 does not change
   that"*. That becomes false when a signer can **create** a Defcon 3 — Phase 5 by the traceability
   table. Changing it here would be copy with no behaviour behind it, in a phase that has no way to
-  test copy. The other two harbour notes are already action-type-agnostic: *"Signing this does not
+  test copy. The other two harbor notes are already action-type-agnostic: *"Signing this does not
   change that"* and *"Sending this does not change that"*.
 - **The new rule inherits every way `activation_height` can be wrong**, not only null — it is
   computed with the depth read **live at reveal-confirmation time**, so changing

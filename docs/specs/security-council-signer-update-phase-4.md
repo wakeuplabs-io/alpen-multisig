@@ -215,10 +215,10 @@ process every submitted block.
 Then AC 7b uses Defcon 1 because it has depth zero and its observable bridge effect is immediate:
 
 6. submit a Defcon 1 at council sequence 1 with `C0` plus the **removed** key `C1`, assigning `C1` to
-   the canonical slot now occupied by `C3`; mine its reveal and assert the safe harbour remains off,
+   the canonical slot now occupied by `C3`; mine its reveal and assert the safe harbor remains off,
    no Defcon is queued and the council sequence stays unchanged;
 7. submit the same Defcon 1 at sequence 1 with the valid new quorum `C0 + C3`; assert the safe
-   harbour turns on and the council sequence advances.
+   harbor turns on and the council sequence advances.
 
 The second submission deliberately uses the **same sequence 1**, not a retry sequence. The invalid
 attempt and valid counter-case share action and sequence. The second succeeding proves

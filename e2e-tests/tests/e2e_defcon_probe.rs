@@ -8,12 +8,12 @@
 //! the generic signing/broadcast utilities that operate on an opaque SSZ `action_hex`.
 //!
 //! Covered:
-//! - Defcon 1 activates the bridge safe harbour in the same block as the reveal (depth 0).
+//! - Defcon 1 activates the bridge safe harbor in the same block as the reveal (depth 0).
 //! - Defcon 3 stays queued until its configured depth elapses, then activates.
 //! - The Defcon 1 signing message renders exactly the four canonical lines, with no details
 //!   block.
 //! - A Defcon 3 cancelled by the council while queued leaves the queue and never activates the
-//!   safe harbour, even past the height it would have activated at.
+//!   safe harbor, even past the height it would have activated at.
 
 use std::process::Command;
 
@@ -42,42 +42,42 @@ fn anyhow_string<T>(r: Result<T, String>) -> anyhow::Result<T> {
 }
 
 /// Defcon 1 has confirmation depth 0 upstream, so it must apply inside the reveal block
-/// itself: no queue entry, safe harbour already activated, council seqno advanced.
+/// itself: no queue entry, safe harbor already activated, council seqno advanced.
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_defcon1_activates_safe_harbour_in_the_reveal_block() {
+async fn e2e_defcon1_activates_safe_harbor_in_the_reveal_block() {
     if Command::new("bitcoind").arg("--version").output().is_err() {
-        eprintln!("Skipping e2e_defcon1_activates_safe_harbour_in_the_reveal_block: bitcoind is not available in PATH");
+        eprintln!("Skipping e2e_defcon1_activates_safe_harbor_in_the_reveal_block: bitcoind is not available in PATH");
         return;
     }
     run_defcon1(&FAST_ENACTMENT)
         .await
-        .expect("defcon 1 activates the safe harbour immediately");
+        .expect("defcon 1 activates the safe harbor immediately");
 }
 
 /// Defcon 3 is the delayed lever: queued on reveal, applied only once its configured
 /// confirmation depth has elapsed.
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_defcon3_activates_safe_harbour_only_after_its_depth() {
+async fn e2e_defcon3_activates_safe_harbor_only_after_its_depth() {
     if Command::new("bitcoind").arg("--version").output().is_err() {
-        eprintln!("Skipping e2e_defcon3_activates_safe_harbour_only_after_its_depth: bitcoind is not available in PATH");
+        eprintln!("Skipping e2e_defcon3_activates_safe_harbor_only_after_its_depth: bitcoind is not available in PATH");
         return;
     }
     run_defcon3(&FAST_ENACTMENT)
         .await
-        .expect("defcon 3 activates the safe harbour after its confirmation depth");
+        .expect("defcon 3 activates the safe harbor after its confirmation depth");
 }
 
 /// A Defcon 3 cancelled by the council while it sits in the queue must never activate the safe
-/// harbour, even once the chain passes the height it would have activated at (Constraint 3).
+/// harbor, even once the chain passes the height it would have activated at (Constraint 3).
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_defcon3_canceled_never_activates_the_safe_harbour() {
+async fn e2e_defcon3_canceled_never_activates_the_safe_harbor() {
     if Command::new("bitcoind").arg("--version").output().is_err() {
-        eprintln!("Skipping e2e_defcon3_canceled_never_activates_the_safe_harbour: bitcoind is not available in PATH");
+        eprintln!("Skipping e2e_defcon3_canceled_never_activates_the_safe_harbor: bitcoind is not available in PATH");
         return;
     }
     run_defcon3_canceled(&FAST_ENACTMENT)
         .await
-        .expect("a cancelled defcon 3 never activates the safe harbour");
+        .expect("a cancelled defcon 3 never activates the safe harbor");
 }
 
 /// The signer sees exactly these four lines. Defcon 1 carries no payload, so the rendered
@@ -109,8 +109,8 @@ async fn run_defcon1(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         .build()
         .await?;
 
-    let initial = bridge_safe_harbour_activated(&harness)?;
-    anyhow::ensure!(!initial, "safe harbour must start deactivated");
+    let initial = bridge_safe_harbor_activated(&harness)?;
+    anyhow::ensure!(!initial, "safe harbor must start deactivated");
     let seqno_before = council_last_seqno(&harness)?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
@@ -124,7 +124,7 @@ async fn run_defcon1(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         .ok_or_else(|| anyhow::anyhow!("bridge section missing"))?;
     anyhow::ensure!(
         bridge.safe_harbour().is_activated(),
-        "Defcon 1 must activate the safe harbour in the reveal block"
+        "Defcon 1 must activate the safe harbor in the reveal block"
     );
 
     let admin = decode_administration_subproto(&asm_state)
@@ -169,8 +169,8 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         "Defcon 3 must sit in the admin queue before its depth elapses"
     );
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(&harness)?,
-        "safe harbour must stay deactivated while Defcon 3 is queued"
+        !bridge_safe_harbor_activated(&harness)?,
+        "safe harbor must stay deactivated while Defcon 3 is queued"
     );
 
     // `process_queued` drains at `activation_height <= tip`, and the activation height is
@@ -193,7 +193,7 @@ async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()>
         .ok_or_else(|| anyhow::anyhow!("bridge section missing"))?;
     anyhow::ensure!(
         bridge.safe_harbour().is_activated(),
-        "Defcon 3 must activate the safe harbour after its confirmation depth"
+        "Defcon 3 must activate the safe harbor after its confirmation depth"
     );
 
     Ok(())
@@ -212,8 +212,8 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
         .build()
         .await?;
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(&harness)?,
-        "safe harbour must start deactivated"
+        !bridge_safe_harbor_activated(&harness)?,
+        "safe harbor must start deactivated"
     );
 
     // 1 — queue a Defcon 3.
@@ -228,8 +228,8 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
         anyhow::anyhow!("Defcon 3 must sit in the admin queue before its depth elapses")
     })?;
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(&harness)?,
-        "safe harbour must stay off while the Defcon 3 is queued"
+        !bridge_safe_harbor_activated(&harness)?,
+        "safe harbor must stay off while the Defcon 3 is queued"
     );
 
     // 2 — cancel it, signed by the same council.
@@ -261,8 +261,8 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
         "the cancel must remove the Defcon 3 from the queue"
     );
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(&harness)?,
-        "the cancel must not activate the harbour it removed"
+        !bridge_safe_harbor_activated(&harness)?,
+        "the cancel must not activate the harbor it removed"
     );
 
     // 3 — take the tip past the height the Defcon 3 would have activated at. Measured, not
@@ -283,8 +283,8 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
         "the queue must stay empty past the activation height"
     );
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(&harness)?,
-        "a cancelled Defcon 3 must never activate the safe harbour"
+        !bridge_safe_harbor_activated(&harness)?,
+        "a cancelled Defcon 3 must never activate the safe harbor"
     );
 
     // Both actions were accepted by the council, not silently dropped. Never `==`: the council
@@ -445,7 +445,7 @@ async fn submit_council_action(
     Ok(reveal_height)
 }
 
-fn bridge_safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
+fn bridge_safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
     let (_, asm_state) = harness
         .get_latest_asm_state()?
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;

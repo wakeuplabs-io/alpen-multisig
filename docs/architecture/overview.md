@@ -367,7 +367,7 @@ The ASM processes Bitcoin blocks regardless of how the transaction was construct
 - **CI / release:** GitHub Actions (ADR-004), signed releases, Tier-1 reproducible builds.
 
 **Open / deferred (see specs and [`deferred-backlog.md`](../assessment/deferred-backlog.md)):**
-- Security Council (Defcon 1/3, Safe Harbour address, Security Council signer update) — not built yet. Upstream support is confirmed and proven against a regtest ASM at pin `v0.1-alpha.11`; see [ADR-007](adrs/007-asm-pin-for-security-council.md) and [`specs/security-council.md`](../specs/security-council.md).
+- Security Council (Defcon 1/3, Safe Harbor address, Security Council signer update) — not built yet. Upstream support is confirmed and proven against a regtest ASM at pin `v0.1-alpha.11`; see [ADR-007](adrs/007-asm-pin-for-security-council.md) and [`specs/security-council.md`](../specs/security-council.md).
 - Payout Administrator full product line (partial `block_payout` coverage).
 - Shared Send UX unifying wallet Send and governance broadcast (Phase 9).
 - US-H5 manual-fallback export/reconcile polish when orchestrator is down.

@@ -372,7 +372,7 @@ wording, with the reason recorded inline the way Phase 3 corrected AC 3 — and 
 half, *never the word "Approved"*, is quoted unchanged in each.
 
 The same commit marks Phase 6 ✅ in the build plan and records that the *Enacted* wireframe's block
-number and safe-harbour line are not built (§8).
+number and safe-harbor line are not built (§8).
 
 ## 6. Tests
 
@@ -440,14 +440,14 @@ and `npm run build` was the honest answer in all three cases.
 
 ## 8. Out of scope
 
-- **Phase 7** — the safe-harbour banner, the per-proposal enactment predicate, AC 18–20.
+- **Phase 7** — the safe-harbor banner, the per-proposal enactment predicate, AC 18–20.
 - **A route guard on `/proposals/:id/cancel`** (§4.3).
 - **The `Enter manually` entry point** (§7).
 - **The contract's *Enacted* wireframe panel.** *Lifecycle Display* draws an enacted proposal as
-  `Status: Enacted · Block: 850,123` with a `Safe harbour activated: ✓` line
+  `Status: Enacted · Block: 850,123` with a `Safe harbor activated: ✓` line
   (`security-council-defcon.md:265-270`). Neither fact is rendered today and neither is required by
   an acceptance criterion — AC 8 is about the backend detecting enactment, not about the screen
-  reporting how. The safe-harbour half is unbuildable here in any case: `grep -rn "safe_harbour" desktop-app/`
+  reporting how. The safe-harbor half is unbuildable here in any case: `grep -rn "safe_harbour" desktop-app/`
   returns nothing until Phase 7 adds the read, and Phase 7 spends it on the dashboard banner and the
   create-form warning, which are the two places a signer can still act on it. The block number is a
   standalone addition to the detail screen with no criterion behind it. Recorded as a known

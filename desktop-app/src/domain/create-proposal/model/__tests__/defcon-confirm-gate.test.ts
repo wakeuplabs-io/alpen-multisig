@@ -23,7 +23,7 @@ const draft = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
-	newSafeHarbourAddress: '',
+	newSafeHarborAddress: '',
 	defconMessage: 'Strata ASM Administration v1',
 }
 
@@ -35,7 +35,7 @@ function issuesOn(
 		currentMultisigSigners: [],
 		currentMultisigThreshold: null,
 		authority,
-		currentSafeHarbourAddress: null,
+		currentSafeHarborAddress: null,
 	}).safeParse({
 		...draft,
 		actionType,

@@ -43,7 +43,7 @@ change its mind. That single difference is the whole of this slice.
 
 ### Not included
 
-- Security Council membership update (V3) and Safe Harbour address update (V4) — both authorized by
+- Security Council membership update (V3) and Safe Harbor address update (V4) — both authorized by
   the **Strata Administrator**, not the council.
 - De-escalation. There is none in the protocol: `is_activated()` is never set back to `false`. A
   cancel prevents an activation; it never undoes one.
@@ -118,8 +118,8 @@ the chain tip reached the proposal's stored `activation_height`, and a proposal 
 state is never re-evaluated.
 
 **Why:** a cancel removes the entry from the queue *before* its activation height, and
-`safe_harbour_activated` may already be `true` from an earlier Defcon 1 — so the naive conjunction
-"harbour on and not queued" is satisfied by a Defcon 3 that was cancelled. The height term is what
+`safe_harbor_activated` may already be `true` from an earlier Defcon 1 — so the naive conjunction
+"harbor on and not queued" is satisfied by a Defcon 3 that was cancelled. The height term is what
 separates "matured" from "was taken out early".
 
 **Inside the application, the cancel owns the target's outcome.** A cancel that reached the chain
@@ -128,7 +128,7 @@ also the shape the supersession sweep reads as "dead". The reconciliation theref
 proposal whose cancel is on chain and lets the cancel write `Canceled`; without that, the target
 lands on `Superseded` and the cancel on `Expired`, whichever order the sweep happens to use.
 
-**Known limit, recorded rather than solved:** if the harbour was already active *and* a cancel was
+**Known limit, recorded rather than solved:** if the harbor was already active *and* a cancel was
 broadcast entirely outside this application *and* the tip has since passed the activation height, no
 observable ASM state distinguishes the two outcomes — there is no cancel proposal to defer to. This
 is the same class of limit V1's Phase 4 recorded for reveal-block ordering, and the
@@ -258,7 +258,7 @@ most likely to be reaching for under time pressure, and the delayed one is the c
 Defcon 3 extends `create-proposal` and gets no route of its own, exactly as Defcon 1 does. The form
 carries, in order:
 
-1. The safe-harbour note, when the bridge is **already** in safe harbour — with its own wording, not
+1. The safe-harbor note, when the bridge is **already** in safe harbor — with its own wording, not
    Defcon 1's. It is told, never enforced: a warning, never a block.
 2. A destructive callout stating the **delayed and cancelable** nature of the action
    ([Constraint 5](#5-defcon-3-is-destructive-but-it-is-not-irreversible)).
@@ -285,8 +285,8 @@ Everything here already behaves correctly for a non-Defcon-1 action; this slice 
 The badge that says an enacted proposal changed nothing on chain is currently computed by ordering
 enacted **Defcon 1** proposals by sequence number. Defcon 3 activates the same flag on a timelock, so
 that premise breaks the moment this slice ships. It is replaced by ordering **all** enacted
-harbour-activating proposals by their **activation height**; the lowest is the one that turned the
-harbour on, and every one after it changed nothing — Defcon 3 included.
+harbor-activating proposals by their **activation height**; the lowest is the one that turned the
+harbor on, and every one after it changed nothing — Defcon 3 included.
 
 ### Manual fallback
 
@@ -365,7 +365,7 @@ is frozen by contract (`updates.rs:91-92`) because external signers hash the ren
 
 **Given** a Defcon 3 whose reveal has confirmed
 **When** the chain tip is below its activation height
-**Then** the proposal is **Awaiting enactment**, the safe harbour is **not** activated, and the ASM
+**Then** the proposal is **Awaiting enactment**, the safe harbor is **not** activated, and the ASM
 admin queue holds its entry.
 
 ### 7. The countdown is driven by the live depth
@@ -379,13 +379,13 @@ admin queue holds its entry.
 
 **Given** a queued Defcon 3
 **When** the tip reaches `reveal_block + defcon3`
-**Then** the entry leaves the queue, the safe harbour is activated, and the proposal becomes
+**Then** the entry leaves the queue, the safe harbor is activated, and the proposal becomes
 `Enacted` — including when the council accepted another action in the meantime
 ([Constraint 2](#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)).
 
 ### 9. The activating proposal is the one with the lowest activation height
 
-**Given** several enacted proposals that activate the safe harbour
+**Given** several enacted proposals that activate the safe harbor
 **When** the redundancy badge is computed
 **Then** the one with the lowest activation height is named the activation and every later one is
 marked as having changed nothing — regardless of sequence number, and regardless of which of the two
@@ -404,11 +404,11 @@ Defcon types each is.
 **Then** the cancel proposal is created under the Security Council authority and requires a fresh
 council quorum.
 
-### 12. A cancelled Defcon 3 never activates the harbour
+### 12. A cancelled Defcon 3 never activates the harbor
 
 **Given** a queued Defcon 3 whose cancel enacted
 **When** the tip passes the original activation height
-**Then** the entry is gone from the queue, the safe harbour is **not** activated by it, and the
+**Then** the entry is gone from the queue, the safe harbor is **not** activated by it, and the
 proposal reads `Canceled` — never `Enacted`
 ([Constraint 3](#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted)).
 
@@ -426,9 +426,9 @@ proposal is itself never cancellable.
 **Then** a Defcon 3 and its cancel can both be aggregated and broadcast, and the exported bundle
 carries the raw transaction hex.
 
-### 15. The safe-harbour note appears with its own wording
+### 15. The safe-harbor note appears with its own wording
 
-**Given** the bridge is already in safe harbour
+**Given** the bridge is already in safe harbor
 **When** a council signer opens the Defcon 3 form
 **Then** a note says so — stating that a Defcon 3 additionally costs a full delay before changing
 nothing — and it never blocks creation.
@@ -441,7 +441,7 @@ nothing — and it never blocks creation.
 |---|---|
 | `confirmation_depths.defcon3` is `0` in a deployment | Supported degradation. The action becomes immediate and uncancellable: no queue entry, no countdown, no cancel affordance — all three by construction, since each reads the resolved depth. Nothing hardcodes an alternative. |
 | Two live Defcon 3 proposals | The payload is empty, so two Defcon 3 actions are byte-identical and a queue lookup by action matches the **first** entry. Each proposal then reads the other's queue state. Sequence numbers differ, so acceptance still orders them; **prevented at creation** by [AC 3](#3-a-duplicate-defcon-3-is-rejected) only when the seqno also matches. Recorded as a known ambiguity and revisited if a deployment ever needs two in flight. |
-| Safe harbour already active when a Defcon 3 is created | Allowed, warned about ([AC 15](#15-the-safe-harbour-note-appears-with-its-own-wording)). Refusing the lever on the strength of a state read is the worse failure. |
+| Safe harbor already active when a Defcon 3 is created | Allowed, warned about ([AC 15](#15-the-safe-harbor-note-appears-with-its-own-wording)). Refusing the lever on the strength of a state read is the worse failure. |
 | A Defcon 3 is cancelled after its activation height | Impossible on chain — the entry is gone. The cancel fails with `UnknownAction`, and the proposal shows Enacted. |
 | Council membership rotated while a Defcon 3 is queued | The queued entry stands; the ASM validated it at acceptance. A *cancel* would need a quorum of the new council. |
 | The ASM cannot answer during a listing | The listing succeeds; cancelability degrades to "no affordance" and the next cycle asks again. |
@@ -471,8 +471,8 @@ activation height, and the field-driven cancel decision. Plus the IPC schema con
 fail when the Zod schema and the Rust DTO diverge.
 
 **E2E (`e2e-tests`)** — the existing `run_defcon3` proves queue → depth → activation. This slice adds
-the cancelled path: submit a Defcon 3, assert queued with the harbour off, submit a council-signed
-cancel, mine exactly `depth` blocks, and assert the queue is empty **and the harbour is still off**.
+the cancelled path: submit a Defcon 3, assert queued with the harbor off, submit a council-signed
+cancel, mine exactly `depth` blocks, and assert the queue is empty **and the harbor is still off**.
 That assertion is the only automated coverage of
 [Constraint 3](#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
@@ -498,9 +498,9 @@ Code review checks that:
 
 Post-merge validation on regtest, with the local stack:
 
-1. A council signer creates, signs to quorum and broadcasts a Defcon 3; the harbour stays off.
+1. A council signer creates, signs to quorum and broadcasts a Defcon 3; the harbor stays off.
 2. The proposal shows Approved, then Awaiting enactment with a countdown to the right block.
-3. Path A: mine `depth` blocks → Enacted, harbour on.
-4. Path B: cancel inside the window → the target reads Canceled, the harbour stays off, and nothing
+3. Path A: mine `depth` blocks → Enacted, harbor on.
+4. Path B: cancel inside the window → the target reads Canceled, the harbor stays off, and nothing
    reads Enacted.
 5. A Defcon 1 created in the same session still shows no countdown and no cancel affordance.

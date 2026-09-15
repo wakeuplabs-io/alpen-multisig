@@ -8,7 +8,7 @@
 
 **Closes:** [AC 6](./security-council-defcon-3.md#6-a-broadcast-defcon-3-is-queued-not-enacted),
 [AC 8](./security-council-defcon-3.md#8-it-enacts-at-exactly-its-depth), and the in-band half of
-[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbour);
+[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor);
 [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)
 and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
@@ -16,7 +16,7 @@ and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-repo
 
 The `Defcon3` arm of `is_proposal_enacted_on_asm` stops returning `BadRequest` and becomes a pure
 predicate over four observations — seqno consumed, gone from the queue, tip past the stored
-activation height, harbour active — shaped like `defcon1_enacted` so its truth table is testable
+activation height, harbor active — shaped like `defcon1_enacted` so its truth table is testable
 without an ASM.
 
 ## 2. What this phase is not
@@ -46,7 +46,7 @@ predicate. No Tauri, no desktop, no new e2e.
 
 Using `==` on Defcon 3 marks a successfully enacted proposal as `Superseded`
 ([Constraint 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)).
-Omitting the height term marks a cancelled proposal as `Enacted` when the harbour was already on
+Omitting the height term marks a cancelled proposal as `Enacted` when the harbor was already on
 ([Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted)).
 
 ## 4. Function contract
@@ -58,20 +58,20 @@ fn defcon3_enacted(
     last_seqno: u64,
     seq_no: u64,
     still_queued: bool,
-    safe_harbour_activated: bool,
+    safe_harbor_activated: bool,
     bitcoin_tip: u64,
     activation_height: u64,
 ) -> bool {
     last_seqno >= seq_no
         && !still_queued
-        && safe_harbour_activated
+        && safe_harbor_activated
         && bitcoin_tip >= activation_height
 }
 ```
 
 ### 4.2 Dispatch arm
 
-Replace `asm_enactment.rs`'s `BadRequest` stub. Read council `last_seqno`, bridge harbour flag, and
+Replace `asm_enactment.rs`'s `BadRequest` stub. Read council `last_seqno`, bridge harbor flag, and
 whether any Defcon 3 is still in `admin.queued()`. The payload is empty, so matching this action
 and matching any Defcon 3 are the same question — two in-flight Defcon 3s share queue state
 (contract edge case). Same `matches!` shape as Defcon 1.
@@ -123,7 +123,7 @@ check: a proposal whose cancel is `RevealConfirmed` and not `Expired` is left al
 
 ### 4.7 Known limit (recorded, not solved)
 
-Cancel broadcast entirely outside this app, tip past activation height, harbour already active — no
+Cancel broadcast entirely outside this app, tip past activation height, harbor already active — no
 observable ASM state distinguishes cancelled from enacted, and there is no cancel proposal to defer
 to. Phase 7 e2e pins the in-band path.
 

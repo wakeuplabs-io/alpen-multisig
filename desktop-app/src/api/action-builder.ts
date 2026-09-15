@@ -56,15 +56,15 @@ export function buildSequencerKeyUpdateHex(
 }
 
 /** Defcon 1 carries no payload, so its action hex is a constant the Rust side encodes. */
-export type BuildSafeHarbourAddressUpdateHexInput = {
+export type BuildSafeHarborAddressUpdateHexInput = {
 	/** A bech32m P2TR address on the active network. Rust converts it to the BOSD descriptor. */
 	address: string
 }
 
-export function buildSafeHarbourAddressUpdateHex(
-	input: BuildSafeHarbourAddressUpdateHexInput,
+export function buildSafeHarborAddressUpdateHex(
+	input: BuildSafeHarborAddressUpdateHexInput,
 ): Promise<ApiResult<BuildActionHexResponse>> {
-	return tauriCall('build_safe_harbour_address_update_hex', { input }, buildActionHexResponseSchema)
+	return tauriCall('build_safe_harbor_address_update_hex', { input }, buildActionHexResponseSchema)
 }
 
 export function buildDefcon1ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {

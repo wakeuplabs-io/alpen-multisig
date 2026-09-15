@@ -27,11 +27,11 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 		title: 'Security Council signer update',
 		description: 'Add / remove council keys or change threshold.',
 	},
-	// "Safe Harbour" rather than "Safe Harbor": the label follows the protocol's spelling, which is
+	// "Safe Harbor" rather than "Safe Harbor": the label follows the protocol's spelling, which is
 	// what the signing message and the device show.
 	safe_harbour_address_update: {
 		actionType: 'safe_harbour_address_update',
-		title: 'Safe Harbour address update',
+		title: 'Safe Harbor address update',
 		description: 'Change where the bridge sweeps funds to.',
 	},
 	operator_set_update: {

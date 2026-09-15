@@ -112,28 +112,28 @@ pub async fn fetch_current_operators(rpc_url: &str) -> Result<Vec<String>, Strin
         .collect())
 }
 
-/// Whether the bridge is currently in safe harbour.
+/// Whether the bridge is currently in safe harbor.
 ///
 /// Read straight from the node like the other live ASM facts this module serves: the desktop
 /// decodes the bridge section it already decodes for the operator set. The address is not
 /// returned — nothing in the app renders it.
-/// The bridge's safe harbour: whether it is activated, and where it currently points.
+/// The bridge's safe harbor: whether it is activated, and where it currently points.
 ///
 /// The address is the BOSD wire form — a type tag plus the payload — which is also the string the
 /// signing message renders and the device displays.
-pub struct SafeHarbour {
+pub struct SafeHarbor {
     pub activated: bool,
     pub address_hex: String,
 }
 
-pub async fn fetch_safe_harbour(rpc_url: &str) -> Result<SafeHarbour, String> {
+pub async fn fetch_safe_harbor(rpc_url: &str) -> Result<SafeHarbor, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let bridge = decode_bridge_state(&anchor)?;
-    let safe_harbour = bridge.safe_harbour();
-    Ok(SafeHarbour {
-        activated: safe_harbour.is_activated(),
-        address_hex: hex::encode(safe_harbour.address().as_descriptor().to_bytes()),
+    let safe_harbor = bridge.safe_harbour();
+    Ok(SafeHarbor {
+        activated: safe_harbor.is_activated(),
+        address_hex: hex::encode(safe_harbor.address().as_descriptor().to_bytes()),
     })
 }
 

@@ -228,7 +228,7 @@ true rather than aspirational.
 | `components/approvals-list.tsx` via `allSigners` | correct — the authorizing authority, which is what it means | — |
 | `use-manual-proposal.ts:203,281` import gate | stops refusing the bundle (§10) | — |
 | `proposal-status.ts:78,96` | `'approved'` and a countdown, which is what the contract's State Model wants — both predicates exclude only `defcon_1` | — correct by construction |
-| `lib/safe-harbour-redundancy.ts:23` | not harbour-activating | — correct by construction |
+| `lib/safe-harbor-redundancy.ts:23` | not harbor-activating | — correct by construction |
 | `orchestrator-be` enactment | parks at Approved. `asm_enactment.rs` returns `BadRequest` and `application/proposals.rs` `warn!`s and returns `Ok(())` **per proposal**, so it does not poison the reconciliation of anything else | 2 |
 | `create-proposal/` | no menu entry, no validator, no schema value | 3 |
 

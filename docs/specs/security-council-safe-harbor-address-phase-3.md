@@ -1,23 +1,23 @@
 # V4 Phase 3 — What the manual walk exposed
 
-> **Functional contract:** [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 > §4 Phase 3, which reserved this phase without contents: "expect it to be about copy — how 'safe
-> harbour' reads to someone who has not read the PRD — and about how the destination is displayed."
+> harbor' reads to someone who has not read the PRD — and about how the destination is displayed."
 > Both halves turned out to be right, and one of them is not cosmetic.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
-> **Predecessors:** [Phase 1](./security-council-safe-harbour-address-phase-1.md) (#548),
-> [Phase 2](./security-council-safe-harbour-address-phase-2.md) (#549).
+> **Predecessors:** [Phase 1](./security-council-safe-harbor-address-phase-1.md) (#548),
+> [Phase 2](./security-council-safe-harbor-address-phase-2.md) (#549).
 > **Source:** the manual walk on regtest, 2026-09-10 — three runs: an enactment, a cancel followed
-> by an enactment, and a rotation submitted with the harbour already up.
+> by an enactment, and a rotation submitted with the harbor already up.
 > **Status:** implemented; automated checks green, and walked on regtest 2026-09-10 (§13).
 
 ## 1. The change in one sentence
 
 The one path this slice exists to describe — a rotation the bridge accepts and discards — is the one
 path the app explains wrongly, and it explains it wrongly because the administrator's dashboard never
-reads the harbour at all.
+reads the harbor at all.
 
 ## 2. What the walk confirmed
 
@@ -35,7 +35,7 @@ refusals for a P2WPKH address and for an address of another network (item 3 — 
 exist at `desktop-app/src-tauri/src/domain/action.rs:141-147` and have tests, but no one has read
 them off the screen), and the manual bundle round-trip (item 10).
 
-## 3. The dashboard does not read the harbour for the authority that rotates it
+## 3. The dashboard does not read the harbor for the authority that rotates it
 
 This is the root the three copy defects below grow out of, so it comes first.
 
@@ -45,14 +45,14 @@ This is the root the three copy defects below grow out of, so it comes first.
 // The council only: no other authority has a lever that answers a bridge-wide state, so no
 // other session reads it either.
 const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
-const safeHarbourActivated = useSafeHarbourActivated(isCouncil)
+const safeHarborActivated = useSafeHarborActivated(isCouncil)
 ```
 
 That comment was true when V2 wrote it and V4 falsified it. The administrator now has an action
 whose entire outcome is decided by that bridge-wide state — and on the administrator's dashboard the
-flag is not read, so it is `false` for every safe harbour rotation any signer will ever look at.
+flag is not read, so it is `false` for every safe harbor rotation any signer will ever look at.
 
-The gate widens to both authorities that have something to say about the harbour. It does not widen
+The gate widens to both authorities that have something to say about the harbor. It does not widen
 to *all* sessions: the rule the comment encodes — read it only where a lever answers it — is right,
 and the fix is that V4 added a second such lever, not that the rule was wrong.
 
@@ -67,38 +67,38 @@ which is correct, above this detail (`lib/proposal-send-state.ts:76-79`):
 No other action used it. *This* action used it. It was mined, the ASM accepted it, the signature
 verified, the queue entry drained, and `SafeHarbour::update_address` refused the change and returned
 a boolean the bridge subprotocol discards — the behaviour
-[Constraint 1](./security-council-safe-harbour-address.md#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)
-is written about, and the reason `safe_harbour_address_enacted` decides on the destination rather
+[Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
+is written about, and the reason `safe_harbor_address_enacted` decides on the destination rather
 than on the sequence number (`orchestrator-be/src/infrastructure/asm_enactment.rs:294-320`).
 
 So the backend knows the difference and the screen does not. Worse, the advice inverts: told a rival
 action beat them, a signer creates a replacement, collects a quorum, pays commit and reveal fees
-again, and the bridge discards that one too, because the harbour is still up and nothing in the
+again, and the bridge discards that one too, because the harbor is still up and nothing in the
 protocol takes it down.
 
 ### 4.1 The shape
 
-`proposalSendState` gains a third superseded variant and one input, `harbourFrozeDestination`,
+`proposalSendState` gains a third superseded variant and one input, `harborFrozeDestination`,
 computed by the two callers rather than read inside — the module is pure and stays pure. The
-condition is: the proposal's `actionType` is `safe_harbour_address_update`, and the harbour is
+condition is: the proposal's `actionType` is `safe_harbour_address_update`, and the harbor is
 activated now.
 
 **"Now" is sound here, and this is the one place it needs an argument.** The flag is set once and
 there is no de-escalation upstream — the contract's Scope says so, and it is why V2's redundancy
-badge and every `SafeHarbourNote` render site already read it live. A harbour that is up today was
+badge and every `SafeHarborNote` render site already read it live. A harbor that is up today was
 up when the rotation was mined, or came up after; it cannot have gone down.
 
 The residual ambiguity is the reverse case: a rotation genuinely superseded by a rival action, with
-the harbour activated only afterwards. The attribution is then wrong — but the *advice* is not, and
+the harbor activated only afterwards. The attribution is then wrong — but the *advice* is not, and
 the advice is what a signer acts on: a replacement really would be discarded. Today's copy is wrong
 on both. Recorded in §8 rather than solved with a stored reason.
 
 ### 4.2 The copy
 
-> **Superseded.** The safe harbour is already active, so the bridge's destination is frozen: this
+> **Superseded.** The safe harbor is already active, so the bridge's destination is frozen: this
 > transaction was mined and the ASM accepted it, and nothing changed. The signatures are bound to a
 > sequence number that is now spent, and a replacement would be discarded the same way while the
-> harbour is up. The commit and reveal fees were spent.
+> harbor is up. The commit and reveal fees were spent.
 
 It names the state, says what was lost, and — unlike both existing variants — does not prescribe a
 replacement, because here a replacement is the wrong move.
@@ -117,17 +117,17 @@ detail screen because the co-signers never saw the create form. The sign view is
 co-signers actually commit, and it is the *least* informative of the three: the signer who chose the
 destination sees the comparison, and the signers who did not, do not.
 
-The fix is reuse, not new markup: `SafeHarbourAddressDetails` already reads the harbour, so it
-switches from `useSafeHarbourActivated()` to `useSafeHarbour()` — one read that returns both the flag
-and the installed destination — and renders `SafeHarbourChangeTable` over
-`buildSafeHarbourChange({ installed, proposed, isEnacted: false })`. `isEnacted` is a constant here:
+The fix is reuse, not new markup: `SafeHarborAddressDetails` already reads the harbor, so it
+switches from `useSafeHarborActivated()` to `useSafeHarbor()` — one read that returns both the flag
+and the installed destination — and renders `SafeHarborChangeTable` over
+`buildSafeHarborChange({ installed, proposed, isEnacted: false })`. `isEnacted` is a constant here:
 nothing enacted is ever signed.
 
-`buildSafeHarbourChange` returning `null` when the destination cannot be read keeps its meaning —
+`buildSafeHarborChange` returning `null` when the destination cannot be read keeps its meaning —
 no section rather than a lone address whose role is unstated — and the note above it still renders,
 since the flag degrades to `false` independently.
 
-The gating test at `screens/__tests__/safe-harbour-note-gating.test.ts` accepts `useSafeHarbour(` and
+The gating test at `screens/__tests__/safe-harbor-note-gating.test.ts` accepts `useSafeHarbor(` and
 a `.activated` guard, so the switch satisfies it as written. That was designed in; this phase is the
 first caller to use it.
 
@@ -179,11 +179,11 @@ now; recorded here so the next reader knows it was weighed.
 
 Pure TypeScript, in the runner CI already globs (`src/**/*.test.ts(x)`):
 
-- `proposal-send-state`: a superseded safe harbour rotation with the harbour up gets the frozen
-  detail; the same rotation with the harbour down keeps the sequence-number detail — the pair that
-  proves the new arm is conditional and not a relabelling; a superseded Defcon with the harbour up
+- `proposal-send-state`: a superseded safe harbor rotation with the harbor up gets the frozen
+  detail; the same rotation with the harbor down keeps the sequence-number detail — the pair that
+  proves the new arm is conditional and not a relabelling; a superseded Defcon with the harbor up
   keeps the sequence-number detail, which is the tripwire against gating on the flag alone.
-- `buildSafeHarbourChange` needs no new test — the sign view is a new caller of a covered function.
+- `buildSafeHarborChange` needs no new test — the sign view is a new caller of a covered function.
   The sign view's own wiring has no DOM runner, exactly as Phase 1 §4 recorded; the walk is the
   substitute.
 - The note-gating test is expected to keep passing unchanged. If it does not, the change is wrong.
@@ -194,7 +194,7 @@ Each atomic, none repairing the one before it.
 
 | # | Contents |
 |---|---|
-| 1 | The dashboard reads the harbour for the administrator too (§3). Inert on its own: nothing consumes the widened flag yet. |
+| 1 | The dashboard reads the harbor for the administrator too (§3). Inert on its own: nothing consumes the widened flag yet. |
 | 2 | The frozen-destination superseded variant, its input and the two call sites, red then green (§4). |
 | 3 | The sign view shows the change table and the full note (§5, §7 first item). |
 | 4 | The form error is cleared when the form changes (§6). |
@@ -215,7 +215,7 @@ With V4 closed, Stage 6 — the compliance audit and issue #117 — is the only 
 
 The `AGENTS.md` checklist plus `npm run test:unit`. Then, on the local stack, the four surfaces this
 phase changes: an untitled proposal's preview, a rejected preview followed by a corrected address, a
-co-signer's sign view for a rotation, and — with the harbour already up — the detail of a rotation
+co-signer's sign view for a rotation, and — with the harbor already up — the detail of a rotation
 that reached `Superseded`, which is the sentence this phase exists for.
 
 ## 13. The second walk
@@ -229,13 +229,13 @@ would prove it.
 | §4 the frozen-destination detail | The detail and the dashboard card of a swallowed rotation both carry the new sentence. That it appears on the **administrator's** dashboard is also §3's evidence: under the old gate that copy was unreachable there. |
 | §5 the sign view's before/after | Current and Proposed, with both descriptors, on the screen where the signature is given. |
 | §7 the note's last sentence | "It will not report as Enacted" now on all three surfaces. |
-| §7 the untitled draft | Previews as "Proposal #5 - Safe Harbour address update". |
+| §7 the untitled draft | Previews as "Proposal #5 - Safe Harbor address update". |
 | §6 the signing message | The 66-character descriptor rendered whole, on its own wrapped line. |
 | §6 the stale form error | **Not evidenced.** The walk captured the error while the address was genuinely invalid, which is correct, and the next form seen was already clean but belonged to a different proposal. Nothing contradicts the fix; nothing captured proves it either. |
 
 Two observations, neither a regression:
 
-- An enacted rotation's detail shows a single `Destination` column. That is `buildSafeHarbourChange`
+- An enacted rotation's detail shows a single `Destination` column. That is `buildSafeHarborChange`
   working as designed — the live value *is* what the rotation installed, so two identical columns
   would read as a rotation that changed nothing.
 - "⚠ Expiring soon — 23 h 59 m" is still on every pending surface. That is §8's finding, filed

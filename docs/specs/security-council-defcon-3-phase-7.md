@@ -7,7 +7,7 @@
 §4 Phase 7. This document is that phase at implementation detail.
 
 **Closes:** [AC 11](./security-council-defcon-3.md#11-the-cancel-is-signed-by-the-council-itself),
-[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbour) and
+[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor) and
 [AC 14](./security-council-defcon-3.md#14-the-manual-fallback-works-for-both);
 [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
@@ -31,7 +31,7 @@ owns whatever the manual walk finds.
 
 | Document | What Phase 7 takes from it |
 |---|---|
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) § Test Plan | The e2e's shape: queue → assert harbour off → cancel → mine → queue empty **and harbour still off** |
+| [`security-council-defcon-3.md`](./security-council-defcon-3.md) § Test Plan | The e2e's shape: queue → assert harbor off → cancel → mine → queue empty **and harbor still off** |
 | Same, § Cancel creation | "No new code is expected" — the claim §4 audits |
 | Same, § Manual fallback | "a Defcon 3, **and its cancel**" — the clause §6 discovers is unmet |
 | Same, Edge Cases | Two live Defcon 3s stay a recorded ambiguity; the e2e keeps exactly one in flight |
@@ -123,7 +123,7 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
     anyhow::ensure!(depth > 0, "the fixture must configure a non-zero defcon3 depth: at 0 there is no window to cancel in");
 
     let harness = /* AsmTestHarnessBuilder, as in run_defcon3 */;
-    anyhow::ensure!(!bridge_safe_harbour_activated(&harness)?, "safe harbour must start deactivated");
+    anyhow::ensure!(!bridge_safe_harbor_activated(&harness)?, "safe harbor must start deactivated");
 
     // 1 — queue a Defcon 3.
     let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
@@ -134,7 +134,7 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
 
     let (queued_id, queued_action) = queued_defcon3(&harness)?
         .ok_or_else(|| anyhow::anyhow!("Defcon 3 must sit in the admin queue before its depth elapses"))?;
-    anyhow::ensure!(!bridge_safe_harbour_activated(&harness)?, "safe harbour must stay off while the Defcon 3 is queued");
+    anyhow::ensure!(!bridge_safe_harbor_activated(&harness)?, "safe harbor must stay off while the Defcon 3 is queued");
 
     // 2 — cancel it, signed by the same council.
     //
@@ -154,7 +154,7 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
 
     // A cancel has depth 0, so the entry is gone in the cancel's own reveal block.
     anyhow::ensure!(queued_defcon3(&harness)?.is_none(), "the cancel must remove the Defcon 3 from the queue");
-    anyhow::ensure!(!bridge_safe_harbour_activated(&harness)?, "the cancel must not activate the harbour it removed");
+    anyhow::ensure!(!bridge_safe_harbor_activated(&harness)?, "the cancel must not activate the harbor it removed");
 
     // 3 — take the tip past the height the Defcon 3 would have activated at. Measured, not assumed.
     let tip = harness.get_chain_tip().await?;
@@ -164,7 +164,7 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
 
     // 4 — Constraint 3: leaving the queue is not evidence of enactment.
     anyhow::ensure!(queued_defcon3(&harness)?.is_none(), "the queue must stay empty past the activation height");
-    anyhow::ensure!(!bridge_safe_harbour_activated(&harness)?, "a cancelled Defcon 3 must never activate the safe harbour");
+    anyhow::ensure!(!bridge_safe_harbor_activated(&harness)?, "a cancelled Defcon 3 must never activate the safe harbor");
 
     // Both actions were accepted by the council, not silently dropped. Never `==`: the council may
     // accept further actions, exactly as Constraint 2 says. Written `last > fixture.seq_no` rather
@@ -263,7 +263,7 @@ every authority, which is a fix for them too.
 | # | Claim | Assertion |
 |---|---|---|
 | 1 | A cancelled Defcon 3 leaves the queue (AC 12) | no `UpdateAction::Defcon3` in `admin.queued()`, checked after the cancel's reveal **and** past the activation height |
-| 2 | …and never activates the harbour (Constraint 3) | `!safe_harbour().is_activated()` while queued, right after the cancel, and with `tip > activation_height` — the third is what the test exists for |
+| 2 | …and never activates the harbor (Constraint 3) | `!safe_harbour().is_activated()` while queued, right after the cancel, and with `tip > activation_height` — the third is what the test exists for |
 | 3 | The cancel really landed inside the window | `cancel_height < activation_height`; the queue matures before same-block transactions, so equality is already too late |
 | 4 | The tip really passed the original activation height | `tip > reveal_height + depth`, both terms measured |
 | 5 | The council itself authorised the cancel (AC 11) | signed by the same two council mnemonics at `seq_no + 1`, and `council_last_seqno() > seq_no` afterwards |
@@ -329,7 +329,7 @@ it is ordered after so the phase's stated deliverable lands first.
   through to `null` for the new kind. Cosmetic, and Phase 8's if the manual walk raises it.
 - **`manual-sign-collect.tsx:56` hardcodes `kind: 'update'`**, so on the offline route a cancel is a
   cancel only by its `actionType`. Fixed at the pure-label layer here, not in the component.
-- **The out-of-band cancel remains indistinguishable** from enactment when the harbour was already
+- **The out-of-band cancel remains indistinguishable** from enactment when the harbor was already
   on — Phase 4 §4.7, unchanged.
 
 ## 11. Verification
@@ -357,11 +357,11 @@ unchanged.
 **Manual walk**, from the build plan §5 points 3, 5 and 7:
 
 1. Create a Defcon 3 as a council signer, reach quorum, broadcast: Approved → Awaiting enactment with
-   a countdown, harbour off.
+   a countdown, harbor off.
 2. Open the cancel screen. *"Proposal being cancelled"* **names the Defcon 3** — its title, or
    `Proposal #N - Defcon 3` — not a bare `Proposal #N`.
 3. Sign and broadcast the cancel inside the window: the target reads **Canceled**, nothing reads
-   *Enacted*, the harbour stays off.
+   *Enacted*, the harbor stays off.
 4. Sign the cancel as the second signer: the sign view names it *Cancel* **and shows the update it
    cancels**, so the copy telling the signer to review the action details above points at something.
 5. Paste the cancel's `actionHex` into `/manual` with the council authority and its seqno: **it

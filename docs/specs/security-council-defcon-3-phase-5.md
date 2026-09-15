@@ -12,14 +12,14 @@
 [AC 3](./security-council-defcon-3.md#3-a-duplicate-defcon-3-is-rejected),
 [AC 4](./security-council-defcon-3.md#4-the-signing-message-is-the-four-canonical-lines),
 [AC 5](./security-council-defcon-3.md#5-the-type-to-confirm-gate-is-exact-and-mutually-exclusive) and
-[AC 15](./security-council-defcon-3.md#15-the-safe-harbour-note-appears-with-its-own-wording);
+[AC 15](./security-council-defcon-3.md#15-the-safe-harbor-note-appears-with-its-own-wording);
 [Constraint 5](./security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible).
 
 ## 1. The change in one sentence
 
 Defcon 3 becomes creatable and signable: one Tauri builder command, one entry in the council's action
 menu, one validator, and a Defcon form that is **parameterized by level** rather than duplicated — so
-the confirmation string, the destructive copy and the safe-harbour wording are the only three things
+the confirmation string, the destructive copy and the safe-harbor wording are the only three things
 that differ, and the signing-message wiring that carries the safety is shared.
 
 ## 2. What this phase is not
@@ -29,7 +29,7 @@ enactment logic — Phase 4 owns that. It writes **no signing-message code**: th
 resolve through the same Rust renderer the device signs over, and a second renderer is precisely the
 defect this phase must not introduce.
 
-One thing it does that the build plan does not name: the broadcast screen's safe-harbour note was
+One thing it does that the build plan does not name: the broadcast screen's safe-harbor note was
 keyed to `defcon_1`, and a Defcon 3 is reachable there the moment this phase ships. Leaving it would
 mean the last screen before the commit and reveal fees are spent says nothing, so it reads its level
 from `DEFCON_COPY` like every other surface.
@@ -47,7 +47,7 @@ from `DEFCON_COPY` like every other surface.
 ## 4. Why the form is parameterized and the validators are not
 
 The two Defcon variants differ in exactly three things: the confirmation string, the destructive
-paragraph, and the safe-harbour note's wording. Everything else in
+paragraph, and the safe-harbor note's wording. Everything else in
 [`defcon-form-fields.tsx`](../../desktop-app/src/domain/create-proposal/components/defcon-form-fields.tsx)
 is the safety-critical half — the action-hex resolve, the `useDeviceSigningMessage` call, the mirror
 of the resolved message into `defconMessage`, and the CTA gate that depends on it. Duplicating the
@@ -76,8 +76,8 @@ export type DefconCopy = {
 	calloutTitle: string
 	calloutBody: string
 	signCalloutBody: string
-	safeHarbourNote: string
-	signSafeHarbourNote: string
+	safeHarborNote: string
+	signSafeHarborNote: string
 }
 
 export const DEFCON_COPY: Record<DefconLevel, DefconCopy>
@@ -86,7 +86,7 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy>
 `DefconLevel` is declared **in `lib`**, not imported from the create-proposal domain: the module is
 read by two domains, and the import direction is `domain → lib`, never the reverse. The component
 that renders it, `DefconCallout`, goes to `src/components/` for the same reason
-`src/components/safe-harbour-note.tsx` lives there.
+`src/components/safe-harbor-note.tsx` lives there.
 
 ### 4.2 Mutual exclusion becomes true by construction
 
@@ -149,9 +149,9 @@ No block count and no hour count appears anywhere: the delay is a live depth
 | `calloutTitle` | `Delayed and cancelable` |
 | `calloutBody` | `DEFCON 3 sweeps bridge funds to the Safe Harbor, but not immediately. Once the approved proposal confirms, it is queued for the delay this deployment configures. Until it activates, the council can cancel it. From activation on it cannot be undone.` |
 | `signCalloutBody` | `Signing this approves a delayed Safe Harbor sweep. Until it activates, the council can cancel it. From activation on it cannot be undone.` |
-| `safeHarbourNote` | `The bridge is already in safe harbour. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.` |
-| `signSafeHarbourNote` | `The bridge is already in safe harbour. Signing this does not change that — it waits out its full delay before changing nothing.` |
-| `broadcastSafeHarbourNote` | `The bridge is already in safe harbour. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.` |
+| `safeHarborNote` | `The bridge is already in safe harbor. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.` |
+| `signSafeHarborNote` | `The bridge is already in safe harbor. Signing this does not change that — it waits out its full delay before changing nothing.` |
+| `broadcastSafeHarborNote` | `The bridge is already in safe harbor. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.` |
 
 Defcon 1's fields keep their current wording verbatim, including the `Irreversible` callout title —
 this phase moves those strings, it does not rewrite them.
@@ -232,7 +232,7 @@ Manual walk on regtest (`./scripts/local-stack.sh --clean`), the parts of the bu
 phase owns:
 
 1. A council signer sees both cards, Defcon 1 first and selected; every other authority sees neither.
-2. Selecting Defcon 3 renders its own callout and its own safe-harbour note, and switching back and
+2. Selecting Defcon 3 renders its own callout and its own safe-harbor note, and switching back and
    forth never shows one level's message under the other's heading.
 3. The rendered four-line message matches the signer's screen, has no `Action Details:` block, and
    differs from Defcon 1's.
