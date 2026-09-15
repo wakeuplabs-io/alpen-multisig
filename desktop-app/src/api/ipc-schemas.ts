@@ -187,7 +187,7 @@ export const currentVkSchema = z.object({
 // Zod strips what it does not declare, so a field added on the Rust side alone would vanish here
 // in silence. `addressHex` is the BOSD descriptor the device displays; `address` is the same
 // destination rendered for the active network, and is empty when that could not be resolved.
-export const safeHarbourStatusSchema = z.object({
+export const safeHarborStatusSchema = z.object({
 	activated: z.boolean(),
 	addressHex: z.string(),
 	address: z.string(),

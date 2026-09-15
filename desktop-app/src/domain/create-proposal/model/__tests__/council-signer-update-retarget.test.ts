@@ -36,7 +36,7 @@ const draft = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
-	newSafeHarbourAddress: '',
+	newSafeHarborAddress: '',
 	defconConfirm: '',
 	defconMessage: '',
 }
@@ -53,7 +53,7 @@ function issuesOn(
 		currentMultisigSigners,
 		currentMultisigThreshold: null,
 		authority,
-		currentSafeHarbourAddress: null,
+		currentSafeHarborAddress: null,
 	}).safeParse({
 		...draft,
 		actionType: 'council_signer_update',
@@ -159,7 +159,7 @@ function noOpIssues(
 		currentMultisigSigners,
 		currentMultisigThreshold,
 		authority: 'strata_admin',
-		currentSafeHarbourAddress: null,
+		currentSafeHarborAddress: null,
 	}).safeParse({ ...draft, actionType: 'council_signer_update', ...overrides })
 	if (result.success) return 0
 	return result.error.issues.filter((issue) => issue.path[0] === 'keysToAdd').length

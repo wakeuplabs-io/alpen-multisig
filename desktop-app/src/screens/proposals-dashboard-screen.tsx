@@ -4,13 +4,13 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
 import { useBlockHeight } from '@/hooks/use-block-height'
-import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
+import { useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
-import { COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE } from '@/lib/defcon-copy'
+import { COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE } from '@/lib/defcon-copy'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
@@ -31,13 +31,13 @@ export function ProposalsDashboardScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 
 	// Read by both authorities that hold a lever answering this bridge-wide state, and by no
-	// other session. The council's Defcon levers set the flag; the administrator's safe harbour
+	// other session. The council's Defcon levers set the flag; the administrator's safe harbor
 	// rotation is decided by it, since a rotation submitted after activation is accepted on chain
 	// and applied nowhere. V2 wrote this gate when the council was the only such authority; V4
 	// added the second, which left every rotation on this screen judged against a false flag.
 	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
 	const isStrataAdmin = selectedRole === AuthRole.StrataAdministrator
-	const safeHarbourActivated = useSafeHarbourActivated(isCouncil || isStrataAdmin)
+	const safeHarborActivated = useSafeHarborActivated(isCouncil || isStrataAdmin)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -115,10 +115,10 @@ export function ProposalsDashboardScreen() {
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
 				currentBlockHeight={currentBlockHeight}
-				safeHarbourActivated={safeHarbourActivated}
+				safeHarborActivated={safeHarborActivated}
 				notice={
-					isCouncil && safeHarbourActivated ? (
-						<SafeHarbourNote>{COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE}</SafeHarbourNote>
+					isCouncil && safeHarborActivated ? (
+						<SafeHarborNote>{COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE}</SafeHarborNote>
 					) : null
 				}
 				signerPubkey={signerPubkey}

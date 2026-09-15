@@ -32,7 +32,7 @@ const draft = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
-	newSafeHarbourAddress: '',
+	newSafeHarborAddress: '',
 	defconConfirm: '',
 	defconMessage: '',
 }
@@ -41,19 +41,19 @@ function issues(
 	field: string,
 	{
 		authority = 'strata_admin',
-		currentSafeHarbourAddress,
-		newSafeHarbourAddress,
-	}: { authority?: string; currentSafeHarbourAddress: string | null; newSafeHarbourAddress: string },
+		currentSafeHarborAddress,
+		newSafeHarborAddress,
+	}: { authority?: string; currentSafeHarborAddress: string | null; newSafeHarborAddress: string },
 ): string[] {
 	const result = buildCreateProposalFormSchema({
 		currentMultisigSigners: null,
 		currentMultisigThreshold: null,
 		authority,
-		currentSafeHarbourAddress,
+		currentSafeHarborAddress,
 	}).safeParse({
 		...draft,
 		actionType: 'safe_harbour_address_update',
-		newSafeHarbourAddress,
+		newSafeHarborAddress,
 	})
 	if (result.success) return []
 	return result.error.issues.filter((issue) => issue.path[0] === field).map((issue) => issue.message)
@@ -90,7 +90,7 @@ for (const authority of OTHER_AUTHORITIES) {
 // The menu is display data; this is the rule. It is what a stale form value or a direct route hits.
 for (const authority of OTHER_AUTHORITIES) {
 	assert.ok(
-		issues('actionType', { authority, currentSafeHarbourAddress: null, newSafeHarbourAddress: NEW_ADDRESS }).length > 0,
+		issues('actionType', { authority, currentSafeHarborAddress: null, newSafeHarborAddress: NEW_ADDRESS }).length > 0,
 		`claim 2 (AC 1a): the schema must refuse a safe harbour update authored by ${authority}`,
 	)
 }
@@ -99,8 +99,8 @@ for (const authority of OTHER_AUTHORITIES) {
 assert.ok(
 	issues('actionType', {
 		authority: 'security_council',
-		currentSafeHarbourAddress: null,
-		newSafeHarbourAddress: NEW_ADDRESS,
+		currentSafeHarborAddress: null,
+		newSafeHarborAddress: NEW_ADDRESS,
 	}).length > 0,
 	'claim 2 (AC 1a): the authority that fires the sweep must not choose where the funds land',
 )
@@ -108,16 +108,15 @@ assert.ok(
 // ─── claim 3: the field is required ───
 
 assert.ok(
-	issues('newSafeHarbourAddress', { currentSafeHarbourAddress: CURRENT_ADDRESS, newSafeHarbourAddress: '  ' }).length >
-		0,
+	issues('newSafeHarborAddress', { currentSafeHarborAddress: CURRENT_ADDRESS, newSafeHarborAddress: '  ' }).length > 0,
 	'claim 3: an empty destination is refused',
 )
 
 // ─── claim 4: pasting the descriptor hex is named for what it is ───
 
-const hexIssues = issues('newSafeHarbourAddress', {
-	currentSafeHarbourAddress: CURRENT_ADDRESS,
-	newSafeHarbourAddress: DESCRIPTOR_HEX,
+const hexIssues = issues('newSafeHarborAddress', {
+	currentSafeHarborAddress: CURRENT_ADDRESS,
+	newSafeHarborAddress: DESCRIPTOR_HEX,
 })
 assert.ok(hexIssues.length > 0, 'claim 4: the descriptor hex is not an address and is refused')
 assert.match(
@@ -129,18 +128,18 @@ assert.match(
 // ─── claim 5 (AC 3c): rotating to the destination already installed is refused ───
 
 assert.deepEqual(
-	issues('newSafeHarbourAddress', {
-		currentSafeHarbourAddress: CURRENT_ADDRESS,
-		newSafeHarbourAddress: CURRENT_ADDRESS,
+	issues('newSafeHarborAddress', {
+		currentSafeHarborAddress: CURRENT_ADDRESS,
+		newSafeHarborAddress: CURRENT_ADDRESS,
 	}),
 	[NO_OP_SAFE_HARBOUR_MESSAGE],
 	'claim 5 (AC 3c): the chain accepts this and reports it as Enacted, so the form is the only place it can be caught',
 )
 
 assert.deepEqual(
-	issues('newSafeHarbourAddress', {
-		currentSafeHarbourAddress: CURRENT_ADDRESS,
-		newSafeHarbourAddress: NEW_ADDRESS,
+	issues('newSafeHarborAddress', {
+		currentSafeHarborAddress: CURRENT_ADDRESS,
+		newSafeHarborAddress: NEW_ADDRESS,
 	}),
 	[],
 	'claim 5 (AC 3c): a different destination is a real change and passes — the counter-case',
@@ -148,9 +147,9 @@ assert.deepEqual(
 
 // Bech32m is case-insensitive, and an address pasted from a screen may arrive uppercased.
 assert.deepEqual(
-	issues('newSafeHarbourAddress', {
-		currentSafeHarbourAddress: CURRENT_ADDRESS,
-		newSafeHarbourAddress: CURRENT_ADDRESS.toUpperCase(),
+	issues('newSafeHarborAddress', {
+		currentSafeHarborAddress: CURRENT_ADDRESS,
+		newSafeHarborAddress: CURRENT_ADDRESS.toUpperCase(),
 	}),
 	[NO_OP_SAFE_HARBOUR_MESSAGE],
 	'claim 5 (AC 3c): case must not be a way past the rule',
@@ -159,7 +158,7 @@ assert.deepEqual(
 // ─── claim 6 (AC 3c): the rule is off when the read failed, and the form blocks submission then ───
 
 assert.deepEqual(
-	issues('newSafeHarbourAddress', { currentSafeHarbourAddress: null, newSafeHarbourAddress: CURRENT_ADDRESS }),
+	issues('newSafeHarborAddress', { currentSafeHarborAddress: null, newSafeHarborAddress: CURRENT_ADDRESS }),
 	[],
 	'claim 6 (AC 3c): with no current destination read there is nothing to compare against, so the rule stays silent — safe only because the form disables both CTAs in that state',
 )

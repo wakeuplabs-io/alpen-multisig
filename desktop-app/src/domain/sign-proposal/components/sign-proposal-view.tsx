@@ -5,9 +5,9 @@ import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
-import { useSafeHarbour, useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
+import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
 import { buildSafeHarbourChange } from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
 import { deviceCopy } from '@/lib/device-copy'
@@ -138,23 +138,23 @@ function SafeHarbourAddressDetails({
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
 	// rotation submitted after activation is accepted on chain and discarded. One read for both
 	// answers — whether the harbour is up, and what it currently sweeps to.
-	const { safeHarbour } = useSafeHarbour()
+	const { safeHarbor } = useSafeHarbor()
 
 	// `isEnacted` is a constant on this screen: nothing enacted is ever signed.
 	const change = buildSafeHarbourChange({
-		installed: safeHarbour === null ? null : { address: safeHarbour.address, addressHex: safeHarbour.addressHex },
+		installed: safeHarbor === null ? null : { address: safeHarbor.address, addressHex: safeHarbor.addressHex },
 		proposed: { address: action.address, addressHex: action.addressHex },
 		isEnacted: false,
 	})
 
 	return (
 		<>
-			{safeHarbour?.activated === true && (
+			{safeHarbor?.activated === true && (
 				<div className="mt-5">
-					<SafeHarbourNote>
+					<SafeHarborNote>
 						The destination is frozen once safe harbor is active, so this update will be accepted and change nothing. It
 						will not report as Enacted.
-					</SafeHarbourNote>
+					</SafeHarborNote>
 				</div>
 			)}
 
@@ -205,13 +205,13 @@ function SafeHarbourAddressDetails({
 function DefconDetails({ level }: { level: DefconLevel }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and
 	// the sentences below are written in the future tense, which is wrong once the harbour is up.
-	const safeHarbourActivated = useSafeHarbourActivated()
+	const safeHarborActivated = useSafeHarborActivated()
 
 	return (
 		<>
-			{safeHarbourActivated && (
+			{safeHarborActivated && (
 				<div className="mt-5">
-					<SafeHarbourNote>{DEFCON_COPY[level].signSafeHarbourNote}</SafeHarbourNote>
+					<SafeHarborNote>{DEFCON_COPY[level].signSafeHarborNote}</SafeHarborNote>
 				</div>
 			)}
 

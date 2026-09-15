@@ -5,7 +5,7 @@ import {
 	authorityMembershipsSchema,
 	currentVkSchema,
 	multisigConfigSchema,
-	safeHarbourStatusSchema,
+	safeHarborStatusSchema,
 } from '@/api/ipc-schemas'
 
 export type MultisigConfig = {
@@ -15,7 +15,7 @@ export type MultisigConfig = {
 
 export type AuthorityMemberships = Record<string, boolean>
 
-export type SafeHarbourStatus = {
+export type SafeHarborStatus = {
 	activated: boolean
 	/** BOSD descriptor of the current destination — what a signer's device displays. */
 	addressHex: string
@@ -45,8 +45,8 @@ export function getCurrentOperators(): Promise<ApiResult<string[]>> {
 	return tauriCall('get_current_operators', {}, z.array(z.string()))
 }
 
-export function getSafeHarbourStatus(): Promise<ApiResult<SafeHarbourStatus>> {
-	return tauriCall('get_safe_harbour_status', {}, safeHarbourStatusSchema)
+export function getSafeHarborStatus(): Promise<ApiResult<SafeHarborStatus>> {
+	return tauriCall('get_safe_harbour_status', {}, safeHarborStatusSchema)
 }
 
 export function getBitcoinBlockHeight(): Promise<ApiResult<number>> {

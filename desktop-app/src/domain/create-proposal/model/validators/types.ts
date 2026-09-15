@@ -9,7 +9,7 @@ export type ActionValidatorContext = {
 	currentMultisigSigners: string[] | null
 	currentMultisigThreshold: number | null
 	/** The bridge's current safe harbour destination as an address; null when unread. */
-	currentSafeHarbourAddress: string | null
+	currentSafeHarborAddress: string | null
 }
 
 export type ActionValidator = (context: ActionValidatorContext) => void

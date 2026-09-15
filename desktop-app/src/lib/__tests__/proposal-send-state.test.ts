@@ -120,7 +120,7 @@ assert.equal(proposalSendState(proposal('superseded', 'idle', 0)).kind, 'superse
 // subprotocol discards. Nothing raced it. Saying otherwise sends the signer to build a
 // replacement that would be discarded exactly the same way.
 
-const frozen = proposalSendState({ ...proposal('superseded', 'reveal_confirmed'), harbourFrozeDestination: true })
+const frozen = proposalSendState({ ...proposal('superseded', 'reveal_confirmed'), harborFrozeDestination: true })
 assert.equal(frozen.kind, 'superseded')
 assert.equal(showsSendButton(frozen), false)
 const frozenDetail = frozen.kind === 'superseded' ? frozen.detail : ''
@@ -138,7 +138,7 @@ assert.match(
 
 // Being swallowed requires reaching a block. A bundle that never confirmed never got that far,
 // whatever the harbour was doing.
-const frozenBefore = proposalSendState({ ...proposal('superseded', 'idle'), harbourFrozeDestination: true })
+const frozenBefore = proposalSendState({ ...proposal('superseded', 'idle'), harborFrozeDestination: true })
 assert.equal(frozenBefore.kind, 'superseded')
 assert.doesNotMatch(
 	frozenBefore.kind === 'superseded' ? frozenBefore.detail : '',

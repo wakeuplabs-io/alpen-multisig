@@ -27,7 +27,7 @@ type Props = {
 	operatorsToAdd: string[]
 	operatorIndicesToRemove: string[]
 	newSequencerKeyHex: string
-	newSafeHarbourAddress: string
+	newSafeHarborAddress: string
 	/** The bridge's destination this rotation replaces, and whether it is already frozen. */
 	currentSafeHarbour: { address: string; addressHex: string; activated: boolean } | null
 	/** What the connected device shows for this action — nothing for software signers. */
@@ -57,7 +57,7 @@ export function CreateProposalPreview({
 	operatorsToAdd,
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
-	newSafeHarbourAddress,
+	newSafeHarborAddress,
 	currentSafeHarbour,
 	deviceDisplay,
 	signingMessage,
@@ -181,7 +181,7 @@ export function CreateProposalPreview({
 						New Sweep Destination
 					</p>
 					<div className="flex flex-col gap-1 rounded-lg border border-[#e5e7eb] px-4 py-3">
-						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarbourAddress.trim() || '—'}</span>
+						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarborAddress.trim() || '—'}</span>
 						{currentSafeHarbour !== null && (
 							<span className="text-label text-[#6b7280]">
 								Replacing <span className="font-mono">{currentSafeHarbour.address}</span>

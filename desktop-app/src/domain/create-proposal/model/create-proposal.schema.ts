@@ -34,7 +34,7 @@ const createProposalFormObjectSchema = z.object({
 	operatorsToAdd: z.array(keyRowSchema),
 	operatorIndicesToRemove: z.array(keyRowSchema),
 	newSequencerKeyHex: z.string(),
-	newSafeHarbourAddress: z.string(),
+	newSafeHarborAddress: z.string(),
 	defconConfirm: z.string(),
 	/** The canonical signing message, resolved from Rust and mirrored here so that
 	 * "the signer can see what they are signing" gates submission like any other field. */
@@ -80,14 +80,14 @@ export type BuildCreateProposalFormSchemaArgs = {
 	 * as `Enacted`, indistinguishable from one that changed something. Null when the read failed,
 	 * which is safe only because the form also blocks submission in that state.
 	 */
-	currentSafeHarbourAddress: string | null
+	currentSafeHarborAddress: string | null
 }
 
 export function buildCreateProposalFormSchema({
 	currentMultisigSigners,
 	currentMultisigThreshold,
 	authority,
-	currentSafeHarbourAddress,
+	currentSafeHarborAddress,
 }: BuildCreateProposalFormSchemaArgs) {
 	return createProposalFormObjectSchema.superRefine((data, ctx) => {
 		// The action-type menu is display data. This is the rule: an authority can only draft the
@@ -120,6 +120,6 @@ export function buildCreateProposalFormSchema({
 		}
 
 		const validate = getActionValidator(data.actionType)
-		validate({ data, ctx, currentMultisigSigners, currentMultisigThreshold, currentSafeHarbourAddress })
+		validate({ data, ctx, currentMultisigSigners, currentMultisigThreshold, currentSafeHarborAddress })
 	})
 }

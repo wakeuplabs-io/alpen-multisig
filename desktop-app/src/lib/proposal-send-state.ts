@@ -30,10 +30,10 @@ type SendStateInput = {
 	signatures: ReadonlyArray<unknown>
 	/**
 	 * A safe harbour rotation the bridge accepted and applied nowhere, because the harbour was
-	 * already up. Decided by the caller — see `harbourFrozeDestination` — since answering it needs
+	 * already up. Decided by the caller — see `harborFrozeDestination` — since answering it needs
 	 * a live chain read and this module is pure.
 	 */
-	harbourFrozeDestination?: boolean
+	harborFrozeDestination?: boolean
 }
 
 /**
@@ -116,7 +116,7 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 		// refinement of the confirmed one and never of the other.
 		const stage =
 			proposal.broadcastStatus === 'reveal_confirmed'
-				? proposal.harbourFrozeDestination === true
+				? proposal.harborFrozeDestination === true
 					? SUPERSEDED_BY_FROZEN_HARBOUR
 					: SUPERSEDED_AFTER_CONFIRMATION
 				: SUPERSEDED_BEFORE_CONFIRMATION

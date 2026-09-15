@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { useFormContext, useWatch } from 'react-hook-form'
 import { DefconCallout } from '@/components/defcon-callout'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
-import { useSafeHarbourActivated } from '@/hooks/use-safe-harbour-status'
+import { useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
 import { useDefconActionHex } from '../hooks/use-defcon-action-hex'
 import { SigningMessagePanel, SIGNING_MESSAGE_UNRESOLVED } from '@/components/signing-message-panel'
@@ -38,7 +38,7 @@ export function DefconFormFields({ level }: { level: DefconLevel }) {
 	const messageLabelId = `${level.replace('_', '-')}-signing-message-label`
 
 	const { actionHex, error: actionHexError } = useDefconActionHex(level)
-	const safeHarbourActivated = useSafeHarbourActivated()
+	const safeHarborActivated = useSafeHarborActivated()
 	const seqNo = parseSeqNo(useWatch({ control, name: 'seqNo' }))
 	// Rendered, never written: the four canonical lines come from the same Rust renderer the
 	// device signs over, so they cannot drift from what the signer is about to confirm.
@@ -56,7 +56,7 @@ export function DefconFormFields({ level }: { level: DefconLevel }) {
 	return (
 		<div className="flex flex-col gap-5">
 			{/* Told, never enforced: the type-to-confirm gate below stays the only gate. */}
-			{safeHarbourActivated && <SafeHarbourNote>{copy.safeHarbourNote}</SafeHarbourNote>}
+			{safeHarborActivated && <SafeHarborNote>{copy.safeHarborNote}</SafeHarborNote>}
 
 			<DefconCallout level={level} />
 

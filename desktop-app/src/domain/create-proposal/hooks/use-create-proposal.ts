@@ -107,7 +107,7 @@ export function useCreateProposal(): UseCreateProposalReturn {
 			// The address, not the descriptor: the conversion is Rust's, and so is the network check.
 			case 'safe_harbour_address_update':
 				return unwrapActionHex(
-					await buildSafeHarbourAddressUpdateHex({ address: formData.newSafeHarbourAddress.trim() }),
+					await buildSafeHarbourAddressUpdateHex({ address: formData.newSafeHarborAddress.trim() }),
 				)
 			case 'sequencer_key_update':
 				return unwrapActionHex(

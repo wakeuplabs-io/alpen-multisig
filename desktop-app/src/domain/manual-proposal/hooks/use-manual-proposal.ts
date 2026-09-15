@@ -80,7 +80,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		// The manual bundle carries no live chain read, so it never has an installed destination to
 		// compare against — the detail view's section is absent here by construction, not by failure.
 		safeHarbourChange: null,
-		safeHarbourActivated: false,
+		safeHarborActivated: false,
 		allSigners: [],
 		isLoading: false,
 	})
@@ -461,7 +461,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		setDecodedData({
 			signerSetChange: null,
 			safeHarbourChange: null,
-			safeHarbourActivated: false,
+			safeHarborActivated: false,
 			allSigners: [],
 			isLoading: false,
 		})

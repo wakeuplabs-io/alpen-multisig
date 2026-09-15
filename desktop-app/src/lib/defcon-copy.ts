@@ -2,7 +2,7 @@
  * The two Defcon levers, as data.
  *
  * They differ in exactly three things — the confirmation string, the destructive paragraph and
- * the safe-harbour note's wording — and every other part of the create and sign flows is shared.
+ * the safe-harbor note's wording — and every other part of the create and sign flows is shared.
  * Holding those three as data is what keeps the difference honest: the copy used to be written
  * out by hand in the create form, the preview and the sign view, which is how two levels come to
  * disagree about which one can be cancelled.
@@ -27,11 +27,11 @@ export type DefconCopy = {
 	calloutBody: string
 	/** The same warning at the moment of signing, where the signer is already committing. */
 	signCalloutBody: string
-	/** Shown only when the bridge is already in safe harbour. Told, never enforced. */
-	safeHarbourNote: string
-	signSafeHarbourNote: string
+	/** Shown only when the bridge is already in safe harbor. Told, never enforced. */
+	safeHarborNote: string
+	signSafeHarborNote: string
 	/** The last screen before the commit and reveal fees are spent. */
-	broadcastSafeHarbourNote: string
+	broadcastSafeHarborNote: string
 }
 
 export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
@@ -44,11 +44,11 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 			'DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.',
 		signCalloutBody:
 			'DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.',
-		safeHarbourNote:
+		safeHarborNote:
 			'The bridge is already in safe harbor. Another Defcon 1 does not change that — it consumes a council sequence number, costs fees, and needs a full quorum. Create one only if you have reason to believe this state is wrong.',
-		signSafeHarbourNote:
+		signSafeHarborNote:
 			'The bridge is already in safe harbor. Signing this does not change that — it consumes a council sequence number and needs a full quorum.',
-		broadcastSafeHarbourNote:
+		broadcastSafeHarborNote:
 			'The bridge is already in safe harbor. Sending this does not change that — it consumes a council sequence number and costs the commit and reveal fees.',
 	},
 	defcon_3: {
@@ -60,11 +60,11 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 			'DEFCON 3 sweeps bridge funds to the Safe Harbor, but not immediately. Once the approved proposal confirms, it is queued for the delay this deployment configures. Until it activates, the council can cancel it. From activation on it cannot be undone.',
 		signCalloutBody:
 			'Signing this approves a delayed Safe Harbor sweep. Until it activates, the council can cancel it. From activation on it cannot be undone.',
-		safeHarbourNote:
+		safeHarborNote:
 			'The bridge is already in safe harbor. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.',
-		signSafeHarbourNote:
+		signSafeHarborNote:
 			'The bridge is already in safe harbor. Signing this does not change that — it waits out its full delay before changing nothing.',
-		broadcastSafeHarbourNote:
+		broadcastSafeHarborNote:
 			'The bridge is already in safe harbor. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.',
 	},
 }
@@ -87,5 +87,5 @@ export function defconLevelOf(actionType: string | null | undefined): DefconLeve
 }
 
 /** Council dashboard only — not the create/sign form (AC 15). */
-export const COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE =
+export const COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE =
 	'The bridge is in safe harbor. Another Defcon 1 or Defcon 3 does not change that.'

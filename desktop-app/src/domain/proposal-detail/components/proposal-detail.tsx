@@ -16,7 +16,7 @@ import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-pro
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
-import { harbourFrozeDestination } from '@/lib/safe-harbour-redundancy'
+import { harborFrozeDestination } from '@/lib/safe-harbor-redundancy'
 
 type Props = {
 	proposal: Proposal
@@ -97,7 +97,7 @@ export function ProposalDetail({
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
 	const sendState = proposalSendState({
 		...proposal,
-		harbourFrozeDestination: harbourFrozeDestination(proposal, decodedData.safeHarbourActivated),
+		harborFrozeDestination: harborFrozeDestination(proposal, decodedData.safeHarborActivated),
 	})
 	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 

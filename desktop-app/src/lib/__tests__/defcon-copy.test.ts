@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict'
 import {
-	COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE,
+	COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE,
 	DEFCON_COPY,
 	matchesDefconConfirmation,
 	type DefconCopy,
@@ -45,11 +45,11 @@ assert.equal(matchesDefconConfirmation('defcon_1', 'DEFCON 3'), false, 'DEFCON 3
 
 // The dashboard banner is not a per-level note (AC 15): it must name both levers and never be
 // Defcon-1-only.
-assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE.includes('Defcon 1'), 'the dashboard note must name Defcon 1')
-assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE.includes('Defcon 3'), 'the dashboard note must name Defcon 3')
+assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE.includes('Defcon 1'), 'the dashboard note must name Defcon 1')
+assert.ok(COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE.includes('Defcon 3'), 'the dashboard note must name Defcon 3')
 assert.notEqual(
-	COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE,
-	DEFCON_COPY.defcon_1.safeHarbourNote,
+	COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE,
+	DEFCON_COPY.defcon_1.safeHarborNote,
 	'the dashboard note must not reuse the Defcon 1 form note',
 )
 

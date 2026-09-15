@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import {
 	changedNothingActionIds,
-	harbourFrozeDestination,
-	type HarbourActivationCandidate,
-} from '../safe-harbour-redundancy.ts'
+	harborFrozeDestination,
+	type HarborActivationCandidate,
+} from '../safe-harbor-redundancy.ts'
 
-function proposal(overrides: Partial<HarbourActivationCandidate> = {}): HarbourActivationCandidate {
+function proposal(overrides: Partial<HarborActivationCandidate> = {}): HarborActivationCandidate {
 	return {
 		actionId: 'a',
 		actionType: 'defcon_1',
@@ -26,12 +26,12 @@ function proposal(overrides: Partial<HarbourActivationCandidate> = {}): HarbourA
 		proposal({ actionId: 'd3', seqNo: 5, activationHeight: 120, actionType: 'defcon_3' }),
 		proposal({ actionId: 'd1', seqNo: 6, activationHeight: 118, actionType: 'defcon_1' }),
 	])
-	assert.ok(redundant.has('d3'), 'the Defcon 3 matured after the harbour was already up')
+	assert.ok(redundant.has('d3'), 'the Defcon 3 matured after the harbor was already up')
 	assert.ok(!redundant.has('d1'), 'the Defcon 1 activated it, despite the higher sequence number')
 }
 
 // ── The V1 answer, preserved ────────────────────────────────────────────────
-// The earliest enacted proposal is the one that activated the safe harbour; every enacted one
+// The earliest enacted proposal is the one that activated the safe harbor; every enacted one
 // after it ran against a flag that was already true. Heights are monotone in seqno here, which is
 // what a Defcon-1-only history always looks like: a Defcon 1's lock period is 0, so its activation
 // height is its reveal block, and the ASM accepts at the reveal.
@@ -43,11 +43,11 @@ function proposal(overrides: Partial<HarbourActivationCandidate> = {}): HarbourA
 		proposal({ actionId: 'd', seqNo: 3, activationHeight: 130 }),
 	])
 	assert.deepEqual([...redundant].sort(), ['c', 'd'], 'every enactment after the first is redundant')
-	assert.ok(!redundant.has('a'), 'the earliest activation height is the one that turned the harbour on')
+	assert.ok(!redundant.has('a'), 'the earliest activation height is the one that turned the harbor on')
 	assert.ok(!redundant.has('b'), 'a proposal that never enacted changed nothing to report')
 }
 
-// ── Another action type shares no state with the safe harbour ───────────────
+// ── Another action type shares no state with the safe harbor ───────────────
 // Heights are non-null on purpose: with nulls this would pass for the wrong reason.
 assert.equal(
 	changedNothingActionIds([
@@ -55,7 +55,7 @@ assert.equal(
 		proposal({ actionId: 'y', seqNo: 2, activationHeight: 105, actionType: 'vk_update' }),
 	]).size,
 	0,
-	'only harbour-activating actions are considered',
+	'only harbor-activating actions are considered',
 )
 
 // ── A null activation height is neither activator nor redundant ────────────
@@ -63,7 +63,7 @@ assert.equal(
 // is a missing observation rather than an early block.
 //
 // This case is also where the rule COSTS something, and the fixture is built to show it: if
-// `unknown-height` is what really activated the harbour, then `first` changed nothing and V1 would
+// `unknown-height` is what really activated the harbor, then `first` changed nothing and V1 would
 // have badged it — ordering by seqno, it did not need the height. Here it goes unbadged. The trade
 // is that a row with no height cannot be ranked against one with a real number without guessing its
 // position from the sequence number, which is sound for a Defcon 1 and false for a Defcon 3. The
@@ -82,7 +82,7 @@ assert.equal(
 // ── All heights null: no activator, no badges. Deliberate ──────────────────
 // Every proposal that enacted before the activation_height migration carries null forever, and it
 // has no backfill. The badge disappearing is the correct failure: the dashboard still reports the
-// harbour from a live chain read, it just stops attributing the activation to a row. A future
+// harbor from a live chain read, it just stops attributing the activation to a row. A future
 // author who "fixes" this by falling back to the sequence number should go red here.
 assert.equal(
 	changedNothingActionIds([
@@ -90,7 +90,7 @@ assert.equal(
 		proposal({ actionId: 'old-2', seqNo: 2, activationHeight: null }),
 	]).size,
 	0,
-	'no evidence of which one activated the harbour means no claim about either',
+	'no evidence of which one activated the harbor means no claim about either',
 )
 
 // ── A tie is broken by sequence number, not by arrival order ───────────────
@@ -108,23 +108,23 @@ assert.equal(
 // ── A single enactment is the activation itself ─────────────────────────────
 assert.equal(changedNothingActionIds([proposal({ actionId: 'solo', seqNo: 7 })]).size, 0)
 
-// ── Which superseded proposals the harbour swallowed ───────────────────────
-// The frozen-destination detail is only true of a rotation, and only while the harbour is up.
+// ── Which superseded proposals the harbor swallowed ───────────────────────
+// The frozen-destination detail is only true of a rotation, and only while the harbor is up.
 // The action type is the tripwire: a superseded Defcon really did lose its sequence number to
-// something else, and telling its signer the harbour froze a destination would be nonsense.
+// something else, and telling its signer the harbor froze a destination would be nonsense.
 
 const rotation = { actionType: 'safe_harbour_address_update', status: 'superseded' } as const
-assert.equal(harbourFrozeDestination(rotation, true), true)
-assert.equal(harbourFrozeDestination(rotation, false), false, 'with the harbour down it lost a race')
+assert.equal(harborFrozeDestination(rotation, true), true)
+assert.equal(harborFrozeDestination(rotation, false), false, 'with the harbor down it lost a race')
 assert.equal(
-	harbourFrozeDestination({ actionType: 'defcon_1', status: 'superseded' }, true),
+	harborFrozeDestination({ actionType: 'defcon_1', status: 'superseded' }, true),
 	false,
-	'a Defcon is applied whatever the harbour is doing',
+	'a Defcon is applied whatever the harbor is doing',
 )
 assert.equal(
-	harbourFrozeDestination({ actionType: 'safe_harbour_address_update', status: 'enacted' }, true),
+	harborFrozeDestination({ actionType: 'safe_harbour_address_update', status: 'enacted' }, true),
 	false,
-	'an enacted rotation installed its destination — the harbour cannot have been up',
+	'an enacted rotation installed its destination — the harbor cannot have been up',
 )
 
-console.log('safe-harbour-redundancy: all assertions passed')
+console.log('safe-harbor-redundancy: all assertions passed')

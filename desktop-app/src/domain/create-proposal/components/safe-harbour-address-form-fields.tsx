@@ -1,12 +1,12 @@
 import { useFormContext, useWatch } from 'react-hook-form'
-import { SafeHarbourNote } from '@/components/safe-harbour-note'
-import type { SafeHarbourStatus } from '@/api/asm-state'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
+import type { SafeHarborStatus } from '@/api/asm-state'
 import { useSafeHarbourActionHex } from '../hooks/use-safe-harbour-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
 
 type Props = {
-	safeHarbour: SafeHarbourStatus | null
+	safeHarbor: SafeHarborStatus | null
 	isLoadingSafeHarbour: boolean
 }
 
@@ -29,51 +29,51 @@ const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
  * The full signing message is not here: nothing is signed on this screen. It is on the preview and
  * the sign view, where the signature is given (V4 Phase 4 §2).
  */
-export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour }: Props) {
+export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour }: Props) {
 	const {
 		control,
 		register,
 		formState: { errors },
 	} = useFormContext<CreateProposalFormValues>()
 
-	const address = useWatch({ control, name: 'newSafeHarbourAddress' }) ?? ''
+	const address = useWatch({ control, name: 'newSafeHarborAddress' }) ?? ''
 	// Attempted whenever the Zod rules pass. The earlier version read as if that guard filtered
 	// invalid addresses; it never could, because the address is validated in Rust and the validator
 	// has no opinion about it.
 	const { descriptorHex, error: buildError } = useSafeHarbourActionHex(
-		errors.newSafeHarbourAddress === undefined ? address : '',
+		errors.newSafeHarborAddress === undefined ? address : '',
 	)
 
 	// The builder's rejection answers "is this a destination I can use", which is the question the
 	// field asks — so it belongs under the field, and only once the signer has typed something long
 	// enough to be a whole address. Before that it is a *not yet*, and red is for errors.
 	const looksComplete = address.trim().length >= MIN_PLAUSIBLE_ADDRESS_LENGTH
-	const addressError = errors.newSafeHarbourAddress?.message ?? (looksComplete ? (buildError ?? undefined) : undefined)
+	const addressError = errors.newSafeHarborAddress?.message ?? (looksComplete ? (buildError ?? undefined) : undefined)
 
 	return (
 		<div className="flex flex-col gap-5">
 			{/* Stated, never enforced: the chain accepts this rotation and discards it, so the signer
 			    is told what it will do rather than stopped from doing it. */}
-			{safeHarbour?.activated === true && (
-				<SafeHarbourNote>
+			{safeHarbor?.activated === true && (
+				<SafeHarborNote>
 					The destination is frozen once safe harbor is active, so this update will be accepted on chain and change
 					nothing. It will not report as Enacted.
-				</SafeHarbourNote>
+				</SafeHarborNote>
 			)}
 
 			<div>
 				<p className="mb-3 text-body font-medium text-[#6b7280]">Current destination</p>
 				{isLoadingSafeHarbour ? (
 					<div className="h-12 animate-pulse rounded-lg bg-[#f3f4f6]" />
-				) : safeHarbour === null ? (
+				) : safeHarbor === null ? (
 					<div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-body text-[#9ca3af]">
 						Could not load the current safe harbor destination from chain.
 					</div>
 				) : (
 					<div className="rounded-xl border border-accent-border bg-highlight-surface p-3">
 						<div className="flex flex-col gap-1 rounded-lg border border-[#e5e7eb] bg-white px-4 py-3">
-							<span className="break-all font-mono text-body text-[#374151]">{safeHarbour.address}</span>
-							<span className="break-all font-mono text-label text-[#9ca3af]">{safeHarbour.addressHex}</span>
+							<span className="break-all font-mono text-body text-[#374151]">{safeHarbor.address}</span>
+							<span className="break-all font-mono text-label text-[#9ca3af]">{safeHarbor.addressHex}</span>
 						</div>
 					</div>
 				)}
@@ -87,7 +87,7 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 					id="safe-harbour-address"
 					type="text"
 					className={monoInputClass}
-					{...register('newSafeHarbourAddress')}
+					{...register('newSafeHarborAddress')}
 					data-testid="e2e-safe-harbour-address"
 					placeholder="Taproot address (bc1p… / bcrt1p…)"
 					autoComplete="off"

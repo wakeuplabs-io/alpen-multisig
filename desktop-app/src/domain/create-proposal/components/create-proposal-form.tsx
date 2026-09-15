@@ -16,7 +16,7 @@ import {
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
 import { useMultisigConfig } from '../hooks/use-multisig-config'
-import { useSafeHarbour } from '@/hooks/use-safe-harbour-status'
+import { useSafeHarbor } from '@/hooks/use-safe-harbor-status'
 import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
 import type { ProposalPreview } from '../model/create-proposal.types'
@@ -75,7 +75,7 @@ const defaultFormValues: CreateProposalFormValues = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
-	newSafeHarbourAddress: '',
+	newSafeHarborAddress: '',
 	defconConfirm: '',
 	defconMessage: '',
 }
@@ -121,7 +121,7 @@ export function CreateProposalForm({
 				currentMultisigSigners: null,
 				currentMultisigThreshold: null,
 				authority,
-				currentSafeHarbourAddress: null,
+				currentSafeHarborAddress: null,
 			}),
 		),
 	)
@@ -165,8 +165,8 @@ export function CreateProposalForm({
 	// neither show what is being replaced nor refuse a rotation to the address already installed,
 	// and that second rule is what keeps a no-op from reporting as Enacted.
 	const isSafeHarbourAction = actionType === 'safe_harbour_address_update'
-	const { safeHarbour, isLoading: isLoadingSafeHarbour } = useSafeHarbour(isSafeHarbourAction)
-	const isSafeHarbourUnavailable = isSafeHarbourAction && !isLoadingSafeHarbour && safeHarbour === null
+	const { safeHarbor, isLoading: isLoadingSafeHarbour } = useSafeHarbor(isSafeHarbourAction)
+	const isSafeHarbourUnavailable = isSafeHarbourAction && !isLoadingSafeHarbour && safeHarbor === null
 
 	const createProposalSchema = useMemo(
 		() =>
@@ -174,9 +174,9 @@ export function CreateProposalForm({
 				currentMultisigSigners: multisigConfig?.signers ?? null,
 				currentMultisigThreshold: multisigConfig?.threshold ?? null,
 				authority,
-				currentSafeHarbourAddress: safeHarbour?.address ?? null,
+				currentSafeHarborAddress: safeHarbor?.address ?? null,
 			}),
-		[multisigConfig, authority, safeHarbour],
+		[multisigConfig, authority, safeHarbor],
 	)
 
 	useLayoutEffect(() => {
@@ -376,8 +376,8 @@ export function CreateProposalForm({
 							threshold={previewData.threshold}
 							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
-							newSafeHarbourAddress={previewData.newSafeHarbourAddress}
-							currentSafeHarbour={safeHarbour}
+							newSafeHarborAddress={previewData.newSafeHarborAddress}
+							currentSafeHarbour={safeHarbor}
 							operatorsToAdd={previewData.operatorsToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)}
 							operatorIndicesToRemove={previewData.operatorIndicesToRemove
 								.map((r) => r.value.trim())
@@ -470,7 +470,7 @@ export function CreateProposalForm({
 							) : actionType === 'sequencer_key_update' ? (
 								<SequencerKeyUpdateFormFields />
 							) : isSafeHarbourAction ? (
-								<SafeHarbourAddressFormFields safeHarbour={safeHarbour} isLoadingSafeHarbour={isLoadingSafeHarbour} />
+								<SafeHarbourAddressFormFields safeHarbor={safeHarbor} isLoadingSafeHarbour={isLoadingSafeHarbour} />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
