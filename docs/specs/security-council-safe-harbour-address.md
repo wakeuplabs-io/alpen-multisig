@@ -1,10 +1,11 @@
 # Spec: Security Council — Safe Harbour Address Update
 
-**Status:** All three phases implemented — the action is creatable, signable, cancellable, visible on
+**Status:** All four phases implemented — the action is creatable, signable, cancellable, visible on
 every surface a signer decides from, and proven against a regtest chain on three paths. Automated
 checks green. The manual walk ran on 2026-09-10 over an enactment, a cancel and a rotation submitted
-with the harbour already up; its findings are closed in Phase 3, and three items of `## Verification`
-below (1, 3 and 10) await a walk over Phase 3's own surfaces. This document is the functional contract; the
+with the harbour already up; its findings are closed in Phase 3. Phase 4 answers the #547 review —
+the signing message on the signing screens, and *Safe Harbor* on screen — and its walk is pending,
+together with three items of `## Verification` below (1, 3 and 10). This document is the functional contract; the
 build plan is
 [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md),
 whose phase board says what has landed.

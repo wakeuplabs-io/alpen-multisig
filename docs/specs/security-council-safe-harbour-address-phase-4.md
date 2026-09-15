@@ -8,7 +8,7 @@
 > **Predecessors:** [Phase 1](./security-council-safe-harbour-address-phase-1.md) (#548),
 > [Phase 2](./security-council-safe-harbour-address-phase-2.md) (#549),
 > [Phase 3](./security-council-safe-harbour-address-phase-3.md) (#550).
-> **Status:** implementation in progress.
+> **Status:** implemented; automated checks green. The walk of §8 has not been run yet.
 
 ## 1. The change in one sentence
 
