@@ -20,6 +20,7 @@
 		"test:approvals-list": "tsx src/components/__tests__/approvals-list.test.tsx",
 		"test:broadcast-screens-wiring": "tsx src/screens/__tests__/broadcast-screens-wiring.test.ts",
 		"test:cancel-copy-vendor-neutral": "tsx src/screens/__tests__/cancel-copy-vendor-neutral.test.ts",
+		"test:cancel-screen-view-mode": "tsx src/screens/__tests__/cancel-screen-view-mode.test.ts",
 		"test:derive-proposal-actions": "tsx src/domain/proposal-detail/model/__tests__/derive-proposal-actions.test.ts",
 		"test:api-admin-wallet-watch-only": "tsx src/api/admin-wallet-watch-only.test.ts",
 		"test:api-admin-wallet-receive-rotation": "tsx src/api/admin-wallet-receive-rotation.test.ts",

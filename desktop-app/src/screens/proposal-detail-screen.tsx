@@ -16,7 +16,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
-import { showsActivationCountdown } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, isTerminalProposalStatus, showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
@@ -180,12 +180,22 @@ export function ProposalDetailScreen() {
 								</div>
 							)}
 
-							{/* In-progress cancel banner */}
+							{/* Cancel banner — copy follows the cancel's status; the link always opens it */}
 							{proposal.cancelProposal !== null && (
 								<div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<p className="m-0 text-body-sm text-emphasis-soft">
-										⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
-										{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
+										{isTerminalProposalStatus(proposal.cancelProposal.status) ? (
+											<>
+												Cancellation {PROPOSAL_STATUS_STYLE[proposal.cancelProposal.status].label.toLowerCase()} —{' '}
+												{proposal.cancelProposal.signatures.length} / {proposal.cancelProposal.requiredSignatures}{' '}
+												cancel signatures{proposal.cancelProposal.status === 'expired' ? ' collected' : ''}.
+											</>
+										) : (
+											<>
+												⚠ Cancellation in progress — {proposal.cancelProposal.signatures.length} /{' '}
+												{proposal.cancelProposal.requiredSignatures} cancel signatures collected.
+											</>
+										)}
 									</p>
 									<button
 										type="button"

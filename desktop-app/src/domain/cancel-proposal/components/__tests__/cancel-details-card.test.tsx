@@ -58,6 +58,7 @@ for (const prop of [
 	'isLoadingDetails',
 	'targetActionId',
 	'targetUpdateId',
+	'targetStatus',
 	'allSigners',
 	'signerPubkey',
 ]) {
@@ -79,5 +80,31 @@ assert.ok(
 	'the screen must fall back to the session pubkey — router state is lost on refresh',
 )
 console.log('CancelDetailsCard: screen wiring OK')
+
+// ── 7. A finished cancel offers no action ───────────────────────────────────
+assert.ok(
+	cardSource.includes('const isTerminal = isTerminalProposalStatus(cancelProposal.status)'),
+	'the card must derive terminal-ness from cancelProposal.status via the shared predicate',
+)
+const actionsStart = cardSource.indexOf('{isTerminal ? (')
+assert.ok(actionsStart > 0, 'the actions block must branch on isTerminal')
+const actionsBlock = cardSource.slice(actionsStart, cardSource.indexOf('<ApprovalsList'))
+const branchSplit = actionsBlock.indexOf(') : (')
+assert.ok(branchSplit > 0, 'the actions block must have an outcome branch and a live branch')
+const outcomeBranch = actionsBlock.slice(0, branchSplit)
+const liveBranch = actionsBlock.slice(branchSplit)
+assert.ok(
+	!outcomeBranch.includes('Send cancel tx') && !outcomeBranch.includes('onClick={onSign}'),
+	'a terminal cancel must offer neither Send cancel tx nor Sign',
+)
+assert.ok(
+	liveBranch.includes('Send cancel tx') && liveBranch.includes('onClick={onSign}'),
+	'a live cancel keeps both actions',
+)
+assert.ok(
+	cardSource.includes("enacted: 'Cancellation enacted — the update was removed from the queue'"),
+	'an enacted cancel must say what happened',
+)
+console.log('CancelDetailsCard: terminal cancel offers no action OK')
 
 console.log('All CancelDetailsCard contract tests passed.')

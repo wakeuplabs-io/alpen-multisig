@@ -95,3 +95,8 @@ type ActivationCountdownInput = {
 export function showsActivationCountdown(proposal: ActivationCountdownInput): boolean {
 	return proposal.status === 'approved' && proposal.activationHeight !== null && proposal.actionType !== 'defcon_1'
 }
+
+/** Statuses a proposal never leaves. */
+export function isTerminalProposalStatus(status: ProposalStatus): boolean {
+	return status === 'enacted' || status === 'canceled' || status === 'expired' || status === 'superseded'
+}
