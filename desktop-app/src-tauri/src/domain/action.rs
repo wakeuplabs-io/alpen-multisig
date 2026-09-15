@@ -142,7 +142,7 @@ pub enum SafeHarbourDescriptorError {
     Address(String),
     #[error("this address is for {found}; this deployment is on {expected}")]
     WrongNetwork { expected: Network, found: Network },
-    #[error("safe harbour must be a taproot (P2TR) address")]
+    #[error("safe harbor must be a taproot (P2TR) address")]
     NotP2tr,
     #[error("invalid hex: {0}")]
     Hex(String),

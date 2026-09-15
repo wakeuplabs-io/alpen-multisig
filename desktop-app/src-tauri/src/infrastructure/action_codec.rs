@@ -41,13 +41,13 @@ pub enum CodecError {
     UnsupportedVariant(&'static str),
     #[error("invalid public key: {0}")]
     PubKey(#[from] PubKeyError),
-    #[error("invalid safe harbour address: {0}")]
+    #[error("invalid safe harbor address: {0}")]
     SafeHarbourAddress(#[from] SafeHarbourDescriptorError),
     /// Upstream refused the descriptor. Unreachable for a value this application built — the
     /// domain already checked the curve and the P2TR type — and reachable for an action hex that
     /// arrived from anywhere else, which is the reason this gate stays even though it is a third
     /// check of the same two properties.
-    #[error("upstream rejected the safe harbour descriptor: {0}")]
+    #[error("upstream rejected the safe harbor descriptor: {0}")]
     SafeHarbourRejectedUpstream(String),
     #[error("invalid threshold: value must be non-zero")]
     InvalidThreshold,

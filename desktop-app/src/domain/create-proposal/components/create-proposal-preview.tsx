@@ -202,9 +202,9 @@ export function CreateProposalPreview({
 					)}
 					{currentSafeHarbour?.activated === true && (
 						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
-							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbour is already active</p>
+							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbor is already active</p>
 							<p className="m-0 mt-2 text-body text-[#6b7280]">
-								The destination is frozen once safe harbour is active. This update will be accepted on chain and change
+								The destination is frozen once safe harbor is active. This update will be accepted on chain and change
 								nothing, and it will not report as Enacted.
 							</p>
 						</div>

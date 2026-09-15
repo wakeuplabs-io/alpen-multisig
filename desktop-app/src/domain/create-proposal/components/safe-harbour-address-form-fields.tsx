@@ -56,7 +56,7 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 			    is told what it will do rather than stopped from doing it. */}
 			{safeHarbour?.activated === true && (
 				<SafeHarbourNote>
-					The destination is frozen once safe harbour is active, so this update will be accepted on chain and change
+					The destination is frozen once safe harbor is active, so this update will be accepted on chain and change
 					nothing. It will not report as Enacted.
 				</SafeHarbourNote>
 			)}
@@ -67,7 +67,7 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 					<div className="h-12 animate-pulse rounded-lg bg-[#f3f4f6]" />
 				) : safeHarbour === null ? (
 					<div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-body text-[#9ca3af]">
-						Could not load the current safe harbour destination from chain.
+						Could not load the current safe harbor destination from chain.
 					</div>
 				) : (
 					<div className="rounded-xl border border-accent-border bg-highlight-surface p-3">

@@ -31,7 +31,7 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 	// what the signing message and the device show.
 	safe_harbour_address_update: {
 		actionType: 'safe_harbour_address_update',
-		title: 'Safe Harbour address update',
+		title: 'Safe Harbor address update',
 		description: 'Change where the bridge sweeps funds to.',
 	},
 	operator_set_update: {

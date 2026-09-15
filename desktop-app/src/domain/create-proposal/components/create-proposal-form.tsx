@@ -484,8 +484,8 @@ export function CreateProposalForm({
 
 							{isSafeHarbourUnavailable && (
 								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
-									Could not load the current safe harbour destination. Try again before continuing — without it this
-									form cannot tell a real change from one that would do nothing.
+									Could not load the current safe harbor destination. Try again before continuing — without it this form
+									cannot tell a real change from one that would do nothing.
 								</div>
 							)}
 						</div>

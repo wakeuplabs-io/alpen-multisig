@@ -152,8 +152,8 @@ function SafeHarbourAddressDetails({
 			{safeHarbour?.activated === true && (
 				<div className="mt-5">
 					<SafeHarbourNote>
-						The destination is frozen once safe harbour is active, so this update will be accepted and change nothing.
-						It will not report as Enacted.
+						The destination is frozen once safe harbor is active, so this update will be accepted and change nothing. It
+						will not report as Enacted.
 					</SafeHarbourNote>
 				</div>
 			)}

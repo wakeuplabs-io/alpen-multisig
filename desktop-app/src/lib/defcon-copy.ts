@@ -45,11 +45,11 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 		signCalloutBody:
 			'DEFCON 1 activates the Safe Harbor sweep immediately, taking effect in the block that the approved proposal is confirmed in. Once approved and confirmed, it cannot be canceled, and is therefore irreversible.',
 		safeHarbourNote:
-			'The bridge is already in safe harbour. Another Defcon 1 does not change that — it consumes a council sequence number, costs fees, and needs a full quorum. Create one only if you have reason to believe this state is wrong.',
+			'The bridge is already in safe harbor. Another Defcon 1 does not change that — it consumes a council sequence number, costs fees, and needs a full quorum. Create one only if you have reason to believe this state is wrong.',
 		signSafeHarbourNote:
-			'The bridge is already in safe harbour. Signing this does not change that — it consumes a council sequence number and needs a full quorum.',
+			'The bridge is already in safe harbor. Signing this does not change that — it consumes a council sequence number and needs a full quorum.',
 		broadcastSafeHarbourNote:
-			'The bridge is already in safe harbour. Sending this does not change that — it consumes a council sequence number and costs the commit and reveal fees.',
+			'The bridge is already in safe harbor. Sending this does not change that — it consumes a council sequence number and costs the commit and reveal fees.',
 	},
 	defcon_3: {
 		confirmation: 'DEFCON 3',
@@ -61,11 +61,11 @@ export const DEFCON_COPY: Record<DefconLevel, DefconCopy> = {
 		signCalloutBody:
 			'Signing this approves a delayed Safe Harbor sweep. Until it activates, the council can cancel it. From activation on it cannot be undone.',
 		safeHarbourNote:
-			'The bridge is already in safe harbour. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.',
+			'The bridge is already in safe harbor. A DEFCON 3 does not change that — it consumes a council sequence number, costs fees, needs a full quorum, and waits out its full delay before changing nothing.',
 		signSafeHarbourNote:
-			'The bridge is already in safe harbour. Signing this does not change that — it waits out its full delay before changing nothing.',
+			'The bridge is already in safe harbor. Signing this does not change that — it waits out its full delay before changing nothing.',
 		broadcastSafeHarbourNote:
-			'The bridge is already in safe harbour. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.',
+			'The bridge is already in safe harbor. Sending this does not change that — it costs the commit and reveal fees, then waits out its full delay before changing nothing.',
 	},
 }
 
@@ -88,4 +88,4 @@ export function defconLevelOf(actionType: string | null | undefined): DefconLeve
 
 /** Council dashboard only — not the create/sign form (AC 15). */
 export const COUNCIL_DASHBOARD_SAFE_HARBOUR_NOTE =
-	'The bridge is in safe harbour. Another Defcon 1 or Defcon 3 does not change that.'
+	'The bridge is in safe harbor. Another Defcon 1 or Defcon 3 does not change that.'

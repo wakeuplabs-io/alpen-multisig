@@ -576,7 +576,7 @@ function ProposalCard({
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<p className="m-0 text-body font-medium text-[#111827]">Changed nothing on chain</p>
 					<p className="m-0 mt-1 text-label text-[#6b7280]">
-						The bridge was already in safe harbour when this executed. It consumed a council sequence number and its
+						The bridge was already in safe harbor when this executed. It consumed a council sequence number and its
 						fees, and left the state as it found it.
 					</p>
 				</div>

@@ -11,7 +11,7 @@ import type { ReactNode } from 'react'
 export function SafeHarbourNote({ children }: { children: ReactNode }) {
 	return (
 		<div role="status" className="rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
-			<p className="m-0 text-body font-medium text-emphasis">Safe harbour is already active</p>
+			<p className="m-0 text-body font-medium text-emphasis">Safe harbor is already active</p>
 			<p className="m-0 mt-1 text-body text-emphasis-soft">{children}</p>
 		</div>
 	)

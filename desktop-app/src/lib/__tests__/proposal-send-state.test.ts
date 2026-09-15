@@ -124,7 +124,7 @@ const frozen = proposalSendState({ ...proposal('superseded', 'reveal_confirmed')
 assert.equal(frozen.kind, 'superseded')
 assert.equal(showsSendButton(frozen), false)
 const frozenDetail = frozen.kind === 'superseded' ? frozen.detail : ''
-assert.match(frozenDetail, /safe harbour is already active/i, 'the frozen detail must name the reason')
+assert.match(frozenDetail, /safe harbor is already active/i, 'the frozen detail must name the reason')
 assert.doesNotMatch(frozenDetail, /another action/i, 'nothing else used this sequence number')
 assert.match(frozenDetail, /fees were spent/i, 'the bundle reached a block, so it cost both fees')
 
@@ -142,7 +142,7 @@ const frozenBefore = proposalSendState({ ...proposal('superseded', 'idle'), harb
 assert.equal(frozenBefore.kind, 'superseded')
 assert.doesNotMatch(
 	frozenBefore.kind === 'superseded' ? frozenBefore.detail : '',
-	/safe harbour is already active/i,
+	/safe harbor is already active/i,
 	'an unconfirmed bundle cannot have been accepted and discarded',
 )
 

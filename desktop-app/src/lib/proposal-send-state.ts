@@ -98,7 +98,7 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
 const SUPERSEDED_BY_FROZEN_HARBOUR = {
 	label: 'Superseded',
 	detail:
-		'The safe harbour is already active, so the bridge\u2019s destination is frozen: this transaction was mined and the ASM accepted it, and nothing changed. The signatures are bound to a sequence number that is now spent, and a replacement would be discarded the same way while the harbour is up. The commit and reveal fees were spent.',
+		'The safe harbor is already active, so the bridge\u2019s destination is frozen: this transaction was mined and the ASM accepted it, and nothing changed. The signatures are bound to a sequence number that is now spent, and a replacement would be discarded the same way while the harbor is up. The commit and reveal fees were spent.',
 }
 
 const SUPERSEDED_BEFORE_CONFIRMATION = {

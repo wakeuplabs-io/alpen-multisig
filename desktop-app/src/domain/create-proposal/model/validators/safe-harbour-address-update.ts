@@ -4,7 +4,7 @@ import type { ActionValidator } from './types'
 const P2TR_BOSD_HEX_PATTERN = /^04[0-9a-fA-F]{64}$/
 
 export const NO_OP_SAFE_HARBOUR_MESSAGE =
-	'This is already the safe harbour destination, so this update would change nothing.'
+	'This is already the safe harbor destination, so this update would change nothing.'
 
 /**
  * The address itself is validated in Rust — it has to be, since the descriptor the device displays
@@ -26,7 +26,7 @@ export const validateSafeHarbourAddressUpdate: ActionValidator = ({ data, ctx, c
 		ctx.addIssue({
 			code: 'custom',
 			path: ['newSafeHarbourAddress'],
-			message: 'New safe harbour address is required',
+			message: 'New safe harbor address is required',
 		})
 		return
 	}
