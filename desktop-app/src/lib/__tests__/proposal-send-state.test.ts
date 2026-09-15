@@ -112,9 +112,9 @@ assert.equal(
 // quorum is just as dead, and must not fall through to `unavailable`.
 assert.equal(proposalSendState(proposal('superseded', 'idle', 0)).kind, 'superseded')
 
-// ── Superseded because the harbour froze the destination, not because of a race ──
+// ── Superseded because the harbor froze the destination, not because of a race ──
 //
-// The one path V4 exists to describe. A rotation submitted after the safe harbour is up is
+// The one path V4 exists to describe. A rotation submitted after the safe harbor is up is
 // accepted on chain -- the signature verifies, the sequence number is consumed, the queue entry
 // drains -- and `SafeHarbour::update_address` refuses the change and returns a boolean the bridge
 // subprotocol discards. Nothing raced it. Saying otherwise sends the signer to build a
@@ -129,15 +129,15 @@ assert.doesNotMatch(frozenDetail, /another action/i, 'nothing else used this seq
 assert.match(frozenDetail, /fees were spent/i, 'the bundle reached a block, so it cost both fees')
 
 // The pair that proves the arm is conditional rather than a relabelling: the same rotation with
-// the harbour down is a genuine race and keeps the sequence-number detail.
+// the harbor down is a genuine race and keeps the sequence-number detail.
 assert.match(
 	supersededAfter.kind === 'superseded' ? supersededAfter.detail : '',
 	/another action/i,
-	'without the harbour, a superseded bundle is still a lost race',
+	'without the harbor, a superseded bundle is still a lost race',
 )
 
 // Being swallowed requires reaching a block. A bundle that never confirmed never got that far,
-// whatever the harbour was doing.
+// whatever the harbor was doing.
 const frozenBefore = proposalSendState({ ...proposal('superseded', 'idle'), harborFrozeDestination: true })
 assert.equal(frozenBefore.kind, 'superseded')
 assert.doesNotMatch(

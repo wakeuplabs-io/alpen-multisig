@@ -3,7 +3,7 @@ import type { ActionValidator } from './types'
 /** BOSD descriptor for a P2TR output: type tag `04` followed by a 32-byte x-only key. */
 const P2TR_BOSD_HEX_PATTERN = /^04[0-9a-fA-F]{64}$/
 
-export const NO_OP_SAFE_HARBOUR_MESSAGE =
+export const NO_OP_SAFE_HARBOR_MESSAGE =
 	'This is already the safe harbor destination, so this update would change nothing.'
 
 /**
@@ -20,7 +20,7 @@ export const NO_OP_SAFE_HARBOUR_MESSAGE =
  * When `currentSafeHarborAddress` is null the rule is off, which is safe only because the form
  * blocks submission while that read is unavailable. The two are load-bearing together.
  */
-export const validateSafeHarbourAddressUpdate: ActionValidator = ({ data, ctx, currentSafeHarborAddress }) => {
+export const validateSafeHarborAddressUpdate: ActionValidator = ({ data, ctx, currentSafeHarborAddress }) => {
 	const address = data.newSafeHarborAddress.trim()
 	if (address.length === 0) {
 		ctx.addIssue({
@@ -51,7 +51,7 @@ export const validateSafeHarbourAddressUpdate: ActionValidator = ({ data, ctx, c
 			ctx.addIssue({
 				code: 'custom',
 				path: ['newSafeHarborAddress'],
-				message: NO_OP_SAFE_HARBOUR_MESSAGE,
+				message: NO_OP_SAFE_HARBOR_MESSAGE,
 			})
 		}
 	}

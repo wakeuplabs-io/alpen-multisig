@@ -8,7 +8,7 @@ export type ActionValidatorContext = {
 	ctx: z.RefinementCtx
 	currentMultisigSigners: string[] | null
 	currentMultisigThreshold: number | null
-	/** The bridge's current safe harbour destination as an address; null when unread. */
+	/** The bridge's current safe harbor destination as an address; null when unread. */
 	currentSafeHarborAddress: string | null
 }
 

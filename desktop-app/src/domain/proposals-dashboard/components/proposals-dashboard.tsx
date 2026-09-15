@@ -37,7 +37,7 @@ type Props = {
 	signerPubkey: string | null
 	currentBlockHeight: number | null
 	/**
-	 * The bridge's live safe harbour flag. Read on the two dashboards whose authority holds a lever
+	 * The bridge's live safe harbor flag. Read on the two dashboards whose authority holds a lever
 	 * that answers it; `false` elsewhere, which is also how a failed read degrades.
 	 */
 	safeHarborActivated: boolean
@@ -81,7 +81,7 @@ export function ProposalsDashboard({
 
 	const activeProposals = [...quorumReached, ...pending]
 	const pastProposals = [...executedOrCanceled, ...expiredOrSkipped]
-	// Over every past proposal, never the current page: which proposal activated the harbour is a
+	// Over every past proposal, never the current page: which proposal activated the harbor is a
 	// fact about the whole history.
 	const changedNothing = changedNothingActionIds(pastProposals)
 	const totalPastPages = Math.ceil(pastProposals.length / PAGE_SIZE)
@@ -460,7 +460,7 @@ function ProposalCard({
 	proposal: Proposal
 	signerPubkey: string | null
 	currentBlockHeight: number | null
-	/** Enacted, but the safe harbour was already active — see `changedNothingActionIds`. */
+	/** Enacted, but the safe harbor was already active — see `changedNothingActionIds`. */
 	changedNothing: boolean
 	/** The bridge's live flag, which decides why a superseded rotation is superseded. */
 	safeHarborActivated: boolean

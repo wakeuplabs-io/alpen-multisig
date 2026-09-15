@@ -1,22 +1,22 @@
 /** One destination, in the two forms a signer needs: the one they recognise and the one they verify. */
-export type SafeHarbourDestination = {
+export type SafeHarborDestination = {
 	/** Bech32m address on the active network. Empty when it could not be rendered. */
 	address: string
 	/** BOSD descriptor hex — what the signer's device displays, and therefore what they compare. */
 	addressHex: string
 }
 
-export type SafeHarbourChange = {
+export type SafeHarborChange = {
 	/** The destination being replaced. Null once the rotation is enacted: see below. */
-	from: SafeHarbourDestination | null
-	to: SafeHarbourDestination
+	from: SafeHarborDestination | null
+	to: SafeHarborDestination
 }
 
-export type BuildSafeHarbourChangeInput = {
+export type BuildSafeHarborChangeInput = {
 	/** The bridge's live destination, or null when it could not be read from chain. */
-	installed: SafeHarbourDestination | null
+	installed: SafeHarborDestination | null
 	/** The destination this action carries, decoded from its hex. */
-	proposed: SafeHarbourDestination
+	proposed: SafeHarborDestination
 	isEnacted: boolean
 }
 
@@ -35,7 +35,7 @@ export type BuildSafeHarbourChangeInput = {
  * pre-rotation destination is not recoverable from the action, so it is not invented —
  * `build-signer-set-change.ts` draws the same line for the same reason.
  */
-export function buildSafeHarbourChange(input: BuildSafeHarbourChangeInput): SafeHarbourChange | null {
+export function buildSafeHarborChange(input: BuildSafeHarborChangeInput): SafeHarborChange | null {
 	const { installed, proposed, isEnacted } = input
 	if (installed === null) return null
 	if (isEnacted) return { from: null, to: proposed }

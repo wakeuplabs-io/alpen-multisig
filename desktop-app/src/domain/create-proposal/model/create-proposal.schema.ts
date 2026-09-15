@@ -75,7 +75,7 @@ export type BuildCreateProposalFormSchemaArgs = {
 	/** The session's authority. Decides which action types this form may produce at all. */
 	authority: string
 	/**
-	 * The bridge's current safe harbour destination, as an address on the active network. Needed to
+	 * The bridge's current safe harbor destination, as an address on the active network. Needed to
 	 * refuse a rotation to the destination already installed — which the chain accepts and reports
 	 * as `Enacted`, indistinguishable from one that changed something. Null when the read failed,
 	 * which is safe only because the form also blocks submission in that state.

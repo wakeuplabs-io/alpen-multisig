@@ -8,8 +8,8 @@ import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
 import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
-import { SafeHarbourChangeTable } from '@/domain/safe-harbour-change/components/safe-harbour-change-table'
-import { buildSafeHarbourChange } from '@/domain/safe-harbour-change/model/build-safe-harbour-change'
+import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
+import { buildSafeHarborChange } from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -27,7 +27,7 @@ type SignProposalViewProps = {
 	deviceDisplay: DeviceSigningDisplay
 	/**
 	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
-	 * not already print it. Rendered for a safe harbour rotation only (V4 Phase 4 §2.2).
+	 * not already print it. Rendered for a safe harbor rotation only (V4 Phase 4 §2.2).
 	 */
 	signingMessage: string | null
 	signResult: SignSighashResult | null
@@ -128,7 +128,7 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
-function SafeHarbourAddressDetails({
+function SafeHarborAddressDetails({
 	action,
 	signingMessage,
 }: {
@@ -137,11 +137,11 @@ function SafeHarbourAddressDetails({
 }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
 	// rotation submitted after activation is accepted on chain and discarded. One read for both
-	// answers — whether the harbour is up, and what it currently sweeps to.
+	// answers — whether the harbor is up, and what it currently sweeps to.
 	const { safeHarbor } = useSafeHarbor()
 
 	// `isEnacted` is a constant on this screen: nothing enacted is ever signed.
-	const change = buildSafeHarbourChange({
+	const change = buildSafeHarborChange({
 		installed: safeHarbor === null ? null : { address: safeHarbor.address, addressHex: safeHarbor.addressHex },
 		proposed: { address: action.address, addressHex: action.addressHex },
 		isEnacted: false,
@@ -179,7 +179,7 @@ function SafeHarbourAddressDetails({
 							</code>
 						</div>
 					) : (
-						<SafeHarbourChangeTable change={change} />
+						<SafeHarborChangeTable change={change} />
 					)}
 				</div>
 			</div>
@@ -192,8 +192,8 @@ function SafeHarbourAddressDetails({
 						message={signingMessage}
 						placeholder=""
 						error={null}
-						testId="e2e-sign-safe-harbour-signing-message"
-						labelId="sign-safe-harbour-signing-message-label"
+						testId="e2e-sign-safe-harbor-signing-message"
+						labelId="sign-safe-harbor-signing-message-label"
 						hint="This is exactly what you are signing. The destination appears in it as a descriptor, not as an address."
 					/>
 				</div>
@@ -204,7 +204,7 @@ function SafeHarbourAddressDetails({
 
 function DefconDetails({ level }: { level: DefconLevel }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and
-	// the sentences below are written in the future tense, which is wrong once the harbour is up.
+	// the sentences below are written in the future tense, which is wrong once the harbor is up.
 	const safeHarborActivated = useSafeHarborActivated()
 
 	return (
@@ -288,7 +288,7 @@ export function SignProposalView({
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
 			) : decodedAction.kind === 'safe_harbour_address_update' ? (
-				<SafeHarbourAddressDetails action={decodedAction} signingMessage={signingMessage} />
+				<SafeHarborAddressDetails action={decodedAction} signingMessage={signingMessage} />
 			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
 				<DefconDetails level={decodedAction.kind} />
 			) : decodedAction.kind === 'cancel' ? (

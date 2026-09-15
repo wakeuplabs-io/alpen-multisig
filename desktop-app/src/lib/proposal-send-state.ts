@@ -29,7 +29,7 @@ type SendStateInput = {
 	requiredSignatures: number
 	signatures: ReadonlyArray<unknown>
 	/**
-	 * A safe harbour rotation the bridge accepted and applied nowhere, because the harbour was
+	 * A safe harbor rotation the bridge accepted and applied nowhere, because the harbor was
 	 * already up. Decided by the caller — see `harborFrozeDestination` — since answering it needs
 	 * a live chain read and this module is pure.
 	 */
@@ -87,7 +87,7 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
 /**
  * The third way, and the only one where a replacement is the wrong advice.
  *
- * A safe harbour rotation submitted after the harbour is activated is accepted on chain in full:
+ * A safe harbor rotation submitted after the harbor is activated is accepted on chain in full:
  * the signature verifies, the sequence number is consumed and the queue entry drains.
  * `SafeHarbour::update_address` then refuses the change and returns a boolean the bridge
  * subprotocol discards — no log, no error. So the sequence number is gone for the same reason as
@@ -95,7 +95,7 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
  * upstream, so a replacement meets the same frozen destination. Constraint 1 in
  * docs/specs/security-council-safe-harbour-address.md.
  */
-const SUPERSEDED_BY_FROZEN_HARBOUR = {
+const SUPERSEDED_BY_FROZEN_HARBOR = {
 	label: 'Superseded',
 	detail:
 		'The safe harbor is already active, so the bridge\u2019s destination is frozen: this transaction was mined and the ASM accepted it, and nothing changed. The signatures are bound to a sequence number that is now spent, and a replacement would be discarded the same way while the harbor is up. The commit and reveal fees were spent.',
@@ -112,12 +112,12 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 	// something of its own to say — including which of the two ways it got there. Quorum never
 	// enters into it: the sequence number is gone either way.
 	if (proposal.status === 'superseded') {
-		// Being swallowed by the harbour requires reaching a block, so the frozen variant is a
+		// Being swallowed by the harbor requires reaching a block, so the frozen variant is a
 		// refinement of the confirmed one and never of the other.
 		const stage =
 			proposal.broadcastStatus === 'reveal_confirmed'
 				? proposal.harborFrozeDestination === true
-					? SUPERSEDED_BY_FROZEN_HARBOUR
+					? SUPERSEDED_BY_FROZEN_HARBOR
 					: SUPERSEDED_AFTER_CONFIRMATION
 				: SUPERSEDED_BEFORE_CONFIRMATION
 		return { kind: 'superseded', ...stage }

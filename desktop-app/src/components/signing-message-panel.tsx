@@ -11,7 +11,7 @@ type Props = {
 	testId: string
 	labelId: string
 	/**
-	 * Replaces the default note under the panel. The safe harbour form uses it to say that the
+	 * Replaces the default note under the panel. The safe harbor form uses it to say that the
 	 * destination appears on the device as a descriptor rather than as an address — the one thing a
 	 * signer has to know to compare the two, and the reason the panel is there at all.
 	 */
@@ -21,8 +21,8 @@ type Props = {
 /**
  * The block that shows a signer what their device will display.
  *
- * Shared by the Defcon form and the safe harbour preview and sign view. It started as two copies of
- * the same markup and the same copy, which is how the safe harbour form inherited a sentence written for Defcon — "Reconnect and
+ * Shared by the Defcon form and the safe harbor preview and sign view. It started as two copies of
+ * the same markup and the same copy, which is how the safe harbor form inherited a sentence written for Defcon — "Reconnect and
  * try again" — and showed it under an address that was merely half typed.
  *
  * The rule the shape encodes: **a value that is not finished is not an error.** While nothing has
@@ -39,7 +39,7 @@ export function SigningMessagePanel({ message, placeholder, error, testId, label
 				<pre
 					aria-labelledby={labelId}
 					// Wraps instead of scrolling. Defcon's lines are short and never reached the edge;
-					// the safe harbour message carries a 66-character descriptor that never fits, so
+					// the safe harbor message carries a 66-character descriptor that never fits, so
 					// the one value a signer has to compare against their device was the one value
 					// hidden past the right edge. `pre-wrap` keeps the line breaks and the indent that
 					// make the message readable; `break-words` only breaks a token that cannot fit.

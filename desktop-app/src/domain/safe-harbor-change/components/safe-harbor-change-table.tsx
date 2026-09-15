@@ -1,7 +1,7 @@
-import type { SafeHarbourChange, SafeHarbourDestination } from '../model/build-safe-harbour-change'
+import type { SafeHarborChange, SafeHarborDestination } from '../model/build-safe-harbor-change'
 
 type Props = {
-	change: SafeHarbourChange
+	change: SafeHarborChange
 }
 
 /**
@@ -15,10 +15,10 @@ type Props = {
  * the signer's device displays, so it is the one they can actually check; the address is the one
  * they recognise.
  */
-export function SafeHarbourChangeTable({ change }: Props) {
+export function SafeHarborChangeTable({ change }: Props) {
 	if (change.from === null) {
 		return (
-			<div className="px-4 py-3" data-testid="e2e-safe-harbour-change">
+			<div className="px-4 py-3" data-testid="e2e-safe-harbor-change">
 				<p className="m-0 mb-1.5 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Destination</p>
 				<Destination destination={change.to} />
 			</div>
@@ -28,7 +28,7 @@ export function SafeHarbourChangeTable({ change }: Props) {
 	return (
 		<table
 			className="w-full table-fixed border-collapse"
-			data-testid="e2e-safe-harbour-change"
+			data-testid="e2e-safe-harbor-change"
 			aria-label="Sweep destination change"
 		>
 			<thead>
@@ -61,7 +61,7 @@ export function SafeHarbourChangeTable({ change }: Props) {
 	)
 }
 
-function Destination({ destination }: { destination: SafeHarbourDestination }) {
+function Destination({ destination }: { destination: SafeHarborDestination }) {
 	return (
 		<span className="flex flex-col gap-1">
 			{destination.address.length > 0 && (

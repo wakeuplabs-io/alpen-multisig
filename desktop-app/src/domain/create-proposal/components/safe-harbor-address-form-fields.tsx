@@ -1,13 +1,13 @@
 import { useFormContext, useWatch } from 'react-hook-form'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
 import type { SafeHarborStatus } from '@/api/asm-state'
-import { useSafeHarbourActionHex } from '../hooks/use-safe-harbour-action-hex'
+import { useSafeHarborActionHex } from '../hooks/use-safe-harbor-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
 
 type Props = {
 	safeHarbor: SafeHarborStatus | null
-	isLoadingSafeHarbour: boolean
+	isLoadingSafeHarbor: boolean
 }
 
 /**
@@ -29,7 +29,7 @@ const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
  * The full signing message is not here: nothing is signed on this screen. It is on the preview and
  * the sign view, where the signature is given (V4 Phase 4 §2).
  */
-export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour }: Props) {
+export function SafeHarborAddressFormFields({ safeHarbor, isLoadingSafeHarbor }: Props) {
 	const {
 		control,
 		register,
@@ -40,7 +40,7 @@ export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour 
 	// Attempted whenever the Zod rules pass. The earlier version read as if that guard filtered
 	// invalid addresses; it never could, because the address is validated in Rust and the validator
 	// has no opinion about it.
-	const { descriptorHex, error: buildError } = useSafeHarbourActionHex(
+	const { descriptorHex, error: buildError } = useSafeHarborActionHex(
 		errors.newSafeHarborAddress === undefined ? address : '',
 	)
 
@@ -63,7 +63,7 @@ export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour 
 
 			<div>
 				<p className="mb-3 text-body font-medium text-[#6b7280]">Current destination</p>
-				{isLoadingSafeHarbour ? (
+				{isLoadingSafeHarbor ? (
 					<div className="h-12 animate-pulse rounded-lg bg-[#f3f4f6]" />
 				) : safeHarbor === null ? (
 					<div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-body text-[#9ca3af]">
@@ -80,15 +80,15 @@ export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour 
 			</div>
 
 			<div>
-				<label htmlFor="safe-harbour-address" className="text-body font-medium text-[#111827]">
+				<label htmlFor="safe-harbor-address" className="text-body font-medium text-[#111827]">
 					New destination address
 				</label>
 				<input
-					id="safe-harbour-address"
+					id="safe-harbor-address"
 					type="text"
 					className={monoInputClass}
 					{...register('newSafeHarborAddress')}
-					data-testid="e2e-safe-harbour-address"
+					data-testid="e2e-safe-harbor-address"
 					placeholder="Taproot address (bc1p… / bcrt1p…)"
 					autoComplete="off"
 					spellCheck={false}
@@ -106,7 +106,7 @@ export function SafeHarbourAddressFormFields({ safeHarbor, isLoadingSafeHarbour 
 				{/* Only for an address the builder accepted: a descriptor under a rejected address would
 				    read as a value the device could show. */}
 				{addressError === undefined && descriptorHex !== null && (
-					<div className="mt-3" data-testid="e2e-safe-harbour-descriptor">
+					<div className="mt-3" data-testid="e2e-safe-harbor-descriptor">
 						<p className="m-0 text-body font-medium text-emphasis">Your signer will display</p>
 						<code className="mt-1.5 block break-all rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis">
 							{descriptorHex}

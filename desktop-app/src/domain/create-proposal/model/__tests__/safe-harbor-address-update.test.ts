@@ -1,17 +1,17 @@
-// V4 Phase 1 — the safe harbour address update, in the parts the frontend decides on its own.
+// V4 Phase 1 — the safe harbor address update, in the parts the frontend decides on its own.
 //
 // Pinned in `docs/specs/security-council-safe-harbour-address-phase-1.md` §5.6. The address itself
 // is validated in Rust — bech32m does not check the curve, and the descriptor the device shows is
 // derived there — so what is left here is the menu, the authority gate and the no-op rule.
 //
 // The two addresses below are real regtest taproot addresses for two different x-only keys — both
-// rendered by `SafeHarbourDescriptor::to_address` — so the no-op assertions cannot pass by
+// rendered by `SafeHarborDescriptor::to_address` — so the no-op assertions cannot pass by
 // comparing a string to itself, and a signer could paste either of them for real.
 
 import assert from 'node:assert/strict'
 import { getActionTypeOptions, getDefaultActionType } from '../action-type-config.ts'
 import { buildCreateProposalFormSchema } from '../create-proposal.schema.ts'
-import { NO_OP_SAFE_HARBOUR_MESSAGE } from '../validators/safe-harbour-address-update.ts'
+import { NO_OP_SAFE_HARBOR_MESSAGE } from '../validators/safe-harbor-address-update.ts'
 
 /** Taproot output for the secp256k1 generator point — the destination the local stack ships with. */
 const CURRENT_ADDRESS = 'bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqc8gma6'
@@ -64,7 +64,7 @@ function issues(
 const adminOptions = getActionTypeOptions('strata_admin').map((option) => option.actionType)
 assert.ok(
 	adminOptions.includes('safe_harbour_address_update'),
-	'claim 1 (AC 1): the Strata Administrator must be offered the safe harbour address update',
+	'claim 1 (AC 1): the Strata Administrator must be offered the safe harbor address update',
 )
 assert.equal(
 	adminOptions[adminOptions.length - 1],
@@ -83,7 +83,7 @@ for (const authority of OTHER_AUTHORITIES) {
 	const offered = getActionTypeOptions(authority).map((option) => option.actionType)
 	assert.ok(
 		!offered.includes('safe_harbour_address_update'),
-		`claim 2 (AC 1a): ${authority} must not be offered the safe harbour address update`,
+		`claim 2 (AC 1a): ${authority} must not be offered the safe harbor address update`,
 	)
 }
 
@@ -91,7 +91,7 @@ for (const authority of OTHER_AUTHORITIES) {
 for (const authority of OTHER_AUTHORITIES) {
 	assert.ok(
 		issues('actionType', { authority, currentSafeHarborAddress: null, newSafeHarborAddress: NEW_ADDRESS }).length > 0,
-		`claim 2 (AC 1a): the schema must refuse a safe harbour update authored by ${authority}`,
+		`claim 2 (AC 1a): the schema must refuse a safe harbor update authored by ${authority}`,
 	)
 }
 
@@ -132,7 +132,7 @@ assert.deepEqual(
 		currentSafeHarborAddress: CURRENT_ADDRESS,
 		newSafeHarborAddress: CURRENT_ADDRESS,
 	}),
-	[NO_OP_SAFE_HARBOUR_MESSAGE],
+	[NO_OP_SAFE_HARBOR_MESSAGE],
 	'claim 5 (AC 3c): the chain accepts this and reports it as Enacted, so the form is the only place it can be caught',
 )
 
@@ -151,7 +151,7 @@ assert.deepEqual(
 		currentSafeHarborAddress: CURRENT_ADDRESS,
 		newSafeHarborAddress: CURRENT_ADDRESS.toUpperCase(),
 	}),
-	[NO_OP_SAFE_HARBOUR_MESSAGE],
+	[NO_OP_SAFE_HARBOR_MESSAGE],
 	'claim 5 (AC 3c): case must not be a way past the rule',
 )
 
@@ -163,4 +163,4 @@ assert.deepEqual(
 	'claim 6 (AC 3c): with no current destination read there is nothing to compare against, so the rule stays silent — safe only because the form disables both CTAs in that state',
 )
 
-console.log('safe-harbour-address-update: all assertions passed')
+console.log('safe-harbor-address-update: all assertions passed')

@@ -28,7 +28,7 @@ import { CreateProposalPreview } from './create-proposal-preview'
 import { DefconFormFields } from './defcon-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
-import { SafeHarbourAddressFormFields } from './safe-harbour-address-form-fields'
+import { SafeHarborAddressFormFields } from './safe-harbor-address-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
@@ -164,9 +164,9 @@ export function CreateProposalForm({
 	// Same shape, same reason, for the destination this action replaces: without it the form can
 	// neither show what is being replaced nor refuse a rotation to the address already installed,
 	// and that second rule is what keeps a no-op from reporting as Enacted.
-	const isSafeHarbourAction = actionType === 'safe_harbour_address_update'
-	const { safeHarbor, isLoading: isLoadingSafeHarbour } = useSafeHarbor(isSafeHarbourAction)
-	const isSafeHarbourUnavailable = isSafeHarbourAction && !isLoadingSafeHarbour && safeHarbor === null
+	const isSafeHarborAction = actionType === 'safe_harbour_address_update'
+	const { safeHarbor, isLoading: isLoadingSafeHarbor } = useSafeHarbor(isSafeHarborAction)
+	const isSafeHarborUnavailable = isSafeHarborAction && !isLoadingSafeHarbor && safeHarbor === null
 
 	const createProposalSchema = useMemo(
 		() =>
@@ -377,7 +377,7 @@ export function CreateProposalForm({
 							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
 							newSafeHarborAddress={previewData.newSafeHarborAddress}
-							currentSafeHarbour={safeHarbor}
+							currentSafeHarbor={safeHarbor}
 							operatorsToAdd={previewData.operatorsToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)}
 							operatorIndicesToRemove={previewData.operatorIndicesToRemove
 								.map((r) => r.value.trim())
@@ -469,8 +469,8 @@ export function CreateProposalForm({
 								/>
 							) : actionType === 'sequencer_key_update' ? (
 								<SequencerKeyUpdateFormFields />
-							) : isSafeHarbourAction ? (
-								<SafeHarbourAddressFormFields safeHarbor={safeHarbor} isLoadingSafeHarbour={isLoadingSafeHarbour} />
+							) : isSafeHarborAction ? (
+								<SafeHarborAddressFormFields safeHarbor={safeHarbor} isLoadingSafeHarbor={isLoadingSafeHarbor} />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
 							)}
@@ -482,7 +482,7 @@ export function CreateProposalForm({
 								</div>
 							)}
 
-							{isSafeHarbourUnavailable && (
+							{isSafeHarborUnavailable && (
 								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
 									Could not load the current safe harbor destination. Try again before continuing — without it this form
 									cannot tell a real change from one that would do nothing.
@@ -521,8 +521,8 @@ export function CreateProposalForm({
 												isSubmitting ||
 												isLoadingConfig ||
 												isConfigUnavailable ||
-												isLoadingSafeHarbour ||
-												isSafeHarbourUnavailable ||
+												isLoadingSafeHarbor ||
+												isSafeHarborUnavailable ||
 												!formState.isValid
 											}
 										>
@@ -553,8 +553,8 @@ export function CreateProposalForm({
 											isSubmitting ||
 											isLoadingConfig ||
 											isConfigUnavailable ||
-											isLoadingSafeHarbour ||
-											isSafeHarbourUnavailable ||
+											isLoadingSafeHarbor ||
+											isSafeHarborUnavailable ||
 											!formState.isValid
 										}
 										onClick={() => void handlePreviewClick()}

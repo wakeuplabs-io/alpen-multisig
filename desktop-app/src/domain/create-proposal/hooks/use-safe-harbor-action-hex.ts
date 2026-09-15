@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { buildSafeHarbourAddressUpdateHex } from '@/api/action-builder'
+import { buildSafeHarborAddressUpdateHex } from '@/api/action-builder'
 import { decodeActionHex } from '@/api/signing'
 
-export type SafeHarbourActionHex = {
+export type SafeHarborActionHex = {
 	actionHex: string | null
 	/**
 	 * The destination's BOSD descriptor as the device will display it, decoded back out of the action
@@ -12,10 +12,10 @@ export type SafeHarbourActionHex = {
 	error: string | null
 }
 
-const EMPTY: SafeHarbourActionHex = { actionHex: null, descriptorHex: null, error: null }
+const EMPTY: SafeHarborActionHex = { actionHex: null, descriptorHex: null, error: null }
 
 /**
- * Resolves the action hex for a safe harbour rotation, and the descriptor the device will display for
+ * Resolves the action hex for a safe harbor rotation, and the descriptor the device will display for
  * it, while the signer is still filling the form in — the same thing `use-defcon-action-hex.ts` does,
  * with one difference: the hex depends on what was typed rather than being a constant.
  *
@@ -31,15 +31,15 @@ const EMPTY: SafeHarbourActionHex = { actionHex: null, descriptorHex: null, erro
  * - the failure is returned rather than swallowed, so a hex that never resolved reads as broken
  *   instead of as "you have not finished typing".
  */
-export function useSafeHarbourActionHex(address: string): SafeHarbourActionHex {
-	const [state, setState] = useState<SafeHarbourActionHex>(EMPTY)
+export function useSafeHarborActionHex(address: string): SafeHarborActionHex {
+	const [state, setState] = useState<SafeHarborActionHex>(EMPTY)
 
 	useEffect(() => {
 		let cancelled = false
 		setState(EMPTY)
 		if (address.trim().length === 0) return
 		void (async () => {
-			const built = await buildSafeHarbourAddressUpdateHex({ address: address.trim() })
+			const built = await buildSafeHarborAddressUpdateHex({ address: address.trim() })
 			if (cancelled) return
 			if (!built.ok) {
 				setState({ ...EMPTY, error: built.error })

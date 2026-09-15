@@ -29,7 +29,7 @@ type Props = {
 	newSequencerKeyHex: string
 	newSafeHarborAddress: string
 	/** The bridge's destination this rotation replaces, and whether it is already frozen. */
-	currentSafeHarbour: { address: string; addressHex: string; activated: boolean } | null
+	currentSafeHarbor: { address: string; addressHex: string; activated: boolean } | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
 	/**
@@ -58,7 +58,7 @@ export function CreateProposalPreview({
 	operatorIndicesToRemove,
 	newSequencerKeyHex,
 	newSafeHarborAddress,
-	currentSafeHarbour,
+	currentSafeHarbor,
 	deviceDisplay,
 	signingMessage,
 	authorityLabel,
@@ -182,9 +182,9 @@ export function CreateProposalPreview({
 					</p>
 					<div className="flex flex-col gap-1 rounded-lg border border-[#e5e7eb] px-4 py-3">
 						<span className="break-all font-mono text-body text-[#111827]">{newSafeHarborAddress.trim() || '—'}</span>
-						{currentSafeHarbour !== null && (
+						{currentSafeHarbor !== null && (
 							<span className="text-label text-[#6b7280]">
-								Replacing <span className="font-mono">{currentSafeHarbour.address}</span>
+								Replacing <span className="font-mono">{currentSafeHarbor.address}</span>
 							</span>
 						)}
 					</div>
@@ -194,13 +194,13 @@ export function CreateProposalPreview({
 								message={signingMessage}
 								placeholder=""
 								error={null}
-								testId="e2e-safe-harbour-signing-message"
-								labelId="safe-harbour-preview-signing-message-label"
+								testId="e2e-safe-harbor-signing-message"
+								labelId="safe-harbor-preview-signing-message-label"
 								hint="This is exactly what you will be asked to sign. The destination appears in it as a descriptor, not as an address."
 							/>
 						</div>
 					)}
-					{currentSafeHarbour?.activated === true && (
+					{currentSafeHarbor?.activated === true && (
 						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
 							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbor is already active</p>
 							<p className="m-0 mt-2 text-body text-[#6b7280]">
