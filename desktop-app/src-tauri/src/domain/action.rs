@@ -109,7 +109,7 @@ impl CompressedPubKey {
     }
 }
 
-/// The bridge's safe harbour destination: the x-only key of a P2TR output.
+/// The bridge's safe harbor destination: the x-only key of a P2TR output.
 ///
 /// Upstream models this as a `SafeHarbourAddress`, which wraps a BOSD `Descriptor` restricted to
 /// taproot. This type deliberately holds the bare 32-byte key instead, for two reasons:
@@ -123,18 +123,18 @@ impl CompressedPubKey {
 /// A P2TR script is `OP_1 PUSH32 <key>` — 34 bytes — and the BOSD wire form is the type tag `0x04`
 /// followed by the same key.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SafeHarbourDescriptor([u8; 32]);
+pub struct SafeHarborDescriptor([u8; 32]);
 
 /// BOSD type tag for a P2TR descriptor (`DescriptorType::P2tr`).
 const BOSD_P2TR_TAG: u8 = 0x04;
 
-/// Failure to construct a [`SafeHarbourDescriptor`].
+/// Failure to construct a [`SafeHarborDescriptor`].
 ///
 /// One variant per rejection rather than one opaque string: the create form has to tell a signer
 /// *what* was wrong with the address they pasted, and "invalid address" is the answer that sends
 /// them to paste it again unchanged.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum SafeHarbourDescriptorError {
+pub enum SafeHarborDescriptorError {
     /// The inner parser message is kept for logs and dropped from `Display`: `bitcoin`'s own
     /// wording ("legacy address base58 string" and the like) is written for someone reading a
     /// stack trace, and it reached a signer's screen under a half-typed address.
@@ -154,16 +154,16 @@ pub enum SafeHarbourDescriptorError {
     InvalidPoint(String),
 }
 
-impl SafeHarbourDescriptor {
+impl SafeHarborDescriptor {
     /// Parses a bech32m P2TR address, requiring `network`.
     ///
     /// The network check is not a safety property — BOSD carries no network, so the same key yields
     /// the same descriptor bytes everywhere and only the human-readable prefix differs. It is
     /// rejected because an address from another network is near-conclusive evidence that the
     /// operator took it from the wrong wallet. See the spec's Constraint 4.
-    pub fn from_address(s: &str, network: Network) -> Result<Self, SafeHarbourDescriptorError> {
+    pub fn from_address(s: &str, network: Network) -> Result<Self, SafeHarborDescriptorError> {
         let unchecked = Address::from_str(s.trim())
-            .map_err(|e| SafeHarbourDescriptorError::Address(e.to_string()))?;
+            .map_err(|e| SafeHarborDescriptorError::Address(e.to_string()))?;
         let address = unchecked.require_network(network).map_err(|_| {
             // `require_network` does not report what it found, and the message is the whole
             // point of this variant, so re-parse to name it.
@@ -180,7 +180,7 @@ impl SafeHarbourDescriptor {
                     .find(|n| a.clone().require_network(*n).is_ok())
                 })
                 .unwrap_or(Network::Bitcoin);
-            SafeHarbourDescriptorError::WrongNetwork {
+            SafeHarborDescriptorError::WrongNetwork {
                 expected: network,
                 found,
             }
@@ -191,7 +191,7 @@ impl SafeHarbourDescriptor {
         // A taproot output is exactly `OP_1 PUSH32 <32 bytes>`; anything else is another script
         // type, which upstream's `SafeHarbourAddress::try_from` refuses as well.
         if !script.is_p2tr() || bytes.len() != 34 {
-            return Err(SafeHarbourDescriptorError::NotP2tr);
+            return Err(SafeHarborDescriptorError::NotP2tr);
         }
         let mut key = [0u8; 32];
         key.copy_from_slice(&bytes[2..34]);
@@ -199,14 +199,14 @@ impl SafeHarbourDescriptor {
     }
 
     /// Parses the BOSD wire form: the type tag `0x04` followed by the 32-byte key.
-    pub fn from_hex(s: &str) -> Result<Self, SafeHarbourDescriptorError> {
+    pub fn from_hex(s: &str) -> Result<Self, SafeHarborDescriptorError> {
         let bytes =
-            hex::decode(s.trim()).map_err(|e| SafeHarbourDescriptorError::Hex(e.to_string()))?;
+            hex::decode(s.trim()).map_err(|e| SafeHarborDescriptorError::Hex(e.to_string()))?;
         if bytes.len() != 33 {
-            return Err(SafeHarbourDescriptorError::WrongLength(bytes.len()));
+            return Err(SafeHarborDescriptorError::WrongLength(bytes.len()));
         }
         if bytes[0] != BOSD_P2TR_TAG {
-            return Err(SafeHarbourDescriptorError::NotP2trTag(bytes[0]));
+            return Err(SafeHarborDescriptorError::NotP2trTag(bytes[0]));
         }
         let mut key = [0u8; 32];
         key.copy_from_slice(&bytes[1..33]);
@@ -218,9 +218,9 @@ impl SafeHarbourDescriptor {
     /// Both entry paths funnel through here: bech32m does not check the curve, and BOSD does
     /// (`validate_xonly_pubkey`), so without this an address could be accepted by the form and
     /// rejected by the codec — an error surfacing two screens away from the field that caused it.
-    fn from_key(key: [u8; 32]) -> Result<Self, SafeHarbourDescriptorError> {
+    fn from_key(key: [u8; 32]) -> Result<Self, SafeHarborDescriptorError> {
         bitcoin::secp256k1::XOnlyPublicKey::from_slice(&key)
-            .map_err(|e| SafeHarbourDescriptorError::InvalidPoint(e.to_string()))?;
+            .map_err(|e| SafeHarborDescriptorError::InvalidPoint(e.to_string()))?;
         Ok(Self(key))
     }
 
@@ -305,15 +305,15 @@ pub enum Action {
     VkUpdate(VkUpdate),
     OperatorSetUpdate(OperatorSetUpdate),
     SequencerKeyUpdate(SequencerKeyUpdate),
-    /// Set the bridge's safe harbour destination. Authorized by the **Strata Administrator**, not
+    /// Set the bridge's safe harbor destination. Authorized by the **Strata Administrator**, not
     /// by the council: the council decides when the sweep fires, the administrator decides where
     /// the funds land, and one authority holding both could trigger a sweep and pick its
     /// destination. See `docs/specs/security-council-safe-harbour-address.md`.
-    SafeHarbourAddressUpdate(SafeHarbourDescriptor),
-    /// Activate the bridge safe harbour immediately. Authorized by the Strata Security Council and
+    SafeHarborAddressUpdate(SafeHarborDescriptor),
+    /// Activate the bridge safe harbor immediately. Authorized by the Strata Security Council and
     /// payload-less upstream — the sequence number travels with the proposal, not the action.
     Defcon1,
-    /// Activate the bridge safe harbour after `confirmation_depths.defcon3` blocks. Same authority
+    /// Activate the bridge safe harbor after `confirmation_depths.defcon3` blocks. Same authority
     /// and same payload-less shape as `Defcon1`, and the same message relayed to the bridge — the
     /// delay, during which the council can still cancel it, is the whole difference.
     Defcon3,
@@ -363,7 +363,7 @@ mod tests {
             Action::VkUpdate(_)
             | Action::OperatorSetUpdate(_)
             | Action::SequencerKeyUpdate(_)
-            | Action::SafeHarbourAddressUpdate(_)
+            | Action::SafeHarborAddressUpdate(_)
             | Action::Defcon1
             | Action::Defcon3 => {
                 panic!("unexpected variant")
@@ -412,7 +412,7 @@ mod tests {
         assert!(matches!(err, EvenPubKeyError::InvalidPoint(_)));
     }
 
-    // ─── SafeHarbourDescriptor ──────────────────────────────────────────────
+    // ─── SafeHarborDescriptor ──────────────────────────────────────────────
     //
     // The conversion an operator's address goes through before it becomes the destination every
     // bridge satoshi would sweep to. It is the one step of this slice that is ours rather than
@@ -420,37 +420,37 @@ mod tests {
     // row here, and both entry paths are proved to agree.
 
     /// x-only key of the secp256k1 generator point G. Upstream pins the same value in its own
-    /// safe-harbour tests, and it is the address the local stack ships with.
+    /// safe-harbor tests, and it is the address the local stack ships with.
     const G_XONLY_HEX: &str = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
     const G_BOSD_HEX: &str = "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 
     fn g_address(network: bitcoin::Network) -> String {
-        SafeHarbourDescriptor::from_hex(G_BOSD_HEX)
+        SafeHarborDescriptor::from_hex(G_BOSD_HEX)
             .expect("generator point is a valid x-only key")
             .to_address(network)
     }
 
     #[test]
-    fn safe_harbour_accepts_a_p2tr_address_on_the_active_network() {
+    fn safe_harbor_accepts_a_p2tr_address_on_the_active_network() {
         let address = g_address(bitcoin::Network::Regtest);
         assert!(
             address.starts_with("bcrt1p"),
             "expected a regtest taproot address, got {address}"
         );
 
-        let parsed = SafeHarbourDescriptor::from_address(&address, bitcoin::Network::Regtest)
+        let parsed = SafeHarborDescriptor::from_address(&address, bitcoin::Network::Regtest)
             .expect("a P2TR address on the active network is accepted");
         assert_eq!(parsed.as_key(), &hex::decode(G_XONLY_HEX).unwrap()[..]);
     }
 
     #[test]
-    fn safe_harbour_rejects_an_address_from_another_network() {
+    fn safe_harbor_rejects_an_address_from_another_network() {
         let mainnet = g_address(bitcoin::Network::Bitcoin);
-        let err = SafeHarbourDescriptor::from_address(&mainnet, bitcoin::Network::Regtest)
+        let err = SafeHarborDescriptor::from_address(&mainnet, bitcoin::Network::Regtest)
             .expect_err("a mainnet address must not be accepted on regtest");
         assert_eq!(
             err,
-            SafeHarbourDescriptorError::WrongNetwork {
+            SafeHarborDescriptorError::WrongNetwork {
                 expected: bitcoin::Network::Regtest,
                 found: bitcoin::Network::Bitcoin,
             }
@@ -458,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn safe_harbour_rejects_a_non_taproot_address() {
+    fn safe_harbor_rejects_a_non_taproot_address() {
         // P2WPKH over a 20-byte program: parses as an address, is not a taproot output. Upstream's
         // `SafeHarbourAddress::try_from` refuses the same value, one layer later. Built from raw
         // opcodes (`OP_0 PUSH20 <hash>`) so the fixture needs no hash traits in scope.
@@ -468,19 +468,19 @@ mod tests {
         let address =
             bitcoin::Address::from_script(script.as_script(), bitcoin::Network::Regtest).unwrap();
         let err =
-            SafeHarbourDescriptor::from_address(&address.to_string(), bitcoin::Network::Regtest)
+            SafeHarborDescriptor::from_address(&address.to_string(), bitcoin::Network::Regtest)
                 .expect_err("a P2WPKH address must not be accepted");
-        assert_eq!(err, SafeHarbourDescriptorError::NotP2tr);
+        assert_eq!(err, SafeHarborDescriptorError::NotP2tr);
     }
 
     /// The message a signer reads must not be the parser's. `bitcoin` reports things like "legacy
     /// address base58 string", which reached the create form's signing-message panel verbatim under
     /// a half-typed address — proposing a wrong cause in words written for a stack trace.
     #[test]
-    fn safe_harbour_address_error_does_not_leak_the_parser_message() {
+    fn safe_harbor_address_error_does_not_leak_the_parser_message() {
         // The half-typed value from the manual walk: the regtest destination with its last
         // character changed, so the checksum fails.
-        let err = SafeHarbourDescriptor::from_address(
+        let err = SafeHarborDescriptor::from_address(
             "bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqc8gma7",
             bitcoin::Network::Regtest,
         )
@@ -489,50 +489,50 @@ mod tests {
     }
 
     #[test]
-    fn safe_harbour_rejects_text_that_is_not_an_address() {
-        let err = SafeHarbourDescriptor::from_address("not-an-address", bitcoin::Network::Regtest)
+    fn safe_harbor_rejects_text_that_is_not_an_address() {
+        let err = SafeHarborDescriptor::from_address("not-an-address", bitcoin::Network::Regtest)
             .expect_err("garbage must not parse");
-        assert!(matches!(err, SafeHarbourDescriptorError::Address(_)));
+        assert!(matches!(err, SafeHarborDescriptorError::Address(_)));
     }
 
     #[test]
-    fn safe_harbour_accepts_the_bosd_wire_form() {
-        let parsed = SafeHarbourDescriptor::from_hex(G_BOSD_HEX).expect("valid BOSD P2TR hex");
+    fn safe_harbor_accepts_the_bosd_wire_form() {
+        let parsed = SafeHarborDescriptor::from_hex(G_BOSD_HEX).expect("valid BOSD P2TR hex");
         assert_eq!(parsed.to_bosd_hex(), G_BOSD_HEX);
     }
 
     #[test]
-    fn safe_harbour_rejects_a_descriptor_that_is_not_p2tr_tagged() {
+    fn safe_harbor_rejects_a_descriptor_that_is_not_p2tr_tagged() {
         // Tag 0x03 with a 32-byte payload is a valid BOSD descriptor — P2WSH — and upstream
-        // refuses it for the safe harbour. Same answer here, two layers earlier.
-        let err = SafeHarbourDescriptor::from_hex(&format!("03{G_XONLY_HEX}"))
+        // refuses it for the safe harbor. Same answer here, two layers earlier.
+        let err = SafeHarborDescriptor::from_hex(&format!("03{G_XONLY_HEX}"))
             .expect_err("a non-P2TR type tag must be rejected");
-        assert_eq!(err, SafeHarbourDescriptorError::NotP2trTag(0x03));
+        assert_eq!(err, SafeHarborDescriptorError::NotP2trTag(0x03));
     }
 
     #[test]
-    fn safe_harbour_rejects_hex_of_the_wrong_length() {
+    fn safe_harbor_rejects_hex_of_the_wrong_length() {
         // The bare 32-byte key, without its type tag: the most likely paste mistake.
-        let err = SafeHarbourDescriptor::from_hex(G_XONLY_HEX)
+        let err = SafeHarborDescriptor::from_hex(G_XONLY_HEX)
             .expect_err("32 bytes is a key, not a descriptor");
-        assert_eq!(err, SafeHarbourDescriptorError::WrongLength(32));
+        assert_eq!(err, SafeHarborDescriptorError::WrongLength(32));
     }
 
     #[test]
-    fn safe_harbour_rejects_a_key_that_is_not_on_the_curve() {
+    fn safe_harbor_rejects_a_key_that_is_not_on_the_curve() {
         // bech32m does not check the curve and BOSD does, so without this check the form would
         // accept an address the codec then refuses — an error two screens from its cause.
-        let err = SafeHarbourDescriptor::from_hex(&format!("04{}", "00".repeat(32)))
+        let err = SafeHarborDescriptor::from_hex(&format!("04{}", "00".repeat(32)))
             .expect_err("the all-zero scalar is not a valid x-only key");
-        assert!(matches!(err, SafeHarbourDescriptorError::InvalidPoint(_)));
+        assert!(matches!(err, SafeHarborDescriptorError::InvalidPoint(_)));
     }
 
     /// The claim the two entry paths make together, which neither makes alone: an address and the
     /// descriptor hex of the same destination resolve to the same key.
     #[test]
-    fn safe_harbour_address_and_hex_agree_on_the_same_destination() {
-        let from_hex = SafeHarbourDescriptor::from_hex(G_BOSD_HEX).unwrap();
-        let from_address = SafeHarbourDescriptor::from_address(
+    fn safe_harbor_address_and_hex_agree_on_the_same_destination() {
+        let from_hex = SafeHarborDescriptor::from_hex(G_BOSD_HEX).unwrap();
+        let from_address = SafeHarborDescriptor::from_address(
             &g_address(bitcoin::Network::Regtest),
             bitcoin::Network::Regtest,
         )
@@ -543,8 +543,8 @@ mod tests {
     /// Only the prefix moves between networks: BOSD carries no network, so the descriptor bytes —
     /// the value the device displays and the chain stores — are identical everywhere.
     #[test]
-    fn safe_harbour_descriptor_bytes_do_not_depend_on_the_network() {
-        let descriptor = SafeHarbourDescriptor::from_hex(G_BOSD_HEX).unwrap();
+    fn safe_harbor_descriptor_bytes_do_not_depend_on_the_network() {
+        let descriptor = SafeHarborDescriptor::from_hex(G_BOSD_HEX).unwrap();
         assert!(descriptor
             .to_address(bitcoin::Network::Bitcoin)
             .starts_with("bc1p"));

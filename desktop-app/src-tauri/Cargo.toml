@@ -46,7 +46,7 @@ strata-l1-envelope-fmt = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
-# Only `action_codec` imports it: the safe harbour payload is a P2TR BOSD descriptor.
+# Only `action_codec` imports it: the safe harbor payload is a P2TR BOSD descriptor.
 bitcoin-bosd = { workspace = true }
 ssz = { workspace = true }
 secp256k1 = { workspace = true }

@@ -44,12 +44,12 @@ pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
-/// Valid tx type 14 fixture: a safe harbour address update, authorized by Strata Admin.
+/// Valid tx type 14 fixture: a safe harbor address update, authorized by Strata Admin.
 ///
 /// The destination is the taproot output for the secp256k1 generator point — the same one the
 /// local stack ships with, and the one upstream pins in its own signing-message test.
 #[cfg(test)]
-pub(crate) fn test_fixture_safe_harbour_address_action_hex() -> String {
+pub(crate) fn test_fixture_safe_harbor_address_action_hex() -> String {
     use ssz::Encode;
     use strata_asm_txs_admin::actions::updates::SafeHarbourAddressUpdate;
     use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};

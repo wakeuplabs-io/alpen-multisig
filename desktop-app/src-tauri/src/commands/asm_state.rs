@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 use tauri::State;
 
-use desktop_app::domain::action::SafeHarbourDescriptor;
+use desktop_app::domain::action::SafeHarborDescriptor;
 use desktop_app::domain::auth::AuthRole;
 use desktop_app::domain::authority::Authority;
 use desktop_app::infrastructure::asm_status_rpc;
@@ -19,7 +19,7 @@ pub struct MultisigConfigDto {
     pub threshold: u8,
 }
 
-/// The bridge's safe harbour, in both the form a signer recognises and the form their device
+/// The bridge's safe harbor, in both the form a signer recognises and the form their device
 /// shows.
 ///
 /// `address_hex` is the BOSD descriptor — what upstream renders into the signing message — and
@@ -28,7 +28,7 @@ pub struct MultisigConfigDto {
 /// wallet.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SafeHarbourStatusDto {
+pub struct SafeHarborStatusDto {
     pub activated: bool,
     pub address_hex: String,
     pub address: String,
@@ -93,29 +93,29 @@ pub async fn get_current_operators(
 }
 
 #[tauri::command]
-pub async fn get_safe_harbour_status(
+pub async fn get_safe_harbor_status(
     node_config: State<'_, NodeConfigState>,
-) -> Result<SafeHarbourStatusDto, String> {
+) -> Result<SafeHarborStatusDto, String> {
     let rpc_url = node_config
         .0
         .read()
         .map_err(|e| format!("lock error: {e}"))?
         .strata_rpc_url()
         .to_string();
-    let safe_harbour = asm_status_rpc::fetch_safe_harbour(&rpc_url).await?;
+    let safe_harbor = asm_status_rpc::fetch_safe_harbor(&rpc_url).await?;
     // A network that cannot be resolved blanks only the address: the hex is what the device shows
     // and what the no-op rule compares, so it must survive a misconfigured environment.
     let address = network_env::network_from_env()
         .ok()
         .and_then(|network| {
-            SafeHarbourDescriptor::from_hex(&safe_harbour.address_hex)
+            SafeHarborDescriptor::from_hex(&safe_harbor.address_hex)
                 .ok()
                 .map(|d| d.to_address(network))
         })
         .unwrap_or_default();
-    Ok(SafeHarbourStatusDto {
-        activated: safe_harbour.activated,
-        address_hex: safe_harbour.address_hex,
+    Ok(SafeHarborStatusDto {
+        activated: safe_harbor.activated,
+        address_hex: safe_harbor.address_hex,
         address,
     })
 }

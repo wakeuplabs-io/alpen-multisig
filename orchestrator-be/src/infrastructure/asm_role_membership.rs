@@ -687,7 +687,7 @@ mod tests {
     /// be the one that chooses where it lands. The refusal comes from upstream's
     /// `authorized_role()`, not from a list this application maintains.
     #[test]
-    fn safe_harbour_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
+    fn safe_harbor_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
         let update = safe_harbour_address_update();
 
         require_authorized_for_action(Authority::StrataAdmin, &update)
@@ -752,10 +752,10 @@ mod tests {
     }
 
     /// AC 12 for tx 14, with the same discriminating shape: the administrator's own signer update
-    /// (tx 10) against the safe harbour rotation (tx 14). Both are created by the administrator,
+    /// (tx 10) against the safe harbor rotation (tx 14). Both are created by the administrator,
     /// so only the action can separate their depths.
     #[test]
-    fn strata_admin_and_safe_harbour_updates_resolve_to_their_own_depths() {
+    fn strata_admin_and_safe_harbor_updates_resolve_to_their_own_depths() {
         let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
         depths.strata_admin_multisig_update = 11;
         depths.safe_harbour_address_update = 23;

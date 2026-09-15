@@ -341,8 +341,8 @@ async fn prove_rotated_membership_controls_defcon(
         "fresh council sequence must begin at zero"
     );
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(harness)?,
-        "safe harbour must start deactivated"
+        !bridge_safe_harbor_activated(harness)?,
+        "safe harbor must start deactivated"
     );
 
     let live = administration_state(harness)?;
@@ -370,8 +370,8 @@ async fn prove_rotated_membership_controls_defcon(
 
     let after_rejected = administration_state(harness)?;
     anyhow::ensure!(
-        !bridge_safe_harbour_activated(harness)?,
-        "removed-signer quorum must not activate safe harbour"
+        !bridge_safe_harbor_activated(harness)?,
+        "removed-signer quorum must not activate safe harbor"
     );
     anyhow::ensure!(
         !after_rejected
@@ -399,8 +399,8 @@ async fn prove_rotated_membership_controls_defcon(
     .await?;
 
     anyhow::ensure!(
-        bridge_safe_harbour_activated(harness)?,
-        "valid new quorum must activate safe harbour at the same sequence"
+        bridge_safe_harbor_activated(harness)?,
+        "valid new quorum must activate safe harbor at the same sequence"
     );
     let after_accepted = administration_state(harness)?;
     anyhow::ensure!(
@@ -526,7 +526,7 @@ fn signer_index(config: &ThresholdConfig, secret_key: &SecretKey) -> anyhow::Res
         .map_err(|_| anyhow::anyhow!("signer index exceeds u8"))
 }
 
-fn bridge_safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
+fn bridge_safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
     let (_, asm_state) = harness
         .get_latest_asm_state()?
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;

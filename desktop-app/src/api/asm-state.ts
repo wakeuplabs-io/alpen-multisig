@@ -46,7 +46,7 @@ export function getCurrentOperators(): Promise<ApiResult<string[]>> {
 }
 
 export function getSafeHarborStatus(): Promise<ApiResult<SafeHarborStatus>> {
-	return tauriCall('get_safe_harbour_status', {}, safeHarborStatusSchema)
+	return tauriCall('get_safe_harbor_status', {}, safeHarborStatusSchema)
 }
 
 export function getBitcoinBlockHeight(): Promise<ApiResult<number>> {

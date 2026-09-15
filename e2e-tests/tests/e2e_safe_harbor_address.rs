@@ -1,12 +1,12 @@
-//! Protocol regression e2e for the Safe Harbour address update (SPS-50 tx type 14).
+//! Protocol regression e2e for the Safe Harbor address update (SPS-50 tx type 14).
 //!
-//! Three paths, and the third is why this file exists: once the safe harbour is activated the
+//! Three paths, and the third is why this file exists: once the safe harbor is activated the
 //! bridge **refuses** an address change and the subprotocol discards the refusal, so the action is
 //! accepted on chain, consumes its sequence number, leaves the queue — and changes nothing. Nothing
 //! upstream covers that, and it is the shape every rotation attempted after an incident would take.
 //!
 //! Administrator and council keys are disjoint on purpose: the rotation is authorized by the
-//! administrator and the Defcon that freezes the harbour by the council, and mixing them would hide
+//! administrator and the Defcon that freezes the harbor by the council, and mixing them would hide
 //! a mistake in either gate.
 
 use std::num::NonZero;
@@ -26,11 +26,11 @@ use strata_asm_txs_admin::test_utils::create_signature_set;
 use strata_crypto::keys::compressed::CompressedPublicKey;
 use strata_crypto::threshold_signature::ThresholdConfig;
 
-use desktop_app::domain::action::{Action, SafeHarbourDescriptor};
+use desktop_app::domain::action::{Action, SafeHarborDescriptor};
 use desktop_app::infrastructure::action_codec;
 
-const HARBOUR_UPDATE_DEPTH: u16 = 5;
-/// Deliberately different from the safe harbour depth: a per-authority mapping would resolve both
+const HARBOR_UPDATE_DEPTH: u16 = 5;
+/// Deliberately different from the safe harbor depth: a per-authority mapping would resolve both
 /// administrator actions to one number, and the queue assertions would still pass.
 const ADMIN_UPDATE_DEPTH: u16 = 9;
 const ROTATION_SEQNO: u64 = 7;
@@ -47,13 +47,13 @@ const FIRST_UPDATE_ID: u32 = 0;
 const NEW_DESCRIPTOR_HEX: &str =
     "040202020202020202020202020202020202020202020202020202020202020202";
 
-struct HarbourFixture {
+struct HarborFixture {
     admin_keys: Vec<SecretKey>,
     council_keys: Vec<SecretKey>,
     admin_config: AdministrationInitConfig,
 }
 
-impl HarbourFixture {
+impl HarborFixture {
     fn new() -> Self {
         let admin_keys = vec![fixed_key(1), fixed_key(2)];
         let council_keys = vec![fixed_key(3), fixed_key(4)];
@@ -66,16 +66,16 @@ impl HarbourFixture {
             strata_security_council: threshold_config(&council_keys, 2),
             confirmation_depths: ConfirmationDepths {
                 strata_admin_multisig_update: ADMIN_UPDATE_DEPTH,
-                strata_seq_manager_multisig_update: HARBOUR_UPDATE_DEPTH,
-                alpen_admin_multisig_update: HARBOUR_UPDATE_DEPTH,
-                operator_update: HARBOUR_UPDATE_DEPTH,
-                sequencer_update: HARBOUR_UPDATE_DEPTH,
-                ol_stf_vk_update: HARBOUR_UPDATE_DEPTH,
-                asm_stf_vk_update: HARBOUR_UPDATE_DEPTH,
-                ee_stf_vk_update: HARBOUR_UPDATE_DEPTH,
-                strata_security_council_multisig_update: HARBOUR_UPDATE_DEPTH,
-                defcon3: HARBOUR_UPDATE_DEPTH,
-                safe_harbour_address_update: HARBOUR_UPDATE_DEPTH,
+                strata_seq_manager_multisig_update: HARBOR_UPDATE_DEPTH,
+                alpen_admin_multisig_update: HARBOR_UPDATE_DEPTH,
+                operator_update: HARBOR_UPDATE_DEPTH,
+                sequencer_update: HARBOR_UPDATE_DEPTH,
+                ol_stf_vk_update: HARBOR_UPDATE_DEPTH,
+                asm_stf_vk_update: HARBOR_UPDATE_DEPTH,
+                ee_stf_vk_update: HARBOR_UPDATE_DEPTH,
+                strata_security_council_multisig_update: HARBOR_UPDATE_DEPTH,
+                defcon3: HARBOR_UPDATE_DEPTH,
+                safe_harbour_address_update: HARBOR_UPDATE_DEPTH,
             },
             max_seqno_gap: NonZero::new(10).expect("non-zero sequence gap"),
         };
@@ -91,15 +91,15 @@ impl HarbourFixture {
     /// what is under test, and it keeps this crate free of the protocol crates that build the
     /// payload.
     fn rotation_action(&self) -> anyhow::Result<MultisigAction> {
-        let destination = SafeHarbourDescriptor::from_hex(NEW_DESCRIPTOR_HEX)?;
-        let encoded = action_codec::encode_hex(&Action::SafeHarbourAddressUpdate(destination))?;
+        let destination = SafeHarborDescriptor::from_hex(NEW_DESCRIPTOR_HEX)?;
+        let encoded = action_codec::encode_hex(&Action::SafeHarborAddressUpdate(destination))?;
         ssz::Decode::from_ssz_bytes(&hex::decode(encoded)?).map_err(|e| anyhow::anyhow!("{e:?}"))
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_safe_harbour_address_enacts_at_its_depth() {
-    if skip_without_bitcoind("e2e_safe_harbour_address_enacts_at_its_depth") {
+async fn e2e_safe_harbor_address_enacts_at_its_depth() {
+    if skip_without_bitcoind("e2e_safe_harbor_address_enacts_at_its_depth") {
         return;
     }
     run_enacted_rotation()
@@ -108,8 +108,8 @@ async fn e2e_safe_harbour_address_enacts_at_its_depth() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_safe_harbour_address_cancelled_never_changes_the_destination() {
-    if skip_without_bitcoind("e2e_safe_harbour_address_cancelled_never_changes_the_destination") {
+async fn e2e_safe_harbor_address_cancelled_never_changes_the_destination() {
+    if skip_without_bitcoind("e2e_safe_harbor_address_cancelled_never_changes_the_destination") {
         return;
     }
     run_cancelled_rotation()
@@ -118,17 +118,17 @@ async fn e2e_safe_harbour_address_cancelled_never_changes_the_destination() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn e2e_safe_harbour_address_is_swallowed_once_the_harbour_is_active() {
-    if skip_without_bitcoind("e2e_safe_harbour_address_is_swallowed_once_the_harbour_is_active") {
+async fn e2e_safe_harbor_address_is_swallowed_once_the_harbor_is_active() {
+    if skip_without_bitcoind("e2e_safe_harbor_address_is_swallowed_once_the_harbor_is_active") {
         return;
     }
     run_swallowed_rotation()
         .await
-        .expect("an activated harbour must freeze the destination while still accepting the tx");
+        .expect("an activated harbor must freeze the destination while still accepting the tx");
 }
 
 async fn run_enacted_rotation() -> anyhow::Result<()> {
-    let fixture = HarbourFixture::new();
+    let fixture = HarborFixture::new();
     let harness = AsmTestHarnessBuilder::default()
         .with_admin_config(fixture.admin_config.clone())
         .build()
@@ -136,14 +136,14 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
 
     let initial = administration_state(&harness)?;
     assert_fixture_depths(&initial)?;
-    let initial_destination = safe_harbour_descriptor_hex(&harness)?;
+    let initial_destination = safe_harbor_descriptor_hex(&harness)?;
     anyhow::ensure!(
         initial_destination != NEW_DESCRIPTOR_HEX,
         "the fixture destination must differ from the one the rotation installs"
     );
     anyhow::ensure!(
-        !safe_harbour_activated(&harness)?,
-        "the harness must start with the safe harbour down"
+        !safe_harbor_activated(&harness)?,
+        "the harness must start with the safe harbor down"
     );
     let (admin_config, initial_admin_seqno) =
         authority_snapshot(&initial, Role::StrataAdministrator)?;
@@ -158,7 +158,7 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
         &admin_indices,
     )
     .await?;
-    let activation_height = reveal_height + u64::from(HARBOUR_UPDATE_DEPTH);
+    let activation_height = reveal_height + u64::from(HARBOR_UPDATE_DEPTH);
 
     // Queued, and nothing moved yet — the seqno is spent at acceptance, the destination is not.
     anyhow::ensure!(
@@ -166,7 +166,7 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
         "the rotation must sit in the admin queue before its activation height"
     );
     anyhow::ensure!(
-        safe_harbour_descriptor_hex(&harness)? == initial_destination,
+        safe_harbor_descriptor_hex(&harness)? == initial_destination,
         "the destination must not change while the update is queued"
     );
     anyhow::ensure!(
@@ -178,13 +178,13 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
     // One block short is still short: the boundary is `activation_height <= tip`.
     mine_to(&harness, activation_height - 1).await?;
     anyhow::ensure!(
-        safe_harbour_descriptor_hex(&harness)? == initial_destination,
+        safe_harbor_descriptor_hex(&harness)? == initial_destination,
         "the destination must not change one block before activation"
     );
 
     mine_to(&harness, activation_height).await?;
     anyhow::ensure!(
-        safe_harbour_descriptor_hex(&harness)? == NEW_DESCRIPTOR_HEX,
+        safe_harbor_descriptor_hex(&harness)? == NEW_DESCRIPTOR_HEX,
         "the destination must equal the proposed one at exact activation"
     );
     anyhow::ensure!(
@@ -193,8 +193,8 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
     );
     // AC 7a: a rotation moves the destination and never touches activation.
     anyhow::ensure!(
-        !safe_harbour_activated(&harness)?,
-        "a rotation must not activate the safe harbour"
+        !safe_harbor_activated(&harness)?,
+        "a rotation must not activate the safe harbor"
     );
     anyhow::ensure!(
         initial_admin_seqno < ROTATION_SEQNO,
@@ -204,14 +204,14 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
 }
 
 async fn run_cancelled_rotation() -> anyhow::Result<()> {
-    let fixture = HarbourFixture::new();
+    let fixture = HarborFixture::new();
     let harness = AsmTestHarnessBuilder::default()
         .with_admin_config(fixture.admin_config.clone())
         .build()
         .await?;
 
     let initial = administration_state(&harness)?;
-    let initial_destination = safe_harbour_descriptor_hex(&harness)?;
+    let initial_destination = safe_harbor_descriptor_hex(&harness)?;
     let (admin_config, _) = authority_snapshot(&initial, Role::StrataAdministrator)?;
     let admin_indices = signer_indices(&admin_config, &fixture.admin_keys)?;
 
@@ -224,7 +224,7 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
         &admin_indices,
     )
     .await?;
-    let activation_height = reveal_height + u64::from(HARBOUR_UPDATE_DEPTH);
+    let activation_height = reveal_height + u64::from(HARBOR_UPDATE_DEPTH);
 
     let queued_state = administration_state(&harness)?;
     let MultisigAction::Update(expected_update) = &rotation else {
@@ -262,29 +262,29 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
         "the cancel must drain the queue entry"
     );
     anyhow::ensure!(
-        safe_harbour_descriptor_hex(&harness)? == initial_destination,
+        safe_harbor_descriptor_hex(&harness)? == initial_destination,
         "a cancelled rotation must never install its destination"
     );
     Ok(())
 }
 
 /// Constraint 1, against a real chain. `SafeHarbour::update_address` returns `false` while the
-/// harbour is activated and the bridge subprotocol drops that boolean — so everything else about
+/// harbor is activated and the bridge subprotocol drops that boolean — so everything else about
 /// this rotation succeeds and the destination does not move.
 async fn run_swallowed_rotation() -> anyhow::Result<()> {
-    let fixture = HarbourFixture::new();
+    let fixture = HarborFixture::new();
     let harness = AsmTestHarnessBuilder::default()
         .with_admin_config(fixture.admin_config.clone())
         .build()
         .await?;
 
     let initial = administration_state(&harness)?;
-    let initial_destination = safe_harbour_descriptor_hex(&harness)?;
+    let initial_destination = safe_harbor_descriptor_hex(&harness)?;
     let (admin_config, _) = authority_snapshot(&initial, Role::StrataAdministrator)?;
     let (council_config, _) = authority_snapshot(&initial, Role::StrataSecurityCouncil)?;
 
-    // Defcon 1 has depth 0: it activates the harbour in its own reveal block. The rotation has to
-    // be submitted after that, or it would be queued against a deactivated harbour and this test
+    // Defcon 1 has depth 0: it activates the harbor in its own reveal block. The rotation has to
+    // be submitted after that, or it would be queued against a deactivated harbor and this test
     // would prove the enacted path instead.
     let defcon = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
     let council_indices = signer_indices(&council_config, &fixture.council_keys)?;
@@ -297,8 +297,8 @@ async fn run_swallowed_rotation() -> anyhow::Result<()> {
     )
     .await?;
     anyhow::ensure!(
-        safe_harbour_activated(&harness)?,
-        "Defcon 1 must activate the safe harbour in its own block"
+        safe_harbor_activated(&harness)?,
+        "Defcon 1 must activate the safe harbor in its own block"
     );
 
     let rotation = fixture.rotation_action()?;
@@ -311,9 +311,9 @@ async fn run_swallowed_rotation() -> anyhow::Result<()> {
         &admin_indices,
     )
     .await?;
-    let activation_height = reveal_height + u64::from(HARBOUR_UPDATE_DEPTH);
+    let activation_height = reveal_height + u64::from(HARBOR_UPDATE_DEPTH);
 
-    // Accepted, exactly as it would be with the harbour down: the signature check passed and the
+    // Accepted, exactly as it would be with the harbor down: the signature check passed and the
     // sequence number is spent.
     anyhow::ensure!(
         authority_snapshot(&administration_state(&harness)?, Role::StrataAdministrator)?.1
@@ -332,12 +332,12 @@ async fn run_swallowed_rotation() -> anyhow::Result<()> {
         "the queue entry must drain at activation, as it would for a rotation that applied"
     );
     anyhow::ensure!(
-        safe_harbour_descriptor_hex(&harness)? == initial_destination,
-        "the destination is frozen once the harbour is active: the rotation must change nothing"
+        safe_harbor_descriptor_hex(&harness)? == initial_destination,
+        "the destination is frozen once the harbor is active: the rotation must change nothing"
     );
     anyhow::ensure!(
-        safe_harbour_activated(&harness)?,
-        "the harbour must still be active after the swallowed rotation"
+        safe_harbor_activated(&harness)?,
+        "the harbor must still be active after the swallowed rotation"
     );
     Ok(())
 }
@@ -396,7 +396,7 @@ fn queued_matches(harness: &AsmTestHarness, action: &MultisigAction) -> anyhow::
 }
 
 /// The BOSD wire form of the installed destination — the same bytes the signing message renders.
-fn safe_harbour_descriptor_hex(harness: &AsmTestHarness) -> anyhow::Result<String> {
+fn safe_harbor_descriptor_hex(harness: &AsmTestHarness) -> anyhow::Result<String> {
     let (_, asm_state) = harness
         .get_latest_asm_state()?
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
@@ -407,7 +407,7 @@ fn safe_harbour_descriptor_hex(harness: &AsmTestHarness) -> anyhow::Result<Strin
     ))
 }
 
-fn safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
+fn safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
     let (_, asm_state) = harness
         .get_latest_asm_state()?
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
@@ -419,8 +419,8 @@ fn safe_harbour_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
 fn assert_fixture_depths(state: &AdministrationSubprotoState) -> anyhow::Result<()> {
     anyhow::ensure!(
         state.confirmation_depth(UpdateTxType::SafeHarbourAddressUpdate)
-            == Some(HARBOUR_UPDATE_DEPTH),
-        "tx14 must use the safe harbour depth"
+            == Some(HARBOR_UPDATE_DEPTH),
+        "tx14 must use the safe harbor depth"
     );
     anyhow::ensure!(
         state.confirmation_depth(UpdateTxType::StrataAdminMultisigUpdate)

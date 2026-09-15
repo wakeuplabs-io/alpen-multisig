@@ -64,7 +64,7 @@ export type BuildSafeHarborAddressUpdateHexInput = {
 export function buildSafeHarborAddressUpdateHex(
 	input: BuildSafeHarborAddressUpdateHexInput,
 ): Promise<ApiResult<BuildActionHexResponse>> {
-	return tauriCall('build_safe_harbour_address_update_hex', { input }, buildActionHexResponseSchema)
+	return tauriCall('build_safe_harbor_address_update_hex', { input }, buildActionHexResponseSchema)
 }
 
 export function buildDefcon1ActionHex(): Promise<ApiResult<BuildActionHexResponse>> {
