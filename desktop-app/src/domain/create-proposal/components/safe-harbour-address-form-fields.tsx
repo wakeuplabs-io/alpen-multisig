@@ -1,9 +1,7 @@
 import { useFormContext, useWatch } from 'react-hook-form'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
-import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import type { SafeHarbourStatus } from '@/api/asm-state'
 import { useSafeHarbourActionHex } from '../hooks/use-safe-harbour-action-hex'
-import { SigningMessagePanel } from '@/components/signing-message-panel'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
 import { fieldErrorClass, monoInputClass } from '../model/create-proposal-form-styles'
 
@@ -18,20 +16,18 @@ type Props = {
  */
 const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
 
-/** `seqNo` is a free-text field; the signing message can only be resolved for a real number. */
-function parseSeqNo(raw: string | undefined): number | null {
-	const trimmed = (raw ?? '').trim()
-	return /^\d+$/.test(trimmed) ? Number(trimmed) : null
-}
-
 /**
  * The destination the bridge sweeps to, and the exact value the signer's device will display for
  * it.
  *
  * The address is what an operator holds; the BOSD descriptor is what the device shows. The
  * conversion between them is this application's, which makes it the one step of this action where a
- * defect would be invisible — so the descriptor is rendered here, from the same Rust renderer the
- * device signs over, rather than composed in TypeScript or left for the signer to take on trust.
+ * defect would be invisible — so the descriptor is printed under the address, decoded by the same Rust
+ * codec that builds the action, rather than composed in TypeScript or left for the signer to take on
+ * trust.
+ *
+ * The full signing message is not here: nothing is signed on this screen. It is on the preview and
+ * the sign view, where the signature is given (V4 Phase 4 §2).
  */
 export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour }: Props) {
 	const {
@@ -41,27 +37,18 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 	} = useFormContext<CreateProposalFormValues>()
 
 	const address = useWatch({ control, name: 'newSafeHarbourAddress' }) ?? ''
-	const seqNo = parseSeqNo(useWatch({ control, name: 'seqNo' }))
 	// Attempted whenever the Zod rules pass. The earlier version read as if that guard filtered
 	// invalid addresses; it never could, because the address is validated in Rust and the validator
 	// has no opinion about it.
-	const { actionHex, error: buildError } = useSafeHarbourActionHex(
+	const { descriptorHex, error: buildError } = useSafeHarbourActionHex(
 		errors.newSafeHarbourAddress === undefined ? address : '',
 	)
-	const { message } = useDeviceSigningMessage(seqNo, actionHex)
 
 	// The builder's rejection answers "is this a destination I can use", which is the question the
 	// field asks — so it belongs under the field, and only once the signer has typed something long
 	// enough to be a whole address. Before that it is a *not yet*, and red is for errors.
 	const looksComplete = address.trim().length >= MIN_PLAUSIBLE_ADDRESS_LENGTH
 	const addressError = errors.newSafeHarbourAddress?.message ?? (looksComplete ? (buildError ?? undefined) : undefined)
-
-	const placeholder =
-		address.trim().length === 0
-			? 'Enter a destination address to resolve the signing message.'
-			: seqNo === null
-				? 'Enter a sequence number to resolve the signing message.'
-				: 'Resolving…'
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -116,19 +103,20 @@ export function SafeHarbourAddressFormFields({ safeHarbour, isLoadingSafeHarbour
 						Must be a taproot address on this network. Every bridge output would sweep here.
 					</p>
 				)}
+				{/* Only for an address the builder accepted: a descriptor under a rejected address would
+				    read as a value the device could show. */}
+				{addressError === undefined && descriptorHex !== null && (
+					<div className="mt-3" data-testid="e2e-safe-harbour-descriptor">
+						<p className="m-0 text-body font-medium text-emphasis">Your signer will display</p>
+						<code className="mt-1.5 block break-all rounded-lg border border-[#e5e7eb] bg-bg-surface px-3 py-2.5 font-mono text-body text-emphasis">
+							{descriptorHex}
+						</code>
+						<p className="mt-1 text-label text-emphasis-soft">
+							The destination appears on the device as this descriptor, not as an address — compare that line.
+						</p>
+					</div>
+				)}
 			</div>
-
-			{/* The panel never carries the address's rejection: an unfinished address leaves it waiting,
-			    not shouting. Red here is reserved for a failure that finishing the field cannot fix,
-			    which is why it is `null` while the input is still the thing that is wrong. */}
-			<SigningMessagePanel
-				message={message}
-				placeholder={placeholder}
-				error={null}
-				testId="e2e-safe-harbour-signing-message"
-				labelId="safe-harbour-signing-message-label"
-				hint="This is exactly what you will see on your signer screen. The destination appears there as a descriptor, not as an address — compare that line."
-			/>
 		</div>
 	)
 }

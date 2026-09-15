@@ -21,8 +21,8 @@ type Props = {
 /**
  * The block that shows a signer what their device will display.
  *
- * Shared by both forms that have one. They used to be two copies of the same markup and the same
- * copy, which is how the safe harbour form inherited a sentence written for Defcon — "Reconnect and
+ * Shared by the Defcon form and the safe harbour preview and sign view. It started as two copies of
+ * the same markup and the same copy, which is how the safe harbour form inherited a sentence written for Defcon — "Reconnect and
  * try again" — and showed it under an address that was merely half typed.
  *
  * The rule the shape encodes: **a value that is not finished is not an error.** While nothing has

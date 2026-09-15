@@ -3,6 +3,7 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarbourNote } from '@/components/safe-harbour-note'
 import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
@@ -24,6 +25,11 @@ type SignProposalViewProps = {
 	currentThreshold: number | null
 	/** What the connected device displays for this signature (Ledger hash / Trezor text). */
 	deviceDisplay: DeviceSigningDisplay
+	/**
+	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
+	 * not already print it. Rendered for a safe harbour rotation only (V4 Phase 4 §2.2).
+	 */
+	signingMessage: string | null
 	signResult: SignSighashResult | null
 	isSigning: boolean
 	error: string | null
@@ -124,8 +130,10 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 
 function SafeHarbourAddressDetails({
 	action,
+	signingMessage,
 }: {
 	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
+	signingMessage: string | null
 }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
 	// rotation submitted after activation is accepted on chain and discarded. One read for both
@@ -175,6 +183,21 @@ function SafeHarbourAddressDetails({
 					)}
 				</div>
 			</div>
+
+			{/* The message this signature authorizes, on the screen where it is given. A hardware
+			    signer already sees it in the device hint below, so it is set only when there is none. */}
+			{signingMessage !== null && (
+				<div className="mt-5">
+					<SigningMessagePanel
+						message={signingMessage}
+						placeholder=""
+						error={null}
+						testId="e2e-sign-safe-harbour-signing-message"
+						labelId="sign-safe-harbour-signing-message-label"
+						hint="This is exactly what you are signing. The destination appears in it as a descriptor, not as an address."
+					/>
+				</div>
+			)}
 		</>
 	)
 }
@@ -237,6 +260,7 @@ export function SignProposalView({
 	decodedAction,
 	currentThreshold,
 	deviceDisplay,
+	signingMessage,
 	signResult,
 	isSigning,
 	error,
@@ -264,7 +288,7 @@ export function SignProposalView({
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
 			) : decodedAction.kind === 'safe_harbour_address_update' ? (
-				<SafeHarbourAddressDetails action={decodedAction} />
+				<SafeHarbourAddressDetails action={decodedAction} signingMessage={signingMessage} />
 			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
 				<DefconDetails level={decodedAction.kind} />
 			) : decodedAction.kind === 'cancel' ? (

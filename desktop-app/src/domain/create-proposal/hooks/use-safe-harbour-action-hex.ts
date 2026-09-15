@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react'
 import { buildSafeHarbourAddressUpdateHex } from '@/api/action-builder'
+import { decodeActionHex } from '@/api/signing'
 
 export type SafeHarbourActionHex = {
 	actionHex: string | null
+	/**
+	 * The destination's BOSD descriptor as the device will display it, decoded back out of the action
+	 * hex by the Rust codec — so the form can print it under the address without composing it here.
+	 */
+	descriptorHex: string | null
 	error: string | null
 }
 
+const EMPTY: SafeHarbourActionHex = { actionHex: null, descriptorHex: null, error: null }
+
 /**
- * Resolves the action hex for a safe harbour rotation, so the form can render the canonical signing
- * message while the signer is still filling it in — the same thing `use-defcon-action-hex.ts` does,
+ * Resolves the action hex for a safe harbour rotation, and the descriptor the device will display for
+ * it, while the signer is still filling the form in — the same thing `use-defcon-action-hex.ts` does,
  * with one difference: the hex depends on what was typed rather than being a constant.
  *
  * That difference is why the resolve is keyed on the address and not on every keystroke: the
@@ -18,22 +26,31 @@ export type SafeHarbourActionHex = {
  *
  * Two rules taken from the Defcon hook verbatim, for the same reasons:
  *
- * - the state is cleared before each resolve, so a message resolved for one destination is never
+ * - the state is cleared before each resolve, so a descriptor resolved for one destination is never
  *   left standing under another;
  * - the failure is returned rather than swallowed, so a hex that never resolved reads as broken
  *   instead of as "you have not finished typing".
  */
 export function useSafeHarbourActionHex(address: string): SafeHarbourActionHex {
-	const [state, setState] = useState<SafeHarbourActionHex>({ actionHex: null, error: null })
+	const [state, setState] = useState<SafeHarbourActionHex>(EMPTY)
 
 	useEffect(() => {
 		let cancelled = false
-		setState({ actionHex: null, error: null })
+		setState(EMPTY)
 		if (address.trim().length === 0) return
-		void buildSafeHarbourAddressUpdateHex({ address: address.trim() }).then((result) => {
+		void (async () => {
+			const built = await buildSafeHarbourAddressUpdateHex({ address: address.trim() })
 			if (cancelled) return
-			setState(result.ok ? { actionHex: result.data.actionHex, error: null } : { actionHex: null, error: result.error })
-		})
+			if (!built.ok) {
+				setState({ ...EMPTY, error: built.error })
+				return
+			}
+			const decoded = await decodeActionHex(built.data.actionHex)
+			if (cancelled) return
+			const descriptorHex =
+				decoded.ok && decoded.data.kind === 'safe_harbour_address_update' ? decoded.data.addressHex : null
+			setState({ actionHex: built.data.actionHex, descriptorHex, error: null })
+		})()
 		return () => {
 			cancelled = true
 		}

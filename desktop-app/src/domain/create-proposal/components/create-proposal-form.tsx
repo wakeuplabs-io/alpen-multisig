@@ -6,7 +6,7 @@ import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import type { MultisigTargetAuthority } from '@/api/action-builder'
 import { deviceCopy } from '@/lib/device-copy'
-import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { deviceSigningDisplay, signingMessageSection } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -384,6 +384,7 @@ export function CreateProposalForm({
 								.filter((v) => v.length > 0)}
 							newSequencerKeyHex={previewData.newSequencerKeyHex}
 							deviceDisplay={deviceDisplay}
+							signingMessage={signingMessageSection(deviceDisplay, deviceMessage)}
 							authorityLabel={authorityLabel}
 							walletVendor={walletVendor}
 							currentSigners={multisigConfig?.signers ?? []}

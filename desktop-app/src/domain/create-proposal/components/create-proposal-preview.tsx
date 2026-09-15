@@ -4,6 +4,7 @@ import type { WalletVendor } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
@@ -31,6 +32,11 @@ type Props = {
 	currentSafeHarbour: { address: string; addressHex: string; activated: boolean } | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
+	/**
+	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
+	 * not already print it. Resolved by the caller from the Rust renderer the device signs over.
+	 */
+	signingMessage: string | null
 	authorityLabel: string
 	/** Signer connected in this session — drives the device-specific confirmation copy. */
 	walletVendor: WalletVendor
@@ -54,6 +60,7 @@ export function CreateProposalPreview({
 	newSafeHarbourAddress,
 	currentSafeHarbour,
 	deviceDisplay,
+	signingMessage,
 	authorityLabel,
 	walletVendor,
 	currentSigners,
@@ -181,6 +188,18 @@ export function CreateProposalPreview({
 							</span>
 						)}
 					</div>
+					{signingMessage !== null && (
+						<div className="mt-4">
+							<SigningMessagePanel
+								message={signingMessage}
+								placeholder=""
+								error={null}
+								testId="e2e-safe-harbour-signing-message"
+								labelId="safe-harbour-preview-signing-message-label"
+								hint="This is exactly what you will be asked to sign. The destination appears in it as a descriptor, not as an address."
+							/>
+						</div>
+					)}
 					{currentSafeHarbour?.activated === true && (
 						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
 							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbour is already active</p>

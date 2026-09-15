@@ -1,7 +1,7 @@
 // device-signing-display — what each signer shows for a message signature.
 
 import assert from 'node:assert/strict'
-import { deviceSigningDisplay } from '../device-signing-display.ts'
+import { deviceSigningDisplay, signingMessageSection } from '../device-signing-display.ts'
 
 const message = 'Strata ASM Administration v1\nAction: ...'
 const messageHash = 'ee020aa4a02d55a674aee20764aaa760d463559e7858c91f14f'
@@ -35,3 +35,11 @@ assert.deepEqual(deviceSigningDisplay('ledger', { message: null, messageHash }),
 assert.deepEqual(deviceSigningDisplay('trezor', { message: null, messageHash }), { kind: 'none' })
 
 console.log('device-signing-display: all assertions passed')
+
+// signingMessageSection — the message appears exactly once on a signing screen: inside the device
+// hint when there is one, as its own section when there is not, and nowhere before it resolves.
+assert.equal(signingMessageSection(deviceSigningDisplay('ledger', { message, messageHash }), message), null)
+assert.equal(signingMessageSection(deviceSigningDisplay('trezor', { message, messageHash }), message), null)
+assert.equal(signingMessageSection(deviceSigningDisplay('mnemonic', { message, messageHash }), message), message)
+assert.equal(signingMessageSection(deviceSigningDisplay('mock', { message, messageHash }), message), message)
+assert.equal(signingMessageSection(deviceSigningDisplay('mnemonic', { message: null, messageHash: null }), null), null)
