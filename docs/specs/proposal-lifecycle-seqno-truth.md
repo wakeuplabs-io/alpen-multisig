@@ -19,7 +19,7 @@ Both came from one manual session on regtest, with three Defcon 1 proposals numb
 1. **Two proposals with quorum were sent while the first was still in the mempool.** Both cards
    settled on *Reveal sent — the reveal transaction is in the mempool, waiting to be mined*, and
    stayed there. Neither reached `Enacted`.
-2. **With the safe harbour already active, the third proposal could still be signed and sent.** The
+2. **With the safe harbor already active, the third proposal could still be signed and sent.** The
    dashboard note added in Phase 7 was on screen; the sign screen said nothing, and offered its
    usual controls.
 
@@ -65,12 +65,12 @@ Three consequences follow, and all three are load-bearing:
 
 ### 3.1 `last_seqno >= seq_no` is not evidence that *this* proposal executed
 
-Phase 7 gave the Defcon 1 predicate its seqno term and fixed the collapse to "the safe harbour is
+Phase 7 gave the Defcon 1 predicate its seqno term and fixed the collapse to "the safe harbor is
 active". It left a narrower version of the same error in place. `defcon1_enacted`
 (`orchestrator-be/src/infrastructure/asm_enactment.rs:195-201`) reads:
 
 ```rust
-last_seqno >= seq_no && safe_harbour_activated && !defcon1_queued
+last_seqno >= seq_no && safe_harbor_activated && !defcon1_queued
 ```
 
 `last_seqno` advances for **any** action of the role and jumps past intermediate values, while the
@@ -78,7 +78,7 @@ other two terms are facts about the bridge rather than about this proposal. So t
 post-condition is satisfiable by somebody else's transaction:
 
 > Proposals #1 (`seq_no = 1`) and #2 (`seq_no = 2`), both Defcon 1, both with confirmed reveals.
-> #2 is mined first: `last_seqno = 2`, the safe harbour activates. #1 is mined next and the ASM
+> #2 is mined first: `last_seqno = 2`, the safe harbor activates. #1 is mined next and the ASM
 > refuses it with `InvalidSeqno`. Reconciliation then reads `2 >= 1`, activated, queue clear —
 > and marks **#1** `Enacted`, on a transaction the chain rejected.
 
@@ -105,7 +105,7 @@ no way out (§9 lists the others, which this phase does not fix).
 |---|---|---|
 | `desktop-app/src/lib/proposal-send-state.ts:44-47` | *The reveal transaction is in the mempool, waiting to be mined.* | Reports the last persisted `broadcast_status`. Nothing has looked at the mempool since the broadcast screen was closed, and no elapsed time is shown |
 | `proposal-send-state.ts:48-51` | *Nothing left to send; the ASM applies the change after the delay.* | A promise. There is no state for "confirmed, and the ASM refused it" |
-| `desktop-app/src/domain/sign-proposal/components/sign-proposal-view.tsx:126-129` | *Approving this authorizes the bridge safe harbour to activate immediately once the proposal is broadcast.* | Future tense, rendered unchanged when the safe harbour is already active. This is the screen where symptom 2's decision was taken |
+| `desktop-app/src/domain/sign-proposal/components/sign-proposal-view.tsx:126-129` | *Approving this authorizes the bridge safe harbor to activate immediately once the proposal is broadcast.* | Future tense, rendered unchanged when the safe harbor is already active. This is the screen where symptom 2's decision was taken |
 
 ## 4. The rule set
 
@@ -116,7 +116,7 @@ Evaluated in this order, inside the reconcile pass that already runs on every re
 **1. Enacted — tightened for Defcon 1 only.**
 
 ```rust
-last_seqno == seq_no && safe_harbour_activated && !defcon1_queued
+last_seqno == seq_no && safe_harbor_activated && !defcon1_queued
 ```
 
 Equality is what attributes the jump to this proposal. `>=` asks "has the role moved past this
@@ -192,7 +192,7 @@ status on one card — the lesson `security-council-defcon-phase-3.md` recorded 
 | 4 | `ProposalStatus::Superseded` and the sweep | `domain/proposal.rs`, `application/proposals.rs` |
 | 5 | The claim gate | `application/proposals.rs` |
 | 6 | Copy that stops asserting what it has not checked, and says how long | `lib/proposal-send-state.ts` and its two renderers |
-| 7 | The safe-harbour note on the sign and broadcast screens | `domain/sign-proposal/`, `domain/broadcast-proposal/` |
+| 7 | The safe-harbor note on the sign and broadcast screens | `domain/sign-proposal/`, `domain/broadcast-proposal/` |
 | 8 | Back-propagation to the contract and the build plan | `docs/specs/` |
 
 No database migration: `status` is `TEXT NOT NULL` with no `CHECK`
@@ -218,7 +218,7 @@ contract tests, which do run in CI.
 ## 8. Acceptance criteria
 
 ### A. A proposal is enacted only on its own sequence number
-**Given** a Defcon 1 proposal whose reveal has confirmed, on a chain where the safe harbour is active
+**Given** a Defcon 1 proposal whose reveal has confirmed, on a chain where the safe harbor is active
 **When** the role's `last_seqno` is greater than the proposal's `seq_no` because another action consumed it
 **Then** the proposal is not marked `Enacted`.
 
@@ -237,8 +237,8 @@ contract tests, which do run in CI.
 **When** a signer looks at it
 **Then** the screen says when it was sent and does not assert the transaction's present location or promise enactment.
 
-### E. The safe harbour is visible where the decision is taken
-**Given** a Defcon 1 proposal and a chain whose safe harbour is already active
+### E. The safe harbor is visible where the decision is taken
+**Given** a Defcon 1 proposal and a chain whose safe harbor is already active
 **When** a signer opens the sign screen or the send screen
 **Then** the state is on screen, and the existing gates remain the only gates.
 
@@ -250,7 +250,7 @@ contract tests, which do run in CI.
 ### G. A redundant enactment says so
 **Given** a Defcon 1 proposal that enacted after another Defcon 1 had already enacted
 **When** a signer reads it
-**Then** it says the bridge was already in safe harbour and the action changed nothing, alongside the `Enacted` badge, which remains true: the ASM applied the action.
+**Then** it says the bridge was already in safe harbor and the action changed nothing, alongside the `Enacted` badge, which remains true: the ASM applied the action.
 
 ## 9. Not in this phase
 
@@ -296,5 +296,5 @@ On the regtest stack that already carries the three stuck proposals:
 3. A fresh Defcon 1 with the next sequence reaches `Enacted` on its own sequence, and only then.
 4. Sending a proposal whose sequence is consumed is refused, the message names the sequence, and no
    fee is spent.
-5. The sign screen for a Defcon 1 shows the safe-harbour state when it is active, and the
+5. The sign screen for a Defcon 1 shows the safe-harbor state when it is active, and the
    type-to-confirm gate is still the only gate.

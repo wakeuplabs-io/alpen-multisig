@@ -37,15 +37,15 @@ flowchart LR
 | Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
-| Security Council (Defcon, safe harbour, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
+| Security Council (Defcon, safe harbor, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
 | Security Council — Defcon 1 functional contract (V1) | [`specs/security-council-defcon.md`](./specs/security-council-defcon.md) | Current |
 | Security Council — Defcon 1 build plan (V1 phases) | [`specs/security-council-defcon-implementation.md`](./specs/security-council-defcon-implementation.md) | Current |
 | Security Council — Defcon 3 functional contract (V2, includes the cancel) | [`specs/security-council-defcon-3.md`](./specs/security-council-defcon-3.md) | Current |
 | Security Council — Defcon 3 build plan (V2 phases) | [`specs/security-council-defcon-3-implementation.md`](./specs/security-council-defcon-3-implementation.md) | Current |
 | Security Council — signer update functional contract (V3) | [`specs/security-council-signer-update.md`](./specs/security-council-signer-update.md) | Current |
 | Security Council — signer update build plan (V3 phases) | [`specs/security-council-signer-update-implementation.md`](./specs/security-council-signer-update-implementation.md) | Current |
-| Security Council — safe harbour address functional contract (V4) | [`specs/security-council-safe-harbour-address.md`](./specs/security-council-safe-harbour-address.md) | Current |
-| Security Council — safe harbour address build plan (V4 phases) | [`specs/security-council-safe-harbour-address-implementation.md`](./specs/security-council-safe-harbour-address-implementation.md) | Current |
+| Security Council — safe harbor address functional contract (V4) | [`specs/security-council-safe-harbor-address.md`](./specs/security-council-safe-harbor-address.md) | Current |
+| Security Council — safe harbor address build plan (V4 phases) | [`specs/security-council-safe-harbor-address-implementation.md`](./specs/security-council-safe-harbor-address-implementation.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |

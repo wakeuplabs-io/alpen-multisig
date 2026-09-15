@@ -10,7 +10,7 @@ implementation pending
 
 This document is the SSOT for the scope, staging and slice status of the Security Council feature.
 Per-slice functional contracts are separate siblings (`security-council-defcon.md`,
-`security-council-signer-update.md`, `security-council-safe-harbour-address.md`) and are written
+`security-council-signer-update.md`, `security-council-safe-harbor-address.md`) and are written
 only once a slice is proven implementable — see [Stage 4](#6-stage-board).
 
 All upstream claims below were read from the `asm` submodule at tags `v0.1-alpha.11` and `v0.3.1`,
@@ -56,7 +56,7 @@ pub enum Role {
 ```
 
 The council exists to act during a security incident, and its only power is to **signal the bridge
-to sweep all bridge funds to the safe harbour**. It has two levers — one immediate, one timelocked
+to sweep all bridge funds to the safe harbor**. It has two levers — one immediate, one timelocked
 — and nothing else.
 
 ### 2.1 The segregation invariant
@@ -102,7 +102,7 @@ message is emitted — immediately, or after a timelock.
 
 The bridge sets `safe_harbour.set_activated(true)` (`bridge-v1/state/bridge.rs:108-110`). This is
 idempotent and **nothing ever sets it back to `false`** — there is no de-escalation path in the
-protocol. Once activated, safe-harbour address rotation is rejected and silently dropped, so bridge
+protocol. Once activated, safe-harbor address rotation is rejected and silently dropped, so bridge
 nodes always observe a single destination (`bridge-v1/state/bridge.rs:114-123`).
 
 ---
@@ -154,7 +154,7 @@ nothing else for a signer to inspect. That drives the signer-safety treatment in
 ### 3.2 Observable post-conditions
 
 There is no RPC for the admin queue; admin state is reachable only through
-`strata_asm_getAnchorState` plus `find_section(AdministrationSubprotocol::ID)`. The safe harbour
+`strata_asm_getAnchorState` plus `find_section(AdministrationSubprotocol::ID)`. The safe harbor
 does have a dedicated method, `strata_asm_getSafeHarbour(block_hash) -> Option<SafeHarbour>`
 (`crates/rpc/src/traits.rs:39-41`).
 
@@ -162,7 +162,7 @@ does have a dedicated method, `strata_asm_getSafeHarbour(block_hash) -> Option<S
 |---|---|---|
 | Defcon 1 | bridge `.safe_harbour().is_activated()` | `true` **in the submission block**; admin `queued()` never grows |
 | Defcon 3 | same | `false` until `submit_height + defcon3`, `true` after; entry leaves `queued()` |
-| Safe Harbour address | bridge `.safe_harbour().address()` | equals the new address after depth; `is_activated()` **unchanged**. But only while the harbour is deactivated: once activated the address is frozen and the rotation is accepted and silently discarded — see [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md) Constraint 1 |
+| Safe Harbor address | bridge `.safe_harbour().address()` | equals the new address after depth; `is_activated()` **unchanged**. But only while the harbor is deactivated: once activated the address is frozen and the rotation is accepted and silently discarded — see [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md) Constraint 1 |
 | Council rotation | `state.authority(Role::StrataSecurityCouncil).config()` | keys/threshold changed after depth |
 | any action accepted | `state.authority(role).last_seqno()` | advanced to the payload seqno |
 
@@ -174,15 +174,15 @@ enactment detection for Defcon 3 additionally requires the update to be **absent
 
 **GO.** `e2e-tests/tests/e2e_defcon_probe.rs` proves all of the above against a real regtest ASM,
 through the real path — two council signatures, commit, reveal, worker processing the block — with
-no product code involved. Defcon 1 activates the safe harbour inside the reveal block and never
-enters the queue; Defcon 3 stays queued with the harbour off and activates exactly at its depth;
+no product code involved. Defcon 1 activates the safe harbor inside the reveal block and never
+enters the queue; Defcon 3 stays queued with the harbor off and activates exactly at its depth;
 the signing message matches the four canonical lines with no details block.
 
 Three things the probe settled that the source reading alone had left open:
 
 - **The harness needs no explicit bridge config.** `AsmParams::arbitrary` always emits all three
   subprotocols, and `SafeHarbourAddress`'s `Arbitrary` impl derives a valid P2TR descriptor from a
-  fresh keypair, so the default harness already carries a deactivated safe harbour.
+  fresh keypair, so the default harness already carries a deactivated safe harbor.
 - **The activation boundary is `activation_height <= tip`**, so exactly `depth` blocks after the
   reveal are required — not `depth + 1`. Upstream's doc comment on `process_queued` says "equals"
   while the code partitions on `<=`; harmless drift, but `e2e_enactment_predicate` was mining one
@@ -345,7 +345,7 @@ Neither is an open question any more; both were settled while this document was 
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
 | 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
-| 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md) |
+| 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md) |
 | 5 | Vertical slices V1–V4 | Done — V1, V2, V3 and V4 shipped, each closed out after its own manual walk; V3's AC 13 evidence and V4's expiry-countdown finding deferred as recorded debt |
 | 6 | Close-out: compliance audit, issue #117 | Pending |
 
@@ -365,7 +365,7 @@ compliance audit and issue #117.
 | V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
 | V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **shipped**, all seven phases (PRs #524–#527 and #530–#532, plus this one), Phase 8 held in reserve |
 | V3 — Security Council signer update | A Strata Admin signer rotates the council's membership and threshold (US-E7), with the standard Approved state and cancel | Spec — [`security-council-signer-update.md`](./security-council-signer-update.md); build plan — [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md); **shipped**, all four phases (PRs #536, #541, #542, #544) with Phase 5's reserve unspent; manual walk run 2026-09-09 on both the enacted and the cancelled path, AC 13's manual/external-RPC evidence deferred to the build plan's [§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take) |
-| V4 — Safe Harbour address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md); build plan — [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md); **shipped**, all three phases (PRs #548, #549, #550); manual walk run 2026-09-10 over the enacted, cancelled and swallowed paths, its five in-slice findings closed in Phase 3 and the expiry-countdown one filed separately; Phase 4 answers the #547 review (signing message on the signing screens, *Safe Harbor* on screen), walk pending |
+| V4 — Safe Harbor address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md); build plan — [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md); **shipped**, all three phases (PRs #548, #549, #550); manual walk run 2026-09-10 over the enacted, cancelled and swallowed paths, its five in-slice findings closed in Phase 3 and the expiry-countdown one filed separately; Phase 4 answers the #547 review (signing message on the signing screens, *Safe Harbor* on screen), walk pending |
 | ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2); delivered in V2's Phase 7 |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
@@ -455,7 +455,7 @@ forgotten gap.
   no default. *We build against:* whatever the live ASM reports, never a constant — see
   [§5.3](#53-the-defcon-3-delay-is-read-from-live-asm-state-never-hardcoded). Production is assumed
   to honour the documented value.
-- **Production safe harbour address.** `BridgeV1InitConfig.safe_harbour_address` is required at
+- **Production safe harbor address.** `BridgeV1InitConfig.safe_harbour_address` is required at
   genesis and must be a P2TR BOSD descriptor; ours is a deliberate regtest throwaway. *We build
   against:* the address being supplied when those environments are created. Nothing in the
   application hardcodes or validates a specific destination — the council triggers the sweep, the

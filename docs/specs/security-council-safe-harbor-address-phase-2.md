@@ -1,19 +1,19 @@
 # V4 Phase 2 — The cancel, the detail view, the message panel and the e2e
 
-> **Functional contract:** [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 > §4 Phase 2. This document is that phase at implementation detail, and §9 records where it
 > supersedes it.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
-> **Predecessor:** [Phase 1](./security-council-safe-harbour-address-phase-1.md), merged in #548.
+> **Predecessor:** [Phase 1](./security-council-safe-harbor-address-phase-1.md), merged in #548.
 > **Closes:** AC 6 (the countdown half), AC 7a, AC 9, AC 10, AC 13; and the two findings of the
 > Phase 1 manual walk (§4, §5).
 > **Status:** implemented; automated checks green, including the three e2e paths against regtest.
 
 ## 1. The change in one sentence
 
-A queued safe harbour rotation can be cancelled; **every signer who has to approve one can see which
+A queued safe harbor rotation can be cancelled; **every signer who has to approve one can see which
 destination it installs**, not only the one who typed it; the signing-message panel stops shouting a
 parser error at a half-typed address; and three paths run against a real regtest chain — including
 the one where the bridge accepts the rotation and discards it.
@@ -45,7 +45,7 @@ a list of authorities. Read at the pin:
 
 **So the deliverable here is tests, not code.** Two, both in `orchestrator-be`: a cancel of a tx-14
 target is admitted for a `strata_admin` session, and refused for a `security_council` one
-([AC 10](./security-council-safe-harbour-address.md#10-the-cancel-is-signed-by-the-strata-administrator)).
+([AC 10](./security-council-safe-harbor-address.md#10-the-cancel-is-signed-by-the-strata-administrator)).
 The second is the one that matters — it is the segregation invariant on the cancel path, where V3
 found nothing pinned either.
 
@@ -65,7 +65,7 @@ work.
 ### 4.1 Why nothing is there today
 
 `useDecodedProposal` resolves a `signerSetChange` and suppresses it when
-`multisigUpdateTargetAuthority` answers `null` — which it does for tx 14, correctly: a safe harbour
+`multisigUpdateTargetAuthority` answers `null` — which it does for tx 14, correctly: a safe harbor
 rotation changes no signer set. Nothing is broken; there is simply nothing in its place. Three
 surfaces inherit the gap:
 
@@ -79,14 +79,14 @@ surfaces inherit the gap:
 The signer-set change is already split the way this needs to be split: a pure builder in
 `domain/signer-set-change/model/build-signer-set-change.ts` and a Before/After table in
 `components/`, unified across the three surfaces in #543. This mirrors it:
-`domain/safe-harbour-change/model/build-safe-harbour-change.ts` and a matching component, consumed
+`domain/safe-harbor-change/model/build-safe-harbor-change.ts` and a matching component, consumed
 by the detail view and the cancel summary from one place.
 
 Each side carries **both forms of its destination — the address and its descriptor hex** — for the
-reason [Constraint 3](./security-council-safe-harbour-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
+reason [Constraint 3](./security-council-safe-harbor-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
 gives: the device displays the descriptor, so the descriptor is what a signer can actually compare
 against the screen in front of them. Both values come from Rust — the proposed pair from
-`decode_action_hex`, the installed pair from `get_safe_harbour_status` — and neither is composed in
+`decode_action_hex`, the installed pair from `get_safe_harbor_status` — and neither is composed in
 TypeScript.
 
 **When the installed destination cannot be read, the section is not rendered.** Not a fallback that
@@ -125,14 +125,14 @@ together.
 1. **It proposes a wrong cause.** "Reconnect and try again" names a connection problem. The cause is
    an address that is not finished.
 2. **It leaks the parser's own words.** `legacy address base58 string` comes from `bitcoin`'s
-   `Address` parser through `SafeHarbourDescriptorError::Address(String)`, which passes the inner
+   `Address` parser through `SafeHarborDescriptorError::Address(String)`, which passes the inner
    message through verbatim. That string is written for a developer reading a stack trace.
 3. **It is red over a field that is mid-edit.** A half-typed address is a *not yet*, not an error,
    and red is this repository's colour for errors.
 
 ### 5.2 Why Phase 1's guard did not prevent it
 
-`safe-harbour-address-form-fields.tsx` only resolves when `errors.newSafeHarbourAddress` is
+`safe-harbor-address-form-fields.tsx` only resolves when `errors.newSafeHarborAddress` is
 undefined. That guard filters nothing, because **the address is validated in Rust, not in the Zod
 validator** — the TypeScript rules cover emptiness, a pasted descriptor hex and the no-op case, and
 say nothing about whether the string is a valid taproot address. So no error is registered, the
@@ -157,13 +157,13 @@ message could not be resolved, so there is nothing to compare against your signe
 the address parses and the IPC still fails, which is the case the sentence is actually true for.
 
 **The panel becomes one shared component.** `defcon-form-fields.tsx:62-96` and
-`safe-harbour-address-form-fields.tsx` render the same block with the same copy; unifying them is
+`safe-harbor-address-form-fields.tsx` render the same block with the same copy; unifying them is
 what makes "fix both together" a property of the code rather than of this document. Defcon's action
 hex is a constant, so its only failure mode is infrastructural — the shared component's red line is
 correct for it unchanged, and it keeps its `data-testid` so the WebDriver specs that read it are
 unaffected.
 
-**And the Rust error stops leaking.** `SafeHarbourDescriptorError::Address` renders its own sentence
+**And the Rust error stops leaking.** `SafeHarborDescriptorError::Address` renders its own sentence
 instead of the parser's. The detail stays available in `Debug` for logs; what reaches a signer is
 one line that names the field, not the library.
 
@@ -172,30 +172,30 @@ is for comparison. The manual walk did not disturb that, and this phase leaves i
 
 ## 6. The e2e — the only automated proof against a chain
 
-`e2e-tests/tests/e2e_safe_harbour_address.rs`, a new file following `e2e_council_rotation.rs`: the
+`e2e-tests/tests/e2e_safe_harbor_address.rs`, a new file following `e2e_council_rotation.rs`: the
 same `AsmTestHarnessBuilder`, the same `submit_action` / `mine_to` helpers, the same `bitcoind`
 availability skip, and exact block counts rather than sleeps.
 
-The action is composed through the desktop codec — `SafeHarbourDescriptor` plus
+The action is composed through the desktop codec — `SafeHarborDescriptor` plus
 `action_codec::encode_hex` — exactly as the council rotation is, because that wire mapping is part
 of what is under test and because it keeps `e2e-tests` free of the two protocol crates Phase 1 added
 to the desktop.
 
 | Path | Asserts |
 |---|---|
-| **Enacted** | Queued at `reveal + depth` with the bridge's destination unchanged; at exactly `depth`, the destination is the proposed one, the administrator's `last_seqno` advanced, and **`is_activated()` is unchanged** ([AC 7a](./security-council-safe-harbour-address.md#7a-activation-is-untouched)) |
+| **Enacted** | Queued at `reveal + depth` with the bridge's destination unchanged; at exactly `depth`, the destination is the proposed one, the administrator's `last_seqno` advanced, and **`is_activated()` is unchanged** ([AC 7a](./security-council-safe-harbor-address.md#7a-activation-is-untouched)) |
 | **Cancelled** | Cancel inside the window, mine past the original activation height: the queue is empty and the destination is still the original one |
 | **Swallowed** | Fire a Defcon 1 first, then submit the rotation: it is accepted, the seqno advances, the queue drains — and the destination **does not change** |
 
 The swallowed path is the only automated proof of
-[Constraint 1](./security-council-safe-harbour-address.md#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)
+[Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
 against a real chain, and it exists nowhere — upstream included. It needs both key sets, since the
 Defcon is council-authorized and the rotation is administrator-authorized; the fixture in
 `e2e_council_rotation.rs` already carries that shape and is the model.
 
-**One ordering detail worth stating.** Defcon 1 has depth 0, so it activates the harbour in its own
+**One ordering detail worth stating.** Defcon 1 has depth 0, so it activates the harbor in its own
 reveal block — the rotation must be submitted *after* that block, or it would be queued against a
-deactivated harbour and the test would prove the enacted path instead. The assertion that separates
+deactivated harbor and the test would prove the enacted path instead. The assertion that separates
 the two is the destination itself, not the queue.
 
 ## 7. Tests
@@ -204,8 +204,8 @@ the two is the destination itself, not the queue.
 |---|---|---|
 | Cancel of a tx-14 target: admitted for `strata_admin`, refused for `security_council` | `orchestrator-be` | AC 10, and the segregation invariant on the cancel path — nothing pins it today |
 | The three e2e paths | `e2e-tests` | AC 7a, AC 9, and the only chain-level proof of Constraint 1 |
-| `buildSafeHarbourChange`: both shapes, and `null` when the installed destination is unread | frontend, pure | The one piece of §4 that is logic rather than markup, including the enacted branch that would otherwise print one address twice |
-| `SafeHarbourDescriptorError::Address` renders its own sentence and not the parser's | `src-tauri` | §5.1's second defect. A one-line assertion, and the only kind of test that can catch a message written for the wrong reader |
+| `buildSafeHarborChange`: both shapes, and `null` when the installed destination is unread | frontend, pure | The one piece of §4 that is logic rather than markup, including the enacted branch that would otherwise print one address twice |
+| `SafeHarborDescriptorError::Address` renders its own sentence and not the parser's | `src-tauri` | §5.1's second defect. A one-line assertion, and the only kind of test that can catch a message written for the wrong reader |
 
 **Not tested:** the detail, cancel and create screens themselves. No DOM runner; the manual walk
 covers them — which is precisely how both findings in this phase were discovered. No unit test of
@@ -218,10 +218,10 @@ real one.
 |---|---|---|
 | 0 | 📄 | This document. |
 | 1 | 🟢 | The two cancel authorization tests. No production diff — if one appears, §3 was wrong and this document is corrected before the phase continues. |
-| 2 | 🔴🟢 | `buildSafeHarbourChange` and its tests: both shapes, and the unread case. |
+| 2 | 🔴🟢 | `buildSafeHarborChange` and its tests: both shapes, and the unread case. |
 | 3 | 🟢 | `useDecodedProposal`'s conditional second read, the change component, the detail section, the cancel summary and the derived title. |
 | 4 | 🔴🟢 | §5: the shared signing-message panel, the address error moved to its field, and the Rust message that stops leaking the parser's. Both forms in one commit — they are one duplicated block. |
-| 5 | 🟢 | `e2e_safe_harbour_address.rs`, all three paths. |
+| 5 | 🟢 | `e2e_safe_harbor_address.rs`, all three paths. |
 | 6 | 📄 | Close-out: three status lines, plus the V4 rows in `security-council.md`'s stage and slice boards. |
 
 ## 9. Where this phase departs from the build plan, and from its own first draft

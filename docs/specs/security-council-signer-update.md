@@ -62,7 +62,7 @@ slice.
 
 ### Not included
 
-- Safe Harbour address update (V4). Same authority, same segregation invariant, different payload —
+- Safe Harbor address update (V4). Same authority, same segregation invariant, different payload —
   and a P2TR BOSD descriptor is a validation problem this slice does not need to solve.
 - Any protocol validity rule. The orchestrator stays coordination-only; the ASM decides whether a
   rotation is legal.
@@ -579,7 +579,7 @@ The criterion stands unchanged; only its evidence is outstanding, recorded in th
 | The rotation removes every current council member | Valid on chain and allowed by the application. The council loses its ability to sign a Defcon. Stated at the confirmation step, not blocked — see [Constraint 5](#5-a-rotation-can-disable-the-emergency-lever-and-nothing-on-chain-prevents-it). |
 | A Defcon 3 is queued while a council rotation is queued | Independent. The Defcon 3 was validated against the council at acceptance and stands; a *cancel* of it after the rotation enacts would need a quorum of the **new** council. Already recorded in V2's edge cases, restated here because this is the slice that can cause it. |
 | A council rotation and an administrator signer update are both queued | Independent entries with different action bytes and different target roles. Both consume the administrator's seqno, so the standard ordering applies and the second must carry the later sequence number. |
-| The ASM cannot answer while the create form is open | The council's config is unavailable, so the form cannot validate against it. Unlike the Defcon safe-harbour note — which is informational and degrades to `false` — this read is load-bearing: without it the form would validate against nothing. The form must not offer a threshold or an add/remove decision it cannot check. |
+| The ASM cannot answer while the create form is open | The council's config is unavailable, so the form cannot validate against it. Unlike the Defcon safe-harbor note — which is informational and degrades to `false` — this read is load-bearing: without it the form would validate against nothing. The form must not offer a threshold or an add/remove decision it cannot check. |
 | The administrator rotates the council while a Defcon 3 cancel is being collected offchain | The collected signatures are the old council's and will not verify. Out of band for this slice; recorded because it is the concrete shape of "the council loses its signing ability", which `security-council.md` §7.2 names as untested upstream. |
 | A council rotation expires before quorum | The standard 7-day pending window. No carve-out. |
 

@@ -114,7 +114,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. All
         // four have post-conditions now. See docs/specs/security-council.md,
         // docs/specs/security-council-defcon-3-phase-4.md and
-        // docs/specs/security-council-safe-harbour-address-phase-1.md.
+        // docs/specs/security-council-safe-harbor-address-phase-1.md.
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
@@ -300,7 +300,7 @@ fn defcon3_enacted(
 /// error, and by then the signature has verified, the seqno is consumed and the queue entry is
 /// drained. Such a rotation is accepted on chain and changes nothing, so the address term is what
 /// keeps it out of `Enacted` — it resolves as `Superseded` instead. See Constraint 1 in
-/// docs/specs/security-council-safe-harbour-address.md.
+/// docs/specs/security-council-safe-harbor-address.md.
 ///
 /// Takes bytes rather than `SafeHarbourAddress` so this crate names no protocol type for it: the
 /// caller reads the installed destination through inherent methods, and the truth table below can

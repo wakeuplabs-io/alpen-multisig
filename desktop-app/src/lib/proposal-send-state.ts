@@ -93,7 +93,7 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
  * subprotocol discards — no log, no error. So the sequence number is gone for the same reason as
  * above, but nothing raced this proposal, and nothing will do better: there is no de-escalation
  * upstream, so a replacement meets the same frozen destination. Constraint 1 in
- * docs/specs/security-council-safe-harbour-address.md.
+ * docs/specs/security-council-safe-harbor-address.md.
  */
 const SUPERSEDED_BY_FROZEN_HARBOR = {
 	label: 'Superseded',

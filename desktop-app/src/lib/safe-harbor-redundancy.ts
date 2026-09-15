@@ -84,7 +84,7 @@ export function changedNothingActionIds(proposals: readonly HarborActivationCand
  * That "or came up after it" is the residual ambiguity: a rotation genuinely superseded by a rival
  * action, with the harbor raised afterwards, reads as swallowed. The attribution is then wrong and
  * the advice still right — a replacement really would be discarded — which is the trade recorded in
- * docs/specs/security-council-safe-harbour-address-phase-3.md §4.1.
+ * docs/specs/security-council-safe-harbor-address-phase-3.md §4.1.
  *
  * The action type is load-bearing and not a formality: every other action is applied whatever the
  * harbor is doing, and a superseded Defcon really did lose its sequence number to something else.

@@ -1,6 +1,6 @@
 // V4 Phase 1 — the safe harbor address update, in the parts the frontend decides on its own.
 //
-// Pinned in `docs/specs/security-council-safe-harbour-address-phase-1.md` §5.6. The address itself
+// Pinned in `docs/specs/security-council-safe-harbor-address-phase-1.md` §5.6. The address itself
 // is validated in Rust — bech32m does not check the curve, and the descriptor the device shows is
 // derived there — so what is left here is the menu, the authority gate and the no-op rule.
 //

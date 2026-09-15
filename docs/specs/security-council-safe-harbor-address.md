@@ -1,13 +1,13 @@
-# Spec: Security Council — Safe Harbour Address Update
+# Spec: Security Council — Safe Harbor Address Update
 
 **Status:** All four phases implemented — the action is creatable, signable, cancellable, visible on
 every surface a signer decides from, and proven against a regtest chain on three paths. Automated
 checks green. The manual walk ran on 2026-09-10 over an enactment, a cancel and a rotation submitted
-with the harbour already up; its findings are closed in Phase 3. Phase 4 answers the #547 review —
+with the harbor already up; its findings are closed in Phase 3. Phase 4 answers the #547 review —
 the signing message on the signing screens, and *Safe Harbor* on screen — and its walk is pending,
 together with three items of `## Verification` below (1, 3 and 10). This document is the functional contract; the
 build plan is
-[`security-council-safe-harbour-address-implementation.md`](./security-council-safe-harbour-address-implementation.md),
+[`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md),
 whose phase board says what has landed.
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §5.1, §5.2.2, §5.5
@@ -27,7 +27,7 @@ first whose post-conditions live in the **bridge** subprotocol rather than the a
 
 ## Objective
 
-Let a Strata Administrator signer set the bridge's safe harbour destination: create → sign → quorum
+Let a Strata Administrator signer set the bridge's safe harbor destination: create → sign → quorum
 → broadcast → queued for `confirmation_depths.safe_harbour_address_update` blocks → Enacted, with
 the standard cancel window in the middle.
 
@@ -55,9 +55,9 @@ Two things are new, and both are new *kinds* of thing rather than new instances:
 - `UpdateTxType::SafeHarbourAddressUpdate = 14` (SSZ union selector **11**, payload
   `SafeHarbourAddress`) end to end, authorized by the **Strata Administrator**.
 - A distinct create-menu entry for the Strata Administrator, with a form that reads the bridge's
-  current safe harbour address and shows the descriptor hex the device will display.
+  current safe harbor address and shows the descriptor hex the device will display.
 - Enactment detection that compares the **bridge's actual address** against the proposed one
-  ([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
+  ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
 - The standard cancel. PRD §5.2.2 carves out only the Sequencer Manager and Defcon 1, so this action
   is fully inside §5(b): a real `Approved` state, viewable cancellation signatures, and a cancel
   broadcast flow — signed by the Strata Administrator.
@@ -66,8 +66,8 @@ Two things are new, and both are new *kinds* of thing rather than new instances:
 
 - Any protocol validity rule. The orchestrator stays coordination-only, and in particular the
   application does **not** refuse to create a rotation that the chain will swallow
-  ([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
-- De-escalating the safe harbour. There is no such action upstream; `is_activated()` is never set
+  ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
+- De-escalating the safe harbor. There is no such action upstream; `is_activated()` is never set
   back to `false`.
 - A second creation path. This extends `create-proposal` exactly as V1, V2 and V3 did.
 - Any notion of a *target authority* on the `Proposal` row. The proposal belongs to the Strata
@@ -80,7 +80,7 @@ Two things are new, and both are new *kinds* of thing rather than new instances:
 - **PRD §5.1** — the Approved/Pending/Past requirements apply to the Strata Administrator multisig,
   so this action gets the full lifecycle with no carve-out.
 - **PRD §5.2.2** — the §5(b) carve-out names the Sequencer Manager multisig and *"Strata Security
-  Council multisig (**Defcon 1 transaction**)"*. A safe harbour rotation is neither. It has an
+  Council multisig (**Defcon 1 transaction**)"*. A safe harbor rotation is neither. It has an
   Approved state and a cancel.
 - **PRD §3.1.4** — *the Strata Security Council multisig MUST be usable exclusively by Security
   Council Signers*. This action is **not** on the council multisig, so §3.1.4 does not reach it. The
@@ -120,7 +120,7 @@ Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
   `safe_harbour_address_update` (`confirmation_depth.rs:55`); depth `0` means "apply immediately,
   never enqueued". Upstream's sample params use 144; the local stack uses 30.
 - **Activation is unaffected.** Only Defcon signals toggle `activated`
-  (`subprotocol.rs:165-168`); a rotation never activates or deactivates the harbour.
+  (`subprotocol.rs:165-168`); a rotation never activates or deactivates the harbor.
 - **The signing message is rendered by upstream and pinned in a test**
   (`safe_harbour_address.rs:62-88`):
 
@@ -143,13 +143,13 @@ Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
 - **No upstream end-to-end coverage.** `admin/subprotocol/src/handler.rs:662-686` proves the message
   is forwarded to the bridge, and `safe_harbour.rs` unit-tests the frozen-address rule. Nothing
   upstream drives tx type 14 through a chain, and nothing anywhere covers a rotation submitted after
-  the harbour is up.
+  the harbor is up.
 
 ---
 
 ## Constraints
 
-### 1. A rotation with the harbour already activated is accepted and changes nothing
+### 1. A rotation with the harbor already activated is accepted and changes nothing
 
 **Rule:** the application states the consequence wherever the decision is taken, and never reports
 such a rotation as `Enacted`. It does **not** block it.
@@ -207,7 +207,7 @@ one place in this slice where a bug sends funds somewhere else, so it is the one
 must be able to check.
 
 This is why the form accepts an address rather than the hex: an operator holds an address, and
-nobody distributes a safe harbour as a BOSD string. The conversion is a convenience the application
+nobody distributes a safe harbor as a BOSD string. The conversion is a convenience the application
 provides and then immediately exposes for verification.
 
 ### 4. Network is a signal, not a protection
@@ -246,7 +246,7 @@ actually rotated.
 That is the same reasoning that made
 [V3's AC 3b](./security-council-signer-update.md#3b-the-update-must-be-a-real-change) a safety rule
 rather than hygiene, and it needs the same plumbing: the validator context gains
-`currentSafeHarbourAddress: string | null`, twinned with the signer-set fields. When it is null the
+`currentSafeHarborAddress: string | null`, twinned with the signer-set fields. When it is null the
 rule is off, which is safe only because an unavailable read also blocks submission
 ([Edge Cases](#edge-cases)).
 
@@ -286,7 +286,7 @@ Expired / Superseded
 - `Canceled` is reachable while the entry is queued, by a Strata Administrator quorum.
 - `Superseded` applies with the standard ordering, and is also where a rotation lands that the chain
   accepted but the bridge refused
-  ([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
+  ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
 
 The proposal's `authority` is `strata_admin` throughout.
 
@@ -342,16 +342,16 @@ button.
 Modelled on `vk-update-form-fields.tsx`: the current value read from chain, then one input. It
 carries three things and no more:
 
-1. **The bridge's current safe harbour address**, rendered as an address and as its descriptor hex.
+1. **The bridge's current safe harbor address**, rendered as an address and as its descriptor hex.
 2. **One input** taking a bech32m P2TR address, validated per Constraints 4, 5 and 6.
 3. **The descriptor hex the device will display**, resolved as the signer types and shown under the
    input, so the comparison the signer must make is possible before they reach the device. The full
    signing message is **not** on this form: nothing is signed here, so it lives on the preview and
-   the sign view ([Phase 4 §2](./security-council-safe-harbour-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
+   the sign view ([Phase 4 §2](./security-council-safe-harbor-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
 
-The safe-harbour note appears here when the harbour is already active
-([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)),
-reusing `SafeHarbourNote` with its own wording.
+The safe-harbor note appears here when the harbor is already active
+([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)),
+reusing `SafeHarborNote` with its own wording.
 
 ### The signing message
 
@@ -362,15 +362,11 @@ signer, as its own section otherwise.
 
 ### Terminology
 
-On-screen copy spells the feature **Safe Harbor**. The signing message keeps upstream's
-`Safe Harbour`, which is byte-frozen, and identifiers, wire values and these documents keep
-`harbour` ([Phase 4 §4](./security-council-safe-harbour-address-phase-4.md#4-terminology-harbor-on-screen-harbour-on-the-wire)).
-
-### Lifecycle display
-
-Nothing action-specific. The standard Approved label, the standard activation countdown, the
-standard cancel affordance driven by the DTO field. The detail view shows current vs proposed
-destination, both with their hex.
+This repository spells the feature **Safe Harbor** everywhere it owns the name: copy, identifiers,
+files, test ids, commands, tests, comments and these documents. Upstream's names keep upstream's
+`Safe Harbour` — the byte-frozen signing message, protocol types and methods, the RPC and the wire
+value `safe_harbour_address_update`
+([Phase 4 §4](./security-council-safe-harbor-address-phase-4.md#4-terminology-harbor-in-everything-we-own-harbour-in-what-upstream-owns)).
 
 ---
 
@@ -388,9 +384,9 @@ a routine-looking form whose blast radius equals the bridge's balance.
    where a defect is invisible, and exposing its output is what makes it checkable.
 3. **A wrong-network address is stopped**, with a message naming the expected network
    ([Constraint 4](#4-network-is-a-signal-not-a-protection)).
-4. **An already-activated harbour is stated, not blocked**, on create, preview and sign — the three
+4. **An already-activated harbor is stated, not blocked**, on create, preview and sign — the three
    surfaces where the decision is still reversible
-   ([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
+   ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
    Amber, not red: it is a fact about the chain, not an error by the signer.
 5. **Authority context is visible throughout** — the Strata Administrator badge from create through
    broadcast.
@@ -404,11 +400,11 @@ independently of the UI.
 
 ## Acceptance Criteria
 
-### 1. A Strata Administrator can create a safe harbour address update
+### 1. A Strata Administrator can create a safe harbor address update
 
 **Given** an authenticated Strata Administrator session
 **When** the signer opens the create-proposal flow
-**Then** the safe harbour address update is offered as its own entry, selecting it renders its
+**Then** the safe harbor address update is offered as its own entry, selecting it renders its
 fields, and the default selection is unchanged.
 
 ### 1a. No other authority can reach it
@@ -451,7 +447,7 @@ The refusal comes from `require_authorized_for_action` comparing against upstrea
 
 ### 3c. The update must be a real change
 
-**Given** an address equal to the bridge's current safe harbour address
+**Given** an address equal to the bridge's current safe harbor address
 **When** the signer reaches the sign step
 **Then** it is refused as producing no change
 ([Constraint 6](#6-rotating-to-the-address-already-installed-enacts-and-changes-nothing)), while any
@@ -459,7 +455,7 @@ other valid address is allowed.
 
 ### 4. The signing message is upstream's, with its details block
 
-**Given** a safe harbour address update at sequence 17 carrying the generator-point descriptor
+**Given** a safe harbor address update at sequence 17 carrying the generator-point descriptor
 **When** the signing message is rendered
 **Then** it reads exactly the six lines upstream pins in `safe_harbour_address.rs:62-88`, with
 `Action: Safe Harbour Address Update` and `Authorized By: Strata Administrator` on separate lines,
@@ -468,21 +464,21 @@ displays.
 
 ### 5. The action is distinguishable everywhere
 
-**Given** a persisted proposal carrying a safe harbour address update
+**Given** a persisted proposal carrying a safe harbor address update
 **When** its action hex is decoded for display
-**Then** it reports as a safe harbour address update — not as `unknown` — in the list, the detail
+**Then** it reports as a safe harbor address update — not as `unknown` — in the list, the detail
 view, the sign view and the manual bundle.
 
 ### 6. It is queued, not enacted, on broadcast
 
-**Given** a broadcast safe harbour address update at a non-zero depth
+**Given** a broadcast safe harbor address update at a non-zero depth
 **When** the reveal confirms
 **Then** the update is in the admin queue, the bridge's address is unchanged, and the proposal shows
 Awaiting enactment with a countdown to `reveal_block + depth`.
 
 ### 7. Enactment compares the bridge's address against the administrator's sequence number
 
-**Given** a queued safe harbour address update that reached its activation height
+**Given** a queued safe harbor address update that reached its activation height
 **When** enactment is evaluated
 **Then** `bridge.safe_harbour().address()` equals the proposed descriptor, the sequence-number term
 is read from `state.authority(Role::StrataAdministrator).last_seqno()`, and the proposal shows
@@ -493,7 +489,7 @@ Enacted ([Constraint 2](#2-enactment-is-read-from-the-bridge-and-the-seqno-from-
 **Given** the same enacted update
 **When** the bridge state is read
 **Then** `is_activated()` is exactly what it was before — a rotation never activates or deactivates
-the harbour.
+the harbor.
 
 ### 7b. Neither term is substituted for the other
 
@@ -507,29 +503,29 @@ Constraint 1 forbids.
 
 ### 8. A swallowed rotation is never reported as enacted
 
-**Given** a safe harbour that is already activated
+**Given** a safe harbor that is already activated
 **When** a rotation is broadcast, confirmed, and its activation height passes
 **Then** the queue is empty, the administrator's `last_seqno` has advanced, the bridge's address is
 unchanged, and the proposal resolves as `Superseded` — never `Enacted`
-([Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)).
+([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
 
 ### 9. A cancelled rotation never applies
 
-**Given** a queued safe harbour address update
+**Given** a queued safe harbor address update
 **When** a Strata Administrator quorum cancels it and its original activation height passes
 **Then** the queue is empty, the bridge's address is unchanged, the proposal reads `Canceled`, and
 nothing reads `Enacted`.
 
 ### 10. The cancel is signed by the Strata Administrator
 
-**Given** a queued safe harbour address update
+**Given** a queued safe harbor address update
 **When** the cancel is created
 **Then** it is stored under the `strata_admin` authority and requires a Strata Administrator session
 — and a Security Council session is refused.
 
-### 11. An already-activated harbour is stated at every decision point
+### 11. An already-activated harbor is stated at every decision point
 
-**Given** a safe harbour that is already activated
+**Given** a safe harbor that is already activated
 **When** the signer opens the form, reviews the preview, or opens the sign view
 **Then** each surface states that the rotation will not take effect, styled as information rather
 than as an error, and the action is not blocked.
@@ -543,7 +539,7 @@ other depth
 
 ### 13. The manual fallback works
 
-**Given** a safe harbour address update with a quorum of collected signatures
+**Given** a safe harbor address update with a quorum of collected signatures
 **When** the signer exports the bundle
 **Then** it broadcasts through the existing manual route and through an external Bitcoin RPC, with
 no action-specific handling — and the bundle never reports the action as `unknown`.
@@ -555,8 +551,8 @@ no action-specific handling — and the bundle never reports the action as `unkn
 | Scenario | Behavior |
 |---|---|
 | `confirmation_depths.safe_harbour_address_update` is `0` | Supported degradation. Applied in the submission block: no queue entry, no countdown, no cancel affordance — all three by construction, since each reads the resolved depth. |
-| The safe harbour is already activated when the rotation matures | The seqno is consumed and the queue entry drained, but the bridge's address is unchanged, so post-conditions are not met and the proposal resolves as `Superseded`, never `Enacted`. See [Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing). |
-| The harbour is activated *while* the rotation is queued | Same outcome, reached differently: valid at acceptance, refused at apply. Nothing in the application predicts it, and the note on the detail view reflects the live read. |
+| The safe harbor is already activated when the rotation matures | The seqno is consumed and the queue entry drained, but the bridge's address is unchanged, so post-conditions are not met and the proposal resolves as `Superseded`, never `Enacted`. See [Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing). |
+| The harbor is activated *while* the rotation is queued | Same outcome, reached differently: valid at acceptance, refused at apply. Nothing in the application predicts it, and the note on the detail view reflects the live read. |
 | Two rotations to the same destination are queued | Both post-conditions match once either applies. Recorded, not solved: it is the same ambiguity every config-carrying action has, and the seqno term bounds it to proposals of the same administrator. |
 | The ASM cannot answer while the create form is open | The current address is unavailable, so neither the Before/After nor the no-op rule can answer. Load-bearing, like V3's config read: the form must not offer a destination it cannot compare, so submission is blocked with a message naming what could not be read. |
 | The address is valid P2TR but nobody holds the key | Accepted on chain and allowed by the application. There is no way to tell from a script, and validating destinations is not something the protocol does either. |
@@ -593,12 +589,12 @@ ASM — paired against tx type 10, which is the pair an authority-shaped mapping
 against the five address forms; the no-op rule with its counter-case; and the IPC schema contract
 tests, which fail when the Zod schema and the Rust DTO diverge.
 
-**E2E (`e2e-tests`)** — a new file, `e2e_safe_harbour_address.rs`, following the shape of
+**E2E (`e2e-tests`)** — a new file, `e2e_safe_harbor_address.rs`, following the shape of
 `e2e_council_rotation.rs`. Three paths: enacted (queued with the address unchanged, mine exactly
 `depth`, address changed and `is_activated()` still false), cancelled (cancel inside the window,
 mine `depth`, queue empty and address unchanged), and **swallowed** (fire a Defcon 1 first, then
 rotate: accepted, seqno advanced, queue drained, address unchanged). The third is the only automated
-proof of [Constraint 1](#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing)
+proof of [Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
 against a real chain, and it exists nowhere — upstream included.
 
 **Not tested, deliberately:** no DOM or component tests — this repository has no DOM runner, and a
@@ -627,7 +623,7 @@ Code review checks that:
 
 Post-merge validation on regtest, with the local stack
 (`./scripts/local-stack.sh --clean`), which already carries a depth of 30 for tx type 14 and an
-initial safe harbour address:
+initial safe harbor address:
 
 1. A Strata Administrator signer reaches the new entry; a Security Council signer does not.
 2. The form shows the bridge's current address and its descriptor hex.
@@ -638,8 +634,8 @@ initial safe harbour address:
 6. Path A: mine 30 blocks → `Enacted`, and `strata_asm_getSafeHarbour` shows the new address with
    `activated` unchanged.
 7. Path B: cancel inside the window → the target reads `Canceled` and the address is unchanged.
-8. Path C: with the harbour already activated, the note appears on create, preview and sign, the
+8. Path C: with the harbor already activated, the note appears on create, preview and sign, the
    action can still be signed, and it resolves as `Superseded`.
 9. Pasting the address already installed is refused by the form.
 10. The manual bundle exports and imports the action without reporting it as unknown.
-11. `cargo test -p alpen-multisig-e2e-tests` green, including `e2e_safe_harbour_address`.
+11. `cargo test -p alpen-multisig-e2e-tests` green, including `e2e_safe_harbor_address`.

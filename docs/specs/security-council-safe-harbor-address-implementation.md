@@ -1,6 +1,6 @@
 # Security Council — Safe Harbour Address Update (V4) Implementation Plan
 
-**Functional contract:** [`security-council-safe-harbour-address.md`](./security-council-safe-harbour-address.md)
+**Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
 — the SSOT for *what* V4 must do. This document is only *how* it gets built, and never overrides it.
 
 **Master plan:** [`security-council.md`](./security-council.md) §6 Stage board, §7 Slice board.
@@ -11,7 +11,7 @@
 comments on #547; its manual walk is pending. The Phase 1 manual walk produced
 two findings, both fixed in Phase 2; the walk of 2026-09-10 over Phase 2's surfaces produced seven,
 five of which Phase 3 closes — the remaining two are recorded in
-[Phase 3 §8](./security-council-safe-harbour-address-phase-3.md#8-what-the-walk-found-and-this-phase-does-not-take).
+[Phase 3 §8](./security-council-safe-harbor-address-phase-3.md#8-what-the-walk-found-and-this-phase-does-not-take).
 The reserve is spent.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
@@ -29,30 +29,30 @@ left here is genuinely new in two places and free everywhere else:
 
 Everything else — depth, cancelability, authorization, countdown, lifecycle, manual bundle — already
 answers for tx type 14 with no new branch
-([Constraint 7](./security-council-safe-harbour-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
+([Constraint 7](./security-council-safe-harbor-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
 
 **In scope**
 
 - `UpdateTxType::SafeHarbourAddressUpdate = 14` end to end, authorized by the Strata Administrator
   (US-E5).
 - The standard cancel, which per PRD §5.2.2 applies here in full.
-- The end-to-end test of a rotation submitted after the harbour is up, which exists nowhere.
+- The end-to-end test of a rotation submitted after the harbor is up, which exists nowhere.
 
 **Not in scope**
 
 - Blocking a rotation the chain will swallow. See
-  [Constraint 1](./security-council-safe-harbour-address.md#1-a-rotation-with-the-harbour-already-activated-is-accepted-and-changes-nothing).
-- De-escalating the safe harbour. No such action exists upstream.
+  [Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing).
+- De-escalating the safe harbor. No such action exists upstream.
 - Any protocol validity rule. The orchestrator stays coordination-only.
 
 ## 2. Traceability
 
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
-| 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbour-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
-| 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbour-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
-| 3 ✅ | What the manual walk exposed — [phase spec](./security-council-safe-harbour-address-phase-3.md) | The five findings of the 2026-09-10 walk that belong to this slice | `desktop-app` |
-| 4 ✅ | What the ticket review asked for — [phase spec](./security-council-safe-harbour-address-phase-4.md) | The two review comments on #547: the signing message on the signing screens, and "Harbor" on screen | `desktop-app`, `src-tauri` |
+| 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbor-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
+| 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbor-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
+| 3 ✅ | What the manual walk exposed — [phase spec](./security-council-safe-harbor-address-phase-3.md) | The five findings of the 2026-09-10 walk that belong to this slice | `desktop-app` |
+| 4 ✅ | What the ticket review asked for — [phase spec](./security-council-safe-harbor-address-phase-4.md) | The two review comments on #547: the signing message on the signing screens, and "Harbor" on screen | `desktop-app`, `src-tauri` |
 
 Each phase is its own pull request against `develop`, branched from a freshly pulled `develop`.
 Phases are sequential, not parallel.
@@ -72,7 +72,7 @@ The list is the point of the slice: nothing below needs a line of new code.
 | `create_cancel_proposal` | `orchestrator-be/src/application/proposals.rs` | Stores the cancel under the target's authority (`strata_admin`) and requires the session to match. |
 | `render_signing_message` / `compute_sighash` | `desktop-app/src-tauri/src/infrastructure/signing.rs:57-67,138-145` | Delegate to `SigningMessage::for_action`. The six canonical lines come out for free. |
 | `network_from_env` | `desktop-app/src-tauri/src/infrastructure/network_env.rs:31-34` | The process-wide network resolution this repository already treats as canonical. `NodeConfig` deliberately carries only endpoints. |
-| `SafeHarbourNote`, `useSafeHarbourActivated` | `desktop-app/src/components`, `src/hooks` | The already-in-harbour note is a component, not a Defcon detail. |
+| `SafeHarborNote`, `useSafeHarborActivated` | `desktop-app/src/components`, `src/hooks` | The already-in-harbor note is a component, not a Defcon detail. |
 | `VkUpdateFormFields` | `desktop-app/src/domain/create-proposal/components` | The shape the new fields component follows: current value from chain, then one input. |
 | `showsActivationCountdown` | `desktop-app/src/lib/proposal-status.ts` | Already correct — it excludes only `defcon_1`. |
 | `e2e_council_rotation.rs` | `e2e-tests/tests/` | The shape Phase 2's e2e follows, including the exhaustive `ConfirmationDepths` literal that already carries `safe_harbour_address_update`. |
@@ -96,7 +96,7 @@ surfaces only when the codec compiles.
 **Enactment leaves the administration subprotocol.** `is_proposal_enacted_on_asm` answers
 `BadRequest("not implemented yet")` at `asm_enactment.rs:169-171` today. It becomes a predicate over
 the bridge's address and the administrator's seqno
-([Constraint 2](./security-council-safe-harbour-address.md#2-enactment-is-read-from-the-bridge-and-the-seqno-from-the-administrator)),
+([Constraint 2](./security-council-safe-harbor-address.md#2-enactment-is-read-from-the-bridge-and-the-seqno-from-the-administrator)),
 applied to **both** copies of the module.
 
 ### Where V4 lives in the frontend
@@ -124,8 +124,8 @@ Four do **not**, and have to be carried by hand:
    the commit order below, exactly as in V3 Phase 1 §3.
 3. `desktop-app/src-tauri/src/commands/invoke.rs` — **two** handler lists (`:22-28` production,
    `:95-101` dev-signing). Registering in one makes the command fail in one mode only.
-4. `screens/__tests__/safe-harbour-note-gating.test.ts:30-48` — it scans `SafeHarbourNote` render
-   sites and requires each to call `useSafeHarbourActivated(` behind the guard. Phase 1 confirms
+4. `screens/__tests__/safe-harbor-note-gating.test.ts:30-48` — it scans `SafeHarborNote` render
+   sites and requires each to call `useSafeHarborActivated(` behind the guard. Phase 1 confirms
    whether its glob reaches `domain/**` or only `screens/*`, and widens it if not.
 
 ## 4. Phased plan
@@ -145,13 +145,13 @@ Commits, in order. Each is atomic; none repairs the one before it.
 | 2 | TypeScript vocabulary: both `ActionType` unions, the `z.enum` in `ipc-schemas.ts`, the `decodedActionSchema` member, the `DecodedAction` type, `ACTION_TYPE_BY_KIND`, and the label. Inert — nothing emits the value yet. |
 | 3 | The Rust domain newtype and its parsing table, red then green. |
 | 4 | The codec in both directions, the builder command registered in **both** `invoke.rs` lists, `action_type_from_hex`, and the `DecodedAction` variant. |
-| 5 | The bridge's current address on the read path: `asm_status_rpc` returns it alongside the activation flag, `SafeHarbourStatusDto` carries both, and the TS API follows. |
-| 6 | The menu entry, the validator (including the no-op rule), the fields component, the preview arm and the sign-view arm, with the safe-harbour note on all three surfaces. |
+| 5 | The bridge's current address on the read path: `asm_status_rpc` returns it alongside the activation flag, `SafeHarborStatusDto` carries both, and the TS API follows. |
+| 6 | The menu entry, the validator (including the no-op rule), the fields component, the preview arm and the sign-view arm, with the safe-harbor note on all three surfaces. |
 | 7 | Enactment in `orchestrator-be` and in the desktop's copy, plus the stale comment at `asm_enactment.rs:113-116` that still says the slice is pending. |
 
 **Why the preview arm cannot be forgotten.** `create-proposal-preview.tsx` ends its action-type
 ternary with the VK block, so a missing arm shows a signer **"New Verification Key"** above a safe
-harbour rotation. The same shape exists in `create-proposal-form.tsx`. Neither is a compile error;
+harbor rotation. The same shape exists in `create-proposal-form.tsx`. Neither is a compile error;
 both are in commit 6 by name. This is the trap V3 Phase 3 §5 documented.
 
 **Tests.**
@@ -175,7 +175,7 @@ Mostly verification plus the test upstream does not have.
   backend code. If the phase discovers otherwise, that discovery is its most valuable output.
 - The detail view: current versus proposed destination, both with their descriptor hex. It is the
   analogue of V3's Before/After over a single value instead of a set.
-- `e2e-tests/tests/e2e_safe_harbour_address.rs`, a **new file**, following `e2e_council_rotation.rs`:
+- `e2e-tests/tests/e2e_safe_harbor_address.rs`, a **new file**, following `e2e_council_rotation.rs`:
   - **Enacted path** — submit an administrator-signed rotation, assert it is queued with the
     bridge's address unchanged, mine exactly `depth`, assert the address changed, the
     administrator's `last_seqno` advanced, and `is_activated()` is unchanged.
@@ -193,11 +193,11 @@ Mostly verification plus the test upstream does not have.
 ### Phase 3 — What the manual walk exposed
 
 V1 needed two phases nobody planned plus four close-out PRs; V2 and V3 budgeted one each. Budgeted
-one here, expecting copy — how "safe harbour" reads to someone who has not read the PRD — and how the
+one here, expecting copy — how "safe harbor" reads to someone who has not read the PRD — and how the
 destination is displayed. Both halves were right, and one of them was not cosmetic: the dashboard
-never read the harbour for the authority that rotates it, so a rotation the bridge swallowed told its
+never read the harbor for the authority that rotates it, so a rotation the bridge swallowed told its
 signer another action had taken its sequence number and to build a replacement that would be
-swallowed too. See the [phase spec](./security-council-safe-harbour-address-phase-3.md).
+swallowed too. See the [phase spec](./security-council-safe-harbor-address-phase-3.md).
 
 ## 5. Verification
 

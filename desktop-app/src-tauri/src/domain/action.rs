@@ -308,7 +308,7 @@ pub enum Action {
     /// Set the bridge's safe harbor destination. Authorized by the **Strata Administrator**, not
     /// by the council: the council decides when the sweep fires, the administrator decides where
     /// the funds land, and one authority holding both could trigger a sweep and pick its
-    /// destination. See `docs/specs/security-council-safe-harbour-address.md`.
+    /// destination. See `docs/specs/security-council-safe-harbor-address.md`.
     SafeHarborAddressUpdate(SafeHarborDescriptor),
     /// Activate the bridge safe harbor immediately. Authorized by the Strata Security Council and
     /// payload-less upstream — the sequence number travels with the proposal, not the action.

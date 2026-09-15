@@ -11,7 +11,7 @@
 ## 1. The change in one sentence
 
 `asm_enactment.rs:102-104` answers `BadRequest("Defcon1 enactment detection is not implemented
-yet")`; it becomes a real post-condition read — the safe harbour is activated and no Defcon 1
+yet")`; it becomes a real post-condition read — the safe harbor is activated and no Defcon 1
 entry sits in the admin queue.
 
 ## 2. What this phase is not
@@ -20,7 +20,7 @@ It is not the end of V1. A council signer still has no screen: Phases 5 and 6 ow
 signing message and the lifecycle display. What changes here is invisible to anyone without an
 HTTP client — a Defcon 1 proposal that today parks at `Approved` forever now reaches `Enacted`.
 
-It is also not Defcon 3, and not the safe-harbour address update. Both keep their
+It is also not Defcon 3, and not the safe-harbor address update. Both keep their
 "not implemented yet" arms (`:105-110`), and the verification in §9 pins that they do.
 
 ## 3. The two post-conditions
@@ -59,7 +59,7 @@ enqueued, and without the check a proposal would be marked `Enacted` while its u
 pending and still cancellable. It costs one `matches!` over a slice the arm already decodes.
 
 The ambiguity the check does **not** remove, and which this phase accepts: a Defcon 3 that matured
-between a Defcon 1's reveal confirmation and the next reconcile poll activates the safe harbour,
+between a Defcon 1's reveal confirmation and the next reconcile poll activates the safe harbor,
 and the Defcon 1 proposal would read as enacted on the strength of somebody else's action. This is
 the same class of risk the module already declares at `asm_enactment.rs:1-4` ("concurrent
 overlapping updates may produce ambiguous post-condition matches"), and it is out of reach for V1:
@@ -68,7 +68,7 @@ Defcon 3 has no product flow until V2, so no orchestrator-tracked proposal can p
 ### 3.2 A value, not a transition
 
 The contract's Edge Cases (`security-council-defcon.md:454`) require that a Defcon 1 whose safe
-harbour was **already** activated before the broadcast still reaches `enacted` — upstream's
+harbor was **already** activated before the broadcast still reaches `enacted` — upstream's
 `set_activated(true)` is idempotent. Any design that watched for the flag *flipping* would leave
 such a proposal stuck at `Approved`. Reading the flag's current value satisfies the requirement by
 construction, and the conjunction with the queue check does not weaken it.
@@ -79,7 +79,7 @@ Upstream exposes `strata_asm_getSafeHarbour(block_hash)`
 (`asm/bin/asm-runner/src/rpc_server.rs:142`), which this repo does not use and will not start
 using here. The `strata_asm_getStatus` call at `asm_enactment.rs:41` already ran before the
 `match` and already produced the whole `AnchorState`, from which both the bridge section and the
-administration section decode — **from the same block**. A second call for the safe harbour would
+administration section decode — **from the same block**. A second call for the safe harbor would
 read a different tip than the queue check, tearing a post-condition that is by definition a
 conjunction over one state.
 
@@ -97,7 +97,7 @@ Stated plainly, because it is a V1 constraint a later maintainer should not have
 call sites give is "the reveal is confirmed"; what they do not give is "the activation happened at
 or after that block". In V1 the gap is unreachable — Defcon 1 is the only orchestrator-tracked
 action that can set this flag, and Edge Cases (`security-council-defcon.md:454`) already rules
-that a pre-activated safe harbour must still enact — so closing it would mean building a
+that a pre-activated safe harbor must still enact — so closing it would mean building a
 per-block-height read for one arm, which nothing in V1 can exercise. If Defcon 3 ever gains a
 product flow (V2), this is the assumption that has to be revisited, together with §3.1.
 
@@ -109,12 +109,12 @@ The dispatch arm, replacing `asm_enactment.rs:102-104`:
 MultisigAction::Update(UpdateAction::Defcon1(_)) => {
     let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
     let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-    let safe_harbour_activated = bridge.safe_harbour().is_activated();
+    let safe_harbor_activated = bridge.safe_harbour().is_activated();
     let defcon1_queued = admin
         .queued()
         .iter()
         .any(|q| matches!(q.action(), UpdateAction::Defcon1(_)));
-    Ok(defcon1_enacted(safe_harbour_activated, defcon1_queued))
+    Ok(defcon1_enacted(safe_harbor_activated, defcon1_queued))
 }
 ```
 
@@ -127,19 +127,19 @@ the mismatch instead of showing it.
 and the decision it delegates to, beside `ee_stf_vk_enacted`:
 
 ```rust
-/// Defcon 1 executes at depth 0: it activates the safe harbour in the reveal block and never
+/// Defcon 1 executes at depth 0: it activates the safe harbor in the reveal block and never
 /// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
 /// proposal enacted.
-fn defcon1_enacted(safe_harbour_activated: bool, defcon1_queued: bool) -> bool {
-    safe_harbour_activated && !defcon1_queued
+fn defcon1_enacted(safe_harbor_activated: bool, defcon1_queued: bool) -> bool {
+    safe_harbor_activated && !defcon1_queued
 }
 ```
 
 | Input | Result |
 |---|---|
-| Safe harbour activated, no Defcon 1 queued | `Ok(true)` — the proposal is promoted to `Enacted` |
-| Safe harbour not activated | `Ok(false)` — reveal confirmed but ASM has not applied it yet |
-| Safe harbour activated, a Defcon 1 queued | `Ok(false)` — upstream drift (§3.1); refuse rather than promote |
+| Safe harbor activated, no Defcon 1 queued | `Ok(true)` — the proposal is promoted to `Enacted` |
+| Safe harbor not activated | `Ok(false)` — reveal confirmed but ASM has not applied it yet |
+| Safe harbor activated, a Defcon 1 queued | `Ok(false)` — upstream drift (§3.1); refuse rather than promote |
 | `AnchorState` has no bridge or no administration section | `Err(BadRequest)` — retried next poll (§5) |
 
 Nothing is added to the signature of `is_proposal_enacted_on_asm`: `authority` and `seq_no` stay
@@ -185,7 +185,7 @@ One test, on the extracted predicate, in the module's existing `mod tests`.
 |---|---|---|
 | 1 | Both post-conditions are required, and together they suffice | `defcon1_enacted(false, false)` and `(true, true)` are false; `(true, false)` is true |
 
-Named `defcon1_enacted_requires_safe_harbour_active_and_queue_clear`, mirroring
+Named `defcon1_enacted_requires_safe_harbor_active_and_queue_clear`, mirroring
 `ee_stf_vk_enacted_requires_seqno_consumed_and_not_queued` (`:533-537`) — the same shape of
 decision, tested the same way.
 
@@ -193,7 +193,7 @@ decision, tested the same way.
 `AnchorState` carrying both a bridge and an administration section; `orchestrator-be` has no such
 fixture and hand-building one would pin SSZ layout we do not own, in a test that duplicates
 coverage that already exists against a real ASM. That coverage is
-`e2e-tests/tests/e2e_defcon_probe.rs::e2e_defcon1_activates_safe_harbour_in_the_reveal_block`,
+`e2e-tests/tests/e2e_defcon_probe.rs::e2e_defcon1_activates_safe_harbor_in_the_reveal_block`,
 which asserts `bridge.safe_harbour().is_activated()` (`:110`) and `admin.queued().is_empty()`
 (`:117`) — precisely the two reads this arm performs.
 

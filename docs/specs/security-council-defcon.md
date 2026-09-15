@@ -10,7 +10,7 @@
 
 ## Objective
 
-Define the full stack for Security Council signers to create and enact Defcon 1 proposals: immediate (depth-0) safe-harbour activation with no cancellation path. The end-to-end flow: authenticate as council signer → create Defcon 1 proposal → sign → reach quorum → broadcast via commit/reveal → Enacted (safe harbour activated in the reveal block).
+Define the full stack for Security Council signers to create and enact Defcon 1 proposals: immediate (depth-0) safe-harbor activation with no cancellation path. The end-to-end flow: authenticate as council signer → create Defcon 1 proposal → sign → reach quorum → broadcast via commit/reveal → Enacted (safe harbor activated in the reveal block).
 
 This spec covers orchestrator-be (authority→role mapping, per-action lock period, enactment detection), desktop-app (create form, type-to-confirm gate, lifecycle display), and signer safety (four-line message, destructive UX, no "Approved" label, no cancel CTA).
 
@@ -32,7 +32,7 @@ This spec covers orchestrator-be (authority→role mapping, per-action lock peri
 - Defcon 3 (timelocked, V2 in scope).
 - Defcon 3 cancellation (V5 in scope).
 - Security Council membership update (V3 in scope, Strata Admin authority).
-- Safe harbour address update (V4 in scope, Strata Admin authority).
+- Safe harbor address update (V4 in scope, Strata Admin authority).
 - Bridge fund handling (protocol concern).
 - Protocol validity rules (orchestrator stays coordination-only).
 
@@ -102,9 +102,9 @@ are noted here rather than in the code alone, because both go wrong quietly.
 
 **The "changed nothing on chain" badge assumes only Defcon 1 sets the flag.** *(Settled in V2
 Phase 2 — [`security-council-defcon-3-phase-2.md`](./security-council-defcon-3-phase-2.md). The
-module is now `desktop-app/src/lib/safe-harbour-redundancy.ts` and orders by activation height.)*
+module is now `desktop-app/src/lib/safe-harbor-redundancy.ts` and orders by activation height.)*
 `desktop-app/src/lib/redundant-defcon-1.ts` treated the earliest enacted Defcon 1 by sequence number
-as the one that activated the safe harbour. Defcon 3 activates the same flag, on a timelock, so from
+as the one that activated the safe harbor. Defcon 3 activates the same flag, on a timelock, so from
 V2 onwards a Defcon 3 that matured first would have been the activation — and this would then name
 the wrong proposal and stay silent about a genuinely redundant one. The answer is the activation
 height, not the sequence number.
@@ -270,7 +270,7 @@ Create Defcon 1 proposal                  [Security Council badge] [Session] [Di
   ┌─ Confirmation gate ──────────────────────────────────────────────────────────────┐
   │  Type to confirm:  [ input field: "DEFCON 1" ] (case-insensitive)               │
   │                                                                                  │
-  │  ⚠  WARNING: Defcon 1 activates safe harbour immediately.                       │
+  │  ⚠  WARNING: Defcon 1 activates safe harbor immediately.                       │
   │      This action cannot be cancelled.                                            │
   └──────────────────────────────────────────────────────────────────────────────────┘
 
@@ -315,7 +315,7 @@ Quorum reached — ready to send
 
 ```
 Status: Enacted                          Block: 850,123
-Safe harbour activated: ✓
+Safe harbor activated: ✓
 ```
 
 **No Cancel CTA anywhere** — not on this screen, not in a detail view, not in a status column. If the user asks "How do I undo this?", the answer is "You cannot — Defcon 1 is irreversible."
@@ -436,7 +436,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 **When** the signer clicks the broadcast button  
 **Then** the app builds the commit and reveal transactions, signs both locally, broadcasts them through the existing commit/reveal pipeline (via `submitpackage` or sequential `sendrawtransaction`), and the proposal's broadcast status advances through the orchestrator.
 
-### 8. Enactment detected via safe harbour activation and queue bypass
+### 8. Enactment detected via safe harbor activation and queue bypass
 **Given** a Defcon 1 proposal whose commit/reveal has been broadcast and confirmed  
 **When** the orchestrator polls ASM state  
 **Then** it detects both: (1) `bridge.safe_harbour().is_activated() == true` in the reveal block, AND (2) no Defcon 1 entry in the admin queue (the action never entered the queue because depth 0 means immediate execution); marks the proposal `enacted`.
@@ -518,7 +518,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 > touches the UI.
 
 ### 18. Enactment is decided per proposal, not per bridge
-**Given** a Defcon 1 proposal whose reveal transaction has confirmed, on a chain where the safe harbour is already active  
+**Given** a Defcon 1 proposal whose reveal transaction has confirmed, on a chain where the safe harbor is already active  
 **When** the orchestrator checks its post-condition while the council's `last_seqno` is still below the proposal's `seq_no`  
 **Then** the proposal is **not** marked `Enacted`, and it becomes `Enacted` only once the council's `last_seqno` has reached its `seq_no` — that is, once its own action executed.
 
@@ -532,12 +532,12 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 > [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §3.1 and §4.
 
 ### 19. The council can see the state before it signs
-**Given** a Security Council session on a chain whose safe harbour is already active  
+**Given** a Security Council session on a chain whose safe harbor is already active  
 **When** the signer opens the proposals dashboard, or the Defcon 1 create form  
-**Then** both say that the bridge is already in safe harbour, before any signature is requested. A node that cannot answer shows nothing rather than an error.
+**Then** both say that the bridge is already in safe harbor, before any signature is requested. A node that cannot answer shows nothing rather than an error.
 
 ### 20. Seeing the state never blocks the lever
-**Given** the Defcon 1 create form with the safe harbour already active  
+**Given** the Defcon 1 create form with the safe harbor already active  
 **When** the signer completes the type-to-confirm field  
 **Then** the submit control is enabled and the proposal can be created. The type-to-confirm gate remains the only gate.
 
@@ -556,7 +556,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 | seq_no is not a valid integer (e.g., `"1.5"` or `"abc"`) | Validation error shown; Sign button disabled. |
 | Type-to-confirm field has extra spaces or case mismatch (`"defcon1"` or `"DEFCON 1 "`) | Sign button disabled; message: `"Type must match 'DEFCON 1' exactly (case-insensitive)."` |
 | ASM state is unavailable when reconciling enacted proposals | Orchestrator retries on next poll cycle; proposal stays in `approved` status until post-condition is confirmed. |
-| Safe harbour is already activated before Defcon 1 is broadcast | The activation is idempotent (`set_activated(true)`). The proposal still reaches `enacted` — but on **its own** sequence number ([AC 18](#18-enactment-is-decided-per-proposal-not-per-bridge)), never on the earlier activation. The app says the safe harbour is already active before the signer commits to a second lever ([AC 19](#19-the-council-can-see-the-state-before-it-signs)). |
+| Safe harbor is already activated before Defcon 1 is broadcast | The activation is idempotent (`set_activated(true)`). The proposal still reaches `enacted` — but on **its own** sequence number ([AC 18](#18-enactment-is-decided-per-proposal-not-per-bridge)), never on the earlier activation. The app says the safe harbor is already active before the signer commits to a second lever ([AC 19](#19-the-council-can-see-the-state-before-it-signs)). |
 | User attempts to copy "all cancel signatures" for Defcon 1 | No such button exists; UI only shows "Copy approval signatures" and "Broadcast" actions. |
 
 ## Critical Files
@@ -565,7 +565,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 |---|---|
 | ~~`orchestrator-be/src/domain/proposal.rs`~~ | **Not changed.** There is no `ProposalKind`: the action is identified by decoding `action_hex`, and a stored discriminator would be a second answer to a question the bytes already settle. |
 | `orchestrator-be/src/infrastructure/asm_role_membership.rs` | Add `lock_period_for_action`, resolving the depth from the action rather than the authority; retire `lock_period_for_authority`. |
-| `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbour activation; refactor enactment detection to use per-action depth; **replace the cancel gate's authority allow-list with the action's confirmation depth** (see [Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)). |
+| `orchestrator-be/src/application/proposals.rs` | Implement `create_defcon_proposal`; update `reconcile_enacted_for_authority` to detect safe-harbor activation; refactor enactment detection to use per-action depth; **replace the cancel gate's authority allow-list with the action's confirmation depth** (see [Constraint 2](#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)). |
 | `orchestrator-be/src/handlers/proposals.rs` | **Shipped differently:** no routing by type. `create_proposal` decodes the action and calls `require_authorized_for_action` before the generic `create_update_action` — see the correction under *Proposal Creation*. |
 | `orchestrator-be/src/handlers/mod.rs` | Ensure Security Council role mapping is wired; route guards check `authority == SecurityCouncil`. |
 | `desktop-app/src/api/proposals.ts` | Add `'defcon_1'` to the `ActionType` union (the file is `api/proposals.ts`, not `types/proposal.ts`, and the union is `ActionType`, not `ProposalKind`). Mirrored in `api/ipc-schemas.ts`, whose enums are closed — an unregistered value fails the parse of every proposal in the same list. |
@@ -596,7 +596,7 @@ Run `cargo test -p orchestrator-be` (see AGENTS.md for CI checklist).
 
 Backend integration tests are part of the standard test suite. Verify:
 
-- Full flow: create Defcon 1 → collect two signatures → broadcast (commit/reveal) → safe harbour activates → enactment reconciliation runs → proposal marked `enacted`.
+- Full flow: create Defcon 1 → collect two signatures → broadcast (commit/reveal) → safe harbor activates → enactment reconciliation runs → proposal marked `enacted`.
 - Manual fallback: signatures exported and payload composed offline; raw transaction buildable without orchestrator.
 
 ### Frontend Component and E2E Tests

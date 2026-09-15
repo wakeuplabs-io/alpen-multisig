@@ -87,7 +87,7 @@ exists on it. The fix is to stop using `unknown` as an `else`:
 (`:121-149`) would be a lie — its copy reads *"activates the Safe Harbor sweep immediately… it cannot
 be canceled, and is therefore irreversible"*, which is the opposite of Defcon 3 on both counts and
 which [Constraint 5](./security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible)
-forbids. Writing an honest `Defcon3Details` is destructive copy plus the safe-harbour note, which is
+forbids. Writing an honest `Defcon3Details` is destructive copy plus the safe-harbor note, which is
 Phase 5's by assignment.
 
 `UnknownActionDetails` is not the fallback either, and cannot be: it prints `decodedAction.rawHex`,
@@ -134,11 +134,11 @@ false one.
 |---|---|---|
 | `sign-proposal-view.tsx:189-197` details panel | no panel; the header names the action | 5 (§5) |
 | `create-proposal-preview.tsx` | unaffected — it is typed by the *other* union (§6) | 5 |
-| `broadcast-proposal-screen.tsx:54,111` | no safe-harbour note; only reachable after quorum | 5 |
+| `broadcast-proposal-screen.tsx:54,111` | no safe-harbor note; only reachable after quorum | 5 |
 | `proposal-status.ts:78` `proposalDisplayStatus` | `'approved'`, which is already what the contract wants | 6 (pinning) |
 | `proposal-status.ts:95-97` `showsActivationCountdown` | `true`, already correct — the predicate excludes only `defcon_1` | 6 (pinning) |
 | `derive-proposal-actions.ts:44` `canCancelProposal` | `false`: `security_council` is not in `CANCELABLE_AUTHORITIES` | 3 |
-| `lib/redundant-defcon-1.ts:25` (now `lib/safe-harbour-redundancy.ts`) | an enacted Defcon 3 is not considered as the harbour activator | 2 |
+| `lib/redundant-defcon-1.ts:25` (now `lib/safe-harbor-redundancy.ts`) | an enacted Defcon 3 is not considered as the harbor activator | 2 |
 | `manual-proposal/hooks/use-manual-proposal.ts:202,280` | the `kind === 'unknown'` guard lets a Defcon 3 bundle through — **correct, do not "fix"** | — |
 | `proposal-detail/hooks/use-decoded-proposal.ts:93` | clears the signer table for a non-`multisig_update` — correct | — |
 

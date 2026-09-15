@@ -33,7 +33,7 @@ them made the remaining generic machinery action-shaped rather than authority-sh
 
 **Not in scope**
 
-- Safe Harbour address update (V4).
+- Safe Harbor address update (V4).
 - Repairing [Constraint 4](./security-council-signer-update.md#4-acceptance-is-not-application-and-upstream-does-not-say-so).
   Pre-existing, applies to all four authorities, belongs to a slice that owns multisig-update
   correctness as a whole.
