@@ -69,7 +69,7 @@ function MultisigUpdateDetails({
 				{changes.addKeys.length > 0 && (
 					<div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#16a34a]">
-							Members to add · {changes.addKeys.length}
+							Signers to add · {changes.addKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.addKeys.map((key) => (
@@ -84,7 +84,7 @@ function MultisigUpdateDetails({
 				{changes.removeKeys.length > 0 && (
 					<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-emphasis">
-							Members to remove · {changes.removeKeys.length}
+							Signers to remove · {changes.removeKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.removeKeys.map((key) => (
@@ -99,7 +99,7 @@ function MultisigUpdateDetails({
 				)}
 
 				{changes.showThreshold && changes.addKeys.length === 0 && changes.removeKeys.length === 0 && (
-					<p className="m-0 text-label text-[#9ca3af]">Threshold-only change — no members added or removed.</p>
+					<p className="m-0 text-label text-[#9ca3af]">Threshold-only change — no signers added or removed.</p>
 				)}
 
 				{!changes.hasAnyChange && (
