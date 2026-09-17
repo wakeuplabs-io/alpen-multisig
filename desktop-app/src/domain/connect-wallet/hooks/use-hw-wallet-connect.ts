@@ -3,7 +3,7 @@ import { verifyAddressOnDevice } from '@/api/admin-wallet'
 import type { HwDeviceType } from '@/api/admin-wallet'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
-import { selectedStateFromWallet } from '@/domain/connect-wallet/model/resume-connect-session'
+import { connectStateForWallet } from '@/domain/connect-wallet/model/resume-connect-session'
 import { matchesDeviceAddress } from '@/lib/admin-id'
 import type { WalletAccountInfo, WalletAdapter, WalletKind } from '@/wallet/types'
 
@@ -31,13 +31,13 @@ type HookResult = {
 }
 
 export function useHwWalletConnect({ adapter, onConnected, existingWallet = null }: Params): HookResult {
-	const seeded = existingWallet ? selectedStateFromWallet(existingWallet) : null
-	const [phase, setPhase] = useState<HwWalletConnectState['phase']>(seeded?.phase ?? 'connect')
+	// Read once, at mount. A session wallet that appears later is this hook's own `connect()`
+	// reporting back, and one that disappears is handled by the reconcile effect below.
+	const [seeded] = useState(() => connectStateForWallet(existingWallet))
+	const [phase, setPhase] = useState<HwWalletConnectState['phase']>(seeded.phase)
 	const [loading, setLoading] = useState(false)
-	const [account, setAccount] = useState<WalletAccountInfo | null>(seeded?.account ?? null)
-	const [selectedEntry, setSelectedEntry] = useState<HwWalletConnectState['selectedEntry']>(
-		seeded?.selectedEntry ?? null,
-	)
+	const [account, setAccount] = useState<WalletAccountInfo | null>(seeded.account)
+	const [selectedEntry, setSelectedEntry] = useState<HwWalletConnectState['selectedEntry']>(seeded.selectedEntry)
 	const [connectViewState, setConnectViewState] = useState<HwWalletConnectState['connectViewState']>('idle')
 	const [isVerifyingAddress, setIsVerifyingAddress] = useState(false)
 	const [verifyMessage, setVerifyMessage] = useState<string | null>(null)
@@ -51,6 +51,22 @@ export function useHwWalletConnect({ adapter, onConnected, existingWallet = null
 			}
 		}
 	}, [])
+
+	// The session wallet can be cleared from outside this hook — the header's Disconnect, an
+	// adapter swap, a session that ends. When it goes, the wizard goes back to Connect signer:
+	// leaving it on a phase that claims a connected signer renders a dead card for a session
+	// that no longer exists, and the screen has no way out of it.
+	useEffect(() => {
+		if (existingWallet !== null) {
+			return
+		}
+		const reset = connectStateForWallet(null)
+		setPhase(reset.phase)
+		setAccount(reset.account)
+		setSelectedEntry(reset.selectedEntry)
+		setConnectViewState('idle')
+		setVerifyMessage(null)
+	}, [existingWallet])
 
 	async function connect(kind: WalletKind = 'standard') {
 		setLoading(true)

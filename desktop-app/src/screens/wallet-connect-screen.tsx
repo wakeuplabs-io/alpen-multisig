@@ -5,7 +5,10 @@ import {} from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
-import { readAuthorityStepFromLocationState } from '@/domain/connect-wallet/model/resume-connect-session'
+import {
+	hasAuthorityStep,
+	readAuthorityStepFromLocationState,
+} from '@/domain/connect-wallet/model/resume-connect-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { NodeConfigModal } from '@/domain/node-config/components/node-config-modal'
@@ -87,11 +90,13 @@ export function WalletConnectScreen() {
 		}
 	}, [localNodeUnreachable])
 
+	// A navigation that tags a step wins over whatever the screen was showing; one that tags none
+	// (a plain entry, or the disconnect below clearing the tag) leaves the step alone.
 	useEffect(() => {
-		const step = readAuthorityStepFromLocationState(location.state)
-		if ((location.state as { authorityStep?: unknown } | null)?.authorityStep != null) {
-			setAuthorityStep(step)
+		if (!hasAuthorityStep(location.state)) {
+			return
 		}
+		setAuthorityStep(readAuthorityStepFromLocationState(location.state))
 	}, [location.state])
 
 	const defaultEnabledAuthority = useMemo(
