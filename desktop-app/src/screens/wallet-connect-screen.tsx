@@ -197,6 +197,12 @@ export function WalletConnectScreen() {
 	async function handleHeaderDisconnect() {
 		disconnectRef.current?.()
 		await disconnectSession()
+		// Disconnect ends the wizard, so the step goes back to selection and the `authorityStep`
+		// tagged by Back-from-offline is dropped from the history entry. Left in place, the next
+		// signer connected on this screen would land straight on Authenticate for whichever
+		// authority happened to be selected, never having been asked to pick one.
+		setAuthorityStep('select-authority')
+		navigate('/', { replace: true, state: null })
 	}
 
 	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) {

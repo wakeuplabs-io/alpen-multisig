@@ -69,3 +69,18 @@ assert.ok(hook.includes('existingWallet'), 'connect hook must accept existingWal
 assert.ok(hwConnect.includes('existingWallet'), 'HwWalletConnect must forward existingWallet')
 
 console.log('All resume-connect-session tests passed.')
+
+// Disconnect ends the wizard, so the authority step has to fall back to selection. Without this
+// the step stays on Authenticate and the `authorityStep` this fix tags on the history entry
+// outlives the session: the next signer connected on this screen would skip authority selection.
+const headerDisconnect = walletConnect.slice(
+	walletConnect.indexOf('async function handleHeaderDisconnect'),
+	walletConnect.indexOf('function handleSelectWalletMethod'),
+)
+assert.ok(headerDisconnect.length > 0, 'header disconnect handler must exist')
+assert.ok(headerDisconnect.includes("setAuthorityStep('select-authority')"), 'disconnect must reset the authority step')
+assert.ok(
+	headerDisconnect.includes('replace: true') && headerDisconnect.includes('state: null'),
+	'disconnect must clear the authorityStep tagged on the history entry',
+)
+console.log('disconnect resets the authority step: OK')
