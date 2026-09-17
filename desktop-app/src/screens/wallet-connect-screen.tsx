@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DisconnectButton } from '@/components/disconnect-button'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {} from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
+import {
+	hasAuthorityStep,
+	readAuthorityStepFromLocationState,
+} from '@/domain/connect-wallet/model/resume-connect-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { NodeConfigModal } from '@/domain/node-config/components/node-config-modal'
@@ -52,6 +56,7 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 
 export function WalletConnectScreen() {
 	const navigate = useNavigate()
+	const location = useLocation()
 	const {
 		wallet,
 		setConnectedWallet,
@@ -69,7 +74,9 @@ export function WalletConnectScreen() {
 	const disconnectRef = useRef<(() => void) | null>(null)
 	const [showTopBarDisconnect, setShowTopBarDisconnect] = useState(false)
 	const [isNodeConfigOpen, setIsNodeConfigOpen] = useState(false)
-	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>('select-authority')
+	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>(() =>
+		readAuthorityStepFromLocationState(location.state),
+	)
 	const [authError, setAuthError] = useState<string | null>(null)
 	const [authOkMessage, setAuthOkMessage] = useState<string | null>(null)
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -82,6 +89,15 @@ export function WalletConnectScreen() {
 			setIsNodeConfigOpen(true)
 		}
 	}, [localNodeUnreachable])
+
+	// A navigation that tags a step wins over whatever the screen was showing; one that tags none
+	// (a plain entry, or the disconnect below clearing the tag) leaves the step alone.
+	useEffect(() => {
+		if (!hasAuthorityStep(location.state)) {
+			return
+		}
+		setAuthorityStep(readAuthorityStepFromLocationState(location.state))
+	}, [location.state])
 
 	const defaultEnabledAuthority = useMemo(
 		() => AUTHORITY_OPTIONS.find((option) => option.enabled && option.role !== null) ?? null,
@@ -130,7 +146,14 @@ export function WalletConnectScreen() {
 		setIsAuthenticating(true)
 		try {
 			await connectOnChainSession()
-			navigate('/manual')
+			navigate('/manual', {
+				state: {
+					returnTo: {
+						path: '/',
+						authorityStep: 'authenticate-session',
+					},
+				},
+			})
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -179,6 +202,12 @@ export function WalletConnectScreen() {
 	async function handleHeaderDisconnect() {
 		disconnectRef.current?.()
 		await disconnectSession()
+		// Disconnect ends the wizard, so the step goes back to selection and the `authorityStep`
+		// tagged by Back-from-offline is dropped from the history entry. Left in place, the next
+		// signer connected on this screen would land straight on Authenticate for whichever
+		// authority happened to be selected, never having been asked to pick one.
+		setAuthorityStep('select-authority')
+		navigate('/', { replace: true, state: null })
 	}
 
 	function handleSelectWalletMethod(method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) {
@@ -216,6 +245,7 @@ export function WalletConnectScreen() {
 					walletVendor={adapter.vendor}
 					onSelectWalletMethod={handleSelectWalletMethod}
 					onConnected={setConnectedWallet}
+					existingWallet={wallet}
 					disconnectRef={disconnectRef}
 					onHardwareSessionChange={setShowTopBarDisconnect}
 					authoritySelection={

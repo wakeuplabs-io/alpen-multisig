@@ -24,16 +24,18 @@ import { useAdminWalletCapability } from '@/domain/admin-wallet/hooks/use-admin-
 import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
+import { resolveManualBackNavigation, type ManualReturnTo } from '@/domain/connect-wallet/model/resume-connect-session'
 
 const STEP_LABELS = ['Import', 'Sign & Collect', 'Send']
 
-type LocationState = { prefill?: ManualBundleJson }
+type LocationState = { prefill?: ManualBundleJson; returnTo?: ManualReturnTo }
 
 export function ManualProposalScreen() {
 	const location = useLocation()
 	const navigate = useNavigate()
 	const { wallet, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
-	const prefill = (location.state as LocationState | null)?.prefill ?? null
+	const locationState = (location.state as LocationState | null) ?? null
+	const prefill = locationState?.prefill ?? null
 	// `null` until presets load: the broadcast step stays blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
 	const feeRateSatPerKvb = feeState.status === 'ready' ? feeState.satPerKvb : null
@@ -65,8 +67,17 @@ export function ManualProposalScreen() {
 				? receiveAddressHook.error
 				: null
 
-	async function handleBack() {
+	async function handleDisconnect() {
 		await disconnectSession()
+	}
+
+	function handleNavigateBack() {
+		const back = resolveManualBackNavigation(locationState)
+		if (back.kind === 'returnTo') {
+			navigate(back.path, { state: { authorityStep: back.authorityStep } })
+			return
+		}
+		navigate(-1)
 	}
 
 	if (wallet === null) {
@@ -93,7 +104,7 @@ export function ManualProposalScreen() {
 							isActive={isOpen}
 							panelId="wallet-slide-dialog"
 						/>
-						<DisconnectButton onClick={() => void handleBack()} />
+						<DisconnectButton onClick={() => void handleDisconnect()} />
 					</>
 				}
 			>
@@ -101,7 +112,7 @@ export function ManualProposalScreen() {
 					<button
 						type="button"
 						className="mb-3 inline-flex items-center gap-1 text-body text-[#666] transition hover:text-[#0a0a0a]"
-						onClick={() => navigate(-1)}
+						onClick={handleNavigateBack}
 					>
 						<span aria-hidden="true">←</span>
 						Back
