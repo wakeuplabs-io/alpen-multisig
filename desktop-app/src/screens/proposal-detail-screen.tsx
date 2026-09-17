@@ -188,7 +188,7 @@ export function ProposalDetailScreen() {
 											<>
 												Cancellation {PROPOSAL_STATUS_STYLE[proposal.cancelProposal.status].label.toLowerCase()} —{' '}
 												{proposal.cancelProposal.signatures.length} / {proposal.cancelProposal.requiredSignatures}{' '}
-												cancel signatures{proposal.cancelProposal.status === 'expired' ? ' collected' : ''}.
+												cancel signatures collected.
 											</>
 										) : (
 											<>
