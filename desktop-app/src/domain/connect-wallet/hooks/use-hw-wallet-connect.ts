@@ -3,6 +3,7 @@ import { verifyAddressOnDevice } from '@/api/admin-wallet'
 import type { HwDeviceType } from '@/api/admin-wallet'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
+import { selectedStateFromWallet } from '@/domain/connect-wallet/model/resume-connect-session'
 import { matchesDeviceAddress } from '@/lib/admin-id'
 import type { WalletAccountInfo, WalletAdapter, WalletKind } from '@/wallet/types'
 
@@ -14,6 +15,8 @@ function hwDeviceType(vendor: WalletAdapter['vendor']): HwDeviceType | null {
 type Params = {
 	adapter: WalletAdapter
 	onConnected: (info: WalletAccountInfo | null) => void
+	/** When the session already has a wallet (e.g. Back from offline), skip the connect phase. */
+	existingWallet?: WalletAccountInfo | null
 }
 
 type HookResult = {
@@ -27,11 +30,14 @@ type HookResult = {
 	}
 }
 
-export function useHwWalletConnect({ adapter, onConnected }: Params): HookResult {
-	const [phase, setPhase] = useState<HwWalletConnectState['phase']>('connect')
+export function useHwWalletConnect({ adapter, onConnected, existingWallet = null }: Params): HookResult {
+	const seeded = existingWallet ? selectedStateFromWallet(existingWallet) : null
+	const [phase, setPhase] = useState<HwWalletConnectState['phase']>(seeded?.phase ?? 'connect')
 	const [loading, setLoading] = useState(false)
-	const [account, setAccount] = useState<WalletAccountInfo | null>(null)
-	const [selectedEntry, setSelectedEntry] = useState<HwWalletConnectState['selectedEntry']>(null)
+	const [account, setAccount] = useState<WalletAccountInfo | null>(seeded?.account ?? null)
+	const [selectedEntry, setSelectedEntry] = useState<HwWalletConnectState['selectedEntry']>(
+		seeded?.selectedEntry ?? null,
+	)
 	const [connectViewState, setConnectViewState] = useState<HwWalletConnectState['connectViewState']>('idle')
 	const [isVerifyingAddress, setIsVerifyingAddress] = useState(false)
 	const [verifyMessage, setVerifyMessage] = useState<string | null>(null)

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DisconnectButton } from '@/components/disconnect-button'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {} from '@/assets/icons'
 import { AuthRole } from '@/types'
 import { HwWalletConnect } from '@/domain/connect-wallet/components/hw-wallet-connect'
 import type { AuthorityOption } from '@/domain/connect-wallet/components/authority-selection-phase'
+import { readAuthorityStepFromLocationState } from '@/domain/connect-wallet/model/resume-connect-session'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { NodeConfigModal } from '@/domain/node-config/components/node-config-modal'
@@ -52,6 +53,7 @@ const AUTHORITY_OPTIONS: AuthorityOption[] = [
 
 export function WalletConnectScreen() {
 	const navigate = useNavigate()
+	const location = useLocation()
 	const {
 		wallet,
 		setConnectedWallet,
@@ -69,7 +71,9 @@ export function WalletConnectScreen() {
 	const disconnectRef = useRef<(() => void) | null>(null)
 	const [showTopBarDisconnect, setShowTopBarDisconnect] = useState(false)
 	const [isNodeConfigOpen, setIsNodeConfigOpen] = useState(false)
-	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>('select-authority')
+	const [authorityStep, setAuthorityStep] = useState<'select-authority' | 'authenticate-session'>(() =>
+		readAuthorityStepFromLocationState(location.state),
+	)
 	const [authError, setAuthError] = useState<string | null>(null)
 	const [authOkMessage, setAuthOkMessage] = useState<string | null>(null)
 	const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -82,6 +86,13 @@ export function WalletConnectScreen() {
 			setIsNodeConfigOpen(true)
 		}
 	}, [localNodeUnreachable])
+
+	useEffect(() => {
+		const step = readAuthorityStepFromLocationState(location.state)
+		if ((location.state as { authorityStep?: unknown } | null)?.authorityStep != null) {
+			setAuthorityStep(step)
+		}
+	}, [location.state])
 
 	const defaultEnabledAuthority = useMemo(
 		() => AUTHORITY_OPTIONS.find((option) => option.enabled && option.role !== null) ?? null,
@@ -130,7 +141,14 @@ export function WalletConnectScreen() {
 		setIsAuthenticating(true)
 		try {
 			await connectOnChainSession()
-			navigate('/manual')
+			navigate('/manual', {
+				state: {
+					returnTo: {
+						path: '/',
+						authorityStep: 'authenticate-session',
+					},
+				},
+			})
 		} catch (e) {
 			const message = String(e)
 			if (message.toLowerCase().includes('not a member')) {
@@ -216,6 +234,7 @@ export function WalletConnectScreen() {
 					walletVendor={adapter.vendor}
 					onSelectWalletMethod={handleSelectWalletMethod}
 					onConnected={setConnectedWallet}
+					existingWallet={wallet}
 					disconnectRef={disconnectRef}
 					onHardwareSessionChange={setShowTopBarDisconnect}
 					authoritySelection={

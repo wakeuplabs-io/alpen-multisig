@@ -20,6 +20,8 @@ type Props = {
 	walletVendor: WalletVendor
 	onSelectWalletMethod: (method: 'trezor' | 'ledger' | 'mnemonic', mnemonic?: string) => void
 	onConnected: (info: WalletAccountInfo | null) => void
+	/** Session wallet already connected — rehydrate wizard past Connect signer on remount. */
+	existingWallet?: WalletAccountInfo | null
 	/** Wired to the shell header so Disconnect lives only in the top bar. */
 	disconnectRef?: MutableRefObject<(() => void) | null>
 	onHardwareSessionChange?: (active: boolean) => void
@@ -46,11 +48,12 @@ export function HwWalletConnect({
 	walletVendor,
 	onSelectWalletMethod,
 	onConnected,
+	existingWallet = null,
 	disconnectRef,
 	onHardwareSessionChange,
 	authoritySelection,
 }: Props) {
-	const { state, actions } = useHwWalletConnect({ adapter, onConnected })
+	const { state, actions } = useHwWalletConnect({ adapter, onConnected, existingWallet })
 	const mnemonicEnabled = useMnemonicSigningEnabled()
 	const isWidePhase = state.phase === 'selected' && authoritySelection !== null
 
