@@ -158,6 +158,12 @@ effect on a container restart; if it did not, a hidden-wallet connect puts the k
 spec waits forever on a refusal that will never come. Read `passphrase_protection` off the live
 device first.
 
+**Safe 7 (T3W1).** The same specs (`qa:login-trezor`, `qa:certificate-trezor` and the two above) run
+against `up.sh --model T3W1 --wipe`. A Safe 7 speaks THP, and the first connect in an app run asks on
+the device to pair with this computer; `test/helpers/trezor-pairing.mjs` confirms that dialog and
+presses nothing on a Safe 3, which never shows it. The T3W1 emulator only starts from a wiped
+profile, so toggle its passphrase with `--wipe --passphrase` / `--wipe --no-passphrase`.
+
 ## Troubleshooting
 
 | Symptom                         | Likely fix                                                                                                                                                                                                                                                                                                                                                                                          |

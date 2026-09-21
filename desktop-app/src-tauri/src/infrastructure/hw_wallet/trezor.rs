@@ -1,12 +1,13 @@
 use std::str::FromStr;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use bitcoin::address::KnownHrp;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::Network;
 use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, TrezorResponse};
 
-use super::{AddressScriptType, HwWalletInfo};
+use super::{trezor_thp, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
 /// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
@@ -16,8 +17,9 @@ const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
 ///
 /// One Trezor seed backs unlimited wallets: the standard one, plus a distinct wallet per
 /// passphrase. The passphrase is a per-session parameter rather than device state, so the
-/// wallet is chosen on every connection by how the host answers `PassphraseRequest` —
-/// there is no "current wallet" the device remembers between sessions.
+/// wallet is chosen on every connection — by how the host answers `PassphraseRequest` on a V1
+/// device, and by how it asks for the session (`ThpCreateNewSession`) on a THP one. There is no
+/// "current wallet" the device remembers between sessions.
 ///
 /// Neither answer sends a secret from this machine: [`Standard`](Self::Standard) sends an
 /// empty string, which is the absence of one, and [`Hidden`](Self::Hidden) hands entry to
@@ -33,8 +35,9 @@ pub enum WalletKind {
 
 /// The device session, and which wallet it belongs to.
 ///
-/// Every Trezor operation opens its own transport (`open_trezor`), so without the session id
-/// the device would treat each one as a fresh session and re-derive the seed — which means
+/// Every Trezor operation starts over (`open_trezor`): a new transport on a V1 device, a new
+/// client over the kept channel on a THP one. Without the session id the device would treat
+/// each operation as a fresh session and re-derive the seed, which means
 /// re-prompting for the passphrase on the device keypad on *every* call. Resuming the
 /// session keeps the firmware's cached seed (`APP_COMMON_SEED`) alive, so the signer enters
 /// the passphrase once per connection.
@@ -46,7 +49,9 @@ pub enum WalletKind {
 /// wallet.
 #[derive(Debug, Default, Clone)]
 struct SessionState {
-    /// The id from the last successful `Initialize`, if the device reported a usable one.
+    /// The session to resume. On a V1 device it is the 32-byte id from the last successful
+    /// `Initialize`, if the device reported a usable one; on a THP device it is the one-byte
+    /// session id the host chose on the open channel.
     id: Option<Vec<u8>>,
     /// The wallet the signer chose on the connection this session belongs to.
     kind: WalletKind,
@@ -65,6 +70,11 @@ static TREZOR_SESSION: OnceLock<Mutex<SessionState>> = OnceLock::new();
 /// an extra passphrase prompt. Mirrors `LEDGER_DEVICE_LOCK` in `ledger.rs`.
 static TREZOR_DEVICE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Whether the device on the other end speaks THP rather than Protocol V1. Learned from the
+/// first V1 attempt the device refuses, and kept for the process so later operations go
+/// straight to THP (see [`speaks_thp`]).
+static SPEAKS_THP: AtomicBool = AtomicBool::new(false);
+
 /// An open device, held for as long as the operation using it.
 ///
 /// The lock guard travels with the device rather than wrapping each entry point, so an
@@ -72,7 +82,7 @@ static TREZOR_DEVICE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 /// Derefs to [`Trezor`], so call sites use it as if it were the device itself.
 struct TrezorDevice {
     trezor: Trezor,
-    _guard: std::sync::MutexGuard<'static, ()>,
+    _guard: MutexGuard<'static, ()>,
 }
 
 impl std::ops::Deref for TrezorDevice {
@@ -174,14 +184,48 @@ fn remember_session(requested: Option<&[u8]>, trezor: &Trezor) {
     session_slot().id = Some(returned);
 }
 
+/// Whether a failed V1 `Initialize` means the device speaks THP.
+///
+/// THP firmware answers any V1 frame with a fixed `Failure_InvalidProtocol`. Firmware 2.9.x
+/// declares that reply 20 bytes long and pads it with zeros, so the V1 codec fails to decode it
+/// (`Incorrect tag`) before the failure code is ever read — both shapes mean the same thing.
+fn speaks_thp(error: &trezor_client::Error) -> bool {
+    match error {
+        trezor_client::Error::FailureResponse(f) => {
+            f.code() == protos::failure::FailureType::Failure_InvalidProtocol
+        }
+        trezor_client::Error::Protobuf(_) => true,
+        _ => false,
+    }
+}
+
+/// Refuses a hidden wallet the device cannot give us, rather than silently handing back the
+/// standard one. Checked against `has_passphrase_protection` too: the firmware omits the field
+/// entirely while the device is locked, and absent must not read as "switched off".
+///
+/// It runs before any session exists: on a THP device, asking for the hidden wallet is what
+/// brings up the device keyboard, and it must not appear for a wallet that will be refused.
+fn refuse_unavailable_wallet(features: &protos::Features) -> Result<(), String> {
+    if current_wallet_kind() == WalletKind::Hidden
+        && features.has_passphrase_protection()
+        && !features.passphrase_protection()
+    {
+        return Err(PASSPHRASE_DISABLED_ON_DEVICE.to_string());
+    }
+    Ok(())
+}
+
 fn open_trezor() -> Result<TrezorDevice, String> {
     let guard = TREZOR_DEVICE_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|e| e.into_inner());
 
+    if SPEAKS_THP.load(Ordering::Relaxed) {
+        return open_thp(guard);
+    }
+
     let mut attempts = Vec::with_capacity(2);
-    let mut saw_invalid_protocol = false;
     let requested = session_slot().id.clone();
 
     for debug in [false, true] {
@@ -196,17 +240,23 @@ fn open_trezor() -> Result<TrezorDevice, String> {
         match trezor.init_device(requested.clone()) {
             Ok(_) => {
                 remember_session(requested.as_deref(), &trezor);
+                let features = trezor
+                    .features()
+                    .cloned()
+                    .ok_or("Trezor returned no device features.".to_string())?;
+                refuse_unavailable_wallet(&features)?;
                 return Ok(TrezorDevice {
                     trezor,
                     _guard: guard,
                 });
             }
-            Err(e) => {
-                if e.to_string().contains("Failure_InvalidProtocol") {
-                    saw_invalid_protocol = true;
-                }
-                attempts.push(format!("debug={debug}: init failed ({e})"));
+            // The debug interface would only fail the same way, and differently worded.
+            Err(e) if speaks_thp(&e) => {
+                drop(trezor);
+                SPEAKS_THP.store(true, Ordering::Relaxed);
+                return open_thp(guard);
             }
+            Err(e) => attempts.push(format!("debug={debug}: init failed ({e})")),
         }
     }
 
@@ -214,20 +264,85 @@ fn open_trezor() -> Result<TrezorDevice, String> {
     // about whether its session is still valid, and a stale id costs nothing: the firmware
     // answers it with a fresh session, which `session_outcome` reports as `Lost`. Dropping it
     // here would mean a transient probe failure re-prompts the signer for the passphrase.
-    let mut hint = "Ensure trezord/emulator are healthy, then reconnect the device.".to_string();
-    if saw_invalid_protocol {
-        hint.push_str(
-            " If you are testing with an emulator, point this app directly to the emulator UDP port \
-(21324) instead of the Trezor Bridge endpoint."
-        );
-    }
-
     Err(format!(
         "Trezor init failed on both transport modes. \
-{} Details: {}",
-        hint,
+Ensure trezord/emulator are healthy, then reconnect the device. Details: {}",
         attempts.join(" | ")
     ))
+}
+
+fn get_features(
+    trezor: &mut Trezor,
+) -> Result<TrezorResponse<'_, protos::Features, protos::Features>, String> {
+    trezor
+        .call(protos::GetFeatures::new(), Box::new(|_, m| Ok(m)))
+        .map_err(|e| e.to_string())
+}
+
+/// Opens a THP device: the channel (kept across operations), then the session for the wallet
+/// this connection is for.
+///
+/// Under THP there is no `Initialize`. Features come from `GetFeatures` on the seedless session
+/// 0, and the wallet is chosen when the session is created ([`start_thp_session`]), so no
+/// `PassphraseRequest` ever reaches [`resolve`].
+fn open_thp(guard: MutexGuard<'static, ()>) -> Result<TrezorDevice, String> {
+    // Failing to open a channel at all may mean the device on the other end changed; forget
+    // THP so the next operation probes V1 again rather than insisting on a protocol.
+    let open =
+        || trezor_thp::ensure_channel().inspect_err(|_| SPEAKS_THP.store(false, Ordering::Relaxed));
+    let mut fresh = open()?;
+    let features = loop {
+        if fresh {
+            // Session ids belong to the channel, so a new channel invalidates the one we hold.
+            session_slot().id = None;
+        }
+        let mut seedless = trezor_thp::client(0);
+        match get_features(&mut seedless).and_then(resolve) {
+            Ok(features) => break features,
+            // A channel kept from an earlier operation may have died with the device
+            // (unplugged, emulator restarted); only its first message can tell. Retry once
+            // on a fresh channel.
+            Err(_) if !fresh => {
+                trezor_thp::close_channel();
+                fresh = open()?;
+            }
+            Err(e) => return Err(format!("Trezor get_features failed: {e}")),
+        }
+    };
+    refuse_unavailable_wallet(&features)?;
+
+    // Read the slot on its own line: a guard taken in the `match` scrutinee would live through
+    // `start_thp_session`, which takes the same lock.
+    let remembered = session_slot().id.clone();
+    let session_id = match remembered.as_deref() {
+        Some(&[id]) => id,
+        _ => start_thp_session()?,
+    };
+    Ok(TrezorDevice {
+        trezor: trezor_thp::client(session_id),
+        _guard: guard,
+    })
+}
+
+/// Creates the device session for the wallet this connection is for, and remembers it.
+///
+/// [`WalletKind::Standard`] sends no passphrase at all, which the firmware reads as the empty
+/// one, with no prompt; [`WalletKind::Hidden`] asks for entry on the device keyboard. As on V1,
+/// neither sends a secret from this machine.
+fn start_thp_session() -> Result<u8, String> {
+    let id = trezor_thp::next_session_id()?;
+    let mut request = protos::ThpCreateNewSession::new();
+    if current_wallet_kind() == WalletKind::Hidden {
+        request.set_on_device(true);
+    }
+    let mut trezor = trezor_thp::client(id);
+    resolve(
+        trezor
+            .call(request, Box::new(|_, _: protos::Success| Ok(())))
+            .map_err(|e| format!("Trezor session creation failed: {e}"))?,
+    )?;
+    session_slot().id = Some(vec![id]);
+    Ok(id)
 }
 
 fn parse_path(path: &str) -> Result<DerivationPath, String> {
@@ -380,19 +495,8 @@ pub fn connect(derivation_path: Option<String>, kind: WalletKind) -> Result<HwWa
     // and could otherwise land *after* the next connect and wipe the session it just made.
     start_session(kind);
 
+    // Also refuses a hidden wallet the device cannot give (`refuse_unavailable_wallet`).
     let mut trezor = open_trezor()?;
-
-    // Refuse a hidden wallet the device cannot give us, rather than silently handing back the
-    // standard one. Checked against `has_passphrase_protection` too: the firmware omits the
-    // field entirely while the device is locked, and absent must not read as "switched off".
-    if kind == WalletKind::Hidden {
-        let features = trezor
-            .features()
-            .ok_or("Trezor returned no device features.".to_string())?;
-        if features.has_passphrase_protection() && !features.passphrase_protection() {
-            return Err(PASSPHRASE_DISABLED_ON_DEVICE.to_string());
-        }
-    }
 
     let xpub = resolve(
         get_xpub(

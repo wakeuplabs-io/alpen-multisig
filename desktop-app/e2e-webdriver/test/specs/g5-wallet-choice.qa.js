@@ -12,8 +12,11 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { allowPairingUntil } from '../helpers/trezor-pairing.mjs'
+
 const EVIDENCE = path.resolve(process.cwd(), '../../../../issues/evidence')
 const EMU = 'alpen-trezor-emu'
+const ASKS_PASSPHRASE = /passphrase|keyboard/i
 
 /** Type a passphrase on the emulator keypad over the debug link. */
 function typeOnDevice(passphrase) {
@@ -31,7 +34,10 @@ finally:
 	return execFileSync('docker', ['exec', '-i', EMU, 'python3', '-'], { input: script, encoding: 'utf8' })
 }
 
-/** Whatever the device is showing right now. */
+/**
+ * Whatever the device is showing right now: the title, and the layout's main component. The Safe 3
+ * titles its keypad "passphrase"; the Safe 7 leaves the title empty and shows a `StringKeyboard`.
+ */
 function deviceScreen() {
 	const script = `
 from trezorlib.debuglink import DebugLink
@@ -39,7 +45,8 @@ from trezorlib.transport.udp import UdpTransport
 d = DebugLink(UdpTransport("127.0.0.1:21325"), auto_interact=True)
 d.open()
 try:
-    print(d.read_layout().title())
+    layout = d.read_layout()
+    print(layout.title(), layout.main_component())
 finally:
     d.close()
 `
@@ -77,13 +84,14 @@ describe('G5 — the two Trezor connect actions open different wallets', () => {
 		await connect.waitForClickable({ timeout: 60000 })
 		await connect.click()
 
+		await allowPairingUntil(() => $('[data-testid="e2e-connect-admin-id-value"]').isDisplayed())
 		const standardId = await readAdminId()
 		await shoot('standard-connected')
 		console.log(`STANDARD_ADMIN_ID=${standardId}`)
 
 		const screenAfterStandard = deviceScreen()
 		console.log(`DEVICE_SCREEN_AFTER_STANDARD=${screenAfterStandard}`)
-		if (/passphrase/i.test(screenAfterStandard)) {
+		if (ASKS_PASSPHRASE.test(screenAfterStandard)) {
 			throw new Error('the standard wallet asked for a passphrase on the device keypad')
 		}
 
@@ -96,7 +104,7 @@ describe('G5 — the two Trezor connect actions open different wallets', () => {
 		await hidden.click()
 
 		// The device puts its keypad up while the app still says "Detecting…".
-		await browser.waitUntil(async () => /passphrase/i.test(deviceScreen()), {
+		await browser.waitUntil(async () => ASKS_PASSPHRASE.test(deviceScreen()), {
 			timeout: 60000,
 			interval: 2000,
 			timeoutMsg: 'the device never asked for a passphrase on its keypad',
