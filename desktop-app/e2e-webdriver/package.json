@@ -23,6 +23,7 @@
 		"qa:certificate-ledger": "wdio run wdio.conf.js --spec ./test/specs/g9-certificate-ledger.qa.js",
 		"qa:trezor-wallet-choice": "wdio run wdio.conf.js --spec ./test/specs/g5-wallet-choice.qa.js",
 		"qa:trezor-hidden-refused": "wdio run wdio.conf.js --spec ./test/specs/g5-refusal.qa.js",
+		"qa:trezor-pairing": "wdio run wdio.conf.js --spec ./test/specs/trezor-pairing-code.qa.js",
 		"test:e2e:clipboard-copy": "wdio run wdio.conf.js --spec ./test/specs/clipboard-copy.e2e.js",
 		"test:e2e:fee-bump": "wdio run wdio.conf.js --spec ./test/specs/fee-bump.e2e.js",
 		"format": "prettier --write \"./**/*.{js,mjs}\""

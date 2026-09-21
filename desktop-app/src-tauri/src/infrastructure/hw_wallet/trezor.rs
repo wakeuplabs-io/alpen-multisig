@@ -215,11 +215,26 @@ fn refuse_unavailable_wallet(features: &protos::Features) -> Result<(), String> 
     Ok(())
 }
 
-fn open_trezor() -> Result<TrezorDevice, String> {
-    let guard = TREZOR_DEVICE_LOCK
+fn device_lock() -> MutexGuard<'static, ()> {
+    TREZOR_DEVICE_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
-        .unwrap_or_else(|e| e.into_inner());
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+/// Returned by any operation, `connect` included, while a THP device shows a pairing code: the
+/// caller asks the signer for the code and hands it to [`submit_pairing_code`], then connects
+/// again. A fixed token rather than prose, because the frontend matches on it.
+pub const PAIRING_CODE_REQUIRED: &str = "TREZOR_PAIRING_CODE_REQUIRED";
+
+/// Completes the pairing a THP device is showing a code for (see [`PAIRING_CODE_REQUIRED`]).
+pub fn submit_pairing_code(code: String) -> Result<(), String> {
+    let _guard = device_lock();
+    trezor_thp::submit_pairing_code(&code)
+}
+
+fn open_trezor() -> Result<TrezorDevice, String> {
+    let guard = device_lock();
 
     if SPEAKS_THP.load(Ordering::Relaxed) {
         return open_thp(guard);
@@ -292,6 +307,11 @@ fn open_thp(guard: MutexGuard<'static, ()>) -> Result<TrezorDevice, String> {
         || trezor_thp::ensure_channel().inspect_err(|_| SPEAKS_THP.store(false, Ordering::Relaxed));
     let mut fresh = open()?;
     let features = loop {
+        // A new channel stops at the pairing code, and stays there across calls until the
+        // signer types it.
+        if trezor_thp::awaiting_pairing_code() {
+            return Err(PAIRING_CODE_REQUIRED.to_string());
+        }
         if fresh {
             // Session ids belong to the channel, so a new channel invalidates the one we hold.
             session_slot().id = None;

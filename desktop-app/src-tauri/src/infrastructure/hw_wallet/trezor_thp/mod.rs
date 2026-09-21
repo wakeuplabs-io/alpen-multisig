@@ -9,9 +9,11 @@
 //! process-wide slot, and the transport handed to `Trezor` is only a session id into it.
 //!
 //! `trezor-thp` does the framing, ACKs, retransmission and the Noise handshake. Pairing is left
-//! to the application: here, only SkipPairing, which the emulator and debug builds offer.
-//! Release firmware requires CodeEntry, which is Phase 2 of `docs/specs/trezor-safe7-thp.md`.
+//! to the application: CodeEntry, where the device shows a 6-digit code the signer types into
+//! the app. That spans two IPC calls, so a channel can sit in the slot waiting for its code.
+//! The pairing is not remembered across app runs (Phase 3 of `docs/specs/trezor-safe7-thp.md`).
 
+mod cpace;
 mod link;
 
 use std::io;
@@ -20,9 +22,12 @@ use std::time::Duration;
 
 use protobuf::{Enum, Message};
 use rand::RngCore;
+use sha2::{Digest, Sha256};
 use trezor_client::client::trezor_with_transport;
 use trezor_client::protos::{
-    Failure, MessageType, ThpDeviceProperties, ThpMessageType, ThpPairingMethod, ThpPairingRequest,
+    Failure, MessageType, ThpCodeEntryChallenge, ThpCodeEntryCommitment, ThpCodeEntryCpaceHostTag,
+    ThpCodeEntryCpaceTrezor, ThpCodeEntrySecret, ThpDeviceProperties, ThpEndRequest,
+    ThpEndResponse, ThpMessageType, ThpPairingMethod, ThpPairingRequest, ThpPairingRequestApproved,
     ThpSelectMethod,
 };
 use trezor_client::transport::{error::Error as TransportError, ProtoMessage, Transport};
@@ -189,7 +194,8 @@ impl<C: ChannelIO> Wire<C> {
     }
 
     /// Sends a message on session 0 and returns the answer, acknowledging any on-device
-    /// confirmation in between. A `Failure` becomes an error carrying the device's message.
+    /// confirmation in between. A `Failure` becomes a `PermissionDenied` error carrying the
+    /// device's message, so a caller can tell the device refusing from the link failing.
     fn call_confirmed(&mut self, message_type: u16, message: &[u8]) -> io::Result<(u16, Vec<u8>)> {
         self.write(0, message_type, message)?;
         loop {
@@ -198,10 +204,10 @@ impl<C: ChannelIO> Wire<C> {
                 MESSAGE_TYPE_BUTTON_REQUEST => self.write(0, MESSAGE_TYPE_BUTTON_ACK, &[])?,
                 MESSAGE_TYPE_FAILURE => {
                     let failure = Failure::parse_from_bytes(&reply).unwrap_or_default();
-                    return Err(io::Error::other(format!(
-                        "Trezor refused pairing: {}",
-                        failure.message()
-                    )));
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        format!("Trezor refused pairing: {}", failure.message()),
+                    ));
                 }
                 _ => return Ok((reply_type, reply)),
             }
@@ -215,20 +221,34 @@ struct ThpConnection {
     wire: Wire<HostChannel>,
     /// The next session id to hand out. Session 0 is the seedless one; ids run 1..=255.
     next_session_id: u8,
+    /// Set while the device shows a pairing code and waits for the signer to type it. The
+    /// channel carries no application message until [`submit_pairing_code`] clears it.
+    pairing: Option<CodeEntry>,
 }
+
+/// What the host must remember between showing the pairing code and receiving it.
+struct CodeEntry {
+    challenge: [u8; CHALLENGE_LEN],
+    /// SHA-256 of the secret the device reveals once the code is proven, sent up front so it
+    /// cannot pick the secret after seeing our tag.
+    commitment: Vec<u8>,
+    trezor_public_key: [u8; 32],
+}
+
+const CHALLENGE_LEN: usize = 16;
 
 fn thp_type(message_type: ThpMessageType) -> u16 {
     message_type.value() as u16
 }
 
-fn expect_reply(got: u16, want: ThpMessageType) -> io::Result<()> {
-    if got == thp_type(want) {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!(
+/// The body of `reply` if it is a `want`, parsed; an error otherwise.
+fn expect_reply<M: Message>((got, body): (u16, Vec<u8>), want: ThpMessageType) -> io::Result<M> {
+    if got != thp_type(want) {
+        return Err(io::Error::other(format!(
             "unexpected Trezor reply during pairing: message type {got}"
-        )))
+        )));
     }
+    M::parse_from_bytes(&body).map_err(io::Error::other)
 }
 
 fn encode(message: &impl Message) -> io::Result<Vec<u8>> {
@@ -272,23 +292,31 @@ fn open_channel() -> io::Result<ThpConnection> {
     }
     let mut wire = wire.map(|open| open.complete())?;
 
-    pair(&mut wire, &properties)?;
-    wire.channel.end_pairing();
+    let pairing = start_code_entry(&mut wire, &properties)?;
     Ok(ThpConnection {
         wire,
         next_session_id: 1,
+        pairing: Some(pairing),
     })
 }
 
-fn pair(wire: &mut Wire<HostChannel>, properties: &ThpDeviceProperties) -> io::Result<()> {
-    let offers_skip = properties
+/// Pairs with CodeEntry, the one method release firmware offers: the device shows a 6-digit
+/// code and the host proves it knows it. The signer types the code in between, so this stops
+/// once the code is on screen and [`finish_code_entry`] completes it on a later call.
+///
+/// Debug builds and the emulator also offer SkipPairing; it is deliberately not used, so the
+/// emulator runs the same path as a device in the signer's hands.
+fn start_code_entry(
+    wire: &mut Wire<HostChannel>,
+    properties: &ThpDeviceProperties,
+) -> io::Result<CodeEntry> {
+    let offers_code_entry = properties
         .pairing_methods
         .iter()
-        .any(|m| m.enum_value() == Ok(ThpPairingMethod::SkipPairing));
-    if !offers_skip {
+        .any(|m| m.enum_value() == Ok(ThpPairingMethod::CodeEntry));
+    if !offers_code_entry {
         return Err(io::Error::other(
-            "This Trezor asks to be paired with a code shown on its screen, which this build \
-does not support yet.",
+            "This Trezor offers no pairing method this app supports (code entry).",
         ));
     }
 
@@ -301,22 +329,109 @@ does not support yet.",
         host_name
     });
     request.set_app_name(APP_NAME.to_string());
-    let (reply, _) = wire.call_confirmed(
-        thp_type(ThpMessageType::ThpMessageType_ThpPairingRequest),
-        &encode(&request)?,
-    )?;
-    expect_reply(
-        reply,
+    let _: ThpPairingRequestApproved = expect_reply(
+        wire.call_confirmed(
+            thp_type(ThpMessageType::ThpMessageType_ThpPairingRequest),
+            &encode(&request)?,
+        )?,
         ThpMessageType::ThpMessageType_ThpPairingRequestApproved,
     )?;
 
     let mut select = ThpSelectMethod::new();
-    select.set_selected_pairing_method(ThpPairingMethod::SkipPairing);
-    let (reply, _) = wire.call_confirmed(
-        thp_type(ThpMessageType::ThpMessageType_ThpSelectMethod),
-        &encode(&select)?,
+    select.set_selected_pairing_method(ThpPairingMethod::CodeEntry);
+    let commitment: ThpCodeEntryCommitment = expect_reply(
+        wire.call_confirmed(
+            thp_type(ThpMessageType::ThpMessageType_ThpSelectMethod),
+            &encode(&select)?,
+        )?,
+        ThpMessageType::ThpMessageType_ThpCodeEntryCommitment,
     )?;
-    expect_reply(reply, ThpMessageType::ThpMessageType_ThpEndResponse)
+
+    let mut challenge = [0u8; CHALLENGE_LEN];
+    rand::rngs::OsRng.fill_bytes(&mut challenge);
+    let mut challenge_message = ThpCodeEntryChallenge::new();
+    challenge_message.set_challenge(challenge.to_vec());
+    let trezor_cpace: ThpCodeEntryCpaceTrezor = expect_reply(
+        wire.call_confirmed(
+            thp_type(ThpMessageType::ThpMessageType_ThpCodeEntryChallenge),
+            &encode(&challenge_message)?,
+        )?,
+        ThpMessageType::ThpMessageType_ThpCodeEntryCpaceTrezor,
+    )?;
+    let trezor_public_key = trezor_cpace
+        .cpace_trezor_public_key()
+        .try_into()
+        .map_err(|_| io::Error::other("the Trezor sent a malformed pairing key"))?;
+
+    Ok(CodeEntry {
+        challenge,
+        commitment: commitment.commitment().to_vec(),
+        trezor_public_key,
+    })
+}
+
+/// The code the device shows for this pairing: SHA-256 over the method, the handshake hash,
+/// the revealed secret and our challenge, reduced to six decimal digits.
+fn expected_code(handshake_hash: &[u8], secret: &[u8], challenge: &[u8]) -> String {
+    let hash = Sha256::new()
+        .chain_update([ThpPairingMethod::CodeEntry as u8])
+        .chain_update(handshake_hash)
+        .chain_update(secret)
+        .chain_update(challenge)
+        .finalize();
+    // `int.from_bytes(hash, "big") % 1_000_000`, folded byte by byte to stay in a u64.
+    let code = hash
+        .iter()
+        .fold(0u64, |acc, byte| (acc * 256 + u64::from(*byte)) % 1_000_000);
+    format!("{code:06}")
+}
+
+fn finish_code_entry(
+    wire: &mut Wire<HostChannel>,
+    pairing: &CodeEntry,
+    code: &str,
+) -> io::Result<()> {
+    let handshake_hash = *wire.channel.handshake_hash();
+    let (host_public_key, shared_secret) =
+        cpace::cpace(code.as_bytes(), &handshake_hash, &pairing.trezor_public_key);
+    let mut tag = ThpCodeEntryCpaceHostTag::new();
+    tag.set_cpace_host_public_key(host_public_key.to_vec());
+    tag.set_tag(Sha256::digest(shared_secret).to_vec());
+    let reply = wire
+        .call_confirmed(
+            thp_type(ThpMessageType::ThpMessageType_ThpCodeEntryCpaceHostTag),
+            &encode(&tag)?,
+        )
+        .map_err(|e| match e.kind() {
+            io::ErrorKind::PermissionDenied => io::Error::other(
+                "That code does not match the one on the Trezor. Connect again to get a new code.",
+            ),
+            _ => e,
+        })?;
+    let secret: ThpCodeEntrySecret =
+        expect_reply(reply, ThpMessageType::ThpMessageType_ThpCodeEntrySecret)?;
+
+    // The device proves the code was its own: the secret matches what it committed to before
+    // seeing our tag, and the code derives from it. Either failing means something other than
+    // our Trezor answered.
+    if Sha256::digest(secret.secret())[..] != pairing.commitment[..]
+        || expected_code(&handshake_hash, secret.secret(), &pairing.challenge) != code
+    {
+        return Err(io::Error::other(
+            "The Trezor could not prove the pairing code it showed. Do not use this device; \
+disconnect it and try again.",
+        ));
+    }
+
+    let _: ThpEndResponse = expect_reply(
+        wire.call_confirmed(
+            thp_type(ThpMessageType::ThpMessageType_ThpEndRequest),
+            &encode(&ThpEndRequest::new())?,
+        )?,
+        ThpMessageType::ThpMessageType_ThpEndResponse,
+    )?;
+    wire.channel.end_pairing();
+    Ok(())
 }
 
 static CONNECTION: Mutex<Option<ThpConnection>> = Mutex::new(None);
@@ -326,7 +441,8 @@ fn connection_slot() -> MutexGuard<'static, Option<ThpConnection>> {
 }
 
 /// Opens the channel unless one is already up. Returns `true` when it opened one just now,
-/// which means every session id handed out before is gone.
+/// which means every session id handed out before is gone. A new channel is left waiting for
+/// its pairing code (see [`awaiting_pairing_code`]).
 pub fn ensure_channel() -> Result<bool, String> {
     let mut slot = connection_slot();
     if slot.is_some() {
@@ -335,6 +451,38 @@ pub fn ensure_channel() -> Result<bool, String> {
     *slot = Some(open_channel().map_err(|e| format!("Trezor THP connection failed: {e}"))?);
     Ok(true)
 }
+
+/// Whether the open channel is waiting for the code the device is showing.
+pub fn awaiting_pairing_code() -> bool {
+    connection_slot()
+        .as_ref()
+        .is_some_and(|connection| connection.pairing.is_some())
+}
+
+/// Completes the pairing the device is showing a code for.
+///
+/// A malformed code is refused without touching the device, so the signer can retype it. Any
+/// other failure — a wrong code included — drops the channel: the device has abandoned that
+/// pairing, and the next connect starts a new one with a new code.
+pub fn submit_pairing_code(code: &str) -> Result<(), String> {
+    let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
+    if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("The pairing code is the 6 digits shown on the Trezor.".to_string());
+    }
+    let mut slot = connection_slot();
+    let Some(connection) = slot.as_mut() else {
+        return Err(NO_PAIRING_IN_PROGRESS.to_string());
+    };
+    let Some(pairing) = connection.pairing.take() else {
+        return Err(NO_PAIRING_IN_PROGRESS.to_string());
+    };
+    finish_code_entry(&mut connection.wire, &pairing, &code).map_err(|e| {
+        *slot = None;
+        e.to_string()
+    })
+}
+
+const NO_PAIRING_IN_PROGRESS: &str = "No Trezor pairing is in progress. Connect again.";
 
 /// Drops the channel, so the next [`ensure_channel`] opens a fresh one.
 pub fn close_channel() {

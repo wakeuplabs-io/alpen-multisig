@@ -3,7 +3,7 @@
 use bdk_wallet::bitcoin::Network;
 use desktop_app::infrastructure::admin_wallet::wallet::admin_wallet_account_path;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
-use desktop_app::infrastructure::hw_wallet::trezor::WalletKind;
+use desktop_app::infrastructure::hw_wallet::trezor::{self, WalletKind};
 use desktop_app::infrastructure::hw_wallet::{AddressScriptType, HwWalletInfo};
 use desktop_app::infrastructure::network_env::network_from_env;
 use desktop_app::infrastructure::signing::{self, SignatureResult};
@@ -56,6 +56,15 @@ pub async fn hw_wallet_connect(
     let device = parse_device_kind(&vendor)?;
     let kind = parse_wallet_kind(wallet_kind.as_deref())?;
     tokio::task::spawn_blocking(move || device.connect(derivation_path, kind))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Types the pairing code a Trezor Safe 7 shows into the pairing `hw_wallet_connect` started
+/// (it answers `PAIRING_CODE_REQUIRED` until this succeeds). The caller then connects again.
+#[tauri::command]
+pub async fn trezor_submit_pairing_code(code: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || trezor::submit_pairing_code(code))
         .await
         .map_err(|e| e.to_string())?
 }

@@ -62,6 +62,10 @@ trezor-noise-rust-crypto = { version = "0.6.2", default-features = false, featur
 protobuf = "3.7"
 rusb = "0.9"
 gethostname = "1.1"
+# CodeEntry pairing (CPace): Elligator2 field math, the generator hash, and X25519 on it.
+crypto-bigint = "0.5"
+sha2 = "0.10"
+x25519-dalek = "2"
 ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
 ledger-transport-hid = "0.11"
 ledger-apdu = "0.11"

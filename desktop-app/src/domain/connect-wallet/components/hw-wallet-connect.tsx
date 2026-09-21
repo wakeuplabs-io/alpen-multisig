@@ -122,6 +122,8 @@ export function HwWalletConnect({
 					loading={state.loading}
 					connectViewState={state.connectViewState}
 					error={state.error}
+					pairingCodeRequested={state.pairingCodeRequested}
+					onSubmitPairingCode={(code) => void actions.submitPairingCode(code)}
 					onConnect={() => void actions.connect()}
 					onConnectTrezor={handleConnectTrezor}
 					onConnectMnemonic={handleConnectMnemonic}

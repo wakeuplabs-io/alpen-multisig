@@ -159,10 +159,13 @@ spec waits forever on a refusal that will never come. Read `passphrase_protectio
 device first.
 
 **Safe 7 (T3W1).** The same specs (`qa:login-trezor`, `qa:certificate-trezor` and the two above) run
-against `up.sh --model T3W1 --wipe`. A Safe 7 speaks THP, and the first connect in an app run asks on
-the device to pair with this computer; `test/helpers/trezor-pairing.mjs` confirms that dialog and
-presses nothing on a Safe 3, which never shows it. The T3W1 emulator only starts from a wiped
-profile, so toggle its passphrase with `--wipe --passphrase` / `--wipe --no-passphrase`.
+against `up.sh --model T3W1 --wipe`. A Safe 7 speaks THP and pairs the first time the app connects
+to it in a run. It asks to allow this computer, then shows a 6-digit code that the signer types into
+the app. `test/helpers/trezor-pairing.mjs` plays that signer: it confirms the dialog, reads the code
+over the debug link and types it. On a Safe 3, which never pairs, it only waits.
+`npm run qa:trezor-pairing` covers a wrong code, then a successful pairing. The T3W1 emulator only
+starts from a wiped profile, so toggle its passphrase with `--wipe --passphrase` /
+`--wipe --no-passphrase`.
 
 ## Troubleshooting
 
