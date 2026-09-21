@@ -5,6 +5,7 @@ import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import type { HwWalletConnectState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { connectStateForWallet } from '@/domain/connect-wallet/model/resume-connect-session'
 import { matchesDeviceAddress } from '@/lib/admin-id'
+import { PairingCodeRequiredError } from '@/wallet/hw-adapter'
 import type { WalletAccountInfo, WalletAdapter, WalletKind } from '@/wallet/types'
 
 /** The connected device kind for verify dispatch, or null for software vendors. */
@@ -24,6 +25,8 @@ type HookResult = {
 	actions: {
 		/** Defaults to the standard wallet: the one that needs no passphrase. */
 		connect: (kind?: WalletKind) => Promise<void>
+		/** Pairs with the code the device shows, then connects the wallet that was asked for. */
+		submitPairingCode: (code: string) => Promise<void>
 		goBackToConnect: () => void
 		verifyOnDevice: () => Promise<void>
 		disconnect: () => void
@@ -42,6 +45,8 @@ export function useHwWalletConnect({ adapter, onConnected, existingWallet = null
 	const [isVerifyingAddress, setIsVerifyingAddress] = useState(false)
 	const [verifyMessage, setVerifyMessage] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	// The wallet the interrupted connect was for, while the device shows its pairing code.
+	const [pairingKind, setPairingKind] = useState<WalletKind | null>(null)
 	const successTransitionTimeoutRef = useRef<number | null>(null)
 
 	useEffect(() => {
@@ -100,11 +105,33 @@ export function useHwWalletConnect({ adapter, onConnected, existingWallet = null
 				setPhase('selected')
 			}, 400)
 		} catch (e) {
-			setError(String(e))
+			if (e instanceof PairingCodeRequiredError) {
+				setPairingKind(kind)
+			} else {
+				setError(String(e))
+			}
 			setConnectViewState('idle')
 		} finally {
 			setLoading(false)
 		}
+	}
+
+	async function submitPairingCode(code: string) {
+		if (pairingKind === null || !adapter.submitPairingCode) return
+		const kind = pairingKind
+		setLoading(true)
+		setError(null)
+		try {
+			await adapter.submitPairingCode(code)
+		} catch (e) {
+			// The device has dropped this pairing; connecting again shows a new code.
+			setPairingKind(null)
+			setError(String(e))
+			setLoading(false)
+			return
+		}
+		setPairingKind(null)
+		await connect(kind)
 	}
 
 	function goBackToConnect() {
@@ -170,12 +197,14 @@ export function useHwWalletConnect({ adapter, onConnected, existingWallet = null
 			account,
 			selectedEntry,
 			connectViewState,
+			pairingCodeRequested: pairingKind !== null,
 			isVerifyingAddress,
 			verifyMessage,
 			error,
 		},
 		actions: {
 			connect,
+			submitPairingCode,
 			goBackToConnect,
 			verifyOnDevice,
 			disconnect,

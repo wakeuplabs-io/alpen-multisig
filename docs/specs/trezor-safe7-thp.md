@@ -3,8 +3,9 @@
 **Ticket:** [#566](https://github.com/wakeuplabs-io/alpen-multisig/issues/566) — the Trezor
 connection method fails on a Safe 7.
 
-**Status:** Phase 1 implemented — every device QA spec passes on the T3W1 and the T2B1 emulators
-(§4, Phase 1). Phase 2 closes the ticket; Phase 3 is deferred.
+**Status:** Phases 1 and 2 implemented. The Safe 7 emulator pairs by CodeEntry, as release
+firmware requires, and every device QA spec passes on the T3W1 and T2B1 emulators. What is still
+open: a run on a physical Safe 7 (manual review), and Phase 3, which is deferred.
 
 This document is both the contract (§2) and the plan (§4). The contract section wins if they ever
 disagree.
@@ -184,8 +185,9 @@ phases.
 
 ### Phase 2 — CodeEntry pairing
 
-- New `trezor_thp/cpace.rs` (with the vector tests) and `trezor_thp/pairing.rs`. The SkipPairing branch
-  is removed, so the emulator runs the same path as a real device.
+- New `trezor_thp/cpace.rs` (with the vector tests). The pairing steps live in `trezor_thp/mod.rs`
+  beside the channel they drive. The SkipPairing branch is removed, so the emulator runs the same
+  path as a real device.
 - `commands/hw_wallet.rs`: `trezor_submit_pairing_code`, registered in **both** handler lists in
   `commands/invoke.rs`.
 - Frontend: `wallet/hw-adapter.ts`, `domain/connect-wallet/hooks/use-hw-wallet-connect.ts`, and a
@@ -201,6 +203,14 @@ phases.
 - T2B1 g10 still passes.
 
 A physical Safe 7 run is left to manual review.
+
+**What the run showed** (2026-09-21, T3W1 fw 2.9.3 and T2B1 fw 2.8.7):
+- `qa:trezor-pairing` (new) refuses a wrong code with "That code does not match…". It then pairs on
+  the next connect, and the device shows a new code.
+- g10, g9, g5 and the refusal pass on both models. On the Safe 7 each one now pairs by code
+  through the shared helper.
+- The device shows "Enter this one-time security code on <host> 123 456". The host name can hold
+  digits, so the helper reads only the trailing `NNN NNN`.
 
 ### Phase 3 — Remember the pairing (deferred)
 

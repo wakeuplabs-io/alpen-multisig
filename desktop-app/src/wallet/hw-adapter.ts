@@ -22,6 +22,17 @@ type SignatureResult = {
 	signatureHex: string
 }
 
+/** Matches `trezor::PAIRING_CODE_REQUIRED` in the Tauri backend. */
+const TREZOR_PAIRING_CODE_REQUIRED = 'TREZOR_PAIRING_CODE_REQUIRED'
+
+/** The device is showing a pairing code and waits for the signer to type it. */
+export class PairingCodeRequiredError extends Error {
+	constructor() {
+		super('Enter the pairing code shown on the device.')
+		this.name = 'PairingCodeRequiredError'
+	}
+}
+
 /**
  * No passphrase crosses this boundary. A Trezor passphrase is entered on the device
  * keypad, so there is nothing here to hold or forward (#448). `kind` selects *which* wallet
@@ -42,7 +53,9 @@ export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 				derivationPath: null,
 				walletKind: kind,
 			})
-			if (!result.ok) throw new Error(result.error)
+			if (!result.ok) {
+				throw result.error === TREZOR_PAIRING_CODE_REQUIRED ? new PairingCodeRequiredError() : new Error(result.error)
+			}
 			const info = result.data
 			publicKeyHex = info.publicKeyHex ?? info.xpubOrFingerprint ?? null
 			currentDerivationPath = info.derivationPath
@@ -95,6 +108,11 @@ export function createHwAdapter(vendor: WalletVendor): WalletAdapter {
 			const result = await tauriCall<string>('hw_wallet_get_xpub', { vendor })
 			if (!result.ok) throw new Error(result.error)
 			return result.data
+		},
+
+		async submitPairingCode(code: string): Promise<void> {
+			const result = await tauriCall<null>('trezor_submit_pairing_code', { code })
+			if (!result.ok) throw new Error(result.error)
 		},
 
 		async getMasterFingerprint(): Promise<number> {

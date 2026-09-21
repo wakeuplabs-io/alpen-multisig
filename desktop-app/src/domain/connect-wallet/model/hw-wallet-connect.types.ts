@@ -9,6 +9,8 @@ export type HwWalletConnectState = {
 	account: WalletAccountInfo | null
 	selectedEntry: HwAddressEntry | null
 	connectViewState: ConnectViewState
+	/** The device is showing a pairing code; the connect screen asks for it. */
+	pairingCodeRequested: boolean
 	isVerifyingAddress: boolean
 	verifyMessage: string | null
 	error: string | null

@@ -56,4 +56,10 @@ export type WalletAdapter = {
 	signSighash(sighashHex: string, context?: SigningContext): Promise<SignSighashResult>
 	getAccountXpub?(): Promise<string>
 	getMasterFingerprint?(): Promise<number>
+	/**
+	 * Completes the pairing a device asked for (a Trezor Safe 7, the first time the app talks to
+	 * it in a run), with the code the device shows. `connect` reports it by throwing
+	 * `PairingCodeRequiredError`; connect again once this resolves.
+	 */
+	submitPairingCode?(code: string): Promise<void>
 }
