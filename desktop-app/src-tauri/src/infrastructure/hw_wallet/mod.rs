@@ -1,6 +1,7 @@
 pub mod hw_psbt_signer;
 pub mod ledger;
 pub mod trezor;
+mod trezor_thp;
 
 use serde::Serialize;
 

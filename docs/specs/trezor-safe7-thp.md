@@ -3,7 +3,8 @@
 **Ticket:** [#566](https://github.com/wakeuplabs-io/alpen-multisig/issues/566) — the Trezor
 connection method fails on a Safe 7.
 
-**Status:** Planned. Phase 1 and Phase 2 close the ticket; Phase 3 is deferred.
+**Status:** Phase 1 implemented — every device QA spec passes on the T3W1 and the T2B1 emulators
+(§4, Phase 1). Phase 2 closes the ticket; Phase 3 is deferred.
 
 This document is both the contract (§2) and the plan (§4). The contract section wins if they ever
 disagree.
@@ -166,6 +167,20 @@ phases.
 - with `--passphrase`, `qa:trezor-wallet-choice` (g5) passes;
 - with passphrase protection off, `qa:trezor-hidden-refused` passes;
 - after `up.sh --wipe` (T2B1), g10 still passes.
+
+**What the run showed** (2026-09-21, T3W1 fw 2.9.3 and T2B1 fw 2.8.7):
+- All four specs pass on both models. The hidden wallet for the same passphrase has the same
+  address on the Safe 3 (V1, `PassphraseRequest`) and on the Safe 7 (THP, `ThpCreateNewSession`).
+- A taproot PSBT signed on the Safe 7 verifies against the output key. No QA spec covers it, so it
+  was checked by hand.
+- **Even SkipPairing asks the signer.** The first channel in an app run shows "Allow Strata Multisig
+  on <host> to pair with this Trezor?". The QA specs confirm it through
+  `test/helpers/trezor-pairing.mjs`.
+- **`TRANSPORT_BUSY` is routine.** A channel left open by a previous run keeps the device busy
+  while a new one is allocated. It is retried with a short backoff, the handshake included, because
+  nothing else would resend it there.
+- The T3W1 emulator only boots from a wiped profile (its Tropic model keeps no state), so the
+  passphrase is toggled with `--wipe`.
 
 ### Phase 2 — CodeEntry pairing
 

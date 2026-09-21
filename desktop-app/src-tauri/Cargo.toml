@@ -55,7 +55,13 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 tracing = "0.1"
-trezor-client = "0.1.5"
+trezor-client = "0.1.6"
+# Safe 7 (T3W1) speaks only THP. Pinned exactly: the 0.1.x API still changes between patches.
+trezor-thp = { version = "=0.1.1", features = ["use_std"] }
+trezor-noise-rust-crypto = { version = "0.6.2", default-features = false, features = ["use-x25519", "use-aes-256-gcm", "use-sha2"] }
+protobuf = "3.7"
+rusb = "0.9"
+gethostname = "1.1"
 ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
 ledger-transport-hid = "0.11"
 ledger-apdu = "0.11"
