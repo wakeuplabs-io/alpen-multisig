@@ -13,7 +13,7 @@ per-phase delivery specs are history, in
 [`archive/features/security-council/`](../archive/features/security-council/).
 
 All upstream claims below were read from the `asm` submodule at tags `v0.1-alpha.11` and `v0.3.1`,
-with file and line references. Where the two tags differ, [§7](#7-upstream-version-notes) says so.
+with file and line references. Where the two tags differ, [§7.1](#71-upstream-version-notes) says so.
 
 ---
 
@@ -333,7 +333,7 @@ Neither is an open question any more; both were settled while this document was 
 | 0 | Branch off `develop`; triage the two prior branches | Done |
 | 1 | High-level discovery; this document | Done |
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
-| 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
+| 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go--no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
 | 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md) |
 | 5 | Vertical slices V1–V4 | Done — V1, V2, V3 and V4 shipped, each closed out after its own manual walk; V3's AC 13 evidence and V4's expiry-countdown finding deferred as recorded debt |

@@ -227,7 +227,7 @@ the smallest possible addition to all three layers:
 
 ### Two IPC boundaries stay on `Unknown` — and the build plan is wrong about why
 
-The build plan assigns `decode_action_hex` to Phase 5 ([§4 Phase 5](../../../specs/security-council-defcon-implementation.md#phase-5--frontend-create-and-sign)),
+The build plan assigns `decode_action_hex` to Phase 5 ([§4 Phase 5](../../../specs/security-council-defcon-implementation.md#phase-5--frontend-create-and-sign-)),
 and it is right, but not for the reason it gives. Moving that arm earlier is not merely premature: it
 would be a **regression**. `decodedActionSchema` (`desktop-app/src/api/ipc-schemas.ts:128-142`) is a
 zod *discriminated union*, so a `kind` it does not list is a parse failure, not an `unknown`

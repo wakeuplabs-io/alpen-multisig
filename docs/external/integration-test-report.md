@@ -8,7 +8,7 @@ The Strata Multisig application includes a comprehensive integration test suite 
 
 ## Test Environment
 
-> **Scope note:** The Rust workspace suite below validates protocol and coordination layers. It does **not** cover all PRD update types, full E2E WebDriver desktop flows, or physical hardware on every CI run. See [Limitations](#limitations) and the [compatibility matrix](./hardware-wallet-matrix.md).
+> **Scope note:** The Rust workspace suite below validates protocol and coordination layers. It does **not** cover all PRD update types, full E2E WebDriver desktop flows, or physical hardware on every CI run. See [Limitations](#known-limitations) and the [compatibility matrix](./hardware-wallet-matrix.md).
 
 | Component | Configuration |
 |-----------|---------------|
