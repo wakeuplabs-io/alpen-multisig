@@ -2,9 +2,9 @@
 
 **Status:** All four slices shipped — V1 (Defcon 1), V2 (Defcon 3 and its cancel), V3 (Security
 Council signer update), V4 (Safe Harbor address update) — each closed out after its own manual walk.
-Stage 6 (compliance audit, issue #117) in progress
-**PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
-**Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13, US-E14
+Stage 6 (close-out: tests, code, docs, compliance audit, issue #117) in progress  
+**PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5  
+**Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13, US-E14  
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
 
 This document is the SSOT for the scope, staging and slice status of the Security Council feature.
