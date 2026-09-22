@@ -156,10 +156,10 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 ### NF-20 · Upstream Alpen crate coverage
 - **Concern:** External dependency.
 - **Requirement:** The Alpen admin subprotocol crate must expose types/sighash tags for all 13 update types and all 5 authorities.
-- **Status:** Met at ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) for every authority except the Payout Administrator, which has no role upstream; the two bridge update types were withdrawn.
+- **Status:** Met at ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) for four of the five authorities and every update type still in scope. The residual gap is the Payout Administrator, which has no role upstream; the two bridge update types were withdrawn rather than left missing.
 - **Source:** `2-discovery/08-alpen-crate-prd-coverage.md`.
 - **Needed by:** Slice 2 (all update types), Slice 4 (Payout Admin).
-- **Action:** Track coordination with Alpen Labs; file upstream issues for each missing piece.
+- **Action:** None open for the admin subprotocol. The Payout Administrator gap is not implemented by decision, not blocked on upstream — see [`specs/security-council.md`](../specs/security-council.md) §5.5.
 
 ---
 
