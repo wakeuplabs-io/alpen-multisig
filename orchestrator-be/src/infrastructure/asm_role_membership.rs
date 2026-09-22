@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 
-use serde_json::{json, Value};
-use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::{Role, UpdateTxType};
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, http_client, rpc_timeout};
+use crate::infrastructure::{action_codec, asm_rpc};
 
 /// Whether this authority has a wired ASM `Role` mapping (P-037).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,11 +61,9 @@ pub(crate) async fn last_seqno_for_authority(
         return Ok(seqno);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     let authority_config = admin.authority(role).ok_or_else(|| {
         AppError::BadRequest(format!(
@@ -87,11 +82,9 @@ pub(crate) async fn threshold_for_authority(
         return Ok(threshold);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     let authority_config = admin.authority(role).ok_or_else(|| {
         AppError::BadRequest(format!(
@@ -120,11 +113,9 @@ pub(crate) async fn lock_period_for_action(
         return Ok(period);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
     Ok(depth_for_action(&action, |tx_type| {
         admin.confirmation_depth(tx_type)
@@ -163,7 +154,7 @@ impl ConfirmationDepthResolver {
             return Self::Mock(uniform_confirmation_depths(2016));
         }
 
-        match fetch_admin_state(rpc_url).await {
+        match asm_rpc::fetch_admin_state(rpc_url).await {
             Ok(admin) => Self::Live(admin),
             Err(e) => {
                 tracing::warn!("cancelability: confirmation depth lookup failed: {e}");
@@ -192,12 +183,6 @@ impl ConfirmationDepthResolver {
     }
 }
 
-async fn fetch_admin_state(rpc_url: &str) -> Result<AdministrationSubprotoState, String> {
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    decode_admin_state(&anchor)
-}
-
 /// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
 ///
 /// Decodes the action, then scans the live ASM queue for the matching `UpdateAction`.
@@ -218,11 +203,9 @@ pub(crate) async fn update_id_in_queue_for_action(
         MultisigAction::Cancel(_) => return Ok(None),
     };
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
     let found = admin
         .queued()
@@ -284,9 +267,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 }
 
 async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String>>, String> {
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    let admin = decode_admin_state(&anchor)?;
+    let admin = asm_rpc::fetch_admin_state(rpc_url).await?;
 
     // A role the chain does not carry is "not a member", never "membership unknowable". This is
     // read for every authority on every auth challenge, so one authority missing from an older
@@ -309,91 +290,6 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     }
 
     Ok(role_to_keys)
-}
-
-async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = http_client::shared();
-    let payload = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params
-    });
-
-    let response = rpc_timeout::with_rpc_timeout(
-        &format!("ASM RPC `{method}`"),
-        client.post(rpc_url).json(&payload).send(),
-    )
-    .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!(
-            "RPC method `{method}` returned unexpected status code: {status}"
-        ));
-    }
-
-    let body: Value =
-        rpc_timeout::with_rpc_timeout(&format!("ASM RPC `{method}` body"), response.json()).await?;
-
-    if let Some(err) = body.get("error") {
-        let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");
-        if method == "strata_asm_getStatus" && err.to_string().contains("\"code\":-32601") {
-            return Err(format!(
-				"{base}. This usually means `STRATA_ADMIN_STATE_RPC_URL` points to a non-ASM endpoint."
-			));
-        }
-        return Err(base);
-    }
-
-    body.get("result")
-        .cloned()
-        .ok_or_else(|| format!("RPC method `{method}` response does not contain `result`: {body}"))
-}
-
-fn decode_state_bytes_from_status(status_result: &Value) -> Result<Vec<u8>, String> {
-    let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
-
-    let items = raw_state
-        .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
-
-    items
-        .iter()
-        .map(|v| {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("state entry is not an unsigned integer: {v}"))?;
-            u8::try_from(n).map_err(|_| format!("state entry out of byte range: {n}"))
-        })
-        .collect::<Result<Vec<u8>, String>>()
-}
-
-fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState, String> {
-    let bytes = decode_state_bytes_from_status(status_result)?;
-    AnchorState::from_ssz_bytes(&bytes)
-        .map_err(|err| format!("failed to SSZ-decode AnchorState from status state bytes: {err}"))
-}
-
-fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {
-    let id = AdministrationSubprotocol::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!(
-            "AnchorState has no administration subprotocol section (expected id {id}). \
-             The RPC returned a decodable `AnchorState`, but it does not include admin — \
-             often wrong `strata-asm-runner` spec/params, or state from an incompatible DB snapshot."
-        )
-    })?;
-    section.try_to_state::<AdministrationSubprotocol>().map_err(|e| {
-        format!(
-            "Administration section (id {id}) is present but its SSZ payload does not decode with this app ({e:?}). \
-             Rebuild `strata-asm-runner` from the same `alpenlabs/asm` commit as this workspace and delete the runner DB \
-             (see `[database].path` in orchestrator ASM config / asm-config.toml, e.g. /tmp/asm-runner-db) so genesis is recreated."
-        )
-    })
 }
 
 fn authority_keys_hex(

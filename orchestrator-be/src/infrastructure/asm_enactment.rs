@@ -3,21 +3,14 @@
 //! This does not re-validate signatures or queue semantics. Concurrent overlapping updates may
 //! produce ambiguous post-condition matches (same class of risk as threshold snapshot checks).
 
-use serde_json::{json, Value};
-use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::Role;
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
-use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
-use strata_asm_proto_checkpoint::CheckpointState;
-use strata_asm_proto_checkpoint::CheckpointSubprotocol;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, asm_role_membership, http_client, rpc_timeout};
+use crate::infrastructure::{action_codec, asm_role_membership, asm_rpc};
 
 #[cfg(any(test, feature = "dev-mocks"))]
 const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
@@ -52,14 +45,14 @@ pub(crate) async fn is_proposal_enacted_on_asm(
     let action =
         action_codec::decode_multisig_action_hex(action_hex).map_err(AppError::BadRequest)?;
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let anchor = asm_rpc::fetch_anchor_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
 
     match &action {
         MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
-            let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
+            let checkpoint =
+                asm_rpc::decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
             Ok(predicate_keys_match(
                 update.key(),
                 checkpoint.checkpoint_predicate(),
@@ -71,7 +64,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                     "EeStfVk proposal requires AlpenAdmin authority".to_string(),
                 ));
             }
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             let alpen = admin.authority(Role::AlpenAdministrator).ok_or_else(|| {
                 AppError::BadRequest(
                     "admin state missing authority for role `AlpenAdministrator`".to_string(),
@@ -86,7 +79,8 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             // PredicateKey::new(Bip340Schnorr, key_bytes) and relays it to the checkpoint
             // subprotocol, which stores it in `sequencer_predicate` (distinct from
             // `checkpoint_predicate` which OlStfVk updates).
-            let checkpoint = decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
+            let checkpoint =
+                asm_rpc::decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
             let expected =
                 PredicateKey::new(PredicateTypeId::Bip340Schnorr, update.pub_key().0.to_vec());
             Ok(predicate_keys_match(
@@ -95,7 +89,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             ))
         }
         MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
-            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let current_keys: Vec<String> = bridge
                 .operators()
                 .operators()
@@ -116,8 +110,8 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         // docs/specs/security-council-defcon-3-phase-4.md and
         // docs/specs/security-council-safe-harbor-address-phase-1.md.
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
-            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             let safe_harbor_activated = bridge.safe_harbour().is_activated();
             let defcon1_queued = admin
                 .queued()
@@ -142,8 +136,8 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         MultisigAction::Update(UpdateAction::Defcon3(_)) => {
             let (activation_height, bitcoin_tip) =
                 defcon3_observations(activation_height, bitcoin_tip)?;
-            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             // Payload is empty, so this is the same question as equality against `this` action —
             // two in-flight Defcon 3s share queue state (contract edge case). Same shape as Defcon 1.
             let still_queued = admin
@@ -168,8 +162,8 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             ))
         }
         MultisigAction::Update(UpdateAction::SafeHarbourAddress(update)) => {
-            let bridge = decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             let target = UpdateAction::SafeHarbourAddress(update.clone());
             let still_queued = admin.queued().iter().any(|q| q.action() == &target);
             // The role is named literally: an arm that matches one action variant knows its role,
@@ -207,7 +201,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 MultisigAction::Update(update) => update.required_role(),
                 _ => unreachable!("outer arm already matched MultisigAction::Update"),
             };
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
             multisig_update_enacted(
                 target_role,
@@ -231,7 +225,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             .map_err(AppError::BadRequest)
         }
         MultisigAction::Cancel(cancel) => {
-            let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
+            let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
             Ok(admin.find_queued(cancel.target_id()).is_none())
         }
     }
@@ -513,101 +507,6 @@ fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
 #[cfg(not(any(test, feature = "dev-mocks")))]
 fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
     None
-}
-
-async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = http_client::shared();
-    let payload = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params
-    });
-
-    let response = rpc_timeout::with_rpc_timeout(
-        &format!("ASM RPC `{method}`"),
-        client.post(rpc_url).json(&payload).send(),
-    )
-    .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!(
-            "RPC method `{method}` returned unexpected status code: {status}"
-        ));
-    }
-
-    let body: Value =
-        rpc_timeout::with_rpc_timeout(&format!("ASM RPC `{method}` body"), response.json()).await?;
-
-    if let Some(err) = body.get("error") {
-        return Err(format!(
-            "RPC method `{method}` returned JSON-RPC error: {err}"
-        ));
-    }
-
-    body.get("result")
-        .cloned()
-        .ok_or_else(|| format!("RPC method `{method}` response does not contain `result`: {body}"))
-}
-
-fn decode_state_bytes_from_status(status_result: &Value) -> Result<Vec<u8>, String> {
-    let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
-
-    let items = raw_state
-        .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
-
-    items
-        .iter()
-        .map(|v| {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("state entry is not an unsigned integer: {v}"))?;
-            u8::try_from(n).map_err(|_| format!("state entry out of byte range: {n}"))
-        })
-        .collect::<Result<Vec<u8>, String>>()
-}
-
-fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState, String> {
-    let bytes = decode_state_bytes_from_status(status_result)?;
-    AnchorState::from_ssz_bytes(&bytes)
-        .map_err(|err| format!("failed to SSZ-decode AnchorState from status state bytes: {err}"))
-}
-
-fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {
-    let id = AdministrationSubprotocol::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!("AnchorState has no administration subprotocol section (expected id {id}).")
-    })?;
-    section
-        .try_to_state::<AdministrationSubprotocol>()
-        .map_err(|e| {
-            format!("Administration section (id {id}) does not decode with this app ({e:?}).")
-        })
-}
-
-fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeV1State, String> {
-    let id = BridgeV1Subproto::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!("AnchorState has no bridge-v1 subprotocol section (expected id {id})")
-    })?;
-    section
-        .try_to_state::<BridgeV1Subproto>()
-        .map_err(|e| format!("BridgeV1 section SSZ decode failed: {e:?}"))
-}
-
-fn decode_checkpoint_state(anchor: &AnchorState) -> Result<CheckpointState, String> {
-    let id = CheckpointSubprotocol::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!("AnchorState has no checkpoint subprotocol section (expected id {id}).")
-    })?;
-    section
-        .try_to_state::<CheckpointSubprotocol>()
-        .map_err(|e| format!("Checkpoint section (id {id}) does not decode with this app ({e:?})."))
 }
 
 #[cfg(test)]
