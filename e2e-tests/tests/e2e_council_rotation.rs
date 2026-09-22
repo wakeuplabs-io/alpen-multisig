@@ -171,14 +171,14 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
         "council sequence must not advance for an administrator-authorized rotation"
     );
 
-    mine_to(&harness, activation_height - 1).await?;
+    harness.mine_to(activation_height - 1).await?;
     assert_rotation_queued(
         &harness,
         &rotation,
         activation_height,
         &fixture.initial_council_config,
     )?;
-    mine_to(&harness, activation_height).await?;
+    harness.mine_to(activation_height).await?;
 
     let enacted = administration_state(&harness)?;
     anyhow::ensure!(
@@ -292,7 +292,7 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
         "administrator-authorized cancel must not consume council sequence"
     );
 
-    mine_to(&harness, activation_height + 1).await?;
+    harness.mine_to(activation_height + 1).await?;
     let tip = harness.get_chain_tip().await?;
     anyhow::ensure!(
         tip > activation_height,
@@ -462,18 +462,6 @@ async fn submit_action(
     let reveal = harness.build_envelope_tx(action.tag(), payload).await?;
     let block_hash = harness.submit_and_mine_tx(&reveal).await?;
     Ok(harness.client.get_block_height(&block_hash).await?)
-}
-
-async fn mine_to(harness: &AsmTestHarness, target_height: u64) -> anyhow::Result<()> {
-    let tip = harness.get_chain_tip().await?;
-    let _ = harness
-        .mine_blocks(target_height.saturating_sub(tip) as usize)
-        .await?;
-    anyhow::ensure!(
-        harness.get_chain_tip().await? == target_height.max(tip),
-        "mining must end at the requested measured height"
-    );
-    Ok(())
 }
 
 fn administration_state(harness: &AsmTestHarness) -> anyhow::Result<AdministrationSubprotoState> {
