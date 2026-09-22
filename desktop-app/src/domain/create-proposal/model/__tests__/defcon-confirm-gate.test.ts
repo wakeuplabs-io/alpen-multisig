@@ -45,10 +45,9 @@ function issuesOn(
 	return result.error.issues.filter((issue) => issue.path[0] === field).length
 }
 
-// AC 5 — the same accepted/rejected list as the pure matcher in defcon-copy.test.ts, but
-// through the schema: each level accepts its own string (and the case variants), refuses the
-// near-misses the Edge Cases name, and a trim() or a different matcher inside validateDefcon
-// would fail here, not only in the pure-function suite.
+// AC 5 — through the schema, the only caller of the matcher: each level accepts its own string
+// (and the case variants) and refuses the near-misses the Edge Cases name, so a trim() or a
+// different matcher inside validateDefcon fails here.
 for (const level of ['defcon_1', 'defcon_3'] as const) {
 	const confirmation = DEFCON_COPY[level].confirmation
 	for (const accepted of [confirmation, confirmation.toLowerCase(), 'Defcon' + confirmation.slice(6)]) {

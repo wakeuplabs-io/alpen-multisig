@@ -2,9 +2,8 @@
 //
 // `inferProposalTypeLabel` is a chain of `if`s ending in `return 'Unknown'`, so a missing arm is
 // not a build failure: it is a dashboard, a detail view and a sign-screen header that all name the
-// action wrongly. It has two silent failure modes and both are asserted here — the arm left out
-// (`Unknown`) and the arm copied from the line above it (`Defcon 1`), which would print the
-// immediate lever's name over the timelocked one.
+// action wrongly. Its two silent failure modes — the arm left out (`Unknown`) and the arm copied
+// from the line above it — are both caught by asserting the exact label.
 
 import assert from 'node:assert/strict'
 import { inferProposalTypeLabel } from '../proposal-type-label.ts'
@@ -15,13 +14,11 @@ function proposal(actionType: ActionType, kind: ProposalKind = 'update', authori
 }
 
 assert.equal(inferProposalTypeLabel(proposal('defcon_3')), 'Defcon 3')
-assert.notEqual(inferProposalTypeLabel(proposal('defcon_3')), 'Defcon 1')
-assert.notEqual(inferProposalTypeLabel(proposal('defcon_3')), 'Unknown')
 
 assert.equal(inferProposalTypeLabel(proposal('defcon_1')), 'Defcon 1')
 
-// A cancel is named by what it is, never by the action hex it wraps — the rule Phase 7 leans on
-// once the council can cancel a queued Defcon 3. The offline route sets `kind` from the decoded
+// A cancel is named by what it is, never by the action hex it wraps — the rule the council's
+// cancel of a queued Defcon 3 leans on. The offline route sets `kind` from the decoded
 // actionType, so the `kind === 'cancel'` arm is enough on every path.
 assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
 
@@ -29,15 +26,12 @@ assert.equal(inferProposalTypeLabel(proposal('defcon_3', 'cancel')), 'Cancel')
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'sequencer_manager')), 'Sequencer update')
 assert.equal(inferProposalTypeLabel(proposal('multisig_update', 'update', 'strata_admin')), 'Signer update')
 
-// Security Council signer update (V3) Phase 1 — the highest-value assertion in the phase. A
-// council rotation's proposal authority IS `strata_admin` (the existing `multisig_update` arm
+// A council rotation's proposal authority IS `strata_admin` (the existing `multisig_update` arm
 // above derives its label from that same authority), so passing `strata_admin` explicitly here
 // proves the new label comes from `actionType`, not from a copy of the authority-branching logic.
 assert.equal(
 	inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')),
 	'Security Council signer update',
 )
-assert.notEqual(inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')), 'Unknown')
-assert.notEqual(inferProposalTypeLabel(proposal('council_signer_update', 'update', 'strata_admin')), 'Signer update')
 
 console.log('proposal-type-label: all assertions passed.')
