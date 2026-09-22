@@ -23,7 +23,7 @@ export type ProposalActions = {
 	canCancel: boolean
 }
 
-export type CancelableInput = {
+type CancelableInput = {
 	isCancelable: boolean
 }
 

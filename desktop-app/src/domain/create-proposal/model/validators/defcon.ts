@@ -1,7 +1,7 @@
 import { DEFCON_COPY, matchesDefconConfirmation, type DefconLevel } from '@/lib/defcon-copy'
 import type { ActionValidator } from './types'
 
-export function defconConfirmationError(level: DefconLevel): string {
+function defconConfirmationError(level: DefconLevel): string {
 	return `Type must match '${DEFCON_COPY[level].confirmation}' exactly (case-insensitive).`
 }
 

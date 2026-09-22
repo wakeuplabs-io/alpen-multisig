@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { buildDefconActionHex } from '@/api/action-builder'
 import type { DefconLevel } from '@/lib/defcon-copy'
 
-export type DefconActionHex = {
+type DefconActionHex = {
 	actionHex: string | null
 	error: string | null
 }
