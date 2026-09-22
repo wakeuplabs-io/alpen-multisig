@@ -50,20 +50,12 @@ pub async fn get_multisig_config(
     let parsed = Authority::from_wire(authority.trim())
         .map_err(|e| format!("invalid authority `{}`: {e}", authority))?;
 
-    let role = match parsed {
-        Authority::StrataAdmin => AuthRole::StrataAdministrator,
-        Authority::SequencerManager => AuthRole::StrataSequencerManager,
-        Authority::AlpenAdmin => AuthRole::AlpenAdministrator,
-        Authority::SecurityCouncil => AuthRole::StrataSecurityCouncil,
-        // Listed rather than caught by `_`: a catch-all is how the council reached this arm
-        // silently in the first place, and the next authority added should be a compile error.
-        Authority::PayoutAdmin => {
-            return Err(format!(
-                "authority `{}` is not supported in the desktop app yet",
-                parsed.as_str()
-            ));
-        }
-    };
+    let role = AuthRole::for_authority(parsed).ok_or_else(|| {
+        format!(
+            "authority `{}` is not supported in the desktop app yet",
+            parsed.as_str()
+        )
+    })?;
 
     let rpc_url = node_config
         .0

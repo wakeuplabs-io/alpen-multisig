@@ -9,6 +9,7 @@ use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
+use crate::domain::auth::AuthRole;
 use crate::domain::authority::Authority;
 
 /// Returns true when admin state satisfies the post-conditions of `action_hex`.
@@ -40,7 +41,7 @@ pub fn is_multisig_update_enacted_in_admin_state(
     };
 
     let authorizing_role = update.required_role();
-    let session_role = authority_to_role(authority)?;
+    let session_role = AuthRole::try_for_authority(authority)?.to_upstream_role();
     if session_role != authorizing_role {
         return Err(format!(
             "action `{}` must be authorized by `{authorizing_role}`, but the session is `{session_role}`",
@@ -180,22 +181,6 @@ fn multisig_update_post_conditions_met(
         }
     }
     true
-}
-
-fn authority_to_role(authority: Authority) -> Result<Role, String> {
-    // Exhaustive for the same reason as its twin in `asm_role_membership`: the council sat in a
-    // catch-all error arm here for four phases, and a new authority upstream should stop the
-    // build rather than surface as a runtime failure.
-    match authority {
-        Authority::StrataAdmin => Ok(Role::StrataAdministrator),
-        Authority::SequencerManager => Ok(Role::StrataSequencerManager),
-        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
-        // No ASM role upstream.
-        Authority::PayoutAdmin => Err(format!(
-            "authority `{authority:?}` is not mapped to ASM role authorization yet"
-        )),
-    }
 }
 
 #[cfg(test)]
