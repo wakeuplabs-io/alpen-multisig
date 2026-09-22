@@ -222,8 +222,7 @@ mod tests {
     }
 
     /// The Payout Admin is the remaining authority with no ASM role upstream, and so the one this
-    /// invariant can still be stated with — the Security Council, which used to stand here, is
-    /// mapped as of Phase 3.
+    /// invariant can still be stated with.
     #[tokio::test]
     async fn test_auth_verify_unmapped_authority_is_fail_closed() {
         let app = test_app();

@@ -28,7 +28,7 @@ const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
  * trust.
  *
  * The full signing message is not here: nothing is signed on this screen. It is on the preview and
- * the sign view, where the signature is given (V4 Phase 4 §2).
+ * the sign view, where the signature is given.
  */
 export function SafeHarborAddressFormFields({ safeHarbor, isLoadingSafeHarbor }: Props) {
 	const {

@@ -69,9 +69,6 @@ pub(crate) fn test_fixture_safe_harbor_address_action_hex() -> String {
 }
 
 /// Valid `action_hex` for a Defcon 1 update — the action upstream hardcodes to depth `0`.
-///
-/// Test-only: the desktop cannot build this action until Phase 3. See
-/// docs/specs/security-council-defcon-phase-2.md §7.
 #[cfg(test)]
 pub(crate) fn test_fixture_defcon_1_action_hex() -> String {
     use ssz::Encode;
@@ -82,7 +79,7 @@ pub(crate) fn test_fixture_defcon_1_action_hex() -> String {
     hex::encode(action.as_ssz_bytes())
 }
 
-/// Test-only fixture for Defcon 3 enactment and cancel paths in later phases.
+/// Valid `action_hex` for a Defcon 3 update — timelocked, so it has a cancel window.
 #[cfg(test)]
 pub(crate) fn test_fixture_defcon_3_action_hex() -> String {
     use ssz::Encode;

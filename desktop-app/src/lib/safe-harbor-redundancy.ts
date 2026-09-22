@@ -41,7 +41,7 @@ const HARBOR_ACTIVATING_ACTIONS: readonly ActionType[] = ['defcon_1', 'defcon_3'
  * backend computes the height once, non-fatally, when the reveal confirms, and never retries. Such
  * a row is neither the activator nor redundant.
  *
- * That exclusion costs a badge V1 used to show, and the trade is deliberate. If the proposal that
+ * That exclusion costs a badge an ordering by seqno would show, and the trade is deliberate. If the proposal that
  * really activated the harbor is the one whose height failed to compute, it drops out of the
  * ranking, the next-lowest known height is named the activator, and a proposal that genuinely
  * burned a sequence number for nothing goes unbadged. What it buys is that the badge never says
@@ -83,8 +83,7 @@ export function changedNothingActionIds(proposals: readonly HarborActivationCand
  *
  * That "or came up after it" is the residual ambiguity: a rotation genuinely superseded by a rival
  * action, with the harbor raised afterwards, reads as swallowed. The attribution is then wrong and
- * the advice still right — a replacement really would be discarded — which is the trade recorded in
- * docs/specs/security-council-safe-harbor-address-phase-3.md §4.1.
+ * the advice still right — a replacement really would be discarded — a trade accepted on purpose.
  *
  * The action type is load-bearing and not a formality: every other action is applied whatever the
  * harbor is doing, and a superseded Defcon really did lose its sequence number to something else.

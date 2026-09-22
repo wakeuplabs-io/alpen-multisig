@@ -114,7 +114,7 @@ assert.equal(proposalSendState(proposal('superseded', 'idle', 0)).kind, 'superse
 
 // ── Superseded because the harbor froze the destination, not because of a race ──
 //
-// The one path V4 exists to describe. A rotation submitted after the safe harbor is up is
+// The swallowed safe harbor rotation. A rotation submitted after the safe harbor is up is
 // accepted on chain -- the signature verifies, the sequence number is consumed, the queue entry
 // drains -- and `SafeHarbour::update_address` refuses the change and returns a boolean the bridge
 // subprotocol discards. Nothing raced it. Saying otherwise sends the signer to build a

@@ -44,7 +44,7 @@ export type BroadcastPhase = 'idle' | 'preparing' | 'confirming' | 'broadcasting
  * The manual/imported bundle path has no `Proposal` and no `enacted` status to reconstruct
  * around — every bundle reviewed here is unsigned, pre-broadcast — so `buildSignerSetChange` is
  * always called with `isEnacted: false`. A failed config read for the target falls back to
- * suppression, matching `useDecodedProposal` (§4.9): never render against some other config.
+ * suppression, matching `useDecodedProposal`: never render against some other config.
  */
 function buildManualTableOrNull(
 	action: Extract<DecodedAction, { kind: 'multisig_update' }>,
@@ -126,7 +126,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 		setDecodedData((prev) => ({ ...prev, isLoading: true }))
 
 		// `allSigners` and `requiredSignatures` must always read the declared authority — never the
-		// target of the decoded action — mirroring `useDecodedProposal` (§4.9). This first read is
+		// target of the decoded action — mirroring `useDecodedProposal`. This first read is
 		// unchanged by the retarget below: same request, same timing.
 		void Promise.all([decodeActionHex(importData.actionHex), getMultisigConfig(importData.authority)]).then(
 			([actionRes, ownConfigRes]) => {
@@ -164,7 +164,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 					return
 				}
 
-				// Retarget (§4.9): the decoded action modifies an authority other than the one declared
+				// Retarget: the decoded action modifies an authority other than the one declared
 				// on import — a council rotation. The table renders against the *target's* config, read
 				// here, conditionally, only when it differs.
 				void getMultisigConfig(target).then((targetConfigRes) => {

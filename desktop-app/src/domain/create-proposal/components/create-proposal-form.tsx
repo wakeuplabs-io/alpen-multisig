@@ -55,7 +55,7 @@ type Props = {
 	onReauthenticate: () => Promise<void>
 }
 
-// Names the target in the unavailable-config message (§4.8) — a signer told "the config could
+// Names the target in the unavailable-config message — a signer told "the config could
 // not be read" with no target named has no idea which read to retry.
 const TARGET_AUTHORITY_LABELS: Record<MultisigTargetAuthority, string> = {
 	strata_admin: 'Strata Administrator',
@@ -153,7 +153,7 @@ export function CreateProposalForm({
 	const isSignerUpdate = isSignerUpdateActionType(actionType)
 
 	// Constraint 2: the target is decided by the action, never the session. `authority` here is
-	// the session the screen already resolved, not a fresh `useSession()` call (§4.3).
+	// the session the screen already resolved, not a fresh `useSession()` call.
 	const targetAuthority = multisigTargetAuthority(actionType, authority)
 	const { multisigConfig, multisigConfigVersion, isLoadingConfig } = useMultisigConfig(targetAuthority)
 
@@ -197,7 +197,7 @@ export function CreateProposalForm({
 		void trigger('threshold')
 	}, [isSignerUpdate, signerKeysDigest, trigger])
 
-	// Separates a target switch from a same-target refetch (§4.5): `keysToRemove` and `threshold`
+	// Separates a target switch from a same-target refetch: `keysToRemove` and `threshold`
 	// already mirror the target's config on every version bump, but `keysToAdd` must only be
 	// cleared when the target actually changed — otherwise keys a signer chose against the
 	// previous target would silently be reinterpreted as adds against the new one.

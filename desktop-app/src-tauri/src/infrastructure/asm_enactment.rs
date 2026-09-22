@@ -35,7 +35,6 @@ pub fn is_multisig_update_enacted_in_admin_state(
 
     // The target lookup runs before the authorization guard: reversed, an `AsmStfVk` under an
     // authority that does not authorize it would go from `Ok(false)` to `Err`.
-    // See docs/specs/security-council-signer-update-phase-2.md §10.3.
     let Some((target_role, config_update)) = multisig_config_update_target(&action) else {
         return Ok(false);
     };
@@ -75,7 +74,7 @@ pub fn is_multisig_update_enacted_in_admin_state(
 /// The target belongs to the action variant and to nothing else — see Constraint 2. Upstream
 /// applies tx type 15 to `Role::StrataSecurityCouncil` (`handler.rs:145-147`) while authorizing it
 /// with `Role::StrataAdministrator` (`updates.rs:64`); for the three self-rotating updates the two
-/// coincide, which is why nothing needed this distinction before V3.
+/// coincide.
 ///
 /// `None` for every action that is not a multisig config update — the caller answers `Ok(false)`,
 /// which is what `AsmStfVk` has always relied on.

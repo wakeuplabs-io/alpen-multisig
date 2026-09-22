@@ -1,7 +1,6 @@
 //! Proposal business logic — CRUD operations over the repository trait.
 //!
 //! Functions receive a `ProposalRepository` as a parameter (dependency injection).
-//! No authentication or quorum detection — those are added in future slices.
 
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
@@ -793,7 +792,6 @@ pub(crate) async fn create_cancel_proposal(
     // Cancelability is the target action's confirmation depth, never its authority: the Security
     // Council signs both Defcon 1 (depth 0) and Defcon 3 (timelocked). A zero-depth action is never
     // enqueued, so an on-chain cancel would fail with `UnknownAction`.
-    // See docs/specs/security-council-defcon-phase-2.md.
     let target_depth = lock_period_for_action(asm_rpc_url, &target.action_hex).await?;
     if target_depth == 0 {
         return Err(AppError::BadRequest(format!(

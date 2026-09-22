@@ -50,8 +50,7 @@ type KeyedDecodedProposalData = DecodedProposalData & {
 
 /**
  * Builds the Before/After table from a decoded action and the config it should read against, or
- * suppresses it (returns `null`) rather than guess. Suppression is Phase 1 behaviour, preserved
- * on purpose (§4.9): a failed config read for the *target* falls back here too, never to
+ * suppresses it (returns `null`) rather than guess: a failed config read for the *target* falls back here too, never to
  * rendering against some other config.
  */
 function buildTableOrNull(
@@ -96,7 +95,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
 		// always read the proposal's own authority, never the target of the action it decodes to
-		// (§4.9). This call is unchanged by the retarget below: same request, same timing, so the
+		//. This call is unchanged by the retarget below: same request, same timing, so the
 		// approval surface carries zero regression risk from this commit.
 		void Promise.all([decodeActionHex(proposal.actionHex), getMultisigConfig(proposal.authority)]).then(
 			([actionRes, ownConfigRes]) => {
@@ -168,7 +167,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					return
 				}
 
-				// Retarget (§4.9): the decoded action modifies an authority other than the proposal's
+				// Retarget: the decoded action modifies an authority other than the proposal's
 				// own (a council rotation, authored and persisted under `strata_admin`). The target is
 				// only known after the decode, so this second read is issued here, conditionally, and
 				// re-checks `cancelled` on its own — `allSigners` above is untouched by it.

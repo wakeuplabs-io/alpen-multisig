@@ -1,7 +1,5 @@
-// V3 Phase 3 — the create-proposal form retargets to the Security Council (Constraint 2).
-//
-// Nine claims, pinned in `docs/specs/security-council-signer-update-phase-3.md` §7.1 and §5. The
-// fixture's two signer sets differ in both membership and cardinality on purpose: with equal
+// The create-proposal form retargets to the Security Council
+// (docs/specs/security-council-signer-update.md Constraint 2, AC 1, 1a, 3, 3a, 3b). The fixture's two signer sets differ in both membership and cardinality on purpose: with equal
 // sizes, half of these assertions would pass by accident.
 
 import assert from 'node:assert/strict'
@@ -65,7 +63,7 @@ function issuesOn(
 
 // Claim 1 (AC 1) — the council entry joins the administrator's menu, after signer_update and
 // before vk_update, and the default selection does not move: it is the first entry, unchanged.
-// V4 appended `safe_harbour_address_update` at the end for the same reason, which is why the whole
+// `safe_harbour_address_update` goes at the end for the same reason, which is why the whole
 // order is asserted rather than only the council entry's presence.
 assert.deepEqual(
 	getActionTypeOptions('strata_admin').map((option) => option.actionType),

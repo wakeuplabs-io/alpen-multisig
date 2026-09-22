@@ -6,7 +6,7 @@ import { compressedPubKeyHexPattern } from './types'
 // and remove sets, `apply_update` retains the same signers and re-sets the same threshold, and
 // `handle_action` advances `last_seqno` regardless. The on-chain result is a *successful* no-op —
 // post-conditions match, and the proposal reports `Enacted` for an update that changed nothing.
-// That is what makes this a safety rule rather than hygiene (§4.7).
+// That is what makes this a safety rule rather than hygiene.
 export const NO_OP_UPDATE_MESSAGE =
 	'This update does not change the signer set or the threshold. A no-op still enacts successfully on chain.'
 

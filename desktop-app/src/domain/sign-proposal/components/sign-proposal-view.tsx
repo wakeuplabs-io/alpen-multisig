@@ -27,7 +27,7 @@ type SignProposalViewProps = {
 	deviceDisplay: DeviceSigningDisplay
 	/**
 	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
-	 * not already print it. Rendered for a safe harbor rotation only (V4 Phase 4 §2.2).
+	 * not already print it. Rendered for a safe harbor rotation only.
 	 */
 	signingMessage: string | null
 	signResult: SignSighashResult | null

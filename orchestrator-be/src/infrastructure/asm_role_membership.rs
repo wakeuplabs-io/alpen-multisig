@@ -71,7 +71,7 @@ pub(crate) async fn threshold_for_authority(
 ///
 /// Resolved from the action, never from the authority: the Security Council signs both Defcon 1
 /// (immediate) and Defcon 3 (timelocked), so no per-authority mapping can answer for it. Read live
-/// on every call — see docs/specs/security-council-defcon-phase-1.md.
+/// on every call, never cached or defaulted — see docs/specs/security-council.md §5.3.
 ///
 /// Returns `0` for actions that bypass the queue and apply immediately.
 pub(crate) async fn lock_period_for_action(
@@ -193,14 +193,12 @@ pub(crate) async fn update_id_in_queue_for_action(
 /// The role that may sign an update is upstream's table (`UpdateTxType::authorized_role`), not a
 /// copy of ours, so a new update variant is gated correctly here the moment it exists. Reads no
 /// chain state — hence sync, unlike its neighbours in this module.
-///
-/// See docs/specs/security-council-defcon-phase-3.md §5.
 pub(crate) fn require_authorized_for_action(
     authority: Authority,
     action: &MultisigAction,
 ) -> Result<(), AppError> {
     // A cancel carries no `UpdateTxType` and so no authorized role. Cancels are created through
-    // their own endpoint, gated on the target's confirmation depth (Phase 2).
+    // their own endpoint, gated on the target's confirmation depth.
     let MultisigAction::Update(update) = action else {
         return Ok(());
     };
@@ -220,11 +218,9 @@ pub(crate) fn require_authorized_for_action(
 
 /// The one answer this crate gives to "which ASM role is this authority".
 ///
-/// Listed exhaustively rather than caught by `_`, for the reason its desktop twin already
-/// records: a catch-all is how the council reached an error arm long after it had been mapped
-/// everywhere else, and it is how the enactment module kept a third, staler answer of its own
-/// until slice V3. The next authority added upstream should stop the build rather than surface
-/// as a runtime refusal.
+/// Listed exhaustively rather than caught by `_`: a catch-all is how the council once sat in an
+/// error arm long after it had been mapped everywhere else. The next authority added upstream
+/// should stop the build rather than surface as a runtime refusal.
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
@@ -579,8 +575,7 @@ mod tests {
         let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
         depths.defcon3 = 7;
 
-        // Tripwire for the composition in docs/specs/security-council-defcon-phase-1.md §4: we hold
-        // no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
+        // Tripwire: we hold no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
         // configurable depth. Every field is non-zero, so `None` here can only come from the
         // hardcoded arm.
         assert!(depths.get(UpdateTxType::Defcon1).is_none());

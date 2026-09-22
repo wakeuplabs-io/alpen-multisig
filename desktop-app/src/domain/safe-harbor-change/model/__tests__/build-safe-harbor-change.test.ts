@@ -1,4 +1,4 @@
-// V4 Phase 2 §4.2 — the destination change shown to a signer who never opened the create form.
+// The safe harbor destination change shown to a signer who never opened the create form.
 //
 // Three claims, all of them about what the reader is left with rather than about markup.
 

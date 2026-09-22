@@ -104,9 +104,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         // Security Council actions. Explicit arms rather than a catch-all: without them these
         // would fall through to the multisig-config branch, which returns `Ok(false)` for an
         // unrecognized variant — a Defcon proposal would silently never reach `Enacted`. All
-        // four have post-conditions now. See docs/specs/security-council.md,
-        // docs/specs/security-council-defcon-3-phase-4.md and
-        // docs/specs/security-council-safe-harbor-address-phase-1.md.
+        // four have post-conditions now. See docs/specs/security-council.md §3.2.
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
@@ -178,7 +176,6 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             // The target lookup runs before the authorization guard: reversed, an `AsmStfVk`
             // under a non-administrator authority would go from `Ok(false)` to `Err`, and
             // `reconcile_one` turns every `Err` into a per-proposal warning that never resolves.
-            // See docs/specs/security-council-signer-update-phase-2.md §10.3.
             let Some((target_role, config_update)) = multisig_config_update_target(&action) else {
                 return Ok(false);
             };
@@ -331,7 +328,7 @@ pub(crate) fn action_needs_chain_tip(action_hex: &str) -> bool {
 /// The target belongs to the action variant and to nothing else — see Constraint 2. Upstream
 /// applies tx type 15 to `Role::StrataSecurityCouncil` (`handler.rs:145-147`) while authorizing it
 /// with `Role::StrataAdministrator` (`updates.rs:64`); for the three self-rotating updates the two
-/// coincide, which is why nothing needed this distinction before V3.
+/// coincide.
 ///
 /// `None` for every action that is not a multisig config update — the caller answers `Ok(false)`,
 /// which is what `AsmStfVk` has always relied on.
@@ -865,7 +862,7 @@ mod tests {
         );
     }
 
-    /// The three authorities shipped before V3 self-rotate: target and authorizing role coincide,
+    /// The three self-rotating authorities: target and authorizing role coincide,
     /// so reading both from one role must answer exactly as it always did.
     #[test]
     fn an_administrator_signer_update_reads_one_role_for_all_three_terms() {
