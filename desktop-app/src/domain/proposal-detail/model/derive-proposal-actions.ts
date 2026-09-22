@@ -24,15 +24,19 @@ export type ProposalActions = {
 }
 
 type CancelableInput = {
+	status: ProposalStatus
+	broadcastStatus: BroadcastStatus
 	isCancelable: boolean
 }
 
 // Whether to offer starting a cancel against this proposal.
 //
-// Answered by the backend from live confirmation depth — the same gate
-// `create_cancel_proposal` uses. The desktop holds no authority allow-list.
+// Two halves. Whether the action can be cancelled at all is the backend's answer from live
+// confirmation depth — the same gate `create_cancel_proposal` uses; the desktop holds no authority
+// allow-list. Whether there is anything to cancel yet is the chain's: a cancel names the update's
+// id in the ASM queue, and the update is queued only once its reveal confirms.
 export function canCancelProposal(proposal: CancelableInput): boolean {
-	return proposal.isCancelable
+	return proposal.isCancelable && proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
 }
 
 // Single source of truth for signer-facing action availability on a proposal.
