@@ -1,8 +1,8 @@
 # V4 Phase 2 — The cancel, the detail view, the message panel and the e2e
 
-> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](../../../specs/security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](../../../specs/security-council-safe-harbor-address-implementation.md)
 > §4 Phase 2. This document is that phase at implementation detail, and §9 records where it
 > supersedes it.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
@@ -45,7 +45,7 @@ a list of authorities. Read at the pin:
 
 **So the deliverable here is tests, not code.** Two, both in `orchestrator-be`: a cancel of a tx-14
 target is admitted for a `strata_admin` session, and refused for a `security_council` one
-([AC 10](./security-council-safe-harbor-address.md#10-the-cancel-is-signed-by-the-strata-administrator)).
+([AC 10](../../../specs/security-council-safe-harbor-address.md#10-the-cancel-is-signed-by-the-strata-administrator)).
 The second is the one that matters — it is the segregation invariant on the cancel path, where V3
 found nothing pinned either.
 
@@ -83,7 +83,7 @@ The signer-set change is already split the way this needs to be split: a pure bu
 by the detail view and the cancel summary from one place.
 
 Each side carries **both forms of its destination — the address and its descriptor hex** — for the
-reason [Constraint 3](./security-council-safe-harbor-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
+reason [Constraint 3](../../../specs/security-council-safe-harbor-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
 gives: the device displays the descriptor, so the descriptor is what a signer can actually compare
 against the screen in front of them. Both values come from Rust — the proposed pair from
 `decode_action_hex`, the installed pair from `get_safe_harbor_status` — and neither is composed in
@@ -183,12 +183,12 @@ to the desktop.
 
 | Path | Asserts |
 |---|---|
-| **Enacted** | Queued at `reveal + depth` with the bridge's destination unchanged; at exactly `depth`, the destination is the proposed one, the administrator's `last_seqno` advanced, and **`is_activated()` is unchanged** ([AC 7a](./security-council-safe-harbor-address.md#7a-activation-is-untouched)) |
+| **Enacted** | Queued at `reveal + depth` with the bridge's destination unchanged; at exactly `depth`, the destination is the proposed one, the administrator's `last_seqno` advanced, and **`is_activated()` is unchanged** ([AC 7a](../../../specs/security-council-safe-harbor-address.md#7a-activation-is-untouched)) |
 | **Cancelled** | Cancel inside the window, mine past the original activation height: the queue is empty and the destination is still the original one |
 | **Swallowed** | Fire a Defcon 1 first, then submit the rotation: it is accepted, the seqno advances, the queue drains — and the destination **does not change** |
 
 The swallowed path is the only automated proof of
-[Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
+[Constraint 1](../../../specs/security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
 against a real chain, and it exists nowhere — upstream included. It needs both key sets, since the
 Defcon is council-authorized and the rotation is administrator-authorized; the fixture in
 `e2e_council_rotation.rs` already carries that shape and is the model.

@@ -7,11 +7,10 @@ the SSOT for *what* V3 must do. This document is only *how* it gets built, and n
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E7.
 
-**Status:** Closed. All four planned phases implemented, automated checks green, and the manual walk
-run on 2026-09-09 for both the enacted and the cancelled path. Phase 5 was **not spent as code**: the
-walk found no defect in what V3 shipped, and the copy and signer-safety hardening it surfaced is
-recorded as debt in [§6](#6-known-debt-this-slice-does-not-take) rather than fixed here. AC 13's
-manual/external-RPC evidence is deferred there too, and does not block V4.
+**Status:** Closed — four phases shipped, PRs #536, #541, #542, #544; manual walk 2026-09-09 found no
+defect, so Phase 5's reserve is unspent. The hardening it surfaced and AC 13's evidence are debt in
+[§6](#6-known-debt-this-slice-does-not-take). Contract:
+[`security-council-signer-update.md`](./security-council-signer-update.md)
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -43,10 +42,10 @@ them made the remaining generic machinery action-shaped rather than authority-sh
 
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
-| 1 ✅ | `council_signer_update` is a readable type — [phase spec](./security-council-signer-update-phase-1.md) | AC 5; [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) (the Rust half) | `src-tauri`, `desktop-app/src/api` |
-| 2 ✅ | Enactment reads two roles — [phase spec](./security-council-signer-update-phase-2.md) | AC 7, AC 7a; [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | `orchestrator-be`, `src-tauri` |
-| 3 ✅ | The form targets the council — [phase spec](./security-council-signer-update-phase-3.md) | AC 1, 1a, 2, 3, 3a, 3b, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
-| 4 ✅ | The cancel and the e2e — [phase spec](./security-council-signer-update-phase-4.md) | AC 6, 7b, 8, 9, 10; AC 13 implemented, its manual evidence deferred to [§6](#6-known-debt-this-slice-does-not-take) | `e2e-tests`, `orchestrator-be` |
+| 1 ✅ | `council_signer_update` is a readable type — [phase spec](../archive/features/security-council/security-council-signer-update-phase-1.md) | AC 5; [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) (the Rust half) | `src-tauri`, `desktop-app/src/api` |
+| 2 ✅ | Enactment reads two roles — [phase spec](../archive/features/security-council/security-council-signer-update-phase-2.md) | AC 7, AC 7a; [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | `orchestrator-be`, `src-tauri` |
+| 3 ✅ | The form targets the council — [phase spec](../archive/features/security-council/security-council-signer-update-phase-3.md) | AC 1, 1a, 2, 3, 3a, 3b, 4, 11, 12; [Constraints 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session) and [3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions) | `desktop-app`, `src-tauri` |
+| 4 ✅ | The cancel and the e2e — [phase spec](../archive/features/security-council/security-council-signer-update-phase-4.md) | AC 6, 7b, 8, 9, 10; AC 13 implemented, its manual evidence deferred to [§6](#6-known-debt-this-slice-does-not-take) | `e2e-tests`, `orchestrator-be` |
 | 5 — | Reserve, not spent — the manual walk found no defect in what V3 shipped; the hardening it surfaced is recorded in [§6](#6-known-debt-this-slice-does-not-take) | — | — |
 
 ## 3. Architecture

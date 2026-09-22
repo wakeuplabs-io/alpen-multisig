@@ -1,43 +1,33 @@
 # Security Council — Master Plan
 
-**Status:** V1 (Defcon 1), V2 (Defcon 3, with the cancel absorbed from V5) and V3 (Security Council
-signer update) shipped end to end, V3's manual walk run on 2026-09-09 for both the enacted and the
-cancelled path with AC 13's external-RPC evidence deferred as recorded debt; V4 written and planned,
-implementation pending
-**PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5
-**Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13
+**Status:** All four slices shipped — V1 (Defcon 1), V2 (Defcon 3 and its cancel), V3 (Security
+Council signer update), V4 (Safe Harbor address update) — each closed out after its own manual walk.
+Stage 6 (close-out: tests, code, docs, compliance audit, issue #117) in progress  
+**PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) (current snapshot) §3.1.4, §5.1, §5.2.2, §5.5  
+**Stories:** [`story-map.md`](../3-stories/story-map.md) US-E5, US-E7, US-E12, US-E13, US-E14  
 **Blocker it closes:** issue #117 — *Pending definition of actions and roles*
 
 This document is the SSOT for the scope, staging and slice status of the Security Council feature.
-Per-slice functional contracts are separate siblings (`security-council-defcon.md`,
-`security-council-signer-update.md`, `security-council-safe-harbor-address.md`) and are written
-only once a slice is proven implementable — see [Stage 4](#6-stage-board).
+Each slice has a functional contract and a build plan beside it — see [§7](#7-slice-board). The
+per-phase delivery specs are history, in
+[`archive/features/security-council/`](../archive/features/security-council/).
 
 All upstream claims below were read from the `asm` submodule at tags `v0.1-alpha.11` and `v0.3.1`,
-with file and line references. Where the two tags differ, [§7](#7-upstream-version-notes) says so.
+with file and line references. Where the two tags differ, [§7.1](#71-upstream-version-notes) says so.
 
 ---
 
 ## 1. Why this was blocked, and why it no longer is
 
-Security Council is the last of the five PRD multisig authorities with no implementation. It was
-deferred for a good reason: upstream had nothing to build against.
-[`08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md) recorded
-*"Security Council — 0%, role not defined anywhere"* and *"Defcon 1 — Blocked, zero references to
-'defcon' in the Alpen codebase"*, and
-[`19-asm-bump-impact-assessment.md`](../2-discovery/19-asm-bump-impact-assessment.md) confirmed the
-same after the last ASM bump. The 2026-05-22 comprehensive audit records Defcon 1/3 as **FAIL —
-not implemented**.
-
-**Those statements are stale.** `alpenlabs/asm` PR #81 (*feat(admin): add Security Council and
-Defcon actions*, merge commit `3d45351`, merged 2026-05-30) implemented the role and all four
-actions this feature needs, complete. They were invisible from here because the workspace was
-pinned at `e0461f8` (2026-05-11), 19 commits before that merge. The pin has since moved to
-`v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) and the
-capability is proven against a regtest ASM — see [§3.3](#33-go-no-go-result).
-
-The historical documents are not edited; they were true when written. They are routed around
-instead, by the Security Council row in the SSOT table of [`docs/README.md`](../README.md).
+Security Council was the last of the five PRD multisig authorities with no implementation, because
+upstream had nothing to build against: the discovery notes
+([`08-alpen-crate-prd-coverage.md`](../2-discovery/08-alpen-crate-prd-coverage.md),
+[`19-asm-bump-impact-assessment.md`](../2-discovery/19-asm-bump-impact-assessment.md)) and the
+2026-05-22 audit record it as not implementable. `alpenlabs/asm` PR #81 (merge `3d45351`,
+2026-05-30) then added the role and all four actions; the workspace pin moved to `v0.1-alpha.11`
+([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) and the capability was proven
+against a regtest ASM ([§3.3](#33-go--no-go-result)). The historical documents are not edited; the
+Security Council row in [`docs/README.md`](../README.md) routes around them.
 
 ---
 
@@ -343,33 +333,42 @@ Neither is an open question any more; both were settled while this document was 
 | 0 | Branch off `develop`; triage the two prior branches | Done |
 | 1 | High-level discovery; this document | Done |
 | 2 | ASM pin decision, with compile evidence → [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | Done — `v0.1-alpha.11` |
-| 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go-no-go-result) |
+| 3 | Upstream capability evaluation — **go/no-go gate** | Done — **GO**, see [§3.3](#33-go--no-go-result) |
 | 3.5 | Close-out of 0–3: absorb `develop`, retire the "blocked on upstream" claims across the docs | Done |
 | 4 | Functional specs — Defcon first (V1, then V2 with the cancel it absorbed), then the rest | Done — V1: [`security-council-defcon.md`](./security-council-defcon.md); V2: [`security-council-defcon-3.md`](./security-council-defcon-3.md); V3: [`security-council-signer-update.md`](./security-council-signer-update.md); V4: [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md) |
 | 5 | Vertical slices V1–V4 | Done — V1, V2, V3 and V4 shipped, each closed out after its own manual walk; V3's AC 13 evidence and V4's expiry-countdown finding deferred as recorded debt |
-| 6 | Close-out: compliance audit, issue #117 | Pending |
-
-Stage 3.5 was the documentation debt the earlier stages left behind. `develop` was absorbed into the
-branch (28 commits: v0.2.6 and the Admin ID program), and every live document that still called the
-Security Council *blocked on upstream* now says what is actually true — it is not built yet, and the
-protocol support has been proven. What remains historical stays historical:
-[`2-discovery/`](../2-discovery/) is Phase 1 evidence and is covered by a routing row in
-[`docs/README.md`](../README.md) instead of being rewritten. Corrections that this document had
-parked for Stage 6 — the story map, the retired stories — were made here, so Stage 6 is now only the
-compliance audit and issue #117.
+| 6 | Close-out: tests, code, docs, compliance audit, issue #117 | In progress — tests (#570), code (#571), docs (this change); compliance audit and #117 next |
 
 ## 7. Slice board
 
 | Slice | End-to-end path | Status |
 |---|---|---|
-| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec written — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
-| V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec written — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **shipped**, all seven phases (PRs #524–#527 and #530–#532, plus this one), Phase 8 held in reserve |
+| V1 — Defcon 1 | Authenticate as a council signer → create → sign → quorum → broadcast → Enacted | Spec — [`security-council-defcon.md`](./security-council-defcon.md); build plan — [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md); **shipped**, all eight phases (PRs #505–#512) |
+| V2 — Defcon 3, with its cancel | Same path, timelocked, with an activation countdown, plus the council cancelling its own queued Defcon 3 (US-E14) | Spec — [`security-council-defcon-3.md`](./security-council-defcon-3.md); build plan — [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md); **shipped**, all seven phases (PRs #524–#527 and #530–#533), Phase 8's reserve unspent |
 | V3 — Security Council signer update | A Strata Admin signer rotates the council's membership and threshold (US-E7), with the standard Approved state and cancel | Spec — [`security-council-signer-update.md`](./security-council-signer-update.md); build plan — [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md); **shipped**, all four phases (PRs #536, #541, #542, #544) with Phase 5's reserve unspent; manual walk run 2026-09-09 on both the enacted and the cancelled path, AC 13's manual/external-RPC evidence deferred to the build plan's [§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take) |
-| V4 — Safe Harbor address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md); build plan — [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md); **shipped**, all three phases (PRs #548, #549, #550); manual walk run 2026-09-10 over the enacted, cancelled and swallowed paths, its five in-slice findings closed in Phase 3 and the expiry-countdown one filed separately; Phase 4 answers the #547 review (signing message on the signing screens, *Safe Harbor* on screen), walked 2026-09-15 |
+| V4 — Safe Harbor address update | Strata Admin sets the sweep destination (US-E5), with the standard Approved state and cancel | Spec — [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md); build plan — [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md); **shipped**, all four phases (PRs #548, #549, #550, #563); manual walk run 2026-09-10 over the enacted, cancelled and swallowed paths, its five in-slice findings closed in Phase 3 and the expiry-countdown one filed as #551; Phase 4 answers the #547 review (signing message on the signing screens, *Safe Harbor* on screen), walked 2026-09-15 |
 | ~~V5 — Defcon 3 cancel~~ | Council cancels its own queued Defcon 3 (US-E14) | **Absorbed into V2** — see [§7.3](#73-why-v5-was-absorbed-into-v2); delivered in V2's Phase 7 |
 
 V1 carries the shared spine (authority→role mapping, per-action lock period, enactment detection,
 codec, action builder, authentication, signer-safety UX), so every later slice is cheap.
+
+### 7.1 Upstream version notes
+
+The entire role/action/segregation model is **byte-identical** between `v0.1-alpha.11` and `v0.3.1`
+— PR #81 landed it complete and nothing since has changed it. The only API differences that reach
+us are `ThresholdConfigUpdate::new` → `try_new` (now fallible, via the `strata-common` v0.3.0
+cascade) and a split of `AdministrationTxParseError::MalformedTransaction` into two variants. Wire
+format, signing-message bytes, role assignments, confirmation-depth semantics and cancel semantics
+are the same at both tags.
+
+### 7.2 Coverage upstream does not have
+
+Upstream tests cover Defcon 1/3 propagation, the negative activation window, and wrong-role
+rejection for all four actions. They do **not** cover: cancelling a queued Defcon 3, an end-to-end
+`StrataSecurityCouncilMultisigUpdate`, or the council losing its signing ability after the
+Administrator rotates it. All three are ours now: `e2e_defcon_probe.rs` cancels a queued Defcon 3,
+and `e2e_council_rotation.rs` runs the rotation end to end and checks who can fire a Defcon after
+it.
 
 ### 7.3 Why V5 was absorbed into V2
 
@@ -386,22 +385,6 @@ the slices would mean opening the create menu, the lifecycle gates and their tes
 
 The V5 row is struck through rather than deleted, so the numbering other documents cite does not
 shift.
-
-### 7.1 Upstream version notes
-
-The entire role/action/segregation model is **byte-identical** between `v0.1-alpha.11` and `v0.3.1`
-— PR #81 landed it complete and nothing since has changed it. The only API differences that reach
-us are `ThresholdConfigUpdate::new` → `try_new` (now fallible, via the `strata-common` v0.3.0
-cascade) and a split of `AdministrationTxParseError::MalformedTransaction` into two variants. Wire
-format, signing-message bytes, role assignments, confirmation-depth semantics and cancel semantics
-are the same at both tags.
-
-### 7.2 Coverage upstream does not have
-
-Upstream tests cover Defcon 1/3 propagation, the negative activation window, and wrong-role
-rejection for all four actions. They do **not** cover: cancelling a queued Defcon 3, an end-to-end
-`StrataSecurityCouncilMultisigUpdate`, or the council losing its signing ability after the
-Administrator rotates it. Those three are the highest-value tests for us to write.
 
 ---
 

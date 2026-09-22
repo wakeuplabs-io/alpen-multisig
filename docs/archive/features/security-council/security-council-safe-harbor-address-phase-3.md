@@ -1,8 +1,8 @@
 # V4 Phase 3 — What the manual walk exposed
 
-> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](../../../specs/security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](../../../specs/security-council-safe-harbor-address-implementation.md)
 > §4 Phase 3, which reserved this phase without contents: "expect it to be about copy — how 'safe
 > harbor' reads to someone who has not read the PRD — and about how the destination is displayed."
 > Both halves turned out to be right, and one of them is not cosmetic.
@@ -67,7 +67,7 @@ which is correct, above this detail (`lib/proposal-send-state.ts:76-79`):
 No other action used it. *This* action used it. It was mined, the ASM accepted it, the signature
 verified, the queue entry drained, and `SafeHarbour::update_address` refused the change and returned
 a boolean the bridge subprotocol discards — the behaviour
-[Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
+[Constraint 1](../../../specs/security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
 is written about, and the reason `safe_harbor_address_enacted` decides on the destination rather
 than on the sequence number (`orchestrator-be/src/infrastructure/asm_enactment.rs:294-320`).
 
@@ -205,7 +205,7 @@ Each atomic, none repairing the one before it.
 The build plan §7 records that V1, V2 and V3 each needed a follow-up pull request for exactly this
 drift. It is avoidable here because Phase 3 is the last phase, so the four places move in commit 5:
 the `Status:` header of the contract, the `Status:` header of the build plan, and in
-[`security-council.md`](./security-council.md) the Stage board (§6) and the Slice board (§7).
+[`security-council.md`](../../../specs/security-council.md) the Stage board (§6) and the Slice board (§7).
 
 They record what is true: V4's three phases implemented, the walk of 2026-09-10 run with its findings
 closed, and the three verification items of §2 outstanding for a walk over this phase's own surfaces.

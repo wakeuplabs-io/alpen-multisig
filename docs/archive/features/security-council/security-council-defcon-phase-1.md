@@ -1,13 +1,13 @@
 # Security Council — Defcon 1 (V1), Phase 1: Per-action lock period
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 1. This document is that phase at implementation detail.
 
 **Closes:** AC 12, AC 12a, and
-[Constraint 1](./security-council-defcon.md#1-lock-period-is-per-action-never-per-authority).
+[Constraint 1](../../../specs/security-council-defcon.md#1-lock-period-is-per-action-never-per-authority).
 
 ## 1. The change in one sentence
 
@@ -224,8 +224,8 @@ not the same as the product being able to create it.
 
 ## 10. Verification
 
-`cargo test -p orchestrator-be`, then the full [`AGENTS.md`](../../AGENTS.md) pre-commit checklist.
+`cargo test -p orchestrator-be`, then the full [`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist.
 
 Review must additionally confirm the structural claim in §7: no caching of the depth anywhere on the
 path. End-to-end regtest verification belongs to the close-out of all six phases
-([build plan §5](./security-council-defcon-implementation.md#5-verification)).
+([build plan §5](../../../specs/security-council-defcon-implementation.md#5-verification)).

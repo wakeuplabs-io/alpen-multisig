@@ -1,9 +1,9 @@
 # Security Council — Defcon 1 (V1), Phase 4: Enactment detection
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 4. This document is that phase at implementation detail.
 
 **Closes:** AC 8.
@@ -224,7 +224,7 @@ the fixture decision, and it is the same cost every other arm in this module alr
 cargo test -p orchestrator-be
 ```
 
-then the full [`AGENTS.md`](../../AGENTS.md) pre-commit checklist (`cargo fmt --check`,
+then the full [`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist (`cargo fmt --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`). The frontend
 is untouched by this phase.
 

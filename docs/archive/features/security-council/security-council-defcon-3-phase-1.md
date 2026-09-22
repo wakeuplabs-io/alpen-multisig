@@ -1,9 +1,9 @@
 # Security Council — Defcon 3 (V2), Phase 1: `defcon_3` is a readable type
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 1. This document is that phase at implementation detail.
 
 **Closes:** no acceptance criterion. This is a prerequisite of Phases 2, 3, 5 and 6, each of which
@@ -86,7 +86,7 @@ exists on it. The fix is to stop using `unknown` as an `else`:
 **A Defcon 3 therefore renders with no details panel in this phase.** Reusing `Defcon1Details`
 (`:121-149`) would be a lie — its copy reads *"activates the Safe Harbor sweep immediately… it cannot
 be canceled, and is therefore irreversible"*, which is the opposite of Defcon 3 on both counts and
-which [Constraint 5](./security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible)
+which [Constraint 5](../../../specs/security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible)
 forbids. Writing an honest `Defcon3Details` is destructive copy plus the safe-harbor note, which is
 Phase 5's by assignment.
 
@@ -178,7 +178,7 @@ no DOM runner for this path, and what §5 changes is a narrowing, which `tsc` al
 
 ## 9. Verification
 
-The full [`AGENTS.md`](../../AGENTS.md) checklist:
+The full [`AGENTS.md`](../../../../AGENTS.md) checklist:
 
 ```bash
 cargo fmt --check
@@ -214,5 +214,5 @@ No manual walk. There is nothing to walk until a producer exists in Phase 5.
 - **`/manual` stops refusing a Defcon 3 bundle.** `use-manual-proposal.ts:202,280` rejects a decode
   of kind `unknown` with *"Unknown action kind — cannot decode this hex"*, which is what a Defcon 3
   hex produced until now. It imports from here on. That is the intended behaviour — the manual
-  fallback is required for both levers ([AC 14](./security-council-defcon-3.md#14-the-manual-fallback-works-for-both))
+  fallback is required for both levers ([AC 14](../../../specs/security-council-defcon-3.md#14-the-manual-fallback-works-for-both))
   — and it is listed here because it is a behaviour change the diff does not show.

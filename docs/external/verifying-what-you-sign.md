@@ -157,11 +157,13 @@ Key lengths differ by action, and a correct message will not always show 66-char
 
 | Action | Detail lines | Value format |
 |---|---|---|
-| Multisig updates (Strata Admin, Sequencer Manager, Alpen Admin) | `New Threshold`, `Members to Add`, `N. Add Member`, `Members to Remove`, `N. Remove Member` | Lower-case hex, 33-byte compressed key — **66 characters** |
+| Multisig updates (Strata Admin, Sequencer Manager, Alpen Admin, and `Strata Security Council Multisig Update`, which the Strata Admin authorizes) | `New Threshold`, `Members to Add`, `N. Add Member`, `Members to Remove`, `N. Remove Member` | Lower-case hex, 33-byte compressed key — **66 characters** |
 | `Bridge Operator Set Update` | `Operators to Add`, `N. Add Operator`, `Operators to Remove`, `N. Remove Operator` | Lower-case hex, 32-byte x-only key — **64 characters** |
 | `Sequencer Update` | `New Sequencer Key` | Lower-case hex, 32-byte — **64 characters** |
 | VK updates (`OL STF`, `ASM STF`, `EE STF`) | `Predicate Type`, then `Predicate Hex` **or** `Predicate Hash` | See below |
 | `Cancel` | `Target Id`, `Target Update`, then the cancelled update's own detail lines | See below |
+| `Safe Harbour Address Update` | `New Safe Harbour Address` | Lower-case hex of the BOSD descriptor, a type byte `04` then the 32-byte x-only key — **66 characters**. It is not the address you typed: compare it against the descriptor the app prints under that address |
+| `Defcon 1`, `Defcon 3` | None — the message is the four header lines and has no `Action Details:` block | — |
 
 **VK updates.** The second line is `Predicate Hex: <hex>` when the condition is 32 bytes or shorter,
 and `Predicate Hash: <hex>` when it is longer. Seeing `Predicate Hash` instead of `Predicate Hex` is

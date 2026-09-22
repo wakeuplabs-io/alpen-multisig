@@ -1,8 +1,8 @@
 # V3 Phase 3 — The form targets the council
 
-> **Functional contract:** [`security-council-signer-update.md`](./security-council-signer-update.md) — SSOT
+> **Functional contract:** [`security-council-signer-update.md`](../../../specs/security-council-signer-update.md) — SSOT
 > for *what* V3 must do. This document never overrides it.
-> **Build plan:** [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
+> **Build plan:** [`security-council-signer-update-implementation.md`](../../../specs/security-council-signer-update-implementation.md)
 > §4 Phase 3. This document is that phase at implementation detail, and §9 records where it supersedes it.
 > **Closes:** AC 1, 1a, 2, 3, 3a, 3b, 4, 11 and 12; Constraints 2 and 3.
 

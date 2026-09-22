@@ -1,9 +1,9 @@
 # Security Council — Defcon 1 (V1), Phase 3: Role, builder, creation
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 3. This document is that phase at implementation detail.
 
 **Closes:** AC 2 (backend half), AC 3, AC 17.
@@ -164,9 +164,9 @@ That contradicts three things at once:
 
 | Source | Says |
 |---|---|
-| [PRD 02](../0-prd/02-multisig-backend.md) §3.4.1 | "The backend MUST **reject** duplicate creation" |
+| [PRD 02](../../../0-prd/02-multisig-backend.md) §3.4.1 | "The backend MUST **reject** duplicate creation" |
 | AC 3's own title | "ActionId is stable and **duplicate rejection** works" |
-| [`story-map.md`](../3-stories/story-map.md), quoted by this contract's Requirements Alignment | "duplicate rejection" |
+| [`story-map.md`](../../../3-stories/story-map.md), quoted by this contract's Requirements Alignment | "duplicate rejection" |
 
 The PRD is the client's SSOT and is not ours to modify; the contract is ours, so the contract is
 what moves. AC 3 is corrected in the same commit as this spec, with the citation inline. Both
@@ -227,7 +227,7 @@ the smallest possible addition to all three layers:
 
 ### Two IPC boundaries stay on `Unknown` — and the build plan is wrong about why
 
-The build plan assigns `decode_action_hex` to Phase 5 ([§4 Phase 5](./security-council-defcon-implementation.md#phase-5--frontend-create-and-sign)),
+The build plan assigns `decode_action_hex` to Phase 5 ([§4 Phase 5](../../../specs/security-council-defcon-implementation.md#phase-5--frontend-create-and-sign-)),
 and it is right, but not for the reason it gives. Moving that arm earlier is not merely premature: it
 would be a **regression**. `decodedActionSchema` (`desktop-app/src/api/ipc-schemas.ts:128-142`) is a
 zod *discriminated union*, so a `kind` it does not list is a parse failure, not an `unknown`
@@ -313,7 +313,7 @@ what the generic path already does, plus C's naming of the id.
 ## 12. Verification
 
 `cargo test -p orchestrator-be` for cycle 1, `cargo test -p desktop-app` for cycle 2, then the full
-[`AGENTS.md`](../../AGENTS.md) pre-commit checklist on each.
+[`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist on each.
 
 Review must additionally confirm:
 
@@ -323,4 +323,4 @@ Review must additionally confirm:
   returns nothing.
 
 End-to-end regtest verification belongs to the close-out of all six phases
-([build plan §5](./security-council-defcon-implementation.md#5-verification)).
+([build plan §5](../../../specs/security-council-defcon-implementation.md#5-verification)).

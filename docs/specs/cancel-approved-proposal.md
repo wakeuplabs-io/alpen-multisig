@@ -28,7 +28,7 @@ This spec covers the orchestrator backend (DB, application layer, API), the Taur
 ## Requirements Alignment
 
 - **PRD §5.2**: Users must see all Approved updates and be able to cancel any of them; copy cancellation signatures; create and broadcast a cancellation transaction or copy the raw hex for manual broadcast.
-- **PRD §5.2.2**: Cancel/Approved state does NOT apply to Sequencer Manager or Security Council.
+- **PRD §5.2.2**: Cancel/Approved state does NOT apply to Sequencer Manager or to the Security Council's Defcon 1. It does apply to Defcon 3, cancelled by the council itself ([`security-council-defcon-3.md`](./security-council-defcon-3.md)).
 - **Orchestrator remains coordination-only**: collects cancel signatures, tracks cancel proposal lifecycle, reports txids — does not sign or submit transactions.
 - **Desktop owns execution**: builds and broadcasts the cancel commit/reveal bundle via Tauri.
 - **Signer safety**: explicit confirmation step before hardware wallet signing; payload summary visible before signing.
@@ -351,7 +351,7 @@ Cancel proposals (`kind === 'cancel'`) appear in existing status-based sections 
 | `activation_height` passed when cancel screen loads | `AlertBanner` "Enacted — cancellation no longer possible." No actions shown. |
 | Cancel proposal already exists for this target | Return existing cancel proposal from `POST /cancel` (idempotent). Frontend shows existing state. |
 | User is not a signer on the authority | Sign CTA is disabled. User can still copy existing cancel signatures for manual aggregation. |
-| Target authority is Sequencer Manager or Security Council | Backend returns `400`. Frontend does not show Cancel CTA for these authorities. |
+| Target action applies immediately (confirmation depth `0`: Sequencer Manager updates, Defcon 1) | Backend returns `400` naming the depth, not the authority. The proposal DTO carries `is_cancelable: false`, so no surface shows a Cancel CTA. |
 | Cancel reaches quorum before target `activation_height` | "Broadcast cancel tx" CTA appears; reuses existing broadcast pipeline. |
 | Cancel tx and target activation in the same block | Protocol processes activations before incoming txs — cancel is rejected. Backend reconcile on next poll detects `Enacted` on target; UI updates accordingly. |
 | Two signers create cancel proposals concurrently | Second `POST /cancel` returns the existing cancel proposal (idempotency guard in `create_cancel_proposal`). |
@@ -387,7 +387,7 @@ Unit tests:
 - `create_cancel_proposal` happy path.
 - `create_cancel_proposal` returns existing cancel proposal (idempotency).
 - `create_cancel_proposal` returns `400` when target is not `Approved`.
-- `create_cancel_proposal` returns `400` for unsupported authority (SequencerManager, SecurityCouncil).
+- `create_cancel_proposal` returns `400` for a zero-depth target action (e.g. Defcon 1).
 - `activation_height` is persisted correctly after `RevealConfirmed` using mock ASM `lock_period`.
 
 Integration test:

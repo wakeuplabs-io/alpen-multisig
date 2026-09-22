@@ -1,6 +1,6 @@
 # Spec: Security Council — Defcon 1
 
-**Status:** Shipped — V1 delivered on `develop` across eight phases (PRs #505–#512); see the build plan
+**Status:** Shipped — eight phases, PRs #505–#512. Build plan:
 [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)  
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §3.1.4, §5.1, §5.2.2, §5.3, §5.4, §5.5  
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E12 (in scope); US-E13, US-E14 (constraints)  
@@ -93,7 +93,7 @@ The replacement does not depend on Defcon and is verifiable before it exists: th
 > route's redirect guard — so AC 10 held only because the council was absent from all three. They are
 > now one `canCancelProposal` carrying the action term, and the test is written against the V5 future:
 > the Defcon 1 it refuses carries an authority that *is* in the list. See
-> [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md) §4.3.
+> [`security-council-defcon-phase-6.md`](../archive/features/security-council/security-council-defcon-phase-6.md) §4.3.
 
 ## What V2 inherits, and must revisit
 
@@ -101,7 +101,7 @@ Two pieces of V1 are correct only because Defcon 1 is currently the only action 
 are noted here rather than in the code alone, because both go wrong quietly.
 
 **The "changed nothing on chain" badge assumes only Defcon 1 sets the flag.** *(Settled in V2
-Phase 2 — [`security-council-defcon-3-phase-2.md`](./security-council-defcon-3-phase-2.md). The
+Phase 2 — [`security-council-defcon-3-phase-2.md`](../archive/features/security-council/security-council-defcon-3-phase-2.md). The
 module is now `desktop-app/src/lib/safe-harbor-redundancy.ts` and orders by activation height.)*
 `desktop-app/src/lib/redundant-defcon-1.ts` treated the earliest enacted Defcon 1 by sequence number
 as the one that activated the safe harbor. Defcon 3 activates the same flag, on a timelock, so from
@@ -249,7 +249,7 @@ to a Security Council session and to no other authority.
 > navigation guard and a sighash pre-flight, and a sibling screen would have reimplemented all of
 > it to change a colour scheme and add one input. What replaces the route guard is the
 > authority-keyed menu plus the backend gate [AC 17](#17-the-backend-refuses-defcon-1-creation-from-a-non-council-session)
-> pins. See [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md) §4.
+> pins. See [`security-council-defcon-phase-5.md`](../archive/features/security-council/security-council-defcon-phase-5.md) §4.
 
 **Form structure:**
 
@@ -456,7 +456,7 @@ with no `Action Details:` block, no wrapping, no abbreviation.
 > moment, on the dashboard group heading and the post-signature modal. The full sentence is not lost —
 > both screens render *Quorum reached — ready to send* beside the badge on a proposal that can be
 > sent. **The non-negotiable half is unchanged: the word "Approved" never appears for a Defcon 1, in
-> any state.** See [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md) §4.1.
+> any state.** See [`security-council-defcon-phase-6.md`](../archive/features/security-council/security-council-defcon-phase-6.md) §4.1.
 
 ### 10. No cancel CTA anywhere
 **Given** any Defcon 1 proposal in any state (Pending, Quorum reached, Enacted)  

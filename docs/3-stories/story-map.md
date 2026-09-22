@@ -157,7 +157,7 @@ Format: `As a <actor>, I want to <goal>, so that <motivation>.` Each story carri
 - **Slice:** 1.
 
 #### US-D3 · List approved proposals with cancellation signatures
-- **Story:** As an Alpen or Strata Admin Signer, I want to see all approved proposals and the count of cancellation signatures collected for each, so that I can coordinate an emergency cancellation before enactment.
+- **Story:** As an Alpen Admin, Strata Admin or Security Council Signer, I want to see all approved proposals and the count of cancellation signatures collected for each, so that I can coordinate an emergency cancellation before enactment.
 - **Classification:** Functional
 - **Acceptance signals:** Lists approved updates; shows cancellation signatures per update. Approved = quorum reached and confirmed on-chain, not yet enacted. Not applicable to Sequencer Manager or to Defcon 1, which execute immediately; Defcon 3 *is* applicable.
 - **Source:** UI PRD §1.12, §1.12.2.
@@ -174,7 +174,7 @@ Format: `As a <actor>, I want to <goal>, so that <motivation>.` Each story carri
 
 > All creation stories share the same shape: the signer composes the update payload for a specific type and submits it — together with their own signature — as a new pending proposal. ActionId is `hash(MultisigAction, SeqNo)`; duplicate `(action, seqno)` submissions are rejected (Backend PRD).
 
-> **Discovery gap:** `2-discovery/08-alpen-crate-prd-coverage.md` shows the upstream Alpen admin crate currently only covers Strata Admin signer update and Sequencer update. The other 11 types depend on upstream Alpen expanding the `Role` enum, `AdminTxType`, and sighash tags. Track this as a dependency for Slice 2.
+> **Upstream coverage:** the discovery gap recorded in `2-discovery/08-alpen-crate-prd-coverage.md` is closed. Since ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) every update type below has an upstream counterpart, except the retired US-E9/US-E10 and the Payout Administrator's, which has no role upstream.
 
 | ID | Story title | Actor | Authority | Update type | Slice |
 |---|---|---|---|---|---|
@@ -211,7 +211,7 @@ Shared acceptance signals for all US-E*:
 - **Discovery note:** The "message being signed" on the HW screen is constrained by device firmware (BIP-137 text or PSBT fields, not raw SPS-65 digest). Visualization strategy is a design question for Phase 2, not a US detail.
 
 #### US-F2 · Cancel an approved proposal
-- **Story:** As an Alpen or Strata Admin Signer, I want to produce a cancellation signature on an approved proposal, so that the authority can block enactment.
+- **Story:** As an Alpen Admin, Strata Admin or Security Council Signer, I want to produce a cancellation signature on an approved proposal, so that the authority can block enactment.
 - **Classification:** Functional
 - **Acceptance signals:** Cancellation signature produced; a fresh cancellation quorum is required. Not applicable to Sequencer Manager or to Defcon 1. A Defcon 3 cancel is signed by the Security Council itself — see US-E14.
 - **Source:** UI PRD §1.12.1; Backend PRD (cancellation signature path).

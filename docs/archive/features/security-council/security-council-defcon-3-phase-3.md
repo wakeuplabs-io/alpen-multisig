@@ -1,13 +1,13 @@
 # Security Council — Defcon 3 (V2), Phase 3: Cancelability travels on the proposal
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 3. This document is that phase at implementation detail.
 
-**Closes:** [AC 13](./security-council-defcon-3.md#13-cancelability-travels-on-the-proposal), and
-[Constraint 4](./security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority).
+**Closes:** [AC 13](../../../specs/security-council-defcon-3.md#13-cancelability-travels-on-the-proposal), and
+[Constraint 4](../../../specs/security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority).
 
 ## 1. The change in one sentence
 
@@ -35,7 +35,7 @@ emitter-before-acceptor rule for `actionType`.
 
 ### 4.1 Response DTO, not persisted domain
 
-[`Proposal`](../../orchestrator-be/src/domain/proposal.rs) is stored in Postgres and must not carry
+[`Proposal`](../../../../orchestrator-be/src/domain/proposal.rs) is stored in Postgres and must not carry
 computed live metadata. The wire shape is:
 
 ```rust
@@ -55,7 +55,7 @@ through the same resolver so Tauri always sees the field.
 
 No `Option<bool>`. When the ASM cannot answer, `is_cancelable = false` — the honest failure is a
 missing cancel button, not a button that cannot work. Same spirit as
-[`live_last_seqno`](../../orchestrator-be/src/application/proposals.rs): a read never fails because
+[`live_last_seqno`](../../../../orchestrator-be/src/application/proposals.rs): a read never fails because
 cleanup could not run.
 
 ### 4.3 Derivation = `depth_for_action > 0`
@@ -92,7 +92,7 @@ Mock URLs (`mock://asm-membership`) use the same `uniform_confirmation_depths` f
 
 ## 5. Frontend contract
 
-[`derive-proposal-actions.ts`](../../desktop-app/src/domain/proposal-detail/model/derive-proposal-actions.ts)
+[`derive-proposal-actions.ts`](../../../../desktop-app/src/domain/proposal-detail/model/derive-proposal-actions.ts)
 deletes `CANCELABLE_AUTHORITIES`. `canCancelProposal` reads `proposal.isCancelable` only. Status,
 terminal state, and `cancelProposal === null` gates stay at call sites — the backend field answers
 only "does this action type have a non-zero confirmation depth right now".

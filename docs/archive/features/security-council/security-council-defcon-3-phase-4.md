@@ -1,16 +1,16 @@
 # Security Council — Defcon 3 (V2), Phase 4: Enactment detection
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 4. This document is that phase at implementation detail.
 
-**Closes:** [AC 6](./security-council-defcon-3.md#6-a-broadcast-defcon-3-is-queued-not-enacted),
-[AC 8](./security-council-defcon-3.md#8-it-enacts-at-exactly-its-depth), and the in-band half of
-[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor);
-[Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)
-and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
+**Closes:** [AC 6](../../../specs/security-council-defcon-3.md#6-a-broadcast-defcon-3-is-queued-not-enacted),
+[AC 8](../../../specs/security-council-defcon-3.md#8-it-enacts-at-exactly-its-depth), and the in-band half of
+[AC 12](../../../specs/security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor);
+[Constraints 2](../../../specs/security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)
+and [3](../../../specs/security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
 ## 1. The change in one sentence
 
@@ -29,11 +29,11 @@ predicate. No Tauri, no desktop, no new e2e.
 
 | Document | What Phase 4 takes from it |
 |---|---|
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) § Enactment detection | Four terms and their sources |
+| [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) § Enactment detection | Four terms and their sources |
 | [`security-council-defcon-phase-4.md`](./security-council-defcon-phase-4.md) (V1) | Pattern: free function beside dispatch arm; mock stays URL-keyed |
-| [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4 | Enactment before supersede; Defcon 1 uses `==`, Defcon 3 uses `>=` |
+| [`proposal-lifecycle-seqno-truth.md`](../../../specs/proposal-lifecycle-seqno-truth.md) §4 | Enactment before supersede; Defcon 1 uses `==`, Defcon 3 uses `>=` |
 | [`security-council-defcon-3-phase-3.md`](./security-council-defcon-3-phase-3.md) | Cancelability done — not revisited |
-| [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md) §6 | Null/stale `activation_height` recorded as debt, not patched here |
+| [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md) §6 | Null/stale `activation_height` recorded as debt, not patched here |
 
 ### Defcon 1 vs Defcon 3 — the seqno term must not be confused
 
@@ -45,9 +45,9 @@ predicate. No Tauri, no desktop, no new e2e.
 | Why different | Never queued; equality pins *this* proposal | Accepted at reveal; later actions jump seqno; maturity needs height |
 
 Using `==` on Defcon 3 marks a successfully enacted proposal as `Superseded`
-([Constraint 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)).
+([Constraint 2](../../../specs/security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality)).
 Omitting the height term marks a cancelled proposal as `Enacted` when the harbor was already on
-([Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted)).
+([Constraint 3](../../../specs/security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted)).
 
 ## 4. Function contract
 
@@ -88,7 +88,7 @@ bitcoin_tip: Option<u64>,
 
 | Observation | Source |
 |---|---|
-| `activation_height` | `Proposal.activation_height` from [`compute_and_store_activation_height`](../../orchestrator-be/src/application/proposals.rs) |
+| `activation_height` | `Proposal.activation_height` from [`compute_and_store_activation_height`](../../../../orchestrator-be/src/application/proposals.rs) |
 | `bitcoin_tip` | `BitcoinRpcClient::get_chain_tip()` via `getblockcount`, **only when the action is Defcon 3** |
 
 ### 4.4 Degradation
@@ -109,7 +109,7 @@ available yet, and `report_broadcast_progress` already answers a not-yet-enacted
 
 ### 4.5 Call sites
 
-Both in [`proposals.rs`](../../orchestrator-be/src/application/proposals.rs): `reconcile_one` and
+Both in [`proposals.rs`](../../../../orchestrator-be/src/application/proposals.rs): `reconcile_one` and
 `report_broadcast_progress`. `bitcoin_tip_for_enactment` skips `getblockcount` unless the hex is a
 Defcon 3.
 

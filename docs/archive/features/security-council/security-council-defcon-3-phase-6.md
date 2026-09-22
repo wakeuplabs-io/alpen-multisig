@@ -1,13 +1,13 @@
 # Security Council — Defcon 3 (V2), Phase 6: The queued lifecycle
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 6. This document is that phase at implementation detail.
 
-**Closes:** [AC 7](./security-council-defcon-3.md#7-the-countdown-is-driven-by-the-live-depth) and
-[AC 10](./security-council-defcon-3.md#10-a-queued-defcon-3-offers-a-cancel-a-defcon-1-never-does);
+**Closes:** [AC 7](../../../specs/security-council-defcon-3.md#7-the-countdown-is-driven-by-the-live-depth) and
+[AC 10](../../../specs/security-council-defcon-3.md#10-a-queued-defcon-3-offers-a-cancel-a-defcon-1-never-does);
 the § *Frontend Contract → Lifecycle display* three bullets.
 
 ## 1. The change in one sentence

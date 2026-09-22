@@ -1,15 +1,9 @@
 # Spec: Security Council — Safe Harbor Address Update
 
-**Status:** All four phases implemented — the action is creatable, signable, cancellable, visible on
-every surface a signer decides from, and proven against a regtest chain on three paths. Automated
-checks green. The manual walk ran on 2026-09-10 over an enactment, a cancel and a rotation submitted
-with the harbor already up; its findings are closed in Phase 3. Phase 4 answers the #547 review —
-the signing message on the signing screens, and *Safe Harbor* in every name this repository owns —
-and was walked on 2026-09-15. Three items of `## Verification` below (1, 3 and 10) are still
-unexercised. This document is the functional contract; the
-build plan is
-[`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md),
-whose phase board says what has landed.
+**Status:** Shipped — four phases, PRs #548, #549, #550, #563; manual walks 2026-09-10 (enacted,
+cancelled and swallowed paths) and 2026-09-15 (Phase 4). Open: items 1, 3 and 10 of
+[Verification](#verification) are unexercised. Build plan:
+[`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §5.1, §5.2.2, §5.5
 
@@ -348,7 +342,7 @@ carries three things and no more:
 3. **The descriptor hex the device will display**, resolved as the signer types and shown under the
    input, so the comparison the signer must make is possible before they reach the device. The full
    signing message is **not** on this form: nothing is signed here, so it lives on the preview and
-   the sign view ([Phase 4 §2](./security-council-safe-harbor-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
+   the sign view ([Phase 4 §2](../archive/features/security-council/security-council-safe-harbor-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
 
 The safe-harbor note appears here when the harbor is already active
 ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)),
@@ -367,7 +361,7 @@ This repository spells the feature **Safe Harbor** everywhere it owns the name: 
 files, test ids, commands, tests, comments and these documents. Upstream's names keep upstream's
 `Safe Harbour` — the byte-frozen signing message, protocol types and methods, the RPC and the wire
 value `safe_harbour_address_update`
-([Phase 4 §4](./security-council-safe-harbor-address-phase-4.md#4-terminology-harbor-in-everything-we-own-harbour-in-what-upstream-owns)).
+([Phase 4 §4](../archive/features/security-council/security-council-safe-harbor-address-phase-4.md#4-terminology-harbor-in-everything-we-own-harbour-in-what-upstream-owns)).
 
 ---
 

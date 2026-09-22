@@ -7,7 +7,9 @@ for *what* V2 must do. This document is only *how* it gets built, and never over
 
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E13 and US-E14.
 
-**Status:** All seven phases shipped. Phase 8 is held in reserve for what the manual walk exposes.
+**Status:** Closed — seven phases shipped, PRs #524–#527 and #530–#533; Phase 8's reserve unspent.
+Known debt in [§6](#6-known-debt-this-slice-does-not-take). Contract:
+[`security-council-defcon-3.md`](./security-council-defcon-3.md)
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.
@@ -38,13 +40,13 @@ variant, two inherited debts, and the cancel.
 
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
-| 1 ✅ | `defcon_3` is a readable type — [phase spec](./security-council-defcon-3-phase-1.md) | (none directly — prerequisite) | `src-tauri`, `desktop-app` |
-| 2 ✅ | Redundancy by activation height — [phase spec](./security-council-defcon-3-phase-2.md) | AC 9; [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) | `desktop-app` |
-| 3 ✅ | Cancelability travels on the proposal — [phase spec](./security-council-defcon-3-phase-3.md) | AC 13; [Constraint 4](./security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority) | `orchestrator-be`, `src-tauri`, `desktop-app` |
-| 4 ✅ | Defcon 3 enactment detection — [phase spec](./security-council-defcon-3-phase-4.md) | AC 6, AC 8, AC 12; [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality) and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `orchestrator-be` |
-| 5 ✅ | Frontend — create and sign — [phase spec](./security-council-defcon-3-phase-5.md) | AC 1, 1a, 2, 3, 4, 5, 15 | `src-tauri`, `desktop-app` |
-| 6 ✅ | Frontend — queued lifecycle — [phase spec](./security-council-defcon-3-phase-6.md) | AC 7, AC 10 | `desktop-app` |
-| 7 ✅ | The cancel, end to end — [phase spec](./security-council-defcon-3-phase-7.md) | AC 11, AC 12, AC 14; [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `desktop-app`, `src-tauri`, `e2e-tests` |
+| 1 ✅ | `defcon_3` is a readable type — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-1.md) | (none directly — prerequisite) | `src-tauri`, `desktop-app` |
+| 2 ✅ | Redundancy by activation height — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-2.md) | AC 9; [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) | `desktop-app` |
+| 3 ✅ | Cancelability travels on the proposal — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-3.md) | AC 13; [Constraint 4](./security-council-defcon-3.md#4-cancelability-is-answered-by-the-backend-for-every-authority) | `orchestrator-be`, `src-tauri`, `desktop-app` |
+| 4 ✅ | Defcon 3 enactment detection — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-4.md) | AC 6, AC 8, AC 12; [Constraints 2](./security-council-defcon-3.md#2-defcon-3-enactment-cannot-reuse-defcon-1s-seqno-equality) and [3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `orchestrator-be` |
+| 5 ✅ | Frontend — create and sign — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-5.md) | AC 1, 1a, 2, 3, 4, 5, 15 | `src-tauri`, `desktop-app` |
+| 6 ✅ | Frontend — queued lifecycle — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-6.md) | AC 7, AC 10 | `desktop-app` |
+| 7 ✅ | The cancel, end to end — [phase spec](../archive/features/security-council/security-council-defcon-3-phase-7.md) | AC 11, AC 12, AC 14; [Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted) | `desktop-app`, `src-tauri`, `e2e-tests` |
 | 8 | Reserve — what the manual walk exposes | — | — |
 
 ## 3. Architecture
@@ -245,7 +247,7 @@ added no `orchestrator-be` code at all. It failed for AC 14. The offline route r
 decoded kind is `unknown`, and a `MultisigAction::Cancel` decoded to exactly that because the
 desktop's domain `Action` enum has no `Cancel` variant — so on the one route built for *"the
 orchestrator is unavailable"*, a council signer could not import, let alone aggregate or broadcast, a
-Defcon 3 cancel. See [the phase spec](./security-council-defcon-3-phase-7.md) §4.1 and §6.
+Defcon 3 cancel. See [the phase spec](../archive/features/security-council/security-council-defcon-3-phase-7.md) §4.1 and §6.
 
 The deliverable is the e2e: `run_defcon3_canceled` in `e2e_defcon_probe.rs`, following the shape of
 `e2e_cancel_proposal.rs` — submit a Defcon 3, assert queued with the harbor off, submit a
@@ -315,8 +317,8 @@ Still open — each wants its own slice:
   adds a per-request depth read and is the natural place to revisit it, but hoisting the whole loop
   requires restructuring mocks keyed by RPC URL and is not this slice's to carry.
 - **Cancelability has no third wire state when the ASM is down.** Listing succeeds and the
-  affordance collapses to "no" ([phase 3](./security-council-defcon-3-phase-3.md),
-  [phase 6](./security-council-defcon-3-phase-6.md)); distinguishing unknown from false needs a DTO
+  affordance collapses to "no" ([phase 3](../archive/features/security-council/security-council-defcon-3-phase-3.md),
+  [phase 6](../archive/features/security-council/security-council-defcon-3-phase-6.md)); distinguishing unknown from false needs a DTO
   change of its own.
 
 ## 7. Close-out
