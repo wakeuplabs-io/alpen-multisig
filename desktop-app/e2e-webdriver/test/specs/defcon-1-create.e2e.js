@@ -62,6 +62,9 @@ describe('Strata Multisig proposal — Defcon 1', () => {
 		const confirm = await $('input[data-testid="e2e-defcon-1-confirm"]')
 		await confirm.waitForDisplayed({ timeout: 30000 })
 		await setConfirmValue(confirm, 'defcon1')
+		// Wait for the validator to have run on the near-miss before reading the control: a
+		// disabled button alone would also pass before validation re-renders.
+		await expect(confirm).toHaveAttribute('aria-invalid', 'true')
 		await expect(preview).toBeDisabled()
 
 		await setConfirmValue(confirm, 'defcon 1')
