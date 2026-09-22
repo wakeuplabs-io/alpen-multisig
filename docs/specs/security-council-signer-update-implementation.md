@@ -8,7 +8,7 @@ the SSOT for *what* V3 must do. This document is only *how* it gets built, and n
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E7.
 
 **Status:** Closed — four phases shipped, PRs #536, #541, #542, #544; manual walk 2026-09-09 found no
-defect, so Phase 5's reserve is unspent. The hardening it surfaced and AC 13's evidence are debt in
+defect, so Phase 5's reserve is unspent. The hardening it surfaced is debt in
 [§6](#6-known-debt-this-slice-does-not-take). Contract:
 [`security-council-signer-update.md`](./security-council-signer-update.md)
 
@@ -322,16 +322,6 @@ that owns it, because a debt item without one does not get picked up.
   never on `proposal.kind`. It is literally true — the cancel did enact — and pre-existing; recorded
   because *Past* now shows "Cancel #4 — Enacted" directly above "Proposal #3 — Canceled", which reads
   as a contradiction until you know it is not.
-- **[AC 13](./security-council-signer-update.md#13-the-manual-fallback-works) has no manual
-  evidence.** The route is implemented and named end to end
-  (`desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts:29-32`,
-  `desktop-app/src/lib/proposal-type-label.ts:10`, both under test), and the criterion is unchanged.
-  Three steps of the phase-4 spec's §10 remain unwalked: a Security Council session confirming it
-  sees neither rotation (asserted by backend tests for
-  [AC 10](./security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it),
-  not by hand), the export/import of a quorum bundle on `/manual`, and the external-RPC recovery via
-  `bitcoin-cli sendrawtransaction`. Deferred deliberately: it is a walk, not a build, and V4 does not
-  depend on it.
 
 ### Carried in from before this slice
 

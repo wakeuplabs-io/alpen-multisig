@@ -1,10 +1,7 @@
 # Spec: Security Council — Signer Update
 
 **Status:** Shipped — four phases, PRs #536, #541, #542, #544; manual walk 2026-09-09 over the
-enacted and cancelled paths. Open: [AC 13](#13-the-manual-fallback-works)'s manual/external-RPC
-evidence, deferred — see the build plan's
-[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take).
-Build plan: [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
+enacted and cancelled paths. Build plan: [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §5.1, §5.2.2, §5.5
 
@@ -552,15 +549,10 @@ from every other depth
 **Then** it broadcasts through the existing manual route and through an external Bitcoin RPC, with
 no council-specific handling.
 
-**Status: deferred, with the route in place.** A council rotation already reaches `/manual` under its
-own name — `actionTypeFromDecoded` derives `council_signer_update` from the decoded action's target
-rather than from its kind
-(`desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts:29-32`), and
-`inferProposalTypeLabel` names it (`desktop-app/src/lib/proposal-type-label.ts:10`), both under test.
-What is not evidenced is the walk itself: exporting the quorum bundle, importing it under
-`strata_admin`, and broadcasting the raw commit and reveal with `bitcoin-cli sendrawtransaction`.
-The criterion stands unchanged; only its evidence is outstanding, recorded in the build plan's
-[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take).
+A council rotation reaches `/manual` under its own name — `actionTypeFromDecoded` derives
+`council_signer_update` from the decoded action's target rather than from its kind
+(`desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts`), and
+`inferProposalTypeLabel` names it (`desktop-app/src/lib/proposal-type-label.ts`), both under test.
 
 ---
 
@@ -661,5 +653,5 @@ each step carries what was observed:
    the council still holds four keys at threshold 3, and nothing reads `Enacted`.
 7. ⏸ A Security Council session sees none of the above at any point. Asserted by
    [AC 10](#10-the-council-never-sees-the-proposal-that-rotates-it) in the backend, not walked by
-   hand; deferred with AC 13.
+   hand.
 8. ✅ `cargo test -p alpen-multisig-e2e-tests` green, including `e2e_council_rotation`.
