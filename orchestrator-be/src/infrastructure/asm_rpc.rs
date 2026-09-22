@@ -4,16 +4,23 @@
 use serde_json::{json, Value};
 use ssz::Decode;
 use strata_asm_common::{AnchorState, Subprotocol};
+use strata_asm_params::Role;
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
 use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
 use strata_asm_proto_checkpoint::{CheckpointState, CheckpointSubprotocol};
 
+use crate::error::AppError;
 use crate::infrastructure::{http_client, rpc_timeout};
 
 /// The current `AnchorState`, as the ASM reports it.
 pub(crate) async fn fetch_anchor_state(rpc_url: &str) -> Result<AnchorState, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     decode_anchor_state_from_status(&status_result)
+}
+
+/// The error for a role the admin state does not carry.
+pub(crate) fn missing_authority(role: Role) -> AppError {
+    AppError::BadRequest(format!("admin state missing authority for role `{role:?}`"))
 }
 
 /// The administration subprotocol's state, read live.

@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::infrastructure::{action_codec, asm_role_membership, asm_rpc};
 
 #[cfg(any(test, feature = "dev-mocks"))]
-const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
+use crate::infrastructure::asm_role_membership::MOCK_MEMBERSHIP_URL;
 #[cfg(any(test, feature = "dev-mocks"))]
 pub(crate) const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
 /// Enacts *and* stands past the proposal's seqno: the fixture that proves enactment is decided
@@ -65,11 +65,9 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 ));
             }
             let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let alpen = admin.authority(Role::AlpenAdministrator).ok_or_else(|| {
-                AppError::BadRequest(
-                    "admin state missing authority for role `AlpenAdministrator`".to_string(),
-                )
-            })?;
+            let alpen = admin
+                .authority(Role::AlpenAdministrator)
+                .ok_or_else(|| asm_rpc::missing_authority(Role::AlpenAdministrator))?;
             let target = UpdateAction::EeStfVk(update.clone());
             let still_queued = admin.queued().iter().any(|q| q.action() == &target);
             Ok(ee_stf_vk_enacted(alpen.last_seqno(), seq_no, still_queued))
@@ -120,12 +118,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             // The role is named literally: an arm that matches one action variant knows its role.
             let council = admin
                 .authority(Role::StrataSecurityCouncil)
-                .ok_or_else(|| {
-                    AppError::BadRequest(
-                        "admin state missing authority for role `StrataSecurityCouncil`"
-                            .to_string(),
-                    )
-                })?;
+                .ok_or_else(|| asm_rpc::missing_authority(Role::StrataSecurityCouncil))?;
             Ok(defcon1_enacted(
                 safe_harbor_activated,
                 defcon1_queued,
@@ -146,12 +139,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 .any(|q| matches!(q.action(), UpdateAction::Defcon3(_)));
             let council = admin
                 .authority(Role::StrataSecurityCouncil)
-                .ok_or_else(|| {
-                    AppError::BadRequest(
-                        "admin state missing authority for role `StrataSecurityCouncil`"
-                            .to_string(),
-                    )
-                })?;
+                .ok_or_else(|| asm_rpc::missing_authority(Role::StrataSecurityCouncil))?;
             Ok(defcon3_enacted(
                 council.last_seqno(),
                 seq_no,
@@ -169,11 +157,9 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             // The role is named literally: an arm that matches one action variant knows its role,
             // and for tx type 14 upstream's `authorized_role()` is the administrator — the council
             // sweeps to the safe harbor but must not also pick where the funds land.
-            let administrator = admin.authority(Role::StrataAdministrator).ok_or_else(|| {
-                AppError::BadRequest(
-                    "admin state missing authority for role `StrataAdministrator`".to_string(),
-                )
-            })?;
+            let administrator = admin
+                .authority(Role::StrataAdministrator)
+                .ok_or_else(|| asm_rpc::missing_authority(Role::StrataAdministrator))?;
             Ok(safe_harbor_address_enacted(
                 administrator.last_seqno(),
                 seq_no,
@@ -183,11 +169,11 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             ))
         }
         MultisigAction::Update(
-            UpdateAction::StrataAdminMultisig(_)
+            update @ (UpdateAction::StrataAdminMultisig(_)
             | UpdateAction::StrataSeqManagerMultisig(_)
             | UpdateAction::AlpenAdminMultisig(_)
             | UpdateAction::StrataSecurityCouncilMultisig(_)
-            | UpdateAction::AsmStfVk(_),
+            | UpdateAction::AsmStfVk(_)),
         ) => {
             // The target lookup runs before the authorization guard: reversed, an `AsmStfVk`
             // under a non-administrator authority would go from `Ok(false)` to `Err`, and
@@ -197,10 +183,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 return Ok(false);
             };
             asm_role_membership::require_authorized_for_action(authority, &action)?;
-            let authorizing_role = match &action {
-                MultisigAction::Update(update) => update.required_role(),
-                _ => unreachable!("outer arm already matched MultisigAction::Update"),
-            };
+            let authorizing_role = update.required_role();
             let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
             multisig_update_enacted(
