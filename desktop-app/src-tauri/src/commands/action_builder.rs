@@ -113,6 +113,12 @@ pub struct BuildActionHexResponse {
     pub action_hex: String,
 }
 
+fn respond(action: &Action) -> Result<BuildActionHexResponse, String> {
+    let action_hex =
+        action_codec::encode_hex(action).map_err(|e| format!("failed to encode action: {e}"))?;
+    Ok(BuildActionHexResponse { action_hex })
+}
+
 #[tauri::command]
 pub fn build_admin_multisig_update_hex(
     input: BuildAdminMultisigUpdateHexInput,
@@ -142,9 +148,7 @@ pub fn build_admin_multisig_update_hex(
         new_threshold,
     });
 
-    let action_hex =
-        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&action)
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,9 +179,7 @@ pub fn build_operator_set_update_hex(
         add_members,
         remove_members: input.remove_operator_indices,
     });
-    let action_hex =
-        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&action)
 }
 
 #[derive(Debug, Deserialize)]
@@ -193,9 +195,7 @@ pub fn build_sequencer_key_update_hex(
     let new_pub_key = EvenPubKey::from_hex(input.new_pub_key.trim())
         .map_err(|e| format!("invalid sequencer key: {e}"))?;
     let action = Action::SequencerKeyUpdate(SequencerKeyUpdate { new_pub_key });
-    let action_hex =
-        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&action)
 }
 
 /// Build the payload-less Defcon 1 action.
@@ -204,9 +204,7 @@ pub fn build_sequencer_key_update_hex(
 /// creation request, as it is for every other action type.
 #[tauri::command]
 pub fn build_defcon_1_action_hex() -> Result<BuildActionHexResponse, String> {
-    let action_hex = action_codec::encode_hex(&Action::Defcon1)
-        .map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&Action::Defcon1)
 }
 
 /// Build the payload-less Defcon 3 action.
@@ -216,9 +214,7 @@ pub fn build_defcon_1_action_hex() -> Result<BuildActionHexResponse, String> {
 /// live from the ASM, and this hex would be wrong the moment it carried a copy of it.
 #[tauri::command]
 pub fn build_defcon_3_action_hex() -> Result<BuildActionHexResponse, String> {
-    let action_hex = action_codec::encode_hex(&Action::Defcon3)
-        .map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&Action::Defcon3)
 }
 
 #[tauri::command]
@@ -236,9 +232,7 @@ pub fn build_vk_update_hex(input: BuildVkUpdateHexInput) -> Result<BuildActionHe
         type_id: input.type_id,
         condition,
     });
-    let action_hex =
-        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&action)
 }
 
 /// Input for [`build_safe_harbor_address_update_hex`].
@@ -264,9 +258,7 @@ pub fn build_safe_harbor_address_update_hex(
     let destination =
         SafeHarborDescriptor::from_address(&input.address, network).map_err(|e| e.to_string())?;
     let action = Action::SafeHarborAddressUpdate(destination);
-    let action_hex =
-        action_codec::encode_hex(&action).map_err(|e| format!("failed to encode action: {e}"))?;
-    Ok(BuildActionHexResponse { action_hex })
+    respond(&action)
 }
 
 #[cfg(test)]
