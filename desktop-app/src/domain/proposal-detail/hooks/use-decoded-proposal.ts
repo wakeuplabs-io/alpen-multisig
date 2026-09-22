@@ -36,6 +36,14 @@ export type DecodedProposalData = {
 	isLoading: boolean
 }
 
+const NOTHING_DECODED: DecodedProposalData = {
+	signerSetChange: null,
+	safeHarborChange: null,
+	safeHarborActivated: false,
+	allSigners: [],
+	isLoading: false,
+}
+
 type KeyedDecodedProposalData = DecodedProposalData & {
 	proposalKey: string | null
 }
@@ -66,34 +74,23 @@ function buildTableOrNull(
 export function useDecodedProposal(proposal: Proposal | null): DecodedProposalData {
 	const proposalKey = proposal === null ? null : `${proposal.actionId}:${proposal.status}`
 	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
+		...NOTHING_DECODED,
 		proposalKey: null,
-		signerSetChange: null,
-		safeHarborChange: null,
-		safeHarborActivated: false,
-		allSigners: [],
-		isLoading: false,
 	})
 
 	useEffect(() => {
 		if (proposal === null) {
 			setDecodedData({
+				...NOTHING_DECODED,
 				proposalKey: null,
-				signerSetChange: null,
-				safeHarborChange: null,
-				safeHarborActivated: false,
-				allSigners: [],
-				isLoading: false,
 			})
 			return
 		}
 
 		let cancelled = false
 		setDecodedData({
+			...NOTHING_DECODED,
 			proposalKey,
-			signerSetChange: null,
-			safeHarborChange: null,
-			safeHarborActivated: false,
-			allSigners: [],
 			isLoading: true,
 		})
 
@@ -111,12 +108,9 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 				if (!actionRes.ok) {
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
-						signerSetChange: null,
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
@@ -133,8 +127,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					void getSafeHarborStatus().then((harborRes) => {
 						if (cancelled) return
 						setDecodedData({
+							...NOTHING_DECODED,
 							proposalKey,
-							signerSetChange: null,
 							safeHarborActivated: harborRes.ok && harborRes.data.activated,
 							safeHarborChange: buildSafeHarborChange({
 								installed: harborRes.ok
@@ -144,7 +138,6 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 								isEnacted: proposal.status === 'enacted',
 							}),
 							allSigners,
-							isLoading: false,
 						})
 					})
 					return
@@ -155,12 +148,9 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
 				if (target === null) {
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
-						signerSetChange: null,
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
@@ -170,12 +160,10 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				if (target === proposal.authority) {
 					// No retarget: the config already read above for `allSigners` is also the target's.
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
@@ -187,12 +175,10 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				void getMultisigConfig(target).then((targetConfigRes) => {
 					if (cancelled) return
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 				})
 			},
@@ -209,10 +195,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	// change return an empty loading view instead of exposing the previous proposal's signer data.
 	if (decodedData.proposalKey !== proposalKey) {
 		return {
-			signerSetChange: null,
-			safeHarborChange: null,
-			safeHarborActivated: false,
-			allSigners: [],
+			...NOTHING_DECODED,
 			isLoading: proposal !== null,
 		}
 	}
