@@ -7,6 +7,18 @@ import { getActionValidator } from './validators'
 export type { VkPredicateType } from '@/lib/vk-predicate'
 export { VK_PREDICATE_TYPES, VK_PREDICATE_TYPE_IDS, VK_PREDICATE_TYPE_LABELS } from '@/lib/vk-predicate'
 
+/** The action types a signer can create. `ActionType` in create-proposal.types derives from it. */
+export const CREATE_ACTION_TYPES = [
+	'vk_update',
+	'signer_update',
+	'council_signer_update',
+	'operator_set_update',
+	'sequencer_key_update',
+	'safe_harbour_address_update',
+	'defcon_1',
+	'defcon_3',
+] as const
+
 const keyRowSchema = z.object({
 	value: z.string(),
 })
@@ -14,16 +26,7 @@ const keyRowSchema = z.object({
 export const normalizeSignerKey = normalizePubkey
 
 const createProposalFormObjectSchema = z.object({
-	actionType: z.enum([
-		'vk_update',
-		'signer_update',
-		'council_signer_update',
-		'operator_set_update',
-		'sequencer_key_update',
-		'safe_harbour_address_update',
-		'defcon_1',
-		'defcon_3',
-	]),
+	actionType: z.enum(CREATE_ACTION_TYPES),
 	seqNo: z.string(),
 	title: z.string().max(512, 'Title must be at most 512 characters'),
 	keysToAdd: z.array(keyRowSchema),

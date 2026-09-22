@@ -1,4 +1,5 @@
 import type { ActionType, BroadcastStatus, ProposalStatus } from '@/api/proposals'
+import { hasProposalQuorum, isTerminalProposalStatus } from '@/lib/proposal-status'
 
 // Minimal proposal shape needed to derive which signer actions are available.
 // Kept as a structural subset of `Proposal` so callers pass the real domain
@@ -22,7 +23,7 @@ export type ProposalActions = {
 	canCancel: boolean
 }
 
-export type CancelableInput = {
+type CancelableInput = {
 	isCancelable: boolean
 }
 
@@ -41,14 +42,8 @@ export function canCancelProposal(proposal: CancelableInput): boolean {
 // (`broadcastStatus === 'idle'`) must still allow an eligible, not-yet-signed
 // signer to add their signature.
 export function deriveProposalActions(proposal: ProposalActionInput, signerPubkey: string | null): ProposalActions {
-	const collectedSignatures = proposal.signatures.length
-	const isTerminal =
-		proposal.status === 'enacted' ||
-		proposal.status === 'canceled' ||
-		proposal.status === 'expired' ||
-		proposal.status === 'superseded'
-	const hasQuorum =
-		!isTerminal && (proposal.status === 'approved' || collectedSignatures >= proposal.requiredSignatures)
+	const isTerminal = isTerminalProposalStatus(proposal.status)
+	const hasQuorum = hasProposalQuorum(proposal)
 	const broadcastStarted = proposal.broadcastStatus !== 'idle'
 
 	const alreadySigned =

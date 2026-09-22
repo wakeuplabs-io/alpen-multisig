@@ -9,6 +9,9 @@ import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
 import { buildSignerSetChange } from '@/domain/signer-set-change/model/build-signer-set-change'
+import { defconLevelOf, FROZEN_DESTINATION_NOTE } from '@/lib/defcon-copy'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
+import type { SafeHarborStatus } from '@/api/asm-state'
 import { actionTypeTitle } from '../model/action-type-config'
 import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import type { ActionType } from '../model/create-proposal.types'
@@ -29,7 +32,7 @@ type Props = {
 	newSequencerKeyHex: string
 	newSafeHarborAddress: string
 	/** The bridge's destination this rotation replaces, and whether it is already frozen. */
-	currentSafeHarbor: { address: string; addressHex: string; activated: boolean } | null
+	currentSafeHarbor: SafeHarborStatus | null
 	/** What the connected device shows for this action — nothing for software signers. */
 	deviceDisplay: DeviceSigningDisplay
 	/**
@@ -69,6 +72,7 @@ export function CreateProposalPreview({
 }: Props) {
 	const signerCopy = deviceCopy(walletVendor)
 	const actionTypeLabel = actionTypeTitle(actionType)
+	const defconLevel = defconLevelOf(actionType)
 	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
 	const signerSetChange = buildSignerSetChange({
 		signers: currentSigners,
@@ -131,8 +135,8 @@ export function CreateProposalPreview({
 
 			<div className="border-t border-[#e5e7eb]" />
 
-			{actionType === 'defcon_1' || actionType === 'defcon_3' ? (
-				<DefconCallout level={actionType} />
+			{defconLevel !== null ? (
+				<DefconCallout level={defconLevel} />
 			) : actionType === 'operator_set_update' ? (
 				<div className="flex flex-col gap-4">
 					{operatorsToAdd.length > 0 && (
@@ -201,12 +205,8 @@ export function CreateProposalPreview({
 						</div>
 					)}
 					{currentSafeHarbor?.activated === true && (
-						<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface p-4">
-							<p className="m-0 text-body font-semibold text-[#111827]">Safe harbor is already active</p>
-							<p className="m-0 mt-2 text-body text-[#6b7280]">
-								The destination is frozen once safe harbor is active. This update will be accepted on chain and change
-								nothing, and it will not report as Enacted.
-							</p>
+						<div className="mt-4">
+							<SafeHarborNote>{FROZEN_DESTINATION_NOTE}</SafeHarborNote>
 						</div>
 					)}
 				</div>

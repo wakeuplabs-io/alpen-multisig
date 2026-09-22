@@ -3,8 +3,7 @@ import { getCurrentOperators, getCurrentVk } from '@/api/asm-state'
 import type { CurrentVk } from '@/api/asm-state'
 import {
 	buildAdminMultisigUpdateHex,
-	buildDefcon1ActionHex,
-	buildDefcon3ActionHex,
+	buildDefconActionHex,
 	buildOperatorSetUpdateHex,
 	buildSafeHarborAddressUpdateHex,
 	buildSequencerKeyUpdateHex,
@@ -112,9 +111,8 @@ export function useCreateProposal(): UseCreateProposalReturn {
 					await buildSequencerKeyUpdateHex({ newPubKey: normalizePubkey(formData.newSequencerKeyHex) }),
 				)
 			case 'defcon_1':
-				return unwrapActionHex(await buildDefcon1ActionHex())
 			case 'defcon_3':
-				return unwrapActionHex(await buildDefcon3ActionHex())
+				return unwrapActionHex(await buildDefconActionHex(formData.actionType))
 			case 'operator_set_update':
 				return unwrapActionHex(
 					await buildOperatorSetUpdateHex({

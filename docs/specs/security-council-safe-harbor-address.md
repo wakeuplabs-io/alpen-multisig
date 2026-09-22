@@ -609,8 +609,8 @@ would be the flakiest test in the repository and would re-prove what the e2e pro
 
 Code review checks that:
 
-- [ ] The enactment predicate reads the address from the bridge and the seqno from the Strata
-      Administrator — in both copies.
+- [ ] The enactment predicate (`orchestrator-be/src/infrastructure/asm_enactment.rs`, the only
+      live one) reads the address from the bridge and the seqno from the Strata Administrator.
 - [ ] No surface reports a rotation enacted on the strength of a consumed sequence number alone.
 - [ ] No constant stands in for `confirmation_depths.safe_harbour_address_update`.
 - [ ] `action_needs_chain_tip` still answers only for Defcon 3.

@@ -21,14 +21,14 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 	// Title matches `lib/proposal-type-label.ts`, so the menu, the dashboard and the detail view
 	// say one thing. Neither the title nor the description may contain the exact substring
 	// "Signer update": three WebDriver specs select the administrator's card by that text, and
-	// `ActionTypeCard` renders both as `<p>` elements the same XPath matches (§6).
+	// `ActionTypeCard` renders both as `<p>` elements the same XPath matches.
 	council_signer_update: {
 		actionType: 'council_signer_update',
 		title: 'Security Council signer update',
 		description: 'Add / remove council keys or change threshold.',
 	},
-	// "Safe Harbor" rather than "Safe Harbor": the label follows the protocol's spelling, which is
-	// what the signing message and the device show.
+	// The key keeps the protocol's `harbour` spelling, which is what the wire and the signing message
+	// carry; the on-screen title uses "Harbor".
 	safe_harbour_address_update: {
 		actionType: 'safe_harbour_address_update',
 		title: 'Safe Harbor address update',
@@ -80,7 +80,7 @@ const ACTION_TYPES_BY_AUTHORITY: Record<string, ActionType[]> = {
 // practice this is `payout_admin`, which has no ASM role. Before council_signer_update existed,
 // borrowing the administrator's list was merely wrong; now it would authorize a council rotation
 // for an authority nobody enumerated, and the schema's own gate reads this same function
-// (create-proposal.schema.ts), so it would authorize it too (§4.6).
+// (create-proposal.schema.ts), so it would authorize it too.
 const UNKNOWN_AUTHORITY_ACTION_TYPES: ActionType[] = []
 
 /** The action type's display title — the same string the selection card carries. */
@@ -96,7 +96,7 @@ export function getActionTypeOptions(authority: string): ActionTypeOption[] {
 export function getDefaultActionType(authority: string): ActionType {
 	const options = getActionTypeOptions(authority)
 	const first = options[0]
-	// The unknown-authority fallback (§4.6) is an empty list, not the administrator's — correct,
+	// The unknown-authority fallback is an empty list, not the administrator's — correct,
 	// but it makes this reachable for an authority nobody enumerated. Today no caller can actually
 	// get here (every session authority that reaches this form is one of the four wired above),
 	// so this is a backstop, not a repair: it fails with a message that names the authority

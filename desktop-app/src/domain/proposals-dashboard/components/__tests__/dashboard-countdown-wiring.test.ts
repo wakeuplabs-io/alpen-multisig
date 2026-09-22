@@ -1,8 +1,8 @@
 // The dashboard card must show the same activation countdown the detail and cancel screens
 // already show, driven by the same live block height and the same shared predicate.
 //
-// Phase 6 (`security-council-defcon-3-phase-6.md` §3.3, §6): before this, a queued proposal's
-// dashboard card said only "Refresh to check whether the ASM has applied it." — no activation
+// Defcon 3 AC 7 (docs/specs/security-council-defcon-3.md): a queued proposal's dashboard card used
+// to say only "Refresh to check whether the ASM has applied it." — no activation
 // block, no current block, no countdown. `showsActivationCountdown` already answered correctly for
 // a queued Defcon 3; the dashboard just never asked it.
 //

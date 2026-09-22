@@ -100,3 +100,17 @@ export function showsActivationCountdown(proposal: ActivationCountdownInput): bo
 export function isTerminalProposalStatus(status: ProposalStatus): boolean {
 	return status === 'enacted' || status === 'canceled' || status === 'expired' || status === 'superseded'
 }
+
+type QuorumInput = {
+	status: ProposalStatus
+	signatures: readonly unknown[]
+	requiredSignatures: number
+}
+
+/** A live proposal that is approved or has collected enough signatures. Never true once terminal. */
+export function hasProposalQuorum(proposal: QuorumInput): boolean {
+	return (
+		!isTerminalProposalStatus(proposal.status) &&
+		(proposal.status === 'approved' || proposal.signatures.length >= proposal.requiredSignatures)
+	)
+}

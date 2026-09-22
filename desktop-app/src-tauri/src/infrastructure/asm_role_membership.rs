@@ -1,9 +1,4 @@
-use serde_json::{json, Value};
-use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
-use strata_asm_params::Role;
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
-
+use crate::domain::auth::AuthRole;
 use crate::domain::authority::Authority;
 
 /// Return the ordered list of hex-encoded compressed public keys for an authority's signer set.
@@ -18,128 +13,10 @@ pub async fn ordered_keys_for_authority(
         return Ok(keys);
     }
     super::reject_mock_asm_url_in_prod(rpc_url)?;
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    let admin = decode_admin_state(&anchor)?;
-    let role = authority_to_role(authority)?;
-    authority_keys_hex(&admin, role)
-}
-
-fn authority_to_role(authority: Authority) -> Result<Role, String> {
-    // Listed exhaustively rather than caught by `_`: a catch-all is how the council reached the
-    // error arm here long after `orchestrator-be` had mapped it, and the next authority added
-    // upstream should be a compile error rather than a broadcast that fails at the last step.
-    match authority {
-        Authority::StrataAdmin => Ok(Role::StrataAdministrator),
-        Authority::SequencerManager => Ok(Role::StrataSequencerManager),
-        Authority::AlpenAdmin => Ok(Role::AlpenAdministrator),
-        Authority::SecurityCouncil => Ok(Role::StrataSecurityCouncil),
-        // No ASM role upstream.
-        Authority::PayoutAdmin => Err(format!(
-            "authority `{authority:?}` is not mapped to ASM role authorization yet"
-        )),
-    }
-}
-
-async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = super::rpc_timeout::rpc_client();
-    let payload = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params
-    });
-
-    let response = client
-        .post(rpc_url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("rpc send failed: {e}"))?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!(
-            "RPC method `{method}` returned unexpected status code: {status}"
-        ));
-    }
-
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("invalid rpc json body: {e}"))?;
-
-    if let Some(err) = body.get("error") {
-        let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");
-        if method == "strata_asm_getStatus" && err.to_string().contains("\"code\":-32601") {
-            return Err(format!(
-                "{base}. This usually means the ASM RPC URL points to a non-ASM endpoint."
-            ));
-        }
-        return Err(base);
-    }
-
-    body.get("result")
-        .cloned()
-        .ok_or_else(|| format!("RPC method `{method}` response does not contain `result`: {body}"))
-}
-
-fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState, String> {
-    let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
-
-    let items = raw_state
-        .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
-
-    let bytes: Vec<u8> = items
-        .iter()
-        .map(|v| {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("state entry is not an unsigned integer: {v}"))?;
-            u8::try_from(n).map_err(|_| format!("state entry out of byte range: {n}"))
-        })
-        .collect::<Result<Vec<u8>, String>>()?;
-
-    AnchorState::from_ssz_bytes(&bytes)
-        .map_err(|err| format!("failed to SSZ-decode AnchorState: {err}"))
-}
-
-fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {
-    let id = AdministrationSubprotocol::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!(
-            "AnchorState has no administration subprotocol section (expected id {id}). \
-             The RPC returned a decodable `AnchorState`, but it does not include admin — \
-             often wrong `strata-asm-runner` spec/params, or state from an incompatible DB snapshot."
-        )
-    })?;
-    section.try_to_state::<AdministrationSubprotocol>().map_err(|e| {
-        format!(
-            "Administration section (id {id}) is present but its SSZ payload does not decode with this app ({e:?}). \
-             Rebuild `strata-asm-runner` from the same `alpenlabs/asm` commit as this workspace and delete the runner DB \
-             (see `[database].path` in asm-config.toml, e.g. /tmp/asm-runner-db) so genesis is recreated."
-        )
-    })
-}
-
-fn authority_keys_hex(
-    admin: &AdministrationSubprotoState,
-    role: Role,
-) -> Result<Vec<String>, String> {
-    let authority = admin
-        .authority(role)
-        .ok_or_else(|| format!("admin state missing authority for role `{:?}`", role))?;
-
-    Ok(authority
-        .config()
-        .keys()
-        .iter()
-        .map(|k| hex::encode(k.serialize()))
-        .collect())
+    let role = AuthRole::try_for_authority(authority)?;
+    Ok(super::asm_status_rpc::fetch_multisig_config(rpc_url, role)
+        .await?
+        .signers)
 }
 
 // In-process ASM signer-set mock — compiled only under `cfg(test)` or `dev-mocks`.
@@ -150,20 +27,13 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
         return None;
     }
     match authority {
-        Authority::StrataAdmin => Some(vec![
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
-            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
-        ]),
-        Authority::SequencerManager => Some(vec![
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
-            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
-        ]),
-        // Same signer pair as the Strata admin above, for the reason the orchestrator's
-        // council mock gives: the local stack authenticates both roles with one wallet.
-        Authority::SecurityCouncil => Some(vec![
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
-            "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
-        ]),
+        // One signer pair for all three: the local stack authenticates every role with one wallet.
+        Authority::StrataAdmin | Authority::SequencerManager | Authority::SecurityCouncil => {
+            Some(vec![
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+                "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
+            ])
+        }
         _ => None,
     }
 }
@@ -171,24 +41,4 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
 #[cfg(not(any(test, feature = "dev-mocks")))]
 fn mock_ordered_keys(_rpc_url: &str, _authority: Authority) -> Option<Vec<String>> {
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Broadcast reads the signer set through this mapping, so every authority with an ASM role
-    /// must resolve to exactly its own.
-    #[test]
-    fn payout_admin_is_the_only_unmapped_authority() {
-        for (authority, role) in [
-            (Authority::StrataAdmin, Role::StrataAdministrator),
-            (Authority::SequencerManager, Role::StrataSequencerManager),
-            (Authority::AlpenAdmin, Role::AlpenAdministrator),
-            (Authority::SecurityCouncil, Role::StrataSecurityCouncil),
-        ] {
-            assert_eq!(authority_to_role(authority), Ok(role), "{authority:?}");
-        }
-        assert!(authority_to_role(Authority::PayoutAdmin).is_err());
-    }
 }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { buildDefcon1ActionHex, buildDefcon3ActionHex } from '@/api/action-builder'
+import { buildDefconActionHex } from '@/api/action-builder'
 import type { DefconLevel } from '@/lib/defcon-copy'
 
-export type DefconActionHex = {
+type DefconActionHex = {
 	actionHex: string | null
 	error: string | null
 }
@@ -25,19 +25,7 @@ export function useDefconActionHex(level: DefconLevel): DefconActionHex {
 	useEffect(() => {
 		let cancelled = false
 		setState({ actionHex: null, error: null })
-		const build = (() => {
-			switch (level) {
-				case 'defcon_1':
-					return buildDefcon1ActionHex
-				case 'defcon_3':
-					return buildDefcon3ActionHex
-				default: {
-					const _exhaustive: never = level
-					return _exhaustive
-				}
-			}
-		})()
-		void build().then((result) => {
+		void buildDefconActionHex(level).then((result) => {
 			if (cancelled) return
 			setState(result.ok ? { actionHex: result.data.actionHex, error: null } : { actionHex: null, error: result.error })
 		})

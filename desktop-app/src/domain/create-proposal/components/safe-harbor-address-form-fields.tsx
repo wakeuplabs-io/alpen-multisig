@@ -1,5 +1,6 @@
 import { useFormContext, useWatch } from 'react-hook-form'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
+import { FROZEN_DESTINATION_NOTE } from '@/lib/defcon-copy'
 import type { SafeHarborStatus } from '@/api/asm-state'
 import { useSafeHarborActionHex } from '../hooks/use-safe-harbor-action-hex'
 import type { CreateProposalFormValues } from '../model/create-proposal.schema'
@@ -27,7 +28,7 @@ const MIN_PLAUSIBLE_ADDRESS_LENGTH = 40
  * trust.
  *
  * The full signing message is not here: nothing is signed on this screen. It is on the preview and
- * the sign view, where the signature is given (V4 Phase 4 §2).
+ * the sign view, where the signature is given.
  */
 export function SafeHarborAddressFormFields({ safeHarbor, isLoadingSafeHarbor }: Props) {
 	const {
@@ -54,12 +55,7 @@ export function SafeHarborAddressFormFields({ safeHarbor, isLoadingSafeHarbor }:
 		<div className="flex flex-col gap-5">
 			{/* Stated, never enforced: the chain accepts this rotation and discards it, so the signer
 			    is told what it will do rather than stopped from doing it. */}
-			{safeHarbor?.activated === true && (
-				<SafeHarborNote>
-					The destination is frozen once safe harbor is active, so this update will be accepted on chain and change
-					nothing. It will not report as Enacted.
-				</SafeHarborNote>
-			)}
+			{safeHarbor?.activated === true && <SafeHarborNote>{FROZEN_DESTINATION_NOTE}</SafeHarborNote>}
 
 			<div>
 				<p className="mb-3 text-body font-medium text-[#6b7280]">Current destination</p>

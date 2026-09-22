@@ -1,29 +1,12 @@
 use std::collections::HashMap;
 
-use serde_json::{json, Value};
-use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
 use strata_asm_params::{Role, UpdateTxType};
-use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
+use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
-use crate::infrastructure::{action_codec, http_client, rpc_timeout};
-
-/// Whether this authority has a wired ASM `Role` mapping (P-037).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AuthorityAsmSupport {
-    Supported,
-    Unsupported,
-}
-
-pub(crate) fn authority_asm_support(authority: Authority) -> AuthorityAsmSupport {
-    match authority_to_role(authority) {
-        Ok(_) => AuthorityAsmSupport::Supported,
-        Err(_) => AuthorityAsmSupport::Unsupported,
-    }
-}
+use crate::infrastructure::{action_codec, asm_rpc};
 
 pub(crate) async fn is_signer_member_for_authority(
     rpc_url: &str,
@@ -34,22 +17,14 @@ pub(crate) async fn is_signer_member_for_authority(
         return Ok(is_member);
     }
 
-    if authority_asm_support(authority) == AuthorityAsmSupport::Unsupported {
-        return Err(AppError::BadRequest(format!(
-            "authority `{authority:?}` is not mapped to ASM role authorization yet"
-        )));
-    }
-
+    // Resolved before the RPC: an authority with no ASM role is refused without a network call.
+    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
     let role_membership = fetch_role_membership(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
-    let keys = role_membership.get(&role).ok_or_else(|| {
-        AppError::BadRequest(format!(
-            "admin state missing authority for role `{:?}`",
-            role
-        ))
-    })?;
+    let keys = role_membership
+        .get(&role)
+        .ok_or_else(|| asm_rpc::missing_authority(role))?;
     Ok(keys
         .iter()
         .any(|key| key.eq_ignore_ascii_case(signer_pubkey)))
@@ -64,18 +39,13 @@ pub(crate) async fn last_seqno_for_authority(
         return Ok(seqno);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
-    let authority_config = admin.authority(role).ok_or_else(|| {
-        AppError::BadRequest(format!(
-            "admin state missing authority for role `{:?}`",
-            role
-        ))
-    })?;
+    let authority_config = admin
+        .authority(role)
+        .ok_or_else(|| asm_rpc::missing_authority(role))?;
     Ok(authority_config.last_seqno())
 }
 
@@ -87,18 +57,13 @@ pub(crate) async fn threshold_for_authority(
         return Ok(threshold);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
     let role = authority_to_role(authority).map_err(AppError::BadRequest)?;
-    let authority_config = admin.authority(role).ok_or_else(|| {
-        AppError::BadRequest(format!(
-            "admin state missing authority for role `{:?}`",
-            role
-        ))
-    })?;
+    let authority_config = admin
+        .authority(role)
+        .ok_or_else(|| asm_rpc::missing_authority(role))?;
     Ok(u16::from(authority_config.config().threshold()))
 }
 
@@ -106,7 +71,7 @@ pub(crate) async fn threshold_for_authority(
 ///
 /// Resolved from the action, never from the authority: the Security Council signs both Defcon 1
 /// (immediate) and Defcon 3 (timelocked), so no per-authority mapping can answer for it. Read live
-/// on every call — see docs/specs/security-council-defcon-phase-1.md.
+/// on every call, never cached or defaulted — see docs/specs/security-council.md §5.3.
 ///
 /// Returns `0` for actions that bypass the queue and apply immediately.
 pub(crate) async fn lock_period_for_action(
@@ -120,11 +85,9 @@ pub(crate) async fn lock_period_for_action(
         return Ok(period);
     }
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
     Ok(depth_for_action(&action, |tx_type| {
         admin.confirmation_depth(tx_type)
@@ -159,11 +122,11 @@ pub(crate) enum ConfirmationDepthResolver {
 impl ConfirmationDepthResolver {
     pub async fn fetch(rpc_url: &str) -> Self {
         #[cfg(any(test, feature = "dev-mocks"))]
-        if rpc_url == "mock://asm-membership" {
+        if rpc_url == MOCK_MEMBERSHIP_URL {
             return Self::Mock(uniform_confirmation_depths(2016));
         }
 
-        match fetch_admin_state(rpc_url).await {
+        match asm_rpc::fetch_admin_state(rpc_url).await {
             Ok(admin) => Self::Live(admin),
             Err(e) => {
                 tracing::warn!("cancelability: confirmation depth lookup failed: {e}");
@@ -192,12 +155,6 @@ impl ConfirmationDepthResolver {
     }
 }
 
-async fn fetch_admin_state(rpc_url: &str) -> Result<AdministrationSubprotoState, String> {
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    decode_admin_state(&anchor)
-}
-
 /// Find the ASM queue `UpdateId` for the update encoded in `action_hex`.
 ///
 /// Decodes the action, then scans the live ASM queue for the matching `UpdateAction`.
@@ -218,11 +175,9 @@ pub(crate) async fn update_id_in_queue_for_action(
         MultisigAction::Cancel(_) => return Ok(None),
     };
 
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([]))
+    let admin = asm_rpc::fetch_admin_state(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let anchor = decode_anchor_state_from_status(&status_result).map_err(AppError::BadRequest)?;
-    let admin = decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
 
     let found = admin
         .queued()
@@ -238,14 +193,12 @@ pub(crate) async fn update_id_in_queue_for_action(
 /// The role that may sign an update is upstream's table (`UpdateTxType::authorized_role`), not a
 /// copy of ours, so a new update variant is gated correctly here the moment it exists. Reads no
 /// chain state — hence sync, unlike its neighbours in this module.
-///
-/// See docs/specs/security-council-defcon-phase-3.md §5.
 pub(crate) fn require_authorized_for_action(
     authority: Authority,
     action: &MultisigAction,
 ) -> Result<(), AppError> {
     // A cancel carries no `UpdateTxType` and so no authorized role. Cancels are created through
-    // their own endpoint, gated on the target's confirmation depth (Phase 2).
+    // their own endpoint, gated on the target's confirmation depth.
     let MultisigAction::Update(update) = action else {
         return Ok(());
     };
@@ -265,11 +218,9 @@ pub(crate) fn require_authorized_for_action(
 
 /// The one answer this crate gives to "which ASM role is this authority".
 ///
-/// Listed exhaustively rather than caught by `_`, for the reason its desktop twin already
-/// records: a catch-all is how the council reached an error arm long after it had been mapped
-/// everywhere else, and it is how the enactment module kept a third, staler answer of its own
-/// until slice V3. The next authority added upstream should stop the build rather than surface
-/// as a runtime refusal.
+/// Listed exhaustively rather than caught by `_`: a catch-all is how the council once sat in an
+/// error arm long after it had been mapped everywhere else. The next authority added upstream
+/// should stop the build rather than surface as a runtime refusal.
 fn authority_to_role(authority: Authority) -> Result<Role, String> {
     match authority {
         Authority::StrataAdmin => Ok(Role::StrataAdministrator),
@@ -284,9 +235,7 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
 }
 
 async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String>>, String> {
-    let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    let anchor = decode_anchor_state_from_status(&status_result)?;
-    let admin = decode_admin_state(&anchor)?;
+    let admin = asm_rpc::fetch_admin_state(rpc_url).await?;
 
     // A role the chain does not carry is "not a member", never "membership unknowable". This is
     // read for every authority on every auth challenge, so one authority missing from an older
@@ -309,91 +258,6 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
     }
 
     Ok(role_to_keys)
-}
-
-async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
-    let client = http_client::shared();
-    let payload = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": params
-    });
-
-    let response = rpc_timeout::with_rpc_timeout(
-        &format!("ASM RPC `{method}`"),
-        client.post(rpc_url).json(&payload).send(),
-    )
-    .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!(
-            "RPC method `{method}` returned unexpected status code: {status}"
-        ));
-    }
-
-    let body: Value =
-        rpc_timeout::with_rpc_timeout(&format!("ASM RPC `{method}` body"), response.json()).await?;
-
-    if let Some(err) = body.get("error") {
-        let base = format!("RPC method `{method}` returned JSON-RPC error: {err}");
-        if method == "strata_asm_getStatus" && err.to_string().contains("\"code\":-32601") {
-            return Err(format!(
-				"{base}. This usually means `STRATA_ADMIN_STATE_RPC_URL` points to a non-ASM endpoint."
-			));
-        }
-        return Err(base);
-    }
-
-    body.get("result")
-        .cloned()
-        .ok_or_else(|| format!("RPC method `{method}` response does not contain `result`: {body}"))
-}
-
-fn decode_state_bytes_from_status(status_result: &Value) -> Result<Vec<u8>, String> {
-    let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
-
-    let items = raw_state
-        .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
-
-    items
-        .iter()
-        .map(|v| {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| format!("state entry is not an unsigned integer: {v}"))?;
-            u8::try_from(n).map_err(|_| format!("state entry out of byte range: {n}"))
-        })
-        .collect::<Result<Vec<u8>, String>>()
-}
-
-fn decode_anchor_state_from_status(status_result: &Value) -> Result<AnchorState, String> {
-    let bytes = decode_state_bytes_from_status(status_result)?;
-    AnchorState::from_ssz_bytes(&bytes)
-        .map_err(|err| format!("failed to SSZ-decode AnchorState from status state bytes: {err}"))
-}
-
-fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoState, String> {
-    let id = AdministrationSubprotocol::ID;
-    let section = anchor.find_section(id).ok_or_else(|| {
-        format!(
-            "AnchorState has no administration subprotocol section (expected id {id}). \
-             The RPC returned a decodable `AnchorState`, but it does not include admin — \
-             often wrong `strata-asm-runner` spec/params, or state from an incompatible DB snapshot."
-        )
-    })?;
-    section.try_to_state::<AdministrationSubprotocol>().map_err(|e| {
-        format!(
-            "Administration section (id {id}) is present but its SSZ payload does not decode with this app ({e:?}). \
-             Rebuild `strata-asm-runner` from the same `alpenlabs/asm` commit as this workspace and delete the runner DB \
-             (see `[database].path` in orchestrator ASM config / asm-config.toml, e.g. /tmp/asm-runner-db) so genesis is recreated."
-        )
-    })
 }
 
 fn authority_keys_hex(
@@ -419,9 +283,13 @@ fn authority_keys_hex(
 // RPC URL can never satisfy an authorization check — it falls through to the real
 // RPC path (and is additionally rejected at startup by `Config::from_env`).
 
+/// The dev stack's ASM: every authority answers with the same fixed signer pair and depths.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_MEMBERSHIP_URL: &str = "mock://asm-membership";
+
 #[cfg(any(test, feature = "dev-mocks"))]
 fn is_mock_url(rpc_url: &str) -> bool {
-    rpc_url == "mock://asm-membership"
+    rpc_url == MOCK_MEMBERSHIP_URL
         || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_URL
         || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL
         || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
@@ -447,7 +315,7 @@ fn mock_strata_signer_b_pk_matches(signer_pubkey: &str) -> bool {
 /// In-process mock for e2e and local dev when `STRATA_ADMIN_STATE_RPC_URL=mock://asm-membership`.
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_membership(rpc_url: &str, authority: Authority, signer_pubkey: &str) -> Option<bool> {
-    if rpc_url != "mock://asm-membership" {
+    if rpc_url != MOCK_MEMBERSHIP_URL {
         return None;
     }
 
@@ -487,15 +355,15 @@ fn mock_last_seqno(rpc_url: &str, authority: Authority) -> Option<u64> {
     {
         return Some(5);
     }
-    if rpc_url != "mock://asm-membership" {
+    if rpc_url != MOCK_MEMBERSHIP_URL {
         return None;
     }
     match authority {
-        Authority::StrataAdmin => Some(0),
-        Authority::SequencerManager => Some(0),
-        Authority::AlpenAdmin => Some(0),
-        Authority::SecurityCouncil => Some(0),
-        _ => None,
+        Authority::PayoutAdmin => None,
+        Authority::StrataAdmin
+        | Authority::SequencerManager
+        | Authority::AlpenAdmin
+        | Authority::SecurityCouncil => Some(0),
     }
 }
 
@@ -508,7 +376,7 @@ fn mock_last_seqno(_rpc_url: &str, _authority: Authority) -> Option<u64> {
 fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     // The seqno fixtures answer the same threshold as the membership one: they exist to move
     // `last_seqno`, not to drift the snapshot.
-    let known = rpc_url == "mock://asm-membership"
+    let known = rpc_url == MOCK_MEMBERSHIP_URL
         || rpc_url == crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
         || rpc_url == crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL;
     if !known {
@@ -516,11 +384,11 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
     }
 
     match authority {
-        Authority::StrataAdmin => Some(2),
-        Authority::SequencerManager => Some(2),
-        Authority::AlpenAdmin => Some(2),
-        Authority::SecurityCouncil => Some(2),
-        _ => None,
+        Authority::PayoutAdmin => None,
+        Authority::StrataAdmin
+        | Authority::SequencerManager
+        | Authority::AlpenAdmin
+        | Authority::SecurityCouncil => Some(2),
     }
 }
 
@@ -555,7 +423,7 @@ fn uniform_confirmation_depths(depth: u16) -> strata_asm_params::ConfirmationDep
 /// immediately.
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_lock_period(rpc_url: &str, action: &MultisigAction) -> Option<u64> {
-    if rpc_url != "mock://asm-membership" {
+    if rpc_url != MOCK_MEMBERSHIP_URL {
         return None;
     }
 
@@ -707,8 +575,7 @@ mod tests {
         let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
         depths.defcon3 = 7;
 
-        // Tripwire for the composition in docs/specs/security-council-defcon-phase-1.md §4: we hold
-        // no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
+        // Tripwire: we hold no local copy of upstream's table, so this is what catches upstream giving Defcon 1 a
         // configurable depth. Every field is non-zero, so `None` here can only come from the
         // hardcoded arm.
         assert!(depths.get(UpdateTxType::Defcon1).is_none());
@@ -780,29 +647,19 @@ mod tests {
         assert_eq!(depth_for_action(&cancel, |t| depths.get(t)), 0);
     }
 
+    /// Every live ASM read resolves the role through this mapping, so each authority with an ASM
+    /// role must resolve to exactly its own (P-037).
     #[test]
-    fn all_five_authorities_have_explicit_asm_mapping_status() {
-        use Authority::*;
-        assert_eq!(
-            authority_asm_support(StrataAdmin),
-            AuthorityAsmSupport::Supported
-        );
-        assert_eq!(
-            authority_asm_support(SequencerManager),
-            AuthorityAsmSupport::Supported
-        );
-        assert_eq!(
-            authority_asm_support(AlpenAdmin),
-            AuthorityAsmSupport::Supported
-        );
-        assert_eq!(
-            authority_asm_support(SecurityCouncil),
-            AuthorityAsmSupport::Supported
-        );
-        assert_eq!(
-            authority_asm_support(PayoutAdmin),
-            AuthorityAsmSupport::Unsupported
-        );
+    fn payout_admin_is_the_only_unmapped_authority() {
+        for (authority, role) in [
+            (Authority::StrataAdmin, Role::StrataAdministrator),
+            (Authority::SequencerManager, Role::StrataSequencerManager),
+            (Authority::AlpenAdmin, Role::AlpenAdministrator),
+            (Authority::SecurityCouncil, Role::StrataSecurityCouncil),
+        ] {
+            assert_eq!(authority_to_role(authority), Ok(role), "{authority:?}");
+        }
+        assert!(authority_to_role(Authority::PayoutAdmin).is_err());
     }
 
     #[test]

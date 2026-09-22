@@ -12,7 +12,7 @@ export type SafeHarborChange = {
 	to: SafeHarborDestination
 }
 
-export type BuildSafeHarborChangeInput = {
+type BuildSafeHarborChangeInput = {
 	/** The bridge's live destination, or null when it could not be read from chain. */
 	installed: SafeHarborDestination | null
 	/** The destination this action carries, decoded from its hex. */

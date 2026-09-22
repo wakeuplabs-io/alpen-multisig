@@ -33,8 +33,7 @@ export function ProposalsDashboardScreen() {
 	// Read by both authorities that hold a lever answering this bridge-wide state, and by no
 	// other session. The council's Defcon levers set the flag; the administrator's safe harbor
 	// rotation is decided by it, since a rotation submitted after activation is accepted on chain
-	// and applied nowhere. V2 wrote this gate when the council was the only such authority; V4
-	// added the second, which left every rotation on this screen judged against a false flag.
+	// and applied nowhere. Gating it on the council alone judged every rotation against a false flag.
 	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
 	const isStrataAdmin = selectedRole === AuthRole.StrataAdministrator
 	const safeHarborActivated = useSafeHarborActivated(isCouncil || isStrataAdmin)

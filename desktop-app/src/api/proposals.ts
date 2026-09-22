@@ -1,5 +1,5 @@
 import type { ApiResult } from '@/types'
-import { broadcastResultSchema, proposalSchema } from '@/api/ipc-schemas'
+import { broadcastResultSchema, proposalSchema, type PROPOSAL_ACTION_TYPES } from '@/api/ipc-schemas'
 import { tauriCall } from '@/api/tauri-bridge'
 import { z } from 'zod'
 
@@ -15,17 +15,7 @@ export type BroadcastStatus =
 
 export type ProposalKind = 'update' | 'cancel'
 
-export type ActionType =
-	| 'multisig_update'
-	| 'vk_update'
-	| 'operator_set_update'
-	| 'sequencer_key_update'
-	| 'council_signer_update'
-	| 'safe_harbour_address_update'
-	| 'defcon_1'
-	| 'defcon_3'
-	| 'cancel'
-	| 'unknown'
+export type ActionType = (typeof PROPOSAL_ACTION_TYPES)[number]
 
 export type CancelProposalSummary = {
 	actionId: string

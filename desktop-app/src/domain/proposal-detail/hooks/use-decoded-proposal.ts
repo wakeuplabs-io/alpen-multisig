@@ -36,14 +36,21 @@ export type DecodedProposalData = {
 	isLoading: boolean
 }
 
+const NOTHING_DECODED: DecodedProposalData = {
+	signerSetChange: null,
+	safeHarborChange: null,
+	safeHarborActivated: false,
+	allSigners: [],
+	isLoading: false,
+}
+
 type KeyedDecodedProposalData = DecodedProposalData & {
 	proposalKey: string | null
 }
 
 /**
  * Builds the Before/After table from a decoded action and the config it should read against, or
- * suppresses it (returns `null`) rather than guess. Suppression is Phase 1 behaviour, preserved
- * on purpose (§4.9): a failed config read for the *target* falls back here too, never to
+ * suppresses it (returns `null`) rather than guess: a failed config read for the *target* falls back here too, never to
  * rendering against some other config.
  */
 function buildTableOrNull(
@@ -66,40 +73,29 @@ function buildTableOrNull(
 export function useDecodedProposal(proposal: Proposal | null): DecodedProposalData {
 	const proposalKey = proposal === null ? null : `${proposal.actionId}:${proposal.status}`
 	const [decodedData, setDecodedData] = useState<KeyedDecodedProposalData>({
+		...NOTHING_DECODED,
 		proposalKey: null,
-		signerSetChange: null,
-		safeHarborChange: null,
-		safeHarborActivated: false,
-		allSigners: [],
-		isLoading: false,
 	})
 
 	useEffect(() => {
 		if (proposal === null) {
 			setDecodedData({
+				...NOTHING_DECODED,
 				proposalKey: null,
-				signerSetChange: null,
-				safeHarborChange: null,
-				safeHarborActivated: false,
-				allSigners: [],
-				isLoading: false,
 			})
 			return
 		}
 
 		let cancelled = false
 		setDecodedData({
+			...NOTHING_DECODED,
 			proposalKey,
-			signerSetChange: null,
-			safeHarborChange: null,
-			safeHarborActivated: false,
-			allSigners: [],
 			isLoading: true,
 		})
 
 		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
 		// always read the proposal's own authority, never the target of the action it decodes to
-		// (§4.9). This call is unchanged by the retarget below: same request, same timing, so the
+		//. This call is unchanged by the retarget below: same request, same timing, so the
 		// approval surface carries zero regression risk from this commit.
 		void Promise.all([decodeActionHex(proposal.actionHex), getMultisigConfig(proposal.authority)]).then(
 			([actionRes, ownConfigRes]) => {
@@ -111,12 +107,9 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 				if (!actionRes.ok) {
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
-						signerSetChange: null,
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
@@ -133,8 +126,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 					void getSafeHarborStatus().then((harborRes) => {
 						if (cancelled) return
 						setDecodedData({
+							...NOTHING_DECODED,
 							proposalKey,
-							signerSetChange: null,
 							safeHarborActivated: harborRes.ok && harborRes.data.activated,
 							safeHarborChange: buildSafeHarborChange({
 								installed: harborRes.ok
@@ -144,7 +137,6 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 								isEnacted: proposal.status === 'enacted',
 							}),
 							allSigners,
-							isLoading: false,
 						})
 					})
 					return
@@ -155,12 +147,9 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// table, or `deriveProposalTitle` would go on titling a Defcon 1 "Add 2 signers".
 				if (target === null) {
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
-						signerSetChange: null,
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
@@ -170,29 +159,25 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				if (target === proposal.authority) {
 					// No retarget: the config already read above for `allSigners` is also the target's.
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 					return
 				}
 
-				// Retarget (§4.9): the decoded action modifies an authority other than the proposal's
+				// Retarget: the decoded action modifies an authority other than the proposal's
 				// own (a council rotation, authored and persisted under `strata_admin`). The target is
 				// only known after the decode, so this second read is issued here, conditionally, and
 				// re-checks `cancelled` on its own — `allSigners` above is untouched by it.
 				void getMultisigConfig(target).then((targetConfigRes) => {
 					if (cancelled) return
 					setDecodedData({
+						...NOTHING_DECODED,
 						proposalKey,
 						signerSetChange: buildTableOrNull(action, targetConfigRes, proposal),
-						safeHarborChange: null,
-						safeHarborActivated: false,
 						allSigners,
-						isLoading: false,
 					})
 				})
 			},
@@ -209,10 +194,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 	// change return an empty loading view instead of exposing the previous proposal's signer data.
 	if (decodedData.proposalKey !== proposalKey) {
 		return {
-			signerSetChange: null,
-			safeHarborChange: null,
-			safeHarborActivated: false,
-			allSigners: [],
+			...NOTHING_DECODED,
 			isLoading: proposal !== null,
 		}
 	}

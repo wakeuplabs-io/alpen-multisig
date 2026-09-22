@@ -4,8 +4,7 @@
 // The detail view builds its Before/After signer table from `getMultisigConfig(proposal.authority)`.
 // For a council rotation the proposal's authority is `strata_admin` (the administrator), so without
 // this function that call reads the administrator's config and the table renders the wrong signers
-// under "Before". Commit 6 uses this value to suppress that table rather than show a false one;
-// Phase 3 uses the same value to fetch the right config instead of suppressing.
+// under "Before". The read side uses this value to fetch the target's config instead.
 
 import assert from 'node:assert/strict'
 import { multisigUpdateTargetAuthority } from '../multisig-update-target.ts'

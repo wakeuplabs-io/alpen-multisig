@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { buildSafeHarborAddressUpdateHex } from '@/api/action-builder'
 import { decodeActionHex } from '@/api/signing'
 
-export type SafeHarborActionHex = {
-	actionHex: string | null
+type SafeHarborActionHex = {
 	/**
 	 * The destination's BOSD descriptor as the device will display it, decoded back out of the action
 	 * hex by the Rust codec — so the form can print it under the address without composing it here.
@@ -12,11 +11,11 @@ export type SafeHarborActionHex = {
 	error: string | null
 }
 
-const EMPTY: SafeHarborActionHex = { actionHex: null, descriptorHex: null, error: null }
+const EMPTY: SafeHarborActionHex = { descriptorHex: null, error: null }
 
 /**
- * Resolves the action hex for a safe harbor rotation, and the descriptor the device will display for
- * it, while the signer is still filling the form in — the same thing `use-defcon-action-hex.ts` does,
+ * Resolves the descriptor the device will display for a safe harbor rotation, by building its action
+ * hex and decoding it back, while the signer is still filling the form in — the same thing `use-defcon-action-hex.ts` does,
  * with one difference: the hex depends on what was typed rather than being a constant.
  *
  * That difference is why the resolve is keyed on the address and not on every keystroke: the
@@ -49,7 +48,7 @@ export function useSafeHarborActionHex(address: string): SafeHarborActionHex {
 			if (cancelled) return
 			const descriptorHex =
 				decoded.ok && decoded.data.kind === 'safe_harbour_address_update' ? decoded.data.addressHex : null
-			setState({ actionHex: built.data.actionHex, descriptorHex, error: null })
+			setState({ descriptorHex, error: null })
 		})()
 		return () => {
 			cancelled = true

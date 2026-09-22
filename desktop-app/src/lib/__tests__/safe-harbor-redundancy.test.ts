@@ -30,7 +30,7 @@ function proposal(overrides: Partial<HarborActivationCandidate> = {}): HarborAct
 	assert.ok(!redundant.has('d1'), 'the Defcon 1 activated it, despite the higher sequence number')
 }
 
-// ── The V1 answer, preserved ────────────────────────────────────────────────
+// ── Monotone heights: the earliest activates ────────────────────────────────────────────────
 // The earliest enacted proposal is the one that activated the safe harbor; every enacted one
 // after it ran against a flag that was already true. Heights are monotone in seqno here, which is
 // what a Defcon-1-only history always looks like: a Defcon 1's lock period is 0, so its activation
@@ -63,8 +63,8 @@ assert.equal(
 // is a missing observation rather than an early block.
 //
 // This case is also where the rule COSTS something, and the fixture is built to show it: if
-// `unknown-height` is what really activated the harbor, then `first` changed nothing and V1 would
-// have badged it — ordering by seqno, it did not need the height. Here it goes unbadged. The trade
+// `unknown-height` is what really activated the harbor, then `first` changed nothing and ordering
+// by seqno would have badged it without needing the height. Here it goes unbadged. The trade
 // is that a row with no height cannot be ranked against one with a real number without guessing its
 // position from the sequence number, which is sound for a Defcon 1 and false for a Defcon 3. The
 // badge errs towards saying nothing rather than towards calling an activation redundant. The real

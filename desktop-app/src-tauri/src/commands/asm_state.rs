@@ -42,6 +42,15 @@ pub struct CurrentVkDto {
     pub condition_hex: String,
 }
 
+fn strata_rpc_url(node_config: &State<'_, NodeConfigState>) -> Result<String, String> {
+    Ok(node_config
+        .0
+        .read()
+        .map_err(|e| format!("lock error: {e}"))?
+        .strata_rpc_url()
+        .to_string())
+}
+
 #[tauri::command]
 pub async fn get_multisig_config(
     authority: String,
@@ -50,27 +59,14 @@ pub async fn get_multisig_config(
     let parsed = Authority::from_wire(authority.trim())
         .map_err(|e| format!("invalid authority `{}`: {e}", authority))?;
 
-    let role = match parsed {
-        Authority::StrataAdmin => AuthRole::StrataAdministrator,
-        Authority::SequencerManager => AuthRole::StrataSequencerManager,
-        Authority::AlpenAdmin => AuthRole::AlpenAdministrator,
-        Authority::SecurityCouncil => AuthRole::StrataSecurityCouncil,
-        // Listed rather than caught by `_`: a catch-all is how the council reached this arm
-        // silently in the first place, and the next authority added should be a compile error.
-        Authority::PayoutAdmin => {
-            return Err(format!(
-                "authority `{}` is not supported in the desktop app yet",
-                parsed.as_str()
-            ));
-        }
-    };
+    let role = AuthRole::for_authority(parsed).ok_or_else(|| {
+        format!(
+            "authority `{}` is not supported in the desktop app yet",
+            parsed.as_str()
+        )
+    })?;
 
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
+    let rpc_url = strata_rpc_url(&node_config)?;
     let config = asm_status_rpc::fetch_multisig_config(&rpc_url, role).await?;
 
     Ok(MultisigConfigDto {
@@ -83,12 +79,7 @@ pub async fn get_multisig_config(
 pub async fn get_current_operators(
     node_config: State<'_, NodeConfigState>,
 ) -> Result<Vec<String>, String> {
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
+    let rpc_url = strata_rpc_url(&node_config)?;
     asm_status_rpc::fetch_current_operators(&rpc_url).await
 }
 
@@ -96,12 +87,7 @@ pub async fn get_current_operators(
 pub async fn get_safe_harbor_status(
     node_config: State<'_, NodeConfigState>,
 ) -> Result<SafeHarborStatusDto, String> {
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
+    let rpc_url = strata_rpc_url(&node_config)?;
     let safe_harbor = asm_status_rpc::fetch_safe_harbor(&rpc_url).await?;
     // A network that cannot be resolved blanks only the address: the hex is what the device shows
     // and what the no-op rule compares, so it must survive a misconfigured environment.
@@ -124,12 +110,7 @@ pub async fn get_safe_harbor_status(
 pub async fn get_current_vk(
     node_config: State<'_, NodeConfigState>,
 ) -> Result<CurrentVkDto, String> {
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
+    let rpc_url = strata_rpc_url(&node_config)?;
     let vk = asm_status_rpc::fetch_current_vk(&rpc_url).await?;
     Ok(CurrentVkDto {
         type_id: vk.type_id,
@@ -158,12 +139,7 @@ pub async fn check_authority_memberships(
     pubkey_hex: String,
     node_config: State<'_, NodeConfigState>,
 ) -> Result<HashMap<String, bool>, String> {
-    let rpc_url = node_config
-        .0
-        .read()
-        .map_err(|e| format!("lock error: {e}"))?
-        .strata_rpc_url()
-        .to_string();
+    let rpc_url = strata_rpc_url(&node_config)?;
     let (role_to_keys, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
 
     let mut result = HashMap::new();
