@@ -6,7 +6,7 @@ import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
-import { DEFCON_COPY, type DefconLevel } from '@/lib/defcon-copy'
+import { DEFCON_COPY, defconLevelOf, type DefconLevel } from '@/lib/defcon-copy'
 import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
 import { buildSafeHarborChange } from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
@@ -270,8 +270,9 @@ export function SignProposalView({
 	const { label, isHardware } = deviceCopy(walletVendor)
 	// Both Defcon levers relay the same message to the bridge and sweep the same funds; only the
 	// delay differs. Keying the destructive treatment on one of them would put the other behind a
-	// neutral CTA — and this is a palette token, not the copy that Phase 5 owns.
-	const isDestructive = decodedAction?.kind === 'defcon_1' || decodedAction?.kind === 'defcon_3'
+	// neutral CTA.
+	const defconLevel = defconLevelOf(decodedAction?.kind)
+	const isDestructive = defconLevel !== null
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-bg-surface p-4">
@@ -289,8 +290,8 @@ export function SignProposalView({
 				<VkUpdateDetails action={decodedAction} />
 			) : decodedAction.kind === 'safe_harbour_address_update' ? (
 				<SafeHarborAddressDetails action={decodedAction} signingMessage={signingMessage} />
-			) : decodedAction.kind === 'defcon_1' || decodedAction.kind === 'defcon_3' ? (
-				<DefconDetails level={decodedAction.kind} />
+			) : defconLevel !== null ? (
+				<DefconDetails level={defconLevel} />
 			) : decodedAction.kind === 'cancel' ? (
 				<CancelActionDetails action={decodedAction} />
 			) : decodedAction.kind === 'unknown' ? (

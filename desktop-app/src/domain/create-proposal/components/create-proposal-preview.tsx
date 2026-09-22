@@ -9,6 +9,7 @@ import { CheckCircleEmeraldIcon, UsbTridentIcon } from '@/assets/icons'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
 import { buildSignerSetChange } from '@/domain/signer-set-change/model/build-signer-set-change'
+import { defconLevelOf } from '@/lib/defcon-copy'
 import { actionTypeTitle } from '../model/action-type-config'
 import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import type { ActionType } from '../model/create-proposal.types'
@@ -69,6 +70,7 @@ export function CreateProposalPreview({
 }: Props) {
 	const signerCopy = deviceCopy(walletVendor)
 	const actionTypeLabel = actionTypeTitle(actionType)
+	const defconLevel = defconLevelOf(actionType)
 	const keysToRemoveRows = keysToRemove.map((k) => ({ value: k }))
 	const signerSetChange = buildSignerSetChange({
 		signers: currentSigners,
@@ -131,8 +133,8 @@ export function CreateProposalPreview({
 
 			<div className="border-t border-[#e5e7eb]" />
 
-			{actionType === 'defcon_1' || actionType === 'defcon_3' ? (
-				<DefconCallout level={actionType} />
+			{defconLevel !== null ? (
+				<DefconCallout level={defconLevel} />
 			) : actionType === 'operator_set_update' ? (
 				<div className="flex flex-col gap-4">
 					{operatorsToAdd.length > 0 && (

@@ -5,6 +5,7 @@ import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import type { MultisigTargetAuthority } from '@/api/action-builder'
+import { defconLevelOf } from '@/lib/defcon-copy'
 import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay, signingMessageSection } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
@@ -309,7 +310,8 @@ export function CreateProposalForm({
 	// the review step — the last control the signer touches must not look like every other one.
 	// Only the copy inside distinguishes them: one is irreversible, the other cancelable until it
 	// activates.
-	const isDestructive = actionType === 'defcon_1' || actionType === 'defcon_3'
+	const defconLevel = defconLevelOf(actionType)
+	const isDestructive = defconLevel !== null
 	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
 
 	return (
@@ -451,10 +453,10 @@ export function CreateProposalForm({
 								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
 							</div>
 
-							{actionType === 'defcon_1' || actionType === 'defcon_3' ? (
+							{defconLevel !== null ? (
 								// Keyed by level: switching between the two remounts rather than carrying one
 								// lever's resolved action hex, and its signing message, into the other's form.
-								<DefconFormFields key={actionType} level={actionType} />
+								<DefconFormFields key={defconLevel} level={defconLevel} />
 							) : isSignerUpdateActionType(actionType) ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
