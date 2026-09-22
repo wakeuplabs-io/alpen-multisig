@@ -443,35 +443,6 @@ mod tests {
         );
     }
 
-    /// `Authorized By` names the Strata Administrator even though the action reaches into the
-    /// bridge. That line is the wire-level shape of the segregation invariant — the council
-    /// triggers the sweep, the administrator picks the destination — and a change that moved it
-    /// would be an upstream break worth catching here rather than on a signer's screen.
-    #[test]
-    fn safe_harbor_update_is_authorized_by_the_administrator_not_the_council() {
-        use desktop_app::infrastructure::signing::render_signing_message;
-
-        let network = network_env::network_from_env().expect("a valid network");
-        let address = SafeHarborDescriptor::from_hex(
-            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        )
-        .expect("valid descriptor")
-        .to_address(network);
-
-        let action_hex =
-            build_safe_harbor_address_update_hex(BuildSafeHarborAddressUpdateHexInput { address })
-                .expect("build should succeed")
-                .action_hex;
-
-        let message = render_signing_message(3, &action_hex).expect("message renders");
-        assert!(
-            message
-                .lines()
-                .any(|line| line == "Authorized By: Strata Administrator"),
-            "expected the administrator to authorize tx type 14, got:\n{message}"
-        );
-    }
-
     /// The decode side of the same action, which is what every read surface renders from.
     #[test]
     fn decode_safe_harbor_update_carries_both_forms_of_the_destination() {

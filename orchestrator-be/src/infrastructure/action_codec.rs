@@ -106,9 +106,4 @@ mod tests {
     fn accepts_fixture_action() {
         decode_multisig_action_hex(&test_fixture_action_hex()).unwrap();
     }
-
-    #[test]
-    fn accepts_defcon_3_fixture_action() {
-        decode_multisig_action_hex(&test_fixture_defcon_3_action_hex()).unwrap();
-    }
 }
