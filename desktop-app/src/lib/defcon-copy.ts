@@ -86,6 +86,13 @@ export function defconLevelOf(actionType: string | null | undefined): DefconLeve
 	return actionType === 'defcon_1' || actionType === 'defcon_3' ? actionType : null
 }
 
+/**
+ * A safe harbor address update written while the harbor is active: upstream accepts it and drops
+ * the change, so the signer is told what it will do rather than stopped from doing it.
+ */
+export const FROZEN_DESTINATION_NOTE =
+	'The destination is frozen once safe harbor is active, so this update will be accepted on chain and change nothing. It will not report as Enacted.'
+
 /** Council dashboard only — not the create/sign form (AC 15). */
 export const COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE =
 	'The bridge is in safe harbor. Another Defcon 1 or Defcon 3 does not change that.'

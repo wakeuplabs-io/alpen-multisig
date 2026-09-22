@@ -6,7 +6,7 @@ import { DeviceSigningHint } from '@/components/device-signing-hint'
 import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
-import { DEFCON_COPY, defconLevelOf, type DefconLevel } from '@/lib/defcon-copy'
+import { DEFCON_COPY, defconLevelOf, FROZEN_DESTINATION_NOTE, type DefconLevel } from '@/lib/defcon-copy'
 import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
 import { buildSafeHarborChange } from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
@@ -151,10 +151,7 @@ function SafeHarborAddressDetails({
 		<>
 			{safeHarbor?.activated === true && (
 				<div className="mt-5">
-					<SafeHarborNote>
-						The destination is frozen once safe harbor is active, so this update will be accepted and change nothing. It
-						will not report as Enacted.
-					</SafeHarborNote>
+					<SafeHarborNote>{FROZEN_DESTINATION_NOTE}</SafeHarborNote>
 				</div>
 			)}
 
