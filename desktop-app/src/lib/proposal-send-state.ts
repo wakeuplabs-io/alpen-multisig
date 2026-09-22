@@ -26,8 +26,6 @@ export type ProposalSendState =
 type SendStateInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
-	requiredSignatures: number
-	signatures: ReadonlyArray<unknown>
 	/**
 	 * A safe harbor rotation the bridge accepted and applied nowhere, because the harbor was
 	 * already up. Decided by the caller — see `harborFrozeDestination` — since answering it needs
@@ -123,13 +121,9 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 		return { kind: 'superseded', ...stage }
 	}
 
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum =
-		!isTerminal && (proposal.status === 'approved' || proposal.signatures.length >= proposal.requiredSignatures)
-
 	// Only an approved proposal has a bundle to broadcast. Quorum alone is not
 	// enough: the backend approves the proposal before the bundle exists.
-	if (isTerminal || !hasQuorum || proposal.status !== 'approved') return { kind: 'unavailable' }
+	if (proposal.status !== 'approved') return { kind: 'unavailable' }
 
 	switch (proposal.broadcastStatus) {
 		case 'idle':
