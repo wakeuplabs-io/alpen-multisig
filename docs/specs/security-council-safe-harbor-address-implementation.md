@@ -234,5 +234,4 @@ End to end, once both phases land, the manual walk in the contract's `## Verific
 Four places do not update themselves, and V1, V2 and V3 each needed a follow-up PR for exactly this
 drift: the `Status:` header of the contract, the `Status:` header of this document, and in
 [`security-council.md`](./security-council.md) the Stage board (§6) and the Slice board (§7). With
-V4 closed, Stage 6 — the compliance audit and issue #117 — is the only remaining work on the
-feature.
+V4 closed, Stage 6 closed the feature: see the master plan's Stage board.
