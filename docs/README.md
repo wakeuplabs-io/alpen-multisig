@@ -38,6 +38,7 @@ flowchart LR
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
 | Security Council (Defcon, safe harbor, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
+| Security Council PRD compliance | [`specs/security-council-prd-compliance.md`](./specs/security-council-prd-compliance.md) | Current |
 | Security Council — Defcon 1 functional contract (V1) | [`specs/security-council-defcon.md`](./specs/security-council-defcon.md) | Current |
 | Security Council — Defcon 1 build plan (V1 phases) | [`specs/security-council-defcon-implementation.md`](./specs/security-council-defcon-implementation.md) | Current |
 | Security Council — Defcon 3 functional contract (V2, includes the cancel) | [`specs/security-council-defcon-3.md`](./specs/security-council-defcon-3.md) | Current |
@@ -74,7 +75,7 @@ When documents disagree, use this order:
 1. **Protocol:** SPS-50, SPS-51, SPS-65 (via Alpen crates and PRDs).
 2. **Architecture decisions:** `architecture/adrs/` (e.g. ADR-006 over legacy assessment claims).
 3. **Feature contract:** `specs/<feature>.md` (functional spec wins over implementation spec if they conflict).
-4. **Admin Wallet PRD status:** `admin-wallet-prd-compliance.md` over phase checkmarks in `admin-wallet-implementation-plan.md`.
+4. **Admin Wallet PRD status:** `admin-wallet-prd-compliance.md` over phase checkmarks in `admin-wallet-implementation-plan.md`. **Security Council PRD status:** `security-council-prd-compliance.md` over the contracts' and build plans' status lines, and over the 2026-05-22 audit.
 5. **Client deliverables:** `docs/external/` over internal stubs in `operations/`.
 6. **Backlog truth:** `deferred-backlog.md` + `action-plan-progress.md` over historical `assessment/archive/action-plan-2026-05-14.md` severity tables.
 

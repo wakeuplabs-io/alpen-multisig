@@ -8,6 +8,7 @@
 |------|------|
 | Current behavior | [`specs/<feature>.md`](../specs/) |
 | PRD compliance (Admin Wallet) | [`specs/admin-wallet-prd-compliance.md`](../specs/admin-wallet-prd-compliance.md) |
+| PRD compliance (Security Council) | [`specs/security-council-prd-compliance.md`](../specs/security-council-prd-compliance.md) |
 | Delivery / post-merge history | This folder |
 
 If an archived doc contradicts a current spec, the spec wins — see [`specs/README.md`](../specs/README.md).

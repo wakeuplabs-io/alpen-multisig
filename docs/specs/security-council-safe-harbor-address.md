@@ -1,7 +1,7 @@
 # Spec: Security Council — Safe Harbor Address Update
 
 **Status:** Shipped — four phases, PRs #548, #549, #550, #563; manual walks 2026-09-10 (enacted,
-cancelled and swallowed paths) and 2026-09-15 (Phase 4). Open: items 1, 3 and 10 of
+cancelled and swallowed paths) and 2026-09-15 (Phase 4). Open: items 1 and 3 of
 [Verification](#verification) are unexercised. Build plan:
 [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 
