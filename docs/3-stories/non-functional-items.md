@@ -155,7 +155,8 @@ Each item is scoped to the concern it addresses; the first round of specs in `do
 
 ### NF-20 · Upstream Alpen crate coverage
 - **Concern:** External dependency.
-- **Requirement:** The Alpen admin subprotocol crate must expose types/sighash tags for all 13 update types and all 5 authorities. Today only Strata Admin signer update and Sequencer update are covered; 8+ update types and 3 authorities are unsupported.
+- **Requirement:** The Alpen admin subprotocol crate must expose types/sighash tags for all 13 update types and all 5 authorities.
+- **Status:** Met at ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) for every authority except the Payout Administrator, which has no role upstream; the two bridge update types were withdrawn.
 - **Source:** `2-discovery/08-alpen-crate-prd-coverage.md`.
 - **Needed by:** Slice 2 (all update types), Slice 4 (Payout Admin).
 - **Action:** Track coordination with Alpen Labs; file upstream issues for each missing piece.

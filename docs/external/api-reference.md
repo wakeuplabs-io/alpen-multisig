@@ -88,7 +88,7 @@ List proposals, optionally filtered by status. Only returns proposals for the au
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `status` | string | No | Filter by status: `pending`, `approved`, `enacted`, `canceled`, `expired` |
+| `status` | string | No | Filter by status: `pending`, `approved`, `enacted`, `canceled`, `expired`, `superseded` |
 
 **Response:**
 ```json
@@ -111,12 +111,18 @@ List proposals, optionally filtered by status. Only returns proposals for the au
         "required": 3,
         "is_reached": false
       },
+      "is_cancelable": true,
       "created_at": "2026-06-01T12:00:00Z",
       "expires_at": "2026-06-08T12:00:00Z"
     }
   ]
 }
 ```
+
+`is_cancelable` answers whether the proposal's action can ever be cancelled on chain: `true` when its
+live confirmation depth is non-zero (it is queued before it applies), `false` for actions that apply
+immediately (Sequencer Manager updates, Defcon 1) and for cancels themselves. It is `false` too when
+the depth cannot be read from the ASM.
 
 ---
 
@@ -388,6 +394,7 @@ Report broadcast progress and transaction IDs from the desktop client.
 | `enacted` | Activation height reached, governance change applied |
 | `canceled` | Proposal canceled (off-chain or on-chain) |
 | `expired` | 7-day window elapsed before broadcast |
+| `superseded` | The authority's on-chain sequence number moved past this proposal's, so the ASM will refuse it; terminal |
 
 ### Action ID
 
