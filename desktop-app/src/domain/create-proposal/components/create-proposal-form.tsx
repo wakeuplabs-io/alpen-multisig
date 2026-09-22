@@ -229,9 +229,7 @@ export function CreateProposalForm({
 			return
 		}
 		if (JSON.stringify(watchedValues) !== JSON.stringify(frozenAtPreview)) {
-			setIsPreviewMode(false)
-			setPreview(null)
-			setFrozenAtPreview(null)
+			exitPreview()
 		}
 	}, [watchedValues, isPreviewMode, frozenAtPreview])
 
@@ -251,6 +249,18 @@ export function CreateProposalForm({
 	const previewRemovingKeys = previewData.keysToRemove
 		.map((row) => row.value.trim())
 		.filter((value) => value.length > 0)
+	function exitPreview() {
+		setIsPreviewMode(false)
+		setPreview(null)
+		setFrozenAtPreview(null)
+	}
+
+	function askToReauthenticate(action: 'preview' | 'submit') {
+		setPendingAction(action)
+		setReauthError(null)
+		setShowReauthModal(true)
+	}
+
 	async function handlePreviewClick() {
 		const isValid = await trigger(undefined, { shouldFocus: true })
 		if (!isValid) return
@@ -262,27 +272,19 @@ export function CreateProposalForm({
 			setPreview(nextPreview)
 			setIsPreviewMode(true)
 		} catch (error) {
-			if (!isSessionExpiredReauthError(error)) return
-			setPendingAction('preview')
-			setReauthError(null)
-			setShowReauthModal(true)
+			if (isSessionExpiredReauthError(error)) askToReauthenticate('preview')
 		}
 	}
 
 	async function handleSubmitAttempt(data: CreateProposalFormValues) {
 		if (frozenAtPreview === null || JSON.stringify(data) !== JSON.stringify(frozenAtPreview)) {
-			setIsPreviewMode(false)
-			setPreview(null)
-			setFrozenAtPreview(null)
+			exitPreview()
 			return
 		}
 		try {
 			await onSubmitValid(frozenAtPreview)
 		} catch (error) {
-			if (!isSessionExpiredReauthError(error)) return
-			setPendingAction('submit')
-			setReauthError(null)
-			setShowReauthModal(true)
+			if (isSessionExpiredReauthError(error)) askToReauthenticate('submit')
 		}
 	}
 
@@ -313,6 +315,13 @@ export function CreateProposalForm({
 	const defconLevel = defconLevelOf(actionType)
 	const isDestructive = defconLevel !== null
 	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
+	const isActionBlocked =
+		isSubmitting ||
+		isLoadingConfig ||
+		isConfigUnavailable ||
+		isLoadingSafeHarbor ||
+		isSafeHarborUnavailable ||
+		!formState.isValid
 
 	return (
 		<FormProvider {...form}>
@@ -324,11 +333,7 @@ export function CreateProposalForm({
 							<button
 								type="button"
 								className="mb-4 flex items-center gap-1.5 text-body text-[#6b7280] hover:text-[#111827]"
-								onClick={() => {
-									setIsPreviewMode(false)
-									setPreview(null)
-									setFrozenAtPreview(null)
-								}}
+								onClick={exitPreview}
 							>
 								<span>←</span> Back to new proposal
 							</button>
@@ -519,14 +524,7 @@ export function CreateProposalForm({
 											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
 												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
 											}`}
-											disabled={
-												isSubmitting ||
-												isLoadingConfig ||
-												isConfigUnavailable ||
-												isLoadingSafeHarbor ||
-												isSafeHarborUnavailable ||
-												!formState.isValid
-											}
+											disabled={isActionBlocked}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
 											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
@@ -551,14 +549,7 @@ export function CreateProposalForm({
 												? 'border-danger text-danger-deep hover:bg-danger-surface'
 												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
 										}`}
-										disabled={
-											isSubmitting ||
-											isLoadingConfig ||
-											isConfigUnavailable ||
-											isLoadingSafeHarbor ||
-											isSafeHarborUnavailable ||
-											!formState.isValid
-										}
+										disabled={isActionBlocked}
 										onClick={() => void handlePreviewClick()}
 									>
 										<EyeGrayIcon width={15} height={15} className="block shrink-0" />
