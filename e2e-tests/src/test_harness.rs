@@ -155,6 +155,23 @@ impl AsmTestHarness {
         Ok(hashes)
     }
 
+    /// Mine until the tip reaches `target_height`, and check that it landed exactly there.
+    ///
+    /// Tests that care about an activation boundary must read heights from the chain rather than
+    /// count blocks: `submit_and_mine_tx` mines as many blocks as it takes to confirm, so a count
+    /// taken from a guess about the tip is a race. A target at or below the tip mines nothing.
+    pub async fn mine_to(&self, target_height: u64) -> anyhow::Result<()> {
+        let tip = self.get_chain_tip().await?;
+        let _ = self
+            .mine_blocks(target_height.saturating_sub(tip) as usize)
+            .await?;
+        anyhow::ensure!(
+            self.get_chain_tip().await? == target_height.max(tip),
+            "mining must end at the requested measured height"
+        );
+        Ok(())
+    }
+
     // Transaction Submission
 
     /// Submit a transaction to Bitcoin regtest mempool.

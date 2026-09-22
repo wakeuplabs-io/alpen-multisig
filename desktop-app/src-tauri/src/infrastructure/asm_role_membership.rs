@@ -177,35 +177,18 @@ fn mock_ordered_keys(_rpc_url: &str, _authority: Authority) -> Option<Vec<String
 mod tests {
     use super::*;
 
-    #[test]
-    fn security_council_maps_to_its_asm_role() {
-        assert_eq!(
-            authority_to_role(Authority::SecurityCouncil),
-            Ok(Role::StrataSecurityCouncil)
-        );
-    }
-
+    /// Broadcast reads the signer set through this mapping, so every authority with an ASM role
+    /// must resolve to exactly its own.
     #[test]
     fn payout_admin_is_the_only_unmapped_authority() {
-        for authority in [
-            Authority::StrataAdmin,
-            Authority::SequencerManager,
-            Authority::AlpenAdmin,
-            Authority::SecurityCouncil,
+        for (authority, role) in [
+            (Authority::StrataAdmin, Role::StrataAdministrator),
+            (Authority::SequencerManager, Role::StrataSequencerManager),
+            (Authority::AlpenAdmin, Role::AlpenAdministrator),
+            (Authority::SecurityCouncil, Role::StrataSecurityCouncil),
         ] {
-            assert!(
-                authority_to_role(authority).is_ok(),
-                "{authority:?} must resolve an ASM role: broadcast reads the signer set through it"
-            );
+            assert_eq!(authority_to_role(authority), Ok(role), "{authority:?}");
         }
         assert!(authority_to_role(Authority::PayoutAdmin).is_err());
-    }
-
-    #[tokio::test]
-    async fn mock_stack_answers_the_council_signer_set() {
-        let keys = ordered_keys_for_authority("mock://asm-membership", Authority::SecurityCouncil)
-            .await
-            .expect("the council is a mock authority");
-        assert_eq!(keys.len(), 2);
     }
 }

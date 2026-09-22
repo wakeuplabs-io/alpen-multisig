@@ -382,8 +382,12 @@ mod tests {
         }
     }
 
-    /// T8, AC 7 half — the desktop copy wires the same two roles as the backend: keys/threshold
-    /// from the target, `last_seqno` from the authorizer.
+    /// AC 7 — the desktop copy wires the same two roles as the backend: keys/threshold from the
+    /// target, `last_seqno` from the authorizer. The only test that goes red if keys and threshold
+    /// are read off the administrator, whose set disagrees with `config`.
+    ///
+    /// Both roles stand at the same `last_seqno` on purpose: that term belongs to the next test,
+    /// and leaving it able to fail here would make the two fail together under a seqno swap.
     #[test]
     fn council_rotation_targets_the_council_and_the_administrator_authorizes_it() {
         let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
@@ -392,7 +396,7 @@ mod tests {
         let council = AuthoritySnapshot {
             keys: vec![key_hex(1), key_hex(3)],
             threshold: 3,
-            last_seqno: 0,
+            last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
             keys: vec![key_hex(2)],
@@ -418,7 +422,7 @@ mod tests {
         );
     }
 
-    /// T8, AC 7a half two — and the test that fails if a future refactor collapses the two roles
+    /// AC 7a — and the test that fails if a future refactor collapses the two roles
     /// back into one. The council's own `last_seqno` races ahead of `seq_no`; only the
     /// administrator's `last_seqno` may decide whether the rotation was authorized.
     #[test]

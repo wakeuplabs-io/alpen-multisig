@@ -1,19 +1,19 @@
-//! Upstream capability probe for the Security Council Defcon levers.
+//! Defcon 1 and Defcon 3 against a real regtest ASM, signed and broadcast through the desktop's own
+//! signing and commit/reveal code.
 //!
-//! This is the go/no-go gate for the Security Council feature: it proves the pinned ASM
-//! really exposes everything the product will need, before any product code exists.
-//!
-//! Deliberately bypasses the domain `Action` / `action_codec` layer (which has no Defcon
-//! variants yet) and builds [`MultisigAction`] straight from the Alpen crates, reusing only
-//! the generic signing/broadcast utilities that operate on an opaque SSZ `action_hex`.
+//! Builds [`MultisigAction`] straight from the Alpen crates and hands it to the generic
+//! signing/broadcast utilities, which operate on an opaque SSZ `action_hex`.
 //!
 //! Covered:
-//! - Defcon 1 activates the bridge safe harbor in the same block as the reveal (depth 0).
-//! - Defcon 3 stays queued until its configured depth elapses, then activates.
+//! - Defcon 3 stays queued until its configured depth elapses, then activates — at exactly the
+//!   activation height, not one block earlier.
 //! - The Defcon 1 signing message renders exactly the four canonical lines, with no details
 //!   block.
 //! - A Defcon 3 cancelled by the council while queued leaves the queue and never activates the
 //!   safe harbor, even past the height it would have activated at.
+//!
+//! Defcon 1 activating in its reveal block is covered by `e2e_safe_harbor_address.rs` and
+//! `e2e_council_rotation.rs`, which both fire one.
 
 use std::process::Command;
 
@@ -39,19 +39,6 @@ use desktop_app::infrastructure::{broadcast_tx, signing};
 
 fn anyhow_string<T>(r: Result<T, String>) -> anyhow::Result<T> {
     r.map_err(|e| anyhow::anyhow!(e))
-}
-
-/// Defcon 1 has confirmation depth 0 upstream, so it must apply inside the reveal block
-/// itself: no queue entry, safe harbor already activated, council seqno advanced.
-#[tokio::test(flavor = "multi_thread")]
-async fn e2e_defcon1_activates_safe_harbor_in_the_reveal_block() {
-    if Command::new("bitcoind").arg("--version").output().is_err() {
-        eprintln!("Skipping e2e_defcon1_activates_safe_harbor_in_the_reveal_block: bitcoind is not available in PATH");
-        return;
-    }
-    run_defcon1(&FAST_ENACTMENT)
-        .await
-        .expect("defcon 1 activates the safe harbor immediately");
 }
 
 /// Defcon 3 is the delayed lever: queued on reveal, applied only once its configured
@@ -102,98 +89,44 @@ fn defcon1_signing_message_renders_the_four_canonical_lines() {
     );
 }
 
-async fn run_defcon1(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()> {
-    let admin_section = parse_admin_section(fixture.admin_section_json);
-    let harness = AsmTestHarnessBuilder::default()
-        .with_admin_config(administration_init_config(&admin_section))
-        .build()
-        .await?;
-
-    let initial = bridge_safe_harbor_activated(&harness)?;
-    anyhow::ensure!(!initial, "safe harbor must start deactivated");
-    let seqno_before = council_last_seqno(&harness)?;
-
-    let action = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
-    let _ =
-        submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
-
-    let (_, asm_state) = harness
-        .get_latest_asm_state()?
-        .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
-    let bridge = decode_bridge_subproto(&asm_state)
-        .ok_or_else(|| anyhow::anyhow!("bridge section missing"))?;
-    anyhow::ensure!(
-        bridge.safe_harbour().is_activated(),
-        "Defcon 1 must activate the safe harbor in the reveal block"
-    );
-
-    let admin = decode_administration_subproto(&asm_state)
-        .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
-    anyhow::ensure!(
-        admin.queued().is_empty(),
-        "Defcon 1 must bypass the admin queue, found {} queued update(s)",
-        admin.queued().len()
-    );
-
-    let seqno_after = council_last_seqno(&harness)?;
-    anyhow::ensure!(
-        seqno_after > seqno_before,
-        "security council seqno must advance ({seqno_before} -> {seqno_after})"
-    );
-
-    Ok(())
-}
-
 async fn run_defcon3(fixture: &SignerUpdateEnactedFixture) -> anyhow::Result<()> {
     let admin_section = parse_admin_section(fixture.admin_section_json);
-    let depth = defcon3_confirmation_depth(&admin_section);
+    let depth = defcon3_confirmation_depth(&admin_section) as u64;
+    anyhow::ensure!(
+        depth > 0,
+        "the fixture must configure a non-zero defcon3 depth: at 0 there is no queued window"
+    );
     let harness = AsmTestHarnessBuilder::default()
         .with_admin_config(administration_init_config(&admin_section))
         .build()
         .await?;
 
     let action = MultisigAction::Update(UpdateAction::Defcon3(Defcon3Update));
-    let _ =
+    let reveal_height =
         submit_council_action(&harness, fixture, &admin_section, &action, fixture.seq_no).await?;
+    // `process_queued` drains at `activation_height <= tip`, and the activation height is the
+    // reveal height plus the depth.
+    let activation_height = reveal_height + depth;
 
-    let (_, asm_state) = harness
-        .get_latest_asm_state()?
-        .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
-    let admin = decode_administration_subproto(&asm_state)
-        .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
+    // One block short of activation: still queued, harbor still off.
+    harness.mine_to(activation_height - 1).await?;
     anyhow::ensure!(
-        admin
-            .queued()
-            .iter()
-            .any(|q| matches!(q.action(), UpdateAction::Defcon3(_))),
-        "Defcon 3 must sit in the admin queue before its depth elapses"
+        queued_defcon3(&harness)?.is_some(),
+        "Defcon 3 must sit in the admin queue until its activation height"
     );
     anyhow::ensure!(
         !bridge_safe_harbor_activated(&harness)?,
         "safe harbor must stay deactivated while Defcon 3 is queued"
     );
 
-    // `process_queued` drains at `activation_height <= tip`, and the activation height is
-    // the reveal height plus the depth, so exactly `depth` further blocks are needed.
-    let _ = harness.mine_blocks(depth as usize).await?;
-
-    let (_, asm_state) = harness
-        .get_latest_asm_state()?
-        .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
-    let admin = decode_administration_subproto(&asm_state)
-        .ok_or_else(|| anyhow::anyhow!("admin section missing"))?;
+    harness.mine_to(activation_height).await?;
     anyhow::ensure!(
-        !admin
-            .queued()
-            .iter()
-            .any(|q| matches!(q.action(), UpdateAction::Defcon3(_))),
-        "Defcon 3 must leave the queue once enacted"
+        queued_defcon3(&harness)?.is_none(),
+        "Defcon 3 must leave the queue at its activation height"
     );
-    let bridge = decode_bridge_subproto(&asm_state)
-        .ok_or_else(|| anyhow::anyhow!("bridge section missing"))?;
     anyhow::ensure!(
-        bridge.safe_harbour().is_activated(),
-        "Defcon 3 must activate the safe harbor after its confirmation depth"
+        bridge_safe_harbor_activated(&harness)?,
+        "Defcon 3 must activate the safe harbor at its activation height"
     );
 
     Ok(())
@@ -267,15 +200,7 @@ async fn run_defcon3_canceled(fixture: &SignerUpdateEnactedFixture) -> anyhow::R
 
     // 3 — take the tip past the height the Defcon 3 would have activated at. Measured, not
     // assumed.
-    let tip = harness.get_chain_tip().await?;
-    let _ = harness
-        .mine_blocks((activation_height + 1).saturating_sub(tip) as usize)
-        .await?;
-    let tip = harness.get_chain_tip().await?;
-    anyhow::ensure!(
-        tip > activation_height,
-        "tip {tip} must have passed the original activation height {activation_height}"
-    );
+    harness.mine_to(activation_height + 1).await?;
 
     // 4 — Constraint 3: leaving the queue is not evidence of enactment.
     anyhow::ensure!(

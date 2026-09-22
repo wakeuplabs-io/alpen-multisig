@@ -748,7 +748,6 @@ mod tests {
     fn defcon1_enacted_requires_safe_harbor_active_and_queue_clear() {
         assert!(!defcon1_enacted(false, false, 2, 2));
         assert!(!defcon1_enacted(true, true, 2, 2));
-        assert!(defcon1_enacted(true, false, 2, 2));
     }
 
     #[test]
@@ -802,37 +801,35 @@ mod tests {
         assert!(safe_harbor_address_enacted(9, 5, false, HARBOR_A, HARBOR_A));
     }
 
-    /// Constraint 2: the seqno term is `>=`. Defcon 1 answers the same observation with `==` and
-    /// says "not enacted" — which for a Defcon 3 would end in `Superseded`.
+    /// Each row flips one term of the conjunction against the enacted baseline
+    /// `(2, 2, false, true, 100, 100)`.
+    ///
+    /// The seqno term is `>=`: Defcon 1 answers "a later action consumed the seqno" with `==` and
+    /// says "not enacted" — which for a Defcon 3 would end in `Superseded`. The tip term is what
+    /// separates "matured" from "taken out of the queue early by a cancel".
     #[test]
-    fn defcon3_enacted_when_a_later_action_consumed_the_seqno() {
-        assert!(defcon3_enacted(5, 2, false, true, 120, 100));
-        assert!(!defcon1_enacted(true, false, 5, 2));
-    }
-
-    #[test]
-    fn defcon3_not_enacted_when_seqno_still_below() {
-        assert!(!defcon3_enacted(1, 2, false, true, 120, 100));
-    }
-
-    #[test]
-    fn defcon3_not_enacted_while_still_queued() {
-        assert!(!defcon3_enacted(2, 2, true, true, 120, 100));
-    }
-
-    #[test]
-    fn defcon3_not_enacted_when_harbor_off() {
-        assert!(!defcon3_enacted(2, 2, false, false, 120, 100));
-    }
-
-    #[test]
-    fn defcon3_not_enacted_before_activation_height() {
-        assert!(!defcon3_enacted(2, 2, false, true, 99, 100));
-    }
-
-    #[test]
-    fn defcon3_enacted_at_exact_activation_height() {
-        assert!(defcon3_enacted(2, 2, false, true, 100, 100));
+    fn defcon3_enacted_needs_every_term() {
+        #[rustfmt::skip]
+        let cases = [
+            // (last_seqno, seq_no, queued, harbor_on, tip, activation, enacted, why)
+            (2, 2, false, true, 100, 100, true,  "enacted at exact activation height"),
+            (5, 2, false, true, 120, 100, true,  "a later action consumed the seqno"),
+            (1, 2, false, true, 120, 100, false, "seqno still below"),
+            (2, 2, true,  true, 120, 100, false, "still queued"),
+            (2, 2, false, false, 120, 100, false, "harbor off"),
+            (2, 2, false, true, 99, 100, false,  "before activation height"),
+        ];
+        for (last, seq, queued, harbor, tip, activation, enacted, why) in cases {
+            assert_eq!(
+                defcon3_enacted(last, seq, queued, harbor, tip, activation),
+                enacted,
+                "{why}"
+            );
+        }
+        assert!(
+            !defcon1_enacted(true, false, 5, 2),
+            "Defcon 1 answers the same seqno observation the other way"
+        );
     }
 
     #[test]

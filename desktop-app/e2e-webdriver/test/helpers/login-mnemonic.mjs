@@ -76,7 +76,9 @@ export async function loginMnemonicToProposals(mnemonic = DEMO_MNEMONIC, authori
 	await authorityContinue.click()
 
 	await $('//h1[contains(.,"Authenticate session")]').waitForDisplayed({ timeout: 60000 })
-	await $('button[data-testid="e2e-authenticate-submit"]').click()
+	const authenticate = await $('button[data-testid="e2e-authenticate-submit"]')
+	await authenticate.waitForClickable({ timeout: 30000 })
+	await authenticate.click()
 
 	await browser.waitUntil(async () => (await browser.getUrl()).includes('/proposals'), {
 		timeout: 90000,

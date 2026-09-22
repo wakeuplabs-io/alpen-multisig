@@ -156,7 +156,8 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         1_000,
     ))?;
 
-    let _ = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_block_hash = harness.submit_and_mine_tx(&reveal_tx).await?;
+    let reveal_height = harness.client.get_block_height(&reveal_block_hash).await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?
@@ -175,11 +176,12 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
         "predicate must be false before activation_height is reached"
     );
 
-    // Exactly `confirmation_depth` blocks, not one more. The reveal is queued at
-    // `activation_height = reveal_height + depth` (`handler.rs`) and released once
-    // `activation_height <= tip` (`state.rs`), so the depth-th block after the reveal is
-    // already the activating one.
-    let _ = harness.mine_blocks(confirmation_depth as usize).await?;
+    // The reveal is queued at `activation_height = reveal_height + depth` (`handler.rs`) and
+    // released once `activation_height <= tip` (`state.rs`). Measured from the reveal's own
+    // block, never counted from a guess about the tip.
+    harness
+        .mine_to(reveal_height + u64::from(confirmation_depth))
+        .await?;
 
     let (_, asm_state) = harness
         .get_latest_asm_state()?

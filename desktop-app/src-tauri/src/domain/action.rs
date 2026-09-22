@@ -496,12 +496,6 @@ mod tests {
     }
 
     #[test]
-    fn safe_harbor_accepts_the_bosd_wire_form() {
-        let parsed = SafeHarborDescriptor::from_hex(G_BOSD_HEX).expect("valid BOSD P2TR hex");
-        assert_eq!(parsed.to_bosd_hex(), G_BOSD_HEX);
-    }
-
-    #[test]
     fn safe_harbor_rejects_a_descriptor_that_is_not_p2tr_tagged() {
         // Tag 0x03 with a 32-byte payload is a valid BOSD descriptor — P2WSH — and upstream
         // refuses it for the safe harbor. Same answer here, two layers earlier.

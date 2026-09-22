@@ -9,7 +9,7 @@
 // comparing a string to itself, and a signer could paste either of them for real.
 
 import assert from 'node:assert/strict'
-import { getActionTypeOptions, getDefaultActionType } from '../action-type-config.ts'
+import { getActionTypeOptions } from '../action-type-config.ts'
 import { buildCreateProposalFormSchema } from '../create-proposal.schema.ts'
 import { NO_OP_SAFE_HARBOR_MESSAGE } from '../validators/safe-harbor-address-update.ts'
 
@@ -59,23 +59,8 @@ function issues(
 	return result.error.issues.filter((issue) => issue.path[0] === field).map((issue) => issue.message)
 }
 
-// ─── claim 1 (AC 1): the Strata Administrator is offered it, and the default does not move ───
-
-const adminOptions = getActionTypeOptions('strata_admin').map((option) => option.actionType)
-assert.ok(
-	adminOptions.includes('safe_harbour_address_update'),
-	'claim 1 (AC 1): the Strata Administrator must be offered the safe harbor address update',
-)
-assert.equal(
-	adminOptions[adminOptions.length - 1],
-	'safe_harbour_address_update',
-	'claim 1 (AC 1): it goes last, so the first entry — and therefore the default — does not move',
-)
-assert.equal(
-	getDefaultActionType('strata_admin'),
-	'signer_update',
-	'claim 1 (AC 1): the default selection is unchanged',
-)
+// Claim 1 (AC 1) — the Strata Administrator is offered it last, so the default does not move — is
+// asserted with the whole menu order in council-signer-update-retarget.test.ts.
 
 // ─── claim 2 (AC 1a): no other authority can reach it ───
 
@@ -88,22 +73,14 @@ for (const authority of OTHER_AUTHORITIES) {
 }
 
 // The menu is display data; this is the rule. It is what a stale form value or a direct route hits.
+// `security_council` is the case that matters: it triggers the sweep and must not pick the
+// destination.
 for (const authority of OTHER_AUTHORITIES) {
 	assert.ok(
 		issues('actionType', { authority, currentSafeHarborAddress: null, newSafeHarborAddress: NEW_ADDRESS }).length > 0,
 		`claim 2 (AC 1a): the schema must refuse a safe harbor update authored by ${authority}`,
 	)
 }
-
-// The council is the case that matters: it triggers the sweep and must not pick the destination.
-assert.ok(
-	issues('actionType', {
-		authority: 'security_council',
-		currentSafeHarborAddress: null,
-		newSafeHarborAddress: NEW_ADDRESS,
-	}).length > 0,
-	'claim 2 (AC 1a): the authority that fires the sweep must not choose where the funds land',
-)
 
 // ─── claim 3: the field is required ───
 

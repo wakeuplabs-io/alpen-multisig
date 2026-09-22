@@ -176,13 +176,13 @@ async fn run_enacted_rotation() -> anyhow::Result<()> {
     );
 
     // One block short is still short: the boundary is `activation_height <= tip`.
-    mine_to(&harness, activation_height - 1).await?;
+    harness.mine_to(activation_height - 1).await?;
     anyhow::ensure!(
         safe_harbor_descriptor_hex(&harness)? == initial_destination,
         "the destination must not change one block before activation"
     );
 
-    mine_to(&harness, activation_height).await?;
+    harness.mine_to(activation_height).await?;
     anyhow::ensure!(
         safe_harbor_descriptor_hex(&harness)? == NEW_DESCRIPTOR_HEX,
         "the destination must equal the proposed one at exact activation"
@@ -256,7 +256,7 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
 
     // Past the height the rotation would have matured at: the destination stays put because the
     // entry is gone, not because it has not come due yet.
-    mine_to(&harness, activation_height + 1).await?;
+    harness.mine_to(activation_height + 1).await?;
     anyhow::ensure!(
         administration_state(&harness)?.queued().is_empty(),
         "the cancel must drain the queue entry"
@@ -325,7 +325,7 @@ async fn run_swallowed_rotation() -> anyhow::Result<()> {
         "the rotation must be queued like any other"
     );
 
-    mine_to(&harness, activation_height).await?;
+    harness.mine_to(activation_height).await?;
 
     anyhow::ensure!(
         administration_state(&harness)?.queued().is_empty(),
@@ -362,18 +362,6 @@ async fn submit_action(
     let reveal = harness.build_envelope_tx(action.tag(), payload).await?;
     let block_hash = harness.submit_and_mine_tx(&reveal).await?;
     Ok(harness.client.get_block_height(&block_hash).await?)
-}
-
-async fn mine_to(harness: &AsmTestHarness, target_height: u64) -> anyhow::Result<()> {
-    let tip = harness.get_chain_tip().await?;
-    let _ = harness
-        .mine_blocks(target_height.saturating_sub(tip) as usize)
-        .await?;
-    anyhow::ensure!(
-        harness.get_chain_tip().await? == target_height.max(tip),
-        "mining must end at the requested measured height"
-    );
-    Ok(())
 }
 
 fn administration_state(harness: &AsmTestHarness) -> anyhow::Result<AdministrationSubprotoState> {

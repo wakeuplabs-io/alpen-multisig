@@ -2494,133 +2494,65 @@ mod tests {
         assert!(matches!(err, AppError::BadRequest(_)));
     }
 
-    /// AC 9: tx type 15 modifies the council but belongs to Strata Admin. The council cannot file
-    /// its cancel, and the refusal must happen without persisting a proposal.
+    /// Tx types 15 (council rotation) and 14 (safe harbor address) reach into the council's world
+    /// but belong to Strata Admin, and so do their cancels. Nothing in the cancel path knows about
+    /// either type: this asserts the generic path lands on the right answer in both directions.
+    /// The council fires the sweep and must not be able to stand down a change to who sits on it
+    /// or where the sweep lands — and a refused cancel must leave nothing behind.
     #[tokio::test]
-    async fn test_council_rotation_cancel_requires_strata_admin_session() {
-        let repo = new_repo();
-        let action_hex = test_fixture_council_rotation_action_hex();
-        let target =
-            save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
-        assert_eq!(target.authority, Authority::StrataAdmin);
+    async fn test_strata_admin_rotations_are_cancelled_only_by_the_strata_administrator() {
+        for action_hex in [
+            test_fixture_council_rotation_action_hex(),
+            test_fixture_safe_harbor_address_action_hex(),
+        ] {
+            let repo = new_repo();
+            let target =
+                save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex)
+                    .await;
+            let signer = sig_a();
+            let cancel_as = |authority| {
+                create_cancel_proposal(
+                    &repo,
+                    "mock://asm-membership",
+                    SessionContext {
+                        authority,
+                        signer_pubkey: &signer.signer_pubkey,
+                    },
+                    target.action_id.clone(),
+                    2,
+                    "cafebabe",
+                    "cancel_sig",
+                )
+            };
 
-        let err = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            SessionContext {
-                authority: Authority::SecurityCouncil,
-                signer_pubkey: &sig_a().signer_pubkey,
-            },
-            target.action_id.clone(),
-            2,
-            "cafebabe",
-            "cancel_sig",
-        )
-        .await
-        .unwrap_err();
+            let err = cancel_as(Authority::SecurityCouncil).await.unwrap_err();
+            assert!(matches!(err, AppError::Unauthorized), "{err:?}");
+            assert!(
+                repo.find_cancel_for_target(&target.action_id)
+                    .await
+                    .unwrap()
+                    .is_none(),
+                "a refused cancel must leave nothing behind"
+            );
 
-        assert!(matches!(err, AppError::Unauthorized), "{err:?}");
-        assert!(
-            repo.find_cancel_for_target(&target.action_id)
-                .await
-                .unwrap()
-                .is_none(),
-            "a refused cancel must leave nothing behind"
-        );
-    }
-
-    /// AC 10: a safe harbor rotation belongs to Strata Admin, and its cancel does too. Nothing in
-    /// the cancel path knows about tx type 14 — this asserts that generic path lands on the right
-    /// answer rather than that someone wrote an arm for it.
-    #[tokio::test]
-    async fn test_safe_harbor_cancel_is_created_by_the_strata_administrator() {
-        let repo = new_repo();
-        let action_hex = test_fixture_safe_harbor_address_action_hex();
-        let target =
-            save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
-
-        let cancel = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            SessionContext {
-                authority: Authority::StrataAdmin,
-                signer_pubkey: &sig_a().signer_pubkey,
-            },
-            target.action_id.clone(),
-            2,
-            "cafebabe",
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(cancel.authority, Authority::StrataAdmin);
-        assert_eq!(cancel.target_action_id, Some(target.action_id));
-    }
-
-    /// AC 10, the half that matters: the council fires the sweep and must not be able to stand down
-    /// a change to where it lands — not by authoring one, and not by cancelling one either. The
-    /// segregation invariant on the cancel path, which nothing pinned for this action.
-    #[tokio::test]
-    async fn test_safe_harbor_cancel_requires_strata_admin_session() {
-        let repo = new_repo();
-        let action_hex = test_fixture_safe_harbor_address_action_hex();
-        let target =
-            save_approved_proposal_with_action(&repo, Authority::StrataAdmin, 1, &action_hex).await;
-
-        let err = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            SessionContext {
-                authority: Authority::SecurityCouncil,
-                signer_pubkey: &sig_a().signer_pubkey,
-            },
-            target.action_id.clone(),
-            2,
-            "cafebabe",
-            "cancel_sig",
-        )
-        .await
-        .unwrap_err();
-
-        assert!(matches!(err, AppError::Unauthorized), "{err:?}");
-        assert!(
-            repo.find_cancel_for_target(&target.action_id)
-                .await
-                .unwrap()
-                .is_none(),
-            "a refused cancel must leave nothing behind"
-        );
+            let cancel = cancel_as(Authority::StrataAdmin).await.unwrap();
+            assert_eq!(cancel.authority, Authority::StrataAdmin);
+            assert_eq!(cancel.target_action_id, Some(target.action_id.clone()));
+        }
     }
 
     /// AC 11: the gate is the action's confirmation depth, and the rejection names it. Defcon 1 is
     /// the zero-depth case — never enqueued, so an on-chain cancel would fail with `UnknownAction`.
     #[tokio::test]
     async fn test_create_cancel_proposal_rejects_zero_depth_action() {
-        // Inserted directly: the Security Council has no ASM role mapping until Phase 3, so
-        // `create_update_action` cannot build this target.
         let repo = new_repo();
-        let target_action_id = ActionId("defcon_1_target".to_string());
-        let target = Proposal {
-            action_id: target_action_id.clone(),
-            seq_no: 1,
-            authority: Authority::SecurityCouncil,
-            status: ProposalStatus::Approved,
-            required_signatures: 2,
-            action_hex: test_fixture_defcon_1_action_hex(),
-            title: None,
-            signatures: vec![sig_a(), sig_b()],
-            broadcast_status: BroadcastStatus::Idle,
-            commit_txid: None,
-            reveal_txid: None,
-            broadcast_error: None,
-            target_action_id: None,
-            activation_height: None,
-            update_id_in_queue: None,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-        };
-        repo.save_proposal(target).await.unwrap();
+        let target = save_approved_proposal_with_action(
+            &repo,
+            Authority::SecurityCouncil,
+            1,
+            &test_fixture_defcon_1_action_hex(),
+        )
+        .await;
 
         let err = create_cancel_proposal(
             &repo,
@@ -2629,7 +2561,7 @@ mod tests {
                 authority: Authority::SecurityCouncil,
                 signer_pubkey: &sig_a().signer_pubkey,
             },
-            target_action_id,
+            target.action_id,
             99,
             "cafebabe",
             "cancel_sig",

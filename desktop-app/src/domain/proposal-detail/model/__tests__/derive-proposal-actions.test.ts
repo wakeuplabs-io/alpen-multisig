@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { canCancelProposal, deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
+import { deriveProposalActions, type ProposalActionInput } from '../derive-proposal-actions.ts'
 
 const SIGNER_A = '02aaaa'
 const SIGNER_B = '02bbbb'
@@ -120,9 +120,6 @@ for (const status of ['enacted', 'canceled', 'expired'] as const) {
 
 // ── Cancelability is field-driven, not authority-driven ──────────────────────
 {
-	assert.equal(canCancelProposal({ isCancelable: true }), true)
-	assert.equal(canCancelProposal({ isCancelable: false }), false)
-
 	const actions = deriveProposalActions(proposal({ actionType: 'defcon_3', isCancelable: true }), SIGNER_A)
 	assert.equal(actions.canCancel, true, 'defcon_3 cancel follows the backend field, not authority')
 

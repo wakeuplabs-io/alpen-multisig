@@ -1105,47 +1105,56 @@ pub async fn proposals_broadcast_manual(
 mod tests {
     use super::*;
 
+    use desktop_app::domain::action::{
+        Action, CompressedPubKey, MultisigUpdate, SafeHarborDescriptor,
+    };
+    use desktop_app::domain::authority::Authority;
+    use desktop_app::infrastructure::action_codec::encode_hex;
+
+    fn signer_update(role: Authority) -> Action {
+        Action::MultisigUpdate(MultisigUpdate {
+            role,
+            add_keys: vec![CompressedPubKey::from_hex(
+                "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            )
+            .unwrap()],
+            remove_keys: vec![],
+            new_threshold: std::num::NonZeroU8::new(2).unwrap(),
+        })
+    }
+
     /// `actionType` is a closed zod enum on the other side of this boundary, and a value it does
     /// not know fails the parse of every proposal in the same list — so what this function emits
-    /// has to stay in step with `decodedActionSchema`'s sibling enum in `ipc-schemas.ts`.
+    /// has to stay in step with `decodedActionSchema`'s sibling enum in `ipc-schemas.ts`. Every
+    /// read surface derives its label from this string, and `"unknown"` would list a proposal as
+    /// *Unknown* with its raw payload.
+    ///
+    /// The administrator row is not redundant with the council one: the function binds
+    /// `update.role`, so the regression it guards — every multisig update suddenly answering the
+    /// council's name — is real.
     #[test]
-    fn action_type_from_hex_names_defcon_1() {
-        let hex = desktop_app::infrastructure::action_codec::encode_hex(
-            &desktop_app::domain::action::Action::Defcon1,
-        )
-        .expect("encode should succeed");
-
-        assert_eq!(action_type_from_hex(&None, &hex), "defcon_1");
-    }
-
-    #[test]
-    fn action_type_from_hex_names_defcon_3() {
-        let hex = desktop_app::infrastructure::action_codec::encode_hex(
-            &desktop_app::domain::action::Action::Defcon3,
-        )
-        .expect("encode should succeed");
-
-        assert_eq!(action_type_from_hex(&None, &hex), "defcon_3");
-    }
-
-    /// AC 5: every read surface derives its label from this string, and `"unknown"` is what it
-    /// answered before the codec learned the variant — a proposal listed as *Unknown* with its raw
-    /// payload, on the screen a signer uses to decide.
-    #[test]
-    fn action_type_from_hex_names_a_safe_harbor_address_update() {
-        let destination = desktop_app::domain::action::SafeHarborDescriptor::from_hex(
+    fn action_type_from_hex_names_every_security_council_action() {
+        let destination = SafeHarborDescriptor::from_hex(
             "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         )
         .expect("valid P2TR descriptor");
-        let hex = desktop_app::infrastructure::action_codec::encode_hex(
-            &desktop_app::domain::action::Action::SafeHarborAddressUpdate(destination),
-        )
-        .expect("encode should succeed");
-
-        assert_eq!(
-            action_type_from_hex(&None, &hex),
-            "safe_harbour_address_update"
-        );
+        let cases = [
+            (Action::Defcon1, "defcon_1"),
+            (Action::Defcon3, "defcon_3"),
+            (
+                Action::SafeHarborAddressUpdate(destination),
+                "safe_harbour_address_update",
+            ),
+            (
+                signer_update(Authority::SecurityCouncil),
+                "council_signer_update",
+            ),
+            (signer_update(Authority::StrataAdmin), "multisig_update"),
+        ];
+        for (action, expected) in cases {
+            let hex = encode_hex(&action).expect("encode should succeed");
+            assert_eq!(action_type_from_hex(&None, &hex), expected, "{action:?}");
+        }
     }
 
     /// A cancel is identified by its target, never by decoding its own payload.
@@ -1155,48 +1164,5 @@ mod tests {
             action_type_from_hex(&Some("target".to_string()), "not-valid-hex"),
             "cancel"
         );
-    }
-
-    const VALID_HEX: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
-
-    /// The DTO boundary must name a council rotation for what it is, not collapse it into the
-    /// generic `"multisig_update"` that hides its target from the list, the detail view, the
-    /// sign header and the manual bundle.
-    #[test]
-    fn action_type_from_hex_names_a_council_signer_update() {
-        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
-        let update = desktop_app::domain::action::Action::MultisigUpdate(
-            desktop_app::domain::action::MultisigUpdate {
-                role: desktop_app::domain::authority::Authority::SecurityCouncil,
-                add_keys: vec![pk],
-                remove_keys: vec![],
-                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
-            },
-        );
-        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
-            .expect("encode should succeed");
-
-        assert_eq!(action_type_from_hex(&None, &hex), "council_signer_update");
-    }
-
-    /// Not a duplicate of `action_type_from_hex_names_a_council_signer_update`: that test proves
-    /// the new value is emitted, this one proves the old one still is. The change binds a field
-    /// the function previously ignored (`update.role`), so the regression it guards — every
-    /// multisig update suddenly answering the council's name — is real.
-    #[test]
-    fn action_type_from_hex_still_names_an_administrator_signer_update() {
-        let pk = desktop_app::domain::action::CompressedPubKey::from_hex(VALID_HEX).unwrap();
-        let update = desktop_app::domain::action::Action::MultisigUpdate(
-            desktop_app::domain::action::MultisigUpdate {
-                role: desktop_app::domain::authority::Authority::StrataAdmin,
-                add_keys: vec![pk],
-                remove_keys: vec![],
-                new_threshold: std::num::NonZeroU8::new(2).unwrap(),
-            },
-        );
-        let hex = desktop_app::infrastructure::action_codec::encode_hex(&update)
-            .expect("encode should succeed");
-
-        assert_eq!(action_type_from_hex(&None, &hex), "multisig_update");
     }
 }
