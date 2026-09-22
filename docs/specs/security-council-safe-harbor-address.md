@@ -348,7 +348,7 @@ carries three things and no more:
 3. **The descriptor hex the device will display**, resolved as the signer types and shown under the
    input, so the comparison the signer must make is possible before they reach the device. The full
    signing message is **not** on this form: nothing is signed here, so it lives on the preview and
-   the sign view ([Phase 4 §2](./security-council-safe-harbor-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
+   the sign view ([Phase 4 §2](../archive/features/security-council/security-council-safe-harbor-address-phase-4.md#2-the-signing-message-is-on-the-wrong-screen)).
 
 The safe-harbor note appears here when the harbor is already active
 ([Constraint 1](#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)),
@@ -367,7 +367,7 @@ This repository spells the feature **Safe Harbor** everywhere it owns the name: 
 files, test ids, commands, tests, comments and these documents. Upstream's names keep upstream's
 `Safe Harbour` — the byte-frozen signing message, protocol types and methods, the RPC and the wire
 value `safe_harbour_address_update`
-([Phase 4 §4](./security-council-safe-harbor-address-phase-4.md#4-terminology-harbor-in-everything-we-own-harbour-in-what-upstream-owns)).
+([Phase 4 §4](../archive/features/security-council/security-council-safe-harbor-address-phase-4.md#4-terminology-harbor-in-everything-we-own-harbour-in-what-upstream-owns)).
 
 ---
 

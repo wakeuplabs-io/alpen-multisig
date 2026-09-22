@@ -1,9 +1,9 @@
 # V4 Phase 4 — What the ticket review asked for
 
-> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](../../../specs/security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it; where it changes the contract, the
 > contract is amended in the same pull request.
-> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md).
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](../../../specs/security-council-safe-harbor-address-implementation.md).
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547) — two review comments.
 > **Predecessors:** [Phase 1](./security-council-safe-harbor-address-phase-1.md) (#548),
 > [Phase 2](./security-council-safe-harbor-address-phase-2.md) (#549),
@@ -52,7 +52,7 @@ review did not ask for it. Recorded as debt in §6.
 
 ## 3. The trap: what the create form must still show
 
-Removing the panel naively breaks [Constraint 3](./security-council-safe-harbor-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
+Removing the panel naively breaks [Constraint 3](../../../specs/security-council-safe-harbor-address.md#3-the-reviewable-artifact-is-the-descriptor-hex-not-the-address)
 and AC 3, and the ticket's own behaviour list: *next to the address, the form shows the exact value
 the signer's device will display*. The **new** destination's descriptor hex appears today only inside
 the signing message.

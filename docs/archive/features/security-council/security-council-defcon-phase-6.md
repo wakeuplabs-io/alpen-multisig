@@ -1,9 +1,9 @@
 # Security Council — Defcon 1 (V1), Phase 6: Frontend lifecycle
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 6. This document is that phase at implementation detail.
 
 **Closes:** AC 6, AC 7, AC 9, AC 10, AC 13, AC 15/15a/15b, AC 16.
@@ -53,7 +53,7 @@ is what this phase is worth reading for.
 | 15a | The export broadcasts through `/manual` | `processBundle` (`use-manual-proposal.ts:241`) accepts the downloaded proposal JSON — it reads the four fields it needs and ignores the rest — and `security_council` is already in its `AUTHORITIES` list (`:24`) | Display defect only, §4.4 |
 | 15b | The raw transaction can go to an external RPC | **Half true.** The *Send manually* panel — the raw commit and reveal hex, each with a copy button and a `sendrawtransaction` instruction — exists at `broadcast-phase-progress.tsx:138-147` and is rendered by `/proposals/:id/broadcast` and the cancel broadcast screen. `/manual`, the route AC 15b names, throws the same structured error away and prints its raw string (`manual-proposal-screen.tsx:332`) | §4.6 |
 | 9 | Never the word *Approved* | **Fails.** `PROPOSAL_STATUS_STYLE.approved.label` is `'Approved'` and is keyed on status alone | §4.1 |
-| 10 | No cancel affordance anywhere | **Holds by accident, in three places.** `CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']` is declared three times — the dashboard card, the detail screen's *Cancel this proposal* button, and the cancel route's own redirect guard — and every one of them is the authority-shaped gate [Constraint 2](./security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil) forbids | §4.3 |
+| 10 | No cancel affordance anywhere | **Holds by accident, in three places.** `CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']` is declared three times — the dashboard card, the detail screen's *Cancel this proposal* button, and the cancel route's own redirect guard — and every one of them is the authority-shaped gate [Constraint 2](../../../specs/security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil) forbids | §4.3 |
 
 The two "no code" columns are not an invitation to skip verification: §10 walks the flow. They are a
 refusal to add tests that would pin `proposalSendState` a second time.
@@ -132,7 +132,7 @@ is nothing to wait for.
 
 **Suppress the countdown for `defcon_1`.** Not for the authority: Defcon 3 shares the authority,
 carries a real configurable depth, and must keep the countdown when V2 ships. Keyed on the action,
-which is [Constraint 1](./security-council-defcon.md#1-lock-period-is-per-action-never-per-authority)'s
+which is [Constraint 1](../../../specs/security-council-defcon.md#1-lock-period-is-per-action-never-per-authority)'s
 rule applied to the display half.
 
 The frontend cannot read the depth — it has no ASM handle and the proposal DTO carries the resolved
@@ -154,7 +154,7 @@ defect.
 
 AC 10 holds today only because `security_council` is missing from a list of two authorities. That is
 the wrong reason for a correct outcome, and it is the exact shape
-[Constraint 2](./security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)
+[Constraint 2](../../../specs/security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil)
 was written to forbid — the backend gate was rewritten in Phase 2 for the same reason, and the
 desktop kept its copy, the way it kept the authority→role mapping Phase 5 had to chase down.
 
@@ -433,7 +433,7 @@ and `npm run build` was the honest answer in all three cases.
   `_onManualExecute` and renders no control — so the `/manual` prefill the detail screen builds
   (`proposal-detail-screen.tsx:149-161`) is unreachable. This predates the slice: the manual spec
   asked for an *Enter manually* button on the dashboard
-  ([`manual-execution-flow.md`](./manual-execution-flow.md):177) and it was never built either. AC 15a
+  ([`manual-execution-flow.md`](../../../specs/manual-execution-flow.md):177) and it was never built either. AC 15a
   is satisfied without it — *Download bundle* → `/manual` from the connect screen → drop the file —
   so wiring a new control is a change to the manual flow's UX for all five authorities, which
   belongs to that spec and not to a Defcon phase. Recorded so the next reader knows it was seen.
@@ -464,7 +464,7 @@ and `npm run build` was the honest answer in all three cases.
 
 ## 9. Verification
 
-Per commit, the full [`AGENTS.md`](../../AGENTS.md) pre-commit checklist:
+Per commit, the full [`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist:
 
 ```bash
 cargo fmt --check

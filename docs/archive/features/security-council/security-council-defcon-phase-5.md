@@ -1,9 +1,9 @@
 # Security Council — Defcon 1 (V1), Phase 5: Frontend create and sign
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 5. This document is that phase at implementation detail.
 
 **Closes:** AC 1, AC 1a, AC 4, AC 5, AC 14.
@@ -328,7 +328,7 @@ is wiring, and a failing wire is a failing `npm run build` or a failing parse, n
 
 ## 11. Verification
 
-Per commit, the full [`AGENTS.md`](../../AGENTS.md) pre-commit checklist:
+Per commit, the full [`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist:
 
 ```bash
 cargo fmt --check

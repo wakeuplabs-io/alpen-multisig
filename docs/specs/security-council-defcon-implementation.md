@@ -119,7 +119,7 @@ upstream has no `ConfirmationDepths` field for it — and Defcon 3 reads `confir
 from live ASM state. The value is read on every call, never cached at startup.
 
 **Shipped as `lock_period_for_action`. Detail spec:**
-[`security-council-defcon-phase-1.md`](./security-council-defcon-phase-1.md), which supersedes the
+[`security-council-defcon-phase-1.md`](../archive/features/security-council/security-council-defcon-phase-1.md), which supersedes the
 bullets below where they differ. Three things it settled that this plan had wrong:
 
 - **The resolution composes upstream's table rather than restating it.** `UpdateAction::update_tx_type()`
@@ -149,7 +149,7 @@ bullets below where they differ. Three things it settled that this plan had wron
 Replace the authority allow-list in `create_cancel_proposal` with the action's confirmation depth:
 reject when the depth is zero, and say so in the rejection.
 
-**Detail spec:** [`security-council-defcon-phase-2.md`](./security-council-defcon-phase-2.md), which
+**Detail spec:** [`security-council-defcon-phase-2.md`](../archive/features/security-council/security-council-defcon-phase-2.md), which
 supersedes the bullets below where they differ. Three things it settled that this plan left open:
 
 - **"The action's" depth is the *target's*, never the cancel's.** Every `MultisigAction::Cancel`
@@ -169,7 +169,7 @@ supersedes the bullets below where they differ. Three things it settled that thi
 
 ### Phase 3 — Backend Defcon 1: role, codec, creation ✅
 
-**Detail spec:** [`security-council-defcon-phase-3.md`](./security-council-defcon-phase-3.md), which
+**Detail spec:** [`security-council-defcon-phase-3.md`](../archive/features/security-council/security-council-defcon-phase-3.md), which
 supersedes the bullets below where they differ. Four things it settled that this plan left open or
 had wrong:
 
@@ -209,7 +209,7 @@ Add the Defcon 1 arm to the action dispatch in `orchestrator-be/src/infrastructu
 Enacted requires **both** post-conditions: `safe_harbour().is_activated()` is true, **and** no Defcon 1
 entry sits in the ASM admin queue.
 
-**Detail spec:** [`security-council-defcon-phase-4.md`](./security-council-defcon-phase-4.md),
+**Detail spec:** [`security-council-defcon-phase-4.md`](../archive/features/security-council/security-council-defcon-phase-4.md),
 which supersedes this section where they differ. Two things it settled that this plan had wrong or
 left open:
 
@@ -230,7 +230,7 @@ left open:
 
 ### Phase 5 — Frontend: create and sign ✅
 
-**Detail spec:** [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md), which
+**Detail spec:** [`security-council-defcon-phase-5.md`](../archive/features/security-council/security-council-defcon-phase-5.md), which
 supersedes the bullets below where they differ. Four things it settled that this plan left out or
 had wrong:
 
@@ -264,7 +264,7 @@ The display carve-out and the states after quorum: never the word "Approved" for
 affordance in any state or view, the "Send" control once quorum is reached, enacted and expired
 proposals in the "Past" list, and the manual fallback reachable through the existing `/manual` route.
 
-**Detail spec:** [`security-council-defcon-phase-6.md`](./security-council-defcon-phase-6.md), which
+**Detail spec:** [`security-council-defcon-phase-6.md`](../archive/features/security-council/security-council-defcon-phase-6.md), which
 supersedes the bullets above where they differ. Four things it settled that this plan left open or
 had wrong:
 
@@ -294,7 +294,7 @@ spends it on the dashboard banner and the create-form warning.
 
 ### Phase 7 — The safe harbor is visible, and enactment is per proposal ✅
 
-**Detail spec:** [`security-council-defcon-phase-7.md`](./security-council-defcon-phase-7.md).
+**Detail spec:** [`security-council-defcon-phase-7.md`](../archive/features/security-council/security-council-defcon-phase-7.md).
 
 Not in this plan's original six. It exists because running the finished flow produced a second
 Defcon 1 on a chain whose safe harbor was already active, and neither half of the system

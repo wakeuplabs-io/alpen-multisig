@@ -11,7 +11,7 @@
 comments on #547; walked on 2026-09-15. The Phase 1 manual walk produced
 two findings, both fixed in Phase 2; the walk of 2026-09-10 over Phase 2's surfaces produced seven,
 five of which Phase 3 closes — the remaining two are recorded in
-[Phase 3 §8](./security-council-safe-harbor-address-phase-3.md#8-what-the-walk-found-and-this-phase-does-not-take).
+[Phase 3 §8](../archive/features/security-council/security-council-safe-harbor-address-phase-3.md#8-what-the-walk-found-and-this-phase-does-not-take).
 The reserve is spent.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
@@ -49,10 +49,10 @@ answers for tx type 14 with no new branch
 
 | Phase | Name | Closes (contract) | Touches |
 |---|---|---|---|
-| 1 ✅ | From the screen to `Enacted` — [phase spec](./security-council-safe-harbor-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
-| 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](./security-council-safe-harbor-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
-| 3 ✅ | What the manual walk exposed — [phase spec](./security-council-safe-harbor-address-phase-3.md) | The five findings of the 2026-09-10 walk that belong to this slice | `desktop-app` |
-| 4 ✅ | What the ticket review asked for — [phase spec](./security-council-safe-harbor-address-phase-4.md) | The two review comments on #547: the signing message on the signing screens, and "Harbor" on screen | `desktop-app`, `src-tauri` |
+| 1 ✅ | From the screen to `Enacted` — [phase spec](../archive/features/security-council/security-council-safe-harbor-address-phase-1.md) | AC 1, 1a, 2, 3, 3a, 3b, 3c, 4, 5, 6, 7, 7a, 7b, 8, 11, 12; Constraints 1-7 | `Cargo.toml`, `src-tauri`, `desktop-app`, `orchestrator-be` |
+| 2 ✅ | The cancel, the detail, the message panel and the e2e — [phase spec](../archive/features/security-council/security-council-safe-harbor-address-phase-2.md) | AC 6 (countdown), 7a, 9, 10, 13; the two manual-walk findings | `e2e-tests`, `desktop-app`, `orchestrator-be`, `src-tauri` |
+| 3 ✅ | What the manual walk exposed — [phase spec](../archive/features/security-council/security-council-safe-harbor-address-phase-3.md) | The five findings of the 2026-09-10 walk that belong to this slice | `desktop-app` |
+| 4 ✅ | What the ticket review asked for — [phase spec](../archive/features/security-council/security-council-safe-harbor-address-phase-4.md) | The two review comments on #547: the signing message on the signing screens, and "Harbor" on screen | `desktop-app`, `src-tauri` |
 
 Each phase is its own pull request against `develop`, branched from a freshly pulled `develop`.
 Phases are sequential, not parallel.
@@ -197,7 +197,7 @@ one here, expecting copy — how "safe harbor" reads to someone who has not read
 destination is displayed. Both halves were right, and one of them was not cosmetic: the dashboard
 never read the harbor for the authority that rotates it, so a rotation the bridge swallowed told its
 signer another action had taken its sequence number and to build a replacement that would be
-swallowed too. See the [phase spec](./security-council-safe-harbor-address-phase-3.md).
+swallowed too. See the [phase spec](../archive/features/security-council/security-council-safe-harbor-address-phase-3.md).
 
 ## 5. Verification
 

@@ -181,7 +181,7 @@ same race `ensure_threshold_snapshot_current` accepts, for the same reason.
 
 The order is forced by one hazard. The TypeScript proposal schema is **closed**, so a `status`
 value the frontend does not know is a parse error that takes down the whole list, not an unknown
-status on one card — the lesson `security-council-defcon-phase-3.md` recorded for `actionType`.
+status on one card — the lesson `archive/features/security-council/security-council-defcon-phase-3.md` recorded for `actionType`.
 **The frontend learns `superseded` before the backend can emit it.**
 
 | # | What | Where |

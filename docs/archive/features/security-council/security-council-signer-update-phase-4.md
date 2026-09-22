@@ -1,18 +1,18 @@
 # Security Council — Signer Update (V3), Phase 4: The cancel and the e2e
 
-**Functional contract:** [`security-council-signer-update.md`](./security-council-signer-update.md) —
+**Functional contract:** [`security-council-signer-update.md`](../../../specs/security-council-signer-update.md) —
 the SSOT for *what* V3 must do. This document never overrides it.
 
-**Build plan:** [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
+**Build plan:** [`security-council-signer-update-implementation.md`](../../../specs/security-council-signer-update-implementation.md)
 §4 Phase 4. This document is that phase at implementation detail.
 
-**Closes:** [AC 6](./security-council-signer-update.md#6-it-is-queued-not-enacted-on-broadcast),
-[AC 7b](./security-council-signer-update.md#7b-the-new-council-can-act-and-the-removed-signers-cannot),
-[AC 8](./security-council-signer-update.md#8-a-cancelled-rotation-never-applies),
-[AC 9](./security-council-signer-update.md#9-the-cancel-is-signed-by-the-strata-administrator) and
-[AC 10](./security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it);
+**Closes:** [AC 6](../../../specs/security-council-signer-update.md#6-it-is-queued-not-enacted-on-broadcast),
+[AC 7b](../../../specs/security-council-signer-update.md#7b-the-new-council-can-act-and-the-removed-signers-cannot),
+[AC 8](../../../specs/security-council-signer-update.md#8-a-cancelled-rotation-never-applies),
+[AC 9](../../../specs/security-council-signer-update.md#9-the-cancel-is-signed-by-the-strata-administrator) and
+[AC 10](../../../specs/security-council-signer-update.md#10-the-council-never-sees-the-proposal-that-rotates-it);
 Constraint 1 against a real regtest ASM. The implementation path for
-[AC 13](./security-council-signer-update.md#13-the-manual-fallback-works) is structurally covered,
+[AC 13](../../../specs/security-council-signer-update.md#13-the-manual-fallback-works) is structurally covered,
 but its manual/external-RPC execution evidence remains pending (§10).
 
 **Story:** US-E7 — a Strata Administrator signer rotates the Security Council's membership and
@@ -33,7 +33,7 @@ It is not the create form, target-role derivation, enactment predicate, codec vo
 message. Phases 1–3 shipped those pieces and their focused tests.
 
 It does not repair
-[Constraint 4](./security-council-signer-update.md#4-acceptance-is-not-application-and-upstream-does-not-say-so),
+[Constraint 4](../../../specs/security-council-signer-update.md#4-acceptance-is-not-application-and-upstream-does-not-say-so),
 add a client-side protocol validator, or add a target authority to the proposal row. It does not
 implement V4.
 
@@ -361,7 +361,7 @@ enacted rotation's result already on chain. Observed —
   council keys, which is the read-side confirmation that the cancel changed nothing.
 
 Steps **5, 6 and 7 are deferred**, with the reasoning and the outstanding work in the build plan's
-[§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take). The
+[§6](../../../specs/security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take). The
 walk introduced no finding against what this phase built; the copy and signer-safety hardening it
 surfaced is recorded in that same section rather than fixed, so Phase 5 closes unspent.
 

@@ -1,19 +1,19 @@
 # Security Council — Defcon 3 (V2), Phase 5: Create and sign
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 5. This document is that phase at implementation detail.
 
-**Closes:** [AC 1](./security-council-defcon-3.md#1-a-council-signer-can-create-a-defcon-3),
-[AC 1a](./security-council-defcon-3.md#1a-no-other-authority-can-reach-it),
-[AC 2](./security-council-defcon-3.md#2-only-a-council-session-can-create-a-defcon-3),
-[AC 3](./security-council-defcon-3.md#3-a-duplicate-defcon-3-is-rejected),
-[AC 4](./security-council-defcon-3.md#4-the-signing-message-is-the-four-canonical-lines),
-[AC 5](./security-council-defcon-3.md#5-the-type-to-confirm-gate-is-exact-and-mutually-exclusive) and
-[AC 15](./security-council-defcon-3.md#15-the-safe-harbor-note-appears-with-its-own-wording);
-[Constraint 5](./security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible).
+**Closes:** [AC 1](../../../specs/security-council-defcon-3.md#1-a-council-signer-can-create-a-defcon-3),
+[AC 1a](../../../specs/security-council-defcon-3.md#1a-no-other-authority-can-reach-it),
+[AC 2](../../../specs/security-council-defcon-3.md#2-only-a-council-session-can-create-a-defcon-3),
+[AC 3](../../../specs/security-council-defcon-3.md#3-a-duplicate-defcon-3-is-rejected),
+[AC 4](../../../specs/security-council-defcon-3.md#4-the-signing-message-is-the-four-canonical-lines),
+[AC 5](../../../specs/security-council-defcon-3.md#5-the-type-to-confirm-gate-is-exact-and-mutually-exclusive) and
+[AC 15](../../../specs/security-council-defcon-3.md#15-the-safe-harbor-note-appears-with-its-own-wording);
+[Constraint 5](../../../specs/security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible).
 
 ## 1. The change in one sentence
 
@@ -38,9 +38,9 @@ from `DEFCON_COPY` like every other surface.
 
 | Document | What Phase 5 takes from it |
 |---|---|
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) § Frontend Contract | Menu order, form field order, the mutual-exclusion requirement |
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) Constraint 5 | No Defcon 3 surface may reuse Defcon 1's *Irreversible* copy |
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) Constraint 1 | The delay is a live depth, so no copy may name a block count or an hour count |
+| [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) § Frontend Contract | Menu order, form field order, the mutual-exclusion requirement |
+| [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) Constraint 5 | No Defcon 3 surface may reuse Defcon 1's *Irreversible* copy |
+| [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) Constraint 1 | The delay is a live depth, so no copy may name a block count or an hour count |
 | [`security-council-defcon-phase-5.md`](./security-council-defcon-phase-5.md) (V1) | Pattern: builder command, validator entry, form fields, authority-keyed menu |
 | [`security-council-defcon-3-phase-1.md`](./security-council-defcon-3-phase-1.md) | `defcon_3` already readable end to end; this phase lifts its "nothing can create one" barrier |
 
@@ -48,7 +48,7 @@ from `DEFCON_COPY` like every other surface.
 
 The two Defcon variants differ in exactly three things: the confirmation string, the destructive
 paragraph, and the safe-harbor note's wording. Everything else in
-[`defcon-form-fields.tsx`](../../desktop-app/src/domain/create-proposal/components/defcon-form-fields.tsx)
+[`defcon-form-fields.tsx`](../../../../desktop-app/src/domain/create-proposal/components/defcon-form-fields.tsx)
 is the safety-critical half — the action-hex resolve, the `useDeviceSigningMessage` call, the mirror
 of the resolved message into `defconMessage`, and the CTA gate that depends on it. Duplicating the
 component forks that wiring, and a fork is a place where one copy gets fixed and the other does not.
@@ -60,9 +60,9 @@ action type a compile error rather than a silent no-op. Both delegate to one `va
 ### 4.1 The three copies become data
 
 The *Irreversible* paragraph is currently written out three times — in the form fields, in
-[`create-proposal-preview.tsx:125`](../../desktop-app/src/domain/create-proposal/components/create-proposal-preview.tsx),
+[`create-proposal-preview.tsx:125`](../../../../desktop-app/src/domain/create-proposal/components/create-proposal-preview.tsx),
 and in `Defcon1Details` inside
-[`sign-proposal-view.tsx:121`](../../desktop-app/src/domain/sign-proposal/components/sign-proposal-view.tsx).
+[`sign-proposal-view.tsx:121`](../../../../desktop-app/src/domain/sign-proposal/components/sign-proposal-view.tsx).
 Adding a second level to three hand-written copies is how the two levels come to disagree.
 
 ```ts
@@ -109,11 +109,11 @@ Both are introduced *by* the parameterization, and both are closed in code rathe
 
 ### 5.1 A stale action hex under the other level's heading
 
-[`use-defcon-action-hex.ts`](../../desktop-app/src/domain/create-proposal/hooks/use-defcon-action-hex.ts)
+[`use-defcon-action-hex.ts`](../../../../desktop-app/src/domain/create-proposal/hooks/use-defcon-action-hex.ts)
 never resets its state: the effect has empty deps and only ever writes in the `.then()`. Parameterized
 to `useDefconActionHex(level)` with `level` in the deps, it keeps the **previous level's hex** for the
 duration of the refetch. The pairing guard in
-[`use-device-signing-message.ts`](../../desktop-app/src/hooks/use-device-signing-message.ts) matches
+[`use-device-signing-message.ts`](../../../../desktop-app/src/hooks/use-device-signing-message.ts) matches
 *message against hex*, not *hex against level*, so during that window a form labelled DEFCON 3 renders
 `Action: Defcon 1`, and `defconMessage` is non-empty — the validator would call the other action's
 message resolved.
@@ -125,11 +125,11 @@ cleared on the same switch, because it is evidence that the signer read *this* f
 ### 5.2 A Defcon 3 built as a VK update
 
 `resolveActionHex` in
-[`use-create-proposal.ts:95`](../../desktop-app/src/domain/create-proposal/hooks/use-create-proposal.ts)
+[`use-create-proposal.ts:95`](../../../../desktop-app/src/domain/create-proposal/hooks/use-create-proposal.ts)
 is an `if` chain whose final `else` builds a `vk_update`. A missing arm therefore does not fail to
 compile and does not fail loudly — it makes the signer sign a `vk_update` sighash under a form
 labelled DEFCON 3. It becomes a `switch` with an exhaustiveness guard, following the precedent in
-[`action-type-from-decoded.ts`](../../desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts).
+[`action-type-from-decoded.ts`](../../../../desktop-app/src/domain/manual-proposal/model/action-type-from-decoded.ts).
 The two cosmetic ternaries (preview, form dispatch) are left as they are; only this one is a safety
 failure.
 
@@ -137,9 +137,9 @@ failure.
 
 Shorter and markedly less severe than Defcon 1's, because Defcon 3 **is** cancelable until it
 activates, and overstating that trains signers to discount the same warning where it is true
-([Constraint 5](./security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible)).
+([Constraint 5](../../../specs/security-council-defcon-3.md#5-defcon-3-is-destructive-but-it-is-not-irreversible)).
 No block count and no hour count appears anywhere: the delay is a live depth
-([Constraint 1](./security-council-defcon-3.md#1-the-delay-is-always-the-live-depth-never-a-constant)).
+([Constraint 1](../../../specs/security-council-defcon-3.md#1-the-delay-is-always-the-live-depth-never-a-constant)).
 
 | Field | Defcon 3 |
 |---|---|

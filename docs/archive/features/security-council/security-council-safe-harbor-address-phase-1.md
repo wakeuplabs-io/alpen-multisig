@@ -1,8 +1,8 @@
 # V4 Phase 1 — From the screen to `Enacted`
 
-> **Functional contract:** [`security-council-safe-harbor-address.md`](./security-council-safe-harbor-address.md)
+> **Functional contract:** [`security-council-safe-harbor-address.md`](../../../specs/security-council-safe-harbor-address.md)
 > — SSOT for *what* V4 must do. This document never overrides it.
-> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
+> **Build plan:** [`security-council-safe-harbor-address-implementation.md`](../../../specs/security-council-safe-harbor-address-implementation.md)
 > §4 Phase 1. This document is that phase at implementation detail, and §9 records where it
 > supersedes it.
 > **Ticket:** [#547](https://github.com/wakeuplabs-io/alpen-multisig/issues/547).
@@ -25,12 +25,12 @@ device signs over, and this phase adds a tripwire, not a renderer (§7.3).
 
 It is not a protocol rule. Nothing added here refuses an action the chain would accept: the
 already-activated harbor is stated, never blocked
-([Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
+([Constraint 1](../../../specs/security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)).
 
 It is not a change to the desktop's copy of `asm_enactment.rs` (§4.6), and it is not a change to any
 generic mechanism — depth, cancelability, authorization and the lifecycle already answer for tx type
 14, and this phase only adds the tests that pin that
-([Constraint 7](./security-council-safe-harbor-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
+([Constraint 7](../../../specs/security-council-safe-harbor-address.md#7-everything-generic-already-answers-and-gets-tests-rather-than-changes)).
 
 ## 3. Why the screen and the enactment ship together
 
@@ -81,7 +81,7 @@ cannot break on a version bump because there is no shared type in it.
 
 **Why validation lives in the domain and not in the form.** The form's job is to explain; the
 domain's is to decide. Upstream decides last, via `SafeHarbourAddress::try_from`
-([Constraint 5](./security-council-safe-harbor-address.md#5-p2tr-and-nothing-else)) — three gates,
+([Constraint 5](../../../specs/security-council-safe-harbor-address.md#5-p2tr-and-nothing-else)) — three gates,
 narrowing, with the authoritative one at the end.
 
 `Action::SafeHarbourAddressUpdate(SafeHarborDescriptor)` joins the enum. Rust's exhaustive matches
@@ -95,7 +95,7 @@ repository — its own doc comment says the active network is process-wide and d
 builder command calls it once and passes it down.
 
 A wrong-network address is refused
-([Constraint 4](./security-council-safe-harbor-address.md#4-network-is-a-signal-not-a-protection))
+([Constraint 4](../../../specs/security-council-safe-harbor-address.md#4-network-is-a-signal-not-a-protection))
 even though it is not dangerous: BOSD carries no network, so the same key yields the same descriptor
 bytes everywhere and only the HRP differs. It is refused because it is near-conclusive evidence that
 the operator took the address from the wrong wallet.
@@ -164,7 +164,7 @@ it does not declare**, so adding them in Rust alone would drop them in silence �
 `useSafeHarborActivated` keeps its current shape and its deliberate degradation to `false`: a node
 that cannot answer must not stand between the council and the emergency lever. The **address**, in
 contrast, is load-bearing: without it neither the Before/After nor the no-op rule of
-[Constraint 6](./security-council-safe-harbor-address.md#6-rotating-to-the-address-already-installed-enacts-and-changes-nothing)
+[Constraint 6](../../../specs/security-council-safe-harbor-address.md#6-rotating-to-the-address-already-installed-enacts-and-changes-nothing)
 can answer, so the create form blocks submission while it is unavailable, with a message naming what
 could not be read. Two reads, two different failure policies, because they answer two different
 questions.
@@ -213,7 +213,7 @@ Three things about that signature are deliberate:
   depth, so a later administrator action may jump `last_seqno` past this proposal before it matures,
   and `==` would mark a successfully enacted rotation `Superseded`.
 - **The address term is what makes it this proposal's answer**, and it is what makes
-  [Constraint 1](./security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
+  [Constraint 1](../../../specs/security-council-safe-harbor-address.md#1-a-rotation-with-the-harbor-already-activated-is-accepted-and-changes-nothing)
   hold: a rotation the bridge swallowed leaves the queue with the seqno consumed and the address
   unchanged, so this returns `false` and the proposal resolves as `Superseded`, never `Enacted`.
 

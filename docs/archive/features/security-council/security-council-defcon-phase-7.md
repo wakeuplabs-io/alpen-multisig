@@ -1,9 +1,9 @@
 # Security Council — Defcon 1 (V1), Phase 7: The safe harbor is visible, and enactment is per proposal
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it; §10 records the two places it corrects.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4. This phase is **not** in that plan — §1 says why it exists.
 
 **Closes:** AC 8 (tightened), and AC 18, AC 19, AC 20 added by this phase (§10).

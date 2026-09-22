@@ -1,15 +1,15 @@
 # Security Council — Signer Update (V3), Phase 2: Enactment reads two roles
 
-**Functional contract:** [`security-council-signer-update.md`](./security-council-signer-update.md) —
+**Functional contract:** [`security-council-signer-update.md`](../../../specs/security-council-signer-update.md) —
 SSOT for *what* V3 must do. This document never overrides it.
 
-**Build plan:** [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
+**Build plan:** [`security-council-signer-update-implementation.md`](../../../specs/security-council-signer-update-implementation.md)
 §4 Phase 2. This document is that phase at implementation detail, and §7 records where it supersedes
 it.
 
-**Closes:** [AC 7](./security-council-signer-update.md#7-enactment-compares-the-councils-config-against-the-administrators-sequence-number)
-and [AC 7a](./security-council-signer-update.md#7a-neither-role-is-substituted-for-the-other);
-[Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one), including
+**Closes:** [AC 7](../../../specs/security-council-signer-update.md#7-enactment-compares-the-councils-config-against-the-administrators-sequence-number)
+and [AC 7a](../../../specs/security-council-signer-update.md#7a-neither-role-is-substituted-for-the-other);
+[Constraint 1](../../../specs/security-council-signer-update.md#1-enactment-reads-two-roles-not-one), including
 the `authority_to_role` divergence it names as *"known divergence to fix while here"*.
 
 ## 1. The change in one sentence
@@ -25,7 +25,7 @@ no no-op rule. Those are Phase 3, and `desktop-app/src/` has **zero diff** in th
 the cancel or the e2e — Phase 4, and `e2e-tests/` has zero diff. It adds no protocol validity rule:
 whether a rotation is legal is the ASM's answer, not ours.
 
-It does not repair [Constraint 4](./security-council-signer-update.md#4-acceptance-is-not-application-and-upstream-does-not-say-so).
+It does not repair [Constraint 4](../../../specs/security-council-signer-update.md#4-acceptance-is-not-application-and-upstream-does-not-say-so).
 It does not repair `AsmStfVk`, which rides in the multisig arm by inheritance and answers `Ok(false)`
 forever (§10.2).
 
@@ -37,14 +37,14 @@ authorities already shipped, for which it is behaviour-preserving by constructio
 
 | Document | What Phase 2 takes from it |
 |---|---|
-| [`security-council-signer-update.md`](./security-council-signer-update.md) § Enactment detection | The five bullets: target from the variant, authorizing from the authority, keys/threshold from the target, `last_seqno` from the authorizing, `multisig_update_post_conditions_met` unchanged |
-| Same, [Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | Both terms wrong in opposite directions; both failures silent; the `authority_to_role` divergence closed here |
+| [`security-council-signer-update.md`](../../../specs/security-council-signer-update.md) § Enactment detection | The five bullets: target from the variant, authorizing from the authority, keys/threshold from the target, `last_seqno` from the authorizing, `multisig_update_post_conditions_met` unchanged |
+| Same, [Constraint 1](../../../specs/security-council-signer-update.md#1-enactment-reads-two-roles-not-one) | Both terms wrong in opposite directions; both failures silent; the `authority_to_role` divergence closed here |
 | Same, § Test Plan | "a truth table with AC 7a as two named tests"; no ASM-backed integration test inside `orchestrator-be` |
 | Same, § Verification | *"Only one `authority_to_role` answers for the backend, and it maps four authorities"* — §4.1 closes it by deletion, which is stronger (§7.1) |
 | [`security-council-defcon-3-phase-4.md`](./security-council-defcon-3-phase-4.md) §4.4 | `Ok(false)` falls through to supersession, so inconclusive must be `Err`. Reused verbatim as §6 |
 | [`security-council-defcon-phase-1.md`](./security-council-defcon-phase-1.md) | The closure seam pattern: `depth_for_action(action, depth_of)` |
 | [`security-council-signer-update-phase-1.md`](./security-council-signer-update-phase-1.md) §11.1 | *"The honest fix derives the authorizing role from the decoded action … that derivation is exactly what Phase 2 builds"* — §4.2 is it |
-| [`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4 | Enactment is decided before supersession; the seqno term stays `>=` for config-carrying arms |
+| [`proposal-lifecycle-seqno-truth.md`](../../../specs/proposal-lifecycle-seqno-truth.md) §4 | Enactment is decided before supersession; the seqno term stays `>=` for config-carrying arms |
 
 ## 4. Design
 
@@ -234,7 +234,7 @@ answer matches the proposal's authority. Deduplicating leaves two call sites tha
 deleting leaves one function in the crate that can be wrong at all.
 
 Recorded here rather than left as drift: V1 and V2 each needed a close-out PR for exactly this kind
-of silent divergence. [`docs/specs/README.md`](./README.md) sets the order — the functional contract
+of silent divergence. [`docs/specs/README.md`](../../../specs/README.md) sets the order — the functional contract
 outranks the build plan — and the contract asks only that *"only one `authority_to_role` answers for
 the backend, and it maps four authorities"*, which this satisfies.
 
@@ -419,7 +419,7 @@ answers, and only one of them is an answer at all.
 
 ## 11. Verification
 
-The full [`AGENTS.md`](../../AGENTS.md) checklist:
+The full [`AGENTS.md`](../../../../AGENTS.md) checklist:
 
 ```bash
 cargo fmt --check

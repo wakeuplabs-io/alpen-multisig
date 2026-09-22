@@ -1,14 +1,14 @@
 # Security Council — Signer Update (V3), Phase 1: `council_signer_update` is a readable type
 
-**Functional contract:** [`security-council-signer-update.md`](./security-council-signer-update.md) —
+**Functional contract:** [`security-council-signer-update.md`](../../../specs/security-council-signer-update.md) —
 SSOT for *what* V3 must do. This document never overrides it.
 
-**Build plan:** [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
+**Build plan:** [`security-council-signer-update-implementation.md`](../../../specs/security-council-signer-update-implementation.md)
 §4 Phase 1. This document is that phase at implementation detail, and §6 records the one place it
 supersedes it.
 
-**Closes:** [AC 5](./security-council-signer-update.md#5-the-action-is-distinguishable-from-an-administrator-signer-update),
-and the Rust half of [Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session).
+**Closes:** [AC 5](../../../specs/security-council-signer-update.md#5-the-action-is-distinguishable-from-an-administrator-signer-update),
+and the Rust half of [Constraint 2](../../../specs/security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session).
 It is also a prerequisite of Phases 2, 3 and 4, each of which needs `council_signer_update` to be a
 legal `ActionType` merely to write a fixture.
 
@@ -96,7 +96,7 @@ removeKeys, newThreshold }`. `decode_action_hex` already emits `update.role.as_s
 (`commands/action_builder.rs`), so this needs no Rust change beyond §5.1.
 
 This is the contract's own mechanism.
-[Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session)
+[Constraint 2](../../../specs/security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session)
 says *"`MultisigUpdate.role` means the authority being modified"*, and Scope excludes *"any notion of a
 target authority on the `Proposal` row … the target lives in the action"*.
 
@@ -135,7 +135,7 @@ config read also feeds `allSigners` (`use-decoded-proposal.ts:47`, `use-manual-p
 the council would replace one false display with a worse one. A correct display therefore needs a
 **second** config read at each site, ~100 lines across three hooks and one new async ordering, for a
 proposal shape nothing can produce until Phase 3 — which already owns that rule
-([Constraint 3](./security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions)).
+([Constraint 3](../../../specs/security-council-signer-update.md#3-the-form-validates-against-the-targets-config-never-the-sessions)).
 
 So Phase 1 suppresses, with one pure function and three guards:
 
@@ -203,7 +203,7 @@ Tests paragraph names *"the new decoded-action kind"*. Decision 5.2 says there i
 kind, so `api/signing.ts`'s `DecodedAction` and `ipc-schemas.ts`'s `decodedActionSchema` are both
 unchanged.
 
-[`docs/specs/README.md`](./README.md) sets the order: layer 1 (the functional contract) outranks layer
+[`docs/specs/README.md`](../../../specs/README.md) sets the order: layer 1 (the functional contract) outranks layer
 2 (the implementation plan) — *"functional spec wins over implementation spec"*. The functional
 contract never asks for a new kind; it asks (AC 5) that the action *"reports as a council signer
 update, not as a generic `multisig_update`, everywhere the action type is shown — list, detail, sign
@@ -284,7 +284,7 @@ The change binds a previously ignored field, so the regression it guards is real
 
 ## 9. Verification
 
-The full [`AGENTS.md`](../../AGENTS.md) checklist, plus `npm run test:unit`, which CI runs
+The full [`AGENTS.md`](../../../../AGENTS.md) checklist, plus `npm run test:unit`, which CI runs
 (`.github/workflows/ci.yml:155-156`) and the AGENTS.md snippet omits:
 
 ```bash
@@ -381,7 +381,7 @@ flow at all, which is why it is recorded here.
 
 **Owner: Phase 4**, which holds AC 13 (the manual fallback). The honest fix derives the authorizing
 role from the decoded action rather than trusting the bundle, and that derivation is exactly what
-**Phase 2** builds for enactment ([Constraint 1](./security-council-signer-update.md#1-enactment-reads-two-roles-not-one)).
+**Phase 2** builds for enactment ([Constraint 1](../../../specs/security-council-signer-update.md#1-enactment-reads-two-roles-not-one)).
 Writing it here would mean writing it twice.
 
 ### 11.2 The encode arm removes the last backstop on `build_admin_multisig_update_hex`
@@ -399,5 +399,5 @@ already untrue today because `selectedRole` can be the council. It is unreachabl
 
 **Owner: Phase 3**, and it is already in that slice's contract — its Verification checklist requires
 that *"no `as` cast decides which authority a multisig update targets"*
-([Constraint 2](./security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session)).
+([Constraint 2](../../../specs/security-council-signer-update.md#2-the-target-comes-from-the-action-never-from-the-session)).
 Recorded here because this phase is what made the cast load-bearing rather than merely untidy.

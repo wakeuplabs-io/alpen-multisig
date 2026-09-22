@@ -1,15 +1,15 @@
 # Security Council — Defcon 3 (V2), Phase 7: The cancel, end to end
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 7. This document is that phase at implementation detail.
 
-**Closes:** [AC 11](./security-council-defcon-3.md#11-the-cancel-is-signed-by-the-council-itself),
-[AC 12](./security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor) and
-[AC 14](./security-council-defcon-3.md#14-the-manual-fallback-works-for-both);
-[Constraint 3](./security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
+**Closes:** [AC 11](../../../specs/security-council-defcon-3.md#11-the-cancel-is-signed-by-the-council-itself),
+[AC 12](../../../specs/security-council-defcon-3.md#12-a-cancelled-defcon-3-never-activates-the-harbor) and
+[AC 14](../../../specs/security-council-defcon-3.md#14-the-manual-fallback-works-for-both);
+[Constraint 3](../../../specs/security-council-defcon-3.md#3-a-cancelled-defcon-3-must-never-be-reported-as-enacted).
 
 ## 1. The change in one sentence
 
@@ -31,14 +31,14 @@ owns whatever the manual walk finds.
 
 | Document | What Phase 7 takes from it |
 |---|---|
-| [`security-council-defcon-3.md`](./security-council-defcon-3.md) § Test Plan | The e2e's shape: queue → assert harbor off → cancel → mine → queue empty **and harbor still off** |
+| [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) § Test Plan | The e2e's shape: queue → assert harbor off → cancel → mine → queue empty **and harbor still off** |
 | Same, § Cancel creation | "No new code is expected" — the claim §4 audits |
 | Same, § Manual fallback | "a Defcon 3, **and its cancel**" — the clause §6 discovers is unmet |
 | Same, Edge Cases | Two live Defcon 3s stay a recorded ambiguity; the e2e keeps exactly one in flight |
 | [`security-council-defcon-3-phase-4.md`](./security-council-defcon-3-phase-4.md) §4.7 | The out-of-band cancel has no observable distinction; this phase pins the **in-band** path |
 | [`security-council-defcon-3-phase-1.md`](./security-council-defcon-3-phase-1.md) | Emitter and acceptor of a closed Zod union cannot be split across commits — restated in §9 commit 3 |
 | [`security-council-defcon-3-phase-6.md`](./security-council-defcon-3-phase-6.md) §8 | Migration shape: the seam is opened in its own commit, before the test that uses it |
-| [`cancel-approved-proposal.md`](./cancel-approved-proposal.md) | The desktop cancel journey, unchanged by this phase |
+| [`cancel-approved-proposal.md`](../../../specs/cancel-approved-proposal.md) | The desktop cancel journey, unchanged by this phase |
 
 ## 4. The build plan's bet, audited
 

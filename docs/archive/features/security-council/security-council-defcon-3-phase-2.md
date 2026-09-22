@@ -1,13 +1,13 @@
 # Security Council — Defcon 3 (V2), Phase 2: Redundancy by activation height
 
-**Functional contract:** [`security-council-defcon-3.md`](./security-council-defcon-3.md) — SSOT for
+**Functional contract:** [`security-council-defcon-3.md`](../../../specs/security-council-defcon-3.md) — SSOT for
 *what* V2 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
+**Build plan:** [`security-council-defcon-3-implementation.md`](../../../specs/security-council-defcon-3-implementation.md)
 §4 Phase 2. This document is that phase at implementation detail.
 
-**Closes:** [AC 9](./security-council-defcon-3.md#9-the-activating-proposal-is-the-one-with-the-lowest-activation-height),
-and [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit) — the one V1 recorded
+**Closes:** [AC 9](../../../specs/security-council-defcon-3.md#9-the-activating-proposal-is-the-one-with-the-lowest-activation-height),
+and [debt A](../../../specs/security-council-defcon.md#what-v2-inherits-and-must-revisit) — the one V1 recorded
 against this exact module.
 
 ## 1. The change in one sentence
@@ -36,7 +36,7 @@ as a client error. A Defcon 3 therefore parks at Approved until **Phase 4**.
 That is the point of the ordering, not a gap in it: the corrected rule lands *before* there is any
 data it could get wrong. The alternative — shipping enactment detection first — would open a window
 in which a matured Defcon 3 is enacted and the badge silently names the wrong proposal, which is
-precisely the failure [debt A](./security-council-defcon.md#what-v2-inherits-and-must-revisit)
+precisely the failure [debt A](../../../specs/security-council-defcon.md#what-v2-inherits-and-must-revisit)
 describes.
 
 The consequence to state plainly: **the discriminating fixture is necessarily synthetic**, and there
@@ -95,7 +95,7 @@ upstream** — a backend that retries a failed `activation_height` removes the c
 is recorded as debt in the build plan §6 rather than patched around here.
 
 **A second route reaches the same shape, and it is not the height's fault.**
-[`proposal-lifecycle-seqno-truth.md`](./proposal-lifecycle-seqno-truth.md) §4.1 accepts that a
+[`proposal-lifecycle-seqno-truth.md`](../../../specs/proposal-lifecycle-seqno-truth.md) §4.1 accepts that a
 proposal which enacted unobserved, and was then jumped past, resolves as `Superseded`. The filter
 here reads `status === 'enacted'`, so that proposal leaves the candidate set exactly as a null-height
 row does, and the badge behind it is lost the same way. Pre-existing and untouched by this phase —
@@ -237,7 +237,7 @@ now*. No copy change in this phase.
 
 ## 11. Verification
 
-The frontend half of the [`AGENTS.md`](../../AGENTS.md) checklist is what this phase can fail; the
+The frontend half of the [`AGENTS.md`](../../../../AGENTS.md) checklist is what this phase can fail; the
 Rust half is run anyway before pushing.
 
 ```bash

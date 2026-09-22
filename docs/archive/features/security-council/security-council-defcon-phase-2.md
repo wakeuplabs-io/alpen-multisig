@@ -1,13 +1,13 @@
 # Security Council — Defcon 1 (V1), Phase 2: Cancel gate by depth
 
-**Functional contract:** [`security-council-defcon.md`](./security-council-defcon.md) — SSOT for
+**Functional contract:** [`security-council-defcon.md`](../../../specs/security-council-defcon.md) — SSOT for
 *what* V1 must do. This document never overrides it.
 
-**Build plan:** [`security-council-defcon-implementation.md`](./security-council-defcon-implementation.md)
+**Build plan:** [`security-council-defcon-implementation.md`](../../../specs/security-council-defcon-implementation.md)
 §4 Phase 2. This document is that phase at implementation detail.
 
 **Closes:** AC 11, and
-[Constraint 2](./security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil).
+[Constraint 2](../../../specs/security-council-defcon.md#2-cancelability-is-decided-per-action-and-per-live-depth-never-by-authoritysecuritycouncil).
 
 ## 1. The change in one sentence
 
@@ -200,7 +200,7 @@ ordered first.
 
 ## 10. Verification
 
-`cargo test -p orchestrator-be`, then the full [`AGENTS.md`](../../AGENTS.md) pre-commit checklist.
+`cargo test -p orchestrator-be`, then the full [`AGENTS.md`](../../../../AGENTS.md) pre-commit checklist.
 
 Review must additionally confirm the structural claim of Constraint 2: no authority-shaped condition
 remains anywhere on the backend cancel path — `grep -rn "cancel is only supported for" orchestrator-be`
@@ -208,4 +208,4 @@ returns nothing, and the only `Authority` value the path still reads is the one 
 cancel proposal and passes to `threshold_for_authority`.
 
 End-to-end regtest verification belongs to the close-out of all six phases
-([build plan §5](./security-council-defcon-implementation.md#5-verification)).
+([build plan §5](../../../specs/security-council-defcon-implementation.md#5-verification)).
