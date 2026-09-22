@@ -1058,6 +1058,61 @@ mod tests {
         assert_eq!(next_seq_no_from_state(10, 3), 11);
     }
 
+    /// PRD §5.3.3: a pending update expires once `expiry_days` have passed since it was proposed,
+    /// and the transition is persisted so every later read agrees. One day either side of the
+    /// window, and a status the rule must never touch.
+    #[tokio::test]
+    async fn expire_if_overdue_expires_only_a_pending_proposal_past_its_window() {
+        const EXPIRY_DAYS: u64 = 7;
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(&repo, session, 3, ACTION_HEX, &sig, 2, None)
+            .await
+            .unwrap();
+        let aged = |days: i64| Proposal {
+            created_at: Utc::now() - chrono::Duration::days(days),
+            ..created.clone()
+        };
+
+        let inside = expire_if_overdue(&repo, aged(EXPIRY_DAYS as i64 - 1), EXPIRY_DAYS)
+            .await
+            .unwrap();
+        assert_eq!(inside.status, ProposalStatus::Pending, "inside the window");
+
+        let past = expire_if_overdue(&repo, aged(EXPIRY_DAYS as i64 + 1), EXPIRY_DAYS)
+            .await
+            .unwrap();
+        assert_eq!(past.status, ProposalStatus::Expired, "past the window");
+        let stored = repo
+            .find_by_action_id(&created.action_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            stored.status,
+            ProposalStatus::Expired,
+            "the expiry is persisted"
+        );
+
+        let approved = save_approved_proposal(&repo, Authority::StrataAdmin, 4).await;
+        let old_approved = Proposal {
+            created_at: Utc::now() - chrono::Duration::days(EXPIRY_DAYS as i64 + 1),
+            ..approved
+        };
+        let untouched = expire_if_overdue(&repo, old_approved, EXPIRY_DAYS)
+            .await
+            .unwrap();
+        assert_eq!(
+            untouched.status,
+            ProposalStatus::Approved,
+            "only a pending proposal expires"
+        );
+    }
+
     #[tokio::test]
     async fn test_next_seq_no_for_authority_considers_local_proposals() {
         let repo = new_repo();
