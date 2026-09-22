@@ -12,6 +12,23 @@ function nullishToNull<T extends z.ZodType>(schema: T) {
 	return schema.nullish().transform((v) => v ?? null)
 }
 
+/**
+ * Every `actionType` the Rust side emits. Closed on purpose: an unregistered value fails the parse
+ * of the whole proposal list, which is louder than an unknown row. `ActionType` derives from it.
+ */
+export const PROPOSAL_ACTION_TYPES = [
+	'multisig_update',
+	'vk_update',
+	'operator_set_update',
+	'sequencer_key_update',
+	'council_signer_update',
+	'safe_harbour_address_update',
+	'defcon_1',
+	'defcon_3',
+	'cancel',
+	'unknown',
+] as const
+
 export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired', 'superseded'])
 
 export const broadcastStatusSchema = z.enum([
@@ -45,18 +62,7 @@ export const proposalSchema = z
 		actionHex: z.string(),
 		// Without this the field is stripped on the way in and the title silently disappears.
 		title: z.string().nullable().default(null),
-		actionType: z.enum([
-			'multisig_update',
-			'vk_update',
-			'operator_set_update',
-			'sequencer_key_update',
-			'council_signer_update',
-			'safe_harbour_address_update',
-			'defcon_1',
-			'defcon_3',
-			'cancel',
-			'unknown',
-		]),
+		actionType: z.enum(PROPOSAL_ACTION_TYPES),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),

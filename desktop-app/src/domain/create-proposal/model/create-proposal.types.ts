@@ -1,14 +1,8 @@
+import type { CREATE_ACTION_TYPES } from './create-proposal.schema'
+
 export type { CreateProposalFormValues } from './create-proposal.schema'
 
-export type ActionType =
-	| 'vk_update'
-	| 'signer_update'
-	| 'council_signer_update'
-	| 'operator_set_update'
-	| 'sequencer_key_update'
-	| 'safe_harbour_address_update'
-	| 'defcon_1'
-	| 'defcon_3'
+export type ActionType = (typeof CREATE_ACTION_TYPES)[number]
 
 export type MultisigConfigSnapshot = {
 	signers: string[]
