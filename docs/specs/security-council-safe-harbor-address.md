@@ -1,15 +1,9 @@
 # Spec: Security Council — Safe Harbor Address Update
 
-**Status:** All four phases implemented — the action is creatable, signable, cancellable, visible on
-every surface a signer decides from, and proven against a regtest chain on three paths. Automated
-checks green. The manual walk ran on 2026-09-10 over an enactment, a cancel and a rotation submitted
-with the harbor already up; its findings are closed in Phase 3. Phase 4 answers the #547 review —
-the signing message on the signing screens, and *Safe Harbor* in every name this repository owns —
-and was walked on 2026-09-15. Three items of `## Verification` below (1, 3 and 10) are still
-unexercised. This document is the functional contract; the
-build plan is
-[`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md),
-whose phase board says what has landed.
+**Status:** Shipped — four phases, PRs #548, #549, #550, #563; manual walks 2026-09-10 (enacted,
+cancelled and swallowed paths) and 2026-09-15 (Phase 4). Open: items 1, 3 and 10 of
+[Verification](#verification) are unexercised. Build plan:
+[`security-council-safe-harbor-address-implementation.md`](./security-council-safe-harbor-address-implementation.md)
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §5.1, §5.2.2, §5.5
 

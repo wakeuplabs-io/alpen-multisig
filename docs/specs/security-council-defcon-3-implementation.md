@@ -7,7 +7,9 @@ for *what* V2 must do. This document is only *how* it gets built, and never over
 
 **Stories:** [`story-map.md`](../3-stories/story-map.md) US-E13 and US-E14.
 
-**Status:** All seven phases shipped. Phase 8 is held in reserve for what the manual walk exposes.
+**Status:** Closed — seven phases shipped, PRs #524–#527 and #530–#533; Phase 8's reserve unspent.
+Known debt in [§6](#6-known-debt-this-slice-does-not-take). Contract:
+[`security-council-defcon-3.md`](./security-council-defcon-3.md)
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.

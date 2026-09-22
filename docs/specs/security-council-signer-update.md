@@ -1,16 +1,10 @@
 # Spec: Security Council — Signer Update
 
-**Status:** Shipped. All four planned phases and automated checks are green, and the manual walk ran
-on 2026-09-09 against the local stack: the enacted path (create → quorum → broadcast → Awaiting
-enactment → **Enacted**, with the council's new config on chain) and the cancelled path (a second
-rotation cancelled inside its window, target **Canceled**, council config unchanged, nothing
-`Enacted`). [AC 13](#13-the-manual-fallback-works) is deferred as recorded debt — the route is
-implemented and covered structurally, its manual/external-RPC evidence is not, and it does not block
-V4. See the build plan's
+**Status:** Shipped — four phases, PRs #536, #541, #542, #544; manual walk 2026-09-09 over the
+enacted and cancelled paths. Open: [AC 13](#13-the-manual-fallback-works)'s manual/external-RPC
+evidence, deferred — see the build plan's
 [§6](./security-council-signer-update-implementation.md#6-known-debt-this-slice-does-not-take).
-This document is the functional contract; the build plan is
-[`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md),
-whose phase board says what has landed.
+Build plan: [`security-council-signer-update-implementation.md`](./security-council-signer-update-implementation.md)
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §5.1, §5.2.2, §5.5
 

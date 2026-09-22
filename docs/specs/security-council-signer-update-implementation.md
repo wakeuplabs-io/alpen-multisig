@@ -7,11 +7,10 @@ the SSOT for *what* V3 must do. This document is only *how* it gets built, and n
 
 **Story:** [`story-map.md`](../3-stories/story-map.md) US-E7.
 
-**Status:** Closed. All four planned phases implemented, automated checks green, and the manual walk
-run on 2026-09-09 for both the enacted and the cancelled path. Phase 5 was **not spent as code**: the
-walk found no defect in what V3 shipped, and the copy and signer-safety hardening it surfaced is
-recorded as debt in [§6](#6-known-debt-this-slice-does-not-take) rather than fixed here. AC 13's
-manual/external-RPC evidence is deferred there too, and does not block V4.
+**Status:** Closed — four phases shipped, PRs #536, #541, #542, #544; manual walk 2026-09-09 found no
+defect, so Phase 5's reserve is unspent. The hardening it surfaced and AC 13's evidence are debt in
+[§6](#6-known-debt-this-slice-does-not-take). Contract:
+[`security-council-signer-update.md`](./security-council-signer-update.md)
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in the
 contract is satisfied — the contract's `## Acceptance Criteria` section stays the measure.

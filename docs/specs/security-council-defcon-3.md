@@ -1,8 +1,7 @@
 # Spec: Security Council — Defcon 3
 
-**Status:** Shipped — all seven phases. This document is the functional contract; the build
-plan is [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md),
-whose phase board says what has landed.
+**Status:** Shipped — seven phases, PRs #524–#527 and #530–#533, manual walk run after Phase 7.
+Build plan: [`security-council-defcon-3-implementation.md`](./security-council-defcon-3-implementation.md)
 
 **PRD:** [`06-prd-hardware-signer-and-block-payouts-update.md`](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md) §3.1.4, §5.1, §5.2.2, §5.5
 
