@@ -4,7 +4,7 @@
 **Master plan:** [`security-council.md`](./security-council.md)
 **Last updated:** 2026-09-22 (Stage 6 audit, against `develop` after #570–#572)
 
-This matrix is the **single place** that records PASS / PARTIAL / FAIL / N/A for the PRD
+This matrix is the **single place** that records PASS / PARTIAL / FAIL for the PRD
 requirements the Security Council feature touches: the council's two actions, the Strata
 Administrator's two council-related actions, and the general §5 lifecycle requirements as they
 apply to those four. The per-slice contracts say what each slice promised; this says whether the
@@ -18,7 +18,6 @@ pins it — a row without a `file:line` is a row nobody checked.
 | **PASS** | Met for the four Security Council actions (see Notes). |
 | **PARTIAL** | Met in part; what is missing is named in Notes. |
 | **FAIL** | Not met. |
-| **N/A** | Outside this feature. |
 
 Rows marked *general* are §5 requirements this feature inherits from the proposal lifecycle every
 authority shares; their status is the same for every authority, and they are listed here because
@@ -45,7 +44,6 @@ the council actions depend on them.
 | 15 | §5.2.1 | Cancel is always offered while an update is cancellable | **PARTIAL** | `ConfirmationDepthResolver::Unavailable` answers `None` (`asm_role_membership.rs:143`), which the DTO reports as `is_cancelable: false` | While the ASM RPC is down the Cancel CTA disappears from every surface with no "unknown" state. The on-chain window is unaffected; the signer is not told. Recorded debt in the V2 build plan §6. |
 | 16 | §5.2 | "Approved" means quorum **and** confirmed on chain | **PARTIAL** *(general, documented deviation)* | `proposal-status.ts:75` shows *Approved* once quorum is reached, before the broadcast; after the reveal confirms it shows *Awaiting enactment* | The application's *Approved* is the backend status (quorum), one step earlier than the PRD's. It shows in the cancel affordance too: the dashboard offers Cancel only once the update awaits enactment (`proposals-dashboard.tsx:637`), but the detail screen offers it from quorum (`desktop-app/src/screens/proposal-detail-screen.tsx:210-213`), before the update is on chain — a cancel broadcast then would find nothing queued. |
 | 17 | §3.2.4 | The signer can read on the device what they sign | **PASS** | `render_signing_message` `desktop-app/src-tauri/src/infrastructure/signing.rs:138`, shown on the create and sign screens · message-shape tests in `commands/action_builder.rs` | Defcon messages are the four header lines with no details block; a safe harbor update shows the BOSD descriptor, not the address. Device behaviour per model: `specs/admin-wallet-prd-compliance.md` §3.2.4. |
-| 18 | §5.5 | "Soft" / "Hard" bridge update | **N/A** | No upstream counterpart at any revision | Confirmed withdrawn; US-E9/US-E10 retired — master plan §5.5. |
 
 ## Actions and roles
 
@@ -62,8 +60,7 @@ cancelled — the definition the feature was blocked on before upstream shipped 
 Sources: master plan [§3](./security-council.md#3-action-inventory) (inventory),
 [§2.2](./security-council.md#22-what-happens-when-a-defcon-fires) and
 [§3.2](./security-council.md#32-observable-post-conditions) (execution),
-[§5.1](./security-council.md#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) (cancellation),
-[§5.5](./security-council.md#55-two-prd-items-have-no-upstream-counterpart-at-any-revision--both-resolved) (withdrawn items).
+[§5.1](./security-council.md#51-defcon-3-is-cancelable--resolved-the-prd-was-corrected) (cancellation).
 
 ## Open items
 
