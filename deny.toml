@@ -129,6 +129,11 @@ expression = "MIT OR Apache-2.0"
 license-files = []
 
 [[licenses.clarify]]
+crate = "strata-checkpoint-verification"
+expression = "MIT OR Apache-2.0"
+license-files = []
+
+[[licenses.clarify]]
 crate = "strata-codec"
 expression = "MIT OR Apache-2.0"
 license-files = []
