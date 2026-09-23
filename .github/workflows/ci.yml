@@ -117,6 +117,12 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace
 
+      # Everything above builds with debug_assertions. Dependencies can gate impls on it (trezor-thp
+      # derives Debug only in debug builds), so code that compiles here can still break the release
+      # pipeline. Check the shipped crates in the release profile; `check` skips codegen to spare disk.
+      - name: Check release profile
+        run: cargo check --release -p desktop-app -p orchestrator-be
+
   frontend:
     name: Frontend (Lint, Format, Build)
     needs: detect-changes
