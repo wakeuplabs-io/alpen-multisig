@@ -70,7 +70,16 @@ impl Backend for Crypto {
 }
 
 fn thp_error(e: trezor_thp::Error) -> io::Error {
-    io::Error::other(format!("THP channel error: {e:?}"))
+    // trezor-thp derives Debug only under debug_assertions, so `{e:?}` breaks release builds.
+    let kind = match e {
+        trezor_thp::Error::UnexpectedInput => "unexpected input",
+        trezor_thp::Error::NotReady => "not ready",
+        trezor_thp::Error::MalformedData => "malformed data",
+        trezor_thp::Error::InvalidChecksum => "invalid checksum",
+        trezor_thp::Error::InsufficientBuffer => "insufficient buffer",
+        trezor_thp::Error::CryptoError => "crypto error",
+    };
+    io::Error::other(format!("THP channel error: {kind}"))
 }
 
 /// A channel in any of its phases (allocation, handshake, established) and the link under it.
