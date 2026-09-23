@@ -4,35 +4,40 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
+import type { MultisigTargetAuthority } from '@/api/action-builder'
+import { defconLevelOf } from '@/lib/defcon-copy'
 import { deviceCopy } from '@/lib/device-copy'
-import { deviceSigningDisplay } from '@/lib/device-signing-display'
+import { deviceSigningDisplay, signingMessageSection } from '@/lib/device-signing-display'
 import { useDeviceSigningMessage } from '@/hooks/use-device-signing-message'
 import { EyeGrayIcon, PencilWhiteIcon } from '@/assets/icons'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FormProvider, useForm, useWatch } from 'react-hook-form'
 import {
 	isSessionExpiredReauthError,
 	SESSION_EXPIRED_REAUTH_MESSAGE,
 } from '@/domain/create-proposal/hooks/use-create-proposal'
+import { useMultisigConfig } from '../hooks/use-multisig-config'
+import { useSafeHarbor } from '@/hooks/use-safe-harbor-status'
+import { isSignerUpdateActionType } from '../model/action-type-predicates'
 import { getActionTypeOptions, getDefaultActionType } from '../model/action-type-config'
-import type { MultisigConfigSnapshot, ProposalPreview } from '../model/create-proposal.types'
+import type { ProposalPreview } from '../model/create-proposal.types'
 import { buildCreateProposalFormSchema, type CreateProposalFormValues } from '../model/create-proposal.schema'
+import { multisigTargetAuthority } from '../model/multisig-target'
 import { fieldErrorClass, numberInputClass, textInputClass } from '../model/create-proposal-form-styles'
 import { ActionTypeCard, LabelWithTooltip } from './create-proposal-form-primitives'
 import { CreateProposalPreview } from './create-proposal-preview'
+import { DefconFormFields } from './defcon-form-fields'
 import { OperatorSetUpdateFormFields } from './operator-set-update-form-fields'
 import { SequencerKeyUpdateFormFields } from './sequencer-key-update-form-fields'
+import { SafeHarborAddressFormFields } from './safe-harbor-address-form-fields'
 import { SignerUpdateFormFields } from './signer-update-form-fields'
 import { VkUpdateFormFields } from './vk-update-form-fields'
 
 type Props = {
 	authorityLabel: string
-	authority: string
+	authority: MultisigTargetAuthority
 	/** Signer connected in this session — drives the device-specific signing copy. */
 	walletVendor: WalletVendor
-	multisigConfig: MultisigConfigSnapshot | null
-	multisigConfigVersion: number
-	isLoadingConfig: boolean
 	nextSeqNo: number | null
 	isLoadingSeqNo: boolean
 	currentVk: CurrentVk | null
@@ -41,11 +46,22 @@ type Props = {
 	isLoadingOperators: boolean
 	isSubmitting: boolean
 	error: string | null
+	/** Clears the error above, called whenever a field changes — see the effect that uses it. */
+	onClearError: () => void
 	createdProposal: Proposal | null
 	onCancel: () => void
 	onPreviewValid: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	onSubmitValid: (data: CreateProposalFormValues) => Promise<void>
 	onReauthenticate: () => Promise<void>
+}
+
+// Names the target in the unavailable-config message — a signer told "the config could
+// not be read" with no target named has no idea which read to retry.
+const TARGET_AUTHORITY_LABELS: Record<MultisigTargetAuthority, string> = {
+	strata_admin: 'Strata Administrator',
+	sequencer_manager: 'Strata Sequencer Manager',
+	alpen_admin: 'Alpen Administrator',
+	security_council: 'Security Council',
 }
 
 const defaultFormValues: CreateProposalFormValues = {
@@ -60,15 +76,15 @@ const defaultFormValues: CreateProposalFormValues = {
 	operatorsToAdd: [{ value: '' }],
 	operatorIndicesToRemove: [{ value: '' }],
 	newSequencerKeyHex: '',
+	newSafeHarborAddress: '',
+	defconConfirm: '',
+	defconMessage: '',
 }
 
 export function CreateProposalForm({
 	authorityLabel,
 	authority,
 	walletVendor,
-	multisigConfig,
-	multisigConfigVersion,
-	isLoadingConfig,
 	nextSeqNo,
 	isLoadingSeqNo,
 	currentVk,
@@ -77,6 +93,7 @@ export function CreateProposalForm({
 	isLoadingOperators,
 	isSubmitting,
 	error,
+	onClearError,
 	createdProposal,
 	onCancel,
 	onPreviewValid,
@@ -91,17 +108,24 @@ export function CreateProposalForm({
 	const [isReauthenticating, setIsReauthenticating] = useState(false)
 	const [pendingAction, setPendingAction] = useState<'preview' | 'submit' | null>(null)
 
-	const createProposalSchema = useMemo(
-		() =>
-			buildCreateProposalFormSchema({
-				currentMultisigSigners: multisigConfig?.signers ?? null,
-			}),
-		[multisigConfig],
-	)
-
-	const resolver = useMemo(() => zodResolver(createProposalSchema), [createProposalSchema])
-
 	const actionTypeOptions = useMemo(() => getActionTypeOptions(authority), [authority])
+
+	// react-hook-form needs a `resolver` at the `useForm()` call below, but the *correct* one
+	// depends on `actionType` — a value only available from `useWatch(form.control)`, which needs
+	// `form` to already exist. State bridges the one-render gap: `useForm()` reads whatever
+	// resolver the *previous* render committed, and the layout effect after `useWatch` (below)
+	// commits this render's fresh one before the browser paints the loaded config. A passive effect
+	// would expose one frame where the buttons could use a resolver for the previous target.
+	const [resolver, setResolver] = useState(() =>
+		zodResolver(
+			buildCreateProposalFormSchema({
+				currentMultisigSigners: null,
+				currentMultisigThreshold: null,
+				authority,
+				currentSafeHarborAddress: null,
+			}),
+		),
+	)
 
 	const form = useForm<CreateProposalFormValues, unknown, CreateProposalFormValues>({
 		resolver,
@@ -111,33 +135,86 @@ export function CreateProposalForm({
 	})
 
 	const { handleSubmit, reset, formState, getValues, control, trigger } = form
+
 	const watchedValues = useWatch({ control })
-	const actionType = watchedValues?.actionType
+
+	// The error under the buttons is a verdict on the values a rejected preview or submit was
+	// given, and it used to survive until the next one — so it stayed on screen under a field the
+	// signer had already corrected, contradicting the resolved signing message two fields above.
+	// Keyed on the values themselves, serialized: setting the error re-renders the form without
+	// changing them, and that must not clear the error it just set.
+	const watchedValuesKey = JSON.stringify(watchedValues)
+	useEffect(() => {
+		onClearError()
+	}, [watchedValuesKey, onClearError])
+	const actionType = watchedValues?.actionType ?? getDefaultActionType(authority)
 	const keysToAddWatched = watchedValues?.keysToAdd
 	const keysToRemoveWatched = watchedValues?.keysToRemove
-	const signerKeysDigest =
-		actionType === 'signer_update'
-			? [
-					multisigConfigVersion,
-					JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
-					JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
-				].join('|')
-			: ''
+	const isSignerUpdate = isSignerUpdateActionType(actionType)
+
+	// Constraint 2: the target is decided by the action, never the session. `authority` here is
+	// the session the screen already resolved, not a fresh `useSession()` call.
+	const targetAuthority = multisigTargetAuthority(actionType, authority)
+	const { multisigConfig, multisigConfigVersion, isLoadingConfig } = useMultisigConfig(targetAuthority)
+
+	// §4.8: if the read failed, `isLoadingConfig` goes false and `multisigConfig` stays null — the
+	// schema would then validate against nothing, which the contract forbids. Both buttons must
+	// stay disabled until the read either succeeds or the signer switches to a different target.
+	const isConfigUnavailable = isSignerUpdate && !isLoadingConfig && multisigConfig === null
+
+	// Same shape, same reason, for the destination this action replaces: without it the form can
+	// neither show what is being replaced nor refuse a rotation to the address already installed,
+	// and that second rule is what keeps a no-op from reporting as Enacted.
+	const isSafeHarborAction = actionType === 'safe_harbour_address_update'
+	const { safeHarbor, isLoading: isLoadingSafeHarbor } = useSafeHarbor(isSafeHarborAction)
+	const isSafeHarborUnavailable = isSafeHarborAction && !isLoadingSafeHarbor && safeHarbor === null
+
+	const createProposalSchema = useMemo(
+		() =>
+			buildCreateProposalFormSchema({
+				currentMultisigSigners: multisigConfig?.signers ?? null,
+				currentMultisigThreshold: multisigConfig?.threshold ?? null,
+				authority,
+				currentSafeHarborAddress: safeHarbor?.address ?? null,
+			}),
+		[multisigConfig, authority, safeHarbor],
+	)
+
+	useLayoutEffect(() => {
+		setResolver(() => zodResolver(createProposalSchema))
+	}, [createProposalSchema])
+
+	const signerKeysDigest = isSignerUpdate
+		? [
+				multisigConfigVersion,
+				JSON.stringify((keysToAddWatched ?? []).map((r) => r.value)),
+				JSON.stringify((keysToRemoveWatched ?? []).map((r) => r.value)),
+			].join('|')
+		: ''
 
 	useEffect(() => {
-		if (actionType !== 'signer_update' || signerKeysDigest === '') return
+		if (!isSignerUpdate || signerKeysDigest === '') return
 		void trigger('threshold')
-	}, [actionType, signerKeysDigest, trigger])
+	}, [isSignerUpdate, signerKeysDigest, trigger])
+
+	// Separates a target switch from a same-target refetch: `keysToRemove` and `threshold`
+	// already mirror the target's config on every version bump, but `keysToAdd` must only be
+	// cleared when the target actually changed — otherwise keys a signer chose against the
+	// previous target would silently be reinterpreted as adds against the new one.
+	const lastAppliedTargetRef = useRef<MultisigTargetAuthority | null>(null)
 
 	useEffect(() => {
 		if (multisigConfigVersion === 0 || multisigConfig === null) return
+		const targetChanged = lastAppliedTargetRef.current !== targetAuthority
+		lastAppliedTargetRef.current = targetAuthority
 		const current = getValues()
 		reset({
 			...current,
+			keysToAdd: targetChanged ? [{ value: '' }] : current.keysToAdd,
 			keysToRemove: [{ value: '' }],
 			threshold: String(multisigConfig.threshold),
 		})
-	}, [multisigConfigVersion, multisigConfig, reset, getValues])
+	}, [multisigConfigVersion, multisigConfig, targetAuthority, reset, getValues])
 
 	useEffect(() => {
 		if (nextSeqNo === null) return
@@ -152,9 +229,7 @@ export function CreateProposalForm({
 			return
 		}
 		if (JSON.stringify(watchedValues) !== JSON.stringify(frozenAtPreview)) {
-			setIsPreviewMode(false)
-			setPreview(null)
-			setFrozenAtPreview(null)
+			exitPreview()
 		}
 	}, [watchedValues, isPreviewMode, frozenAtPreview])
 
@@ -174,6 +249,18 @@ export function CreateProposalForm({
 	const previewRemovingKeys = previewData.keysToRemove
 		.map((row) => row.value.trim())
 		.filter((value) => value.length > 0)
+	function exitPreview() {
+		setIsPreviewMode(false)
+		setPreview(null)
+		setFrozenAtPreview(null)
+	}
+
+	function askToReauthenticate(action: 'preview' | 'submit') {
+		setPendingAction(action)
+		setReauthError(null)
+		setShowReauthModal(true)
+	}
+
 	async function handlePreviewClick() {
 		const isValid = await trigger(undefined, { shouldFocus: true })
 		if (!isValid) return
@@ -185,27 +272,19 @@ export function CreateProposalForm({
 			setPreview(nextPreview)
 			setIsPreviewMode(true)
 		} catch (error) {
-			if (!isSessionExpiredReauthError(error)) return
-			setPendingAction('preview')
-			setReauthError(null)
-			setShowReauthModal(true)
+			if (isSessionExpiredReauthError(error)) askToReauthenticate('preview')
 		}
 	}
 
 	async function handleSubmitAttempt(data: CreateProposalFormValues) {
 		if (frozenAtPreview === null || JSON.stringify(data) !== JSON.stringify(frozenAtPreview)) {
-			setIsPreviewMode(false)
-			setPreview(null)
-			setFrozenAtPreview(null)
+			exitPreview()
 			return
 		}
 		try {
 			await onSubmitValid(frozenAtPreview)
 		} catch (error) {
-			if (!isSessionExpiredReauthError(error)) return
-			setPendingAction('submit')
-			setReauthError(null)
-			setShowReauthModal(true)
+			if (isSessionExpiredReauthError(error)) askToReauthenticate('submit')
 		}
 	}
 
@@ -229,7 +308,20 @@ export function CreateProposalForm({
 		}
 	}
 
+	// Both Defcon levers sweep the same funds, so both carry the danger palette all the way through
+	// the review step — the last control the signer touches must not look like every other one.
+	// Only the copy inside distinguishes them: one is irreversible, the other cancelable until it
+	// activates.
+	const defconLevel = defconLevelOf(actionType)
+	const isDestructive = defconLevel !== null
 	const blocker = useNavigationGuard(formState.isDirty && createdProposal === null)
+	const isActionBlocked =
+		isSubmitting ||
+		isLoadingConfig ||
+		isConfigUnavailable ||
+		isLoadingSafeHarbor ||
+		isSafeHarborUnavailable ||
+		!formState.isValid
 
 	return (
 		<FormProvider {...form}>
@@ -241,11 +333,7 @@ export function CreateProposalForm({
 							<button
 								type="button"
 								className="mb-4 flex items-center gap-1.5 text-body text-[#6b7280] hover:text-[#111827]"
-								onClick={() => {
-									setIsPreviewMode(false)
-									setPreview(null)
-									setFrozenAtPreview(null)
-								}}
+								onClick={exitPreview}
 							>
 								<span>←</span> Back to new proposal
 							</button>
@@ -295,12 +383,15 @@ export function CreateProposalForm({
 							threshold={previewData.threshold}
 							vkTypeId={previewData.vkTypeId}
 							newVkHex={previewData.newVkHex}
+							newSafeHarborAddress={previewData.newSafeHarborAddress}
+							currentSafeHarbor={safeHarbor}
 							operatorsToAdd={previewData.operatorsToAdd.map((r) => r.value.trim()).filter((v) => v.length > 0)}
 							operatorIndicesToRemove={previewData.operatorIndicesToRemove
 								.map((r) => r.value.trim())
 								.filter((v) => v.length > 0)}
 							newSequencerKeyHex={previewData.newSequencerKeyHex}
 							deviceDisplay={deviceDisplay}
+							signingMessage={signingMessageSection(deviceDisplay, deviceMessage)}
 							authorityLabel={authorityLabel}
 							walletVendor={walletVendor}
 							currentSigners={multisigConfig?.signers ?? []}
@@ -311,16 +402,21 @@ export function CreateProposalForm({
 						<div className="flex flex-col gap-6">
 							<div>
 								<p className="mb-3 text-body font-medium text-[#111827]">Action type</p>
-								<div className="grid grid-cols-2 gap-3">
+								<div className={`grid gap-3 ${actionTypeOptions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
 									{actionTypeOptions.map((option) => (
 										<ActionTypeCard
 											key={option.actionType}
 											title={option.title}
 											description={option.description}
 											selected={actionType === option.actionType}
-											onClick={() =>
+											onClick={() => {
+												if (option.actionType === actionType) return
 												form.setValue('actionType', option.actionType, { shouldValidate: true, shouldDirty: true })
-											}
+												// The typed confirmation is evidence that the signer read *this* form. Carrying
+												// it across a switch would hand the next action a gate somebody else passed.
+												// Not validated: an untouched field must not open with an error on it.
+												form.setValue('defconConfirm', '')
+											}}
 										/>
 									))}
 								</div>
@@ -362,7 +458,11 @@ export function CreateProposalForm({
 								{formState.errors.title?.message && <p className={fieldErrorClass}>{formState.errors.title.message}</p>}
 							</div>
 
-							{actionType === 'signer_update' ? (
+							{defconLevel !== null ? (
+								// Keyed by level: switching between the two remounts rather than carrying one
+								// lever's resolved action hex, and its signing message, into the other's form.
+								<DefconFormFields key={defconLevel} level={defconLevel} />
+							) : isSignerUpdateActionType(actionType) ? (
 								<SignerUpdateFormFields
 									isLoadingConfig={isLoadingConfig}
 									currentSigners={multisigConfig?.signers ?? []}
@@ -376,8 +476,24 @@ export function CreateProposalForm({
 								/>
 							) : actionType === 'sequencer_key_update' ? (
 								<SequencerKeyUpdateFormFields />
+							) : isSafeHarborAction ? (
+								<SafeHarborAddressFormFields safeHarbor={safeHarbor} isLoadingSafeHarbor={isLoadingSafeHarbor} />
 							) : (
 								<VkUpdateFormFields currentVk={currentVk} isLoadingCurrentVk={isLoadingCurrentVk} />
+							)}
+
+							{isConfigUnavailable && (
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
+									Could not load the signer set for {TARGET_AUTHORITY_LABELS[targetAuthority]}. Try again before
+									continuing.
+								</div>
+							)}
+
+							{isSafeHarborUnavailable && (
+								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
+									Could not load the current safe harbor destination. Try again before continuing — without it this form
+									cannot tell a real change from one that would do nothing.
+								</div>
 							)}
 						</div>
 					)}
@@ -405,8 +521,10 @@ export function CreateProposalForm({
 										<button
 											type="submit"
 											data-testid="e2e-create-proposal-sign-submit"
-											className="flex items-center gap-2 rounded-lg bg-[#0a0a0a] px-5 py-2.5 text-body font-medium text-white hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
-											disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+											className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-body font-medium text-white disabled:cursor-not-allowed disabled:bg-[#9ca3af] ${
+												isDestructive ? 'bg-danger hover:bg-danger-strong' : 'bg-[#0a0a0a] hover:bg-[#1a1a1a]'
+											}`}
+											disabled={isActionBlocked}
 										>
 											<PencilWhiteIcon width={14} height={14} className="block shrink-0" />
 											{isSubmitting ? 'Signing...' : 'Sign and Create Proposal'}
@@ -426,8 +544,12 @@ export function CreateProposalForm({
 									<button
 										type="button"
 										data-testid="e2e-create-proposal-preview"
-										className="flex items-center gap-2 rounded-lg border border-[#0a0a0a] bg-white px-5 py-2.5 text-body font-medium text-[#111827] hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
-										disabled={isSubmitting || isLoadingConfig || !formState.isValid}
+										className={`flex items-center gap-2 rounded-lg border bg-white px-5 py-2.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+											isDestructive
+												? 'border-danger text-danger-deep hover:bg-danger-surface'
+												: 'border-[#0a0a0a] text-[#111827] hover:bg-bg-base'
+										}`}
+										disabled={isActionBlocked}
 										onClick={() => void handlePreviewClick()}
 									>
 										<EyeGrayIcon width={15} height={15} className="block shrink-0" />

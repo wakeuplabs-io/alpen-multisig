@@ -1,0 +1,49 @@
+// action-type-from-decoded — the offline path names the action it decoded (AC 15a).
+//
+// This replaced a hex-prefix guess that returned `multisig_update` for anything not starting `01`,
+// so an imported Defcon 1 read as *Signer update* on the screen a signer reaches precisely when the
+// orchestrator cannot tell them what they are holding.
+//
+// The assertion that matters is the `unknown` arm: it is the one a `default:` would have swallowed.
+
+import assert from 'node:assert/strict'
+import { actionTypeFromDecoded } from '../action-type-from-decoded.ts'
+
+assert.equal(actionTypeFromDecoded({ kind: 'defcon_1' }), 'defcon_1')
+// The `Record` is exhaustive by type, but `defcon_3: 'defcon_1'` would compile.
+assert.equal(actionTypeFromDecoded({ kind: 'defcon_3' }), 'defcon_3')
+assert.equal(
+	actionTypeFromDecoded({ kind: 'vk_update', authority: 'strata_admin', typeId: 1, conditionHex: '' }),
+	'vk_update',
+)
+assert.equal(
+	actionTypeFromDecoded({ kind: 'multisig_update', role: 'r', addKeys: [], removeKeys: [], newThreshold: 2 }),
+	'multisig_update',
+)
+assert.equal(actionTypeFromDecoded({ kind: 'unknown', rawHex: 'ff' }), 'unknown')
+assert.equal(actionTypeFromDecoded({ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' }), 'cancel')
+
+// Security Council signer update (V3) Phase 1 — `kind` alone does not carry the role, so the
+// distinction is made in the function body, not in the ACTION_TYPE_BY_KIND Record.
+assert.equal(
+	actionTypeFromDecoded({
+		kind: 'multisig_update',
+		role: 'security_council',
+		addKeys: [],
+		removeKeys: [],
+		newThreshold: 2,
+	}),
+	'council_signer_update',
+)
+assert.equal(
+	actionTypeFromDecoded({
+		kind: 'multisig_update',
+		role: 'strata_admin',
+		addKeys: [],
+		removeKeys: [],
+		newThreshold: 2,
+	}),
+	'multisig_update',
+)
+
+console.log('action-type-from-decoded: all assertions passed.')

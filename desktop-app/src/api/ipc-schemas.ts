@@ -12,7 +12,24 @@ function nullishToNull<T extends z.ZodType>(schema: T) {
 	return schema.nullish().transform((v) => v ?? null)
 }
 
-export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired'])
+/**
+ * Every `actionType` the Rust side emits. Closed on purpose: an unregistered value fails the parse
+ * of the whole proposal list, which is louder than an unknown row. `ActionType` derives from it.
+ */
+export const PROPOSAL_ACTION_TYPES = [
+	'multisig_update',
+	'vk_update',
+	'operator_set_update',
+	'sequencer_key_update',
+	'council_signer_update',
+	'safe_harbour_address_update',
+	'defcon_1',
+	'defcon_3',
+	'cancel',
+	'unknown',
+] as const
+
+export const proposalStatusSchema = z.enum(['pending', 'approved', 'enacted', 'canceled', 'expired', 'superseded'])
 
 export const broadcastStatusSchema = z.enum([
 	'idle',
@@ -45,14 +62,7 @@ export const proposalSchema = z
 		actionHex: z.string(),
 		// Without this the field is stripped on the way in and the title silently disappears.
 		title: z.string().nullable().default(null),
-		actionType: z.enum([
-			'multisig_update',
-			'vk_update',
-			'operator_set_update',
-			'sequencer_key_update',
-			'cancel',
-			'unknown',
-		]),
+		actionType: z.enum(PROPOSAL_ACTION_TYPES),
 		signatures: z.array(
 			z.object({
 				signerPubkey: z.string(),
@@ -68,7 +78,9 @@ export const proposalSchema = z
 		activationHeight: nullishToNull(z.number()),
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
+		isCancelable: z.boolean(),
 		createdAtMs: z.number(),
+		updatedAtMs: z.number(),
 		expiresAtMs: z.number(),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
@@ -139,6 +151,16 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 		typeId: z.number(),
 		conditionHex: z.string(),
 	}),
+	// `address` is rendered with the process's active network; `addressHex` is the BOSD
+	// descriptor, which is what the device displays and therefore what a signer compares.
+	z.object({
+		kind: z.literal('safe_harbour_address_update'),
+		addressHex: z.string(),
+		address: z.string(),
+	}),
+	z.object({ kind: z.literal('defcon_1') }),
+	z.object({ kind: z.literal('defcon_3') }),
+	z.object({ kind: z.literal('cancel'), targetUpdateId: z.number(), targetActionHex: z.string() }),
 	z.object({ kind: z.literal('unknown'), rawHex: z.string() }),
 ])
 
@@ -166,6 +188,15 @@ export const currentVkSchema = z.object({
 	typeId: z.number(),
 	typeName: z.string(),
 	conditionHex: z.string(),
+})
+
+// Zod strips what it does not declare, so a field added on the Rust side alone would vanish here
+// in silence. `addressHex` is the BOSD descriptor the device displays; `address` is the same
+// destination rendered for the active network, and is empty when that could not be resolved.
+export const safeHarborStatusSchema = z.object({
+	activated: z.boolean(),
+	addressHex: z.string(),
+	address: z.string(),
 })
 
 export const authorityMembershipsSchema = z.record(z.string(), z.boolean())

@@ -10,6 +10,13 @@ use crate::{
 // ─── Extended response types ─────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
+pub struct ProposalResponse {
+    #[serde(flatten)]
+    pub proposal: Proposal,
+    pub is_cancelable: bool,
+}
+
+#[derive(Debug, Serialize)]
 pub struct CancelProposalSummary {
     pub action_id: ActionId,
     pub status: ProposalStatus,
@@ -20,7 +27,7 @@ pub struct CancelProposalSummary {
 #[derive(Debug, Serialize)]
 pub struct ProposalDetailResponse {
     #[serde(flatten)]
-    pub proposal: Proposal,
+    pub proposal: ProposalResponse,
     pub cancel_proposal: Option<CancelProposalSummary>,
 }
 
@@ -66,7 +73,19 @@ pub struct ListProposalsQuery {
 
 #[derive(Debug, Serialize)]
 pub struct ProposalListResponse {
-    pub proposals: Vec<Proposal>,
+    pub proposals: Vec<ProposalResponse>,
+}
+
+/// Enrich a proposal with the cancelability the desktop reads instead of guessing by authority.
+///
+/// One `strata_asm_getStatus` per response. Every handler that returns a proposal goes through
+/// here, so a value written by one endpoint and read from another cannot disagree.
+async fn proposal_response(state: &AppState, proposal: Proposal) -> ProposalResponse {
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    ProposalResponse {
+        is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
+        proposal,
+    }
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
@@ -75,13 +94,15 @@ pub async fn create_proposal(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Json(body): Json<CreateProposalRequest>,
-) -> Result<(StatusCode, Json<Proposal>)> {
+) -> Result<(StatusCode, Json<ProposalResponse>)> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
     };
 
-    action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
+    let action =
+        action_codec::decode_multisig_action_hex(&body.action_hex).map_err(AppError::BadRequest)?;
+    asm_role_membership::require_authorized_for_action(auth.authority, &action)?;
 
     let required_signatures =
         asm_role_membership::threshold_for_authority(&state.asm_rpc_url, auth.authority).await?;
@@ -100,7 +121,10 @@ pub async fn create_proposal(
     )
     .await?;
 
-    Ok((StatusCode::CREATED, Json(proposal)))
+    Ok((
+        StatusCode::CREATED,
+        Json(proposal_response(&state, proposal).await),
+    ))
 }
 
 pub async fn get_next_seq_no(
@@ -125,6 +149,7 @@ pub async fn list_proposals(
     proposals::reconcile_enacted_for_authority(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        state.btc_client.as_ref(),
         auth.authority,
     )
     .await?;
@@ -139,7 +164,22 @@ pub async fn list_proposals(
         );
     }
 
-    Ok(Json(ProposalListResponse { proposals: checked }))
+    if checked.is_empty() {
+        return Ok(Json(ProposalListResponse { proposals: vec![] }));
+    }
+
+    // One depth read for the whole page: `is_cancelable_for_hex` answers from the table, so a
+    // listing of N proposals is one round trip and not N.
+    let resolver = asm_role_membership::ConfirmationDepthResolver::fetch(&state.asm_rpc_url).await;
+    let proposals = checked
+        .into_iter()
+        .map(|proposal| ProposalResponse {
+            is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
+            proposal,
+        })
+        .collect();
+
+    Ok(Json(ProposalListResponse { proposals }))
 }
 
 #[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
@@ -152,12 +192,18 @@ pub async fn get_proposal(
     proposals::reconcile_enacted_for_action(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        state.btc_client.as_ref(),
         auth.authority,
         &action_id,
     )
     .await?;
-    proposals::reconcile_update_id_in_queue(state.repo.as_ref(), &state.asm_rpc_url, &action_id)
-        .await?;
+    proposals::reconcile_reveal_confirmed_facts(
+        state.repo.as_ref(),
+        &state.asm_rpc_url,
+        state.btc_client.as_ref(),
+        &action_id,
+    )
+    .await?;
 
     let proposal =
         proposals::get_update_action(state.repo.as_ref(), auth.authority, &action_id).await?;
@@ -177,7 +223,7 @@ pub async fn get_proposal(
         });
 
     Ok(Json(ProposalDetailResponse {
-        proposal,
+        proposal: proposal_response(&state, proposal).await,
         cancel_proposal,
     }))
 }
@@ -212,7 +258,7 @@ pub async fn create_cancel_proposal(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<CreateCancelProposalRequest>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     if !body.signer_pubkey.eq_ignore_ascii_case(&auth.signer_pubkey) {
         return Err(AppError::Unauthorized);
     }
@@ -220,15 +266,18 @@ pub async fn create_cancel_proposal(
     let proposal = proposals::create_cancel_proposal(
         state.repo.as_ref(),
         &state.asm_rpc_url,
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
         ActionId(action_id),
         body.seq_no,
         &body.action_hex,
-        &auth.signer_pubkey,
         &body.signature_hex,
     )
     .await?;
 
-    Ok(Json(proposal))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
@@ -237,7 +286,7 @@ pub async fn approve_action(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ApproveActionRequest>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let sig = ProposalSignature {
         signer_pubkey: body.signer_pubkey,
         signature_hex: body.signature_hex,
@@ -254,7 +303,7 @@ pub async fn approve_action(
     )
     .await?;
 
-    Ok(Json(proposal))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[derive(Debug, Deserialize)]
@@ -269,7 +318,7 @@ pub async fn patch_proposal(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<PatchProposalBody>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     if body.proposal_status != "approved" {
         return Err(AppError::BadRequest(format!(
             "unsupported proposal_status: {}",
@@ -288,7 +337,7 @@ pub async fn patch_proposal(
     )
     .await?;
 
-    Ok(Json(proposal))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 /// Coordination-only: desktop claims broadcast before local commit/reveal (P-066).
@@ -297,7 +346,7 @@ pub async fn claim_broadcast(
     State(state): State<AppState>,
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let action_id = ActionId(action_id);
     let proposal = proposals::claim_broadcast_coordination(
         state.repo.as_ref(),
@@ -306,7 +355,7 @@ pub async fn claim_broadcast(
         &action_id,
     )
     .await?;
-    Ok(Json(proposal))
+    Ok(Json(proposal_response(&state, proposal).await))
 }
 
 #[derive(Debug, Deserialize)]
@@ -325,7 +374,7 @@ pub async fn report_broadcast_progress(
     auth: AuthenticatedSession,
     Path(action_id): Path<String>,
     Json(body): Json<ReportBroadcastProgressBody>,
-) -> Result<Json<Proposal>> {
+) -> Result<Json<ProposalResponse>> {
     let action_id = ActionId(action_id);
     let proposal = proposals::report_broadcast_progress(
         state.repo.as_ref(),
@@ -342,5 +391,5 @@ pub async fn report_broadcast_progress(
         },
     )
     .await?;
-    Ok(Json(proposal))
+    Ok(Json(proposal_response(&state, proposal).await))
 }

@@ -250,6 +250,9 @@ mod tests {
     use strata_asm_txs_admin::actions::UpdateAction;
     use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
+    use crate::domain::action::Action;
+    use crate::infrastructure::action_codec;
+
     // -- Test helpers --------------------------------------------------------
 
     struct DemoKeypair {
@@ -446,5 +449,26 @@ mod tests {
 
         assert!(!result.valid);
         assert_eq!(result.signatures_verified, 0);
+    }
+
+    /// The four canonical lines are upstream's and are frozen by contract, so pinning them here
+    /// would only restate a test that already lives there. What this side can lose is the
+    /// distinction: an upstream change that rendered the immediate and the timelocked lever
+    /// identically would otherwise be discovered on a signer's screen. Same seqno for both, so
+    /// "differs" can only mean the action.
+    #[test]
+    fn defcon_3_signing_message_is_rendered_and_differs_from_defcon_1() {
+        let seqno = 42;
+        let defcon1_hex = action_codec::encode_hex(&Action::Defcon1).expect("encode ok");
+        let defcon3_hex = action_codec::encode_hex(&Action::Defcon3).expect("encode ok");
+
+        let defcon1 = render_signing_message(seqno, &defcon1_hex).expect("defcon 1 renders");
+        let defcon3 = render_signing_message(seqno, &defcon3_hex).expect("defcon 3 renders");
+
+        assert!(!defcon3.trim().is_empty(), "a blank message signs nothing");
+        assert_ne!(
+            defcon1, defcon3,
+            "the two levers must not present the signer with the same message"
+        );
     }
 }

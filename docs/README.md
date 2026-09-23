@@ -37,6 +37,16 @@ flowchart LR
 | Release program (internal tracking) | [`operations/executable-delivery-plan.md`](./operations/executable-delivery-plan.md) | Current |
 | Verify releases / reproducible builds (client steps) | [`external/verifying-releases.md`](./external/verifying-releases.md), [`external/reproducible-builds.md`](./external/reproducible-builds.md) | Client |
 | Security model | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | Current |
+| Security Council (Defcon, safe harbor, council signer update) | [`specs/security-council.md`](./specs/security-council.md) | Current |
+| Security Council PRD compliance | [`specs/security-council-prd-compliance.md`](./specs/security-council-prd-compliance.md) | Current |
+| Security Council — Defcon 1 functional contract (V1) | [`specs/security-council-defcon.md`](./specs/security-council-defcon.md) | Current |
+| Security Council — Defcon 1 build plan (V1 phases) | [`specs/security-council-defcon-implementation.md`](./specs/security-council-defcon-implementation.md) | Current |
+| Security Council — Defcon 3 functional contract (V2, includes the cancel) | [`specs/security-council-defcon-3.md`](./specs/security-council-defcon-3.md) | Current |
+| Security Council — Defcon 3 build plan (V2 phases) | [`specs/security-council-defcon-3-implementation.md`](./specs/security-council-defcon-3-implementation.md) | Current |
+| Security Council — signer update functional contract (V3) | [`specs/security-council-signer-update.md`](./specs/security-council-signer-update.md) | Current |
+| Security Council — signer update build plan (V3 phases) | [`specs/security-council-signer-update-implementation.md`](./specs/security-council-signer-update-implementation.md) | Current |
+| Security Council — safe harbor address functional contract (V4) | [`specs/security-council-safe-harbor-address.md`](./specs/security-council-safe-harbor-address.md) | Current |
+| Security Council — safe harbor address build plan (V4 phases) | [`specs/security-council-safe-harbor-address-implementation.md`](./specs/security-council-safe-harbor-address-implementation.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |
@@ -54,6 +64,7 @@ Use this table when two internal docs seem to disagree. **SSOT** is where curren
 | Backlog & closure | [`assessment/deferred-backlog.md`](./assessment/deferred-backlog.md), [`assessment/action-plan-progress.md`](./assessment/action-plan-progress.md) | [`assessment/archive/`](./assessment/archive/) wave snapshots | See [`assessment/README.md`](./assessment/README.md) ([conflict rule #6](#conflict-resolution)) |
 | Operations | [`operations/runbook.md`](./operations/runbook.md) | [`assessment/archive/action-plan-2026-05-14.md`](./assessment/archive/action-plan-2026-05-14.md) P-051 row | Runbook exists; 2026-05-14 table is a historical snapshot |
 | Security | [`operations/threat-model.md`](./operations/threat-model.md), [`specs/signer-safety-model.md`](./specs/signer-safety-model.md) | — (pair is joint SSOT) | Threat model = assets/risks; signer-safety = UX principles; read both |
+| Security Council | [`specs/security-council.md`](./specs/security-council.md) | [`2-discovery/08-alpen-crate-prd-coverage.md`](./2-discovery/08-alpen-crate-prd-coverage.md), [`2-discovery/19-asm-bump-impact-assessment.md`](./2-discovery/19-asm-bump-impact-assessment.md), [`archive/features/security-council/`](./archive/features/security-council/) | Both discovery notes predate the pin bump and call the council blocked on upstream; the per-phase specs are delivery history. The spec carries the upstream evidence and the current stage board |
 
 Folder indexes: [`assessment/README.md`](./assessment/README.md), [`specs/README.md`](./specs/README.md), [`operations/README.md`](./operations/README.md), [`archive/README.md`](./archive/README.md).
 
@@ -64,7 +75,7 @@ When documents disagree, use this order:
 1. **Protocol:** SPS-50, SPS-51, SPS-65 (via Alpen crates and PRDs).
 2. **Architecture decisions:** `architecture/adrs/` (e.g. ADR-006 over legacy assessment claims).
 3. **Feature contract:** `specs/<feature>.md` (functional spec wins over implementation spec if they conflict).
-4. **Admin Wallet PRD status:** `admin-wallet-prd-compliance.md` over phase checkmarks in `admin-wallet-implementation-plan.md`.
+4. **Admin Wallet PRD status:** `admin-wallet-prd-compliance.md` over phase checkmarks in `admin-wallet-implementation-plan.md`. **Security Council PRD status:** `security-council-prd-compliance.md` over the contracts' and build plans' status lines, and over the 2026-05-22 audit.
 5. **Client deliverables:** `docs/external/` over internal stubs in `operations/`.
 6. **Backlog truth:** `deferred-backlog.md` + `action-plan-progress.md` over historical `assessment/archive/action-plan-2026-05-14.md` severity tables.
 

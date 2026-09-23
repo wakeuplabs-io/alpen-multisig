@@ -3,6 +3,13 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SigningMessagePanel } from '@/components/signing-message-panel'
+import { DefconCallout } from '@/components/defcon-callout'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
+import { DEFCON_COPY, defconLevelOf, FROZEN_DESTINATION_NOTE, type DefconLevel } from '@/lib/defcon-copy'
+import { useSafeHarbor, useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
+import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
+import { buildSafeHarborChange } from '@/domain/safe-harbor-change/model/build-safe-harbor-change'
 import { deviceCopy } from '@/lib/device-copy'
 import { multisigUpdateChanges } from '../model/multisig-update-changes'
 import type { SignSighashResult, WalletVendor } from '@/wallet/types'
@@ -18,6 +25,11 @@ type SignProposalViewProps = {
 	currentThreshold: number | null
 	/** What the connected device displays for this signature (Ledger hash / Trezor text). */
 	deviceDisplay: DeviceSigningDisplay
+	/**
+	 * The signing message this screen prints as its own section — set only when `deviceDisplay` does
+	 * not already print it. Rendered for a safe harbor rotation only.
+	 */
+	signingMessage: string | null
 	signResult: SignSighashResult | null
 	isSigning: boolean
 	error: string | null
@@ -57,7 +69,7 @@ function MultisigUpdateDetails({
 				{changes.addKeys.length > 0 && (
 					<div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#16a34a]">
-							Members to add · {changes.addKeys.length}
+							Signers to add · {changes.addKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.addKeys.map((key) => (
@@ -72,7 +84,7 @@ function MultisigUpdateDetails({
 				{changes.removeKeys.length > 0 && (
 					<div className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-3">
 						<p className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-emphasis">
-							Members to remove · {changes.removeKeys.length}
+							Signers to remove · {changes.removeKeys.length}
 						</p>
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.removeKeys.map((key) => (
@@ -87,7 +99,7 @@ function MultisigUpdateDetails({
 				)}
 
 				{changes.showThreshold && changes.addKeys.length === 0 && changes.removeKeys.length === 0 && (
-					<p className="m-0 text-label text-[#9ca3af]">Threshold-only change — no members added or removed.</p>
+					<p className="m-0 text-label text-[#9ca3af]">Threshold-only change — no signers added or removed.</p>
 				)}
 
 				{!changes.hasAnyChange && (
@@ -116,6 +128,116 @@ function VkUpdateDetails({ action }: { action: Extract<DecodedAction, { kind: 'v
 	)
 }
 
+function SafeHarborAddressDetails({
+	action,
+	signingMessage,
+}: {
+	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
+	signingMessage: string | null
+}) {
+	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
+	// rotation submitted after activation is accepted on chain and discarded. One read for both
+	// answers — whether the harbor is up, and what it currently sweeps to.
+	const { safeHarbor } = useSafeHarbor()
+
+	// `isEnacted` is a constant on this screen: nothing enacted is ever signed.
+	const change = buildSafeHarborChange({
+		installed: safeHarbor === null ? null : { address: safeHarbor.address, addressHex: safeHarbor.addressHex },
+		proposed: { address: action.address, addressHex: action.addressHex },
+		isEnacted: false,
+	})
+
+	return (
+		<>
+			{safeHarbor?.activated === true && (
+				<div className="mt-5">
+					<SafeHarborNote>{FROZEN_DESTINATION_NOTE}</SafeHarborNote>
+				</div>
+			)}
+
+			<div className="mt-5">
+				<p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+					New sweep destination
+				</p>
+				{/* The comparison the create form gave the signer who drafted this, on the screen every
+				    other signer commits from. Each destination carries its descriptor as well as its
+				    address: the descriptor is what the device renders, so it is the one a signer can
+				    actually check. When the installed destination cannot be read there is no
+				    comparison to make, and the proposed one is shown alone rather than in a column
+				    whose header would claim more than is known. */}
+				<div className="mt-2 overflow-hidden rounded-lg border border-[#e5e7eb]">
+					{change === null ? (
+						<div className="flex flex-col gap-2 px-3 py-2.5">
+							{action.address.length > 0 && (
+								<span className="break-all font-mono text-[12px] leading-5 text-[#111827]">{action.address}</span>
+							)}
+							<code className="block break-all font-mono text-[12px] leading-5 text-[#6b7280]">
+								{action.addressHex}
+							</code>
+						</div>
+					) : (
+						<SafeHarborChangeTable change={change} />
+					)}
+				</div>
+			</div>
+
+			{/* The message this signature authorizes, on the screen where it is given. A hardware
+			    signer already sees it in the device hint below, so it is set only when there is none. */}
+			{signingMessage !== null && (
+				<div className="mt-5">
+					<SigningMessagePanel
+						message={signingMessage}
+						placeholder=""
+						error={null}
+						testId="e2e-sign-safe-harbor-signing-message"
+						labelId="sign-safe-harbor-signing-message-label"
+						hint="This is exactly what you are signing. The destination appears in it as a descriptor, not as an address."
+					/>
+				</div>
+			)}
+		</>
+	)
+}
+
+function DefconDetails({ level }: { level: DefconLevel }) {
+	// Read here and not only on the dashboard: this is the screen where the signer commits, and
+	// the sentences below are written in the future tense, which is wrong once the harbor is up.
+	const safeHarborActivated = useSafeHarborActivated()
+
+	return (
+		<>
+			{safeHarborActivated && (
+				<div className="mt-5">
+					<SafeHarborNote>{DEFCON_COPY[level].signSafeHarborNote}</SafeHarborNote>
+				</div>
+			)}
+
+			<div className="mt-5">
+				<DefconCallout level={level} variant="sign" />
+			</div>
+		</>
+	)
+}
+
+function CancelActionDetails({ action }: { action: Extract<DecodedAction, { kind: 'cancel' }> }) {
+	// Before a cancel decoded to its own kind it fell through to `UnknownActionDetails`, so the
+	// signer at least saw the payload they were signing. Without an arm here the view would render
+	// nothing at all, under copy that tells them to review the action details above.
+	return (
+		<div className="mt-5">
+			<p className="m-0 text-mono-sm font-semibold uppercase tracking-[0.08em] text-[#9ca3af]">
+				Update being cancelled
+			</p>
+			<div className="mt-2 flex flex-col gap-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-3">
+				<span className="shrink-0 self-start rounded-md bg-highlight-surface-alt px-2 py-0.5 font-mono text-[11px] font-medium text-emphasis">
+					Queue update ID {action.targetUpdateId}
+				</span>
+				<code className="block break-all font-mono text-label leading-5 text-[#6b7280]">{action.targetActionHex}</code>
+			</div>
+		</div>
+	)
+}
+
 function UnknownActionDetails({ rawHex }: { rawHex: string }) {
 	return (
 		<div className="mt-5">
@@ -135,6 +257,7 @@ export function SignProposalView({
 	decodedAction,
 	currentThreshold,
 	deviceDisplay,
+	signingMessage,
 	signResult,
 	isSigning,
 	error,
@@ -142,6 +265,11 @@ export function SignProposalView({
 	onSign,
 }: SignProposalViewProps) {
 	const { label, isHardware } = deviceCopy(walletVendor)
+	// Both Defcon levers relay the same message to the bridge and sweep the same funds; only the
+	// delay differs. Keying the destructive treatment on one of them would put the other behind a
+	// neutral CTA.
+	const defconLevel = defconLevelOf(decodedAction?.kind)
+	const isDestructive = defconLevel !== null
 	return (
 		<section className="w-full rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
 			<div className="rounded-xl border border-[#f1f5f9] bg-bg-surface p-4">
@@ -157,9 +285,15 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
-			) : (
+			) : decodedAction.kind === 'safe_harbour_address_update' ? (
+				<SafeHarborAddressDetails action={decodedAction} signingMessage={signingMessage} />
+			) : defconLevel !== null ? (
+				<DefconDetails level={defconLevel} />
+			) : decodedAction.kind === 'cancel' ? (
+				<CancelActionDetails action={decodedAction} />
+			) : decodedAction.kind === 'unknown' ? (
 				<UnknownActionDetails rawHex={decodedAction.rawHex} />
-			)}
+			) : null}
 
 			<div className="mt-4 rounded-lg border border-[#e5e7eb] bg-bg-surface p-3.5">
 				<div className="flex items-start gap-2.5">
@@ -184,7 +318,11 @@ export function SignProposalView({
 				<button
 					type="button"
 					data-testid="e2e-sign-proposal-submit"
-					className="inline-flex items-center gap-1.5 rounded-lg border border-[#0a0a0a] bg-[#0a0a0a] px-4 py-2 text-body font-medium text-white transition hover:bg-[#232323] disabled:cursor-not-allowed disabled:opacity-60"
+					className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-body font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+						isDestructive
+							? 'border-danger bg-danger hover:bg-danger-strong'
+							: 'border-[#0a0a0a] bg-[#0a0a0a] hover:bg-[#232323]'
+					}`}
 					onClick={onSign}
 					disabled={isSigning}
 				>

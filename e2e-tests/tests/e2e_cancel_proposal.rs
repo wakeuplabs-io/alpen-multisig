@@ -13,6 +13,7 @@ use std::process::Command;
 use alpen_multisig_e2e_tests::fixtures::decode_administration_subproto;
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
+use bitcoind_async_client::traits::Reader;
 use rand::rngs::OsRng;
 use ssz::encode::Encode;
 use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role};
@@ -53,7 +54,8 @@ async fn e2e_cancel_prevents_update_enactment() {
     let admin_config = AdministrationInitConfig {
         strata_administrator: strata_admin_config,
         strata_sequencer_manager: other_config.clone(),
-        alpen_administrator: other_config,
+        alpen_administrator: other_config.clone(),
+        strata_security_council: other_config,
         confirmation_depths: ConfirmationDepths {
             strata_admin_multisig_update: CONFIRMATION_DEPTH,
             strata_seq_manager_multisig_update: CONFIRMATION_DEPTH,
@@ -63,6 +65,9 @@ async fn e2e_cancel_prevents_update_enactment() {
             ol_stf_vk_update: CONFIRMATION_DEPTH,
             asm_stf_vk_update: CONFIRMATION_DEPTH,
             ee_stf_vk_update: CONFIRMATION_DEPTH,
+            strata_security_council_multisig_update: CONFIRMATION_DEPTH,
+            defcon3: CONFIRMATION_DEPTH,
+            safe_harbour_address_update: CONFIRMATION_DEPTH,
         },
         max_seqno_gap: NonZero::new(10).unwrap(),
     };
@@ -108,10 +113,16 @@ async fn e2e_cancel_prevents_update_enactment() {
         .build_envelope_tx(update.tag(), update_payload)
         .await
         .expect("should build update envelope tx");
-    harness
+    let update_block_hash = harness
         .submit_and_mine_tx(&update_reveal_tx)
         .await
         .expect("update reveal tx should be broadcast and confirmed");
+    let update_height = harness
+        .client
+        .get_block_height(&update_block_hash)
+        .await
+        .expect("update reveal block height");
+    let activation_height = update_height + u64::from(CONFIRMATION_DEPTH);
 
     // --- Step 2: Verify the update is queued (not yet enacted) ---
 
@@ -149,17 +160,26 @@ async fn e2e_cancel_prevents_update_enactment() {
         .build_envelope_tx(cancel.tag(), cancel_payload)
         .await
         .expect("should build cancel envelope tx");
-    harness
+    let cancel_block_hash = harness
         .submit_and_mine_tx(&cancel_reveal_tx)
         .await
         .expect("cancel reveal tx should be broadcast and confirmed");
+    let cancel_height = harness
+        .client
+        .get_block_height(&cancel_block_hash)
+        .await
+        .expect("cancel reveal block height");
+    assert!(
+        cancel_height < activation_height,
+        "the cancel must land inside the window (landed at {cancel_height}, activation {activation_height})"
+    );
 
-    // --- Step 4: Advance blocks past what would have been the activation height ---
+    // --- Step 4: Advance past what would have been the activation height ---
     // If the cancel had not worked, the update would have been enacted here.
     harness
-        .mine_blocks(CONFIRMATION_DEPTH as usize + 1)
+        .mine_to(activation_height + 1)
         .await
-        .expect("should mine blocks past activation height");
+        .expect("should mine past the activation height");
 
     // --- Step 5: Verify state is unchanged ---
 

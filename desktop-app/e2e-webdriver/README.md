@@ -81,6 +81,7 @@ npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (canonical Admin ID)
 npm run test:e2e:proposal-co-sign-mnemonic # second signer (cosign mnemonic, same canonical path)
 npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
+npm run test:e2e:defcon-1-create    # Security Council session: Defcon 1 form, four signing lines, type-to-confirm gate
 npm run test:e2e:admin-wallet-panel # admin wallet panel lifecycle (fund, sync, unconfirmed balance)
 npm run test:e2e:fee-bump           # fee-bump flow (PRD §4.3.3) — RBF on unconfirmed send
 ```
@@ -156,6 +157,15 @@ Screenshots land in `issues/evidence/g5-448-b6-*.png`.
 effect on a container restart; if it did not, a hidden-wallet connect puts the keypad up and the
 spec waits forever on a refusal that will never come. Read `passphrase_protection` off the live
 device first.
+
+**Safe 7 (T3W1).** The same specs (`qa:login-trezor`, `qa:certificate-trezor` and the two above) run
+against `up.sh --model T3W1 --wipe`. A Safe 7 speaks THP and pairs the first time the app connects
+to it in a run. It asks to allow this computer, then shows a 6-digit code that the signer types into
+the app. `test/helpers/trezor-pairing.mjs` plays that signer: it confirms the dialog, reads the code
+over the debug link and types it. On a Safe 3, which never pairs, it only waits.
+`npm run qa:trezor-pairing` covers a wrong code, then a successful pairing. The T3W1 emulator only
+starts from a wiped profile, so toggle its passphrase with `--wipe --passphrase` /
+`--wipe --no-passphrase`.
 
 ## Troubleshooting
 

@@ -1,4 +1,5 @@
-import type { BroadcastStatus, ProposalStatus } from '@/api/proposals'
+import type { ActionType, BroadcastStatus, ProposalStatus } from '@/api/proposals'
+import { hasProposalQuorum, isTerminalProposalStatus } from '@/lib/proposal-status'
 
 // Minimal proposal shape needed to derive which signer actions are available.
 // Kept as a structural subset of `Proposal` so callers pass the real domain
@@ -6,6 +7,8 @@ import type { BroadcastStatus, ProposalStatus } from '@/api/proposals'
 export type ProposalActionInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
+	actionType: ActionType
+	isCancelable: boolean
 	requiredSignatures: number
 	signatures: ReadonlyArray<{ signerPubkey: string }>
 }
@@ -17,6 +20,23 @@ export type ProposalActions = {
 	alreadySigned: boolean
 	canSign: boolean
 	canBroadcast: boolean
+	canCancel: boolean
+}
+
+type CancelableInput = {
+	status: ProposalStatus
+	broadcastStatus: BroadcastStatus
+	isCancelable: boolean
+}
+
+// Whether to offer starting a cancel against this proposal.
+//
+// Two halves. Whether the action can be cancelled at all is the backend's answer from live
+// confirmation depth — the same gate `create_cancel_proposal` uses; the desktop holds no authority
+// allow-list. Whether there is anything to cancel yet is the chain's: a cancel names the update's
+// id in the ASM queue, and the update is queued only once its reveal confirms.
+export function canCancelProposal(proposal: CancelableInput): boolean {
+	return proposal.isCancelable && proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
 }
 
 // Single source of truth for signer-facing action availability on a proposal.
@@ -26,10 +46,8 @@ export type ProposalActions = {
 // (`broadcastStatus === 'idle'`) must still allow an eligible, not-yet-signed
 // signer to add their signature.
 export function deriveProposalActions(proposal: ProposalActionInput, signerPubkey: string | null): ProposalActions {
-	const collectedSignatures = proposal.signatures.length
-	const isTerminal = proposal.status === 'enacted' || proposal.status === 'canceled' || proposal.status === 'expired'
-	const hasQuorum =
-		!isTerminal && (proposal.status === 'approved' || collectedSignatures >= proposal.requiredSignatures)
+	const isTerminal = isTerminalProposalStatus(proposal.status)
+	const hasQuorum = hasProposalQuorum(proposal)
 	const broadcastStarted = proposal.broadcastStatus !== 'idle'
 
 	const alreadySigned =
@@ -47,5 +65,13 @@ export function deriveProposalActions(proposal: ProposalActionInput, signerPubke
 		proposal.status === 'approved' &&
 		(proposal.broadcastStatus === 'idle' || proposal.broadcastStatus === 'failed')
 
-	return { isTerminal, hasQuorum, broadcastStarted, alreadySigned, canSign, canBroadcast }
+	return {
+		isTerminal,
+		hasQuorum,
+		broadcastStarted,
+		alreadySigned,
+		canSign,
+		canBroadcast,
+		canCancel: canCancelProposal(proposal),
+	}
 }

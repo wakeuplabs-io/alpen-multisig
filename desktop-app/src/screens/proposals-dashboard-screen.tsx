@@ -4,9 +4,14 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { orchestratorAuthGetSession, getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
+import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
+import { useBlockHeight } from '@/hooks/use-block-height'
+import { useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE } from '@/lib/defcon-copy'
+import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
@@ -21,8 +26,17 @@ export function ProposalsDashboardScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const panel = useWalletPanelData()
+	const currentBlockHeight = useBlockHeight()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
+
+	// Read by both authorities that hold a lever answering this bridge-wide state, and by no
+	// other session. The council's Defcon levers set the flag; the administrator's safe harbor
+	// rotation is decided by it, since a rotation submitted after activation is accepted on chain
+	// and applied nowhere. Gating it on the council alone judged every rotation against a false flag.
+	const isCouncil = selectedRole === AuthRole.StrataSecurityCouncil
+	const isStrataAdmin = selectedRole === AuthRole.StrataAdministrator
+	const safeHarborActivated = useSafeHarborActivated(isCouncil || isStrataAdmin)
 
 	async function handleDisconnect() {
 		await disconnectSession()
@@ -66,7 +80,11 @@ export function ProposalsDashboardScreen() {
 		() => proposals.filter((proposal) => proposal.status === 'enacted' || proposal.status === 'canceled'),
 		[proposals],
 	)
-	const expiredOrSkipped = useMemo(() => proposals.filter((proposal) => proposal.status === 'expired'), [proposals])
+	// Superseded sits with expired: both ran out of a window rather than failing at anything.
+	const expiredOrSkipped = useMemo(
+		() => proposals.filter((proposal) => proposal.status === 'expired' || proposal.status === 'superseded'),
+		[proposals],
+	)
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -95,6 +113,13 @@ export function ProposalsDashboardScreen() {
 		>
 			<ProposalsDashboard
 				authorityLabel={authorityLabel}
+				currentBlockHeight={currentBlockHeight}
+				safeHarborActivated={safeHarborActivated}
+				notice={
+					isCouncil && safeHarborActivated ? (
+						<SafeHarborNote>{COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE}</SafeHarborNote>
+					) : null
+				}
 				signerPubkey={signerPubkey}
 				quorumReached={quorumReached}
 				pending={pending}

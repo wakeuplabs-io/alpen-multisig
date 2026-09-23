@@ -12,20 +12,35 @@ import {
 	SignaturePenMutedIcon,
 	UndoIcon,
 } from '@/assets/icons'
+import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
+import { lastChangeLabel } from '@/lib/last-change-label'
+import { changedNothingActionIds, harborFrozeDestination } from '@/lib/safe-harbor-redundancy'
 import { buildProposalTitle } from '@/lib/proposal-title'
-import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import {
+	PROPOSAL_STATUS_STYLE,
+	proposalDisplayStatus,
+	showsActivationCountdown,
+	type DisplayStatus,
+} from '@/lib/proposal-status'
 import { proposalSendState, sendButtonLabel } from '@/lib/proposal-send-state'
 
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 const PAGE_SIZE = 10
 
 type Tab = 'pending' | 'past'
 
 type Props = {
 	authorityLabel: string
+	/** Rendered above the header, inside the same column. Nothing is reserved when it is absent. */
+	notice?: ReactNode
 	signerPubkey: string | null
+	currentBlockHeight: number | null
+	/**
+	 * The bridge's live safe harbor flag. Read on the two dashboards whose authority holds a lever
+	 * that answers it; `false` elsewhere, which is also how a failed read degrades.
+	 */
+	safeHarborActivated: boolean
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	executedOrCanceled: Proposal[]
@@ -43,7 +58,10 @@ type Props = {
 
 export function ProposalsDashboard({
 	authorityLabel,
+	notice,
 	signerPubkey,
+	currentBlockHeight,
+	safeHarborActivated,
 	quorumReached,
 	pending,
 	executedOrCanceled,
@@ -63,6 +81,9 @@ export function ProposalsDashboard({
 
 	const activeProposals = [...quorumReached, ...pending]
 	const pastProposals = [...executedOrCanceled, ...expiredOrSkipped]
+	// Over every past proposal, never the current page: which proposal activated the harbor is a
+	// fact about the whole history.
+	const changedNothing = changedNothingActionIds(pastProposals)
 	const totalPastPages = Math.ceil(pastProposals.length / PAGE_SIZE)
 	const pagedPastProposals = pastProposals.slice((pastPage - 1) * PAGE_SIZE, pastPage * PAGE_SIZE)
 
@@ -75,6 +96,8 @@ export function ProposalsDashboard({
 
 	return (
 		<section className="mx-auto w-full max-w-200">
+			{notice ? <div className="mb-6">{notice}</div> : null}
+
 			<div className="mb-6 flex items-end justify-between gap-4">
 				<div>
 					<h1 className="m-0 font-display text-display-md font-normal leading-[1.2] tracking-[-0.005em] text-[#0a0a0a]">
@@ -141,7 +164,7 @@ export function ProposalsDashboard({
 								}
 								onClick={() => handleTabChange(tab)}
 							>
-								{tab === 'pending' ? 'Pending' : 'Past'}
+								{tab === 'pending' ? 'In progress' : 'Past'}
 								{tab === 'pending' && activeProposals.length > 0 && (
 									<span
 										className={[
@@ -172,6 +195,7 @@ export function ProposalsDashboard({
 							quorumReached={quorumReached}
 							pending={pending}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
 							onViewProposal={onViewProposal}
@@ -180,10 +204,13 @@ export function ProposalsDashboard({
 					) : (
 						<PastTab
 							proposals={pagedPastProposals}
+							changedNothing={changedNothing}
+							safeHarborActivated={safeHarborActivated}
 							totalProposals={pastProposals.length}
 							page={pastPage}
 							totalPages={totalPastPages}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
 							onPageChange={setPastPage}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
@@ -201,6 +228,7 @@ function PendingTab({
 	quorumReached,
 	pending,
 	signerPubkey,
+	currentBlockHeight,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -209,6 +237,7 @@ function PendingTab({
 	quorumReached: Proposal[]
 	pending: Proposal[]
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -237,6 +266,7 @@ function PendingTab({
 					groupIcon={<ClockIcon width={14} height={14} className="block text-[#6b7280]" />}
 					proposals={pending}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -250,6 +280,7 @@ function PendingTab({
 					groupIcon={<CheckCircleEmeraldIcon width={14} height={14} className="block" />}
 					proposals={quorumReached}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -266,6 +297,9 @@ function PastTab({
 	page,
 	totalPages,
 	signerPubkey,
+	currentBlockHeight,
+	changedNothing,
+	safeHarborActivated,
 	onPageChange,
 	onSignProposal,
 	onBroadcastProposal,
@@ -277,6 +311,10 @@ function PastTab({
 	page: number
 	totalPages: number
 	signerPubkey: string | null
+	currentBlockHeight: number | null
+	/** Computed over every past proposal, not this page: pagination must not move the answer. */
+	changedNothing: ReadonlySet<string>
+	safeHarborActivated: boolean
 	onPageChange: (page: number) => void
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
@@ -302,6 +340,9 @@ function PastTab({
 					key={proposal.actionId}
 					proposal={proposal}
 					signerPubkey={signerPubkey}
+					currentBlockHeight={currentBlockHeight}
+					changedNothing={changedNothing.has(proposal.actionId)}
+					safeHarborActivated={safeHarborActivated}
 					onSignProposal={onSignProposal}
 					onBroadcastProposal={onBroadcastProposal}
 					onViewProposal={onViewProposal}
@@ -339,6 +380,7 @@ function ProposalGroup({
 	groupIcon,
 	proposals,
 	signerPubkey,
+	currentBlockHeight,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -349,6 +391,7 @@ function ProposalGroup({
 	groupIcon: ReactNode
 	proposals: Proposal[]
 	signerPubkey: string | null
+	currentBlockHeight: number | null
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -386,6 +429,11 @@ function ProposalGroup({
 							key={proposal.actionId}
 							proposal={proposal}
 							signerPubkey={signerPubkey}
+							currentBlockHeight={currentBlockHeight}
+							// Only an enacted proposal can have changed nothing, and this group never holds one.
+							changedNothing={false}
+							// Nor a superseded one, which is the only status the flag says anything about here.
+							safeHarborActivated={false}
 							onSignProposal={onSignProposal}
 							onBroadcastProposal={onBroadcastProposal}
 							onViewProposal={onViewProposal}
@@ -401,6 +449,9 @@ function ProposalGroup({
 function ProposalCard({
 	proposal,
 	signerPubkey,
+	currentBlockHeight,
+	changedNothing,
+	safeHarborActivated,
 	onSignProposal,
 	onBroadcastProposal,
 	onViewProposal,
@@ -408,6 +459,11 @@ function ProposalCard({
 }: {
 	proposal: Proposal
 	signerPubkey: string | null
+	currentBlockHeight: number | null
+	/** Enacted, but the safe harbor was already active — see `changedNothingActionIds`. */
+	changedNothing: boolean
+	/** The bridge's live flag, which decides why a superseded rotation is superseded. */
+	safeHarborActivated: boolean
 	onSignProposal: (actionId: string) => void
 	onBroadcastProposal: (actionId: string) => void
 	onViewProposal: (actionId: string) => void
@@ -420,8 +476,12 @@ function ProposalCard({
 		requiredSignatures === 0 ? 0 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 	const proposalTitle = buildProposalTitle(proposal)
 	const proposalTypeLabel = inferProposalTypeLabel(proposal)
-	const { hasQuorum, canSign, canBroadcast } = deriveProposalActions(proposal, signerPubkey)
-	const sendState = proposalSendState(proposal)
+	const { hasQuorum, canSign, canBroadcast, canCancel } = deriveProposalActions(proposal, signerPubkey)
+	const sendState = proposalSendState({
+		...proposal,
+		harborFrozeDestination: harborFrozeDestination(proposal, safeHarborActivated),
+	})
+	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 	const awaitingEnactment = sendState.kind === 'confirmed'
 
 	const signButton = canSign ? (
@@ -472,7 +532,7 @@ function ProposalCard({
 						)}
 					</p>
 				</div>
-				<StatusBadge status={awaitingEnactment ? 'awaiting_enactment' : proposal.status} />
+				<StatusBadge status={proposalDisplayStatus(proposal)} />
 			</div>
 
 			<div className="mt-4">
@@ -512,6 +572,16 @@ function ProposalCard({
 				)}
 			</div>
 
+			{changedNothing && (
+				<div className="mt-4 border-t border-[#eceff3] pt-3">
+					<p className="m-0 text-body font-medium text-[#111827]">Changed nothing on chain</p>
+					<p className="m-0 mt-1 text-label text-[#6b7280]">
+						The bridge was already in safe harbor when this executed. It consumed a council sequence number and its
+						fees, and left the state as it found it.
+					</p>
+				</div>
+			)}
+
 			{canBroadcast ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">
 					{sendState.kind === 'failed' ? (
@@ -547,11 +617,24 @@ function ProposalCard({
 							<p className="m-0 text-body font-medium text-[#0f9d7a]">
 								{sendState.kind === 'confirmed' ? sendState.label : ''}
 							</p>
-							<p className="m-0 mt-1 text-label text-[#6b7280]">
-								Refresh the dashboard after the confirmation delay to see enacted status.
-							</p>
+							{/* The tip has to be known as well: this countdown replaces the refresh line, and one
+							    that can only say "activation in block N" tells a signer neither how far away that
+							    is nor what to do next. The detail screen needs no such term — there the countdown
+							    is an extra block and displaces nothing. */}
+							{proposal.activationHeight !== null &&
+							currentBlockHeight !== null &&
+							showsActivationCountdown(proposal) ? (
+								<div className="mt-1">
+									<ActivationCountdown
+										activationHeight={proposal.activationHeight}
+										currentHeight={currentBlockHeight}
+									/>
+								</div>
+							) : (
+								<p className="m-0 mt-1 text-label text-[#6b7280]">Refresh to check whether the ASM has applied it.</p>
+							)}
 						</div>
-						{CANCELABLE_AUTHORITIES.includes(proposal.authority) && proposal.cancelProposal === null && (
+						{canCancel && proposal.cancelProposal === null && (
 							<button
 								type="button"
 								className="shrink-0 rounded-xl border border-danger bg-white px-3 py-1.5 text-body-sm font-medium text-danger transition hover:bg-danger-surface"
@@ -565,10 +648,11 @@ function ProposalCard({
 						)}
 					</div>
 				</div>
-			) : sendState.kind === 'in-flight' ? (
+			) : sendState.kind === 'in-flight' || sendState.kind === 'superseded' ? (
 				<div className="mt-4 border-t border-[#eceff3] pt-3">
 					<p className="m-0 text-body font-medium text-[#111827]">{sendState.label}</p>
 					<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+					{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 				</div>
 			) : hasQuorum ? (
 				<div className="mt-4 flex items-center justify-between gap-3 border-t border-[#eceff3] pt-3">

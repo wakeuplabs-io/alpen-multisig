@@ -14,7 +14,9 @@ const proposalWithNullBroadcastFields = {
 	commitTxid: null,
 	revealTxid: null,
 	broadcastError: null,
+	isCancelable: false,
 	createdAtMs: 1000000,
+	updatedAtMs: 1000000,
 	expiresAtMs: 2000000,
 }
 
@@ -147,3 +149,34 @@ if (!_typeCheck.ok) {
 }
 
 console.log('ipc-schemas: P-023 errorCode field on ApiResult OK')
+
+// Security Council: both IPC boundaries accept every council action type. Each is a closed schema,
+// so an unregistered value is a parse error rather than an unknown-action fallback — and for
+// `actionType` that empties the whole list, because `listProposals` parses
+// `z.array(proposalSchema)`.
+for (const actionType of ['defcon_1', 'defcon_3', 'council_signer_update', 'safe_harbour_address_update'] as const) {
+	assert.equal(
+		proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType }).success,
+		true,
+		`proposalSchema must accept actionType ${actionType}`,
+	)
+}
+
+// A council rotation decodes as an ordinary `multisig_update` (its role says which), so it has no
+// decoded kind of its own.
+for (const decoded of [
+	{ kind: 'defcon_1' },
+	{ kind: 'defcon_3' },
+	{ kind: 'safe_harbour_address_update', addressHex: '04' + '79'.repeat(32), address: 'bcrt1p' },
+	{ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' },
+]) {
+	assert.equal(decodedActionSchema.safeParse(decoded).success, true, `decodedActionSchema must accept ${decoded.kind}`)
+}
+
+console.log('ipc-schemas: Security Council boundaries OK')
+
+const withoutCancelable = { ...proposalWithNullBroadcastFields }
+delete (withoutCancelable as { isCancelable?: boolean }).isCancelable
+assert.equal(proposalSchema.safeParse(withoutCancelable).success, false, 'proposalSchema must require isCancelable')
+
+console.log('ipc-schemas: isCancelable field OK')

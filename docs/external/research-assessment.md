@@ -33,20 +33,13 @@ The `AdminTxType` enum defines the supported update types:
 | Sequencer update | Sequencer Manager | Immediate |
 | Cancel action | Admin / Sequencer Manager | Consumes a seqno; removes a queued update |
 
-### 1.3 Update Types Requiring Upstream Additions
-
-The following update types require additional role definitions or protocol specifications from Alpen Labs:
-
-**Missing role definitions:**
-- Security Council updates (signer update, Defcon 1 transaction, Defcon 3 transaction)
+### 1.3 Update Types Not Yet Built
 
 **Partially supported:**
 - Alpen Administrator VK update (`EeStfVk`) — Action encoding and signing supported; enactment detection on ASM not yet implemented. Signer updates (`AlpenAdminMultisigUpdate`) are fully supported.
 
-**Undefined protocol concepts:**
-- Safe Harbor address update
-- Soft bridge update
-- Hard bridge update
+**Withdrawn:**
+- Soft bridge update and hard bridge update — no longer relevant concepts; they have no counterpart upstream at any revision.
 
 **Separate protocol:**
 - `block_payout` — This is a native Bitcoin UTXO spend requiring PSBT construction, bridge script knowledge, and Bitcoin RPC integration. It operates independently from the admin subprotocol.
@@ -56,9 +49,9 @@ The following update types require additional role definitions or protocol speci
 | Authority | Supported Update Types |
 |-----------|------------------------|
 | Strata Sequencer Manager | 2/2 |
-| Strata Administrator | 3/3 (signer, VK, operator) |
+| Strata Administrator | 5/5 (signer, VK, operator, Security Council signer, Safe Harbor address) |
 | Alpen Administrator | 1/2 (signer supported; VK update pending enactment detection) |
-| Security Council | Requires upstream role definition |
+| Security Council | 2/2 (Defcon 1; Defcon 3, with its cancel) |
 | Payout Administrator | Separate protocol implementation |
 
 ## 2. Hardware Wallet Compatibility

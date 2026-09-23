@@ -5,6 +5,7 @@ import { ActivationCountdown } from '@/domain/cancel-proposal/components/activat
 import { CancelDetailsCard } from '@/domain/cancel-proposal/components/cancel-details-card'
 import { CancelTargetSummary } from '@/domain/cancel-proposal/components/cancel-target-summary'
 import { useCancelProposalDetails } from '@/domain/cancel-proposal/hooks/use-cancel-proposal-details'
+import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
 import { useBlockHeight } from '@/hooks/use-block-height'
@@ -15,10 +16,9 @@ import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
+import { showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
-
-const CANCELABLE_AUTHORITIES = ['alpen_admin', 'strata_admin']
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -45,11 +45,12 @@ export function CancelProposalScreen() {
 	if (wallet === null) return <Navigate to="/" replace />
 	if (actionId === undefined) return <Navigate to="/proposals" replace />
 
-	// Guard: redirect if target is not cancellable
-	if (proposal !== null && proposal.status !== 'approved') {
+	// The guards only apply to starting a cancel; an existing one is always shown.
+	const isInitiateMode = proposal !== null && proposal.cancelProposal === null
+	if (isInitiateMode && proposal.status !== 'approved') {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
-	if (proposal !== null && !CANCELABLE_AUTHORITIES.includes(proposal.authority)) {
+	if (isInitiateMode && !canCancelProposal(proposal)) {
 		return <Navigate to={`/proposals/${actionId}`} replace />
 	}
 
@@ -115,8 +116,9 @@ export function CancelProposalScreen() {
 								</div>
 							)}
 
-							{/* Activation countdown */}
-							{proposal.activationHeight !== null && proposal.status === 'approved' && (
+							{/* Activation countdown. The null check narrows the prop below; the rule itself
+							    lives in `lib` (shared with the detail screen). */}
+							{proposal.activationHeight !== null && showsActivationCountdown(proposal) && (
 								<div className="rounded-xl border border-accent-border bg-highlight-surface px-4 py-3">
 									<ActivationCountdown
 										activationHeight={proposal.activationHeight}
@@ -126,39 +128,44 @@ export function CancelProposalScreen() {
 							)}
 
 							{/* Target proposal summary */}
-							{proposal.status === 'approved' && <CancelTargetSummary proposal={proposal} decodedData={decodedData} />}
+							{(proposal.cancelProposal !== null || proposal.status === 'approved') && (
+								<CancelTargetSummary proposal={proposal} decodedData={decodedData} />
+							)}
 
-							{/* Cancel details or prompt to initiate */}
-							{proposal.status === 'approved' &&
-								(proposal.cancelProposal !== null ? (
-									<CancelDetailsCard
-										cancelProposal={proposal.cancelProposal}
-										cancelSeqNo={cancelDetails.cancelProposal?.seqNo ?? null}
-										cancelActionHex={cancelDetails.cancelProposal?.actionHex ?? null}
-										isLoadingDetails={cancelDetails.isLoading}
-										targetActionId={proposal.actionId}
-										targetUpdateId={proposal.updateIdInQueue}
-										allSigners={decodedData.allSigners}
-										signerPubkey={signerPubkey}
-										walletVendor={adapter.vendor}
-										onSign={() => navigate(`/proposals/${actionId}/cancel/sign`)}
-										onBroadcast={() => navigate(`/proposals/${actionId}/cancel/broadcast`)}
-									/>
-								) : (
-									<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
-										<p className="m-0 text-body-sm text-[#6b7280]">
-											No cancel proposal initiated yet. Sign with your {signerLabel} to start collecting cancel
-											signatures.
-										</p>
-										<button
-											type="button"
-											className="mt-4 w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
-											onClick={() => navigate(`/proposals/${actionId}/cancel/sign`)}
-										>
-											Initiate cancel
-										</button>
-									</div>
-								))}
+							{/* Existing cancel — shown regardless of the target's status */}
+							{proposal.cancelProposal !== null && (
+								<CancelDetailsCard
+									cancelProposal={proposal.cancelProposal}
+									cancelSeqNo={cancelDetails.cancelProposal?.seqNo ?? null}
+									cancelActionHex={cancelDetails.cancelProposal?.actionHex ?? null}
+									isLoadingDetails={cancelDetails.isLoading}
+									targetActionId={proposal.actionId}
+									targetUpdateId={proposal.updateIdInQueue}
+									targetStatus={proposal.status}
+									allSigners={decodedData.allSigners}
+									signerPubkey={signerPubkey}
+									walletVendor={adapter.vendor}
+									onSign={() => navigate(`/proposals/${actionId}/cancel/sign`)}
+									onBroadcast={() => navigate(`/proposals/${actionId}/cancel/broadcast`)}
+								/>
+							)}
+
+							{/* No cancel yet — the guards above already checked cancelability */}
+							{proposal.cancelProposal === null && proposal.status === 'approved' && (
+								<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
+									<p className="m-0 text-body-sm text-[#6b7280]">
+										No cancel proposal initiated yet. Sign with your {signerLabel} to start collecting cancel
+										signatures.
+									</p>
+									<button
+										type="button"
+										className="mt-4 w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
+										onClick={() => navigate(`/proposals/${actionId}/cancel/sign`)}
+									>
+										Initiate cancel
+									</button>
+								</div>
+							)}
 						</>
 					)}
 				</div>

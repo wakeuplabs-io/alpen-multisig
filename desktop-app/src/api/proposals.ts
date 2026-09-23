@@ -1,17 +1,21 @@
 import type { ApiResult } from '@/types'
-import { broadcastResultSchema, proposalSchema } from '@/api/ipc-schemas'
+import { broadcastResultSchema, proposalSchema, type PROPOSAL_ACTION_TYPES } from '@/api/ipc-schemas'
 import { tauriCall } from '@/api/tauri-bridge'
 import { z } from 'zod'
 
-export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired'
+/**
+ * `superseded`: the role's on-chain sequence number passed this proposal's, so the ASM will refuse
+ * its transaction from here on. Terminal, and unrelated to whether it was ever broadcast. See
+ * docs/specs/proposal-lifecycle-seqno-truth.md.
+ */
+export type ProposalStatus = 'pending' | 'approved' | 'enacted' | 'canceled' | 'expired' | 'superseded'
 
 export type BroadcastStatus =
 	'idle' | 'commit_broadcasted' | 'commit_confirmed' | 'reveal_broadcasted' | 'reveal_confirmed' | 'failed'
 
 export type ProposalKind = 'update' | 'cancel'
 
-export type ActionType =
-	'multisig_update' | 'vk_update' | 'operator_set_update' | 'sequencer_key_update' | 'cancel' | 'unknown'
+export type ActionType = (typeof PROPOSAL_ACTION_TYPES)[number]
 
 export type CancelProposalSummary = {
 	actionId: string
@@ -43,7 +47,11 @@ export type Proposal = {
 	activationHeight: number | null
 	updateIdInQueue: number | null
 	cancelProposal: CancelProposalSummary | null
+	/** Whether the backend considers this action cancelable (live confirmation depth). */
+	isCancelable: boolean
 	createdAtMs: number
+	/** Last change of any kind, including every broadcast-status write. */
+	updatedAtMs: number
 	expiresAtMs: number
 }
 

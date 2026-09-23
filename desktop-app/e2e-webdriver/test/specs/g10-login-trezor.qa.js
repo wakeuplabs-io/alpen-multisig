@@ -18,6 +18,8 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { allowPairingUntil } from '../helpers/trezor-pairing.mjs'
+
 const EVIDENCE = path.resolve(process.cwd(), '../../../../issues/evidence')
 const EMU = 'alpen-trezor-emu'
 
@@ -111,7 +113,7 @@ describe('G10 — login challenge on Trezor', () => {
 		await connect.click()
 
 		const adminIdValue = await $('[data-testid="e2e-connect-admin-id-value"]')
-		await adminIdValue.waitForDisplayed({ timeout: 120000 })
+		await allowPairingUntil(() => adminIdValue.isDisplayed())
 		await browser.waitUntil(async () => P2WPKH_RE.test((await adminIdValue.getText()).trim()), {
 			timeout: 120000,
 			interval: 1000,

@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import type { ApiResult } from '@/types'
 import { tauriCall } from '@/api/tauri-bridge'
-import { authorityMembershipsSchema, currentVkSchema, multisigConfigSchema } from '@/api/ipc-schemas'
+import {
+	authorityMembershipsSchema,
+	currentVkSchema,
+	multisigConfigSchema,
+	safeHarborStatusSchema,
+} from '@/api/ipc-schemas'
 
 export type MultisigConfig = {
 	signers: string[]
@@ -9,6 +14,14 @@ export type MultisigConfig = {
 }
 
 export type AuthorityMemberships = Record<string, boolean>
+
+export type SafeHarborStatus = {
+	activated: boolean
+	/** BOSD descriptor of the current destination — what a signer's device displays. */
+	addressHex: string
+	/** The same destination as an address on the active network; empty if it could not be rendered. */
+	address: string
+}
 
 export type CurrentVk = {
 	typeId: number
@@ -30,6 +43,10 @@ export function getCurrentVk(): Promise<ApiResult<CurrentVk>> {
 
 export function getCurrentOperators(): Promise<ApiResult<string[]>> {
 	return tauriCall('get_current_operators', {}, z.array(z.string()))
+}
+
+export function getSafeHarborStatus(): Promise<ApiResult<SafeHarborStatus>> {
+	return tauriCall('get_safe_harbor_status', {}, safeHarborStatusSchema)
 }
 
 export function getBitcoinBlockHeight(): Promise<ApiResult<number>> {

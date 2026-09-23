@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { tauriCall } from '@/api/tauri-bridge'
 import { ShieldCheckMutedIcon, UsbStrokeWhiteIcon } from '@/assets/icons'
 import { ConnectionIcon, SuccessIcon } from '@/domain/connect-wallet/components/hw-wallet-connect-icons'
+import { PairingCodeForm } from '@/domain/connect-wallet/components/pairing-code-form'
 import type { ConnectViewState } from '@/domain/connect-wallet/model/hw-wallet-connect.types'
 import { deviceCopy } from '@/lib/device-copy'
 import { DEMO_MNEMONIC } from '@/wallet/demo-mnemonic'
@@ -11,6 +12,9 @@ type Props = {
 	loading: boolean
 	connectViewState: ConnectViewState
 	error: string | null
+	/** The device is showing a pairing code (Trezor Safe 7); ask for it instead of detecting. */
+	pairingCodeRequested?: boolean
+	onSubmitPairingCode?: (code: string) => void
 	onConnect: () => void
 	onConnectMnemonic?: (mnemonic: string) => void
 	/** Takes the wallet to open, because one Trezor seed backs more than one. */
@@ -24,6 +28,8 @@ export function ConnectPhase({
 	loading,
 	connectViewState,
 	error,
+	pairingCodeRequested = false,
+	onSubmitPairingCode,
 	onConnect,
 	onConnectMnemonic,
 	onConnectTrezor,
@@ -209,6 +215,10 @@ export function ConnectPhase({
 					</>
 				)}
 			</div>
+
+			{pairingCodeRequested && onSubmitPairingCode && (
+				<PairingCodeForm loading={loading} onSubmit={onSubmitPairingCode} />
+			)}
 
 			{/* Status message */}
 			{isDetecting && (

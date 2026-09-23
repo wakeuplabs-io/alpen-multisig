@@ -9,6 +9,8 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 	return {
 		status: 'pending',
 		broadcastStatus: 'idle',
+		actionType: 'multisig_update',
+		isCancelable: true,
 		requiredSignatures: 2,
 		signatures: [],
 		...overrides,
@@ -114,6 +116,35 @@ for (const status of ['enacted', 'canceled', 'expired'] as const) {
 	const actions = deriveProposalActions(proposal(), null)
 	assert.equal(actions.canSign, false, 'no signerPubkey means no sign affordance')
 	assert.equal(actions.alreadySigned, false, 'no signer cannot have already signed')
+}
+
+// ── Cancelability: a queued update whose action has a cancel window ──────────
+// The field is the backend's answer about the action (its live confirmation depth), never the
+// authority's. The on-chain terms are the other half: a cancel names the update's id in the ASM
+// queue, so until the reveal confirms there is nothing to cancel — offering it earlier sends the
+// signer to a sign step that can only fail.
+{
+	const queued = { status: 'approved', broadcastStatus: 'reveal_confirmed' } as const
+
+	const actions = deriveProposalActions(proposal({ ...queued, actionType: 'defcon_3', isCancelable: true }), SIGNER_A)
+	assert.equal(actions.canCancel, true, 'defcon_3 cancel follows the backend field, not authority')
+
+	const defcon1 = deriveProposalActions(proposal({ ...queued, actionType: 'defcon_1', isCancelable: false }), SIGNER_A)
+	assert.equal(defcon1.canCancel, false, 'defcon_1 with depth 0 offers no cancel')
+
+	for (const broadcastStatus of ['idle', 'commit_broadcasted', 'reveal_broadcasted', 'failed'] as const) {
+		const notQueued = deriveProposalActions(
+			proposal({ status: 'approved', broadcastStatus, actionType: 'defcon_3', isCancelable: true }),
+			SIGNER_A,
+		)
+		assert.equal(notQueued.canCancel, false, `an approved update not yet queued (${broadcastStatus}) offers no cancel`)
+	}
+
+	const pending = deriveProposalActions(
+		proposal({ status: 'pending', broadcastStatus: 'reveal_confirmed', isCancelable: true }),
+		SIGNER_A,
+	)
+	assert.equal(pending.canCancel, false, 'only an approved update can be cancelled')
 }
 
 console.log('derive-proposal-actions: all assertions passed.')

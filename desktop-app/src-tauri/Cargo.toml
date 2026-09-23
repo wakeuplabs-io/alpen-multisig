@@ -1,6 +1,6 @@
 [package]
 name = 'desktop-app'
-version = "0.2.6"
+version = "0.3.0"
 description = 'Strata Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
 license = 'MIT OR Apache-2.0'
@@ -11,7 +11,7 @@ default-run = 'desktop-app'
 # Compiles the in-process ASM mock (mock:// RPC URLs) used by local dev and tests.
 # MUST NOT be enabled for production/release builds — the mock bypasses on-chain
 # authorization (signer set membership, enactment post-conditions).
-# See src/infrastructure/asm_role_membership.rs and asm_enactment.rs.
+# See src/infrastructure/asm_role_membership.rs.
 dev-mocks = []
 
 [build-dependencies]
@@ -33,9 +33,10 @@ rfd = "0.15"
 strata-asm-txs-admin = { workspace = true, features = ['test-utils'] }
 strata-asm-params = { workspace = true }
 strata-asm-common = { workspace = true }
-strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "e0461f8f520e9be814541d1f76fb961fd847e4ae" }
+strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
+strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "b84eb28a71b99ed54e128ca282ed8f637c2e88ef" }
 strata-asm-proto-bridge-v1 = { workspace = true }
+strata-asm-proto-bridge-v1-types = { workspace = true }
 # From alpenlabs/strata-common
 strata-crypto = { workspace = true }
 strata-identifiers = { workspace = true }
@@ -45,6 +46,8 @@ strata-l1-envelope-fmt = { workspace = true }
 
 # Crypto and utilities
 bitcoin = { workspace = true }
+# Only `action_codec` imports it: the safe harbor payload is a P2TR BOSD descriptor.
+bitcoin-bosd = { workspace = true }
 ssz = { workspace = true }
 secp256k1 = { workspace = true }
 rand = "0.8"
@@ -52,7 +55,17 @@ hex = "0.4"
 async-trait = "0.1"
 thiserror = "2"
 tracing = "0.1"
-trezor-client = "0.1.5"
+trezor-client = "0.1.6"
+# Safe 7 (T3W1) speaks only THP. Pinned exactly: the 0.1.x API still changes between patches.
+trezor-thp = { version = "=0.1.1", features = ["use_std"] }
+trezor-noise-rust-crypto = { version = "0.6.2", default-features = false, features = ["use-x25519", "use-aes-256-gcm", "use-sha2"] }
+protobuf = "3.7"
+rusb = "0.9"
+gethostname = "1.1"
+# CodeEntry pairing (CPace): Elligator2 field math, the generator hash, and X25519 on it.
+crypto-bigint = "0.5"
+sha2 = "0.10"
+x25519-dalek = "2"
 ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
 ledger-transport-hid = "0.11"
 ledger-apdu = "0.11"

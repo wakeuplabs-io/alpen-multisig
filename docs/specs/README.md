@@ -20,6 +20,7 @@ See [Conflict resolution](../README.md#conflict-resolution) rule #3: functional 
 | Need | SSOT |
 |------|------|
 | PRD §4 PASS / FAIL / PARTIAL | [`admin-wallet-prd-compliance.md`](./admin-wallet-prd-compliance.md) |
+| Security Council PRD PASS / FAIL / PARTIAL | [`security-council-prd-compliance.md`](./security-council-prd-compliance.md) |
 | Phase / release engineering checklist | [`admin-wallet-implementation-plan.md`](./admin-wallet-implementation-plan.md) |
 
 Compliance matrix wins over phase checkmarks ([conflict rule #4](../README.md#conflict-resolution)).

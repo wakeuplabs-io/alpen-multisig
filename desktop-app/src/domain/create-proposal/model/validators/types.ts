@@ -7,6 +7,9 @@ export type ActionValidatorContext = {
 	data: CreateProposalFormValues
 	ctx: z.RefinementCtx
 	currentMultisigSigners: string[] | null
+	currentMultisigThreshold: number | null
+	/** The bridge's current safe harbor destination as an address; null when unread. */
+	currentSafeHarborAddress: string | null
 }
 
 export type ActionValidator = (context: ActionValidatorContext) => void

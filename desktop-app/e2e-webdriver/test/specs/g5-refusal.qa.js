@@ -12,6 +12,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { allowPairingUntil } from '../helpers/trezor-pairing.mjs'
+
 const EVIDENCE = path.resolve(process.cwd(), '../../../../issues/evidence')
 
 async function shoot(name) {
@@ -40,16 +42,13 @@ describe('G5 — a hidden wallet is refused when the device cannot open one', ()
 
 		// It must fail, and say why. Landing on the Admin ID screen would mean it silently
 		// opened the standard wallet, which is the defect this case exists for.
-		await browser.waitUntil(
-			async () => {
-				const onAdminId = await $$('[data-testid="e2e-connect-admin-id-value"]')
-				if (onAdminId.length > 0) {
-					throw new Error('the app connected to a wallet instead of refusing the hidden one')
-				}
-				return /passphrase switched off/i.test(await $('body').getText())
-			},
-			{ timeout: 120000, interval: 1000, timeoutMsg: 'no refusal message appeared' },
-		)
+		await allowPairingUntil(async () => {
+			const onAdminId = await $$('[data-testid="e2e-connect-admin-id-value"]')
+			if (onAdminId.length > 0) {
+				throw new Error('the app connected to a wallet instead of refusing the hidden one')
+			}
+			return /passphrase switched off/i.test(await $('body').getText())
+		})
 
 		await shoot('hidden-refused-passphrase-off')
 		console.log('REFUSED_AS_EXPECTED')

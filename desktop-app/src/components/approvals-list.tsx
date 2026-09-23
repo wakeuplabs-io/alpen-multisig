@@ -6,11 +6,17 @@ type Approval = { signerPubkey: string; signatureHex: string }
 
 type Props = {
 	signatures: Approval[]
-	/** Every signer of the authority, so the ones still missing can be listed as Pending. */
+	/** Every signer of the authority, so the ones still missing can be listed. */
 	allSigners: string[]
 	/** The connected signer, highlighted with a YOU badge. */
 	signerPubkey: string | null
 	requiredSignatures: number
+	/**
+	 * True only while the proposal is still pending AND below quorum — missing signers read "Pending" then,
+	 * "No signature" otherwise (#540). Quorum is checked too because the backend leaves a quorum-full proposal at
+	 * `pending` until the desktop PATCHes it to `approved`; if that call fails, nothing is left for them to do either.
+	 */
+	isPending: boolean
 	/** Section heading — 'Approvals' for a proposal, 'Cancel approvals' for a cancellation. */
 	title?: string
 }
@@ -27,6 +33,7 @@ export function ApprovalsList({
 	signerPubkey,
 	requiredSignatures,
 	title = 'Approvals',
+	isPending,
 }: Props) {
 	const pending = allSigners.filter(
 		(signer) => !signatures.some((s) => s.signerPubkey.toLowerCase() === signer.toLowerCase()),
@@ -72,7 +79,7 @@ export function ApprovalsList({
 									YOU
 								</span>
 							)}
-							<span className="shrink-0 text-label text-[#9ca3af]">Pending</span>
+							<span className="shrink-0 text-label text-[#9ca3af]">{isPending ? 'Pending' : 'No signature'}</span>
 						</div>
 					)
 				})}

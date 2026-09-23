@@ -1,10 +1,19 @@
 import { CopyButton } from '@/components/copy-button'
 import { ApprovalsList } from '@/components/approvals-list'
 import { CheckCircleEmeraldIcon } from '@/assets/icons'
-import type { CancelProposalSummary } from '@/api/proposals'
+import type { CancelProposalSummary, ProposalStatus } from '@/api/proposals'
 import { deviceCopy } from '@/lib/device-copy'
+import { isTerminalProposalStatus } from '@/lib/proposal-status'
 import { truncatePubkey } from '@/lib/pubkey'
 import type { WalletVendor } from '@/wallet/types'
+
+/** What a finished cancel says instead of offering an action. */
+const CANCEL_OUTCOME_COPY: Partial<Record<ProposalStatus, string>> = {
+	enacted: 'Cancellation enacted — the update was removed from the queue',
+	canceled: 'Cancellation canceled',
+	expired: 'Cancellation expired',
+	superseded: 'Cancellation superseded',
+}
 
 type Props = {
 	cancelProposal: CancelProposalSummary
@@ -18,6 +27,8 @@ type Props = {
 	targetActionId: string
 	/** ASM queue update id the CancelAction targets — null until the target's reveal confirmed. */
 	targetUpdateId: number | null
+	/** Status of the update being cancelled — a cancel of a settled target has nothing left to do. */
+	targetStatus: ProposalStatus
 	/** Every signer of the authority, so the ones still missing are listed as Pending. */
 	allSigners: string[]
 	signerPubkey: string | null
@@ -34,6 +45,7 @@ export function CancelDetailsCard({
 	isLoadingDetails,
 	targetActionId,
 	targetUpdateId,
+	targetStatus,
 	allSigners,
 	signerPubkey,
 	walletVendor,
@@ -44,6 +56,8 @@ export function CancelDetailsCard({
 	const required = cancelProposal.requiredSignatures
 	const progress = required === 0 ? 100 : Math.min((collected / required) * 100, 100)
 	const hasQuorum = collected >= required
+	const isTerminal = isTerminalProposalStatus(cancelProposal.status)
+	const isActionable = !isTerminal && !isTerminalProposalStatus(targetStatus)
 	const alreadySigned =
 		signerPubkey !== null &&
 		cancelProposal.signatures.some((s) => s.signerPubkey.toLowerCase() === signerPubkey.toLowerCase())
@@ -115,36 +129,49 @@ export function CancelDetailsCard({
 						<div className="rounded-xl border border-[#d1fae5] bg-[#f0fdf4] px-4 py-3">
 							<p className="m-0 text-body-sm font-medium text-[#065f46]">
 								You have signed this cancellation.
-								{!hasQuorum && ' Waiting for other signers to reach quorum.'}
+								{!hasQuorum && isActionable && ' Waiting for other signers to reach quorum.'}
 							</p>
 						</div>
 					)}
 
-					{hasQuorum && (
-						<p className="m-0 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
-							<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
-							Quorum reached — ready to send
+					{/* Outcome of a finished cancel, or the actions of a live one */}
+					{isTerminal ? (
+						<p className="m-0 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#374151]">
+							{cancelProposal.status === 'enacted' && (
+								<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
+							)}
+							{CANCEL_OUTCOME_COPY[cancelProposal.status] ?? `Cancellation ${cancelProposal.status}`}
 						</p>
-					)}
-
-					{/* Action buttons */}
-					{hasQuorum ? (
-						<button
-							type="button"
-							className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
-							onClick={onBroadcast}
-						>
-							Send cancel tx
-						</button>
 					) : (
-						!alreadySigned && (
-							<button
-								type="button"
-								className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
-								onClick={onSign}
-							>
-								Sign with {deviceCopy(walletVendor).label}
-							</button>
+						isActionable && (
+							<>
+								{hasQuorum && (
+									<p className="m-0 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
+										<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
+										Quorum reached — ready to send
+									</p>
+								)}
+
+								{hasQuorum ? (
+									<button
+										type="button"
+										className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
+										onClick={onBroadcast}
+									>
+										Send cancel tx
+									</button>
+								) : (
+									!alreadySigned && (
+										<button
+											type="button"
+											className="w-full rounded-xl border border-[#111827] bg-[#111827] px-4 py-2.5 text-body font-medium text-white transition hover:bg-black"
+											onClick={onSign}
+										>
+											Sign with {deviceCopy(walletVendor).label}
+										</button>
+									)
+								)}
+							</>
 						)
 					)}
 				</div>
@@ -156,6 +183,7 @@ export function CancelDetailsCard({
 				signerPubkey={signerPubkey}
 				requiredSignatures={required}
 				title="Cancel approvals"
+				isPending={cancelProposal.status === 'pending' && !hasQuorum}
 			/>
 		</div>
 	)

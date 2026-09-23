@@ -4,15 +4,19 @@ import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon, SendIcon } from '@/assets/icons'
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
+import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
+import { lastChangeLabel } from '@/lib/last-change-label'
 import { ImportBundleModal, type ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
-import { PROPOSAL_STATUS_STYLE, type DisplayStatus } from '@/lib/proposal-status'
+import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
+import { harborFrozeDestination } from '@/lib/safe-harbor-redundancy'
 
 type Props = {
 	proposal: Proposal
@@ -52,6 +56,10 @@ function deriveProposalTitle(proposal: Proposal, decodedData: DecodedProposalDat
 	const authored = proposal.title?.trim()
 	if (authored) return authored
 
+	// Named by what it does, like every other action: a bare `Proposal #N` on a list of pending
+	// approvals says nothing about which of them moves the bridge's sweep destination.
+	if (decodedData.safeHarborChange !== null) return 'Change sweep destination'
+
 	const change = decodedData.signerSetChange
 	if (change === null) return `Proposal #${proposal.seqNo}`
 
@@ -87,12 +95,13 @@ export function ProposalDetail({
 		requiredSignatures === 0 ? 100 : Math.min((collectedSignatures / requiredSignatures) * 100, 100)
 
 	const { isTerminal, hasQuorum, alreadySigned, canSign } = deriveProposalActions(proposal, signerPubkey)
-	const sendState = proposalSendState(proposal)
+	const sendState = proposalSendState({
+		...proposal,
+		harborFrozeDestination: harborFrozeDestination(proposal, decodedData.safeHarborActivated),
+	})
+	const lastChange = lastChangeLabel(proposal.updatedAtMs)
 
-	const displayStatus: DisplayStatus =
-		proposal.status === 'approved' && proposal.broadcastStatus === 'reveal_confirmed'
-			? 'awaiting_enactment'
-			: proposal.status
+	const displayStatus = proposalDisplayStatus(proposal)
 
 	const [bundleCopied, setBundleCopied] = useState(false)
 	const [bundleDownloaded, setBundleDownloaded] = useState(false)
@@ -156,75 +165,26 @@ export function ProposalDetail({
 				</div>
 			</div>
 
+			{/* ── Sweep destination change ──
+			    The detail screen is where every approver after the author decides: they never saw the
+			    create form, so without this section they are asked to authorize where the bridge sweeps
+			    to from a screen that does not name it. */}
+			{decodedData.safeHarborChange !== null && (
+				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
+					<div className="border-b border-[#f3f4f6] px-6 py-4">
+						<SectionLabel>Sweep destination</SectionLabel>
+					</div>
+					<SafeHarborChangeTable change={decodedData.safeHarborChange} />
+				</div>
+			)}
+
 			{/* ── Signer set change ── */}
 			{decodedData.signerSetChange !== null && (
 				<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
 					<div className="border-b border-[#f3f4f6] px-6 py-4">
 						<SectionLabel>Signer set change</SectionLabel>
 					</div>
-					<table className="w-full table-fixed border-collapse">
-						<thead>
-							<tr className="border-b border-[#f3f4f6] bg-[#f9fafb]">
-								<th className="w-1/2 px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
-									Before
-								</th>
-								<th className="w-1/2 border-l border-[#f3f4f6] px-4 py-2.5 text-left text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">
-									After
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{decodedData.signerSetChange.rows.map((row, i) => (
-								<tr key={i} className="border-b border-[#f3f4f6] last:border-0">
-									<td className="px-4 py-2.5 align-top">
-										{row.inBefore ? (
-											<span
-												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'}`}
-											>
-												{row.isRemoved && <span className="mr-1 text-emphasis-soft">−</span>}
-												{row.pubkey}
-											</span>
-										) : (
-											<span className="text-[#9ca3af]">—</span>
-										)}
-									</td>
-									<td className="border-l border-[#f3f4f6] px-4 py-2.5 align-top">
-										{row.inAfter ? (
-											<span
-												className={`break-all font-mono text-mono-sm leading-relaxed ${row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'}`}
-											>
-												{row.isAdded && <span className="mr-1 text-[#0f9d7a]">+</span>}
-												{row.pubkey}
-											</span>
-										) : (
-											<span className="text-[#9ca3af]">—</span>
-										)}
-									</td>
-								</tr>
-							))}
-							{/* Threshold row */}
-							<tr className="border-t border-[#e5e7eb] bg-[#f9fafb]">
-								<td className="px-4 py-2.5 text-label">
-									<span className="text-[#9ca3af]">Threshold </span>
-									{decodedData.signerSetChange.thresholdBefore !== null ? (
-										<span className="font-mono font-medium text-[#374151]">
-											{decodedData.signerSetChange.thresholdBefore} of{' '}
-											{decodedData.signerSetChange.rows.filter((r) => r.inBefore).length}
-										</span>
-									) : (
-										<span className="text-[#9ca3af]">—</span>
-									)}
-								</td>
-								<td className="border-l border-[#f3f4f6] px-4 py-2.5 text-label">
-									<span className="text-[#9ca3af]">Threshold </span>
-									<span className="font-mono font-medium text-[#374151]">
-										{decodedData.signerSetChange.thresholdAfter} of{' '}
-										{decodedData.signerSetChange.rows.filter((r) => r.inAfter).length}
-									</span>
-								</td>
-							</tr>
-						</tbody>
-					</table>
+					<SignerSetChangeTable change={decodedData.signerSetChange} />
 				</div>
 			)}
 
@@ -234,6 +194,7 @@ export function ProposalDetail({
 				allSigners={decodedData.allSigners}
 				signerPubkey={signerPubkey}
 				requiredSignatures={requiredSignatures}
+				isPending={displayStatus === 'pending' && !hasQuorum}
 			/>
 
 			{/* ── Broadcast TXIDs ── */}
@@ -295,13 +256,14 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed') && (
+					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"
 						>
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
 						</div>
 					)}
 
@@ -339,7 +301,7 @@ export function ProposalDetail({
 								<ImportJsonIcon width={12} height={12} className="text-current" />
 							</button>
 							<span className="pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111827] px-2 py-1 text-mono-sm text-white opacity-0 transition-opacity group-hover:opacity-100">
-								Import signatures
+								Import bundle
 							</span>
 						</div>
 					)}
