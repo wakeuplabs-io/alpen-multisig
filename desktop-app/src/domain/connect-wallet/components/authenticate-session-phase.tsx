@@ -94,7 +94,7 @@ export function AuthenticateSessionPhase({
 					<div className="grid grid-cols-2 gap-3">
 						<div>
 							<p className="m-0 text-label text-[#9ca3af]">Session expiry</p>
-							<p className="m-0 mt-1 text-body font-medium text-[#111827]">30 minutes</p>
+							<p className="m-0 mt-1 text-body font-medium text-[#111827]">24 hours</p>
 						</div>
 						<div>
 							<p className="m-0 text-label text-[#9ca3af]">Challenge nonce</p>

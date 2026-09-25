@@ -12,6 +12,10 @@ import { SessionContext, type SigningStepInfo } from '@/contexts/session-context
 import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
 import { useAuthSession } from '@/hooks/use-auth-session'
 import { useWalletSession } from '@/hooks/use-wallet-session'
+import { formatSessionCountdown } from '@/lib/format-session-countdown'
+
+/** The session chip turns to its warning palette when less than this is left. */
+const SESSION_WARNING_MS = 5 * 60_000
 
 export function SessionProvider({ children }: { children: ReactNode }) {
 	const { session, isAuthenticated, isLoading, selectedRole, setSelectedRole, authenticate, logout } = useAuthSession()
@@ -33,12 +37,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
 	const activeExpiresAtMs = orchestratorExpiresAtMs ?? session?.expiresAtUnixMs ?? null
 	const remainingMs = Math.max(0, (activeExpiresAtMs ?? 0) - nowMs)
-	const min = Math.floor(remainingMs / 60_000)
-	const sec = Math.floor((remainingMs % 60_000) / 1_000)
-	const sessionTimeLabel = activeExpiresAtMs
-		? `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-		: '--:--'
-	const sessionWarning = activeExpiresAtMs !== null && min < 5
+	const sessionTimeLabel = formatSessionCountdown(activeExpiresAtMs ? remainingMs : null)
+	const sessionWarning = activeExpiresAtMs !== null && remainingMs < SESSION_WARNING_MS
 
 	const signOrchestratorChallenge = useCallback(async () => {
 		const challengeResult = await orchestratorAuthStart({
