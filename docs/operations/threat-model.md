@@ -35,6 +35,10 @@ flowchart LR
 | Cross-authority data leak | P-002 session + proposal scope |
 | Coordinator/UI desync on broadcast | P-066 desktop execute + PATCH metadata |
 
+## Accepted risks
+
+- **Removed signer keeps offchain access until session expiry (#582).** A session bearer token is valid for up to 24 hours from sign-in, and membership is checked only at `/auth/verify`. A signer removed from the multisig during that window (or anyone holding a leaked token) can keep reading proposals and calling every write endpoint. The orchestrator is coordination only and does not verify governance signatures: it checks that `signer_pubkey` matches the session and stores `signature_hex` as given, so such a caller can open proposals, take a `seq_no`, or add an approval that makes a proposal look ready to broadcast. Mitigation: the ASM rejects signatures from non-members at enactment, so none of this can take effect onchain; the exposure is misleading coordination state, not unauthorized governance. Follow-up: re-check membership on write endpoints.
+
 ## Out of scope (Wave 3+)
 
 - Signed releases all platforms (P-011 full)

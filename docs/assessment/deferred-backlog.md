@@ -86,7 +86,7 @@
 **Description:** Authentication sessions and challenge nonces must expire and must be rate-limited to prevent replay and brute-force attacks.
 
 **Requirement:**
-- Challenge nonces expire in ≤ 5 minutes; sessions expire in ≤ 8 hours.
+- Challenge nonces expire in ≤ 5 minutes; sessions expire in ≤ 24 hours from sign-in (#582).
 - Session store uses TTL-aware storage (background sweep or `parking_lot` + expiry field).
 - Auth endpoints (`/auth/challenge`, `/auth/verify`) are rate-limited via `tower-governor` (e.g. 10 req/min per IP).
 - Rate-limit headers (`X-RateLimit-*`) are returned on 429 responses.
