@@ -336,23 +336,102 @@ fn parse_path(path: &str) -> Result<DerivationPath, String> {
 /// matches what the device renders: coin type `1'` (test nets) → `tb`; otherwise `bc`.
 /// The Ledger has no regtest app, so coin type `1'` shows as testnet (`tb`), not `bcrt`.
 fn hrp_from_path(path: &DerivationPath) -> KnownHrp {
-    if matches!(
-        path.into_iter().nth(1),
-        Some(ChildNumber::Hardened { index: 1 })
-    ) {
+    if is_test_coin_type(path) {
         KnownHrp::Testnets
     } else {
         KnownHrp::Mainnet
     }
 }
 
+/// Coin type `1'` (BIP-44 index 1) is shared by testnet, signet and regtest.
+fn is_test_coin_type(path: &DerivationPath) -> bool {
+    matches!(
+        path.into_iter().nth(1),
+        Some(ChildNumber::Hardened { index: 1 })
+    )
+}
+
+const BITCOIN_APP: &str = "Bitcoin";
+const BITCOIN_TEST_APP: &str = "Bitcoin Test";
+/// Name the device reports when no app is open (dashboard).
+const DASHBOARD_APP: &str = "BOLOS";
+
+/// The Ledger app that accepts the path's coin type: the mainnet app only derives
+/// coin type `0'`, so test networks need the separate Bitcoin Test app.
+fn expected_bitcoin_app(path: &DerivationPath) -> &'static str {
+    if is_test_coin_type(path) {
+        BITCOIN_TEST_APP
+    } else {
+        BITCOIN_APP
+    }
+}
+
+/// Oldest Bitcoin / Bitcoin Test app release this client supports (wallet policy protocol).
+const MIN_BITCOIN_APP_VERSION: (u64, u64, u64) = (2, 1, 0);
+
+fn min_bitcoin_app_version() -> String {
+    let (major, minor, patch) = MIN_BITCOIN_APP_VERSION;
+    format!("{major}.{minor}.{patch}")
+}
+
+/// Leading `major.minor.patch` of an app version; tolerates suffixes such as `2.4.2-rc`.
+fn parse_app_version(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.split('.').map(|part| {
+        let digits: String = part.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse::<u64>().ok()
+    });
+    Some((parts.next()??, parts.next()??, parts.next()??))
+}
+
+/// Checks the app open on the device (`GET_VERSION`) before any path-dependent request, so
+/// a wrong or missing app gets a precise message instead of a generic path rejection.
+/// An unparseable version is not blocking.
+fn check_bitcoin_app(name: &str, version: &str, path: &DerivationPath) -> Result<(), String> {
+    let expected = expected_bitcoin_app(path);
+    if name == DASHBOARD_APP {
+        return Err(format!(
+            "No app is open on your Ledger — open the {expected} app and try again"
+        ));
+    }
+    if name != expected {
+        return Err(match name {
+            BITCOIN_APP => format!(
+                "The {BITCOIN_APP} app is open, but this network (Local/regtest, testnet or signet) \
+                 needs the {BITCOIN_TEST_APP} app — install it from Ledger Live (enable Developer \
+                 mode in Settings → Experimental features), open it, and try again"
+            ),
+            BITCOIN_TEST_APP => format!(
+                "The {BITCOIN_TEST_APP} app is open, but mainnet needs the {BITCOIN_APP} app — \
+                 open the {BITCOIN_APP} app on your Ledger and try again"
+            ),
+            other => {
+                format!("The {other} app is open on your Ledger — open the {expected} app and try again")
+            }
+        });
+    }
+    match parse_app_version(version) {
+        Some(installed) if installed < MIN_BITCOIN_APP_VERSION => Err(format!(
+            "Update the {expected} app to {} or later via Ledger Live (installed: {version})",
+            min_bitcoin_app_version()
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn map_ledger_error(op: &str, raw: &str) -> String {
+    // `InsNotSupported` contains `NotSupported`: keep this branch first.
     if raw.contains("InsNotSupported") || raw.contains("ClaNotSupported") {
-        "Bitcoin app not responding — open the Bitcoin app (v2.1.0+) on your Ledger and try again"
-            .to_string()
+        format!(
+            "Bitcoin app not responding — open the {BITCOIN_APP} or {BITCOIN_TEST_APP} app ({} or later) \
+             on your Ledger and try again",
+            min_bitcoin_app_version()
+        )
     } else if raw.contains("NotSupported") {
-        "Ledger rejected this path — update the Bitcoin app to the latest version via Ledger Live"
-            .to_string()
+        format!(
+            "Ledger rejected this derivation path — test networks (Local/regtest, testnet, signet) \
+             need the {BITCOIN_TEST_APP} app; mainnet needs the {BITCOIN_APP} app. Open the right \
+             app and try again"
+        )
     } else if raw.contains("Deny") {
         "Request rejected on device — confirm the operation on your Ledger".to_string()
     } else if raw.contains("BadState") {
@@ -394,6 +473,12 @@ where
     T::Error: std::fmt::Debug,
 {
     let path = parse_path(path_str)?;
+
+    let (name, version, _flags) = client
+        .get_version()
+        .await
+        .map_err(|e| map_ledger_error("get_version", &format!("{e:?}")))?;
+    check_bitcoin_app(&name, &version, &path)?;
 
     // The Bitcoin app rejects GET_EXTENDED_PUBKEY for paths that contain unhardened components.
     // Request the account-level xpub (hardened prefix only) and derive the remainder in software.
@@ -1045,5 +1130,120 @@ mod verify_helper_tests {
             hrp_from_path(&parse_path("m/84'/0'/73'/0/0").unwrap()),
             KnownHrp::Mainnet
         );
+    }
+}
+
+#[cfg(test)]
+mod app_check_tests {
+    use super::*;
+
+    const TEST_PATH: &str = "m/84'/1'/73'/0/0";
+    const MAIN_PATH: &str = "m/84'/0'/73'/0/0";
+
+    fn check(name: &str, version: &str, path: &str) -> Result<(), String> {
+        check_bitcoin_app(name, version, &parse_path(path).unwrap())
+    }
+
+    #[test]
+    fn accepts_the_app_matching_the_path_coin_type() {
+        assert_eq!(check("Bitcoin Test", "2.4.2", TEST_PATH), Ok(()));
+        assert_eq!(check("Bitcoin", "2.4.2", MAIN_PATH), Ok(()));
+    }
+
+    #[test]
+    fn rejects_the_mainnet_app_on_a_test_path_without_blaming_the_version() {
+        let err = check("Bitcoin", "2.4.2", TEST_PATH).unwrap_err();
+        assert!(err.starts_with("The Bitcoin app is open"), "{err}");
+        assert!(err.contains("needs the Bitcoin Test app"), "{err}");
+        assert!(!err.to_lowercase().contains("update"), "{err}");
+    }
+
+    #[test]
+    fn rejects_the_test_app_on_a_mainnet_path() {
+        let err = check("Bitcoin Test", "2.4.2", MAIN_PATH).unwrap_err();
+        assert!(err.starts_with("The Bitcoin Test app is open"), "{err}");
+        assert!(err.contains("mainnet needs the Bitcoin app"), "{err}");
+        assert!(!err.to_lowercase().contains("update"), "{err}");
+    }
+
+    #[test]
+    fn asks_to_open_the_expected_app_from_the_dashboard() {
+        assert_eq!(
+            check("BOLOS", "2.2.3", TEST_PATH).unwrap_err(),
+            "No app is open on your Ledger — open the Bitcoin Test app and try again"
+        );
+    }
+
+    #[test]
+    fn names_a_foreign_app_and_the_expected_one() {
+        assert_eq!(
+            check("Ethereum", "1.10.0", MAIN_PATH).unwrap_err(),
+            "The Ethereum app is open on your Ledger — open the Bitcoin app and try again"
+        );
+    }
+
+    #[test]
+    fn asks_to_update_an_app_older_than_the_minimum() {
+        let err = check("Bitcoin Test", "2.0.6", TEST_PATH).unwrap_err();
+        assert_eq!(
+            err,
+            "Update the Bitcoin Test app to 2.1.0 or later via Ledger Live (installed: 2.0.6)"
+        );
+    }
+
+    #[test]
+    fn tolerates_version_suffixes_and_unparseable_versions() {
+        assert_eq!(check("Bitcoin", "2.1.0-rc", MAIN_PATH), Ok(()));
+        assert!(check("Bitcoin", "2.0.9-rc", MAIN_PATH)
+            .unwrap_err()
+            .contains("installed: 2.0.9-rc"));
+        assert_eq!(check("Bitcoin", "dev", MAIN_PATH), Ok(()));
+    }
+
+    #[test]
+    fn rejected_path_error_points_to_the_right_app_not_an_update() {
+        let err = map_ledger_error("get_extended_pubkey", "Device { status: NotSupported }");
+        assert!(!err.to_lowercase().contains("update"), "{err}");
+        assert!(err.contains("Bitcoin Test app"), "{err}");
+
+        let ins = map_ledger_error("get_version", "Device { status: InsNotSupported }");
+        assert!(ins.starts_with("Bitcoin app not responding"), "{ins}");
+        assert!(ins.contains("2.1.0 or later"), "{ins}");
+    }
+
+    /// Answers GET_VERSION with a canned app name/version; panics on any other APDU so the
+    /// test proves the app check runs before (and short-circuits) `get_extended_pubkey`.
+    struct VersionOnlyTransport {
+        name: &'static str,
+        version: &'static str,
+    }
+
+    #[async_trait]
+    impl async_client::Transport for VersionOnlyTransport {
+        type Error = String;
+
+        async fn exchange(&self, cmd: &APDUCommand) -> Result<(StatusWord, Vec<u8>), String> {
+            assert_eq!(
+                cmd.ins, 0x01,
+                "unexpected APDU INS {:#04x} after GET_VERSION",
+                cmd.ins
+            );
+            let mut data = vec![0x01, self.name.len() as u8];
+            data.extend_from_slice(self.name.as_bytes());
+            data.push(self.version.len() as u8);
+            data.extend_from_slice(self.version.as_bytes());
+            data.extend_from_slice(&[0x01, 0x00]);
+            Ok((StatusWord::OK, data))
+        }
+    }
+
+    #[tokio::test]
+    async fn connect_with_the_mainnet_app_on_a_test_path_fails_before_reading_the_key() {
+        let client = BitcoinClient::new(VersionOnlyTransport {
+            name: "Bitcoin",
+            version: "2.4.2",
+        });
+        let err = get_info_with(&client, ADMIN_ID_PATH).await.unwrap_err();
+        assert!(err.contains("needs the Bitcoin Test app"), "{err}");
     }
 }
