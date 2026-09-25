@@ -148,6 +148,8 @@ V1 recommendation:
    - Membership proof is point-in-time only
    - Membership must be refreshed periodically
    - Session validity should be shorter than membership refresh cadence
+   - Exception (#582): the orchestrator session lasts 24 hours from sign-in and membership is not re-checked
+     within it; accepted risk recorded in [`threat-model.md`](../operations/threat-model.md#accepted-risks)
 
 4. **Strict role binding**
    - Challenge includes intended role

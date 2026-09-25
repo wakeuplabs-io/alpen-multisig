@@ -94,7 +94,7 @@ services:
       BITCOIN_RPC_PASS: password
       STRATA_ADMIN_STATE_RPC_URL: http://18.209.229.98:8080
       DATABASE_URL: "postgresql://neondb_owner:npg_HuMb6SVQxW7s@ep-proud-star-aqpu1w7v-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-      AUTH_SESSION_TTL_MS: "1800000"
+      AUTH_SESSION_TTL_MS: "86400000"
       PROPOSAL_EXPIRY_DAYS: "1"
     depends_on:
       bitcoin:
