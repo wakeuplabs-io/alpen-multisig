@@ -87,6 +87,10 @@ mod tests {
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn test_app_with_rpc_url(rpc_url: &str) -> Router {
+        test_app_with(rpc_url, 240_000)
+    }
+
+    fn test_app_with(rpc_url: &str, auth_session_ttl_ms: u64) -> Router {
         use crate::infrastructure::{
             bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
         };
@@ -101,7 +105,7 @@ mod tests {
             repo,
             rpc_url.to_string(),
             120_000,
-            240_000,
+            auth_session_ttl_ms,
             btc_client,
             7,
         ))
@@ -289,6 +293,23 @@ mod tests {
     async fn test_create_proposal_requires_bearer() {
         let app = test_app();
         let req = json_request("POST", "/proposals", Some(create_body(SIGNER_A_PK)), None);
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    /// Sessions stay time-bounded: once a Bearer token is past its expiry it is refused, whatever the TTL.
+    #[tokio::test]
+    async fn test_expired_session_is_rejected() {
+        let app = test_app_with("mock://asm-membership", 0);
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
