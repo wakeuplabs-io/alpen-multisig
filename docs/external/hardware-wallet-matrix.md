@@ -38,9 +38,23 @@ The Strata Multisig application supports hardware wallets that provide the follo
 
 **Ledger Integration:**
 - Connected via USB HID
-- Bitcoin app version 2.1.0 or later required for Taproot support
+- Bitcoin app version 2.1.0 or later required — the first release with the wallet-policy format
+  the application speaks (earlier 2.0.x apps use a legacy protocol; see the app's
+  [changelog](https://github.com/LedgerHQ/app-bitcoin-new/blob/develop/CHANGELOG.md))
 - On-device verification of addresses and transaction details
 - Raw ECDSA signing for SPS-65 protocol compliance
+
+**Ledger app per network:** each Ledger app only accepts keys for its own coin type, so the app must
+match the network.
+
+| Network | Ledger app | Coin type |
+|---|---|---|
+| Mainnet | **Bitcoin** | `0'` |
+| Local (regtest), testnet, signet | **Bitcoin Test** | `1'` |
+
+The Bitcoin Test app is installed from Ledger Live after enabling **Settings → Experimental features
+→ Developer mode**. On connect, the application reads which app is open and names the one to use when
+the wrong app is open, no app is open, or the app is older than 2.1.0.
 
 ## Passphrases and hidden wallets
 
@@ -197,8 +211,8 @@ disabled with the reason — there is no device screen to compare against.
 |--------|------------------|---------------------|
 | Trezor Model T | 2.6.0 | Latest stable |
 | Trezor Safe 3 | 2.6.0 | Latest stable |
-| Ledger Nano X | 2.1.0 (Bitcoin app) | Latest stable |
-| Ledger Nano S Plus | 2.1.0 (Bitcoin app) | Latest stable |
+| Ledger Nano X | 2.1.0 (Bitcoin / Bitcoin Test app) | Latest stable |
+| Ledger Nano S Plus | 2.1.0 (Bitcoin / Bitcoin Test app) | Latest stable |
 
 ## Troubleshooting
 
@@ -208,6 +222,14 @@ disabled with the reason — there is no device screen to compare against.
 - Check that your user account has permission to access USB devices (Linux: add your user to the `plugdev` group)
 - Try a different USB port or cable
 - Restart the application after connecting the device
+
+### Ledger App Rejected
+
+- **Wrong app for the network:** Local, testnet and signet need the **Bitcoin Test** app; mainnet
+  needs the **Bitcoin** app. Opening the Bitcoin app on Local fails even when it is up to date —
+  open Bitcoin Test instead (see the table under [Ledger](#ledger)).
+- **No app open:** open the Bitcoin (or Bitcoin Test) app on the device, then connect again.
+- **App too old:** update it to 2.1.0 or later via Ledger Live.
 
 ### Signing Fails
 
