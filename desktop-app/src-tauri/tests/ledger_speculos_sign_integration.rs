@@ -53,7 +53,7 @@ async fn ledger_signs_admin_commit_psbt_without_register_wallet() {
             &account_xpub,
             master_fingerprint,
             HwDeviceType::Ledger,
-            Some("regtest"),
+            bdk_wallet::bitcoin::Network::Regtest,
         )
         .await
         .expect("hw session");

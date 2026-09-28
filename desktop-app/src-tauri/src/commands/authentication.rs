@@ -44,7 +44,7 @@ mod tests {
     async fn auth_logout_clears_wallet_session() {
         let session = WalletSession::empty();
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, bdk_wallet::bitcoin::Network::Regtest)
             .await
             .expect("init must succeed");
         assert!(
