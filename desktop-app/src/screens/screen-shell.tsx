@@ -1,15 +1,26 @@
 import type { ReactNode } from 'react'
 import strataIcon from '@/assets/strata-icon.png'
+import { NetworkStatusPill } from '@/domain/node-config/components/network-status-pill'
+import { useNodeConfig } from '@/domain/node-config/hooks/use-node-config'
 
 type Props = {
 	children: ReactNode
 	headerContent?: ReactNode
 	authorityBadge?: ReactNode
 	centerContent?: boolean
+	/** Makes the network pill open node settings; without it the pill is a read-only indicator. */
+	onOpenNodeSettings?: () => void
 }
 
 /** Shared centered layout for signer-facing screens. */
-export function ScreenShell({ children, headerContent, authorityBadge, centerContent = false }: Props) {
+export function ScreenShell({
+	children,
+	headerContent,
+	authorityBadge,
+	centerContent = false,
+	onOpenNodeSettings,
+}: Props) {
+	const { config: nodeConfig, localNodeStatus } = useNodeConfig()
 	return (
 		<div className="min-h-screen bg-bg-base">
 			<header className="flex h-[60px] items-center justify-between border-b border-[#e5e7eb] bg-white px-8">
@@ -18,7 +29,14 @@ export function ScreenShell({ children, headerContent, authorityBadge, centerCon
 					<span className="text-body-lg font-semibold tracking-[0.04em]">STRATA</span>
 					{authorityBadge}
 				</div>
-				{headerContent ? <div className="flex items-center gap-2">{headerContent}</div> : null}
+				<div className="flex items-center gap-2">
+					{headerContent}
+					<NetworkStatusPill
+						mode={nodeConfig?.mode ?? 'local'}
+						localNodeStatus={localNodeStatus}
+						onClick={onOpenNodeSettings}
+					/>
+				</div>
 			</header>
 			<main
 				className={`flex min-h-[calc(100vh-60px)] justify-center px-8 py-8 ${
