@@ -11,7 +11,8 @@ use desktop_app::infrastructure::signing::SignatureResult;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-/// Derivation path of the Admin ID, the key every one of these measurements signs with.
+/// Derivation path of the Admin ID on test networks, the key every one of these measurements
+/// signs with (Speculos runs the Bitcoin Test app, which only accepts coin type `1'`).
 pub const ADMIN_ID_PATH: &str = "m/84'/1'/73'/0/0";
 
 /// One screen the device painted, as Speculos reports its text lines.

@@ -30,8 +30,6 @@ fn with_ledger_device<R>(f: impl FnOnce() -> Result<R, String>) -> Result<R, Str
     f()
 }
 
-const ADMIN_ID_PATH: &str = "m/84'/1'/73'/0/0";
-
 /// Empty label for `sign_psbt` / `get_wallet_address` (matches ledger_bitcoin_client test vectors).
 const LEDGER_ADMIN_WALLET_POLICY_NAME: &str = "";
 /// Non-empty fallback name only when physical Ledger requires `register_wallet`.
@@ -570,12 +568,11 @@ fn recover_pubkey_from_message(message: &str, sig_bytes: &[u8; 65]) -> Result<St
 // Public API — sync wrappers called from spawn_blocking in Tauri commands
 // ---------------------------------------------------------------------------
 
-pub fn connect(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
-    with_ledger_device(|| connect_unlocked(derivation_path))
+pub fn connect(path_str: String) -> Result<HwWalletInfo, String> {
+    with_ledger_device(|| connect_unlocked(path_str))
 }
 
-fn connect_unlocked(derivation_path: Option<String>) -> Result<HwWalletInfo, String> {
-    let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
+fn connect_unlocked(path_str: String) -> Result<HwWalletInfo, String> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -1243,7 +1240,7 @@ mod app_check_tests {
             name: "Bitcoin",
             version: "2.4.2",
         });
-        let err = get_info_with(&client, ADMIN_ID_PATH).await.unwrap_err();
+        let err = get_info_with(&client, TEST_PATH).await.unwrap_err();
         assert!(err.contains("needs the Bitcoin Test app"), "{err}");
     }
 }

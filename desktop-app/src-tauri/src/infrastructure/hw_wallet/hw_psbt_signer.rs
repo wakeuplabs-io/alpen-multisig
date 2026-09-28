@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::application::psbt_signer::PsbtSigner;
+use crate::infrastructure::admin_wallet::wallet::admin_id_path;
 use crate::infrastructure::hw_wallet::trezor::WalletKind;
 use crate::infrastructure::hw_wallet::{ledger, trezor, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
@@ -16,6 +17,15 @@ use bdk_wallet::bitcoin::Network;
 /// `Send + Sync` and takes `&mut Psbt`.
 pub type DeviceSignFn =
     Arc<dyn Fn(&mut Psbt, &str, u32, Network) -> Result<(), String> + Send + Sync>;
+
+/// The path `connect` reads: the caller's, or the Admin ID path for the device on `network`.
+fn resolve_connect_path(
+    device: HwDeviceType,
+    derivation_path: Option<String>,
+    network: Network,
+) -> String {
+    derivation_path.unwrap_or_else(|| admin_id_path(device, network).to_string())
+}
 
 /// Hardware wallet PSBT signer — re-opens device by fingerprint at sign time.
 /// Allowed on any network (mainnet, testnet, regtest).
@@ -61,11 +71,15 @@ impl HwDeviceType {
 
     /// `kind` is Trezor-only. A Ledger's passphrase is a separate wallet unlocked by PIN on
     /// the device itself, with nothing for the host to select, so it ignores the argument.
+    ///
+    /// Without an explicit `derivation_path` the Admin ID path for `network` is read.
     pub fn connect(
         self,
         derivation_path: Option<String>,
         kind: WalletKind,
+        network: Network,
     ) -> Result<HwWalletInfo, String> {
+        let derivation_path = resolve_connect_path(self, derivation_path, network);
         match self {
             HwDeviceType::Trezor => trezor::connect(derivation_path, kind),
             HwDeviceType::Ledger => ledger::connect(derivation_path),
@@ -191,6 +205,35 @@ impl PsbtSigner for HwPsbtSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_path_defaults_to_the_admin_id_path_for_the_session_network() {
+        let cases = [
+            (HwDeviceType::Ledger, Network::Bitcoin, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Ledger, Network::Regtest, "m/84'/1'/73'/0/0"),
+            (HwDeviceType::Trezor, Network::Regtest, "m/84'/0'/73'/0/0"),
+        ];
+        for (device, network, expected) in cases {
+            assert_eq!(
+                resolve_connect_path(device, None, network),
+                expected,
+                "{device:?} on {network:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn connect_path_keeps_an_explicit_path() {
+        let explicit = "m/84'/1'/0'/0/5".to_string();
+        assert_eq!(
+            resolve_connect_path(
+                HwDeviceType::Ledger,
+                Some(explicit.clone()),
+                Network::Bitcoin
+            ),
+            explicit
+        );
+    }
 
     #[test]
     fn test_hw_psbt_signer_allowed_on_all_networks() {

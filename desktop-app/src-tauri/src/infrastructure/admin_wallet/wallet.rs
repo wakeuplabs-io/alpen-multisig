@@ -87,6 +87,21 @@ pub fn admin_wallet_account_path(device: HwDeviceType, network: Network) -> &'st
     }
 }
 
+/// BIP-84 Admin ID path (P2WPKH message signing) for a hardware device + network.
+///
+/// This is the single source of truth for the Admin ID path. The coin type must match the
+/// device app that will derive it: Trezor derives at coin type `0'` on every network, while
+/// Ledger's Bitcoin app only accepts `0'` and its Bitcoin Test app only `1'` (see
+/// `check_bitcoin_app` in the Ledger adapter), so Ledger uses `0'` on mainnet and `1'` on
+/// test networks.
+pub fn admin_id_path(device: HwDeviceType, network: Network) -> &'static str {
+    match (device, network) {
+        (HwDeviceType::Trezor, _) => "m/84'/0'/73'/0/0",
+        (HwDeviceType::Ledger, Network::Bitcoin) => "m/84'/0'/73'/0/0",
+        (HwDeviceType::Ledger, _) => "m/84'/1'/73'/0/0",
+    }
+}
+
 /// Descriptor origin segment (no leading `m/`) for a hardware device + network.
 pub fn admin_wallet_account_origin(device: HwDeviceType, network: Network) -> &'static str {
     admin_wallet_account_path(device, network)
@@ -368,6 +383,29 @@ mod tests {
                     "{device:?} on {network:?} derives at {path}; the rendered HRP must follow that coin type"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn admin_id_path_follows_the_app_coin_type_on_each_network() {
+        // Trezor: coin 0' on every network; Ledger: coin 0' on mainnet only, since its Bitcoin
+        // app refuses a 1' path and its Bitcoin Test app refuses a 0' one (issue #586).
+        let cases = [
+            (HwDeviceType::Trezor, Network::Bitcoin, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Trezor, Network::Testnet, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Trezor, Network::Signet, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Trezor, Network::Regtest, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Ledger, Network::Bitcoin, "m/84'/0'/73'/0/0"),
+            (HwDeviceType::Ledger, Network::Testnet, "m/84'/1'/73'/0/0"),
+            (HwDeviceType::Ledger, Network::Signet, "m/84'/1'/73'/0/0"),
+            (HwDeviceType::Ledger, Network::Regtest, "m/84'/1'/73'/0/0"),
+        ];
+        for (device, network, expected) in cases {
+            assert_eq!(
+                admin_id_path(device, network),
+                expected,
+                "{device:?} on {network:?}"
+            );
         }
     }
 
