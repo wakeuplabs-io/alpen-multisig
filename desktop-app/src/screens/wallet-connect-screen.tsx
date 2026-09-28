@@ -12,7 +12,6 @@ import {
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { NodeConfigModal } from '@/domain/node-config/components/node-config-modal'
-import { NetworkStatusPill } from '@/domain/node-config/components/network-status-pill'
 import { useNodeConfig } from '@/domain/node-config/hooks/use-node-config'
 
 const AUTHORITY_OPTIONS: AuthorityOption[] = [
@@ -229,16 +228,8 @@ export function WalletConnectScreen() {
 		<>
 			<ScreenShell
 				centerContent={!showTopBarDisconnect}
-				headerContent={
-					<>
-						{showTopBarDisconnect ? <DisconnectButton onClick={() => void handleHeaderDisconnect()} /> : null}
-						<NetworkStatusPill
-							mode={nodeConfig?.mode ?? 'local'}
-							localNodeStatus={localNodeStatus}
-							onClick={() => setIsNodeConfigOpen(true)}
-						/>
-					</>
-				}
+				headerContent={showTopBarDisconnect ? <DisconnectButton onClick={() => void handleHeaderDisconnect()} /> : null}
+				onOpenNodeSettings={() => setIsNodeConfigOpen(true)}
 			>
 				<HwWalletConnect
 					adapter={adapter}
