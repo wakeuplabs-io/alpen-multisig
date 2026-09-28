@@ -758,7 +758,8 @@ async fn cascade_enact_associated_cancel(
     Ok(())
 }
 
-/// Create a cancel proposal for an Approved target, or return the existing one (idempotent).
+/// Create a cancel proposal for an Approved target whose reveal confirmed, or return the existing
+/// one (idempotent).
 ///
 /// `action_hex` encodes `MultisigAction::Cancel` — built by the desktop before signing.
 pub(crate) async fn create_cancel_proposal(
@@ -786,6 +787,16 @@ pub(crate) async fn create_cancel_proposal(
         return Err(AppError::BadRequest(format!(
             "target proposal must be approved to cancel (current: {})",
             target.status
+        )));
+    }
+
+    // A cancel names the update's id in the ASM queue, and the update is queued only once its
+    // reveal confirms — the same rule the desktop's `canCancelProposal` applies before offering it.
+    if target.broadcast_status != BroadcastStatus::RevealConfirmed {
+        return Err(AppError::BadRequest(format!(
+            "cancel is not possible yet: the update is queued only once its reveal confirms \
+             (broadcast: {})",
+            target.broadcast_status
         )));
     }
 
@@ -2404,8 +2415,9 @@ mod tests {
     // create_cancel_proposal tests
     // ---------------------------------------------------------------------------
 
-    /// An approved target for the cancel tests. Its `action_hex` must decode: the cancel gate
-    /// resolves the target's confirmation depth from it.
+    /// An approved target for the cancel tests, with its reveal confirmed: a cancel names the
+    /// update in the ASM queue, so only a queued update can be one. Its `action_hex` must decode:
+    /// the cancel gate resolves the target's confirmation depth from it.
     async fn save_approved_proposal(
         repo: &InMemoryProposalRepository,
         authority: Authority,
@@ -2440,10 +2452,17 @@ mod tests {
         transition_to_approved(repo, session_b, "mock://asm-membership", &created.action_id)
             .await
             .unwrap();
-        repo.find_by_action_id(&created.action_id)
-            .await
-            .unwrap()
-            .unwrap()
+        repo.update_broadcast_status(
+            &created.action_id,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap()
     }
 
     #[tokio::test]
@@ -2545,6 +2564,59 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, AppError::BadRequest(_)));
+    }
+
+    /// #562: an approved update is not in the ASM queue until its reveal confirms, and a cancel
+    /// names it there. Before that — not sent, in the mempool, or failed — there is nothing to
+    /// cancel, and a refused cancel must leave nothing behind.
+    #[tokio::test]
+    async fn test_create_cancel_proposal_rejects_target_whose_reveal_has_not_confirmed() {
+        for broadcast_status in [
+            BroadcastStatus::Idle,
+            BroadcastStatus::RevealBroadcasted,
+            BroadcastStatus::Failed,
+        ] {
+            let repo = new_repo();
+            let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
+            repo.update_broadcast_status(
+                &target.action_id,
+                broadcast_status,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let err = create_cancel_proposal(
+                &repo,
+                "mock://asm-membership",
+                SessionContext {
+                    authority: Authority::StrataAdmin,
+                    signer_pubkey: &sig_a().signer_pubkey,
+                },
+                target.action_id.clone(),
+                2,
+                "cafebabe",
+                "cancel_sig",
+            )
+            .await
+            .unwrap_err();
+
+            let AppError::BadRequest(message) = err else {
+                panic!("expected BadRequest for {broadcast_status}");
+            };
+            assert!(
+                message.contains("reveal"),
+                "the rejection must name the reveal: {message}"
+            );
+            assert!(repo
+                .find_cancel_for_target(&target.action_id)
+                .await
+                .unwrap()
+                .is_none());
+        }
     }
 
     /// Tx types 15 (council rotation) and 14 (safe harbor address) reach into the council's world
