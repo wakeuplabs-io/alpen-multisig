@@ -9,6 +9,7 @@ import { isBroadcastConfirmDisabled, satsToBtc } from '../model/broadcast-propos
 import type { BroadcastPhase } from '../model/broadcast-proposal'
 import type { AdminWalletInfoView } from '../hooks/use-admin-wallet-info'
 import { BroadcastDevicePrompt } from './broadcast-device-prompt'
+import { authorityDisplayName } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
 import type { WalletVendor } from '@/wallet/types'
 
@@ -111,7 +112,7 @@ export function BroadcastDetailsCard({
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
 							<h2 className="m-0 font-display text-[26px] leading-[1.2] text-[#0a0a0a]">Proposal #{proposal.seqNo}</h2>
-							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{proposal.authority}</p>
+							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">{authorityDisplayName(proposal.authority)}</p>
 						</div>
 						<span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.75 text-mono-sm font-medium whitespace-nowrap text-[#059669]">
 							<span className="h-1.5 w-1.5 flex-none rounded-full bg-[#059669]" aria-hidden="true" />

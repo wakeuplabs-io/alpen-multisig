@@ -13,6 +13,7 @@ import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-dec
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
+import { authorityDisplayName } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
@@ -131,7 +132,7 @@ export function ProposalDetail({
 						<div className="min-w-0 flex-1">
 							<h2 className="m-0 font-display text-display-md leading-[1.2] text-[#0a0a0a]">{title}</h2>
 							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {proposal.authority}
+								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {authorityDisplayName(proposal.authority)}
 							</p>
 						</div>
 						<StatusBadge status={displayStatus} />
