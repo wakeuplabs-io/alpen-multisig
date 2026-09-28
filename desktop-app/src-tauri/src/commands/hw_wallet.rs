@@ -55,7 +55,8 @@ pub async fn hw_wallet_connect(
 ) -> Result<HwWalletInfo, String> {
     let device = parse_device_kind(&vendor)?;
     let kind = parse_wallet_kind(wallet_kind.as_deref())?;
-    tokio::task::spawn_blocking(move || device.connect(derivation_path, kind))
+    let network = network_from_env().map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || device.connect(derivation_path, kind, network))
         .await
         .map_err(|e| e.to_string())?
 }

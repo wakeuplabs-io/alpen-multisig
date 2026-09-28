@@ -10,9 +10,6 @@ use trezor_client::{protos, utils, InputScriptType, Trezor, TrezorMessage, Trezo
 use super::{trezor_thp, AddressScriptType, HwWalletInfo};
 use crate::infrastructure::signing::SignatureResult;
 
-/// BIP-84 path for Admin ID (P2WPKH message signing, non-Payout-Admin multisigs).
-const ADMIN_ID_PATH: &str = "m/84'/0'/73'/0/0";
-
 /// Which wallet behind the seed the signer asked for.
 ///
 /// One Trezor seed backs unlimited wallets: the standard one, plus a distinct wallet per
@@ -505,8 +502,7 @@ Passphrase in the device's own settings and connect again, or use the standard w
 ///
 /// `kind` selects which wallet behind the seed to open, and holds for every later operation
 /// on this connection — see [`SessionState`].
-pub fn connect(derivation_path: Option<String>, kind: WalletKind) -> Result<HwWalletInfo, String> {
-    let path_str = derivation_path.unwrap_or_else(|| ADMIN_ID_PATH.to_string());
+pub fn connect(path_str: String, kind: WalletKind) -> Result<HwWalletInfo, String> {
     let path = parse_path(&path_str)?;
 
     // A connection starts its own device session, so the signer is asked for the passphrase

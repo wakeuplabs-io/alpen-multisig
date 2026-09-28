@@ -126,7 +126,11 @@ mod tests {
         let session = WalletSession::empty();
         tokio::runtime::Runtime::new()
             .expect("runtime")
-            .block_on(session.init_from_mnemonic(mnemonic, None, None))
+            .block_on(session.init_from_mnemonic(
+                mnemonic,
+                None,
+                bdk_wallet::bitcoin::Network::Regtest,
+            ))
             .expect("session init");
         session
     }
@@ -227,7 +231,7 @@ mod tests {
         let session = WalletSession::empty();
         tokio::runtime::Runtime::new()
             .expect("runtime")
-            .block_on(session.init_from_xpub(xpub, None))
+            .block_on(session.init_from_xpub(xpub, bdk_wallet::bitcoin::Network::Regtest))
             .expect("session init");
         session
     }

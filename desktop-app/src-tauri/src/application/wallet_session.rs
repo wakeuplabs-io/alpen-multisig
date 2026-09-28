@@ -6,6 +6,7 @@ use crate::infrastructure::admin_wallet::wallet::{
 use crate::infrastructure::admin_wallet::{load_admin_wallet, AdminWalletError};
 use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
 use crate::infrastructure::node_config_store::NodeConfig;
+use bdk_wallet::bitcoin::Network;
 use std::sync::{Arc, RwLock};
 
 /// Live session: Admin Wallet service (mnemonic not stored).
@@ -96,9 +97,8 @@ impl WalletSession {
         account_xpub: &str,
         master_fingerprint: u32,
         device_type: HwDeviceType,
-        network: Option<&str>,
+        net: Network,
     ) -> Result<(), AdminWalletError> {
-        let net = parse_network(network);
         let wallet = load_watch_only_admin_wallet(
             account_xpub,
             net,
@@ -128,9 +128,8 @@ impl WalletSession {
     pub async fn init_from_xpub(
         &self,
         account_xpub: &str,
-        network: Option<&str>,
+        net: Network,
     ) -> Result<(), AdminWalletError> {
-        let net = parse_network(network);
         let state = Self::build_session_from_xpub(account_xpub, net, self.node_config.clone())?;
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
@@ -144,9 +143,8 @@ impl WalletSession {
         &self,
         mnemonic: &str,
         _passphrase: Option<&str>,
-        network: Option<&str>,
+        net: Network,
     ) -> Result<(), AdminWalletError> {
-        let net = parse_network(network);
         let state = Self::build_session_from_mnemonic(mnemonic, net, self.node_config.clone())?;
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = guard.take() {
@@ -159,14 +157,6 @@ impl WalletSession {
     /// Returns the active session wallet, or [`AdminWalletError::Disabled`] when logged out.
     pub fn current_or_fallback(&self) -> Result<Arc<WalletService>, AdminWalletError> {
         self.current().ok_or(AdminWalletError::Disabled)
-    }
-}
-
-fn parse_network(network: Option<&str>) -> bdk_wallet::bitcoin::Network {
-    match network.unwrap_or("regtest") {
-        "testnet" => bdk_wallet::bitcoin::Network::Testnet,
-        "bitcoin" | "mainnet" => bdk_wallet::bitcoin::Network::Bitcoin,
-        _ => bdk_wallet::bitcoin::Network::Regtest,
     }
 }
 
@@ -251,7 +241,7 @@ mod tests {
     async fn init_from_mnemonic_valid_sets_current_to_some() {
         let session = WalletSession::empty();
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
             .await
             .expect("valid mnemonic must succeed");
 
@@ -282,7 +272,7 @@ mod tests {
         use crate::infrastructure::admin_wallet::AdminWalletError;
         let session = WalletSession::empty();
         let result = session
-            .init_from_mnemonic(INVALID_MNEMONIC, None, None)
+            .init_from_mnemonic(INVALID_MNEMONIC, None, Network::Regtest)
             .await;
 
         assert!(
@@ -299,7 +289,9 @@ mod tests {
     #[tokio::test]
     async fn init_from_mnemonic_does_not_require_rpc() {
         let session = WalletSession::empty();
-        let result = session.init_from_mnemonic(TEST_MNEMONIC, None, None).await;
+        let result = session
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
+            .await;
         assert!(
             result.is_ok(),
             "init_from_mnemonic must succeed without a live Bitcoin node: {:?}",
@@ -315,7 +307,7 @@ mod tests {
     async fn current_or_fallback_returns_session_wallet_after_init() {
         let session = WalletSession::empty();
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
             .await
             .expect("init must succeed");
 
@@ -356,7 +348,7 @@ mod tests {
             .init_from_mnemonic(
                 "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
                 None,
-                Some("testnet"),
+                Network::Testnet,
             )
             .await;
         assert!(result.is_ok(), "testnet init must succeed");
@@ -372,7 +364,7 @@ mod tests {
             .init_from_mnemonic(
                 "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
                 None,
-                Some("bitcoin"),
+                Network::Bitcoin,
             )
             .await;
         assert!(result.is_ok(), "mainnet init must succeed");
@@ -396,13 +388,33 @@ mod tests {
         Xpub::from_priv(&secp, &account_xpriv).to_string()
     }
 
+    #[tokio::test]
+    async fn ledger_session_on_mainnet_derives_at_coin_type_zero() {
+        let session = WalletSession::empty();
+        let xpub = derive_account_xpub(TEST_MNEMONIC, Network::Bitcoin);
+        session
+            .init_from_xpub_with_hw(&xpub, 0x73c5_da0a, HwDeviceType::Ledger, Network::Bitcoin)
+            .await
+            .expect("ledger mainnet init must succeed");
+        let svc = session.current().expect("session must be Some after init");
+        assert_eq!(svc.network(), Network::Bitcoin);
+        let wallet = svc.wallet.lock().await;
+        let descriptor = wallet
+            .public_descriptor(bdk_wallet::KeychainKind::External)
+            .to_string();
+        assert!(
+            descriptor.contains("/86'/0'/73']"),
+            "mainnet Ledger origin must be 86'/0'/73', got: {descriptor}"
+        );
+    }
+
     // Acceptance test: init_from_xpub sets a watch-only session (current() Some, can_sign() false)
     #[tokio::test]
     async fn init_from_xpub_sets_session_as_watch_only() {
         let session = WalletSession::empty();
         let xpub = derive_account_xpub(TEST_MNEMONIC, Network::Regtest);
         session
-            .init_from_xpub(&xpub, None)
+            .init_from_xpub(&xpub, Network::Regtest)
             .await
             .expect("valid xpub must succeed");
         assert!(
@@ -418,7 +430,9 @@ mod tests {
     #[tokio::test]
     async fn init_from_xpub_malformed_returns_error_and_slot_stays_none() {
         let session = WalletSession::empty();
-        let result = session.init_from_xpub("not-a-valid-xpub", None).await;
+        let result = session
+            .init_from_xpub("not-a-valid-xpub", Network::Regtest)
+            .await;
         assert!(result.is_err(), "malformed xpub must return error");
         assert!(
             session.current().is_none(),
@@ -435,7 +449,7 @@ mod tests {
         );
 
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
             .await
             .expect("mnemonic init must succeed");
         assert!(
@@ -445,7 +459,7 @@ mod tests {
 
         let xpub = derive_account_xpub(TEST_MNEMONIC, Network::Regtest);
         session
-            .init_from_xpub(&xpub, None)
+            .init_from_xpub(&xpub, Network::Regtest)
             .await
             .expect("xpub init must succeed");
         assert!(
@@ -459,7 +473,7 @@ mod tests {
         let session = WalletSession::empty();
 
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
             .await
             .expect("first init must succeed");
 
@@ -468,7 +482,7 @@ mod tests {
         let notified = cancel.notified();
 
         session
-            .init_from_mnemonic(TEST_MNEMONIC, None, None)
+            .init_from_mnemonic(TEST_MNEMONIC, None, Network::Regtest)
             .await
             .expect("second init must succeed");
 
