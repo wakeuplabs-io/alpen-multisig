@@ -5,6 +5,7 @@ import type { CurrentVk } from '@/api/asm-state'
 import type { Proposal } from '@/api/proposals'
 import type { WalletVendor } from '@/wallet/types'
 import type { MultisigTargetAuthority } from '@/api/action-builder'
+import { authorityDisplayName } from '@/lib/authority-label'
 import { defconLevelOf } from '@/lib/defcon-copy'
 import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay, signingMessageSection } from '@/lib/device-signing-display'
@@ -53,15 +54,6 @@ type Props = {
 	onPreviewValid: (data: CreateProposalFormValues) => Promise<ProposalPreview | null>
 	onSubmitValid: (data: CreateProposalFormValues) => Promise<void>
 	onReauthenticate: () => Promise<void>
-}
-
-// Names the target in the unavailable-config message — a signer told "the config could
-// not be read" with no target named has no idea which read to retry.
-const TARGET_AUTHORITY_LABELS: Record<MultisigTargetAuthority, string> = {
-	strata_admin: 'Strata Administrator',
-	sequencer_manager: 'Strata Sequencer Manager',
-	alpen_admin: 'Alpen Administrator',
-	security_council: 'Security Council',
 }
 
 const defaultFormValues: CreateProposalFormValues = {
@@ -484,7 +476,7 @@ export function CreateProposalForm({
 
 							{isConfigUnavailable && (
 								<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-body text-danger-deep">
-									Could not load the signer set for {TARGET_AUTHORITY_LABELS[targetAuthority]}. Try again before
+									Could not load the signer set for {authorityDisplayName(targetAuthority)}. Try again before
 									continuing.
 								</div>
 							)}

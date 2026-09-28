@@ -2,6 +2,7 @@ import type { Proposal } from '@/api/proposals'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
 import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
+import { authorityDisplayName } from '@/lib/authority-label'
 import { buildProposalTitle } from '@/lib/proposal-title'
 
 type Props = {
@@ -38,7 +39,7 @@ export function CancelTargetSummary({ proposal, decodedData }: Props) {
 				    one screen where a council signer decides whether to cancel the sweep of the bridge. */}
 				<p className="m-0 text-body-lg font-medium text-[#0a0a0a]">{changeLabel ?? buildProposalTitle(proposal)}</p>
 				<p className="m-0 text-label text-[#6b7280]">
-					#{proposal.seqNo} · {proposal.authority}
+					#{proposal.seqNo} · {authorityDisplayName(proposal.authority)}
 				</p>
 			</div>
 
