@@ -155,6 +155,57 @@ Request body:
 - `application/proposals.rs` — `prepare_broadcast_bundle`, `broadcast_commit_then_reveal`; generates ephemeral key internally; accepts `reveal_change_spk: ScriptBuf` (R1.0).
 - IPC: `proposals_prepare_broadcast`, `proposals_broadcast` (no secrets in React). `proposals_broadcast` resolves `reveal_change_spk` from `wallet_service.reveal_change_address()`.
 
+### In-flight UTXO reservation (desktop, #516)
+
+A signed commit (or send) is invisible to BDK until a wallet sync sees it, and the wallet lock is
+released while a hardware signer signs (up to 180 s). Without a guard, a second build in that
+window — or seconds later — selects the same UTXO, the two commits are mutually exclusive, and the
+loser's reveal is unrecoverable because its envelope key is already evicted.
+
+`WalletService` therefore keeps an in-memory set of reserved outpoints, keyed by the txid that
+spends them:
+
+- **Reserve.** Commit funding (`build_and_sign_tx`), Send BTC (`build_send_psbt`) and fee bumps
+  (the CPFP child and the RBF replacement in `bump_fee`) skip the reserved outpoints, call
+  `finish()`, and reserve the new PSBT's inputs **before** releasing the wallet lock. Commit, Send
+  and RBF pass the set to `TxBuilder::unspendable`; the CPFP child leaves reserved coins out of
+  its spare funding. An RBF replacement's reservation also covers the inputs of the tx it
+  replaces, which it spends by design. The Send estimate honours the same set, so Max and the
+  insufficient-funds boundary match the real send.
+- **Release immediately** when building or signing fails, when any setup step fails after the
+  commit is signed but before `broadcast_via` (`CommitFunding::release`), or when a fee bump is
+  aborted before its broadcast (fee lookup error, package-rate shortfall).
+- **Mark attempted** right before `broadcast_via` (`CommitFunding::mark_broadcast_attempted`), and
+  before the broadcast of a Send or a fee bump. From then on a failed broadcast does **not** release: a partial
+  broadcast (commit accepted, reveal rejected) can leave the commit live.
+- **Record on success.** Once a broadcaster accepts a tx (commit and reveal, Send, fee bump), it is
+  inserted into the wallet graph as unconfirmed (`Wallet::apply_unconfirmed_txs`,
+  `WalletService::record_broadcast` / `CommitFunding::record_broadcast`) and its reservation is
+  dropped: BDK itself treats the inputs as spent, even if no sync ever sees the tx (e.g. the node
+  fallback broadcast it while Electrum is down). This complements the attempt mark, which only
+  governs a broadcast that failed or was partial.
+- **Drop on sync.** After `apply_update`, every reservation whose txid the wallet graph now holds is
+  dropped — BDK itself treats those inputs as spent.
+- **Grace** (failed or partial broadcasts only). A reservation no sync has seen expires 10 minutes after its last touch (build or
+  broadcast attempt): well above the 180 s signing timeout plus a few 30 s background syncs, short
+  enough not to strand coins after a broadcast that never landed.
+
+Reservations live in memory only and die with the wallet session.
+
+Once `broadcast_via` has succeeded, the bundle is on the network and the send succeeds: a failing
+progress report is retried (3 attempts) and logged, never reported as `failed` — that would reopen
+the claim while the bundle is live — and the txids are returned so the confirmation watcher starts;
+its `reveal_confirmed` report heals the orchestrator row. Errors before or at the broadcast still
+report `failed`.
+
+**Known limits (BDK 1.2, documented, not fixed):**
+
+- BDK cannot evict a transaction from its graph. A commit — or any broadcast tx recorded in the
+  graph on success — that is dropped from the mempool **without** a conflicting spend keeps its
+  inputs looking spent until the session wallet is rebuilt.
+- A commit funded from unconfirmed change of an earlier commit dies with its parent if the parent
+  is dropped or replaced.
+
 ### Frontend (`desktop-app/src`)
 
 - Route `'/proposals/:actionId/broadcast'`.

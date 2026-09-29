@@ -257,15 +257,11 @@ contract tests, which do run in CI.
 Recorded because they were found, and because none of them is fixed by anything above. Each is a
 candidate for the next phase.
 
-- **Two commits can spend the same UTXO.** `build_and_sign_tx`
-  (`desktop-app/src-tauri/src/application/wallet_service.rs:529-549`) runs BDK coin selection with
-  no `unspendable()` and no UTXO reservation, and the freshly signed commit is never inserted into
-  the local `TxGraph` — so a second broadcast, even seconds later, can select the same input and be
-  mutually exclusive with the first in the mempool. The loser's reveal is unrecoverable: the
-  ephemeral envelope key is evicted immediately after signing, which
-  `desktop-app/src-tauri/src/application/pending_reveals.rs:20-26` already documents as the reason a
-  commit must never be RBF-bumped. **This is the most likely cause of symptom 1**, and it is a
-  change to the signing path, which is why it is not bundled with a phase about labels.
+- ~~**Two commits can spend the same UTXO.**~~ **Resolved (#516).** Commit funding and Send BTC
+  now reserve their inputs in memory before the wallet lock is released, and coin selection skips
+  reserved outpoints until a sync sees the transaction. See "In-flight UTXO reservation" in
+  [`proposal-broadcast-commit-reveal.md`](proposal-broadcast-commit-reveal.md), including the BDK
+  1.2 limits that remain.
 - **Only half the watcher.** Confirmations are noticed on read (rule 0 in §4), but the opposite is
   not: a reveal that was dropped or replaced never degrades `reveal_broadcasted` to `failed`, and
   `proposals_resubmit_reveal` still exists with no UI that can reach it. A bundle that never

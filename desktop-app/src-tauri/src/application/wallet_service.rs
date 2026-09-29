@@ -30,6 +30,16 @@ const ELECTRUM_STOP_GAP: usize = 25;
 /// Max script pubkeys per Electrum batch request.
 const ELECTRUM_BATCH_SIZE: usize = 10;
 
+/// How long an in-flight UTXO reservation outlives its last touch (build or broadcast attempt)
+/// when no sync has seen the transaction. Reservations only exist because the wallet does not
+/// learn about its own transactions until a sync: once a sync sees the tx, BDK itself treats the
+/// inputs as spent and the reservation is dropped. The grace covers the opposite case — a
+/// broadcast that never reached the network, or a partial one where the commit was accepted and
+/// the reveal rejected — without locking those coins for the whole session. Ten minutes is well
+/// above the 180 s device-signing timeout plus a broadcast and a couple of 30 s background
+/// syncs, and short enough that an operator retrying after a failed send is not stuck for long.
+const RESERVATION_GRACE: Duration = Duration::from_secs(600);
+
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,6 +145,14 @@ pub struct SyncState {
 
 // ── WalletService ─────────────────────────────────────────────────────────────
 
+/// A wallet UTXO spent by a transaction this session built but no sync has seen yet (#516).
+#[derive(Debug, Clone, Copy)]
+struct Reservation {
+    txid: bdk_wallet::bitcoin::Txid,
+    /// Build time, reset when the broadcast is attempted; the grace runs from here.
+    since: Instant,
+}
+
 pub struct WalletService {
     pub wallet: Arc<Mutex<bdk_wallet::Wallet>>,
     pub sync_state: Arc<RwLock<SyncState>>,
@@ -151,6 +169,11 @@ pub struct WalletService {
     node_config: Arc<StdRwLock<NodeConfig>>,
     signer: Option<Arc<dyn PsbtSigner>>,
     network: bdk_wallet::bitcoin::Network,
+    /// In-flight UTXO reservations (#516). Coin selection skips these outpoints, because a
+    /// signed-but-unsynced transaction is invisible to BDK and its inputs still look unspent.
+    /// Held only for short, non-async critical sections.
+    reserved:
+        std::sync::Mutex<std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, Reservation>>,
 }
 
 /// Keychain selection for address listing.
@@ -286,6 +309,7 @@ impl WalletService {
             node_config,
             signer: None,
             network,
+            reserved: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -506,6 +530,7 @@ impl WalletService {
             .map_err(|e| AdminWalletError::SyncIncomplete {
                 message: e.to_string(),
             })?;
+        self.drop_reservations_seen_by(&wallet);
 
         let tip_height = wallet.latest_checkpoint().height();
         let last_synced_at = secs_to_iso8601(
@@ -526,7 +551,74 @@ impl WalletService {
         Ok(())
     }
 
-    async fn build_and_sign_tx(
+    fn reservations(
+        &self,
+    ) -> std::sync::MutexGuard<
+        '_,
+        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, Reservation>,
+    > {
+        // Every critical section is a plain map update, so a poisoned lock holds valid data.
+        self.reserved.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Outpoints coin selection must skip: inputs of transactions built this session that no
+    /// sync has seen yet. Expired reservations (see [`RESERVATION_GRACE`]) are dropped here.
+    pub(crate) fn reserved_outpoints(&self) -> Vec<bdk_wallet::bitcoin::OutPoint> {
+        let mut reserved = self.reservations();
+        reserved.retain(|_, r| r.since.elapsed() < RESERVATION_GRACE);
+        reserved.keys().copied().collect()
+    }
+
+    /// Reserves the inputs of a freshly built PSBT. Call it while still holding the wallet
+    /// lock the PSBT was built under, so no other build can select the same coins.
+    pub(crate) fn reserve_inputs(&self, unsigned_tx: &bdk_wallet::bitcoin::Transaction) {
+        let reservation = Reservation {
+            txid: unsigned_tx.compute_txid(),
+            since: Instant::now(),
+        };
+        let mut reserved = self.reservations();
+        for input in &unsigned_tx.input {
+            reserved.insert(input.previous_output, reservation);
+        }
+    }
+
+    /// The transaction is about to be broadcast: from here on only a sync that sees it, or the
+    /// grace period, releases its inputs — a failed broadcast may still have reached the network.
+    pub(crate) fn mark_broadcast_attempted(&self, txid: bdk_wallet::bitcoin::Txid) {
+        let now = Instant::now();
+        self.reservations()
+            .values_mut()
+            .filter(|r| r.txid == txid)
+            .for_each(|r| r.since = now);
+    }
+
+    /// Returns the inputs of a transaction that was never broadcast to the spendable pool.
+    pub(crate) fn release_reservation(&self, txid: bdk_wallet::bitcoin::Txid) {
+        self.reservations().retain(|_, r| r.txid != txid);
+    }
+
+    /// A broadcaster accepted `tx`: insert it into the wallet graph as unconfirmed, so BDK itself
+    /// treats its inputs as spent (and its change as ours) even if no sync ever sees it — e.g.
+    /// the node fallback broadcast it while Electrum is down. Its reservation is then dropped;
+    /// the grace only ever applies to broadcasts that failed or were partial.
+    pub(crate) async fn record_broadcast(&self, tx: &bdk_wallet::bitcoin::Transaction) {
+        let seen_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut wallet = self.wallet.lock().await;
+        wallet.apply_unconfirmed_txs([(tx.clone(), seen_at)]);
+        self.drop_reservations_seen_by(&wallet);
+    }
+
+    /// Drops the reservations whose transaction the wallet graph now holds: BDK itself treats
+    /// those inputs as spent from here on.
+    fn drop_reservations_seen_by(&self, wallet: &bdk_wallet::Wallet) {
+        self.reservations()
+            .retain(|_, r| wallet.get_tx(r.txid).is_none());
+    }
+
+    pub(crate) async fn build_and_sign_tx(
         &self,
         commit_addr: bdk_wallet::bitcoin::Address,
         amount_sats: u64,
@@ -540,12 +632,29 @@ impl WalletService {
                 bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
             );
             tx_builder.fee_rate(fee_rate);
-            tx_builder
+            tx_builder.unspendable(self.reserved_outpoints());
+            let psbt = tx_builder
                 .finish()
-                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+            self.reserve_inputs(&psbt.unsigned_tx);
+            psbt
         };
 
-        self.sign_and_finalize_psbt(psbt).await
+        self.sign_reserved_psbt(psbt).await
+    }
+
+    /// Signs a PSBT whose inputs were reserved by [`Self::reserve_inputs`], releasing the
+    /// reservation when signing fails — nothing was broadcast.
+    pub(crate) async fn sign_reserved_psbt(
+        &self,
+        psbt: bdk_wallet::bitcoin::Psbt,
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
+        let txid = psbt.unsigned_tx.compute_txid();
+        let signed = self.sign_and_finalize_psbt(psbt).await;
+        if signed.is_err() {
+            self.release_reservation(txid);
+        }
+        signed
     }
 
     /// Signs a wallet-built PSBT through the session [`PsbtSigner`] port, finalizes it,
@@ -1378,6 +1487,313 @@ mod tests {
     #[test]
     fn percent_complete_midpoint_returns_50() {
         assert_eq!(percent_complete(50, 100), 50);
+    }
+
+    // ── #516: in-flight UTXO reservation ────────────────────────────────────
+
+    mod reservation {
+        use super::*;
+        use crate::application::psbt_signer::MnemonicPsbtSigner;
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::{
+            DeviceSignFn, HwDeviceType, HwPsbtSigner,
+        };
+        use bdk_wallet::bitcoin::hashes::Hash;
+        use bdk_wallet::bitcoin::{Address, BlockHash, FeeRate, Network, OutPoint, Transaction};
+        use bdk_wallet::chain::BlockId;
+        use bdk_wallet::test_utils::{insert_checkpoint, receive_output_in_latest_block};
+        use std::collections::HashSet;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        /// Sized so one confirmed UTXO funds exactly one commit — never two at once.
+        const COMMIT_SATS: u64 = 60_000;
+
+        /// Admin wallet with one confirmed UTXO per value (distinct values → distinct txids).
+        fn wallet_with_utxos(values: &[u64]) -> bdk_wallet::Wallet {
+            let mut wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+            insert_checkpoint(
+                &mut wallet,
+                BlockId {
+                    height: 1_000,
+                    hash: BlockHash::all_zeros(),
+                },
+            );
+            for value in values {
+                receive_output_in_latest_block(&mut wallet, *value);
+            }
+            wallet
+        }
+
+        fn mnemonic_service(values: &[u64]) -> WalletService {
+            WalletService::with_signer(
+                wallet_with_utxos(values),
+                Arc::new(MnemonicPsbtSigner::new()),
+                test_node_config(),
+            )
+        }
+
+        /// Hardware-signer session whose device operation is the injected stub.
+        fn hw_service(values: &[u64], device_sign: DeviceSignFn) -> WalletService {
+            let signer = Arc::new(HwPsbtSigner::with_device_sign(
+                0xDEAD_BEEF,
+                HwDeviceType::Ledger,
+                "tpubTEST".to_string(),
+                Network::Regtest,
+                device_sign,
+            ));
+            WalletService::with_signer(wallet_with_utxos(values), signer, test_node_config())
+        }
+
+        /// Foreign regtest P2WPKH (derived, so the checksum is always valid).
+        fn commit_address() -> Address {
+            let pk: bdk_wallet::bitcoin::CompressedPublicKey =
+                "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af"
+                    .parse()
+                    .expect("valid pubkey");
+            Address::p2wpkh(&pk, Network::Regtest)
+        }
+
+        fn rate() -> FeeRate {
+            FeeRate::from_sat_per_vb(2).expect("valid rate")
+        }
+
+        async fn build_commit(svc: &WalletService) -> Result<Transaction, AdminWalletError> {
+            svc.build_and_sign_tx(commit_address(), COMMIT_SATS, rate())
+                .await
+        }
+
+        fn inputs(tx: &Transaction) -> HashSet<OutPoint> {
+            tx.input.iter().map(|i| i.previous_output).collect()
+        }
+
+        /// Device stub that records every PSBT it is asked to sign and then rejects it.
+        fn recording_rejecting_signer() -> (DeviceSignFn, Arc<std::sync::Mutex<Vec<Transaction>>>) {
+            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let sink = Arc::clone(&seen);
+            let stub: DeviceSignFn = Arc::new(move |psbt, _xpub, _fp, _net| {
+                sink.lock().unwrap().push(psbt.unsigned_tx.clone());
+                Err("Request rejected on device".to_string())
+            });
+            (stub, seen)
+        }
+
+        #[tokio::test]
+        async fn second_commit_is_refused_while_the_only_utxo_is_reserved() {
+            let svc = mnemonic_service(&[100_000]);
+
+            build_commit(&svc).await.expect("first commit builds");
+            let second = build_commit(&svc).await;
+
+            match second {
+                Err(AdminWalletError::WalletCreation(message)) => assert!(
+                    message.contains("Insufficient funds"),
+                    "the second commit must fail on coin selection, got: {message}"
+                ),
+                other => panic!("expected insufficient funds, got: {other:?}"),
+            }
+        }
+
+        #[tokio::test]
+        async fn back_to_back_commits_spend_disjoint_utxos() {
+            let svc = mnemonic_service(&[100_000, 90_000]);
+
+            let first = build_commit(&svc).await.expect("first commit builds");
+            let second = build_commit(&svc).await.expect("second commit builds");
+
+            assert!(
+                inputs(&first).is_disjoint(&inputs(&second)),
+                "two unbroadcast commits must never share an input"
+            );
+        }
+
+        /// The wallet lock is released while the device signs (up to 180 s). A build in that
+        /// window must already see the first build's inputs as reserved.
+        #[tokio::test]
+        async fn commit_built_while_another_waits_on_the_device_cannot_take_its_coin() {
+            use std::sync::mpsc;
+            use std::time::Duration as StdDuration;
+
+            let on_device = Arc::new(tokio::sync::Notify::new());
+            let (release_tx, release_rx) = mpsc::channel::<()>();
+            let release_rx = Arc::new(std::sync::Mutex::new(release_rx));
+            let (stub, seen) = {
+                let seen = Arc::new(std::sync::Mutex::new(Vec::<Transaction>::new()));
+                let sink = Arc::clone(&seen);
+                let on_device = Arc::clone(&on_device);
+                let stub: DeviceSignFn = Arc::new(move |psbt, _xpub, _fp, _net| {
+                    sink.lock().unwrap().push(psbt.unsigned_tx.clone());
+                    on_device.notify_one();
+                    // Parked "on the device" until the test lets go.
+                    let _ = release_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(StdDuration::from_secs(5));
+                    Err("stub: signing is not the subject of this test".to_string())
+                });
+                (stub, seen)
+            };
+            let svc = Arc::new(hw_service(&[100_000], stub));
+
+            let first = tokio::spawn({
+                let svc = Arc::clone(&svc);
+                async move { build_commit(&svc).await }
+            });
+            on_device.notified().await;
+
+            let second = build_commit(&svc).await;
+            release_tx.send(()).expect("first build still parked");
+            let _ = first.await.expect("first build task");
+
+            assert!(
+                matches!(&second, Err(AdminWalletError::WalletCreation(m)) if m.contains("Insufficient funds")),
+                "the coin on the device must not be selected again, got: {second:?}"
+            );
+            assert_eq!(
+                seen.lock().unwrap().len(),
+                1,
+                "only the first build reaches the device"
+            );
+        }
+
+        #[tokio::test]
+        async fn signer_error_releases_the_reserved_inputs() {
+            let (stub, seen) = recording_rejecting_signer();
+            let svc = hw_service(&[100_000], stub);
+
+            assert!(build_commit(&svc).await.is_err(), "the device rejects");
+            assert!(
+                build_commit(&svc).await.is_err(),
+                "the device rejects again"
+            );
+
+            let seen = seen.lock().unwrap();
+            assert_eq!(
+                seen.len(),
+                2,
+                "after a rejection the only UTXO must be selectable again"
+            );
+            assert_eq!(inputs(&seen[0]), inputs(&seen[1]));
+        }
+
+        /// `do_sync` runs this right after `apply_update`; Electrum is out of reach here, so the
+        /// test plants the synced tx in the graph the way `apply_update` would.
+        #[tokio::test]
+        async fn sync_that_sees_the_commit_drops_its_reservation() {
+            let svc = mnemonic_service(&[100_000]);
+            let commit = build_commit(&svc).await.expect("commit builds");
+            let txid = commit.compute_txid();
+            svc.mark_broadcast_attempted(txid);
+
+            let mut wallet = svc.wallet.lock().await;
+            bdk_wallet::test_utils::insert_tx(&mut wallet, commit);
+            bdk_wallet::test_utils::insert_seen_at(&mut wallet, txid, 1);
+            svc.drop_reservations_seen_by(&wallet);
+            drop(wallet);
+
+            assert!(
+                svc.reserved_outpoints().is_empty(),
+                "once the wallet graph holds the commit, BDK owns the spent state"
+            );
+        }
+
+        #[tokio::test]
+        async fn broadcast_attempt_no_sync_ever_saw_frees_the_coins_after_the_grace() {
+            let svc = mnemonic_service(&[100_000]);
+            let commit = build_commit(&svc).await.expect("commit builds");
+            svc.mark_broadcast_attempted(commit.compute_txid());
+            assert!(build_commit(&svc).await.is_err(), "still inside the grace");
+
+            let expired = Instant::now()
+                .checked_sub(RESERVATION_GRACE + Duration::from_secs(1))
+                .expect("monotonic clock is past the grace");
+            svc.reserved
+                .lock()
+                .unwrap()
+                .values_mut()
+                .for_each(|r| r.since = expired);
+
+            build_commit(&svc)
+                .await
+                .expect("after the grace the coin is selectable again");
+        }
+
+        /// A broadcast that succeeded (e.g. through the node fallback while Electrum is down) may
+        /// never be seen by a sync. Once the grace is over its coins must still count as spent.
+        #[tokio::test]
+        async fn successfully_broadcast_coins_stay_spent_after_the_grace_without_a_sync() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::tx_broadcaster::TxBroadcaster;
+            use crate::application::wallet_send::SendInput;
+
+            let svc = mnemonic_service(&[100_000]);
+            let original_coin: HashSet<OutPoint> = {
+                let wallet = svc.wallet.lock().await;
+                wallet.list_unspent().map(|u| u.outpoint).collect()
+            };
+            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![Arc::new(MockBroadcaster::ok("node"))];
+            svc.send_to_address(
+                &SendInput {
+                    address: commit_address().to_string(),
+                    amount_sats: 30_000,
+                    fee_rate_sat_per_kvb: 2_000,
+                    drain_wallet: false,
+                },
+                crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
+                &chain,
+            )
+            .await
+            .expect("send broadcast");
+
+            let expired = Instant::now()
+                .checked_sub(RESERVATION_GRACE + Duration::from_secs(1))
+                .expect("monotonic clock is past the grace");
+            svc.reserved
+                .lock()
+                .unwrap()
+                .values_mut()
+                .for_each(|r| r.since = expired);
+
+            // Only the send's own change is left to fund a commit (chaining on unconfirmed
+            // change is allowed); the coin the send spent is not.
+            let commit = build_commit(&svc)
+                .await
+                .expect("the send's change funds the commit");
+            assert!(
+                inputs(&commit).is_disjoint(&original_coin),
+                "the broadcast send's coin must never be selected again"
+            );
+        }
+
+        #[tokio::test]
+        async fn send_does_not_spend_the_coins_of_an_unbroadcast_commit() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::tx_broadcaster::TxBroadcaster;
+            use crate::application::wallet_send::{SendError, SendInput};
+
+            let svc = mnemonic_service(&[100_000]);
+            build_commit(&svc).await.expect("commit builds");
+            let broadcaster = Arc::new(MockBroadcaster::ok("Electrum"));
+            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![broadcaster.clone()];
+
+            let result = svc
+                .send_to_address(
+                    &SendInput {
+                        address: commit_address().to_string(),
+                        amount_sats: 30_000,
+                        fee_rate_sat_per_kvb: 2_000,
+                        drain_wallet: false,
+                    },
+                    crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
+                    &chain,
+                )
+                .await;
+
+            assert!(
+                matches!(result, Err(SendError::InsufficientFunds { .. })),
+                "the commit's reserved coin must not fund the send, got: {result:?}"
+            );
+            assert!(broadcaster.sent_single().is_empty(), "nothing is broadcast");
+        }
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto
