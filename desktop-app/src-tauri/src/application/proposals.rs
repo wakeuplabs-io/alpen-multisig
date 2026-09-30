@@ -345,7 +345,7 @@ pub async fn submit_commit_then_reveal(
             message,
         } = &e
         {
-            BroadcastError::Setup(format!("broadcast already in progress: {message}"))
+            BroadcastError::Setup(claim_conflict_message(message))
         } else {
             BroadcastError::Orchestrator(e)
         }
@@ -1311,6 +1311,17 @@ pub async fn resubmit_reveal(
         .await
         .map_err(|failure| BroadcastError::BitcoinRpc(failure.message()))?;
     Ok(stored.reveal_txid)
+}
+
+/// A 409 from the authority gate is one sentence. Any other 409 keeps its body:
+/// "not approved" and "sequence already used" are different refusals.
+fn claim_conflict_message(body: &str) -> String {
+    const GATE: &str = "a broadcast for this authority is already in flight";
+    if body.contains(GATE) {
+        "A broadcast for this authority is already in flight.".to_string()
+    } else {
+        format!("broadcast already in progress: {body}")
+    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -3766,5 +3777,17 @@ mod tests {
             .expect("report captured");
         assert_eq!(req.broadcast_status, "reveal_confirmed");
         assert_eq!(req.proposal_status, None);
+    }
+
+    #[test]
+    fn claim_conflict_message_hides_the_json_only_for_the_authority_gate() {
+        let gate = r#"{"error":"conflict: a broadcast for this authority is already in flight","errorCode":"conflict"}"#;
+        assert_eq!(
+            super::claim_conflict_message(gate),
+            "A broadcast for this authority is already in flight."
+        );
+        let other =
+            r#"{"error":"conflict: proposal must be in 'approved' state","errorCode":"conflict"}"#;
+        assert!(super::claim_conflict_message(other).contains("approved"));
     }
 }

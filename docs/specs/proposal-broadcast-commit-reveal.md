@@ -345,6 +345,28 @@ settled by **one rule**, by asking every configured source whether it holds the 
   of the flow), so a `failed` reported for a bundle that still landed is never retired as
   Superseded.
 
+### One broadcast in flight per authority (orchestrator, #516)
+
+`claim_broadcast` is still one conditional `UPDATE`. It takes the row only when both are true:
+
+- This proposal is `idle` or `failed`, or it is `commit_broadcasted` with both txids null and
+  `broadcast_claimed_at` at least 600 seconds old (`CLAIM_STALE_AFTER`). The desktop claims before
+  the device signs (up to 180 seconds), so a slow confirm does not lose the row. A missing
+  timestamp is not old.
+- No other proposal of the same `authority` is in flight: `commit_confirmed`, `reveal_broadcasted`,
+  or `commit_broadcasted` with a txid or a claim inside that window.
+
+An empty `commit_broadcasted` claim older than the window does not block the authority. If it did,
+an app that died between the claim and the pre-registration would wedge every later proposal. A
+row that already has either txid is never re-claimed; phase 2 settles that bundle. `failed`,
+`idle` and `reveal_confirmed` do not block. Taking the row sets `broadcast_claimed_at` to now and
+clears `broadcast_error`. The conflict text is `a broadcast for this authority is already in flight`.
+
+The column is nullable and is not part of the API payload. Rows that were already
+`commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` when the column was added copy
+`updated_at` into it. Postgres locks every proposal of the authority before the update, so two
+claims of different proposals cannot both pass.
+
 ### Frontend (`desktop-app/src`)
 
 - Route `'/proposals/:actionId/broadcast'`.

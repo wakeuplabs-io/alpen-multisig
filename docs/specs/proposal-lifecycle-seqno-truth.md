@@ -278,8 +278,13 @@ candidate for the next phase.
 - **`max_seqno_gap` is unknown off-chain.** A `seq_no` more than the deployment's gap past
   `last_seqno` is refused silently on chain (§2) and the app never warns. Nothing in
   `orchestrator-be` or `desktop-app` reads that parameter.
-- **No "one in flight per authority" gate.** `claim_broadcast` filters on the primary key alone
-  (`postgres_repo.rs`), so N proposals of one authority can be in flight at once.
+- ~~**No "one in flight per authority" gate.**~~ **Resolved (#516).** `claim_broadcast` refuses
+  a second claim while another proposal of the same authority is in flight
+  (`commit_confirmed`, `reveal_broadcasted`, or a `commit_broadcasted` that has a txid or a claim
+  newer than 10 minutes). A `commit_broadcasted` row with no txids whose claim is older than that
+  can be taken again — nothing was published — and it does not block the rest of the authority. A
+  row that already has a txid is never re-claimed. See "One broadcast in flight per authority" in
+  [`proposal-broadcast-commit-reveal.md`](proposal-broadcast-commit-reveal.md).
 - **`next_seq_no_from_state` counts dead proposals.** `local_max` spans every proposal regardless
   of status (`application/proposals.rs:272`), so superseded and expired ones keep inflating the
   next suggested sequence.
