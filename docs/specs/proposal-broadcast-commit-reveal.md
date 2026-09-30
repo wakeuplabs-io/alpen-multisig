@@ -173,38 +173,105 @@ spends them:
   replaces, which it spends by design. The Send estimate honours the same set, so Max and the
   insufficient-funds boundary match the real send.
 - **Release immediately** when building or signing fails, when any setup step fails after the
-  commit is signed but before `broadcast_via` (`CommitFunding::release`), or when a fee bump is
+  commit is signed but before the broadcast (`CommitFunding::release`), or when a fee bump is
   aborted before its broadcast (fee lookup error, package-rate shortfall).
-- **Mark attempted** right before `broadcast_via` (`CommitFunding::mark_broadcast_attempted`), and
-  before the broadcast of a Send or a fee bump. From then on a failed broadcast does **not** release: a partial
-  broadcast (commit accepted, reveal rejected) can leave the commit live.
 - **Record on success.** Once a broadcaster accepts a tx (commit and reveal, Send, fee bump), it is
   inserted into the wallet graph as unconfirmed (`Wallet::apply_unconfirmed_txs`,
   `WalletService::record_broadcast` / `CommitFunding::record_broadcast`) and its reservation is
   dropped: BDK itself treats the inputs as spent, even if no sync ever sees the tx (e.g. the node
-  fallback broadcast it while Electrum is down). This complements the attempt mark, which only
-  governs a broadcast that failed or was partial.
-- **Drop on sync.** After `apply_update`, every reservation whose txid the wallet graph now holds is
-  dropped — BDK itself treats those inputs as spent.
-- **Grace** (failed or partial broadcasts only). A reservation no sync has seen expires 10 minutes after its last touch (build or
-  broadcast attempt): well above the 180 s signing timeout plus a few 30 s background syncs, short
-  enough not to strand coins after a broadcast that never landed.
+  fallback broadcast it while Electrum is down).
+- **Settle a failed broadcast from the broadcaster's own answer.** Nothing is looked up afterwards.
+  Each broadcaster classifies what happened to **each transaction** it sent
+  (`TxBroadcastError::kind`, typed — never matched from message text):
+
+  | Outcome | Node (JSON-RPC) | Electrum |
+  |---|---|---|
+  | `Accepted` | success, or "already known" | success, "already known", or bitcoind's -27 ("already in block chain") relayed |
+  | `Rejected` | the node answered `sendrawtransaction` with a JSON-RPC error object | the server's error carries bitcoind's refusal code, -25 or -26 (see below) |
+  | `NotDelivered` | the connection never opened (`reqwest` `is_connect`), or Core's HTTP server refused the request before running any RPC: 401, 403, 404 or 405 without a JSON-RPC error body | `Client::new` failed; or the tx could not even be decoded |
+  | `Ambiguous` | anything else: timeout, connection dropped after sending, any other HTTP error without a JSON-RPC error body (5xx), unexpected result; a transport failure of `submitpackage` | any other server error (daemon unreachable or warming up, index not ready, a refusal relayed without its code); any transport error after the request went out; a failed `spawn_blocking` |
+
+  `submitpackage` is asked first. When the node **answers** without taking the whole package — an
+  unknown method, a package error, a non-success `package_msg` — part of it may be in the mempool,
+  so the node is asked again tx by tx with `sendrawtransaction`, whose answer is definitive per tx
+  ("already known" = `Accepted`, so a commit the package already admitted is detected). Only a
+  `submitpackage` call the node never answered stays `Ambiguous` (or `NotDelivered`).
+
+  **Electrum servers relay bitcoind's refusal in different shapes**, and only the relayed code is
+  read (`relayed_bitcoind_code`), never the text around it: the error's own `code` when it is a
+  bitcoind code (`{"code": -26, …}`); Blockstream's electrs (esplora) JSON inside the message
+  (`sendrawtransaction RPC error: {"code":-26,"message":…}`); ElectrumX's daemon-error repr
+  (`daemon error: DaemonError({'code': -26, …})`). romanz/electrs 0.10 (the regtest stack) relays
+  only the daemon's message under its own code 2, and ElectrumX's broadcast refusal names no code:
+  those are `Ambiguous`; the node fallback still answers definitively, and a tx left `Ambiguous`
+  keeps its coins reserved.
+
+  In the sequential fallback (`sendrawtransaction` commit, then reveal) each tx keeps its own
+  outcome: a commit accepted before the reveal fails stays `Accepted`. Across broadcasters, per tx:
+  any `Accepted` → `Accepted`; else any `Ambiguous` → `Ambiguous`; else all `NotDelivered` →
+  `NotDelivered`; else `Rejected` (`TxOutcome::combine`).
+
+  The **commit's** combined outcome drives the proposal (`submit_commit_then_reveal`,
+  `broadcast_manual`):
+
+  | Commit | Coins | Pending reveal | Error (IPC code) | `failed` reported | UI |
+  |---|---|---|---|---|---|
+  | `Accepted` + reveal `Accepted` | both recorded | kept until confirmed | — | no | success |
+  | `Accepted`, reveal not | commit recorded | kept | `RevealNotBroadcast` (`reveal_not_broadcast`) | no | no Retry, no manual panel |
+  | `Rejected` | **released at once** | removed (`action_id` / `manual-<sighash>`) | `BroadcastRejected` (`broadcast_rejected`), no hexes | yes | Retry send |
+  | `NotDelivered` | reserved | kept | `AllBroadcastersFailed` (`broadcast_unavailable`) **with both hexes** | no | send-manually panel, no Retry |
+  | `Ambiguous` | reserved | kept | `BroadcastUncertain` (`broadcast_uncertain`), no hexes | no | "may already be on the network", no Retry |
+
+  The send-manually panel renders only for `broadcast_unavailable`: nothing reached any source,
+  the coins stay reserved and the claim stays taken, so broadcasting those exact transactions by
+  hand cannot double-spend. It never renders after a rejection, whose coins were released and
+  whose claim was reopened. `BroadcastUncertain` carries no hexes on purpose: the tx most likely
+  reached a source that did not answer, the reservation already protects its coins, and the row
+  converges once the network sees it; handing the operator a manual path for a state nobody can
+  read would invite action on a guess.
+
+  A **Send** or **fee bump** follows the same classification for its single tx
+  (`WalletService::broadcast_reserved_tx`): `Accepted` → recorded; `Rejected` or `NotDelivered`
+  (there is no manual panel for these, and nothing was sent) → released at once and
+  `BroadcastFailed`; `Ambiguous` → kept reserved and `BroadcastUncertain` ("may have been sent —
+  its coins stay reserved, shown as in flight, until it is settled; do not send again").
+
+  Every screen that sends a bundle — the send and cancel screens and the manual screen — offers a
+  fresh send (Retry / Back to signing) only when `offersRetry` holds: never for
+  `broadcast_uncertain`, `reveal_not_broadcast`, `bundle_in_flight` or `broadcast_unavailable`.
+  The manual path also refuses a second send of the same proposal while its `manual-<sighash>`
+  reveal is still stored (`BundleInFlight`, IPC `bundle_in_flight`): that bundle's commit may be
+  live, and silently replacing the entry would fund a second commit.
+- **When reserved coins come back.** A reservation without a definitive answer (`Ambiguous`,
+  `NotDelivered` commit) ends only when a wallet sync sees the tx — after `apply_update`, every
+  reservation whose txid the wallet graph now holds is dropped, and BDK itself treats the inputs as
+  spent — or when the session ends. There is no time grace and no lookup.
+- **Balance.** `get_balance` and `list_utxos` leave reserved outpoints out; `BalanceDto` carries
+  them as `reservedSats`, and the wallet panel shows an "N sats in flight" line when it is non-zero.
+  The Send estimate and Max use the same set.
 
 Reservations live in memory only and die with the wallet session.
 
-Once `broadcast_via` has succeeded, the bundle is on the network and the send succeeds: a failing
+Once the pair broadcast has succeeded, the bundle is on the network and the send succeeds: a failing
 progress report is retried (3 attempts) and logged, never reported as `failed` — that would reopen
 the claim while the bundle is live — and the txids are returned so the confirmation watcher starts;
-its `reveal_confirmed` report heals the orchestrator row. Errors before or at the broadcast still
-report `failed`.
+its `reveal_confirmed` report heals the orchestrator row. Errors before the broadcast, and a commit
+every answering source rejected, still report `failed`.
 
-**Known limits (BDK 1.2, documented, not fixed):**
+**Known limits (BDK 1.2 and in-memory reservations, documented, not fixed):**
 
 - BDK cannot evict a transaction from its graph. A commit — or any broadcast tx recorded in the
   graph on success — that is dropped from the mempool **without** a conflicting spend keeps its
   inputs looking spent until the session wallet is rebuilt.
 - A commit funded from unconfirmed change of an earlier commit dies with its parent if the parent
   is dropped or replaced.
+- An `Ambiguous` or `NotDelivered` reservation lives in memory only: an app restart (or the end of
+  the session) loses it, and the coins become selectable again even if the tx later lands.
+- A proposal row left at `commit_broadcasted` by a `NotDelivered`, `Ambiguous` or
+  `RevealNotBroadcast` outcome is not degraded here, and a reveal kept in `PendingReveals` has no
+  resubmit path in the UI; the desktop's detection of stuck bundles (phase 2 of #516) handles both.
+- A source that answers with an explicit rejection is trusted to not hold the tx: the node's
+  JSON-RPC error answer, or an Electrum error that carries bitcoind's -25/-26.
 
 ### Frontend (`desktop-app/src`)
 

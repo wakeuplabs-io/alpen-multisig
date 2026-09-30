@@ -10,6 +10,8 @@ export type BalanceDto = {
 	confirmedSats: number
 	unconfirmedSats: number
 	totalSats: number
+	/** Coins held by this session's in-flight transactions; left out of the three figures above. */
+	reservedSats: number
 }
 
 export type OutPointDto = {
@@ -85,6 +87,8 @@ export type AdminWalletError =
 	| { type: 'BuildFailed'; message: string }
 	| { type: 'SignFailed'; message: string }
 	| { type: 'BroadcastFailed'; message: string }
+	/** #516: no broadcaster confirmed or refused the tx; it may be on the network and its coins stay reserved. */
+	| { type: 'BroadcastUncertain'; message: string }
 	// Phase 6 — Send (PRD §4.3.5)
 	| { type: 'InvalidAddress'; message: string }
 	| { type: 'WrongNetwork'; message: string }

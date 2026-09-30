@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use crate::application::tx_broadcaster::{broadcast_single_with_fallback, TxBroadcaster};
+use crate::application::tx_broadcaster::{TxBroadcaster, TxOutcome};
 use crate::application::wallet_service::WalletService;
 use crate::application::wallet_transactions::fee_rate_sat_per_kvb;
 use crate::domain::fee_rate::FeeRate;
@@ -112,6 +112,10 @@ pub enum SendError {
     SignFailed { message: String },
     #[error("broadcast failed: {message}")]
     BroadcastFailed { message: String },
+    /// No broadcaster confirmed or refused the send, and one may hold it (#516): its coins stay
+    /// reserved. Sending again could pay twice.
+    #[error("the send may have been broadcast: {message}")]
+    BroadcastUncertain { message: String },
 }
 
 /// Stable error code for the tagged `{ "type", "message" }` IPC error shape
@@ -131,6 +135,7 @@ pub fn send_error_code(e: &SendError) -> &'static str {
         SendError::BuildFailed { .. } => "BuildFailed",
         SendError::SignFailed { .. } => "SignFailed",
         SendError::BroadcastFailed { .. } => "BroadcastFailed",
+        SendError::BroadcastUncertain { .. } => "BroadcastUncertain",
     }
 }
 
@@ -396,7 +401,8 @@ impl WalletService {
     /// same branch. The caller is responsible for syncing the wallet beforehand
     /// (the IPC command does so best-effort, mirroring `admin_wallet_bump_fee`);
     /// a stale view is ultimately caught by the network and surfaces as
-    /// `BroadcastFailed`.
+    /// `BroadcastFailed`. A broadcast no source confirmed or refused, where one may hold the tx,
+    /// is `BroadcastUncertain` and keeps its coins reserved (#516).
     pub async fn send_to_address(
         &self,
         input: &SendInput,
@@ -474,20 +480,18 @@ impl WalletService {
             input.amount_sats
         };
 
-        // 8. Broadcast: Electrum first, node RPC fallback. From here the inputs stay reserved
-        //    until a sync sees the tx or the grace ends — a failed broadcast may have landed.
-        self.mark_broadcast_attempted(tx.compute_txid());
-        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
-        broadcast_single_with_fallback(broadcasters, &tx_hex)
+        // 8. Broadcast: Electrum first, node RPC fallback; the reservation is settled from the
+        //    broadcasters' answer (#516).
+        self.broadcast_reserved_tx(broadcasters, &tx)
             .await
-            .map_err(|errors| SendError::BroadcastFailed {
-                message: errors
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
+            .map_err(|failure| {
+                let message = failure.message();
+                if failure.outcome == TxOutcome::Ambiguous {
+                    SendError::BroadcastUncertain { message }
+                } else {
+                    SendError::BroadcastFailed { message }
+                }
             })?;
-        self.record_broadcast(&tx).await;
 
         Ok(SendResultDto {
             txid: tx.compute_txid().to_string(),
@@ -1391,6 +1395,12 @@ mod tests {
                     message: "m".into(),
                 },
                 "BroadcastFailed",
+            ),
+            (
+                SendError::BroadcastUncertain {
+                    message: "m".into(),
+                },
+                "BroadcastUncertain",
             ),
         ];
         for (err, code) in cases {

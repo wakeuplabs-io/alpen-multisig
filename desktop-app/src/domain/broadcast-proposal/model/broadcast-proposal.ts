@@ -37,9 +37,18 @@ export type BroadcastErrorCode =
 	| 'hw_signing_failed'
 	| 'session_expired'
 	| 'broadcast_unavailable'
+	| 'broadcast_rejected'
+	| 'broadcast_uncertain'
+	| 'reveal_not_broadcast'
+	| 'bundle_in_flight'
 	| 'unknown_error'
 
-export type BroadcastRecovery = 'retry' | 'resubmit-reveal' | 'reconnect-device' | 're-auth' | 'manual-broadcast'
+/**
+ * `await-network`: the commit is, or may be, on the network (#516). Nothing to do but let the
+ * proposal update once the network has seen it — a fresh send could fund a second commit.
+ */
+export type BroadcastRecovery =
+	'retry' | 'resubmit-reveal' | 'reconnect-device' | 're-auth' | 'manual-broadcast' | 'await-network'
 
 export type BroadcastError = {
 	code: BroadcastErrorCode
@@ -60,6 +69,12 @@ const CODE_RECOVERY_MAP: Record<string, BroadcastRecovery> = {
 	hw_signing_failed: 'reconnect-device',
 	session_expired: 're-auth',
 	broadcast_unavailable: 'manual-broadcast',
+	// #516: the commit was rejected and its coins released — a fresh send is safe.
+	broadcast_rejected: 'retry',
+	broadcast_uncertain: 'await-network',
+	reveal_not_broadcast: 'await-network',
+	// A manual send refused because the same bundle is still stored and may be live.
+	bundle_in_flight: 'await-network',
 	unknown_error: 'retry',
 }
 
@@ -82,6 +97,26 @@ export function deriveBroadcastError(raw: string): BroadcastError {
 	} catch {
 		return makeBroadcastError('unknown_error', raw, 'retry')
 	}
+}
+
+/**
+ * Whether the error screen may offer "Retry" (#516). Not while the bundle is, or may be, on
+ * the network, nor while it waits to be broadcast by hand: the proposal is still claimed, and a
+ * fresh bundle would fund a second commit.
+ */
+export function offersRetry(error: BroadcastError | null): boolean {
+	return error?.recovery !== 'await-network' && error?.recovery !== 'manual-broadcast'
+}
+
+/**
+ * Heading for a failed send (#516). "Send failed" only when nothing is, or may be, on the
+ * network; a bundle no channel could reach waits to be sent by hand; one that may be live is not
+ * settled yet.
+ */
+export function broadcastErrorTitle(error: BroadcastError): string {
+	if (error.recovery === 'await-network') return 'Send not settled yet'
+	if (error.recovery === 'manual-broadcast') return 'Nothing was sent'
+	return 'Send failed'
 }
 
 function makeBroadcastError(code: BroadcastErrorCode, message: string, recovery: BroadcastRecovery): BroadcastError {

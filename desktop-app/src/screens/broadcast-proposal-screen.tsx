@@ -13,6 +13,7 @@ import {
 	isBroadcastInFlightPhase,
 	isBroadcastLoadingPhase,
 	isBroadcastProgressPhase,
+	offersRetry,
 } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
 import { FeeRateSelector } from '@/domain/fee-selection/components/fee-rate-selector'
@@ -176,7 +177,7 @@ export function BroadcastProposalScreen() {
 						</div>
 					)}
 
-					{phase === 'error' && (
+					{phase === 'error' && offersRetry(error) && (
 						<div>
 							<button
 								type="button"

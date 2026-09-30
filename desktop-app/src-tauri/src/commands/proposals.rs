@@ -501,6 +501,50 @@ mod broadcast_error_code_tests {
         assert!(msg.contains("Bitcoin node: timeout"), "{msg}");
     }
 
+    /// #516 IPC contract: a commit that was rejected, may be live, or is live without its
+    /// reveal each has its own code, and none carries the tx hexes — the send-manually panel is
+    /// only for a bundle no channel could reach.
+    #[test]
+    fn failed_commit_outcomes_map_to_their_own_codes_without_hexes() {
+        let errors = || vec![("Bitcoin node".to_string(), "why".to_string())];
+        let cases = [
+            (
+                BroadcastError::BroadcastRejected { errors: errors() },
+                "broadcast_rejected",
+            ),
+            (
+                BroadcastError::BroadcastUncertain {
+                    commit_txid: "c0".to_string(),
+                    errors: errors(),
+                },
+                "broadcast_uncertain",
+            ),
+            (
+                BroadcastError::RevealNotBroadcast {
+                    commit_txid: "c0".to_string(),
+                    reveal_txid: "r0".to_string(),
+                    errors: errors(),
+                },
+                "reveal_not_broadcast",
+            ),
+        ];
+        let parsed: serde_json::Value =
+            serde_json::from_str(&map_broadcast_error(BroadcastError::BundleInFlight {
+                commit_txid: "c0".to_string(),
+            }))
+            .unwrap();
+        assert_eq!(parsed["code"], "bundle_in_flight");
+        assert!(parsed.get("commitTxHex").is_none());
+        for (error, code) in cases {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&map_broadcast_error(error)).unwrap();
+            assert_eq!(parsed["code"], code);
+            assert!(parsed.get("commitTxHex").is_none() && parsed.get("revealTxHex").is_none());
+            let msg = parsed["message"].as_str().unwrap();
+            assert!(msg.contains("Bitcoin node: why"), "{msg}");
+        }
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
@@ -545,6 +589,10 @@ fn broadcast_error_code(
         BroadcastError::BitcoinRpc(_) => "BitcoinRpc",
         BroadcastError::Timeout { .. } => "Timeout",
         BroadcastError::AllBroadcastersFailed { .. } => "broadcast_unavailable",
+        BroadcastError::BroadcastRejected { .. } => "broadcast_rejected",
+        BroadcastError::BroadcastUncertain { .. } => "broadcast_uncertain",
+        BroadcastError::RevealNotBroadcast { .. } => "reveal_not_broadcast",
+        BroadcastError::BundleInFlight { .. } => "bundle_in_flight",
         BroadcastError::Setup(_) => "Unknown",
         BroadcastError::Orchestrator(_) => "Unknown",
     }
@@ -569,14 +617,10 @@ fn map_broadcast_error_with_boundary(
         errors,
     } = &error
     {
-        let errs = errors
-            .iter()
-            .map(|(name, msg)| format!("{name}: {msg}"))
-            .collect::<Vec<_>>()
-            .join("; ");
+        let errs = join_source_errors(errors);
         return serde_json::json!({
             "code": "broadcast_unavailable",
-            "message": format!("All broadcast channels failed ({errs}). Copy and broadcast the transactions manually."),
+            "message": format!("No broadcast channel could be reached ({errs}), so nothing was sent. Copy and broadcast the transactions manually."),
             "commitTxHex": commit_tx_hex,
             "revealTxHex": reveal_tx_hex,
             "canResubmit": false,
@@ -606,10 +650,42 @@ fn map_broadcast_error_with_boundary(
         }
         // Handled by the early return above; kept non-panicking per backend standards.
         BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
+        // #516: the three outcomes of a failed commit broadcast, each with its own next step.
+        BroadcastError::BroadcastRejected { errors } => format!(
+            "The network rejected the commit ({}). Nothing was sent; you can retry the send.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::BroadcastUncertain {
+            commit_txid,
+            errors,
+        } => format!(
+            "The commit {commit_txid} may already be on the network: no broadcast channel confirmed or refused it ({}). Do not send again — check the proposal once the network has seen it.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::RevealNotBroadcast {
+            commit_txid,
+            errors,
+            ..
+        } => format!(
+            "The commit {commit_txid} is on the network, but its reveal was not accepted ({}). Do not send again: a new send would fund a second commit.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::BundleInFlight { commit_txid } => format!(
+            "A bundle for this proposal was already sent from this app (commit {commit_txid}) and may be on the network. Do not send again: its coins stay reserved and the app settles it on its own."
+        ),
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::Orchestrator(e) => e.to_string(),
     };
     serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
+}
+
+/// `source: message` for every broadcaster, as the IPC messages quote them.
+fn join_source_errors(errors: &[(String, String)]) -> String {
+    errors
+        .iter()
+        .map(|(name, msg)| format!("{name}: {msg}"))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn map_broadcast_error(error: BroadcastError) -> String {

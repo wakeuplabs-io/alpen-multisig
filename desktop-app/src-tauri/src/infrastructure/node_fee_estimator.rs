@@ -49,7 +49,10 @@ mod tests {
 
     #[async_trait]
     impl BitcoinRpcClient for FailingRpc {
-        async fn send_raw_transaction(&self, _: &str) -> Result<String, String> {
+        async fn send_raw_transaction(
+            &self,
+            _: &str,
+        ) -> Result<String, crate::infrastructure::bitcoin_rpc::RpcError> {
             unimplemented!()
         }
         async fn get_transaction_confirmations(&self, _: &str) -> Result<u32, String> {
@@ -67,7 +70,10 @@ mod tests {
         async fn get_block_count(&self) -> Result<u64, String> {
             unimplemented!()
         }
-        async fn submit_package(&self, _: &[String]) -> Result<(), String> {
+        async fn submit_package(
+            &self,
+            _: &[String],
+        ) -> Result<(), crate::infrastructure::bitcoin_rpc::RpcError> {
             unimplemented!()
         }
     }

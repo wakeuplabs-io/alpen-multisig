@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::application::tx_broadcaster::{broadcast_single_with_fallback, TxBroadcaster};
+use crate::application::tx_broadcaster::{TxBroadcaster, TxOutcome};
 use crate::application::wallet_service::WalletService;
 use crate::domain::fee_rate::{FeeRate, MAX_BROADCAST_SAT_PER_KVB};
 use crate::infrastructure::admin_wallet::AdminWalletError;
@@ -143,6 +143,10 @@ pub enum BumpFeeError {
     InvalidFeeRate(#[from] crate::domain::fee_rate::FeeRateError),
     #[error("broadcast failed: {message}")]
     BroadcastFailed { message: String },
+    /// No broadcaster confirmed or refused the bump, and one may hold it (#516): its coins
+    /// stay reserved. Bumping again could pay twice.
+    #[error("the fee bump may have been broadcast: {message}")]
+    BroadcastUncertain { message: String },
 }
 
 /// Stable error code for the tagged `{ "type", "message" }` IPC error shape
@@ -165,6 +169,7 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
         BumpFeeError::BuildFailed { .. } => "BuildFailed",
         BumpFeeError::SignFailed { .. } => "SignFailed",
         BumpFeeError::BroadcastFailed { .. } => "BroadcastFailed",
+        BumpFeeError::BroadcastUncertain { .. } => "BroadcastUncertain",
     }
 }
 
@@ -650,20 +655,18 @@ impl WalletService {
             }
         }
 
-        // 6. Broadcast: Electrum first, node RPC fallback. From here the inputs stay reserved
-        //    until a sync sees the tx or the grace ends — a failed broadcast may have landed.
-        self.mark_broadcast_attempted(parsed_new_txid);
-        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
-        broadcast_single_with_fallback(broadcasters, &tx_hex)
+        // 6. Broadcast: Electrum first, node RPC fallback; the reservation is settled from the
+        //    broadcasters' answer (#516).
+        self.broadcast_reserved_tx(broadcasters, &tx)
             .await
-            .map_err(|errors| BumpFeeError::BroadcastFailed {
-                message: errors
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
+            .map_err(|failure| {
+                let message = failure.message();
+                if failure.outcome == TxOutcome::Ambiguous {
+                    BumpFeeError::BroadcastUncertain { message }
+                } else {
+                    BumpFeeError::BroadcastFailed { message }
+                }
             })?;
-        self.record_broadcast(&tx).await;
 
         // CPFP reports the resulting package rate (what miners evaluate); RBF the
         // replacement's own rate.
@@ -2299,6 +2302,47 @@ mod tests {
             svc.reserved_outpoints().is_empty(),
             "an aborted bump must hand its inputs back"
         );
+    }
+
+    /// #516: a bump settles its coins from the broadcasters' own answer — released at once on
+    /// a rejection, kept (with an error of its own) when a source may hold it.
+    #[tokio::test]
+    async fn failed_bump_settles_its_inputs_from_the_broadcast_outcome() {
+        let cases = [
+            (
+                MockBroadcaster::failing("Electrum", "insufficient fee"),
+                true,
+            ),
+            (MockBroadcaster::ambiguous("Electrum"), false),
+        ];
+        for (broadcaster, released) in cases {
+            let (wallet, commit_txid, reveal, _spare) = dust_window_wallet_with_one_spare();
+            let pending = pending_map_from(&commit_txid, &reveal);
+            let svc = signing_service(wallet);
+
+            let result = svc
+                .bump_fee(
+                    &commit_txid,
+                    higher_rate(),
+                    &pending,
+                    &mock_chain(&[Arc::new(broadcaster)]),
+                )
+                .await;
+
+            if released {
+                assert!(
+                    matches!(result, Err(BumpFeeError::BroadcastFailed { .. })),
+                    "got: {result:?}"
+                );
+                assert!(svc.reserved_outpoints().is_empty());
+            } else {
+                assert!(
+                    matches!(result, Err(BumpFeeError::BroadcastUncertain { .. })),
+                    "got: {result:?}"
+                );
+                assert!(!svc.reserved_outpoints().is_empty());
+            }
+        }
     }
 
     /// The funding coin is the smallest one that closes the gap, not the largest one

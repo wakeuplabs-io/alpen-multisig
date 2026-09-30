@@ -5,8 +5,9 @@ use serde_json::{json, Value};
 
 #[async_trait]
 pub trait BitcoinRpcClient: Send + Sync {
-    /// Broadcast a fully signed raw transaction. Returns txid.
-    async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String>;
+    /// Broadcast a fully signed raw transaction. Returns txid. The error says whether the node
+    /// answered, so a broadcaster can tell a rejection from a request that may have landed.
+    async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, RpcError>;
 
     /// Get the number of confirmations for a transaction (0 = unconfirmed).
     async fn get_transaction_confirmations(&self, txid: &str) -> Result<u32, String>;
@@ -27,7 +28,58 @@ pub trait BitcoinRpcClient: Send + Sync {
     async fn get_block_count(&self) -> Result<u64, String>;
 
     /// Submit a package of transactions.
-    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String>;
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), RpcError>;
+}
+
+/// How a failed node RPC call ended, for callers that must know whether the request may have
+/// taken effect (#516).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RpcFailureKind {
+    /// The node answered with a JSON-RPC error object.
+    Answered,
+    /// The node cannot have run the call: the connection never opened, or the HTTP server
+    /// refused the request before dispatching it (401/403/404/405 without a JSON-RPC error).
+    NotConnected,
+    /// Anything else — a timeout, a connection dropped mid-request, any other HTTP error without
+    /// a JSON-RPC error body (5xx), an unreadable or unexpected result. The node may have acted
+    /// on it.
+    Unknown,
+}
+
+/// A failed node RPC call.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
+pub struct RpcError {
+    pub kind: RpcFailureKind,
+    /// The JSON-RPC error code, when the node answered with one.
+    pub code: Option<i64>,
+    pub message: String,
+}
+
+impl RpcError {
+    pub fn answered(code: Option<i64>, message: impl Into<String>) -> Self {
+        Self {
+            kind: RpcFailureKind::Answered,
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub fn not_connected(message: impl Into<String>) -> Self {
+        Self {
+            kind: RpcFailureKind::NotConnected,
+            code: None,
+            message: message.into(),
+        }
+    }
+
+    pub fn unknown(message: impl Into<String>) -> Self {
+        Self {
+            kind: RpcFailureKind::Unknown,
+            code: None,
+            message: message.into(),
+        }
+    }
 }
 
 pub struct HttpBitcoinRpcClient {
@@ -53,6 +105,11 @@ impl HttpBitcoinRpcClient {
     }
 
     async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
+        self.call_typed(method, params).await.map_err(|e| e.message)
+    }
+
+    /// Like [`Self::call`], keeping how the call failed (#516).
+    async fn call_typed(&self, method: &str, params: Value) -> Result<Value, RpcError> {
         let payload = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -67,43 +124,65 @@ impl HttpBitcoinRpcClient {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| format!("bitcoin rpc send failed: {e}"))?;
+            .map_err(|e| {
+                let message = format!("bitcoin rpc send failed: {e}");
+                if e.is_connect() {
+                    RpcError::not_connected(message)
+                } else {
+                    RpcError::unknown(message)
+                }
+            })?;
 
         let status = resp.status();
+        // Bitcoin Core answers an RPC error with a JSON body carrying `error`, often under an
+        // HTTP error status; that body is what makes the failure an answer.
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| RpcError::unknown(format!("bitcoin rpc `{method}` unreadable: {e}")))?;
+        let body = serde_json::from_str::<Value>(&body_text).ok();
+
+        if let Some(err) = body
+            .as_ref()
+            .and_then(|b| b.get("error"))
+            .filter(|v| !v.is_null())
+        {
+            let msg = err
+                .get("message")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| err.to_string());
+            let code = err.get("code").and_then(Value::as_i64);
+            let message = if status.is_success() {
+                format!("bitcoin rpc `{method}` error: {msg}")
+            } else {
+                format!("bitcoin rpc `{method}` failed (HTTP {status}): {msg}")
+            };
+            return Err(RpcError::answered(code, message));
+        }
 
         if !status.is_success() {
-            let body_text = resp.text().await.unwrap_or_default();
-            let msg = serde_json::from_str::<Value>(&body_text)
-                .ok()
-                .and_then(|v| {
-                    v.pointer("/error/message")
-                        .and_then(|m| m.as_str())
-                        .map(str::to_string)
-                })
-                .unwrap_or(body_text);
-            return Err(format!(
-                "bitcoin rpc `{method}` failed (HTTP {status}): {msg}"
-            ));
+            let message = format!("bitcoin rpc `{method}` failed (HTTP {status}): {body_text}");
+            return Err(if refused_before_dispatch(status) {
+                RpcError::not_connected(message)
+            } else {
+                RpcError::unknown(message)
+            });
         }
 
-        let body: Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("bitcoin rpc `{method}` invalid json: {e}"))?;
-
-        if let Some(err) = body.get("error").filter(|v| !v.is_null()) {
-            let msg = err
-                .pointer("/message")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&err.to_string())
-                .to_string();
-            return Err(format!("bitcoin rpc `{method}` error: {msg}"));
-        }
-
-        body.get("result")
+        body.ok_or_else(|| RpcError::unknown(format!("bitcoin rpc `{method}` invalid json")))?
+            .get("result")
             .cloned()
-            .ok_or_else(|| format!("bitcoin rpc `{method}` missing result"))
+            .ok_or_else(|| RpcError::unknown(format!("bitcoin rpc `{method}` missing result")))
     }
+}
+
+/// Bitcoin Core's HTTP server answers these statuses without a JSON-RPC body before any RPC runs
+/// — bad credentials (401), a forbidden client (403), an unknown path (404), a non-POST request
+/// (405) — so the call cannot have taken effect (#516). A 5xx without a body is not one of them:
+/// it may come after the RPC ran.
+fn refused_before_dispatch(status: reqwest::StatusCode) -> bool {
+    matches!(status.as_u16(), 401 | 403 | 404 | 405)
 }
 
 /// BTC/kvB (float from RPC) → sat/kvB (integer, never below 1).
@@ -148,12 +227,14 @@ fn parse_min_relay(network_info: &Value, mempool_info: &Value) -> u64 {
 
 #[async_trait]
 impl BitcoinRpcClient for HttpBitcoinRpcClient {
-    async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, String> {
-        let result = self.call("sendrawtransaction", json!([tx_hex])).await?;
+    async fn send_raw_transaction(&self, tx_hex: &str) -> Result<String, RpcError> {
+        let result = self
+            .call_typed("sendrawtransaction", json!([tx_hex]))
+            .await?;
         result
             .as_str()
             .map(str::to_string)
-            .ok_or_else(|| "sendrawtransaction: expected string txid".to_string())
+            .ok_or_else(|| RpcError::unknown("sendrawtransaction: expected string txid"))
     }
 
     async fn get_transaction_confirmations(&self, txid: &str) -> Result<u32, String> {
@@ -201,9 +282,9 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
             .ok_or_else(|| "getblockcount: expected u64".to_string())
     }
 
-    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), String> {
+    async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), RpcError> {
         let result = self
-            .call("submitpackage", serde_json::json!([tx_hexes]))
+            .call_typed("submitpackage", serde_json::json!([tx_hexes]))
             .await?;
         let pkg_msg = result
             .get("package_msg")
@@ -212,7 +293,12 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         if pkg_msg == "success" {
             Ok(())
         } else {
-            Err(format!("submitpackage: unexpected result: {result}"))
+            // The node answered without taking the whole package (#516): part of it may be in
+            // the mempool, so the caller asks again tx by tx.
+            Err(RpcError::answered(
+                None,
+                format!("submitpackage: package not accepted: {result}"),
+            ))
         }
     }
 
@@ -241,24 +327,115 @@ mod tests {
         fn _accepts_trait_object(_: &dyn BitcoinRpcClient) {}
     }
 
-    #[test]
-    fn submit_package_parses_non_success_package_msg_as_error() {
-        let result_value = serde_json::json!({"package_msg": "some-failure"});
-        let pkg_msg = result_value
-            .get("package_msg")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        assert_ne!(pkg_msg, "success");
+    // ─── how a failed call ended (#516) ───────────────────────────────────────
+
+    use super::{RpcError, RpcFailureKind};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// A node stub on a local port that reads one request and answers `response` (raw HTTP),
+    /// or closes the connection without answering when `None`.
+    async fn one_shot_node(response: Option<String>) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 16 * 1024];
+            let _ = socket.read(&mut buf).await;
+            if let Some(response) = response {
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+        format!("http://{addr}")
     }
 
-    #[test]
-    fn submit_package_parses_success_package_msg() {
-        let result_value = serde_json::json!({"package_msg": "success"});
-        let pkg_msg = result_value
-            .get("package_msg")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        assert_eq!(pkg_msg, "success");
+    fn http(status: &str, body: &str) -> Option<String> {
+        Some(format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ))
+    }
+
+    /// A port nothing listens on: the connection is refused.
+    async fn closed_port() -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        format!("http://{addr}")
+    }
+
+    /// #516: only a JSON-RPC error answer is a node's answer. A connection that never opened, or
+    /// an HTTP refusal Core sends before dispatching any RPC (401/403/404/405), proves nothing
+    /// ran. Everything else may have reached the node.
+    #[tokio::test]
+    async fn broadcast_failures_are_classified_by_how_the_call_ended() {
+        let rejection =
+            r#"{"result":null,"error":{"code":-26,"message":"min relay fee not met"},"id":1}"#;
+        type Expected = Result<String, (RpcFailureKind, Option<i64>)>;
+        let cases: Vec<(String, Expected)> = vec![
+            (
+                one_shot_node(http("200 OK", r#"{"result":"ab12","error":null,"id":1}"#)).await,
+                Ok("ab12".to_string()),
+            ),
+            (
+                one_shot_node(http("500 Internal Server Error", rejection)).await,
+                Err((RpcFailureKind::Answered, Some(-26))),
+            ),
+            (
+                one_shot_node(http("401 Unauthorized", "")).await,
+                Err((RpcFailureKind::NotConnected, None)),
+            ),
+            (
+                one_shot_node(http("403 Forbidden", "")).await,
+                Err((RpcFailureKind::NotConnected, None)),
+            ),
+            (
+                one_shot_node(http("404 Not Found", "")).await,
+                Err((RpcFailureKind::NotConnected, None)),
+            ),
+            (
+                one_shot_node(http("405 Method Not Allowed", "")).await,
+                Err((RpcFailureKind::NotConnected, None)),
+            ),
+            (
+                one_shot_node(http("500 Internal Server Error", "")).await,
+                Err((RpcFailureKind::Unknown, None)),
+            ),
+            (
+                one_shot_node(http("503 Service Unavailable", "busy")).await,
+                Err((RpcFailureKind::Unknown, None)),
+            ),
+            (
+                one_shot_node(None).await,
+                Err((RpcFailureKind::Unknown, None)),
+            ),
+            (
+                closed_port().await,
+                Err((RpcFailureKind::NotConnected, None)),
+            ),
+        ];
+        for (url, expected) in cases {
+            let client = super::HttpBitcoinRpcClient::new(&url, "user", "pass");
+            let result = client
+                .send_raw_transaction("00")
+                .await
+                .map_err(|e: RpcError| (e.kind, e.code));
+            assert_eq!(result, expected, "{url}");
+        }
+    }
+
+    /// #516: a `submitpackage` result without `package_msg: success` is the node's answer — part
+    /// of the package may be in the mempool — so it is `Answered`, never a transport failure.
+    #[tokio::test]
+    async fn submit_package_non_success_package_msg_is_an_answer() {
+        let body = r#"{"result":{"package_msg":"transaction failed","tx-results":{}},"error":null,"id":1}"#;
+        let url = one_shot_node(http("200 OK", body)).await;
+
+        let e = super::HttpBitcoinRpcClient::new(&url, "user", "pass")
+            .submit_package(&["00".to_string()])
+            .await
+            .unwrap_err();
+
+        assert_eq!(e.kind, RpcFailureKind::Answered, "{}", e.message);
     }
 
     #[test]

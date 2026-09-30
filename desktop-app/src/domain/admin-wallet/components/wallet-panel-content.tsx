@@ -18,6 +18,8 @@ export type WalletPanelContentProps = {
 	adminId: string | undefined
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
+	/** Coins held by in-flight transactions (#516). */
+	reservedBalanceSats: number
 	isBalanceLoading: boolean
 	receiveAddress: string | null
 	/** External index of the current receive address (verify-on-device path). */
@@ -54,6 +56,7 @@ export function WalletPanelContent({
 	adminId,
 	confirmedBalanceSats,
 	unconfirmedBalanceSats,
+	reservedBalanceSats,
 	isBalanceLoading,
 	receiveAddress,
 	receiveIndex,
@@ -132,6 +135,7 @@ export function WalletPanelContent({
 			<WalletBalance
 				confirmedSats={confirmedBalanceSats}
 				unconfirmedSats={unconfirmedBalanceSats}
+				reservedSats={reservedBalanceSats}
 				isLoading={isBalanceLoading}
 			/>
 

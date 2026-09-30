@@ -1,4 +1,7 @@
 use crate::application::psbt_signer::PsbtSigner;
+use crate::application::tx_broadcaster::{
+    broadcast_single_with_fallback, AllSourcesFailed, TxBroadcaster, TxOutcome,
+};
 use crate::infrastructure::admin_wallet::AdminWalletError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
 use crate::infrastructure::node_config_store::NodeConfig;
@@ -30,16 +33,6 @@ const ELECTRUM_STOP_GAP: usize = 25;
 /// Max script pubkeys per Electrum batch request.
 const ELECTRUM_BATCH_SIZE: usize = 10;
 
-/// How long an in-flight UTXO reservation outlives its last touch (build or broadcast attempt)
-/// when no sync has seen the transaction. Reservations only exist because the wallet does not
-/// learn about its own transactions until a sync: once a sync sees the tx, BDK itself treats the
-/// inputs as spent and the reservation is dropped. The grace covers the opposite case — a
-/// broadcast that never reached the network, or a partial one where the commit was accepted and
-/// the reveal rejected — without locking those coins for the whole session. Ten minutes is well
-/// above the 180 s device-signing timeout plus a broadcast and a couple of 30 s background
-/// syncs, and short enough that an operator retrying after a failed send is not stuck for long.
-const RESERVATION_GRACE: Duration = Duration::from_secs(600);
-
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +53,9 @@ pub struct BalanceDto {
     pub confirmed_sats: u64,
     pub unconfirmed_sats: u64,
     pub total_sats: u64,
+    /// Coins spent by this session's in-flight transactions (#516) — left out of the three
+    /// figures above, because no build may select them.
+    pub reserved_sats: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,14 +141,6 @@ pub struct SyncState {
 
 // ── WalletService ─────────────────────────────────────────────────────────────
 
-/// A wallet UTXO spent by a transaction this session built but no sync has seen yet (#516).
-#[derive(Debug, Clone, Copy)]
-struct Reservation {
-    txid: bdk_wallet::bitcoin::Txid,
-    /// Build time, reset when the broadcast is attempted; the grace runs from here.
-    since: Instant,
-}
-
 pub struct WalletService {
     pub wallet: Arc<Mutex<bdk_wallet::Wallet>>,
     pub sync_state: Arc<RwLock<SyncState>>,
@@ -172,8 +160,10 @@ pub struct WalletService {
     /// In-flight UTXO reservations (#516). Coin selection skips these outpoints, because a
     /// signed-but-unsynced transaction is invisible to BDK and its inputs still look unspent.
     /// Held only for short, non-async critical sections.
-    reserved:
-        std::sync::Mutex<std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, Reservation>>,
+    /// Each reserved outpoint maps to the txid of the transaction spending it.
+    reserved: std::sync::Mutex<
+        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, bdk_wallet::bitcoin::Txid>,
+    >,
 }
 
 /// Keychain selection for address listing.
@@ -555,52 +545,39 @@ impl WalletService {
         &self,
     ) -> std::sync::MutexGuard<
         '_,
-        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, Reservation>,
+        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, bdk_wallet::bitcoin::Txid>,
     > {
         // Every critical section is a plain map update, so a poisoned lock holds valid data.
         self.reserved.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Outpoints coin selection must skip: inputs of transactions built this session that no
-    /// sync has seen yet. Expired reservations (see [`RESERVATION_GRACE`]) are dropped here.
+    /// Outpoints coin selection must skip: inputs of transactions built this session that are
+    /// not in the wallet graph. There is no time expiry (#516): a reservation ends when its tx
+    /// is recorded or seen by a sync, when a broadcaster's answer proves it never landed, or
+    /// with the session.
     pub(crate) fn reserved_outpoints(&self) -> Vec<bdk_wallet::bitcoin::OutPoint> {
-        let mut reserved = self.reservations();
-        reserved.retain(|_, r| r.since.elapsed() < RESERVATION_GRACE);
-        reserved.keys().copied().collect()
+        self.reservations().keys().copied().collect()
     }
 
     /// Reserves the inputs of a freshly built PSBT. Call it while still holding the wallet
     /// lock the PSBT was built under, so no other build can select the same coins.
     pub(crate) fn reserve_inputs(&self, unsigned_tx: &bdk_wallet::bitcoin::Transaction) {
-        let reservation = Reservation {
-            txid: unsigned_tx.compute_txid(),
-            since: Instant::now(),
-        };
+        let txid = unsigned_tx.compute_txid();
         let mut reserved = self.reservations();
         for input in &unsigned_tx.input {
-            reserved.insert(input.previous_output, reservation);
+            reserved.insert(input.previous_output, txid);
         }
     }
 
-    /// The transaction is about to be broadcast: from here on only a sync that sees it, or the
-    /// grace period, releases its inputs — a failed broadcast may still have reached the network.
-    pub(crate) fn mark_broadcast_attempted(&self, txid: bdk_wallet::bitcoin::Txid) {
-        let now = Instant::now();
-        self.reservations()
-            .values_mut()
-            .filter(|r| r.txid == txid)
-            .for_each(|r| r.since = now);
-    }
-
-    /// Returns the inputs of a transaction that was never broadcast to the spendable pool.
+    /// Returns the inputs of a transaction that is not, and will not be, on the network to the
+    /// spendable pool.
     pub(crate) fn release_reservation(&self, txid: bdk_wallet::bitcoin::Txid) {
-        self.reservations().retain(|_, r| r.txid != txid);
+        self.reservations().retain(|_, r| *r != txid);
     }
 
     /// A broadcaster accepted `tx`: insert it into the wallet graph as unconfirmed, so BDK itself
     /// treats its inputs as spent (and its change as ours) even if no sync ever sees it — e.g.
-    /// the node fallback broadcast it while Electrum is down. Its reservation is then dropped;
-    /// the grace only ever applies to broadcasts that failed or were partial.
+    /// the node fallback broadcast it while Electrum is down. Its reservation is then dropped.
     pub(crate) async fn record_broadcast(&self, tx: &bdk_wallet::bitcoin::Transaction) {
         let seen_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -615,7 +592,35 @@ impl WalletService {
     /// those inputs as spent from here on.
     fn drop_reservations_seen_by(&self, wallet: &bdk_wallet::Wallet) {
         self.reservations()
-            .retain(|_, r| wallet.get_tx(r.txid).is_none());
+            .retain(|_, txid| wallet.get_tx(*txid).is_none());
+    }
+
+    /// Broadcasts one reserved tx (Electrum first, node fallback) and settles its reservation
+    /// from the broadcasters' own answer (#516): accepted → recorded; rejected, or never
+    /// delivered anywhere → released at once; ambiguous → kept until a sync sees the tx or the
+    /// session ends. `Err` carries the combined outcome and every source's error.
+    pub(crate) async fn broadcast_reserved_tx(
+        &self,
+        broadcasters: &[Arc<dyn TxBroadcaster>],
+        tx: &bdk_wallet::bitcoin::Transaction,
+    ) -> Result<(), AllSourcesFailed> {
+        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(tx);
+        match broadcast_single_with_fallback(broadcasters, &tx_hex).await {
+            Ok(()) => {
+                self.record_broadcast(tx).await;
+                Ok(())
+            }
+            Err(failure) => {
+                match failure.outcome {
+                    TxOutcome::Rejected | TxOutcome::NotDelivered => {
+                        self.release_reservation(tx.compute_txid())
+                    }
+                    // A single tx is never `Accepted` on failure; `Ambiguous` may be live.
+                    TxOutcome::Accepted | TxOutcome::Ambiguous => {}
+                }
+                Err(failure)
+            }
+        }
     }
 
     pub(crate) async fn build_and_sign_tx(
@@ -759,13 +764,32 @@ impl WalletService {
     pub async fn get_balance(&self) -> Result<BalanceDto, AdminWalletError> {
         let wallet = self.wallet.lock().await;
         let balance = wallet.balance();
-        let confirmed_sats = balance.confirmed.to_sat();
-        let unconfirmed_sats =
+        let mut confirmed_sats = balance.confirmed.to_sat();
+        let mut unconfirmed_sats =
             balance.trusted_pending.to_sat() + balance.untrusted_pending.to_sat();
+        // #516: in-flight coins are not spendable; they are reported on their own.
+        let mut reserved_sats = 0;
+        for utxo in self
+            .reserved_outpoints()
+            .into_iter()
+            .filter_map(|outpoint| wallet.get_utxo(outpoint))
+        {
+            let value = utxo.txout.value.to_sat();
+            reserved_sats += value;
+            match utxo.chain_position {
+                bdk_wallet::chain::ChainPosition::Confirmed { .. } => {
+                    confirmed_sats = confirmed_sats.saturating_sub(value)
+                }
+                bdk_wallet::chain::ChainPosition::Unconfirmed { .. } => {
+                    unconfirmed_sats = unconfirmed_sats.saturating_sub(value)
+                }
+            }
+        }
         Ok(BalanceDto {
             confirmed_sats,
             unconfirmed_sats,
             total_sats: confirmed_sats + unconfirmed_sats,
+            reserved_sats,
         })
     }
 
@@ -773,8 +797,10 @@ impl WalletService {
     pub async fn list_utxos(&self) -> Result<Vec<UtxoDto>, AdminWalletError> {
         let wallet = self.wallet.lock().await;
         let tip_height = self.sync_state.read().await.tip_height;
+        let reserved = self.reserved_outpoints();
         let utxos = wallet
             .list_unspent()
+            .filter(|output| !reserved.contains(&output.outpoint))
             .map(|output| {
                 let confirmations = match output.chain_position {
                     bdk_wallet::chain::ChainPosition::Confirmed { anchor, .. } => tip_height
@@ -931,6 +957,7 @@ mod tests {
             confirmed_sats: 100,
             unconfirmed_sats: 50,
             total_sats: 150,
+            reserved_sats: 0,
         };
         assert_eq!(balance.confirmed_sats, 100);
         assert_eq!(balance.unconfirmed_sats, 50);
@@ -1675,6 +1702,28 @@ mod tests {
             assert_eq!(inputs(&seen[0]), inputs(&seen[1]));
         }
 
+        /// Sends 30_000 sats to a foreign address through `broadcaster`.
+        async fn send_through(
+            svc: &WalletService,
+            broadcaster: crate::application::tx_broadcaster::tests::MockBroadcaster,
+        ) -> Result<
+            crate::application::wallet_send::SendResultDto,
+            crate::application::wallet_send::SendError,
+        > {
+            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![Arc::new(broadcaster)];
+            svc.send_to_address(
+                &crate::application::wallet_send::SendInput {
+                    address: commit_address().to_string(),
+                    amount_sats: 30_000,
+                    fee_rate_sat_per_kvb: 2_000,
+                    drain_wallet: false,
+                },
+                crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
+                &chain,
+            )
+            .await
+        }
+
         /// `do_sync` runs this right after `apply_update`; Electrum is out of reach here, so the
         /// test plants the synced tx in the graph the way `apply_update` would.
         #[tokio::test]
@@ -1682,7 +1731,6 @@ mod tests {
             let svc = mnemonic_service(&[100_000]);
             let commit = build_commit(&svc).await.expect("commit builds");
             let txid = commit.compute_txid();
-            svc.mark_broadcast_attempted(txid);
 
             let mut wallet = svc.wallet.lock().await;
             bdk_wallet::test_utils::insert_tx(&mut wallet, commit);
@@ -1696,62 +1744,20 @@ mod tests {
             );
         }
 
-        #[tokio::test]
-        async fn broadcast_attempt_no_sync_ever_saw_frees_the_coins_after_the_grace() {
-            let svc = mnemonic_service(&[100_000]);
-            let commit = build_commit(&svc).await.expect("commit builds");
-            svc.mark_broadcast_attempted(commit.compute_txid());
-            assert!(build_commit(&svc).await.is_err(), "still inside the grace");
-
-            let expired = Instant::now()
-                .checked_sub(RESERVATION_GRACE + Duration::from_secs(1))
-                .expect("monotonic clock is past the grace");
-            svc.reserved
-                .lock()
-                .unwrap()
-                .values_mut()
-                .for_each(|r| r.since = expired);
-
-            build_commit(&svc)
-                .await
-                .expect("after the grace the coin is selectable again");
-        }
-
         /// A broadcast that succeeded (e.g. through the node fallback while Electrum is down) may
-        /// never be seen by a sync. Once the grace is over its coins must still count as spent.
+        /// never be seen by a sync; its coins must still count as spent.
         #[tokio::test]
-        async fn successfully_broadcast_coins_stay_spent_after_the_grace_without_a_sync() {
+        async fn successfully_broadcast_coins_stay_spent_without_a_sync() {
             use crate::application::tx_broadcaster::tests::MockBroadcaster;
-            use crate::application::tx_broadcaster::TxBroadcaster;
-            use crate::application::wallet_send::SendInput;
 
             let svc = mnemonic_service(&[100_000]);
             let original_coin: HashSet<OutPoint> = {
                 let wallet = svc.wallet.lock().await;
                 wallet.list_unspent().map(|u| u.outpoint).collect()
             };
-            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![Arc::new(MockBroadcaster::ok("node"))];
-            svc.send_to_address(
-                &SendInput {
-                    address: commit_address().to_string(),
-                    amount_sats: 30_000,
-                    fee_rate_sat_per_kvb: 2_000,
-                    drain_wallet: false,
-                },
-                crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
-                &chain,
-            )
-            .await
-            .expect("send broadcast");
-
-            let expired = Instant::now()
-                .checked_sub(RESERVATION_GRACE + Duration::from_secs(1))
-                .expect("monotonic clock is past the grace");
-            svc.reserved
-                .lock()
-                .unwrap()
-                .values_mut()
-                .for_each(|r| r.since = expired);
+            send_through(&svc, MockBroadcaster::ok("node"))
+                .await
+                .expect("send broadcast");
 
             // Only the send's own change is left to fund a commit (chaining on unconfirmed
             // change is allowed); the coin the send spent is not.
@@ -1762,6 +1768,73 @@ mod tests {
                 inputs(&commit).is_disjoint(&original_coin),
                 "the broadcast send's coin must never be selected again"
             );
+        }
+
+        /// #516: a send settles its coin from the broadcasters' own answer. A rejection, or no
+        /// source ever reached, gives the coin back at once — to the balance and the next build.
+        /// A source that may hold the send keeps it reserved, with an error of its own.
+        #[tokio::test]
+        async fn failed_send_settles_its_coin_from_the_broadcast_outcome() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::wallet_send::SendError;
+
+            let cases = [
+                (MockBroadcaster::failing("node", "insufficient fee"), true),
+                (MockBroadcaster::unreachable("node"), true),
+                (MockBroadcaster::ambiguous("node"), false),
+            ];
+            for (broadcaster, released) in cases {
+                let svc = mnemonic_service(&[100_000]);
+
+                let result = send_through(&svc, broadcaster).await;
+
+                let balance = svc.get_balance().await.expect("balance");
+                if released {
+                    assert!(
+                        matches!(result, Err(SendError::BroadcastFailed { .. })),
+                        "{result:?}"
+                    );
+                    assert_eq!(
+                        (balance.confirmed_sats, balance.reserved_sats),
+                        (100_000, 0)
+                    );
+                    build_commit(&svc)
+                        .await
+                        .expect("the coin funds the next build");
+                } else {
+                    assert!(
+                        matches!(result, Err(SendError::BroadcastUncertain { .. })),
+                        "{result:?}"
+                    );
+                    assert_eq!(
+                        (balance.confirmed_sats, balance.reserved_sats),
+                        (0, 100_000)
+                    );
+                    assert!(
+                        build_commit(&svc).await.is_err(),
+                        "a send that may be live keeps its coin"
+                    );
+                }
+            }
+        }
+
+        /// Balance and UTXO list leave reserved coins out, and say how much is in flight.
+        #[tokio::test]
+        async fn balance_and_utxos_leave_out_reserved_coins() {
+            let svc = mnemonic_service(&[100_000]);
+            build_commit(&svc).await.expect("commit builds");
+
+            let balance = svc.get_balance().await.expect("balance");
+            assert_eq!(
+                (
+                    balance.confirmed_sats,
+                    balance.unconfirmed_sats,
+                    balance.total_sats,
+                    balance.reserved_sats
+                ),
+                (0, 0, 0, 100_000)
+            );
+            assert!(svc.list_utxos().await.expect("utxos").is_empty());
         }
 
         #[tokio::test]

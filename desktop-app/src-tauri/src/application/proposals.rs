@@ -20,7 +20,7 @@ use crate::application::orchestrator_client::{
     OrchestratorError, ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
 use crate::application::pending_reveals::PendingReveals;
-use crate::application::tx_broadcaster::TxBroadcaster;
+use crate::application::tx_broadcaster::{broadcast_pair_with_fallback, TxBroadcaster, TxOutcome};
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -50,14 +50,42 @@ pub enum BroadcastError {
     Timeout { txid: String },
     #[error("no pending reveal found for action_id: {action_id}")]
     NoPendingReveal { action_id: String },
-    /// All broadcasters (Electrum + node) failed. Carries the raw tx hexes for manual
-    /// copy-and-broadcast as an escape hatch (spec §8.3 M3).
+    /// No broadcaster (Electrum + node) could even be reached: nothing was sent. Carries the
+    /// raw tx hexes for manual copy-and-broadcast as an escape hatch (spec §8.3 M3); the
+    /// commit's coins stay reserved for exactly that bundle (#516).
     #[error("all broadcasters failed: {errors:?}")]
     AllBroadcastersFailed {
         commit_tx_hex: String,
         reveal_tx_hex: String,
         errors: Vec<(String, String)>,
     },
+    /// Every source that answered refused the commit and none may hold it (#516): its coins
+    /// are free again and `failed` is reported, so the send can be retried from scratch.
+    #[error("the commit was rejected: {errors:?}")]
+    BroadcastRejected { errors: Vec<(String, String)> },
+    /// No broadcaster confirmed or refused the commit, and one may hold it (#516). Its coins
+    /// stay reserved, the signed reveal is kept, and `failed` is not reported: the bundle may be
+    /// live, so a fresh send could fund a second commit.
+    #[error("the commit {commit_txid} may have been broadcast: {errors:?}")]
+    BroadcastUncertain {
+        commit_txid: String,
+        errors: Vec<(String, String)>,
+    },
+    /// The commit is on the network but its reveal was not accepted (#516). The commit is
+    /// recorded in the wallet, the signed reveal kept for a resubmit, and `failed` is not
+    /// reported (the commit is live).
+    #[error(
+        "the commit {commit_txid} is on the network but its reveal {reveal_txid} was not accepted: {errors:?}"
+    )]
+    RevealNotBroadcast {
+        commit_txid: String,
+        reveal_txid: String,
+        errors: Vec<(String, String)>,
+    },
+    /// A bundle for the same manual proposal is still stored, so its commit may be live (#516):
+    /// a second send would fund a second commit. Nothing was built.
+    #[error("a bundle for this proposal may already be on the network (commit {commit_txid})")]
+    BundleInFlight { commit_txid: String },
 }
 
 use crate::domain::fee_constants::{COMMIT_DUST_SATS, REVEAL_TX_VBYTES};
@@ -181,28 +209,78 @@ async fn report_on_network(
     }
 }
 
-/// Try each broadcaster in order; the first success wins (spec §8: Electrum first,
-/// node fallback). When every broadcaster fails, returns [`BroadcastError::AllBroadcastersFailed`]
-/// carrying both raw tx hexes so the UI can offer manual copy-and-broadcast.
-async fn broadcast_via(
+/// A bundle broadcast that did not fully land: the error to return, and whether the proposal
+/// may be reported `failed` — only when the commit is proven not to be live (#516).
+struct BundleFailure {
+    error: BroadcastError,
+    report_failed: bool,
+}
+
+/// Broadcasts the bundle (spec §8: Electrum first, node fallback; the first source that lands
+/// both wins) and settles the commit from the broadcasters' own answer (#516):
+///
+/// | commit outcome | coins | pending reveal | error | `failed` |
+/// |---|---|---|---|---|
+/// | accepted, reveal too | recorded (both) | kept | — | — |
+/// | accepted, reveal not | commit recorded | kept | `RevealNotBroadcast` | no |
+/// | rejected | released | removed | `BroadcastRejected` | yes |
+/// | not delivered anywhere | reserved | kept | `AllBroadcastersFailed` (hexes) | no |
+/// | ambiguous | reserved | kept | `BroadcastUncertain` | no |
+async fn broadcast_bundle(
     broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
-    commit_hex: &str,
-    reveal_hex: &str,
-) -> Result<(), BroadcastError> {
-    let mut errors: Vec<(String, String)> = Vec::new();
-    for b in broadcasters {
-        match b.broadcast_pair(commit_hex, reveal_hex).await {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                tracing::warn!(broadcaster = b.name(), error = %e, "broadcaster failed");
-                errors.push((b.name().to_string(), e.message));
-            }
+    commit_funding: &dyn CommitFunding,
+    pending: &PendingReveals,
+    pending_key: &str,
+    commit_tx: &bitcoin::Transaction,
+    reveal_tx: &bitcoin::Transaction,
+) -> Result<(), BundleFailure> {
+    let commit_hex = broadcast_tx::tx_to_hex(commit_tx);
+    let reveal_hex = broadcast_tx::tx_to_hex(reveal_tx);
+    let Err(failure) = broadcast_pair_with_fallback(broadcasters, &commit_hex, &reveal_hex).await
+    else {
+        // On the network: the wallet keeps both txs even if no sync sees them (#516). The
+        // reveal's change is what a CPFP bump spends.
+        commit_funding.record_broadcast(commit_tx).await;
+        commit_funding.record_broadcast(reveal_tx).await;
+        return Ok(());
+    };
+
+    let commit_txid = commit_tx.compute_txid();
+    let errors = failure.by_source();
+    let (error, report_failed) = match failure.outcome {
+        TxOutcome::Accepted => {
+            commit_funding.record_broadcast(commit_tx).await;
+            let error = BroadcastError::RevealNotBroadcast {
+                commit_txid: commit_txid.to_string(),
+                reveal_txid: reveal_tx.compute_txid().to_string(),
+                errors,
+            };
+            (error, false)
         }
-    }
-    Err(BroadcastError::AllBroadcastersFailed {
-        commit_tx_hex: commit_hex.to_string(),
-        reveal_tx_hex: reveal_hex.to_string(),
-        errors,
+        TxOutcome::Rejected => {
+            commit_funding.release(commit_txid);
+            crate::infrastructure::pending_reveals_store::remove_and_persist(pending, pending_key);
+            (BroadcastError::BroadcastRejected { errors }, true)
+        }
+        TxOutcome::NotDelivered => {
+            let error = BroadcastError::AllBroadcastersFailed {
+                commit_tx_hex: commit_hex,
+                reveal_tx_hex: reveal_hex,
+                errors,
+            };
+            (error, false)
+        }
+        TxOutcome::Ambiguous => {
+            let error = BroadcastError::BroadcastUncertain {
+                commit_txid: commit_txid.to_string(),
+                errors,
+            };
+            (error, false)
+        }
+    };
+    Err(BundleFailure {
+        error,
+        report_failed,
     })
 }
 
@@ -229,8 +307,10 @@ pub enum ConfirmOutcome {
 /// broadcasters (Electrum first, node fallback) → report commit_broadcasted → report
 /// reveal_broadcasted → return txids.
 ///
-/// On any error up to and including the broadcast itself (a genuine submission error), the
-/// proposal is reported as `failed`. Once the bundle is on the network the call succeeds (#516):
+/// On any error before the broadcast, and on a commit every answering source rejected, the
+/// proposal is reported as `failed`; a commit that may be live — accepted, ambiguous, or never
+/// delivered and handed over for a manual broadcast — is not (#516, see `broadcast_bundle`).
+/// Once the bundle is on the network the call succeeds (#516):
 /// a failing progress report is retried, logged, and never reported as `failed` — that would
 /// reopen the claim while the bundle is live — and the txids are still returned, so the caller
 /// starts the confirmation watcher, whose `reveal_confirmed` report heals the orchestrator row. The broadcast NEVER advances the chain:
@@ -297,8 +377,9 @@ pub async fn submit_commit_then_reveal(
     let commit_amount_sats = COMMIT_DUST_SATS + reveal_fee_sats;
 
     // What the error path must undo (#516): a signed commit that never reached the broadcast
-    // gives its reserved inputs back.
+    // gives its reserved inputs back; a commit that may be live is never reported `failed`.
     let mut unbroadcast_commit: Option<bitcoin::Txid> = None;
+    let mut report_failed = true;
 
     let broadcast_result: Result<(String, String), BroadcastError> = async {
         // Step 1: Pre-sign commit tx.
@@ -340,7 +421,6 @@ pub async fn submit_commit_then_reveal(
         // Step 4: Serialize both transactions.
         let commit_txid = commit_tx.compute_txid().to_string();
         let reveal_txid = reveal_tx.compute_txid().to_string();
-        let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
         // Step 5: Insert into PendingReveals BEFORE any broadcast.
@@ -354,16 +434,22 @@ pub async fn submit_commit_then_reveal(
             },
         );
 
-        // Step 6: Broadcast — Electrum first, node fallback. From the attempt on, the commit's
-        // inputs stay reserved even if it fails: a partial broadcast can leave the commit live.
-        if let Some(txid) = unbroadcast_commit.take() {
-            commit_funding.mark_broadcast_attempted(txid);
+        // Step 6: Broadcast — Electrum first, node fallback. From here the broadcasters' answer
+        // settles the commit's reservation and whether `failed` may be reported (#516).
+        unbroadcast_commit = None;
+        if let Err(failure) = broadcast_bundle(
+            broadcasters,
+            commit_funding,
+            pending,
+            action_id,
+            &commit_tx,
+            &reveal_tx,
+        )
+        .await
+        {
+            report_failed = failure.report_failed;
+            return Err(failure.error);
         }
-        broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
-        // On the network: the wallet keeps both txs even if no sync sees them (#516). The
-        // reveal's change is what a CPFP bump spends.
-        commit_funding.record_broadcast(&commit_tx).await;
-        commit_funding.record_broadcast(&reveal_tx).await;
 
         // Step 7: Report commit_broadcasted then reveal_broadcasted (no commit_confirmed).
         // From here nothing fails the call: `failed` would reopen the claim while the bundle
@@ -387,16 +473,20 @@ pub async fn submit_commit_then_reveal(
         if let Some(txid) = unbroadcast_commit {
             commit_funding.release(txid);
         }
-        let _ = report_broadcast(
-            client,
-            action_id,
-            "failed",
-            None,
-            None,
-            None,
-            Some(&e.to_string()),
-        )
-        .await;
+        if report_failed {
+            let _ = report_broadcast(
+                client,
+                action_id,
+                "failed",
+                None,
+                None,
+                None,
+                Some(&e.to_string()),
+            )
+            .await;
+        } else {
+            tracing::error!(action_id, error = %e, "broadcast failed but the commit may be live; not reporting failed");
+        }
     }
 
     broadcast_result
@@ -645,6 +735,16 @@ pub async fn broadcast_manual(
     let sighash_hex = hex::encode(sighash);
     let pending_key = format!("manual-{}", &sighash_hex[..sighash_hex.len().min(16)]);
 
+    // A stored bundle for this proposal may be live (#516): never replace it with a second one.
+    let in_flight = pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&pending_key)
+        .map(|stored| stored.commit_txid.clone());
+    if let Some(commit_txid) = in_flight {
+        return Err(BroadcastError::BundleInFlight { commit_txid });
+    }
+
     // A signed commit that never reaches the broadcast gives its reserved inputs back (#516).
     let mut unbroadcast_commit: Option<bitcoin::Txid> = None;
 
@@ -684,7 +784,6 @@ pub async fn broadcast_manual(
 
         let commit_txid = commit_tx.compute_txid().to_string();
         let reveal_txid = reveal_tx.compute_txid().to_string();
-        let commit_hex = broadcast_tx::tx_to_hex(&commit_tx);
         let reveal_hex = broadcast_tx::tx_to_hex(&reveal_tx);
 
         crate::infrastructure::pending_reveals_store::insert_and_persist(
@@ -697,12 +796,17 @@ pub async fn broadcast_manual(
             },
         );
 
-        if let Some(txid) = unbroadcast_commit.take() {
-            commit_funding.mark_broadcast_attempted(txid);
-        }
-        broadcast_via(broadcasters, &commit_hex, &reveal_hex).await?;
-        commit_funding.record_broadcast(&commit_tx).await;
-        commit_funding.record_broadcast(&reveal_tx).await;
+        unbroadcast_commit = None;
+        broadcast_bundle(
+            broadcasters,
+            commit_funding,
+            pending,
+            &pending_key,
+            &commit_tx,
+            &reveal_tx,
+        )
+        .await
+        .map_err(|failure| failure.error)?;
 
         wait_for_confirmation(
             btc_rpc,
@@ -902,7 +1006,7 @@ pub async fn resubmit_reveal(
     let txid = btc_rpc
         .send_raw_transaction(&reveal_tx_hex)
         .await
-        .map_err(BroadcastError::BitcoinRpc)?;
+        .map_err(|e| BroadcastError::BitcoinRpc(e.message))?;
     Ok(txid)
 }
 
@@ -1656,7 +1760,6 @@ mod tests {
         captured_commit_address: Mutex<Option<String>>,
         /// Txid of the commit handed back, so tests can match the reservation calls.
         built_txid: Mutex<Option<bitcoin::Txid>>,
-        marked_broadcast_attempted: Mutex<Vec<bitcoin::Txid>>,
         released: Mutex<Vec<bitcoin::Txid>>,
         recorded: Mutex<Vec<bitcoin::Txid>>,
         /// The signer refuses (e.g. rejected on device): no commit is produced.
@@ -1686,10 +1789,6 @@ mod tests {
 
         fn built_txid(&self) -> bitcoin::Txid {
             self.built_txid.lock().unwrap().expect("a commit was built")
-        }
-
-        fn marked(&self) -> Vec<bitcoin::Txid> {
-            self.marked_broadcast_attempted.lock().unwrap().clone()
         }
 
         fn released(&self) -> Vec<bitcoin::Txid> {
@@ -1754,13 +1853,6 @@ mod tests {
             Ok(tx)
         }
 
-        fn mark_broadcast_attempted(&self, commit_txid: bitcoin::Txid) {
-            self.marked_broadcast_attempted
-                .lock()
-                .unwrap()
-                .push(commit_txid);
-        }
-
         fn release(&self, commit_txid: bitcoin::Txid) {
             self.released.lock().unwrap().push(commit_txid);
         }
@@ -1772,7 +1864,7 @@ mod tests {
 
     /// MockBitcoinRpcClient: configurable submit_package result and call counters.
     struct MockBtcRpc {
-        submit_package_result: Result<(), String>,
+        submit_package_result: Result<(), crate::infrastructure::bitcoin_rpc::RpcError>,
         send_raw_transaction_call_count: Mutex<u32>,
         get_raw_transaction_call_count: Mutex<u32>,
         /// Confirmations returned by `get_transaction_confirmations` (default 1).
@@ -1801,7 +1893,9 @@ mod tests {
 
         fn with_submit_package_error(err: &str) -> Self {
             Self {
-                submit_package_result: Err(err.to_string()),
+                submit_package_result: Err(crate::infrastructure::bitcoin_rpc::RpcError::answered(
+                    None, err,
+                )),
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
                 confirmations: 1,
@@ -1819,7 +1913,10 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::infrastructure::bitcoin_rpc::BitcoinRpcClient for MockBtcRpc {
-        async fn send_raw_transaction(&self, _: &str) -> Result<String, String> {
+        async fn send_raw_transaction(
+            &self,
+            _: &str,
+        ) -> Result<String, crate::infrastructure::bitcoin_rpc::RpcError> {
             *self.send_raw_transaction_call_count.lock().unwrap() += 1;
             Ok("reveal-txid-mock".to_string())
         }
@@ -1842,7 +1939,10 @@ mod tests {
             })
         }
 
-        async fn submit_package(&self, _: &[String]) -> Result<(), String> {
+        async fn submit_package(
+            &self,
+            _: &[String],
+        ) -> Result<(), crate::infrastructure::bitcoin_rpc::RpcError> {
             self.submit_package_result.clone()
         }
 
@@ -2363,31 +2463,133 @@ mod tests {
         );
     }
 
-    /// A genuine submission error (all broadcasters fail) reports `failed`.
-    #[tokio::test]
-    async fn submit_reports_failed_on_real_submission_error() {
-        use bitcoin::{Network, ScriptBuf};
-        use strata_l1_txfmt::MagicBytes;
+    /// Submits through a single `broadcaster`, with `pending` as the reveal store.
+    async fn submit_through(
+        client: &MockOrchestratorClientLargeAction,
+        spy: &SpyCommitFunding,
+        pending: &PendingReveals,
+        broadcaster: MockBroadcaster,
+    ) -> Result<(String, String), BroadcastError> {
+        let chain: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
+            vec![std::sync::Arc::new(broadcaster)];
+        submit_commit_then_reveal(
+            client,
+            &chain,
+            "mock://asm-membership",
+            strata_l1_txfmt::MagicBytes::new([0x62, 0x74, 0x00, 0x00]),
+            bitcoin::Network::Regtest,
+            "action-outcome",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
+            spy,
+            ScriptBuf::new(),
+            pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
+        )
+        .await
+    }
 
+    /// What a failed bundle broadcast leaves behind, per commit outcome (#516).
+    #[derive(Debug, PartialEq)]
+    struct Aftermath {
+        reported_failed: bool,
+        released: bool,
+        recorded_commit: bool,
+        pending_kept: bool,
+    }
+
+    /// #516: the commit's outcome drives the proposal. Only an explicit rejection releases the
+    /// coins, drops the signed reveal and reports `failed`; a commit that may be live keeps
+    /// all three, and each case returns an error the UI can tell apart.
+    #[tokio::test]
+    async fn failed_bundle_is_settled_by_the_commit_outcome() {
+        use crate::application::tx_broadcaster::FailureKind;
+
+        let kept = |recorded_commit| Aftermath {
+            reported_failed: false,
+            released: false,
+            recorded_commit,
+            pending_kept: true,
+        };
+        type ErrorCheck = fn(&BroadcastError) -> bool;
+        let cases: Vec<(MockBroadcaster, ErrorCheck, Aftermath)> = vec![
+            (
+                MockBroadcaster::failing("node", "bad-txns-inputs-missingorspent"),
+                |e| matches!(e, BroadcastError::BroadcastRejected { .. }),
+                Aftermath {
+                    reported_failed: true,
+                    released: true,
+                    recorded_commit: false,
+                    pending_kept: false,
+                },
+            ),
+            (
+                MockBroadcaster::unreachable("node"),
+                |e| {
+                    matches!(e, BroadcastError::AllBroadcastersFailed { commit_tx_hex, reveal_tx_hex, .. }
+                        if !commit_tx_hex.is_empty() && !reveal_tx_hex.is_empty())
+                },
+                kept(false),
+            ),
+            (
+                MockBroadcaster::ambiguous("node"),
+                |e| matches!(e, BroadcastError::BroadcastUncertain { .. }),
+                kept(false),
+            ),
+            (
+                MockBroadcaster::landing_commit_then(
+                    "node",
+                    FailureKind::Rejected,
+                    "reveal rejected",
+                ),
+                |e| matches!(e, BroadcastError::RevealNotBroadcast { .. }),
+                kept(true),
+            ),
+        ];
+        for (broadcaster, expected_error, expected) in cases {
+            let spy = SpyCommitFunding::new("ignored");
+            let client = MockOrchestratorClientLargeAction::new();
+            let pending = crate::application::pending_reveals::new();
+
+            let error = submit_through(&client, &spy, &pending, broadcaster)
+                .await
+                .unwrap_err();
+
+            assert!(expected_error(&error), "got: {error:?}");
+            let aftermath = Aftermath {
+                reported_failed: client.reported_statuses().iter().any(|s| s == "failed"),
+                released: spy.released() == vec![spy.built_txid()],
+                recorded_commit: spy.recorded() == vec![spy.built_txid()],
+                pending_kept: pending.lock().unwrap().contains_key("action-outcome"),
+            };
+            assert_eq!(aftermath, expected, "{error:?}");
+        }
+    }
+
+    /// #516: the manual path has no orchestrator but the same rule — a rejected commit frees
+    /// its coins and drops its `manual-<sighash>` reveal, so nothing offers to send it again.
+    #[tokio::test]
+    async fn manual_rejected_commit_releases_its_coins_and_drops_the_reveal() {
         let spy = SpyCommitFunding::new("ignored");
-        let mock_client = MockOrchestratorClientLargeAction::new();
-        let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
-        // Failing broadcaster simulates all broadcasters down
-        let failing: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
+        let chain: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
             vec![std::sync::Arc::new(MockBroadcaster::failing(
-                "mock",
-                "node rejected",
+                "node",
+                "bad-txns-inputs-missingorspent",
             ))];
 
-        let result = submit_commit_then_reveal(
-            &mock_client,
-            &failing,
+        let result = broadcast_manual(
+            &chain,
+            &MockBtcRpc::new("ignored"),
             "mock://asm-membership",
-            magic_bytes,
-            Network::Regtest,
-            "action-submit-error",
+            strata_l1_txfmt::MagicBytes::new([0x62, 0x74, 0x00, 0x00]),
+            bitcoin::Network::Regtest,
+            &large_demo_action_hex(),
+            1,
+            "strata_admin",
+            &[],
             crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
+            10,
+            5_000,
             &spy,
             ScriptBuf::new(),
             &pending,
@@ -2395,23 +2597,67 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(
-            result,
-            Err(BroadcastError::AllBroadcastersFailed { .. })
-        ));
         assert!(
-            mock_client
-                .reported_statuses()
-                .iter()
-                .any(|s| s == "failed"),
-            "real submission error must report failed"
+            matches!(result, Err(BroadcastError::BroadcastRejected { .. })),
+            "got: {result:?}"
         );
-        // #516: a failed broadcast may still have reached the network, so the commit's inputs
-        // stay reserved (grace / sync) instead of being released.
-        assert_eq!(spy.marked(), vec![spy.built_txid()]);
+        assert_eq!(spy.released(), vec![spy.built_txid()]);
+        assert!(pending.lock().unwrap().is_empty(), "the reveal is dropped");
+    }
+
+    /// #516: a `manual-<sighash>` reveal still stored means that bundle's commit may be live —
+    /// kept after an ambiguous or undelivered broadcast, or still waiting for its reveal. A second
+    /// manual send of the same proposal would fund a second commit, so it is refused before
+    /// anything is built, and the stored bundle is left as it was.
+    #[tokio::test]
+    async fn manual_send_is_refused_while_the_same_bundle_may_be_live() {
+        use crate::application::pending_reveals::PendingReveal;
+
+        let spy = SpyCommitFunding::new("ignored");
+        let pending = crate::application::pending_reveals::new();
+        let action_hex = large_demo_action_hex();
+        let sighash = hex::encode(broadcast_tx::compute_sighash(1, &action_hex).unwrap());
+        let key = format!("manual-{}", &sighash[..16]);
+        let stored = PendingReveal {
+            reveal_tx_hex: "aa".to_string(),
+            reveal_txid: "reveal-live".to_string(),
+            commit_txid: "commit-live".to_string(),
+        };
+        pending.lock().unwrap().insert(key.clone(), stored);
+
+        let result = broadcast_manual(
+            &ok_broadcasters(),
+            &MockBtcRpc::new("ignored"),
+            "mock://asm-membership",
+            strata_l1_txfmt::MagicBytes::new([0x62, 0x74, 0x00, 0x00]),
+            bitcoin::Network::Regtest,
+            &action_hex,
+            1,
+            "strata_admin",
+            &[],
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
+            10,
+            5_000,
+            &spy,
+            ScriptBuf::new(),
+            &pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
+        )
+        .await;
+
         assert!(
-            spy.released().is_empty(),
-            "a broadcast attempt is never released"
+            matches!(&result, Err(BroadcastError::BundleInFlight { commit_txid }) if commit_txid == "commit-live"),
+            "got: {result:?}"
+        );
+        assert!(!spy.was_called(), "nothing is built or signed");
+        assert_eq!(
+            pending
+                .lock()
+                .unwrap()
+                .get(&key)
+                .map(|p| p.reveal_txid.clone()),
+            Some("reveal-live".to_string()),
+            "the stored bundle is untouched"
         );
     }
 
@@ -2456,7 +2702,6 @@ mod tests {
             expected,
             "each report is retried a bounded number of times and `failed` is never sent"
         );
-        assert_eq!(spy.marked(), vec![spy.built_txid()]);
         assert!(spy.released().is_empty(), "the commit is on the network");
         assert_eq!(
             spy.recorded()
@@ -2479,7 +2724,7 @@ mod tests {
 
         assert!(matches!(result, Err(BroadcastError::Setup(_))));
         assert_eq!(client.reported_statuses(), vec!["failed"]);
-        assert!(spy.marked().is_empty(), "nothing was broadcast");
+        assert!(spy.recorded().is_empty(), "nothing was broadcast");
     }
 
     /// A signed commit that fails before the broadcast (here: its reveal cannot be built)
@@ -2496,12 +2741,12 @@ mod tests {
             "got: {result:?}"
         );
         assert_eq!(spy.released(), vec![spy.built_txid()]);
-        assert!(spy.marked().is_empty(), "nothing was broadcast");
+        assert!(spy.recorded().is_empty(), "nothing was broadcast");
         assert_eq!(client.reported_statuses(), vec!["failed"]);
     }
 
     /// Manual broadcast has no orchestrator, but the same reservation rule: a signed commit
-    /// that never reaches `broadcast_via` is released.
+    /// that never reaches the broadcast is released.
     #[tokio::test]
     async fn manual_setup_error_after_the_commit_is_signed_releases_its_inputs() {
         let spy = SpyCommitFunding::paying_elsewhere();
@@ -2532,7 +2777,7 @@ mod tests {
             "got: {result:?}"
         );
         assert_eq!(spy.released(), vec![spy.built_txid()]);
-        assert!(spy.marked().is_empty(), "nothing was broadcast");
+        assert!(spy.recorded().is_empty(), "nothing was broadcast");
     }
 
     /// `await_reveal_confirmation` with 1 confirmation reports `reveal_confirmed`, removes the

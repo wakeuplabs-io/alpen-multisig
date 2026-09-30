@@ -43,6 +43,7 @@ export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, 
 					adminId={adminId}
 					confirmedBalanceSats={panel.confirmedBalanceSats}
 					unconfirmedBalanceSats={panel.unconfirmedBalanceSats}
+					reservedBalanceSats={panel.reservedBalanceSats}
 					isBalanceLoading={panel.isBalanceLoading}
 					receiveAddress={panel.receiveAddress}
 					receiveIndex={panel.receiveIndex}
