@@ -78,28 +78,28 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 		proposal({
 			status: 'approved',
 			broadcastStatus: 'commit_broadcasted',
-			commitTxid: 'abc',
 			signatures: [{ signerPubkey: SIGNER_A }, { signerPubkey: SIGNER_B }],
 		}),
 		SIGNER_C,
 	)
 	assert.equal(actions.broadcastStarted, true, 'commit_broadcasted means broadcast started')
 	assert.equal(actions.canSign, false, 'once broadcast starts, signing is no longer offered')
-	assert.equal(actions.canBroadcast, false, 'cannot re-broadcast once a txid is stored')
+	assert.equal(actions.canBroadcast, false, 'cannot re-broadcast while the claim is live')
 }
 
-// An empty claim never published a transaction. Send comes back; signing stays closed.
+// A stale empty claim never published a transaction. Send comes back; signing stays closed.
 {
 	const actions = deriveProposalActions(
 		proposal({
 			status: 'approved',
 			broadcastStatus: 'commit_broadcasted',
+			broadcastClaimStale: true,
 			requiredSignatures: 2,
 			signatures: [{ signerPubkey: SIGNER_A }, { signerPubkey: SIGNER_B }],
 		}),
 		SIGNER_C,
 	)
-	assert.equal(actions.canBroadcast, true, 'a commit claim with no txids can be sent again')
+	assert.equal(actions.canBroadcast, true, 'a stale empty claim can be sent again')
 	assert.equal(actions.canSign, false, 'the claim already closed signing')
 }
 

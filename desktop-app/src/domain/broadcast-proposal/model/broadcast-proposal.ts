@@ -10,18 +10,18 @@ export type BroadcastPhase =
  * - `reveal_confirmed` (or an already-`enacted` proposal) → `done`.
  * - `reveal_broadcasted` / `commit_broadcasted` / `commit_confirmed` → `awaiting-confirmation`
  *   (submitted, the reveal is in the mempool awaiting a block — the user may leave).
- * - `commit_broadcasted` with neither txid, when the caller passes them → `null`: nothing was published.
+ * - `commit_broadcasted` the backend reports as a stale empty claim → `null`: nothing was published.
  * - anything else (`idle`, `failed`) → `null`, leaving the caller's current phase unchanged.
  */
 export function phaseForBroadcastStatus(
 	broadcastStatus: BroadcastStatus,
 	proposalStatus?: string,
-	txids?: { commitTxid?: string | null; revealTxid?: string | null },
+	broadcastClaimStale?: boolean,
 ): Extract<BroadcastPhase, 'done' | 'awaiting-confirmation'> | null {
 	if (broadcastStatus === 'reveal_confirmed' || proposalStatus === 'enacted') return 'done'
-	// No txid means nothing was published. Leave the send screen on the form so the
-	// signer can try again. Callers that do not pass txids keep the old reading.
-	if (txids !== undefined && isAbandonedCommitClaim(broadcastStatus, txids.commitTxid, txids.revealTxid)) {
+	// Nothing was published and the backend takes the row again. Leave the send screen on
+	// the form so the signer can try again. Inside the window the claim may be live.
+	if (isAbandonedCommitClaim(broadcastStatus, broadcastClaimStale)) {
 		return null
 	}
 	if (

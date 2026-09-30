@@ -42,9 +42,9 @@ assert.equal(
 	'a bundle the network dropped must not read as never sent',
 )
 
-// The claim landed and the app died before any txid was stored. The backend
-// takes that row again; hiding Send would leave the retry with no button.
-const abandoned = proposalSendState(proposal('approved', 'commit_broadcasted'))
+// The claim landed and the app died before any txid was stored. Past the window the
+// backend takes that row again; hiding Send would leave the retry with no button.
+const abandoned = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), broadcastClaimStale: true })
 assert.equal(abandoned.kind, 'failed')
 assert.equal(showsSendButton(abandoned), true)
 assert.equal(sendButtonLabel(abandoned), 'Retry send')
@@ -53,8 +53,11 @@ assert.doesNotMatch(
 	/was broadcast/i,
 	'an empty claim must not say the commit was broadcast',
 )
-const oneTxid = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), revealTxid: 'def' })
-assert.equal(oneTxid.kind, 'in-flight', 'either txid keeps the row in flight')
+// Inside the window the claimer may still be at the device. Another signer must see it
+// in flight, not a failure with a Send the backend would refuse.
+const liveClaim = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), broadcastClaimStale: false })
+assert.equal(liveClaim.kind, 'in-flight', 'a live empty claim stays in flight')
+assert.equal(showsSendButton(liveClaim), false)
 
 // ── Every in-flight stage hides the button and names the leg ──
 
@@ -64,16 +67,13 @@ for (const stage of ['commit_confirmed', 'reveal_broadcasted'] as const) {
 	assert.equal(showsSendButton(state), false, `${stage} must not offer Send`)
 	assert.ok(state.kind === 'in-flight' && state.label.length > 0, `${stage} must carry a label`)
 }
-const publishedCommit = proposalSendState({
-	...proposal('approved', 'commit_broadcasted'),
-	commitTxid: 'abc',
-})
-assert.equal(publishedCommit.kind, 'in-flight', 'a commit with a txid is in flight')
-assert.equal(showsSendButton(publishedCommit), false)
+const unknownClaim = proposalSendState(proposal('approved', 'commit_broadcasted'))
+assert.equal(unknownClaim.kind, 'in-flight', 'no verdict from the backend keeps the row in flight')
+assert.equal(showsSendButton(unknownClaim), false)
 
 // The commit and reveal legs must be distinguishable — "how can I tell when the
 // commit+reveal bundle is confirmed" is the question the issue asks.
-const commit = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), commitTxid: 'abc' })
+const commit = proposalSendState(proposal('approved', 'commit_broadcasted'))
 const reveal = proposalSendState(proposal('approved', 'reveal_broadcasted'))
 assert.notEqual(
 	commit.kind === 'in-flight' ? commit.label : '',

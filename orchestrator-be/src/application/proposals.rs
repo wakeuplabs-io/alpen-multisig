@@ -89,6 +89,7 @@ pub(crate) async fn create_update_action(
         update_id_in_queue: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        broadcast_claimed_at: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -356,6 +357,18 @@ pub(crate) struct BroadcastClaimFacts {
     pub claimed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl From<&Proposal> for BroadcastClaimFacts {
+    fn from(proposal: &Proposal) -> Self {
+        Self {
+            proposal_status: proposal.status,
+            broadcast_status: proposal.broadcast_status,
+            commit_txid: proposal.commit_txid.clone(),
+            reveal_txid: proposal.reveal_txid.clone(),
+            claimed_at: proposal.broadcast_claimed_at,
+        }
+    }
+}
+
 fn txids_absent(facts: &BroadcastClaimFacts) -> bool {
     facts.commit_txid.is_none() && facts.reveal_txid.is_none()
 }
@@ -398,6 +411,22 @@ fn other_bundle_in_flight(facts: &BroadcastClaimFacts, now: chrono::DateTime<chr
         BroadcastStatus::CommitBroadcasted => !txids_absent(facts) || !claim_is_stale(facts, now),
         _ => false,
     }
+}
+
+/// A `commit_broadcasted` row with no txid whose claim is past [`CLAIM_STALE_AFTER`].
+///
+/// Nothing reached the network and the row can be claimed again, so the desktop offers
+/// Send. Inside the window the claimer may still be at the device, and the row reads as
+/// in flight. Decided here, on the server clock, so every desktop agrees with the claim
+/// gate.
+pub(crate) fn empty_claim_is_stale(
+    proposal: &Proposal,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let facts = BroadcastClaimFacts::from(proposal);
+    facts.broadcast_status == BroadcastStatus::CommitBroadcasted
+        && txids_absent(&facts)
+        && claim_is_stale(&facts, now)
 }
 
 /// Same predicate as the `claim_broadcast` SQL in `postgres_repo`.
@@ -926,6 +955,7 @@ pub(crate) async fn create_cancel_proposal(
         update_id_in_queue: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        broadcast_claimed_at: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -1551,6 +1581,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1950,6 +1981,58 @@ mod tests {
         }
     }
 
+    /// Send reopens only when the claim gate would take the row again. Inside the window the
+    /// claimer may still be at the device, and any txid means something may be on the network.
+    #[tokio::test]
+    async fn only_an_empty_claim_past_the_window_reads_as_stale() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        let recent = Utc::now() - chrono::Duration::seconds(30);
+        let cases = [
+            (
+                BroadcastStatus::CommitBroadcasted,
+                None,
+                Some(stale_claim_time()),
+                true,
+            ),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                None,
+                Some(recent),
+                false,
+            ),
+            (BroadcastStatus::CommitBroadcasted, None, None, false),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                Some("commit"),
+                Some(stale_claim_time()),
+                false,
+            ),
+            (
+                BroadcastStatus::RevealBroadcasted,
+                Some("commit"),
+                Some(stale_claim_time()),
+                false,
+            ),
+            (
+                BroadcastStatus::Failed,
+                None,
+                Some(stale_claim_time()),
+                false,
+            ),
+        ];
+        for (status, commit, claimed_at, expected) in cases {
+            repo.stage_broadcast_claim(&action_id, status, commit, None, claimed_at, None)
+                .unwrap();
+            let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+            assert_eq!(
+                empty_claim_is_stale(&proposal, Utc::now()),
+                expected,
+                "{status} commit={commit:?} claimed_at={claimed_at:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn a_finished_or_foreign_or_stale_empty_claim_does_not_block() {
         let repo = new_repo();
@@ -2078,6 +2161,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
         repo.save_proposal(foreign).await.unwrap();
         repo.stage_broadcast_claim(
@@ -2264,6 +2348,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -2337,6 +2422,7 @@ mod tests {
                 update_id_in_queue: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                broadcast_claimed_at: None,
             };
             repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -2393,6 +2479,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")

@@ -137,7 +137,7 @@ Request body:
 
 ### 3) Read proposal status
 
-`GET /proposals` and `GET /proposals/:action_id` include `broadcastStatus`, `commitTxid`, `revealTxid`, `broadcastError` when present.
+`GET /proposals` and `GET /proposals/:action_id` include `broadcastStatus`, `commitTxid`, `revealTxid`, `broadcastError` when present, and `broadcastClaimStale` (see "One broadcast in flight per authority").
 
 ## Technical Design
 
@@ -364,13 +364,18 @@ row that already has either txid is never re-claimed; phase 2 settles that bundl
 `idle` and `reveal_confirmed` do not block. Taking the row sets `broadcast_claimed_at` to now and
 clears `broadcast_error` and both txids. A `failed` row keeps its txids until that claim, so a
 mined reveal is still promoted; once the retry starts, a crash before the new pre-registration is
-an empty claim again. The desktop treats that empty `commit_broadcasted` row as a retry, so Send
-comes back, and it does not say the commit was broadcast. A row with either txid stays in flight.
+an empty claim again. Once that empty claim is past the window, the desktop treats it as a retry:
+Send comes back, and it does not say the commit was broadcast. Inside the window the claimer may
+still be at the device, so every desktop shows the row in flight. A row with either txid stays in
+flight.
 The conflict text is `a broadcast for this authority is already in flight`.
 
-The column is nullable and is not part of the API payload. Rows that were already
-`commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` when the column was added copy
-`updated_at` into it. Postgres locks every proposal of the authority before the update, so two
+The column is nullable and is not part of the API payload. The response carries
+`broadcast_claim_stale` instead: `true` only for a `commit_broadcasted` row with both txids null and
+a claim past the window, the same own-row condition the claim above checks. It is decided on the
+server clock, so no desktop's clock can reopen Send early, and a payload without it reads as
+`false`. Rows that were already `commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted`
+when the column was added copy `updated_at` into it. Postgres locks every proposal of the authority before the update, so two
 claims of different proposals cannot both pass.
 
 ### Frontend (`desktop-app/src`)

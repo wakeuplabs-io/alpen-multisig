@@ -9,15 +9,13 @@ use crate::domain::proposal::{
     ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
 };
 use crate::error::AppError;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct InMemoryProposalRepository {
     proposals: RwLock<HashMap<ActionId, Proposal>>,
-    /// When the current claim was taken. Absent until the first claim. Not on the API payload.
-    claimed_at: RwLock<HashMap<ActionId, DateTime<Utc>>>,
 }
 
 impl InMemoryProposalRepository {
@@ -25,12 +23,11 @@ impl InMemoryProposalRepository {
     pub(crate) fn new() -> Self {
         Self {
             proposals: RwLock::new(HashMap::new()),
-            claimed_at: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Put a row into a broadcast state and set its claim time. Tests only: the
-    /// claim timestamp is not on `Proposal`.
+    /// Put a row into a broadcast state and set its claim time. Tests only: no
+    /// port writes the claim timestamp directly.
     #[cfg(test)]
     pub(crate) fn stage_broadcast_claim(
         &self,
@@ -38,15 +35,11 @@ impl InMemoryProposalRepository {
         status: BroadcastStatus,
         commit_txid: Option<&str>,
         reveal_txid: Option<&str>,
-        claimed_at: Option<DateTime<Utc>>,
+        claimed_at: Option<chrono::DateTime<Utc>>,
         broadcast_error: Option<&str>,
     ) -> Result<(), AppError> {
         let mut proposals = self
             .proposals
-            .write()
-            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let mut claimed = self
-            .claimed_at
             .write()
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
         let Some(proposal) = proposals.get_mut(action_id) else {
@@ -56,23 +49,19 @@ impl InMemoryProposalRepository {
         proposal.commit_txid = commit_txid.map(str::to_string);
         proposal.reveal_txid = reveal_txid.map(str::to_string);
         proposal.broadcast_error = broadcast_error.map(str::to_string);
-        match claimed_at {
-            Some(at) => {
-                claimed.insert(action_id.clone(), at);
-            }
-            None => {
-                claimed.remove(action_id);
-            }
-        }
+        proposal.broadcast_claimed_at = claimed_at;
         Ok(())
     }
 
     #[cfg(test)]
-    pub(crate) fn broadcast_claimed_at(&self, action_id: &ActionId) -> Option<DateTime<Utc>> {
-        self.claimed_at
+    pub(crate) fn broadcast_claimed_at(
+        &self,
+        action_id: &ActionId,
+    ) -> Option<chrono::DateTime<Utc>> {
+        self.proposals
             .read()
             .ok()
-            .and_then(|claimed| claimed.get(action_id).copied())
+            .and_then(|proposals| proposals.get(action_id)?.broadcast_claimed_at)
     }
 }
 
@@ -142,38 +131,22 @@ impl ProposalRepository for InMemoryProposalRepository {
     }
 
     async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError> {
-        // proposals then claimed_at. The write lock serializes claims in this process.
+        // The write lock serializes claims in this process.
         let mut proposals = self
             .proposals
-            .write()
-            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let mut claimed = self
-            .claimed_at
             .write()
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
         let Some(own) = proposals.get(action_id).cloned() else {
             return Err(AppError::NotFound);
         };
         let now = Utc::now();
-        let own_facts = BroadcastClaimFacts {
-            proposal_status: own.status,
-            broadcast_status: own.broadcast_status,
-            commit_txid: own.commit_txid.clone(),
-            reveal_txid: own.reveal_txid.clone(),
-            claimed_at: claimed.get(action_id).copied(),
-        };
+        let own_facts = BroadcastClaimFacts::from(&own);
         let others: Vec<BroadcastClaimFacts> = proposals
             .values()
             .filter(|proposal| {
                 proposal.action_id != own.action_id && proposal.authority == own.authority
             })
-            .map(|proposal| BroadcastClaimFacts {
-                proposal_status: proposal.status,
-                broadcast_status: proposal.broadcast_status,
-                commit_txid: proposal.commit_txid.clone(),
-                reveal_txid: proposal.reveal_txid.clone(),
-                claimed_at: claimed.get(&proposal.action_id).copied(),
-            })
+            .map(BroadcastClaimFacts::from)
             .collect();
         if !broadcast_claim_allowed(&own_facts, &others, now) {
             return Err(AppError::Conflict(AUTHORITY_IN_FLIGHT.to_string()));
@@ -188,7 +161,7 @@ impl ProposalRepository for InMemoryProposalRepository {
         proposal.commit_txid = None;
         proposal.reveal_txid = None;
         proposal.updated_at = now;
-        claimed.insert(action_id.clone(), now);
+        proposal.broadcast_claimed_at = Some(now);
         Ok(proposal.clone())
     }
 
@@ -331,6 +304,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            broadcast_claimed_at: None,
         }
     }
 
