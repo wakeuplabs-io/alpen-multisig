@@ -29,7 +29,15 @@ pub trait BitcoinRpcClient: Send + Sync {
 
     /// Submit a package of transactions.
     async fn submit_package(&self, tx_hexes: &[String]) -> Result<(), RpcError>;
+
+    /// Confirmations of a transaction the node holds, in its mempool (0) or — with `-txindex` —
+    /// in a block, via `getrawtransaction <txid> true`. A node that holds no such transaction
+    /// answers JSON-RPC code -5 ([`RPC_INVALID_ADDRESS_OR_KEY`]), kept typed in the error (#516).
+    async fn get_transaction_depth(&self, txid: &str) -> Result<u32, RpcError>;
 }
+
+/// bitcoind `RPC_INVALID_ADDRESS_OR_KEY`: `getrawtransaction` holds no such transaction.
+pub const RPC_INVALID_ADDRESS_OR_KEY: i64 = -5;
 
 /// How a failed node RPC call ended, for callers that must know whether the request may have
 /// taken effect (#516).
@@ -300,6 +308,18 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
                 format!("submitpackage: package not accepted: {result}"),
             ))
         }
+    }
+
+    async fn get_transaction_depth(&self, txid: &str) -> Result<u32, RpcError> {
+        let result = self
+            .call_typed("getrawtransaction", json!([txid, true]))
+            .await?;
+        // A mempool transaction carries no `confirmations`.
+        let confirmations = result
+            .get("confirmations")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        Ok(u32::try_from(confirmations.max(0)).unwrap_or(u32::MAX))
     }
 
     async fn get_raw_transaction(&self, txid: &str) -> Result<Transaction, String> {

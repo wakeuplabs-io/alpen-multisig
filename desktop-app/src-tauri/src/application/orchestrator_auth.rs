@@ -9,6 +9,8 @@ use crate::infrastructure::orchestrator_client::HttpOrchestratorClient;
 #[derive(Default)]
 struct OrchestratorAuthState {
     session: Option<OrchestratorAuthSession>,
+    /// The orchestrator the session was obtained from.
+    base_url: Option<String>,
 }
 
 fn state() -> &'static Mutex<OrchestratorAuthState> {
@@ -38,11 +40,20 @@ pub async fn complete_auth(
         .auth_verify(request)
         .await
         .map_err(|e| e.to_string())?;
-    state()
+    let mut lock = state()
         .lock()
-        .map_err(|_| "orchestrator auth state lock poisoned".to_string())?
-        .session = Some(session.clone());
+        .map_err(|_| "orchestrator auth state lock poisoned".to_string())?;
+    lock.session = Some(session.clone());
+    lock.base_url = Some(base_url.to_string());
     Ok(session)
+}
+
+/// A client for the orchestrator of the current, unexpired session — for background work that
+/// has no request to take a base URL from (the settle loop, #516). `None` without a session.
+pub fn authenticated_client() -> Option<HttpOrchestratorClient> {
+    let session = get_session().ok()??;
+    let base_url = state().lock().ok()?.base_url.clone()?;
+    Some(HttpOrchestratorClient::new(base_url).with_bearer_token(session.token))
 }
 
 pub fn get_session() -> Result<Option<OrchestratorAuthSession>, String> {

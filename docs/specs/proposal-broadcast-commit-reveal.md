@@ -96,9 +96,9 @@ On user confirmation (`Broadcast`):
 1. `POST /proposals/:action_id/broadcast/claim` — orchestrator atomically sets `broadcast_status = commit_broadcasted` (or `409` if already claimed).
 2. Tauri builds **and signs both** the commit and the reveal locally, drops the ephemeral key, and stores the signed reveal (`PendingReveals`).
 3. **Pre-register (#516).** Before anything reaches the network, `PATCH /proposals/:action_id/broadcast` reports `commit_broadcasted` — the status the claim already set — **with both `commit_txid` and `reveal_txid`** (the backend keeps txids with `COALESCE`). The report is retried (3 attempts); if it still fails, nothing is broadcast: the commit's coins are released, the pending reveal is dropped, and `failed` is reported (best effort). A bundle the orchestrator cannot track would otherwise be unrecoverable once its later reports failed.
-4. Tauri broadcasts commit→reveal (`submitpackage` if available, otherwise sequential `sendrawtransaction`), then reports `reveal_broadcasted` (retried and logged; never `failed` once the bundle is on the network — see the reservation section), and a background task reports `reveal_confirmed` after confirmation, leaving `proposal_status` as `approved`. The intermediate `commit_confirmed` report is not sent (both txs confirm together; the PATCH contract enforces no sub-status ordering).
+4. Tauri broadcasts commit→reveal (`submitpackage` if available, otherwise sequential `sendrawtransaction`), then reports `reveal_broadcasted` (retried and logged; never `failed` once the bundle is on the network — see the reservation section), and a background watcher applies the settle rule (see "Settling what the broadcast left open") until the reveal is mined — reporting `reveal_confirmed`, leaving `proposal_status` as `approved` — or the bundle drops out of the network. The intermediate `commit_confirmed` report is not sent (both txs confirm together; the PATCH contract enforces no sub-status ordering).
 5. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings). Its confirmation poll reads `commitTxid`/`revealTxid` from the row, which are present from step 3 on.
-6. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles: a row at `commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` whose `reveal_txid` is mined is promoted to `reveal_confirmed` (so a bundle whose later reports never landed still converges), and `approved` + `reveal_confirmed` rows become `enacted` when ASM post-conditions match (coordination hygiene only).
+6. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles: a row at `commit_broadcasted`, `commit_confirmed`, `reveal_broadcasted` or `failed` whose `reveal_txid` is mined is promoted to `reveal_confirmed` (so a bundle whose later reports never landed still converges), and `approved` + `reveal_confirmed` rows become `enacted` when ASM post-conditions match (coordination hygiene only).
 
 ### Step 3: Finalize UX
 
@@ -243,10 +243,11 @@ spends them:
   The manual path also refuses a second send of the same proposal while its `manual-<sighash>`
   reveal is still stored (`BundleInFlight`, IPC `bundle_in_flight`): that bundle's commit may be
   live, and silently replacing the entry would fund a second commit.
-- **When reserved coins come back.** A reservation without a definitive answer (`Ambiguous`,
-  `NotDelivered` commit) ends only when a wallet sync sees the tx — after `apply_update`, every
-  reservation whose txid the wallet graph now holds is dropped, and BDK itself treats the inputs as
-  spent — or when the session ends. There is no time grace and no lookup.
+- **When reserved coins come back.** A reservation without a definitive answer (`Ambiguous` send
+  or fee bump, `Ambiguous` or `NotDelivered` commit) ends when a wallet sync sees the tx — after
+  `apply_update`, every reservation whose txid the wallet graph now holds is dropped, and BDK
+  itself treats the inputs as spent — when the settle loop decides it (next section), or when the
+  session ends. There is no time grace.
 - **Balance.** `get_balance` and `list_utxos` leave reserved outpoints out; `BalanceDto` carries
   them as `reservedSats`, and the wallet panel shows an "N sats in flight" line when it is non-zero.
   The Send estimate and Max use the same set.
@@ -275,14 +276,74 @@ never retired as Superseded.
   is dropped or replaced.
 - An `Ambiguous` or `NotDelivered` reservation lives in memory only: an app restart (or the end of
   the session) loses it, and the coins become selectable again even if the tx later lands.
-- A proposal row left at `commit_broadcasted` by a `NotDelivered`, `Ambiguous` or
-  `RevealNotBroadcast` outcome is not degraded here, and a reveal kept in `PendingReveals` has no
-  resubmit path in the UI; the desktop's detection of stuck bundles (phase 2 of #516) handles both.
-  The row already holds both pre-registered txids, so a bundle that did land — or one broadcast by
-  hand from the send-manually panel — is promoted by the orchestrator's reconcile once its reveal
-  is mined.
+- The settle loop and the absence counters live in the desktop process: a bundle left open is only
+  settled while an app that holds its `PendingReveals` entry runs. The row already holds both
+  pre-registered txids, so a bundle that did land — or one broadcast by hand from the send-manually
+  panel — is still promoted by the orchestrator's reconcile once its reveal is mined.
+- The signed reveal exists only on the machine that sent it: another signer cannot resubmit it.
+  Once the bundle drops and `failed` lands, any signer can `Retry send` (fresh key, new commit).
+- A node without `-txindex` answers "not found" (-5) for a mined tx it no longer has in its
+  mempool. The Electrum history still finds it, so a mined tx is never taken as absent while the
+  Electrum server answers; with the Electrum server down every check is `Unknown` and nothing is
+  decided.
 - A source that answers with an explicit rejection is trusted to not hold the tx: the node's
   JSON-RPC error answer, or an Electrum error that carries bitcoind's -25/-26.
+
+### Settling what the broadcast left open (desktop, #516)
+
+The broadcasters' answer settles most broadcasts on the spot. What it leaves open — a send or fee
+bump that may be live (`Ambiguous`), a bundle whose commit may be live (`BroadcastUncertain`), one
+nothing could deliver (`broadcast_unavailable`, handed over for a manual broadcast), a live commit
+whose reveal was not accepted (`RevealNotBroadcast`), or a bundle that simply never confirms — is
+settled by **one rule**, by asking every configured source whether it holds the transaction.
+
+- **Lookups** (`TxLookup`, `infrastructure/tx_lookups.rs`), typed per source: `Found` (mined or
+  not), `NotFound`, `Unanswered`.
+  - Node: `getrawtransaction <txid> true`; JSON-RPC -5 → `NotFound`; any other failure →
+    `Unanswered`.
+  - Electrum: with the tx at hand, the history of its first spendable output script
+    (`blockchain.scripthash.get_history`, which every server implements): listed → `Found` (mined
+    when its height is positive); not listed → `NotFound`. With only the txid,
+    `blockchain.transaction.get`: `NotFound` only when the error relays bitcoind's -5
+    (`relayed_bitcoind_code`, the same formats as the broadcast rule). No free-text matching.
+  - Combined: `Found` if any source found it; `Absent` only if **every** source answered
+    `NotFound`; otherwise `Unknown`.
+- **Rule** (`AbsenceTracker`, `application/tx_settle.rs`): `Found` → live; `Absent` on 3
+  consecutive checks spanning at least 10 minutes → gone; `Unknown` → no change, and the absence
+  count starts over. The window is far beyond propagation and indexer lag (seconds) and short
+  enough that a dropped bundle's coins and claim come back in the same session. Overridable with
+  `SETTLE_ABSENCE_CHECKS` / `SETTLE_ABSENCE_WINDOW_SECS` (regtest tests).
+- **Sends and fee bumps** (`WalletService::settle_unsettled`): found → recorded in the wallet
+  (its inputs stay spent); gone → its reservation is released.
+- **Stored bundles** (`proposals::settle_bundle`, every `PendingReveals` entry):
+
+  | Reveal | Commit | Action |
+  |---|---|---|
+  | mined | — | record both in the wallet; report `reveal_confirmed`; stop tracking |
+  | found | — | record both; report `reveal_broadcasted` if the row is behind (this also sets a mistaken `failed` right) |
+  | absent | found | record the commit; **resubmit the stored reveal** (`resubmit_reveal`: Electrum first, node fallback; "already known" = success; no key needed); report `reveal_broadcasted` |
+  | not found | gone | release the commit's coins; report `failed` with `broadcastError` `dropped: the bundle is no longer in the mempool or the chain`; stop tracking |
+  | anything else | | nothing |
+
+  Reports go only to a row that still carries this bundle's reveal txid (another signer may have
+  retried with a new bundle; then only the coins are settled), and only while the proposal is
+  approved; a row already at `reveal_confirmed`, or no longer approved, ends the tracking. A report
+  that does not land — `failed` included, retried 3 times per check — keeps the bundle tracked and
+  is retried on the next check; with no orchestrator session nothing is reported and the bundle
+  stays tracked. A `manual-<sighash>` bundle has no row: it is only settled for its coins.
+  `RevealNotBroadcast` is cured by the resubmit; a `broadcast_unavailable` bundle someone sent by
+  hand is found, and one nobody sent becomes `failed` after the window, with its coins back.
+- **Where it runs.** A settle loop spawned at app start (`commands::proposals::spawn_settle_loop`)
+  runs one pass every 30 s (`SETTLE_INTERVAL_SECS`) over the current wallet session's unsettled
+  sends and bumps and every stored bundle; a pass with nothing open does no I/O. It builds the
+  lookups and broadcasters from the current node config and reports with the current orchestrator
+  session (`orchestrator_auth::authenticated_client`). After a successful broadcast the send
+  command also starts a watcher (`await_reveal_confirmation`) that applies the same rule every
+  `BROADCAST_CONFIRM_POLL_MS` until the bundle is mined or dropped, or `BROADCAST_CONFIRM_TIMEOUT_MS`
+  hands over to the loop; a source that does not answer is just another open check, never an error.
+- **Orchestrator side.** A `failed` row whose reveal is mined is promoted by the reconcile (step 6
+  of the flow), so a `failed` reported for a bundle that still landed is never retired as
+  Superseded.
 
 ### Frontend (`desktop-app/src`)
 

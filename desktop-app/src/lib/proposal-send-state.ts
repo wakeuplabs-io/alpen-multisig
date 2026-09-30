@@ -32,6 +32,16 @@ type SendStateInput = {
 	 * a live chain read and this module is pure.
 	 */
 	harborFrozeDestination?: boolean
+	/** Orchestrator `broadcast_error`. A `dropped:` prefix is a bundle the settle loop found gone. */
+	broadcastError?: string | null
+}
+
+/** Copy for a `failed` row (#516): never sent, or sent and later dropped from the network. */
+export function failedBroadcastDetail(broadcastError: string | null | undefined): string {
+	if (broadcastError?.startsWith('dropped:')) {
+		return 'The bundle dropped out of the network. You can send it again.'
+	}
+	return 'The bundle was not broadcast. You can send it again.'
 }
 
 /**
@@ -129,7 +139,11 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 		case 'idle':
 			return { kind: 'ready' }
 		case 'failed':
-			return { kind: 'failed', ...STAGE.failed }
+			return {
+				kind: 'failed',
+				label: STAGE.failed.label,
+				detail: failedBroadcastDetail(proposal.broadcastError),
+			}
 		case 'reveal_confirmed':
 			return { kind: 'confirmed', ...STAGE.reveal_confirmed }
 		default:

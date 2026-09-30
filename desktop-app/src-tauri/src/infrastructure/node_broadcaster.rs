@@ -153,6 +153,12 @@ mod tests {
         async fn min_relay_sat_per_kvb(&self) -> Result<u64, String> {
             unimplemented!()
         }
+        async fn get_transaction_depth(
+            &self,
+            _: &str,
+        ) -> Result<u32, crate::infrastructure::bitcoin_rpc::RpcError> {
+            unimplemented!()
+        }
         async fn get_raw_transaction(&self, _: &str) -> Result<Transaction, String> {
             unimplemented!()
         }

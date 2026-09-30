@@ -164,6 +164,12 @@ pub struct WalletService {
     reserved: std::sync::Mutex<
         std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, bdk_wallet::bitcoin::Txid>,
     >,
+    /// Single txs (sends, fee bumps) whose broadcast got no definitive answer (#516): their
+    /// inputs stay reserved until the settle rule finds them (recorded) or proves them gone
+    /// (released) — see [`Self::settle_unsettled`].
+    unsettled: std::sync::Mutex<
+        std::collections::HashMap<bdk_wallet::bitcoin::Txid, bdk_wallet::bitcoin::Transaction>,
+    >,
 }
 
 /// Keychain selection for address listing.
@@ -300,6 +306,7 @@ impl WalletService {
             signer: None,
             network,
             reserved: std::sync::Mutex::new(std::collections::HashMap::new()),
+            unsettled: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -573,6 +580,53 @@ impl WalletService {
     /// spendable pool.
     pub(crate) fn release_reservation(&self, txid: bdk_wallet::bitcoin::Txid) {
         self.reservations().retain(|_, r| *r != txid);
+        self.unsettled_txs().remove(&txid);
+    }
+
+    fn unsettled_txs(
+        &self,
+    ) -> std::sync::MutexGuard<
+        '_,
+        std::collections::HashMap<bdk_wallet::bitcoin::Txid, bdk_wallet::bitcoin::Transaction>,
+    > {
+        self.unsettled.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Whether a send or fee bump still waits for [`Self::settle_unsettled`].
+    pub fn has_unsettled(&self) -> bool {
+        !self.unsettled_txs().is_empty()
+    }
+
+    /// Applies the settle rule (`tx_settle`) once to every single tx whose broadcast got no
+    /// definitive answer (#516): found at any source → recorded in the wallet (its inputs stay
+    /// spent); absent at every source across the whole window → its reservation is released;
+    /// otherwise nothing changes.
+    pub async fn settle_unsettled(
+        &self,
+        lookups: &[Arc<dyn crate::application::tx_settle::TxLookup>],
+        tracker: &mut crate::application::tx_settle::AbsenceTracker,
+        now: Instant,
+    ) {
+        use crate::application::tx_settle::{look_up, TrackedTx, Verdict};
+        let open: Vec<bdk_wallet::bitcoin::Transaction> =
+            self.unsettled_txs().values().cloned().collect();
+        for tx in open {
+            let txid = tx.compute_txid();
+            let presence = look_up(lookups, &TrackedTx::of(&tx)).await;
+            match tracker.observe(txid, presence, now) {
+                Verdict::Found { .. } => {
+                    tracing::info!(%txid, "unsettled tx found on the network; recorded");
+                    tracker.forget(&txid);
+                    self.record_broadcast(&tx).await;
+                }
+                Verdict::Gone => {
+                    tracing::warn!(%txid, "unsettled tx absent from every source; its coins are released");
+                    tracker.forget(&txid);
+                    self.release_reservation(txid);
+                }
+                Verdict::Open => {}
+            }
+        }
     }
 
     /// A broadcaster accepted `tx`: insert it into the wallet graph as unconfirmed, so BDK itself
@@ -593,12 +647,15 @@ impl WalletService {
     fn drop_reservations_seen_by(&self, wallet: &bdk_wallet::Wallet) {
         self.reservations()
             .retain(|_, txid| wallet.get_tx(*txid).is_none());
+        self.unsettled_txs()
+            .retain(|txid, _| wallet.get_tx(*txid).is_none());
     }
 
     /// Broadcasts one reserved tx (Electrum first, node fallback) and settles its reservation
     /// from the broadcasters' own answer (#516): accepted → recorded; rejected, or never
-    /// delivered anywhere → released at once; ambiguous → kept until a sync sees the tx or the
-    /// session ends. `Err` carries the combined outcome and every source's error.
+    /// delivered anywhere → released at once; ambiguous → kept, and left to
+    /// [`Self::settle_unsettled`] (or a sync that sees it). `Err` carries the combined outcome and
+    /// every source's error.
     pub(crate) async fn broadcast_reserved_tx(
         &self,
         broadcasters: &[Arc<dyn TxBroadcaster>],
@@ -616,7 +673,9 @@ impl WalletService {
                         self.release_reservation(tx.compute_txid())
                     }
                     // A single tx is never `Accepted` on failure; `Ambiguous` may be live.
-                    TxOutcome::Accepted | TxOutcome::Ambiguous => {}
+                    TxOutcome::Accepted | TxOutcome::Ambiguous => {
+                        self.unsettled_txs().insert(tx.compute_txid(), tx.clone());
+                    }
                 }
                 Err(failure)
             }
@@ -1815,6 +1874,50 @@ mod tests {
                         "a send that may be live keeps its coin"
                     );
                 }
+            }
+        }
+
+        /// #516: a send no source confirmed or refused keeps its coin until the settle rule
+        /// decides. Found anywhere → recorded as spent. Absent at every source across the whole
+        /// window → released. A source that never answers keeps it reserved, however long.
+        #[tokio::test]
+        async fn unsettled_send_is_settled_by_the_lookups() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::tx_settle::tests::StubLookup;
+            use crate::application::tx_settle::{AbsenceTracker, AbsenceWindow, Lookup, TxLookup};
+            use Lookup::{NotFound, Unanswered};
+
+            let found = Lookup::Found { confirmed: false };
+            // (each source's answer, minutes of the checks, (confirmed, reserved) afterwards)
+            type Case = (Vec<Lookup>, Vec<u64>, (u64, u64));
+            let cases: Vec<Case> = vec![
+                (vec![NotFound, NotFound], vec![0, 5, 10], (100_000, 0)),
+                (vec![NotFound, NotFound], vec![0, 5], (0, 100_000)),
+                (vec![NotFound, Unanswered], vec![0, 5, 10, 15], (0, 100_000)),
+                (vec![found, Unanswered], vec![0], (0, 0)),
+            ];
+            for (answers, minutes, expected) in cases {
+                let svc = mnemonic_service(&[100_000]);
+                let sent = send_through(&svc, MockBroadcaster::ambiguous("node")).await;
+                assert!(sent.is_err(), "the send is unsettled");
+                let lookups: Vec<Arc<dyn TxLookup>> = answers
+                    .iter()
+                    .map(|a| Arc::new(StubLookup::always(*a)) as Arc<dyn TxLookup>)
+                    .collect();
+                let mut tracker = AbsenceTracker::new(AbsenceWindow::DEFAULT);
+                let start = std::time::Instant::now();
+
+                for minute in &minutes {
+                    let at = start + std::time::Duration::from_secs(60 * minute);
+                    svc.settle_unsettled(&lookups, &mut tracker, at).await;
+                }
+
+                let balance = svc.get_balance().await.expect("balance");
+                assert_eq!(
+                    (balance.confirmed_sats, balance.reserved_sats),
+                    expected,
+                    "{answers:?} at {minutes:?}"
+                );
             }
         }
 

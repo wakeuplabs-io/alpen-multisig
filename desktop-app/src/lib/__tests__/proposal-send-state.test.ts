@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict'
 import type { BroadcastStatus, ProposalStatus } from '../../api/proposals'
-import { proposalSendState, showsSendButton, sendButtonLabel } from '../proposal-send-state'
+import { failedBroadcastDetail, proposalSendState, showsSendButton, sendButtonLabel } from '../proposal-send-state'
 
 function proposal(status: ProposalStatus, broadcastStatus: BroadcastStatus, signatures = 2, required = 2) {
 	return { status, broadcastStatus, requiredSignatures: required, signatures: Array(signatures).fill({}) }
@@ -27,6 +27,20 @@ const failed = proposalSendState(proposal('approved', 'failed'))
 assert.equal(failed.kind, 'failed')
 assert.equal(showsSendButton(failed), true)
 assert.equal(sendButtonLabel(failed), 'Retry send')
+assert.equal(
+	failed.kind === 'failed' ? failed.detail : '',
+	failedBroadcastDetail(undefined),
+	'a failed send that never left says it was not broadcast',
+)
+const dropped = proposalSendState({
+	...proposal('approved', 'failed'),
+	broadcastError: 'dropped: the bundle is no longer in the mempool or the chain',
+})
+assert.equal(
+	dropped.kind === 'failed' ? dropped.detail : '',
+	'The bundle dropped out of the network. You can send it again.',
+	'a bundle the network dropped must not read as never sent',
+)
 
 // ── Every in-flight stage hides the button and names the leg ──
 

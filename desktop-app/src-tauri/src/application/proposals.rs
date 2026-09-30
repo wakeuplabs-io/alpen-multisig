@@ -20,7 +20,12 @@ use crate::application::orchestrator_client::{
     OrchestratorError, ReportBroadcastProgressRequest, TransitionProposalRequest,
 };
 use crate::application::pending_reveals::PendingReveals;
-use crate::application::tx_broadcaster::{broadcast_pair_with_fallback, TxBroadcaster, TxOutcome};
+use crate::application::tx_broadcaster::{
+    broadcast_pair_with_fallback, broadcast_single_with_fallback, TxBroadcaster, TxOutcome,
+};
+use crate::application::tx_settle::{
+    look_up, AbsenceTracker, AbsenceWindow, Presence, TrackedTx, TxLookup, Verdict,
+};
 use crate::domain::proposal::{Proposal, Signature};
 use crate::infrastructure::asm_role_membership;
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
@@ -287,16 +292,19 @@ async fn broadcast_bundle(
 /// Outcome of awaiting the reveal confirmation.
 ///
 /// `Confirmed` means the reveal reached at least one confirmation and the orchestrator was
-/// promoted to `reveal_confirmed`. `PendingConfirmation` means the confirmation wait timed out
-/// with zero confirmations — the reveal is still in the mempool and may confirm later. A
-/// `PendingConfirmation` is **not** a failure: no `failed` status is reported and the
-/// `PendingReveals` entry is retained so resubmit/reconcile remain possible.
+/// promoted to `reveal_confirmed`. `PendingConfirmation` means the wait timed out before the
+/// bundle settled — the reveal may still be in the mempool and confirm later: no `failed` is
+/// reported and the `PendingReveals` entry is retained, so the settle loop carries on. `Dropped`
+/// means the bundle was absent from every source across the absence window and was settled as
+/// `failed` (#516).
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConfirmOutcome {
     /// Reveal reached >= 1 confirmation; orchestrator reported `reveal_confirmed`.
     Confirmed,
-    /// Timed out with 0 confirmations; reveal remains in mempool (`reveal_broadcasted`).
+    /// Timed out unsettled; the bundle stays tracked (`reveal_broadcasted`).
     PendingConfirmation,
+    /// The bundle left the network: coins released, `failed` reported.
+    Dropped,
 }
 
 /// Pre-sign commit+reveal, store in PendingReveals, broadcast, and report up to
@@ -432,6 +440,7 @@ pub async fn submit_commit_then_reveal(
                 reveal_tx_hex: reveal_hex.clone(),
                 reveal_txid: reveal_txid.clone(),
                 commit_txid: commit_txid.clone(),
+                commit_tx_hex: Some(broadcast_tx::tx_to_hex(&commit_tx)),
             },
         );
 
@@ -513,65 +522,337 @@ pub async fn submit_commit_then_reveal(
     broadcast_result
 }
 
-/// Await a single confirmation of the reveal tx, then promote the orchestrator.
+/// What the settle rule needs to settle a stored bundle (#516).
+pub struct BundleSettleContext<'a> {
+    /// Every source that can say whether it holds a tx (Electrum, the node).
+    pub lookups: &'a [std::sync::Arc<dyn TxLookup>],
+    /// Used to resubmit a stored reveal.
+    pub broadcasters: &'a [std::sync::Arc<dyn TxBroadcaster>],
+    /// `None` when no orchestrator session is available: nothing is reported, and a bundle whose
+    /// outcome must be reported stays tracked until it can be.
+    pub orchestrator: Option<&'a dyn OrchestratorClient>,
+    /// The session wallet, to record found txs and release a dropped commit's coins.
+    pub funding: Option<&'a dyn CommitFunding>,
+    pub pending: &'a PendingReveals,
+}
+
+/// Where one stored bundle stands after a settle check (#516).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BundleSettlement {
+    /// The reveal is mined (or the orchestrator already closed the proposal): no longer tracked.
+    Confirmed,
+    /// On the network, reveal not mined yet — resubmitted if it was missing.
+    Live,
+    /// Gone from every source across the absence window: coins released, `failed` reported, no
+    /// longer tracked.
+    Dropped,
+    /// Not decided this check.
+    Open,
+    /// No such stored bundle.
+    NotTracked,
+}
+
+/// `broadcast_error` for a bundle the settle rule found gone (#516); the UI reads it to tell a
+/// dropped bundle from one that was never sent.
+pub const DROPPED_BROADCAST_ERROR: &str =
+    "dropped: the bundle is no longer in the mempool or the chain";
+
+/// The orchestrator row of a stored bundle, as far as the settle rule is concerned.
+enum BundleRow {
+    /// A `manual-<sighash>` bundle: no orchestrator row.
+    Manual,
+    /// The row still tracks this very bundle (same reveal txid).
+    Ours(Box<Proposal>),
+    /// The row moved on (another bundle, or none): only the coins are settled.
+    NotOurs,
+    /// No orchestrator session, or it could not be read: nothing can be reported this check.
+    Unreachable,
+}
+
+async fn bundle_row(ctx: &BundleSettleContext<'_>, key: &str, reveal_txid: &str) -> BundleRow {
+    if key.starts_with("manual-") {
+        return BundleRow::Manual;
+    }
+    let Some(client) = ctx.orchestrator else {
+        return BundleRow::Unreachable;
+    };
+    match client.get_proposal(key).await {
+        Ok(row) if row.reveal_txid.as_deref() == Some(reveal_txid) => {
+            BundleRow::Ours(Box::new(row))
+        }
+        Ok(_) => BundleRow::NotOurs,
+        Err(e) => {
+            tracing::warn!(action_id = key, error = %e, "settle: proposal row unreadable");
+            BundleRow::Unreachable
+        }
+    }
+}
+
+/// The row has not caught up with a reveal that is on the network.
+fn reveal_is_behind(row: &Proposal) -> bool {
+    row.broadcast_status != "reveal_broadcasted" && row.broadcast_status != "reveal_confirmed"
+}
+
+fn decode_tx(hex_str: &str) -> Option<bitcoin::Transaction> {
+    let bytes = hex::decode(hex_str).ok()?;
+    bitcoin::consensus::deserialize(&bytes).ok()
+}
+
+/// Applies the settle rule (`tx_settle`) once to the bundle stored under `key` (#516):
 ///
-/// Polls `get_transaction_confirmations(reveal_txid)`:
-/// - On `>= 1` confirmation → reports `reveal_confirmed`, removes the `PendingReveals` entry,
-///   and returns [`ConfirmOutcome::Confirmed`].
-/// - On timeout with `0` confirmations → returns [`ConfirmOutcome::PendingConfirmation`]: it
-///   does **not** report `failed`, keeps the last status at `reveal_broadcasted`, and retains
-///   the `PendingReveals` entry. A slow block is never a failure.
-/// - On a genuine RPC error while polling → returns `Err(BroadcastError::BitcoinRpc)` without
-///   reporting `failed` (the tx is already broadcast; an on-open reconcile can recover later).
+/// | Reveal | Commit | Action |
+/// |---|---|---|
+/// | mined | — | record both; report `reveal_confirmed`; stop tracking |
+/// | found | — | record both; report `reveal_broadcasted` if the row is behind |
+/// | absent | found | record the commit; resubmit the stored reveal; report `reveal_broadcasted` |
+/// | not found | gone (absent across the window) | release the commit's coins; report `failed` ("dropped"); stop tracking |
+/// | anything else | | nothing |
 ///
-/// Intended to run in the background after [`submit_commit_then_reveal`] returns.
-#[allow(clippy::too_many_arguments)]
-pub async fn await_reveal_confirmation(
-    client: &dyn OrchestratorClient,
-    btc_rpc: &dyn BitcoinRpcClient,
-    action_id: &str,
-    commit_txid: &str,
-    reveal_txid: &str,
-    confirm_poll_interval_ms: u64,
-    confirm_timeout_ms: u64,
-    pending: &PendingReveals,
-) -> Result<ConfirmOutcome, BroadcastError> {
-    if !wait_for_confirmation(
-        btc_rpc,
-        reveal_txid,
-        confirm_poll_interval_ms,
-        confirm_timeout_ms,
+/// Reports go only to a row that still carries this bundle's reveal txid, and only while the
+/// proposal is approved; a row that is closed (`reveal_confirmed`, or no longer approved) ends
+/// the tracking. A report that does not land keeps the bundle tracked, so the next check retries
+/// it — never given up silently.
+pub async fn settle_bundle(
+    ctx: &BundleSettleContext<'_>,
+    tracker: &mut AbsenceTracker,
+    key: &str,
+    now: std::time::Instant,
+) -> BundleSettlement {
+    let Some(stored) = ctx
+        .pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(key)
+        .cloned()
+    else {
+        return BundleSettlement::NotTracked;
+    };
+    let row = bundle_row(ctx, key, &stored.reveal_txid).await;
+    if let BundleRow::Ours(proposal) = &row {
+        if proposal.broadcast_status == "reveal_confirmed" || proposal.status != "approved" {
+            crate::infrastructure::pending_reveals_store::remove_and_persist(ctx.pending, key);
+            return BundleSettlement::Confirmed;
+        }
+    }
+    let ours = match &row {
+        BundleRow::Ours(proposal) => Some(proposal.as_ref()),
+        _ => None,
+    };
+    let commit_tx = stored.commit_tx_hex.as_deref().and_then(decode_tx);
+    let reveal_tx = decode_tx(&stored.reveal_tx_hex);
+    let (Ok(commit_txid), Ok(reveal_txid)) = (
+        stored.commit_txid.parse::<bitcoin::Txid>(),
+        stored.reveal_txid.parse::<bitcoin::Txid>(),
+    ) else {
+        tracing::error!(action_id = key, "settle: stored bundle has malformed txids");
+        return BundleSettlement::Open;
+    };
+    let report = |status: &'static str| report_bundle(ctx, key, &stored, status, None);
+    let record = |tx: Option<bitcoin::Transaction>| async move {
+        if let (Some(funding), Some(tx)) = (ctx.funding, tx) {
+            funding.record_broadcast(&tx).await;
+        }
+    };
+
+    let reveal = look_up(
+        ctx.lookups,
+        &TrackedTx {
+            txid: reveal_txid,
+            tx: reveal_tx.clone(),
+        },
     )
-    .await?
-    {
-        // Timed out with 0 confirmations: stay reveal_broadcasted (mempool-pending).
-        return Ok(ConfirmOutcome::PendingConfirmation);
+    .await;
+    if let Presence::Found { confirmed } = reveal {
+        tracker.forget(&commit_txid);
+        record(commit_tx).await;
+        record(reveal_tx).await;
+        if !confirmed {
+            if ours.is_some_and(reveal_is_behind) {
+                if let Err(e) = report("reveal_broadcasted").await {
+                    tracing::warn!(action_id = key, error = %e, "settle: reveal_broadcasted report failed; retried next check");
+                }
+            }
+            return BundleSettlement::Live;
+        }
+        if ours.is_some() {
+            if let Err(e) = report("reveal_confirmed").await {
+                tracing::warn!(action_id = key, error = %e, "settle: reveal_confirmed report failed; retried next check");
+                return BundleSettlement::Live;
+            }
+        }
+        crate::infrastructure::pending_reveals_store::remove_and_persist(ctx.pending, key);
+        return BundleSettlement::Confirmed;
     }
 
+    let commit = look_up(
+        ctx.lookups,
+        &TrackedTx {
+            txid: commit_txid,
+            tx: commit_tx.clone(),
+        },
+    )
+    .await;
+    match tracker.observe(commit_txid, commit, now) {
+        Verdict::Found { .. } => {
+            record(commit_tx).await;
+            if reveal != Presence::Absent {
+                return BundleSettlement::Live;
+            }
+            // The commit is live and every source answered that the reveal is not: send the
+            // stored reveal again (no key needed; "already known" is a success).
+            match resubmit_reveal(ctx.pending, ctx.broadcasters, key).await {
+                Ok(_) => {
+                    tracing::info!(action_id = key, "settle: missing reveal resubmitted");
+                    record(reveal_tx).await;
+                    if ours.is_some_and(reveal_is_behind) {
+                        if let Err(e) = report("reveal_broadcasted").await {
+                            tracing::warn!(action_id = key, error = %e, "settle: reveal_broadcasted report failed; retried next check");
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(action_id = key, error = %e, "settle: reveal resubmit failed; retried next check");
+                }
+            }
+            BundleSettlement::Live
+        }
+        Verdict::Gone => {
+            // The commit is not, and will not be, on the network: its coins are free again.
+            if let Some(funding) = ctx.funding {
+                funding.release(commit_txid);
+            }
+            match &row {
+                BundleRow::Unreachable => {
+                    tracing::warn!(action_id = key, "settle: bundle dropped but the orchestrator is unreachable; `failed` is reported next check");
+                    return BundleSettlement::Open;
+                }
+                BundleRow::Ours(proposal) if proposal.broadcast_status != "failed" => {
+                    if let Err(e) = report_failed_with_retry(ctx, key, &stored).await {
+                        tracing::warn!(action_id = key, error = %e, "settle: `failed` report did not land; retried next check");
+                        return BundleSettlement::Open;
+                    }
+                }
+                _ => {}
+            }
+            tracing::warn!(action_id = key, commit_txid = %commit_txid, "settle: bundle dropped from the network");
+            tracker.forget(&commit_txid);
+            crate::infrastructure::pending_reveals_store::remove_and_persist(ctx.pending, key);
+            BundleSettlement::Dropped
+        }
+        Verdict::Open => BundleSettlement::Open,
+    }
+}
+
+/// Reports `status` for a stored bundle, with both its txids.
+async fn report_bundle(
+    ctx: &BundleSettleContext<'_>,
+    key: &str,
+    stored: &crate::application::pending_reveals::PendingReveal,
+    status: &str,
+    broadcast_error: Option<&str>,
+) -> Result<(), BroadcastError> {
+    let client = ctx
+        .orchestrator
+        .ok_or_else(|| BroadcastError::Setup("no orchestrator session".to_string()))?;
     report_broadcast(
         client,
-        action_id,
-        "reveal_confirmed",
+        key,
+        status,
         None,
-        Some(commit_txid),
-        Some(reveal_txid),
-        None,
+        Some(&stored.commit_txid),
+        Some(&stored.reveal_txid),
+        broadcast_error,
     )
-    .await?;
+    .await
+}
 
-    crate::infrastructure::pending_reveals_store::remove_and_persist(pending, action_id);
+/// Reports a dropped bundle as `failed`, retrying up to [`REPORT_ATTEMPTS`] times.
+async fn report_failed_with_retry(
+    ctx: &BundleSettleContext<'_>,
+    key: &str,
+    stored: &crate::application::pending_reveals::PendingReveal,
+) -> Result<(), BroadcastError> {
+    let mut attempt = 1;
+    loop {
+        let reported =
+            report_bundle(ctx, key, stored, "failed", Some(DROPPED_BROADCAST_ERROR)).await;
+        match reported {
+            Err(e) if attempt < REPORT_ATTEMPTS => {
+                tracing::warn!(action_id = key, attempt, error = %e, "`failed` report failed; retrying");
+                tokio::time::sleep(REPORT_RETRY_DELAY).await;
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
 
-    Ok(ConfirmOutcome::Confirmed)
+/// One settle pass over everything left open (#516): the session wallet's unsettled sends and fee
+/// bumps, then every stored bundle. Run by the desktop's settle loop.
+pub async fn settle_in_flight(
+    ctx: &BundleSettleContext<'_>,
+    wallet: Option<&crate::application::wallet_service::WalletService>,
+    tracker: &mut AbsenceTracker,
+    now: std::time::Instant,
+) {
+    if let Some(wallet) = wallet {
+        wallet.settle_unsettled(ctx.lookups, tracker, now).await;
+    }
+    let keys: Vec<String> = ctx
+        .pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .keys()
+        .cloned()
+        .collect();
+    for key in keys {
+        let settlement = settle_bundle(ctx, tracker, &key, now).await;
+        tracing::debug!(action_id = %key, ?settlement, "settle pass");
+    }
+}
+
+/// Watches a just-broadcast bundle until it settles, polling the settle rule every
+/// `confirm_poll_interval_ms` (#516):
+/// - reveal mined → `reveal_confirmed` reported, entry removed → [`ConfirmOutcome::Confirmed`];
+/// - bundle gone across `window` → coins released, `failed` reported → [`ConfirmOutcome::Dropped`];
+/// - a missing reveal whose commit is live is resubmitted on the way;
+/// - a source that does not answer is just another open check — never an error;
+/// - timeout → [`ConfirmOutcome::PendingConfirmation`]: nothing reported, entry retained, and the
+///   settle loop carries on. A slow block is never a failure.
+///
+/// Intended to run in the background after [`submit_commit_then_reveal`] returns.
+pub async fn await_reveal_confirmation(
+    ctx: &BundleSettleContext<'_>,
+    action_id: &str,
+    window: AbsenceWindow,
+    confirm_poll_interval_ms: u64,
+    confirm_timeout_ms: u64,
+) -> ConfirmOutcome {
+    let start = std::time::Instant::now();
+    let mut tracker = AbsenceTracker::new(window);
+    loop {
+        match settle_bundle(ctx, &mut tracker, action_id, std::time::Instant::now()).await {
+            BundleSettlement::Confirmed => return ConfirmOutcome::Confirmed,
+            BundleSettlement::Dropped => return ConfirmOutcome::Dropped,
+            // Settled by someone else (the settle loop, another watcher).
+            BundleSettlement::NotTracked => return ConfirmOutcome::PendingConfirmation,
+            BundleSettlement::Live | BundleSettlement::Open => {}
+        }
+        if start.elapsed().as_millis() as u64 >= confirm_timeout_ms {
+            return ConfirmOutcome::PendingConfirmation;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(confirm_poll_interval_ms)).await;
+    }
 }
 
 /// Synchronous submit + await-confirmation composition (retained for tests and any sequential
-/// caller). Unlike the previous implementation, a confirmation timeout is **not** reported as
-/// `failed` — it leaves the proposal at `reveal_broadcasted`.
+/// caller). A confirmation timeout is **not** reported as `failed` — it leaves the proposal at
+/// `reveal_broadcasted`.
 #[allow(clippy::too_many_arguments)]
 pub async fn broadcast_commit_then_reveal(
     client: &dyn OrchestratorClient,
     broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
-    btc_rpc: &dyn BitcoinRpcClient,
+    lookups: &[std::sync::Arc<dyn TxLookup>],
     asm_rpc_url: &str,
     magic_bytes: MagicBytes,
     network: Network,
@@ -599,17 +880,21 @@ pub async fn broadcast_commit_then_reveal(
     )
     .await?;
 
+    let ctx = BundleSettleContext {
+        lookups,
+        broadcasters,
+        orchestrator: Some(client),
+        funding: Some(commit_funding),
+        pending,
+    };
     await_reveal_confirmation(
-        client,
-        btc_rpc,
+        &ctx,
         action_id,
-        &commit_txid,
-        &reveal_txid,
+        AbsenceWindow::from_env(),
         confirm_poll_interval_ms,
         confirm_timeout_ms,
-        pending,
     )
-    .await?;
+    .await;
 
     Ok((commit_txid, reveal_txid))
 }
@@ -814,6 +1099,7 @@ pub async fn broadcast_manual(
                 reveal_tx_hex: reveal_hex.clone(),
                 reveal_txid: reveal_txid.clone(),
                 commit_txid: commit_txid.clone(),
+                commit_tx_hex: Some(broadcast_tx::tx_to_hex(&commit_tx)),
             },
         );
 
@@ -1004,31 +1290,27 @@ pub async fn prepare_broadcast_local(
     .await
 }
 
-/// Re-broadcast a stored reveal transaction for a given action_id.
+/// Re-broadcast a stored reveal transaction for a given action_id (Electrum first, node
+/// fallback). Idempotent: "already known" is a success. Returns the reveal txid.
 ///
-/// Looks up the reveal_tx_hex in PendingReveals and calls send_raw_transaction.
-/// Does NOT remove the entry — removal happens on reveal_confirmed.
+/// Does NOT remove the entry — removal happens once the bundle settles.
 pub async fn resubmit_reveal(
     pending: &PendingReveals,
-    btc_rpc: &dyn BitcoinRpcClient,
-    _client: &dyn OrchestratorClient,
+    broadcasters: &[std::sync::Arc<dyn TxBroadcaster>],
     action_id: &str,
 ) -> Result<String, BroadcastError> {
-    let reveal_tx_hex = {
-        let guard = pending.lock().unwrap();
-        guard
-            .get(action_id)
-            .ok_or_else(|| BroadcastError::NoPendingReveal {
-                action_id: action_id.to_string(),
-            })?
-            .reveal_tx_hex
-            .clone()
-    };
-    let txid = btc_rpc
-        .send_raw_transaction(&reveal_tx_hex)
+    let stored = pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(action_id)
+        .cloned()
+        .ok_or_else(|| BroadcastError::NoPendingReveal {
+            action_id: action_id.to_string(),
+        })?;
+    broadcast_single_with_fallback(broadcasters, &stored.reveal_tx_hex)
         .await
-        .map_err(|e| BroadcastError::BitcoinRpc(e.message))?;
-    Ok(txid)
+        .map_err(|failure| BroadcastError::BitcoinRpc(failure.message()))?;
+    Ok(stored.reveal_txid)
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -1886,6 +2168,8 @@ mod tests {
     /// MockBitcoinRpcClient: configurable submit_package result and call counters.
     struct MockBtcRpc {
         submit_package_result: Result<(), crate::infrastructure::bitcoin_rpc::RpcError>,
+        /// Answer of every `sendrawtransaction` when set (default: accepted).
+        send_error: Option<crate::infrastructure::bitcoin_rpc::RpcError>,
         send_raw_transaction_call_count: Mutex<u32>,
         get_raw_transaction_call_count: Mutex<u32>,
         /// Confirmations returned by `get_transaction_confirmations` (default 1).
@@ -1896,19 +2180,10 @@ mod tests {
         fn new(_commit_txid: &str) -> Self {
             Self {
                 submit_package_result: Ok(()),
+                send_error: None,
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
                 confirmations: 1,
-            }
-        }
-
-        /// Submit succeeds but the reveal never confirms (0 confirmations).
-        fn with_zero_confirmations() -> Self {
-            Self {
-                submit_package_result: Ok(()),
-                send_raw_transaction_call_count: Mutex::new(0),
-                get_raw_transaction_call_count: Mutex::new(0),
-                confirmations: 0,
             }
         }
 
@@ -1917,6 +2192,7 @@ mod tests {
                 submit_package_result: Err(crate::infrastructure::bitcoin_rpc::RpcError::answered(
                     None, err,
                 )),
+                send_error: None,
                 send_raw_transaction_call_count: Mutex::new(0),
                 get_raw_transaction_call_count: Mutex::new(0),
                 confirmations: 1,
@@ -1939,7 +2215,10 @@ mod tests {
             _: &str,
         ) -> Result<String, crate::infrastructure::bitcoin_rpc::RpcError> {
             *self.send_raw_transaction_call_count.lock().unwrap() += 1;
-            Ok("reveal-txid-mock".to_string())
+            match &self.send_error {
+                Some(e) => Err(e.clone()),
+                None => Ok("reveal-txid-mock".to_string()),
+            }
         }
 
         async fn get_transaction_confirmations(&self, _txid: &str) -> Result<u32, String> {
@@ -1971,6 +2250,13 @@ mod tests {
             Ok(0)
         }
 
+        async fn get_transaction_depth(
+            &self,
+            _: &str,
+        ) -> Result<u32, crate::infrastructure::bitcoin_rpc::RpcError> {
+            Ok(self.confirmations)
+        }
+
         async fn estimate_smart_fee_sat_per_kvb(&self, _: u16) -> Result<u64, String> {
             Ok(1_000)
         }
@@ -1992,6 +2278,8 @@ mod tests {
         failing_statuses: Vec<&'static str>,
         /// Shared with a probe broadcaster to assert ordering across both ports.
         events: Option<std::sync::Arc<Mutex<Vec<String>>>>,
+        /// `get_proposal` answers with this `(broadcast_status, reveal_txid)` when set.
+        row: Option<(&'static str, String)>,
     }
 
     impl MockOrchestratorClientLargeAction {
@@ -2057,6 +2345,10 @@ mod tests {
             unimplemented!()
         }
         async fn get_proposal(&self, action_id: &str) -> Result<OrcProposal, OrchestratorError> {
+            let (broadcast_status, reveal_txid) = match &self.row {
+                Some((status, reveal_txid)) => (status.to_string(), Some(reveal_txid.clone())),
+                None => ("idle".to_string(), None),
+            };
             Ok(OrcProposal {
                 action_id: action_id.to_string(),
                 authority: Authority::StrataAdmin,
@@ -2066,9 +2358,9 @@ mod tests {
                 status: "approved".to_string(),
                 required_signatures: 2,
                 signatures: vec![],
-                broadcast_status: "idle".to_string(),
+                broadcast_status,
                 commit_txid: None,
-                reveal_txid: None,
+                reveal_txid,
                 broadcast_error: None,
                 target_action_id: None,
                 activation_height: None,
@@ -2206,7 +2498,7 @@ mod tests {
         let _result = broadcast_commit_then_reveal(
             &mock_client,
             &ok_broadcasters(),
-            mock_rpc.as_ref(),
+            &mined_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -2247,7 +2539,7 @@ mod tests {
         let result = broadcast_commit_then_reveal(
             &mock_client,
             &broadcasters,
-            mock_rpc.as_ref(),
+            &mined_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -2286,7 +2578,7 @@ mod tests {
         let result = broadcast_commit_then_reveal(
             &mock_client,
             &broadcasters,
-            mock_rpc.as_ref(),
+            &mined_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -2315,7 +2607,6 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = Arc::new(MockBtcRpc::new("ignored"));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
@@ -2323,7 +2614,7 @@ mod tests {
         let result = broadcast_commit_then_reveal(
             &mock_client,
             &ok_broadcasters(),
-            mock_rpc.as_ref(),
+            &mined_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -2364,7 +2655,6 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = Arc::new(MockBtcRpc::new("ignored"));
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
@@ -2372,7 +2662,7 @@ mod tests {
         let result = broadcast_commit_then_reveal(
             &mock_client,
             &ok_broadcasters(),
-            mock_rpc.as_ref(),
+            &mined_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -2665,6 +2955,7 @@ mod tests {
             reveal_tx_hex: "aa".to_string(),
             reveal_txid: "reveal-live".to_string(),
             commit_txid: "commit-live".to_string(),
+            commit_tx_hex: None,
         };
         pending.lock().unwrap().insert(key.clone(), stored);
 
@@ -2952,89 +3243,424 @@ mod tests {
         assert!(spy.recorded().is_empty(), "nothing was broadcast");
     }
 
-    /// `await_reveal_confirmation` with 1 confirmation reports `reveal_confirmed`, removes the
-    /// pending entry, and returns `Confirmed`.
-    #[tokio::test]
-    async fn await_confirmation_confirms_and_removes_pending() {
-        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
+    // ─── settle rule (#516) ─────────────────────────────────────────────────
 
-        let mock_rpc = MockBtcRpc::new("ignored"); // 1 confirmation
-        let mock_client = MockOrchestratorClientLargeAction::new();
-        let pending = new_pending();
-        pending.lock().unwrap().insert(
-            "action-confirm".to_string(),
-            PendingReveal {
-                reveal_tx_hex: "deadbeef".to_string(),
-                reveal_txid: "reveal-1".to_string(),
-                commit_txid: "commit-1".to_string(),
-            },
-        );
+    use crate::application::tx_settle::tests::StubLookup;
+    use crate::application::tx_settle::Lookup;
 
-        let outcome = await_reveal_confirmation(
-            &mock_client,
-            &mock_rpc,
-            "action-confirm",
-            "commit-1",
-            "reveal-1",
-            10,
-            5000,
-            &pending,
-        )
-        .await
-        .expect("await ok");
+    const MINED: Lookup = Lookup::Found { confirmed: true };
+    const IN_MEMPOOL: Lookup = Lookup::Found { confirmed: false };
 
-        assert_eq!(outcome, ConfirmOutcome::Confirmed);
-        assert_eq!(mock_client.reported_statuses(), vec!["reveal_confirmed"]);
-        assert!(
-            pending.lock().unwrap().get("action-confirm").is_none(),
-            "pending entry must be removed after reveal_confirmed"
-        );
+    fn stub_lookups(answer: Lookup) -> Vec<std::sync::Arc<dyn TxLookup>> {
+        vec![std::sync::Arc::new(StubLookup::always(answer))]
     }
 
-    /// `await_reveal_confirmation` that times out with 0 confirmations returns
-    /// `PendingConfirmation`, reports NOTHING (no `failed`, no `reveal_confirmed`), and keeps
-    /// the pending entry. A slow block must never become a false failure.
+    /// Every source holds both txs, mined.
+    fn mined_lookups() -> Vec<std::sync::Arc<dyn TxLookup>> {
+        stub_lookups(MINED)
+    }
+
+    /// Every source holds both txs, unconfirmed.
+    fn mempool_lookups() -> Vec<std::sync::Arc<dyn TxLookup>> {
+        stub_lookups(IN_MEMPOOL)
+    }
+
+    /// A signed-looking commit and the reveal that spends it, stored as `PendingReveals` holds
+    /// them. Returns `(stored, commit_txid, reveal_txid)`.
+    fn stored_bundle() -> (
+        crate::application::pending_reveals::PendingReveal,
+        bitcoin::Txid,
+        bitcoin::Txid,
+    ) {
+        use bitcoin::{
+            absolute::LockTime, transaction::Version, OutPoint, Transaction, TxIn, TxOut,
+        };
+        let output = |sats| TxOut {
+            value: bitcoin::Amount::from_sat(sats),
+            script_pubkey: ScriptBuf::from_bytes(vec![0x51, 0x20, 0x07]),
+        };
+        let commit = Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn::default()],
+            output: vec![output(10_000)],
+        };
+        let reveal = Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::new(commit.compute_txid(), 0),
+                ..TxIn::default()
+            }],
+            output: vec![output(9_000)],
+        };
+        let stored = crate::application::pending_reveals::PendingReveal {
+            reveal_tx_hex: broadcast_tx::tx_to_hex(&reveal),
+            reveal_txid: reveal.compute_txid().to_string(),
+            commit_txid: commit.compute_txid().to_string(),
+            commit_tx_hex: Some(broadcast_tx::tx_to_hex(&commit)),
+        };
+        (stored, commit.compute_txid(), reveal.compute_txid())
+    }
+
+    /// What the orchestrator knows about the stored bundle in a settle case.
+    #[derive(Clone, Copy, Debug)]
+    enum RowFixture {
+        /// The row carries this bundle's reveal txid, at this broadcast status.
+        Ours(&'static str),
+        /// The row carries another bundle (a retry by another signer).
+        NotOurs,
+        /// No orchestrator session.
+        Unreachable,
+    }
+
+    /// One settle case: each source's answer for `(reveal, commit)`, the minutes of the checks,
+    /// the orchestrator row, and what the last check must leave behind.
+    struct SettleCase {
+        sources: Vec<(Lookup, Lookup)>,
+        minutes: Vec<u64>,
+        row: RowFixture,
+        settlement: BundleSettlement,
+        reported: Vec<&'static str>,
+        resubmitted: bool,
+        released: bool,
+        recorded: usize,
+        tracked: bool,
+    }
+
+    /// #516: the settle rule, bundle state by bundle state.
     #[tokio::test]
-    async fn await_confirmation_timeout_stays_pending_without_failed() {
-        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
-
-        let mock_rpc = MockBtcRpc::with_zero_confirmations();
-        let mock_client = MockOrchestratorClientLargeAction::new();
-        let pending = new_pending();
-        pending.lock().unwrap().insert(
-            "action-pending".to_string(),
-            PendingReveal {
-                reveal_tx_hex: "deadbeef".to_string(),
-                reveal_txid: "reveal-2".to_string(),
-                commit_txid: "commit-2".to_string(),
+    async fn settle_rule_decides_each_stored_bundle() {
+        use Lookup::{NotFound, Unanswered};
+        let ours = RowFixture::Ours;
+        let case = |sources, minutes, row, settlement, reported: Vec<&'static str>| SettleCase {
+            sources,
+            minutes,
+            row,
+            settlement,
+            reported,
+            resubmitted: false,
+            released: false,
+            recorded: 0,
+            tracked: true,
+        };
+        let cases = vec![
+            // Reveal mined: reported and no longer tracked.
+            SettleCase {
+                recorded: 2,
+                tracked: false,
+                ..case(
+                    vec![(MINED, MINED)],
+                    vec![0],
+                    ours("reveal_broadcasted"),
+                    BundleSettlement::Confirmed,
+                    vec!["reveal_confirmed"],
+                )
             },
-        );
+            // Reveal in the mempool: a row still behind catches up; one that is not is left alone.
+            SettleCase {
+                recorded: 2,
+                ..case(
+                    vec![(IN_MEMPOOL, IN_MEMPOOL)],
+                    vec![0],
+                    ours("commit_broadcasted"),
+                    BundleSettlement::Live,
+                    vec!["reveal_broadcasted"],
+                )
+            },
+            SettleCase {
+                recorded: 2,
+                ..case(
+                    vec![(IN_MEMPOOL, IN_MEMPOOL)],
+                    vec![0],
+                    ours("reveal_broadcasted"),
+                    BundleSettlement::Live,
+                    vec![],
+                )
+            },
+            // A mistaken `failed` whose bundle is live is set right.
+            SettleCase {
+                recorded: 2,
+                ..case(
+                    vec![(IN_MEMPOOL, IN_MEMPOOL)],
+                    vec![0],
+                    ours("failed"),
+                    BundleSettlement::Live,
+                    vec!["reveal_broadcasted"],
+                )
+            },
+            // Commit live, reveal absent everywhere: the stored reveal is sent again.
+            SettleCase {
+                resubmitted: true,
+                recorded: 2,
+                ..case(
+                    vec![(NotFound, IN_MEMPOOL)],
+                    vec![0],
+                    ours("commit_broadcasted"),
+                    BundleSettlement::Live,
+                    vec!["reveal_broadcasted"],
+                )
+            },
+            // ...but not on a guess: one source that did not answer about the reveal is enough to wait.
+            SettleCase {
+                recorded: 1,
+                ..case(
+                    vec![(NotFound, IN_MEMPOOL), (Unanswered, Unanswered)],
+                    vec![0],
+                    ours("commit_broadcasted"),
+                    BundleSettlement::Live,
+                    vec![],
+                )
+            },
+            // Absent everywhere across the whole window: dropped.
+            SettleCase {
+                released: true,
+                tracked: false,
+                ..case(
+                    vec![(NotFound, NotFound)],
+                    vec![0, 5, 10],
+                    ours("reveal_broadcasted"),
+                    BundleSettlement::Dropped,
+                    vec!["failed"],
+                )
+            },
+            // Not yet the whole window.
+            case(
+                vec![(NotFound, NotFound)],
+                vec![0, 5],
+                ours("reveal_broadcasted"),
+                BundleSettlement::Open,
+                vec![],
+            ),
+            // A source that never answers keeps it open, however long.
+            case(
+                vec![(NotFound, NotFound), (Unanswered, Unanswered)],
+                vec![0, 5, 10, 15],
+                ours("reveal_broadcasted"),
+                BundleSettlement::Open,
+                vec![],
+            ),
+            // A row that moved on to another bundle: coins settled, nothing reported.
+            SettleCase {
+                released: true,
+                tracked: false,
+                ..case(
+                    vec![(NotFound, NotFound)],
+                    vec![0, 5, 10],
+                    RowFixture::NotOurs,
+                    BundleSettlement::Dropped,
+                    vec![],
+                )
+            },
+            // No orchestrator: the coins come back, but the bundle stays tracked until `failed` lands.
+            SettleCase {
+                released: true,
+                ..case(
+                    vec![(NotFound, NotFound)],
+                    vec![0, 5, 10],
+                    RowFixture::Unreachable,
+                    BundleSettlement::Open,
+                    vec![],
+                )
+            },
+        ];
 
-        let outcome = await_reveal_confirmation(
-            &mock_client,
-            &mock_rpc,
-            "action-pending",
-            "commit-2",
-            "reveal-2",
-            1,
-            5, // tiny timeout → returns PendingConfirmation quickly
-            &pending,
-        )
-        .await
-        .expect("await ok");
-
-        assert_eq!(outcome, ConfirmOutcome::PendingConfirmation);
-        let statuses = mock_client.reported_statuses();
-        assert!(
-            !statuses
+        for c in cases {
+            let (stored, commit_txid, reveal_txid) = stored_bundle();
+            let pending = crate::application::pending_reveals::new();
+            pending
+                .lock()
+                .unwrap()
+                .insert("action-settle".to_string(), stored.clone());
+            let lookups: Vec<std::sync::Arc<dyn TxLookup>> = c
+                .sources
                 .iter()
-                .any(|s| s == "failed" || s == "reveal_confirmed"),
-            "timeout must not report failed or reveal_confirmed: {statuses:?}"
+                .map(|(reveal, commit)| {
+                    let stub = StubLookup::always(Lookup::Unanswered);
+                    stub.answer(reveal_txid, *reveal);
+                    stub.answer(commit_txid, *commit);
+                    std::sync::Arc::new(stub) as std::sync::Arc<dyn TxLookup>
+                })
+                .collect();
+            let broadcaster = std::sync::Arc::new(MockBroadcaster::ok("node"));
+            let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![broadcaster.clone()];
+            let client = MockOrchestratorClientLargeAction {
+                row: Some(match c.row {
+                    RowFixture::Ours(status) => (status, stored.reveal_txid.clone()),
+                    _ => ("reveal_broadcasted", "another-bundle".to_string()),
+                }),
+                ..MockOrchestratorClientLargeAction::default()
+            };
+            let spy = SpyCommitFunding::new("ignored");
+            let ctx = BundleSettleContext {
+                lookups: &lookups,
+                broadcasters: &broadcasters,
+                orchestrator: match c.row {
+                    RowFixture::Unreachable => None,
+                    _ => Some(&client),
+                },
+                funding: Some(&spy),
+                pending: &pending,
+            };
+            let mut tracker = AbsenceTracker::new(AbsenceWindow::DEFAULT);
+            let start = std::time::Instant::now();
+
+            let mut settlement = BundleSettlement::NotTracked;
+            for minute in &c.minutes {
+                let at = start + std::time::Duration::from_secs(60 * minute);
+                settlement = settle_bundle(&ctx, &mut tracker, "action-settle", at).await;
+            }
+
+            let label = format!("{:?} / {:?} at {:?}", c.sources, c.row, c.minutes);
+            assert_eq!(settlement, c.settlement, "{label}");
+            assert_eq!(client.reported_statuses(), c.reported, "{label}");
+            if c.reported == vec!["failed"] {
+                let report = &client.reports()[0];
+                assert_eq!(
+                    report.broadcast_error.as_deref(),
+                    Some(DROPPED_BROADCAST_ERROR)
+                );
+                assert_eq!(
+                    report.reveal_txid.as_deref(),
+                    Some(stored.reveal_txid.as_str())
+                );
+            }
+            assert_eq!(
+                broadcaster.sent_single() == vec![stored.reveal_tx_hex.clone()],
+                c.resubmitted,
+                "{label}"
+            );
+            assert_eq!(spy.released() == vec![commit_txid], c.released, "{label}");
+            assert_eq!(spy.recorded().len(), c.recorded, "{label}");
+            assert_eq!(
+                pending.lock().unwrap().contains_key("action-settle"),
+                c.tracked,
+                "{label}"
+            );
+        }
+    }
+
+    /// #516: a dropped bundle's `failed` report that does not land is never given up: the bundle
+    /// stays tracked, and the next check reports it again.
+    #[tokio::test]
+    async fn dropped_bundle_failed_report_is_retried_on_the_next_check() {
+        let (stored, _, _) = stored_bundle();
+        let pending = crate::application::pending_reveals::new();
+        pending
+            .lock()
+            .unwrap()
+            .insert("action-retry".to_string(), stored.clone());
+        let lookups = stub_lookups(Lookup::NotFound);
+        let row = Some(("reveal_broadcasted", stored.reveal_txid.clone()));
+        let down = MockOrchestratorClientLargeAction {
+            row: row.clone(),
+            ..MockOrchestratorClientLargeAction::with_failing_report_of(&["failed"])
+        };
+        let up = MockOrchestratorClientLargeAction {
+            row,
+            ..MockOrchestratorClientLargeAction::default()
+        };
+        let spy = SpyCommitFunding::new("ignored");
+        let mut tracker = AbsenceTracker::new(AbsenceWindow::DEFAULT);
+        let start = std::time::Instant::now();
+        let minutes = |m: u64| start + std::time::Duration::from_secs(60 * m);
+        let broadcasters = ok_broadcasters();
+        let ctx_down = BundleSettleContext {
+            lookups: &lookups,
+            broadcasters: &broadcasters,
+            orchestrator: Some(&down),
+            funding: Some(&spy),
+            pending: &pending,
+        };
+        let ctx_up = BundleSettleContext {
+            orchestrator: Some(&up),
+            ..ctx_down
+        };
+
+        for m in [0, 5, 10] {
+            let settled = settle_bundle(&ctx_down, &mut tracker, "action-retry", minutes(m)).await;
+            assert_eq!(settled, BundleSettlement::Open);
+        }
+        assert_eq!(
+            down.reported_statuses(),
+            vec!["failed"; REPORT_ATTEMPTS as usize],
+            "retried within the check"
         );
-        assert!(
-            pending.lock().unwrap().get("action-pending").is_some(),
-            "pending entry must be retained on PendingConfirmation"
-        );
+        assert!(pending.lock().unwrap().contains_key("action-retry"));
+
+        let settled = settle_bundle(&ctx_up, &mut tracker, "action-retry", minutes(11)).await;
+        assert_eq!(settled, BundleSettlement::Dropped);
+        assert_eq!(up.reported_statuses(), vec!["failed"]);
+        assert!(pending.lock().unwrap().is_empty());
+    }
+
+    /// #516: the watcher started after a broadcast applies the same rule until the bundle
+    /// settles or the timeout hands over to the settle loop. A source that does not answer is
+    /// never an error, and a timeout never reports `failed`.
+    #[tokio::test]
+    async fn reveal_watcher_stops_when_the_bundle_settles() {
+        let short_window = AbsenceWindow {
+            checks: 1,
+            span: std::time::Duration::ZERO,
+        };
+        let cases = [
+            (
+                MINED,
+                ConfirmOutcome::Confirmed,
+                vec!["reveal_confirmed"],
+                false,
+            ),
+            (
+                IN_MEMPOOL,
+                ConfirmOutcome::PendingConfirmation,
+                vec![],
+                true,
+            ),
+            (
+                Lookup::Unanswered,
+                ConfirmOutcome::PendingConfirmation,
+                vec![],
+                true,
+            ),
+            (
+                Lookup::NotFound,
+                ConfirmOutcome::Dropped,
+                vec!["failed"],
+                false,
+            ),
+        ];
+        for (answer, expected, reported, tracked) in cases {
+            let (stored, _, _) = stored_bundle();
+            let pending = crate::application::pending_reveals::new();
+            pending
+                .lock()
+                .unwrap()
+                .insert("action-watch".to_string(), stored.clone());
+            let lookups = stub_lookups(answer);
+            let broadcasters = ok_broadcasters();
+            let client = MockOrchestratorClientLargeAction {
+                row: Some(("reveal_broadcasted", stored.reveal_txid.clone())),
+                ..MockOrchestratorClientLargeAction::default()
+            };
+            let spy = SpyCommitFunding::new("ignored");
+            let ctx = BundleSettleContext {
+                lookups: &lookups,
+                broadcasters: &broadcasters,
+                orchestrator: Some(&client),
+                funding: Some(&spy),
+                pending: &pending,
+            };
+
+            let outcome = await_reveal_confirmation(&ctx, "action-watch", short_window, 1, 5).await;
+
+            assert_eq!(outcome, expected, "{answer:?}");
+            assert_eq!(client.reported_statuses(), reported, "{answer:?}");
+            assert_eq!(
+                pending.lock().unwrap().contains_key("action-watch"),
+                tracked,
+                "{answer:?}"
+            );
+        }
     }
 
     /// The retained sequential wrapper must NOT report `failed` when confirmation times out.
@@ -3044,7 +3670,6 @@ mod tests {
         use strata_l1_txfmt::MagicBytes;
 
         let spy = SpyCommitFunding::new("ignored");
-        let mock_rpc = Arc::new(MockBtcRpc::with_zero_confirmations());
         let mock_client = MockOrchestratorClientLargeAction::new();
         let magic_bytes = MagicBytes::new([0x62, 0x74, 0x00, 0x00]);
         let pending = crate::application::pending_reveals::new();
@@ -3052,7 +3677,7 @@ mod tests {
         let result = broadcast_commit_then_reveal(
             &mock_client,
             &ok_broadcasters(),
-            mock_rpc.as_ref(),
+            &mempool_lookups(),
             "mock://asm-membership",
             magic_bytes,
             Network::Regtest,
@@ -3085,32 +3710,37 @@ mod tests {
     #[tokio::test]
     async fn resubmit_reveal_returns_no_pending_reveal_when_absent() {
         let pending = crate::application::pending_reveals::new();
-        let mock_rpc = MockBtcRpc::new("ignored");
-        let mock_client = MockOrchestratorClient::new();
-        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-missing").await;
+        let result = resubmit_reveal(&pending, &ok_broadcasters(), "action-missing").await;
         assert!(matches!(
             result,
             Err(BroadcastError::NoPendingReveal { .. })
         ));
     }
 
+    /// #516: resubmitting a stored reveal needs no key and is idempotent — a node that already
+    /// holds it ("already in mempool", -27) is a success, and the stored reveal's txid is returned.
     #[tokio::test]
-    async fn resubmit_reveal_broadcasts_stored_reveal_hex() {
-        use crate::application::pending_reveals::{new as new_pending, PendingReveal};
-        let pending = new_pending();
-        pending.lock().unwrap().insert(
-            "action-1".to_string(),
-            PendingReveal {
-                reveal_tx_hex: "deadbeef".to_string(),
-                reveal_txid: "reveal-txid-123".to_string(),
-                commit_txid: "commit-txid-456".to_string(),
-            },
-        );
-        let mock_rpc = MockBtcRpc::new("action-1");
-        let mock_client = MockOrchestratorClient::new();
-        let result = resubmit_reveal(&pending, &mock_rpc, &mock_client, "action-1").await;
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "reveal-txid-mock");
+    async fn resubmit_reveal_sends_the_stored_hex_and_already_known_is_success() {
+        let (stored, _, reveal_txid) = stored_bundle();
+        let pending = crate::application::pending_reveals::new();
+        pending
+            .lock()
+            .unwrap()
+            .insert("action-1".to_string(), stored.clone());
+        let rpc = Arc::new(MockBtcRpc {
+            send_error: Some(crate::infrastructure::bitcoin_rpc::RpcError::answered(
+                Some(-27),
+                "txn-already-in-mempool",
+            )),
+            ..MockBtcRpc::new("ignored")
+        });
+
+        let resubmitted = resubmit_reveal(&pending, &node_broadcasters(rpc.clone()), "action-1")
+            .await
+            .expect("already known is a success");
+
+        assert_eq!(resubmitted, reveal_txid.to_string());
+        assert_eq!(rpc.send_raw_transaction_call_count(), 1);
     }
 
     #[tokio::test]

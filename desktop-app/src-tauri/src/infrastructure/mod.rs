@@ -59,3 +59,4 @@ pub mod orchestrator_client;
 pub mod pending_reveals_store;
 pub mod rpc_timeout;
 pub mod signing;
+pub mod tx_lookups;

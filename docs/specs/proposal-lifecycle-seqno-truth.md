@@ -262,10 +262,12 @@ candidate for the next phase.
   reserved outpoints until a sync sees the transaction. See "In-flight UTXO reservation" in
   [`proposal-broadcast-commit-reveal.md`](proposal-broadcast-commit-reveal.md), including the BDK
   1.2 limits that remain.
-- **Only half the watcher.** Confirmations are noticed on read (rule 0 in §4), but the opposite is
-  not: a reveal that was dropped or replaced never degrades `reveal_broadcasted` to `failed`, and
-  `proposals_resubmit_reveal` still exists with no UI that can reach it. A bundle that never
-  reaches a block stays in flight until something else consumes its sequence number.
+- ~~**Only half the watcher.**~~ **Resolved (#516).** The desktop's settle loop looks every
+  stored bundle up at every configured source: a live commit whose reveal is missing gets the
+  stored reveal resubmitted automatically, and a bundle absent from every source across the
+  absence window is reported `failed` ("dropped …") with its coins released, so any signer can
+  `Retry send`. See "Settling what the broadcast left open" in
+  [`proposal-broadcast-commit-reveal.md`](proposal-broadcast-commit-reveal.md).
 - **The desktop's report can lose its session and nothing retries it.** The confirmation task
   captures a bearer token when the broadcast starts and keeps it for the whole wait; sessions live
   in the orchestrator's memory, so a restart or an expiry turns the final `PATCH` into a `401` that

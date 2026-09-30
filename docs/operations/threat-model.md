@@ -34,6 +34,7 @@ flowchart LR
 | Supply-chain compromise | P-011 audit/deny/lockfile |
 | Cross-authority data leak | P-002 session + proposal scope |
 | Coordinator/UI desync on broadcast | P-066 desktop execute + PATCH metadata |
+| UTXO double-selection: two commits (or a commit and a send) spend the same coin, so one bundle is replaced and its reveal — whose envelope key is already evicted — can never land (#516) | In-memory reservation of every built tx's inputs before the wallet lock is released; a failed broadcast is settled from the broadcaster's typed answer, and what stays open (ambiguous, undelivered, reveal missing) by the desktop settle loop: found → recorded, absent at every source for 3 checks over 10 min → released and `failed`, commit live + reveal missing → reveal resubmitted. Documented limits: reservations and absence counters are in memory (an app restart forgets them); BDK 1.2 cannot evict a tx, so a recorded tx dropped without a conflict keeps its inputs looking spent until the session is rebuilt; a commit chained on unconfirmed change dies with its parent. See `specs/proposal-broadcast-commit-reveal.md` |
 
 ## Accepted risks
 

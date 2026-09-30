@@ -8,6 +8,7 @@ use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
+use desktop_app::application::tx_settle::{AbsenceTracker, AbsenceWindow, TxLookup};
 use desktop_app::application::wallet_session::WalletSession;
 use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
@@ -21,6 +22,7 @@ use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
 use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
+use desktop_app::infrastructure::tx_lookups::{ElectrumTxLookup, NodeTxLookup};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -312,7 +314,8 @@ pub async fn proposals_resubmit_reveal(
     node_config: tauri::State<'_, NodeConfigState>,
     pending: tauri::State<'_, PendingReveals>,
 ) -> Result<String, String> {
-    let client = build_client(input.base_url)?;
+    // Validates the base URL and the orchestrator session, as every proposal command does.
+    build_client(input.base_url)?;
     let cfg = node_config
         .0
         .read()
@@ -320,8 +323,11 @@ pub async fn proposals_resubmit_reveal(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
-    proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
+    );
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), btc_rpc);
+    proposals::resubmit_reveal(&pending, &broadcasters, &input.action_id)
         .await
         .map_err(|e| match e {
             BroadcastError::NoPendingReveal { action_id } => {
@@ -933,11 +939,7 @@ pub async fn proposals_broadcast(
     let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
         HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
     );
-    // Broadcaster chain: Electrum first (M3), then node fallback.
-    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
-        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
-        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
-    ];
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
@@ -965,18 +967,19 @@ pub async fn proposals_broadcast(
     .await
     .map_err(map_broadcast_error)?;
 
-    // Await the reveal confirmation in the background so the UI unblocks immediately. A slow
-    // block leaves the proposal at `reveal_broadcasted` (PendingConfirmation) — never `failed`.
-    spawn_reveal_confirmation(
-        std::sync::Arc::clone(&client),
-        std::sync::Arc::clone(&btc_rpc),
-        pending.inner().clone(),
-        input.action_id.clone(),
-        commit_txid.clone(),
-        reveal_txid.clone(),
-        env.confirm_poll_interval_ms,
-        env.confirm_timeout_ms,
-    );
+    // Watch the bundle in the background so the UI unblocks immediately. A slow block leaves the
+    // proposal at `reveal_broadcasted` (PendingConfirmation) — never `failed`; the settle loop
+    // carries on from there.
+    spawn_reveal_confirmation(RevealWatch {
+        client: std::sync::Arc::clone(&client),
+        lookups: lookup_chain(cfg.electrum_url(), btc_rpc),
+        broadcasters,
+        wallet: wallet_service,
+        pending: pending.inner().clone(),
+        action_id: input.action_id.clone(),
+        confirm_poll_interval_ms: env.confirm_poll_interval_ms,
+        confirm_timeout_ms: env.confirm_timeout_ms,
+    });
 
     Ok(BroadcastResultDto {
         action_id: input.action_id,
@@ -987,44 +990,141 @@ pub async fn proposals_broadcast(
     })
 }
 
-/// Spawn the background reveal-confirmation poll. Owns `Arc` clones so it outlives the command;
-/// no `tauri::State` crosses the spawn boundary. Errors/outcomes are logged, never surfaced as
-/// a `failed` orchestrator state for a slow block.
-#[allow(clippy::too_many_arguments)]
-fn spawn_reveal_confirmation(
-    client: std::sync::Arc<HttpOrchestratorClient>,
+/// Broadcaster chain: Electrum first (M3), then node fallback.
+fn broadcaster_chain(
+    electrum_url: &str,
     btc_rpc: std::sync::Arc<dyn BitcoinRpcClient>,
+) -> Vec<std::sync::Arc<dyn TxBroadcaster>> {
+    vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(electrum_url)),
+        std::sync::Arc::new(NodeBroadcaster::new(btc_rpc)),
+    ]
+}
+
+/// The sources the settle rule asks (#516): the same two the broadcasters use.
+fn lookup_chain(
+    electrum_url: &str,
+    btc_rpc: std::sync::Arc<dyn BitcoinRpcClient>,
+) -> Vec<std::sync::Arc<dyn TxLookup>> {
+    vec![
+        std::sync::Arc::new(ElectrumTxLookup::new(electrum_url)),
+        std::sync::Arc::new(NodeTxLookup::new(btc_rpc)),
+    ]
+}
+
+/// What the background reveal watcher owns; no `tauri::State` crosses the spawn boundary.
+struct RevealWatch {
+    client: std::sync::Arc<HttpOrchestratorClient>,
+    lookups: Vec<std::sync::Arc<dyn TxLookup>>,
+    broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>>,
+    wallet: std::sync::Arc<desktop_app::application::wallet_service::WalletService>,
     pending: PendingReveals,
     action_id: String,
-    commit_txid: String,
-    reveal_txid: String,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
-) {
+}
+
+/// Spawn the background watcher of a just-broadcast bundle: the settle rule, polled until the
+/// reveal confirms, the bundle drops, or the timeout hands over to the settle loop (#516).
+fn spawn_reveal_confirmation(watch: RevealWatch) {
     tauri::async_runtime::spawn(async move {
+        let funding = AdminWalletCommitFunding::new(watch.wallet);
+        let ctx = proposals::BundleSettleContext {
+            lookups: &watch.lookups,
+            broadcasters: &watch.broadcasters,
+            orchestrator: Some(watch.client.as_ref()),
+            funding: Some(&funding),
+            pending: &watch.pending,
+        };
         let outcome = proposals::await_reveal_confirmation(
-            client.as_ref(),
-            btc_rpc.as_ref(),
-            &action_id,
-            &commit_txid,
-            &reveal_txid,
-            confirm_poll_interval_ms,
-            confirm_timeout_ms,
-            &pending,
+            &ctx,
+            &watch.action_id,
+            AbsenceWindow::from_env(),
+            watch.confirm_poll_interval_ms,
+            watch.confirm_timeout_ms,
         )
         .await;
+        let action_id = &watch.action_id;
         match outcome {
-            Ok(proposals::ConfirmOutcome::Confirmed) => {
+            proposals::ConfirmOutcome::Confirmed => {
                 eprintln!("[broadcast] {action_id}: reveal confirmed; orchestrator promoted");
             }
-            Ok(proposals::ConfirmOutcome::PendingConfirmation) => {
+            proposals::ConfirmOutcome::PendingConfirmation => {
                 eprintln!(
-                    "[broadcast] {action_id}: reveal still unconfirmed after timeout; staying reveal_broadcasted"
+                    "[broadcast] {action_id}: bundle not settled before the timeout; the settle loop carries on"
                 );
             }
-            Err(e) => {
-                eprintln!("[broadcast] {action_id}: reveal confirmation poll errored: {e}");
+            proposals::ConfirmOutcome::Dropped => {
+                eprintln!(
+                    "[broadcast] {action_id}: bundle dropped from the network; reported failed"
+                );
             }
+        }
+    });
+}
+
+/// Interval of the settle loop (#516): `SETTLE_INTERVAL_SECS`, 30 s by default.
+fn settle_interval() -> std::time::Duration {
+    let secs = std::env::var("SETTLE_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(30);
+    std::time::Duration::from_secs(secs)
+}
+
+/// The settle loop (#516): every [`settle_interval`], one settle pass over the current wallet
+/// session's unsettled sends and fee bumps and over every stored bundle whose proposal is not
+/// closed — see `proposals::settle_in_flight`. Runs for the life of the app and follows whichever
+/// wallet session is current; a pass with nothing open does no I/O.
+pub fn spawn_settle_loop(
+    wallet_session: WalletSession,
+    pending: PendingReveals,
+    node_config: std::sync::Arc<
+        std::sync::RwLock<desktop_app::infrastructure::node_config_store::NodeConfig>,
+    >,
+) {
+    tauri::async_runtime::spawn(async move {
+        let interval = settle_interval();
+        let mut tracker = AbsenceTracker::new(AbsenceWindow::from_env());
+        loop {
+            tokio::time::sleep(interval).await;
+            let wallet = wallet_session.current();
+            let has_bundles = !pending.lock().unwrap_or_else(|e| e.into_inner()).is_empty();
+            if !has_bundles && !wallet.as_ref().is_some_and(|w| w.has_unsettled()) {
+                continue;
+            }
+            let Ok(cfg) = node_config.read().map(|c| c.clone()) else {
+                continue;
+            };
+            let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> =
+                std::sync::Arc::new(HttpBitcoinRpcClient::new(
+                    cfg.btc_rpc_url(),
+                    cfg.btc_rpc_user(),
+                    cfg.btc_rpc_pass(),
+                ));
+            let lookups = lookup_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
+            let broadcasters = broadcaster_chain(cfg.electrum_url(), btc_rpc);
+            let client = orchestrator_auth::authenticated_client();
+            let funding = wallet
+                .as_ref()
+                .map(|w| AdminWalletCommitFunding::new(std::sync::Arc::clone(w)));
+            let ctx = proposals::BundleSettleContext {
+                lookups: &lookups,
+                broadcasters: &broadcasters,
+                orchestrator: client.as_ref().map(|c| c as &dyn OrchestratorClient),
+                funding: funding
+                    .as_ref()
+                    .map(|f| f as &dyn desktop_app::application::commit_funding::CommitFunding),
+                pending: &pending,
+            };
+            proposals::settle_in_flight(
+                &ctx,
+                wallet.as_deref(),
+                &mut tracker,
+                std::time::Instant::now(),
+            )
+            .await;
         }
     });
 }
@@ -1120,11 +1220,7 @@ pub async fn proposals_broadcast_manual(
     let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
         HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
     );
-    // Broadcaster chain: Electrum first (M3), then node fallback.
-    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
-        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
-        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
-    ];
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()

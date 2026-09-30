@@ -239,7 +239,7 @@ export function ProposalDetail({
 							data-testid="e2e-detail-broadcast-failed"
 						>
 							<p className="m-0 text-body-sm font-medium text-danger-deep">{sendState.label}</p>
-							<p className="m-0 mt-1 text-label text-danger-deep">{proposal.broadcastError ?? sendState.detail}</p>
+							<p className="m-0 mt-1 text-label text-danger-deep">{sendState.detail}</p>
 						</div>
 					)}
 
@@ -257,7 +257,19 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
+					{sendState.kind === 'in-flight' && (
+						<button
+							type="button"
+							className="w-full rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-left transition hover:border-[#111827]"
+							data-testid="e2e-detail-broadcast-stage"
+							onClick={onBroadcast}
+						>
+							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
+						</button>
+					)}
+					{(sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"
