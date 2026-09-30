@@ -353,8 +353,10 @@ settled by **one rule**, by asking every configured source whether it holds the 
   `broadcast_claimed_at` at least 600 seconds old (`CLAIM_STALE_AFTER`). The desktop claims before
   the device signs (up to 180 seconds), so a slow confirm does not lose the row. A missing
   timestamp is not old.
-- No other proposal of the same `authority` is in flight: `commit_confirmed`, `reveal_broadcasted`,
-  or `commit_broadcasted` with a txid or a claim inside that window.
+- No other **approved** proposal of the same `authority` is in flight: `commit_confirmed`,
+  `reveal_broadcasted`, or `commit_broadcasted` with a txid or a claim inside that window. A
+  proposal that is no longer approved (`superseded`, `expired`, `canceled`, `enacted`) does not
+  count: closing it leaves `broadcast_status` unchanged, and reconcile does not walk those rows.
 
 An empty `commit_broadcasted` claim older than the window does not block the authority. If it did,
 an app that died between the claim and the pre-registration would wedge every later proposal. A
@@ -362,7 +364,9 @@ row that already has either txid is never re-claimed; phase 2 settles that bundl
 `idle` and `reveal_confirmed` do not block. Taking the row sets `broadcast_claimed_at` to now and
 clears `broadcast_error` and both txids. A `failed` row keeps its txids until that claim, so a
 mined reveal is still promoted; once the retry starts, a crash before the new pre-registration is
-an empty claim again. The conflict text is `a broadcast for this authority is already in flight`.
+an empty claim again. The desktop treats that empty `commit_broadcasted` row as a retry, so Send
+comes back, and it does not say the commit was broadcast. A row with either txid stays in flight.
+The conflict text is `a broadcast for this authority is already in flight`.
 
 The column is nullable and is not part of the API payload. Rows that were already
 `commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` when the column was added copy

@@ -14,6 +14,17 @@ for (const status of ['commit_broadcasted', 'commit_confirmed', 'reveal_broadcas
 	assert.equal(phaseForBroadcastStatus(status), 'awaiting-confirmation', `${status} → awaiting-confirmation`)
 }
 
+assert.equal(
+	phaseForBroadcastStatus('commit_broadcasted', 'approved', { commitTxid: null, revealTxid: null }),
+	null,
+	'an empty commit claim returns to the send form',
+)
+assert.equal(
+	phaseForBroadcastStatus('commit_broadcasted', 'approved', { commitTxid: 'abc', revealTxid: null }),
+	'awaiting-confirmation',
+	'a stored commit txid stays on the confirmation screen',
+)
+
 // ── idle / failed → null (do not change phase) ────────────────────────────────
 assert.equal(phaseForBroadcastStatus('idle'), null, 'idle → null')
 assert.equal(phaseForBroadcastStatus('failed'), null, 'failed → null')

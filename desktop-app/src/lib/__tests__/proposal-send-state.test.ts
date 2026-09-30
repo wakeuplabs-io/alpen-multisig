@@ -42,18 +42,38 @@ assert.equal(
 	'a bundle the network dropped must not read as never sent',
 )
 
+// The claim landed and the app died before any txid was stored. The backend
+// takes that row again; hiding Send would leave the retry with no button.
+const abandoned = proposalSendState(proposal('approved', 'commit_broadcasted'))
+assert.equal(abandoned.kind, 'failed')
+assert.equal(showsSendButton(abandoned), true)
+assert.equal(sendButtonLabel(abandoned), 'Retry send')
+assert.doesNotMatch(
+	abandoned.kind === 'failed' ? abandoned.detail : '',
+	/was broadcast/i,
+	'an empty claim must not say the commit was broadcast',
+)
+const oneTxid = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), revealTxid: 'def' })
+assert.equal(oneTxid.kind, 'in-flight', 'either txid keeps the row in flight')
+
 // ── Every in-flight stage hides the button and names the leg ──
 
-for (const stage of ['commit_broadcasted', 'commit_confirmed', 'reveal_broadcasted'] as const) {
+for (const stage of ['commit_confirmed', 'reveal_broadcasted'] as const) {
 	const state = proposalSendState(proposal('approved', stage))
 	assert.equal(state.kind, 'in-flight', `${stage} must be in-flight`)
 	assert.equal(showsSendButton(state), false, `${stage} must not offer Send`)
 	assert.ok(state.kind === 'in-flight' && state.label.length > 0, `${stage} must carry a label`)
 }
+const publishedCommit = proposalSendState({
+	...proposal('approved', 'commit_broadcasted'),
+	commitTxid: 'abc',
+})
+assert.equal(publishedCommit.kind, 'in-flight', 'a commit with a txid is in flight')
+assert.equal(showsSendButton(publishedCommit), false)
 
 // The commit and reveal legs must be distinguishable — "how can I tell when the
 // commit+reveal bundle is confirmed" is the question the issue asks.
-const commit = proposalSendState(proposal('approved', 'commit_broadcasted'))
+const commit = proposalSendState({ ...proposal('approved', 'commit_broadcasted'), commitTxid: 'abc' })
 const reveal = proposalSendState(proposal('approved', 'reveal_broadcasted'))
 assert.notEqual(
 	commit.kind === 'in-flight' ? commit.label : '',

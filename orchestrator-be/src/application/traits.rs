@@ -34,7 +34,8 @@ pub(crate) trait ProposalRepository: Send + Sync {
     ///
     /// Succeeds from `idle` or `failed`, and from a `commit_broadcasted` row that
     /// has no txids and a claim older than `CLAIM_STALE_AFTER`. Refuses when
-    /// another proposal of the same authority is already in flight.
+    /// another approved proposal of the same authority is already in flight.
+    /// A proposal that is no longer approved does not count.
     /// `Err(Conflict)` carries `AUTHORITY_IN_FLIGHT`.
     async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError>;
 

@@ -200,7 +200,10 @@ export function useBroadcastProposal(
 						setPhase('error')
 						return
 					}
-					const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status)
+					const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status, {
+						commitTxid: p.commitTxid,
+						revealTxid: p.revealTxid,
+					})
 					if (resumePhase !== null) {
 						applyProposal(p)
 						setBundle(res.data)

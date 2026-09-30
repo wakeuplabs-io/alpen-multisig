@@ -281,7 +281,7 @@ candidate for the next phase.
 - ~~**No "one in flight per authority" gate.**~~ **Resolved (#516).** `claim_broadcast` refuses
   a second claim while another proposal of the same authority is in flight
   (`commit_confirmed`, `reveal_broadcasted`, or a `commit_broadcasted` that has a txid or a claim
-  newer than 10 minutes). A `commit_broadcasted` row with no txids whose claim is older than that
+  newer than 10 minutes), and only while that proposal is still approved. A `commit_broadcasted` row with no txids whose claim is older than that
   can be taken again — nothing was published — and it does not block the rest of the authority. A
   row that already has a txid is never re-claimed. See "One broadcast in flight per authority" in
   [`proposal-broadcast-commit-reveal.md`](proposal-broadcast-commit-reveal.md).

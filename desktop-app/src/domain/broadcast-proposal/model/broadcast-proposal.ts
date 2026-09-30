@@ -1,4 +1,5 @@
 import type { BroadcastStatus } from '@/api/proposals'
+import { isAbandonedCommitClaim } from '@/lib/proposal-send-state'
 
 export type BroadcastPhase =
 	'idle' | 'preparing' | 'confirming' | 'awaiting-device' | 'broadcasting' | 'awaiting-confirmation' | 'done' | 'error'
@@ -9,13 +10,20 @@ export type BroadcastPhase =
  * - `reveal_confirmed` (or an already-`enacted` proposal) → `done`.
  * - `reveal_broadcasted` / `commit_broadcasted` / `commit_confirmed` → `awaiting-confirmation`
  *   (submitted, the reveal is in the mempool awaiting a block — the user may leave).
+ * - `commit_broadcasted` with neither txid, when the caller passes them → `null`: nothing was published.
  * - anything else (`idle`, `failed`) → `null`, leaving the caller's current phase unchanged.
  */
 export function phaseForBroadcastStatus(
 	broadcastStatus: BroadcastStatus,
 	proposalStatus?: string,
+	txids?: { commitTxid?: string | null; revealTxid?: string | null },
 ): Extract<BroadcastPhase, 'done' | 'awaiting-confirmation'> | null {
 	if (broadcastStatus === 'reveal_confirmed' || proposalStatus === 'enacted') return 'done'
+	// No txid means nothing was published. Leave the send screen on the form so the
+	// signer can try again. Callers that do not pass txids keep the old reading.
+	if (txids !== undefined && isAbandonedCommitClaim(broadcastStatus, txids.commitTxid, txids.revealTxid)) {
+		return null
+	}
 	if (
 		broadcastStatus === 'reveal_broadcasted' ||
 		broadcastStatus === 'commit_broadcasted' ||

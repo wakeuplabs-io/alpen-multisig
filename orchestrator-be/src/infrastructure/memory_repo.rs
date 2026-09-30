@@ -156,6 +156,7 @@ impl ProposalRepository for InMemoryProposalRepository {
         };
         let now = Utc::now();
         let own_facts = BroadcastClaimFacts {
+            proposal_status: own.status,
             broadcast_status: own.broadcast_status,
             commit_txid: own.commit_txid.clone(),
             reveal_txid: own.reveal_txid.clone(),
@@ -167,6 +168,7 @@ impl ProposalRepository for InMemoryProposalRepository {
                 proposal.action_id != own.action_id && proposal.authority == own.authority
             })
             .map(|proposal| BroadcastClaimFacts {
+                proposal_status: proposal.status,
                 broadcast_status: proposal.broadcast_status,
                 commit_txid: proposal.commit_txid.clone(),
                 reveal_txid: proposal.reveal_txid.clone(),

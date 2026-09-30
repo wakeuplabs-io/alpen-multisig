@@ -23,9 +23,28 @@ export type ProposalSendState =
 	/** This proposal's sequence number is spent. Nothing to press, ever again. */
 	| { kind: 'superseded'; label: string; detail: string }
 
+function txidStored(txid: string | null | undefined): boolean {
+	return typeof txid === 'string' && txid.length > 0
+}
+
+/**
+ * A `commit_broadcasted` row that never stored a txid. The claim ran, the bundle
+ * did not. The backend takes that row again once the claim is old, so the app
+ * offers send. A row that has either txid stays in flight.
+ */
+export function isAbandonedCommitClaim(
+	broadcastStatus: BroadcastStatus,
+	commitTxid?: string | null,
+	revealTxid?: string | null,
+): boolean {
+	return broadcastStatus === 'commit_broadcasted' && !txidStored(commitTxid) && !txidStored(revealTxid)
+}
+
 type SendStateInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
+	commitTxid?: string | null
+	revealTxid?: string | null
 	/**
 	 * A safe harbor rotation the bridge accepted and applied nowhere, because the harbor was
 	 * already up. Decided by the caller — see `harborFrozeDestination` — since answering it needs
@@ -144,6 +163,15 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 				label: STAGE.failed.label,
 				detail: failedBroadcastDetail(proposal.broadcastError),
 			}
+		case 'commit_broadcasted':
+			if (isAbandonedCommitClaim(proposal.broadcastStatus, proposal.commitTxid, proposal.revealTxid)) {
+				return {
+					kind: 'failed',
+					label: STAGE.failed.label,
+					detail: failedBroadcastDetail(proposal.broadcastError),
+				}
+			}
+			return { kind: 'in-flight', ...STAGE.commit_broadcasted }
 		case 'reveal_confirmed':
 			return { kind: 'confirmed', ...STAGE.reveal_confirmed }
 		default:

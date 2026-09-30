@@ -1,4 +1,5 @@
 import type { ActionType, BroadcastStatus, ProposalStatus } from '@/api/proposals'
+import { isAbandonedCommitClaim } from '@/lib/proposal-send-state'
 import { hasProposalQuorum, isTerminalProposalStatus } from '@/lib/proposal-status'
 
 // Minimal proposal shape needed to derive which signer actions are available.
@@ -7,6 +8,8 @@ import { hasProposalQuorum, isTerminalProposalStatus } from '@/lib/proposal-stat
 export type ProposalActionInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
+	commitTxid?: string | null
+	revealTxid?: string | null
 	actionType: ActionType
 	isCancelable: boolean
 	requiredSignatures: number
@@ -59,11 +62,14 @@ export function deriveProposalActions(proposal: ProposalActionInput, signerPubke
 	// `failed` re-opens sending on purpose. The backend accepts a re-broadcast from
 	// `Idle | Failed` and rejects every other state with a conflict, so hiding the
 	// button after a failure would strand the user in a state the API can recover
-	// from (#432).
+	// from (#432). An empty `commit_broadcasted` claim is the same hole: the app
+	// died before any txid was stored, and the backend takes that row again.
 	const canBroadcast =
 		hasQuorum &&
 		proposal.status === 'approved' &&
-		(proposal.broadcastStatus === 'idle' || proposal.broadcastStatus === 'failed')
+		(proposal.broadcastStatus === 'idle' ||
+			proposal.broadcastStatus === 'failed' ||
+			isAbandonedCommitClaim(proposal.broadcastStatus, proposal.commitTxid, proposal.revealTxid))
 
 	return {
 		isTerminal,

@@ -349,6 +349,7 @@ pub(crate) const AUTHORITY_IN_FLIGHT: &str = "a broadcast for this authority is 
 
 /// The fields `claim_broadcast` decides on. `claimed_at` is not part of the API payload.
 pub(crate) struct BroadcastClaimFacts {
+    pub proposal_status: ProposalStatus,
     pub broadcast_status: BroadcastStatus,
     pub commit_txid: Option<String>,
     pub reveal_txid: Option<String>,
@@ -380,12 +381,18 @@ fn own_row_is_claimable(facts: &BroadcastClaimFacts, now: chrono::DateTime<chron
 
 /// Another proposal of this authority blocks a new claim.
 ///
-/// `commit_confirmed` and `reveal_broadcasted` are on the network. A
-/// `commit_broadcasted` row blocks when it has a txid, or when its empty claim
-/// is still inside the window. An empty claim older than the window does not
-/// block: nothing was published, and treating it as in flight would wedge the
-/// authority. `idle`, `failed` and `reveal_confirmed` do not block.
+/// Only an `approved` row can. Closing the proposal (`superseded`, `expired`,
+/// `canceled`, `enacted`) leaves `broadcast_status` where it was, and reconcile
+/// does not walk those rows, so counting them would wedge the authority after
+/// the bundle can no longer be sent. `commit_confirmed` and `reveal_broadcasted`
+/// are on the network. A `commit_broadcasted` row blocks when it has a txid, or
+/// when its empty claim is still inside the window. An empty claim older than
+/// the window does not block: nothing was published. `idle`, `failed` and
+/// `reveal_confirmed` do not block.
 fn other_bundle_in_flight(facts: &BroadcastClaimFacts, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if facts.proposal_status != ProposalStatus::Approved {
+        return false;
+    }
     match facts.broadcast_status {
         BroadcastStatus::CommitConfirmed | BroadcastStatus::RevealBroadcasted => true,
         BroadcastStatus::CommitBroadcasted => !txids_absent(facts) || !claim_is_stale(facts, now),
@@ -1885,6 +1892,61 @@ mod tests {
             assert!(matches!(err, AppError::Conflict(_)), "{status}");
             let row = repo.find_by_action_id(&second).await.unwrap().unwrap();
             assert_eq!(row.broadcast_status, BroadcastStatus::Idle);
+        }
+    }
+
+    /// Closing a proposal leaves its broadcast status where it was. Those rows must not keep
+    /// blocking the authority: reconcile never walks them, so nothing else would clear the gate.
+    #[tokio::test]
+    async fn a_closed_proposal_does_not_block_its_authority() {
+        let repo = new_repo();
+        let closed = save_approved(&repo, 1).await;
+        let cases = [
+            (
+                ProposalStatus::Superseded,
+                BroadcastStatus::RevealBroadcasted,
+            ),
+            (ProposalStatus::Expired, BroadcastStatus::CommitConfirmed),
+        ];
+        for (index, (proposal_status, broadcast_status)) in cases.into_iter().enumerate() {
+            repo.update_broadcast_status(
+                &closed,
+                broadcast_status,
+                Some(proposal_status),
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
+            let next = save_approved(&repo, (index + 2) as u64).await;
+            claim_broadcast_coordination(
+                &repo,
+                Authority::StrataAdmin,
+                "mock://asm-membership",
+                &next,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                repo.find_by_action_id(&next)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .broadcast_status,
+                BroadcastStatus::CommitBroadcasted,
+                "{proposal_status} at {broadcast_status} must not block"
+            );
+            repo.update_broadcast_status(
+                &next,
+                BroadcastStatus::RevealConfirmed,
+                None,
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
         }
     }
 

@@ -361,6 +361,7 @@ impl ProposalRepository for PostgresProposalRepository {
                     SELECT 1 FROM proposals AS o
                     WHERE o.authority = p.authority
                       AND o.action_id <> p.action_id
+                      AND o.status = 'approved'
                       AND (
                             o.broadcast_status IN ('commit_confirmed', 'reveal_broadcasted')
                          OR (
