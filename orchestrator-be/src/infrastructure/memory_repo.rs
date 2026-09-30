@@ -183,6 +183,8 @@ impl ProposalRepository for InMemoryProposalRepository {
         };
         proposal.broadcast_status = BroadcastStatus::CommitBroadcasted;
         proposal.broadcast_error = None;
+        proposal.commit_txid = None;
+        proposal.reveal_txid = None;
         proposal.updated_at = now;
         claimed.insert(action_id.clone(), now);
         Ok(proposal.clone())

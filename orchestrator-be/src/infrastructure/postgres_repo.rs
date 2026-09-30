@@ -343,6 +343,8 @@ impl ProposalRepository for PostgresProposalRepository {
             SET broadcast_status = 'commit_broadcasted',
                 broadcast_claimed_at = NOW(),
                 broadcast_error = NULL,
+                commit_txid = NULL,
+                reveal_txid = NULL,
                 updated_at = NOW()
             WHERE p.action_id = $1
               AND (

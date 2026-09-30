@@ -1799,6 +1799,38 @@ mod tests {
         }
     }
 
+    /// A retry of a dropped bundle must not keep the old txids: the claim runs before the device
+    /// signs, and the new txids are registered only after that. Leftover txids would make a crash
+    /// in between look like a published bundle.
+    #[tokio::test]
+    async fn claiming_a_failed_row_drops_its_txids() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        repo.stage_broadcast_claim(
+            &action_id,
+            BroadcastStatus::Failed,
+            Some("old-commit"),
+            Some("old-reveal"),
+            None,
+            Some("dropped"),
+        )
+        .unwrap();
+
+        let claimed = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(claimed.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert!(claimed.commit_txid.is_none());
+        assert!(claimed.reveal_txid.is_none());
+        assert!(claimed.broadcast_error.is_none());
+    }
+
     #[tokio::test]
     async fn another_proposal_of_the_same_authority_is_refused_while_one_is_in_flight() {
         let repo = new_repo();

@@ -360,7 +360,9 @@ An empty `commit_broadcasted` claim older than the window does not block the aut
 an app that died between the claim and the pre-registration would wedge every later proposal. A
 row that already has either txid is never re-claimed; phase 2 settles that bundle. `failed`,
 `idle` and `reveal_confirmed` do not block. Taking the row sets `broadcast_claimed_at` to now and
-clears `broadcast_error`. The conflict text is `a broadcast for this authority is already in flight`.
+clears `broadcast_error` and both txids. A `failed` row keeps its txids until that claim, so a
+mined reveal is still promoted; once the retry starts, a crash before the new pre-registration is
+an empty claim again. The conflict text is `a broadcast for this authority is already in flight`.
 
 The column is nullable and is not part of the API payload. Rows that were already
 `commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` when the column was added copy
