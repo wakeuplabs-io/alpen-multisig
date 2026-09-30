@@ -260,6 +260,12 @@ watcher starts. The orchestrator already holds both txids from the pre-registrat
 reconcile promotes the row once the reveal is mined, even if no later report lands. Errors before
 the broadcast, and a commit every answering source rejected, still report `failed`.
 
+The reconcile (`confirm_reveal_if_mined`) checks the stored reveal txid from `commit_broadcasted`,
+`commit_confirmed`, `reveal_broadcasted` **and `failed`**: a `failed` row keeps its txids, and if its
+reveal is mined the `failed` was a mistake. It is promoted to `reveal_confirmed` (clearing the
+error) before the supersession sweep runs, so a proposal whose own reveal consumed the seqno is
+never retired as Superseded.
+
 **Known limits (BDK 1.2 and in-memory reservations, documented, not fixed):**
 
 - BDK cannot evict a transaction from its graph. A commit — or any broadcast tx recorded in the

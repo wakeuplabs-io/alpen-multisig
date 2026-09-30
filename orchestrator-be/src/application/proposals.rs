@@ -392,12 +392,15 @@ async fn confirm_reveal_if_mined(
     asm_rpc_url: &str,
 ) -> Proposal {
     // The desktop pre-registers both txids at `commit_broadcasted` before it broadcasts (#516),
-    // so a row whose later reports never landed still carries the reveal txid to check.
+    // so a row whose later reports never landed still carries the reveal txid to check. A `failed`
+    // row keeps its txids too: if that reveal was mined, the `failed` was a mistake, and leaving it
+    // would let the sweep below retire as Superseded a proposal whose own reveal used the seqno.
     if !matches!(
         proposal.broadcast_status,
         BroadcastStatus::CommitBroadcasted
             | BroadcastStatus::CommitConfirmed
             | BroadcastStatus::RevealBroadcasted
+            | BroadcastStatus::Failed
     ) {
         return proposal;
     }
@@ -2159,6 +2162,43 @@ mod tests {
             );
             assert_eq!(proposal.status, ProposalStatus::Enacted, "from {status}");
         }
+    }
+
+    /// #516: a desktop may report `failed` for a bundle that later lands — a report it could not
+    /// take back, or a node that answered "not found" for a reveal still propagating. The row keeps
+    /// its reveal txid, so a mined reveal promotes it like any other sub-status. Otherwise the sweep
+    /// would retire it as Superseded while it was its own reveal that consumed the seqno.
+    #[tokio::test]
+    async fn reconcile_promotes_a_failed_row_whose_reveal_was_mined() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        repo.update_broadcast_status(
+            &action_id,
+            BroadcastStatus::Failed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            Some("dropped: the bundle is no longer in the mempool or the chain"),
+        )
+        .await
+        .unwrap();
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(
+            (proposal.broadcast_status, proposal.status),
+            (BroadcastStatus::RevealConfirmed, ProposalStatus::Enacted),
+            "a mined reveal wins over a mistaken `failed`, and the proposal is never Superseded"
+        );
+        assert_eq!(proposal.broadcast_error, None);
     }
 
     /// Upstream refuses `payload.seqno <= last_seqno`, so a proposal whose seqno *equals* the
