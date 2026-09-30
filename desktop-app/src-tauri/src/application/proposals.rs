@@ -147,9 +147,10 @@ pub async fn prepare_broadcast_bundle(
     ))
 }
 
-/// Attempts per progress report once the bundle is on the network (#516). Small and bounded:
-/// the report is idempotent, and giving up only means the proposal stays at its last reported
-/// status until a later report — never that it is marked `failed`.
+/// Attempts per progress report around the broadcast (#516). Small and bounded: the report is
+/// idempotent. Giving up on the pre-registration aborts the send before anything is broadcast;
+/// giving up after the broadcast leaves the row at `commit_broadcasted`, which already holds
+/// both txids — never `failed`.
 const REPORT_ATTEMPTS: u32 = 3;
 const REPORT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
@@ -177,9 +178,8 @@ async fn report_broadcast(
     Ok(())
 }
 
-/// Reports progress for a bundle that is already on the network, retrying up to
-/// [`REPORT_ATTEMPTS`] times. The caller must not turn a final failure into `failed` (#516).
-async fn report_on_network(
+/// Reports broadcast progress, retrying up to [`REPORT_ATTEMPTS`] times (#516).
+async fn report_with_retry(
     client: &dyn OrchestratorClient,
     action_id: &str,
     broadcast_status: &str,
@@ -304,16 +304,17 @@ pub enum ConfirmOutcome {
 /// confirmation — the caller awaits confirmation separately (see [`await_reveal_confirmation`]).
 ///
 /// Flow: claim → build_signed_commit → build_reveal_tx → drop keypair → insert pending →
-/// broadcasters (Electrum first, node fallback) → report commit_broadcasted → report
-/// reveal_broadcasted → return txids.
+/// pre-register both txids (`commit_broadcasted`) → broadcasters (Electrum first, node
+/// fallback) → report reveal_broadcasted → return txids.
 ///
-/// On any error before the broadcast, and on a commit every answering source rejected, the
-/// proposal is reported as `failed`; a commit that may be live — accepted, ambiguous, or never
-/// delivered and handed over for a manual broadcast — is not (#516, see `broadcast_bundle`).
-/// Once the bundle is on the network the call succeeds (#516):
-/// a failing progress report is retried, logged, and never reported as `failed` — that would
-/// reopen the claim while the bundle is live — and the txids are still returned, so the caller
-/// starts the confirmation watcher, whose `reveal_confirmed` report heals the orchestrator row. The broadcast NEVER advances the chain:
+/// If the pre-registration fails, nothing is broadcast: the coins are released, the pending
+/// reveal dropped and `failed` reported (#516). A commit every answering source rejected also
+/// reports `failed`; a commit that may be live — accepted, ambiguous, or never delivered and
+/// handed over for a manual broadcast — does not (see `broadcast_bundle`). Once the bundle is on
+/// the network the call succeeds: a failing `reveal_broadcasted` report is retried, logged, and
+/// never reported as `failed` — that would reopen the claim while the bundle is live — and the
+/// txids are still returned, so the caller starts the confirmation watcher; the orchestrator
+/// already holds both txids and can promote the row on its own. The broadcast NEVER advances the chain:
 /// confirmation is driven by the dev faucet/harness on regtest and by real miners on
 /// testnet/mainnet. `get_raw_transaction` is NEVER called.
 #[allow(clippy::too_many_arguments)]
@@ -434,6 +435,24 @@ pub async fn submit_commit_then_reveal(
             },
         );
 
+        // Step 5b: Pre-register both txids with the orchestrator BEFORE any broadcast (#516).
+        // Same status the claim set; the backend keeps the txids (COALESCE). A bundle the
+        // orchestrator cannot track would be unrecoverable if the later reports never land, so
+        // if this fails nothing is broadcast: the coins are released and `failed` reported by
+        // the error path below.
+        if let Err(e) = report_with_retry(
+            client,
+            action_id,
+            "commit_broadcasted",
+            &commit_txid,
+            Some(&reveal_txid),
+        )
+        .await
+        {
+            crate::infrastructure::pending_reveals_store::remove_and_persist(pending, action_id);
+            return Err(e);
+        }
+
         // Step 6: Broadcast — Electrum first, node fallback. From here the broadcasters' answer
         // settles the commit's reservation and whether `failed` may be reported (#516).
         unbroadcast_commit = None;
@@ -451,18 +470,20 @@ pub async fn submit_commit_then_reveal(
             return Err(failure.error);
         }
 
-        // Step 7: Report commit_broadcasted then reveal_broadcasted (no commit_confirmed).
-        // From here nothing fails the call: `failed` would reopen the claim while the bundle
-        // is live, and an error would skip the confirmation watcher that heals the row.
-        let reports = [
-            ("commit_broadcasted", None),
-            ("reveal_broadcasted", Some(reveal_txid.as_str())),
-        ];
-        for (status, reveal) in reports {
-            if let Err(e) = report_on_network(client, action_id, status, &commit_txid, reveal).await
-            {
-                tracing::error!(action_id, status, error = %e, "bundle is on the network but its progress report failed; the confirmation watcher will report it");
-            }
+        // Step 7: Report reveal_broadcasted (no commit_confirmed). From here nothing fails the
+        // call: `failed` would reopen the claim while the bundle is live, and an error would
+        // skip the confirmation watcher. The txids are already registered (step 5b), so the
+        // orchestrator can reconcile the row even if this report never lands.
+        if let Err(e) = report_with_retry(
+            client,
+            action_id,
+            "reveal_broadcasted",
+            &commit_txid,
+            Some(&reveal_txid),
+        )
+        .await
+        {
+            tracing::error!(action_id, error = %e, "bundle is on the network but its reveal_broadcasted report failed; the txids are already registered");
         }
 
         Ok((commit_txid, reveal_txid))
@@ -1967,8 +1988,10 @@ mod tests {
     struct MockOrchestratorClientLargeAction {
         reports:
             Mutex<Vec<crate::application::orchestrator_client::ReportBroadcastProgressRequest>>,
-        /// Every progress report is recorded and then refused (orchestrator unreachable).
-        reports_fail: bool,
+        /// Progress reports with these statuses are recorded and then refused.
+        failing_statuses: Vec<&'static str>,
+        /// Shared with a probe broadcaster to assert ordering across both ports.
+        events: Option<std::sync::Arc<Mutex<Vec<String>>>>,
     }
 
     impl MockOrchestratorClientLargeAction {
@@ -1976,11 +1999,22 @@ mod tests {
             Self::default()
         }
 
+        /// Every progress report is refused (orchestrator unreachable).
         fn with_failing_reports() -> Self {
+            Self::with_failing_report_of(&["commit_broadcasted", "reveal_broadcasted", "failed"])
+        }
+
+        fn with_failing_report_of(statuses: &[&'static str]) -> Self {
             Self {
-                reports_fail: true,
+                failing_statuses: statuses.to_vec(),
                 ..Self::default()
             }
+        }
+
+        fn reports(
+            &self,
+        ) -> Vec<crate::application::orchestrator_client::ReportBroadcastProgressRequest> {
+            self.reports.lock().unwrap().clone()
         }
 
         fn reported_statuses(&self) -> Vec<String> {
@@ -2110,7 +2144,16 @@ mod tests {
             request: crate::application::orchestrator_client::ReportBroadcastProgressRequest,
         ) -> Result<OrcProposal, OrchestratorError> {
             self.reports.lock().unwrap().push(request.clone());
-            if self.reports_fail {
+            if let Some(events) = &self.events {
+                events
+                    .lock()
+                    .unwrap()
+                    .push(format!("report:{}", request.broadcast_status));
+            }
+            if self
+                .failing_statuses
+                .contains(&request.broadcast_status.as_str())
+            {
                 return Err(OrchestratorError::Backend {
                     status: 503,
                     message: "orchestrator unavailable".to_string(),
@@ -2684,23 +2727,34 @@ mod tests {
 
     /// #516: once the bundle is on the network, reporting `failed` would reopen the claim
     /// while the bundle is live, and failing the call would skip the confirmation watcher —
-    /// the only thing left that reports `reveal_confirmed`. A failing progress report is
-    /// retried, logged, and the call still succeeds with both txids.
+    /// the only thing left that reports `reveal_confirmed`. A failing `reveal_broadcasted`
+    /// report is retried, logged, and the call still succeeds; the orchestrator already holds
+    /// both txids from the pre-registration, so it can reconcile the row on its own.
     #[tokio::test]
-    async fn report_failure_after_broadcast_is_retried_and_never_fails_the_send() {
+    async fn reveal_report_failure_after_broadcast_never_fails_the_send() {
         let spy = SpyCommitFunding::new("ignored");
-        let client = MockOrchestratorClientLargeAction::with_failing_reports();
+        let client =
+            MockOrchestratorClientLargeAction::with_failing_report_of(&["reveal_broadcasted"]);
 
         let result = submit_with(&client, &spy, "action-report-down").await;
 
         let (commit_txid, reveal_txid) =
             result.expect("the bundle is on the network: the send succeeded");
-        let mut expected = vec!["commit_broadcasted"; REPORT_ATTEMPTS as usize];
+        let mut expected = vec!["commit_broadcasted"];
         expected.extend(vec!["reveal_broadcasted"; REPORT_ATTEMPTS as usize]);
         assert_eq!(
             client.reported_statuses(),
             expected,
-            "each report is retried a bounded number of times and `failed` is never sent"
+            "the reveal report is retried a bounded number of times and `failed` is never sent"
+        );
+        let registered = &client.reports()[0];
+        assert_eq!(
+            (
+                registered.commit_txid.as_deref(),
+                registered.reveal_txid.as_deref()
+            ),
+            (Some(commit_txid.as_str()), Some(reveal_txid.as_str())),
+            "the orchestrator holds both txids from before the broadcast"
         );
         assert!(spy.released().is_empty(), "the commit is on the network");
         assert_eq!(
@@ -2710,6 +2764,124 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![commit_txid, reveal_txid],
             "both broadcast txs are recorded in the wallet so their coins stay spent"
+        );
+    }
+
+    /// Broadcaster that only logs when it is called, next to the orchestrator's reports.
+    struct ProbeBroadcaster {
+        events: std::sync::Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::application::tx_broadcaster::TxBroadcaster for ProbeBroadcaster {
+        fn name(&self) -> &'static str {
+            "probe"
+        }
+        async fn broadcast_pair(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<(), crate::application::tx_broadcaster::PairBroadcastError> {
+            self.events.lock().unwrap().push("broadcast".to_string());
+            Ok(())
+        }
+        async fn broadcast_one(
+            &self,
+            _: &str,
+        ) -> Result<(), crate::application::tx_broadcaster::TxBroadcastError> {
+            unimplemented!("pairs only")
+        }
+    }
+
+    async fn submit_through_probe(
+        client: &MockOrchestratorClientLargeAction,
+        events: &std::sync::Arc<Mutex<Vec<String>>>,
+        spy: &SpyCommitFunding,
+        pending: &PendingReveals,
+    ) -> Result<(String, String), BroadcastError> {
+        let probe: Vec<std::sync::Arc<dyn crate::application::tx_broadcaster::TxBroadcaster>> =
+            vec![std::sync::Arc::new(ProbeBroadcaster {
+                events: std::sync::Arc::clone(events),
+            })];
+        submit_commit_then_reveal(
+            client,
+            &probe,
+            "mock://asm-membership",
+            strata_l1_txfmt::MagicBytes::new([0x62, 0x74, 0x00, 0x00]),
+            bitcoin::Network::Regtest,
+            "action-pre-register",
+            crate::domain::fee_rate::FeeRate::from_raw_clamped(1_000),
+            spy,
+            ScriptBuf::new(),
+            pending,
+            &crate::infrastructure::admin_wallet::EnvelopeKeyCache::default(),
+        )
+        .await
+    }
+
+    /// #516: both txids reach the orchestrator before anything reaches the network, so a
+    /// bundle whose later reports never land can still be reconciled from the orchestrator row.
+    #[tokio::test]
+    async fn both_txids_are_registered_before_any_broadcaster_is_called() {
+        let events = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let client = MockOrchestratorClientLargeAction {
+            events: Some(std::sync::Arc::clone(&events)),
+            ..MockOrchestratorClientLargeAction::default()
+        };
+        let spy = SpyCommitFunding::new("ignored");
+
+        submit_through_probe(
+            &client,
+            &events,
+            &spy,
+            &crate::application::pending_reveals::new(),
+        )
+        .await
+        .expect("submit ok");
+
+        assert_eq!(
+            events.lock().unwrap().clone(),
+            vec![
+                "report:commit_broadcasted",
+                "broadcast",
+                "report:reveal_broadcasted"
+            ]
+        );
+        let registered = &client.reports()[0];
+        assert!(registered.commit_txid.is_some() && registered.reveal_txid.is_some());
+    }
+
+    /// #516: if the orchestrator never takes the txids, nothing is broadcast — a bundle it
+    /// cannot track would be unrecoverable. The coins are released, the pending reveal dropped,
+    /// and `failed` reported (best effort) so the claim reopens.
+    #[tokio::test]
+    async fn pre_registration_failure_aborts_before_any_broadcast() {
+        let events = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let client = MockOrchestratorClientLargeAction {
+            events: Some(std::sync::Arc::clone(&events)),
+            ..MockOrchestratorClientLargeAction::with_failing_reports()
+        };
+        let spy = SpyCommitFunding::new("ignored");
+        let pending = crate::application::pending_reveals::new();
+
+        let result = submit_through_probe(&client, &events, &spy, &pending).await;
+
+        assert!(
+            matches!(result, Err(BroadcastError::Orchestrator(_))),
+            "{result:?}"
+        );
+        assert!(
+            !events.lock().unwrap().iter().any(|e| e == "broadcast"),
+            "nothing may be broadcast: {:?}",
+            events.lock().unwrap()
+        );
+        let mut expected = vec!["commit_broadcasted"; REPORT_ATTEMPTS as usize];
+        expected.push("failed");
+        assert_eq!(client.reported_statuses(), expected);
+        assert_eq!(spy.released(), vec![spy.built_txid()]);
+        assert!(
+            pending.lock().unwrap().get("action-pre-register").is_none(),
+            "the pending reveal of a bundle that was never sent is dropped"
         );
     }
 

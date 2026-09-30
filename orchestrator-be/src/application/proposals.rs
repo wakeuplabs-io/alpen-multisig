@@ -391,7 +391,14 @@ async fn confirm_reveal_if_mined(
     btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
 ) -> Proposal {
-    if proposal.broadcast_status != BroadcastStatus::RevealBroadcasted {
+    // The desktop pre-registers both txids at `commit_broadcasted` before it broadcasts (#516),
+    // so a row whose later reports never landed still carries the reveal txid to check.
+    if !matches!(
+        proposal.broadcast_status,
+        BroadcastStatus::CommitBroadcasted
+            | BroadcastStatus::CommitConfirmed
+            | BroadcastStatus::RevealBroadcasted
+    ) {
         return proposal;
     }
     let Some(reveal_txid) = proposal.reveal_txid.clone() else {
@@ -2111,6 +2118,47 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(proposal.status, ProposalStatus::Approved);
+    }
+
+    /// #516: the desktop pre-registers both txids at `commit_broadcasted` before it broadcasts. If
+    /// its later reports never land, the row stays there — so a mined reveal must be noticed from
+    /// the earlier sub-statuses too, and the enactment check must then run on it.
+    #[tokio::test]
+    async fn reconcile_notices_a_mined_reveal_from_a_row_that_never_reached_reveal_broadcasted() {
+        for status in [
+            BroadcastStatus::CommitBroadcasted,
+            BroadcastStatus::CommitConfirmed,
+        ] {
+            let repo = new_repo();
+            let action_id = save_approved(&repo, 1).await;
+            repo.update_broadcast_status(
+                &action_id,
+                status,
+                None,
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
+
+            reconcile_enacted_for_authority(
+                &repo,
+                crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+                &mock_btc(),
+                Authority::StrataAdmin,
+            )
+            .await
+            .unwrap();
+
+            let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+            assert_eq!(
+                proposal.broadcast_status,
+                BroadcastStatus::RevealConfirmed,
+                "from {status}"
+            );
+            assert_eq!(proposal.status, ProposalStatus::Enacted, "from {status}");
+        }
     }
 
     /// Upstream refuses `payload.seqno <= last_seqno`, so a proposal whose seqno *equals* the

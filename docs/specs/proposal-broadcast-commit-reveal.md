@@ -94,10 +94,11 @@ Tauri `proposals_prepare_broadcast`:
 On user confirmation (`Broadcast`):
 
 1. `POST /proposals/:action_id/broadcast/claim` — orchestrator atomically sets `broadcast_status = commit_broadcasted` (or `409` if already claimed).
-2. Tauri builds **and signs both** the commit and the reveal locally, drops the ephemeral key, stores the signed reveal in memory, then broadcasts commit→reveal (`submitpackage` if available, otherwise sequential `sendrawtransaction`) and waits for confirmation (local Bitcoin RPC).
-3. `PATCH /proposals/:action_id/broadcast` reports `commit_broadcasted` (commit_txid) then `reveal_broadcasted` (reveal_txid) after the broadcast, then `reveal_confirmed` after confirmation, leaving `proposal_status` as `approved`. The intermediate `commit_confirmed` report is no longer sent (both txs confirm together; the PATCH contract enforces no sub-status ordering).
-4. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings).
-5. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles `approved` + `reveal_confirmed` rows to `enacted` when ASM post-conditions match (coordination hygiene only).
+2. Tauri builds **and signs both** the commit and the reveal locally, drops the ephemeral key, and stores the signed reveal (`PendingReveals`).
+3. **Pre-register (#516).** Before anything reaches the network, `PATCH /proposals/:action_id/broadcast` reports `commit_broadcasted` — the status the claim already set — **with both `commit_txid` and `reveal_txid`** (the backend keeps txids with `COALESCE`). The report is retried (3 attempts); if it still fails, nothing is broadcast: the commit's coins are released, the pending reveal is dropped, and `failed` is reported (best effort). A bundle the orchestrator cannot track would otherwise be unrecoverable once its later reports failed.
+4. Tauri broadcasts commit→reveal (`submitpackage` if available, otherwise sequential `sendrawtransaction`), then reports `reveal_broadcasted` (retried and logged; never `failed` once the bundle is on the network — see the reservation section), and a background task reports `reveal_confirmed` after confirmation, leaving `proposal_status` as `approved`. The intermediate `commit_confirmed` report is not sent (both txs confirm together; the PATCH contract enforces no sub-status ordering).
+5. UI re-fetches `GET /proposals/:action_id` and displays **persisted** fields (no hard-coded status strings). Its confirmation poll reads `commitTxid`/`revealTxid` from the row, which are present from step 3 on.
+6. On `GET /proposals` or `GET /proposals/:action_id`, the orchestrator reconciles: a row at `commit_broadcasted`, `commit_confirmed` or `reveal_broadcasted` whose `reveal_txid` is mined is promoted to `reveal_confirmed` (so a bundle whose later reports never landed still converges), and `approved` + `reveal_confirmed` rows become `enacted` when ASM post-conditions match (coordination hygiene only).
 
 ### Step 3: Finalize UX
 
@@ -253,10 +254,11 @@ spends them:
 Reservations live in memory only and die with the wallet session.
 
 Once the pair broadcast has succeeded, the bundle is on the network and the send succeeds: a failing
-progress report is retried (3 attempts) and logged, never reported as `failed` — that would reopen
-the claim while the bundle is live — and the txids are returned so the confirmation watcher starts;
-its `reveal_confirmed` report heals the orchestrator row. Errors before the broadcast, and a commit
-every answering source rejected, still report `failed`.
+`reveal_broadcasted` report is retried (3 attempts) and logged, never reported as `failed` — that
+would reopen the claim while the bundle is live — and the txids are returned so the confirmation
+watcher starts. The orchestrator already holds both txids from the pre-registration, so its own
+reconcile promotes the row once the reveal is mined, even if no later report lands. Errors before
+the broadcast, and a commit every answering source rejected, still report `failed`.
 
 **Known limits (BDK 1.2 and in-memory reservations, documented, not fixed):**
 
@@ -270,6 +272,9 @@ every answering source rejected, still report `failed`.
 - A proposal row left at `commit_broadcasted` by a `NotDelivered`, `Ambiguous` or
   `RevealNotBroadcast` outcome is not degraded here, and a reveal kept in `PendingReveals` has no
   resubmit path in the UI; the desktop's detection of stuck bundles (phase 2 of #516) handles both.
+  The row already holds both pre-registered txids, so a bundle that did land — or one broadcast by
+  hand from the send-manually panel — is promoted by the orchestrator's reconcile once its reveal
+  is mined.
 - A source that answers with an explicit rejection is trusted to not hold the tx: the node's
   JSON-RPC error answer, or an Electrum error that carries bitcoind's -25/-26.
 
