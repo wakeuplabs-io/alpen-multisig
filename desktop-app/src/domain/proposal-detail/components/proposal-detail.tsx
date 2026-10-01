@@ -132,7 +132,7 @@ export function ProposalDetail({
 						<div className="min-w-0 flex-1">
 							<h2 className="m-0 font-display text-display-md leading-[1.2] text-[#0a0a0a]">{title}</h2>
 							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {authorityDisplayName(proposal.authority)}
+								#{proposal.seqNo} · {authorityDisplayName(proposal.authority)} · {inferProposalTypeLabel(proposal)}
 							</p>
 						</div>
 						<StatusBadge status={displayStatus} />
