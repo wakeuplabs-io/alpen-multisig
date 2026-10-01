@@ -14,7 +14,7 @@ use crate::infrastructure::asm_role_membership::{
     update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionContext<'a> {
@@ -285,7 +285,15 @@ pub(crate) fn next_seq_no_from_state(asm_last_seqno: u64, local_max_seq_no: u64)
     std::cmp::max(asm_last_seqno, local_max_seq_no) + 1
 }
 
-/// Lazily expire a pending proposal that has exceeded the 7-day TTL.
+/// When a proposal stops being signable: `expiry_days` after it was proposed.
+///
+/// The one place the window is computed. `expire_if_overdue` decides with it and the API serves
+/// it, so the countdown a client shows and the moment the proposal expires cannot drift (#551).
+pub(crate) fn expires_at(proposal: &Proposal, expiry_days: u64) -> DateTime<Utc> {
+    proposal.created_at + chrono::Duration::days(expiry_days as i64)
+}
+
+/// Lazily expire a pending proposal once its `expiry_days` window has passed.
 ///
 /// No-op for any non-pending status. Persists the `Expired` transition so subsequent
 /// reads also return the updated state.
@@ -297,7 +305,7 @@ pub(crate) async fn expire_if_overdue(
     if proposal.status != ProposalStatus::Pending {
         return Ok(proposal);
     }
-    if proposal.created_at + chrono::Duration::days(expiry_days as i64) > Utc::now() {
+    if expires_at(&proposal, expiry_days) > Utc::now() {
         return Ok(proposal);
     }
     repo.update_broadcast_status(
@@ -1236,6 +1244,29 @@ mod tests {
             untouched.status,
             ProposalStatus::Approved,
             "only a pending proposal expires"
+        );
+    }
+
+    /// #551: the served expiry follows the configured window, not a constant.
+    #[tokio::test]
+    async fn expires_at_is_created_at_plus_the_configured_window() {
+        let repo = new_repo();
+        let sig = sig_a();
+        let session = SessionContext {
+            authority: Authority::StrataAdmin,
+            signer_pubkey: &sig.signer_pubkey,
+        };
+        let created = create_update_action(&repo, session, 3, ACTION_HEX, &sig, 2, None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            expires_at(&created, 7),
+            created.created_at + chrono::Duration::days(7)
+        );
+        assert_eq!(
+            expires_at(&created, 1),
+            created.created_at + chrono::Duration::days(1)
         );
     }
 

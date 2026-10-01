@@ -87,10 +87,10 @@ mod tests {
         "03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn test_app_with_rpc_url(rpc_url: &str) -> Router {
-        test_app_with(rpc_url, 240_000)
+        test_app_with(rpc_url, 240_000, 7)
     }
 
-    fn test_app_with(rpc_url: &str, auth_session_ttl_ms: u64) -> Router {
+    fn test_app_with(rpc_url: &str, auth_session_ttl_ms: u64, proposal_expiry_days: u64) -> Router {
         use crate::infrastructure::{
             bitcoin_rpc::HttpBitcoinRpcClient, memory_repo::InMemoryProposalRepository,
         };
@@ -107,7 +107,7 @@ mod tests {
             120_000,
             auth_session_ttl_ms,
             btc_client,
-            7,
+            proposal_expiry_days,
         ))
     }
 
@@ -300,7 +300,7 @@ mod tests {
     /// Sessions stay time-bounded: once a Bearer token is past its expiry it is refused, whatever the TTL.
     #[tokio::test]
     async fn test_expired_session_is_rejected() {
-        let app = test_app_with("mock://asm-membership", 0);
+        let app = test_app_with("mock://asm-membership", 0, 7);
         let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
 
@@ -362,6 +362,43 @@ mod tests {
         );
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// #551: every response carries the expiry the backend itself enforces, from the configured
+    /// window, so a client never has to recompute it from a constant of its own.
+    #[tokio::test]
+    async fn test_responses_serve_expires_at_from_the_configured_window() {
+        const EXPIRY_DAYS: i64 = 3;
+        let app = test_app_with("mock://asm-membership", 240_000, EXPIRY_DAYS as u64);
+        let token = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let window_ms = EXPIRY_DAYS * 24 * 3600 * 1000;
+
+        let req = json_request(
+            "POST",
+            "/proposals",
+            Some(create_body(SIGNER_A_PK)),
+            Some(&token),
+        );
+        let created = response_json(app.clone().oneshot(req).await.unwrap()).await;
+        let created_at = created["created_at"].as_i64().unwrap();
+        assert_eq!(created["expires_at"].as_i64(), Some(created_at + window_ms));
+
+        let action_id = created["action_id"].as_str().unwrap();
+        let req = json_request(
+            "GET",
+            &format!("/proposals/{action_id}"),
+            None,
+            Some(&token),
+        );
+        let detail = response_json(app.clone().oneshot(req).await.unwrap()).await;
+        assert_eq!(detail["expires_at"].as_i64(), Some(created_at + window_ms));
+
+        let req = json_request("GET", "/proposals", None, Some(&token));
+        let list = response_json(app.oneshot(req).await.unwrap()).await;
+        assert_eq!(
+            list["proposals"][0]["expires_at"].as_i64(),
+            Some(created_at + window_ms)
+        );
     }
 
     #[tokio::test]
