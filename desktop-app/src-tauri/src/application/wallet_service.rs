@@ -1,4 +1,7 @@
 use crate::application::psbt_signer::PsbtSigner;
+use crate::application::tx_broadcaster::{
+    broadcast_single_with_fallback, AllSourcesFailed, TxBroadcaster, TxOutcome,
+};
 use crate::infrastructure::admin_wallet::AdminWalletError;
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwPsbtSigner;
 use crate::infrastructure::node_config_store::NodeConfig;
@@ -50,6 +53,9 @@ pub struct BalanceDto {
     pub confirmed_sats: u64,
     pub unconfirmed_sats: u64,
     pub total_sats: u64,
+    /// Coins spent by this session's in-flight transactions (#516) — left out of the three
+    /// figures above, because no build may select them.
+    pub reserved_sats: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,6 +157,19 @@ pub struct WalletService {
     node_config: Arc<StdRwLock<NodeConfig>>,
     signer: Option<Arc<dyn PsbtSigner>>,
     network: bdk_wallet::bitcoin::Network,
+    /// In-flight UTXO reservations (#516). Coin selection skips these outpoints, because a
+    /// signed-but-unsynced transaction is invisible to BDK and its inputs still look unspent.
+    /// Held only for short, non-async critical sections.
+    /// Each reserved outpoint maps to the txid of the transaction spending it.
+    reserved: std::sync::Mutex<
+        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, bdk_wallet::bitcoin::Txid>,
+    >,
+    /// Single txs (sends, fee bumps) whose broadcast got no definitive answer (#516): their
+    /// inputs stay reserved until the settle rule finds them (recorded) or proves them gone
+    /// (released) — see [`Self::settle_unsettled`].
+    unsettled: std::sync::Mutex<
+        std::collections::HashMap<bdk_wallet::bitcoin::Txid, bdk_wallet::bitcoin::Transaction>,
+    >,
 }
 
 /// Keychain selection for address listing.
@@ -286,6 +305,8 @@ impl WalletService {
             node_config,
             signer: None,
             network,
+            reserved: std::sync::Mutex::new(std::collections::HashMap::new()),
+            unsettled: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -506,6 +527,7 @@ impl WalletService {
             .map_err(|e| AdminWalletError::SyncIncomplete {
                 message: e.to_string(),
             })?;
+        self.drop_reservations_seen_by(&wallet);
 
         let tip_height = wallet.latest_checkpoint().height();
         let last_synced_at = secs_to_iso8601(
@@ -526,7 +548,141 @@ impl WalletService {
         Ok(())
     }
 
-    async fn build_and_sign_tx(
+    fn reservations(
+        &self,
+    ) -> std::sync::MutexGuard<
+        '_,
+        std::collections::HashMap<bdk_wallet::bitcoin::OutPoint, bdk_wallet::bitcoin::Txid>,
+    > {
+        // Every critical section is a plain map update, so a poisoned lock holds valid data.
+        self.reserved.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Outpoints coin selection must skip: inputs of transactions built this session that are
+    /// not in the wallet graph. There is no time expiry (#516): a reservation ends when its tx
+    /// is recorded or seen by a sync, when a broadcaster's answer proves it never landed, or
+    /// with the session.
+    pub(crate) fn reserved_outpoints(&self) -> Vec<bdk_wallet::bitcoin::OutPoint> {
+        self.reservations().keys().copied().collect()
+    }
+
+    /// Reserves the inputs of a freshly built PSBT. Call it while still holding the wallet
+    /// lock the PSBT was built under, so no other build can select the same coins.
+    pub(crate) fn reserve_inputs(&self, unsigned_tx: &bdk_wallet::bitcoin::Transaction) {
+        let txid = unsigned_tx.compute_txid();
+        let mut reserved = self.reservations();
+        for input in &unsigned_tx.input {
+            reserved.insert(input.previous_output, txid);
+        }
+    }
+
+    /// Returns the inputs of a transaction that is not, and will not be, on the network to the
+    /// spendable pool.
+    pub(crate) fn release_reservation(&self, txid: bdk_wallet::bitcoin::Txid) {
+        self.reservations().retain(|_, r| *r != txid);
+        self.unsettled_txs().remove(&txid);
+    }
+
+    fn unsettled_txs(
+        &self,
+    ) -> std::sync::MutexGuard<
+        '_,
+        std::collections::HashMap<bdk_wallet::bitcoin::Txid, bdk_wallet::bitcoin::Transaction>,
+    > {
+        self.unsettled.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Whether a send or fee bump still waits for [`Self::settle_unsettled`].
+    pub fn has_unsettled(&self) -> bool {
+        !self.unsettled_txs().is_empty()
+    }
+
+    /// Applies the settle rule (`tx_settle`) once to every single tx whose broadcast got no
+    /// definitive answer (#516): found at any source → recorded in the wallet (its inputs stay
+    /// spent); absent at every source across the whole window → its reservation is released;
+    /// otherwise nothing changes.
+    pub async fn settle_unsettled(
+        &self,
+        lookups: &[Arc<dyn crate::application::tx_settle::TxLookup>],
+        tracker: &mut crate::application::tx_settle::AbsenceTracker,
+        now: Instant,
+    ) {
+        use crate::application::tx_settle::{look_up, TrackedTx, Verdict};
+        let open: Vec<bdk_wallet::bitcoin::Transaction> =
+            self.unsettled_txs().values().cloned().collect();
+        for tx in open {
+            let txid = tx.compute_txid();
+            let presence = look_up(lookups, &TrackedTx::of(&tx)).await;
+            match tracker.observe(txid, presence, now) {
+                Verdict::Found { .. } => {
+                    tracing::info!(%txid, "unsettled tx found on the network; recorded");
+                    tracker.forget(&txid);
+                    self.record_broadcast(&tx).await;
+                }
+                Verdict::Gone => {
+                    tracing::warn!(%txid, "unsettled tx absent from every source; its coins are released");
+                    tracker.forget(&txid);
+                    self.release_reservation(txid);
+                }
+                Verdict::Open => {}
+            }
+        }
+    }
+
+    /// A broadcaster accepted `tx`: insert it into the wallet graph as unconfirmed, so BDK itself
+    /// treats its inputs as spent (and its change as ours) even if no sync ever sees it — e.g.
+    /// the node fallback broadcast it while Electrum is down. Its reservation is then dropped.
+    pub(crate) async fn record_broadcast(&self, tx: &bdk_wallet::bitcoin::Transaction) {
+        let seen_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut wallet = self.wallet.lock().await;
+        wallet.apply_unconfirmed_txs([(tx.clone(), seen_at)]);
+        self.drop_reservations_seen_by(&wallet);
+    }
+
+    /// Drops the reservations whose transaction the wallet graph now holds: BDK itself treats
+    /// those inputs as spent from here on.
+    fn drop_reservations_seen_by(&self, wallet: &bdk_wallet::Wallet) {
+        self.reservations()
+            .retain(|_, txid| wallet.get_tx(*txid).is_none());
+        self.unsettled_txs()
+            .retain(|txid, _| wallet.get_tx(*txid).is_none());
+    }
+
+    /// Broadcasts one reserved tx (Electrum first, node fallback) and settles its reservation
+    /// from the broadcasters' own answer (#516): accepted → recorded; rejected, or never
+    /// delivered anywhere → released at once; ambiguous → kept, and left to
+    /// [`Self::settle_unsettled`] (or a sync that sees it). `Err` carries the combined outcome and
+    /// every source's error.
+    pub(crate) async fn broadcast_reserved_tx(
+        &self,
+        broadcasters: &[Arc<dyn TxBroadcaster>],
+        tx: &bdk_wallet::bitcoin::Transaction,
+    ) -> Result<(), AllSourcesFailed> {
+        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(tx);
+        match broadcast_single_with_fallback(broadcasters, &tx_hex).await {
+            Ok(()) => {
+                self.record_broadcast(tx).await;
+                Ok(())
+            }
+            Err(failure) => {
+                match failure.outcome {
+                    TxOutcome::Rejected | TxOutcome::NotDelivered => {
+                        self.release_reservation(tx.compute_txid())
+                    }
+                    // A single tx is never `Accepted` on failure; `Ambiguous` may be live.
+                    TxOutcome::Accepted | TxOutcome::Ambiguous => {
+                        self.unsettled_txs().insert(tx.compute_txid(), tx.clone());
+                    }
+                }
+                Err(failure)
+            }
+        }
+    }
+
+    pub(crate) async fn build_and_sign_tx(
         &self,
         commit_addr: bdk_wallet::bitcoin::Address,
         amount_sats: u64,
@@ -540,12 +696,29 @@ impl WalletService {
                 bdk_wallet::bitcoin::Amount::from_sat(amount_sats),
             );
             tx_builder.fee_rate(fee_rate);
-            tx_builder
+            tx_builder.unspendable(self.reserved_outpoints());
+            let psbt = tx_builder
                 .finish()
-                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?
+                .map_err(|e| AdminWalletError::WalletCreation(e.to_string()))?;
+            self.reserve_inputs(&psbt.unsigned_tx);
+            psbt
         };
 
-        self.sign_and_finalize_psbt(psbt).await
+        self.sign_reserved_psbt(psbt).await
+    }
+
+    /// Signs a PSBT whose inputs were reserved by [`Self::reserve_inputs`], releasing the
+    /// reservation when signing fails — nothing was broadcast.
+    pub(crate) async fn sign_reserved_psbt(
+        &self,
+        psbt: bdk_wallet::bitcoin::Psbt,
+    ) -> Result<bdk_wallet::bitcoin::Transaction, AdminWalletError> {
+        let txid = psbt.unsigned_tx.compute_txid();
+        let signed = self.sign_and_finalize_psbt(psbt).await;
+        if signed.is_err() {
+            self.release_reservation(txid);
+        }
+        signed
     }
 
     /// Signs a wallet-built PSBT through the session [`PsbtSigner`] port, finalizes it,
@@ -650,13 +823,32 @@ impl WalletService {
     pub async fn get_balance(&self) -> Result<BalanceDto, AdminWalletError> {
         let wallet = self.wallet.lock().await;
         let balance = wallet.balance();
-        let confirmed_sats = balance.confirmed.to_sat();
-        let unconfirmed_sats =
+        let mut confirmed_sats = balance.confirmed.to_sat();
+        let mut unconfirmed_sats =
             balance.trusted_pending.to_sat() + balance.untrusted_pending.to_sat();
+        // #516: in-flight coins are not spendable; they are reported on their own.
+        let mut reserved_sats = 0;
+        for utxo in self
+            .reserved_outpoints()
+            .into_iter()
+            .filter_map(|outpoint| wallet.get_utxo(outpoint))
+        {
+            let value = utxo.txout.value.to_sat();
+            reserved_sats += value;
+            match utxo.chain_position {
+                bdk_wallet::chain::ChainPosition::Confirmed { .. } => {
+                    confirmed_sats = confirmed_sats.saturating_sub(value)
+                }
+                bdk_wallet::chain::ChainPosition::Unconfirmed { .. } => {
+                    unconfirmed_sats = unconfirmed_sats.saturating_sub(value)
+                }
+            }
+        }
         Ok(BalanceDto {
             confirmed_sats,
             unconfirmed_sats,
             total_sats: confirmed_sats + unconfirmed_sats,
+            reserved_sats,
         })
     }
 
@@ -664,8 +856,10 @@ impl WalletService {
     pub async fn list_utxos(&self) -> Result<Vec<UtxoDto>, AdminWalletError> {
         let wallet = self.wallet.lock().await;
         let tip_height = self.sync_state.read().await.tip_height;
+        let reserved = self.reserved_outpoints();
         let utxos = wallet
             .list_unspent()
+            .filter(|output| !reserved.contains(&output.outpoint))
             .map(|output| {
                 let confirmations = match output.chain_position {
                     bdk_wallet::chain::ChainPosition::Confirmed { anchor, .. } => tip_height
@@ -822,6 +1016,7 @@ mod tests {
             confirmed_sats: 100,
             unconfirmed_sats: 50,
             total_sats: 150,
+            reserved_sats: 0,
         };
         assert_eq!(balance.confirmed_sats, 100);
         assert_eq!(balance.unconfirmed_sats, 50);
@@ -1378,6 +1573,403 @@ mod tests {
     #[test]
     fn percent_complete_midpoint_returns_50() {
         assert_eq!(percent_complete(50, 100), 50);
+    }
+
+    // ── #516: in-flight UTXO reservation ────────────────────────────────────
+
+    mod reservation {
+        use super::*;
+        use crate::application::psbt_signer::MnemonicPsbtSigner;
+        use crate::infrastructure::admin_wallet::load_admin_wallet;
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::{
+            DeviceSignFn, HwDeviceType, HwPsbtSigner,
+        };
+        use bdk_wallet::bitcoin::hashes::Hash;
+        use bdk_wallet::bitcoin::{Address, BlockHash, FeeRate, Network, OutPoint, Transaction};
+        use bdk_wallet::chain::BlockId;
+        use bdk_wallet::test_utils::{insert_checkpoint, receive_output_in_latest_block};
+        use std::collections::HashSet;
+
+        const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        /// Sized so one confirmed UTXO funds exactly one commit — never two at once.
+        const COMMIT_SATS: u64 = 60_000;
+
+        /// Admin wallet with one confirmed UTXO per value (distinct values → distinct txids).
+        fn wallet_with_utxos(values: &[u64]) -> bdk_wallet::Wallet {
+            let mut wallet = load_admin_wallet(TEST_MNEMONIC, Network::Regtest).expect("wallet ok");
+            insert_checkpoint(
+                &mut wallet,
+                BlockId {
+                    height: 1_000,
+                    hash: BlockHash::all_zeros(),
+                },
+            );
+            for value in values {
+                receive_output_in_latest_block(&mut wallet, *value);
+            }
+            wallet
+        }
+
+        fn mnemonic_service(values: &[u64]) -> WalletService {
+            WalletService::with_signer(
+                wallet_with_utxos(values),
+                Arc::new(MnemonicPsbtSigner::new()),
+                test_node_config(),
+            )
+        }
+
+        /// Hardware-signer session whose device operation is the injected stub.
+        fn hw_service(values: &[u64], device_sign: DeviceSignFn) -> WalletService {
+            let signer = Arc::new(HwPsbtSigner::with_device_sign(
+                0xDEAD_BEEF,
+                HwDeviceType::Ledger,
+                "tpubTEST".to_string(),
+                Network::Regtest,
+                device_sign,
+            ));
+            WalletService::with_signer(wallet_with_utxos(values), signer, test_node_config())
+        }
+
+        /// Foreign regtest P2WPKH (derived, so the checksum is always valid).
+        fn commit_address() -> Address {
+            let pk: bdk_wallet::bitcoin::CompressedPublicKey =
+                "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af"
+                    .parse()
+                    .expect("valid pubkey");
+            Address::p2wpkh(&pk, Network::Regtest)
+        }
+
+        fn rate() -> FeeRate {
+            FeeRate::from_sat_per_vb(2).expect("valid rate")
+        }
+
+        async fn build_commit(svc: &WalletService) -> Result<Transaction, AdminWalletError> {
+            svc.build_and_sign_tx(commit_address(), COMMIT_SATS, rate())
+                .await
+        }
+
+        fn inputs(tx: &Transaction) -> HashSet<OutPoint> {
+            tx.input.iter().map(|i| i.previous_output).collect()
+        }
+
+        /// Device stub that records every PSBT it is asked to sign and then rejects it.
+        fn recording_rejecting_signer() -> (DeviceSignFn, Arc<std::sync::Mutex<Vec<Transaction>>>) {
+            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let sink = Arc::clone(&seen);
+            let stub: DeviceSignFn = Arc::new(move |psbt, _xpub, _fp, _net| {
+                sink.lock().unwrap().push(psbt.unsigned_tx.clone());
+                Err("Request rejected on device".to_string())
+            });
+            (stub, seen)
+        }
+
+        #[tokio::test]
+        async fn second_commit_is_refused_while_the_only_utxo_is_reserved() {
+            let svc = mnemonic_service(&[100_000]);
+
+            build_commit(&svc).await.expect("first commit builds");
+            let second = build_commit(&svc).await;
+
+            match second {
+                Err(AdminWalletError::WalletCreation(message)) => assert!(
+                    message.contains("Insufficient funds"),
+                    "the second commit must fail on coin selection, got: {message}"
+                ),
+                other => panic!("expected insufficient funds, got: {other:?}"),
+            }
+        }
+
+        #[tokio::test]
+        async fn back_to_back_commits_spend_disjoint_utxos() {
+            let svc = mnemonic_service(&[100_000, 90_000]);
+
+            let first = build_commit(&svc).await.expect("first commit builds");
+            let second = build_commit(&svc).await.expect("second commit builds");
+
+            assert!(
+                inputs(&first).is_disjoint(&inputs(&second)),
+                "two unbroadcast commits must never share an input"
+            );
+        }
+
+        /// The wallet lock is released while the device signs (up to 180 s). A build in that
+        /// window must already see the first build's inputs as reserved.
+        #[tokio::test]
+        async fn commit_built_while_another_waits_on_the_device_cannot_take_its_coin() {
+            use std::sync::mpsc;
+            use std::time::Duration as StdDuration;
+
+            let on_device = Arc::new(tokio::sync::Notify::new());
+            let (release_tx, release_rx) = mpsc::channel::<()>();
+            let release_rx = Arc::new(std::sync::Mutex::new(release_rx));
+            let (stub, seen) = {
+                let seen = Arc::new(std::sync::Mutex::new(Vec::<Transaction>::new()));
+                let sink = Arc::clone(&seen);
+                let on_device = Arc::clone(&on_device);
+                let stub: DeviceSignFn = Arc::new(move |psbt, _xpub, _fp, _net| {
+                    sink.lock().unwrap().push(psbt.unsigned_tx.clone());
+                    on_device.notify_one();
+                    // Parked "on the device" until the test lets go.
+                    let _ = release_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(StdDuration::from_secs(5));
+                    Err("stub: signing is not the subject of this test".to_string())
+                });
+                (stub, seen)
+            };
+            let svc = Arc::new(hw_service(&[100_000], stub));
+
+            let first = tokio::spawn({
+                let svc = Arc::clone(&svc);
+                async move { build_commit(&svc).await }
+            });
+            on_device.notified().await;
+
+            let second = build_commit(&svc).await;
+            release_tx.send(()).expect("first build still parked");
+            let _ = first.await.expect("first build task");
+
+            assert!(
+                matches!(&second, Err(AdminWalletError::WalletCreation(m)) if m.contains("Insufficient funds")),
+                "the coin on the device must not be selected again, got: {second:?}"
+            );
+            assert_eq!(
+                seen.lock().unwrap().len(),
+                1,
+                "only the first build reaches the device"
+            );
+        }
+
+        #[tokio::test]
+        async fn signer_error_releases_the_reserved_inputs() {
+            let (stub, seen) = recording_rejecting_signer();
+            let svc = hw_service(&[100_000], stub);
+
+            assert!(build_commit(&svc).await.is_err(), "the device rejects");
+            assert!(
+                build_commit(&svc).await.is_err(),
+                "the device rejects again"
+            );
+
+            let seen = seen.lock().unwrap();
+            assert_eq!(
+                seen.len(),
+                2,
+                "after a rejection the only UTXO must be selectable again"
+            );
+            assert_eq!(inputs(&seen[0]), inputs(&seen[1]));
+        }
+
+        /// Sends 30_000 sats to a foreign address through `broadcaster`.
+        async fn send_through(
+            svc: &WalletService,
+            broadcaster: crate::application::tx_broadcaster::tests::MockBroadcaster,
+        ) -> Result<
+            crate::application::wallet_send::SendResultDto,
+            crate::application::wallet_send::SendError,
+        > {
+            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![Arc::new(broadcaster)];
+            svc.send_to_address(
+                &crate::application::wallet_send::SendInput {
+                    address: commit_address().to_string(),
+                    amount_sats: 30_000,
+                    fee_rate_sat_per_kvb: 2_000,
+                    drain_wallet: false,
+                },
+                crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
+                &chain,
+            )
+            .await
+        }
+
+        /// `do_sync` runs this right after `apply_update`; Electrum is out of reach here, so the
+        /// test plants the synced tx in the graph the way `apply_update` would.
+        #[tokio::test]
+        async fn sync_that_sees_the_commit_drops_its_reservation() {
+            let svc = mnemonic_service(&[100_000]);
+            let commit = build_commit(&svc).await.expect("commit builds");
+            let txid = commit.compute_txid();
+
+            let mut wallet = svc.wallet.lock().await;
+            bdk_wallet::test_utils::insert_tx(&mut wallet, commit);
+            bdk_wallet::test_utils::insert_seen_at(&mut wallet, txid, 1);
+            svc.drop_reservations_seen_by(&wallet);
+            drop(wallet);
+
+            assert!(
+                svc.reserved_outpoints().is_empty(),
+                "once the wallet graph holds the commit, BDK owns the spent state"
+            );
+        }
+
+        /// A broadcast that succeeded (e.g. through the node fallback while Electrum is down) may
+        /// never be seen by a sync; its coins must still count as spent.
+        #[tokio::test]
+        async fn successfully_broadcast_coins_stay_spent_without_a_sync() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+
+            let svc = mnemonic_service(&[100_000]);
+            let original_coin: HashSet<OutPoint> = {
+                let wallet = svc.wallet.lock().await;
+                wallet.list_unspent().map(|u| u.outpoint).collect()
+            };
+            send_through(&svc, MockBroadcaster::ok("node"))
+                .await
+                .expect("send broadcast");
+
+            // Only the send's own change is left to fund a commit (chaining on unconfirmed
+            // change is allowed); the coin the send spent is not.
+            let commit = build_commit(&svc)
+                .await
+                .expect("the send's change funds the commit");
+            assert!(
+                inputs(&commit).is_disjoint(&original_coin),
+                "the broadcast send's coin must never be selected again"
+            );
+        }
+
+        /// #516: a send settles its coin from the broadcasters' own answer. A rejection, or no
+        /// source ever reached, gives the coin back at once — to the balance and the next build.
+        /// A source that may hold the send keeps it reserved, with an error of its own.
+        #[tokio::test]
+        async fn failed_send_settles_its_coin_from_the_broadcast_outcome() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::wallet_send::SendError;
+
+            let cases = [
+                (MockBroadcaster::failing("node", "insufficient fee"), true),
+                (MockBroadcaster::unreachable("node"), true),
+                (MockBroadcaster::ambiguous("node"), false),
+            ];
+            for (broadcaster, released) in cases {
+                let svc = mnemonic_service(&[100_000]);
+
+                let result = send_through(&svc, broadcaster).await;
+
+                let balance = svc.get_balance().await.expect("balance");
+                if released {
+                    assert!(
+                        matches!(result, Err(SendError::BroadcastFailed { .. })),
+                        "{result:?}"
+                    );
+                    assert_eq!(
+                        (balance.confirmed_sats, balance.reserved_sats),
+                        (100_000, 0)
+                    );
+                    build_commit(&svc)
+                        .await
+                        .expect("the coin funds the next build");
+                } else {
+                    assert!(
+                        matches!(result, Err(SendError::BroadcastUncertain { .. })),
+                        "{result:?}"
+                    );
+                    assert_eq!(
+                        (balance.confirmed_sats, balance.reserved_sats),
+                        (0, 100_000)
+                    );
+                    assert!(
+                        build_commit(&svc).await.is_err(),
+                        "a send that may be live keeps its coin"
+                    );
+                }
+            }
+        }
+
+        /// #516: a send no source confirmed or refused keeps its coin until the settle rule
+        /// decides. Found anywhere → recorded as spent. Absent at every source across the whole
+        /// window → released. A source that never answers keeps it reserved, however long.
+        #[tokio::test]
+        async fn unsettled_send_is_settled_by_the_lookups() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::tx_settle::tests::StubLookup;
+            use crate::application::tx_settle::{AbsenceTracker, AbsenceWindow, Lookup, TxLookup};
+            use Lookup::{NotFound, Unanswered};
+
+            let found = Lookup::Found { confirmed: false };
+            // (each source's answer, minutes of the checks, (confirmed, reserved) afterwards)
+            type Case = (Vec<Lookup>, Vec<u64>, (u64, u64));
+            let cases: Vec<Case> = vec![
+                (vec![NotFound, NotFound], vec![0, 5, 10], (100_000, 0)),
+                (vec![NotFound, NotFound], vec![0, 5], (0, 100_000)),
+                (vec![NotFound, Unanswered], vec![0, 5, 10, 15], (0, 100_000)),
+                (vec![found, Unanswered], vec![0], (0, 0)),
+            ];
+            for (answers, minutes, expected) in cases {
+                let svc = mnemonic_service(&[100_000]);
+                let sent = send_through(&svc, MockBroadcaster::ambiguous("node")).await;
+                assert!(sent.is_err(), "the send is unsettled");
+                let lookups: Vec<Arc<dyn TxLookup>> = answers
+                    .iter()
+                    .map(|a| Arc::new(StubLookup::always(*a)) as Arc<dyn TxLookup>)
+                    .collect();
+                let mut tracker = AbsenceTracker::new(AbsenceWindow::DEFAULT);
+                let start = std::time::Instant::now();
+
+                for minute in &minutes {
+                    let at = start + std::time::Duration::from_secs(60 * minute);
+                    svc.settle_unsettled(&lookups, &mut tracker, at).await;
+                }
+
+                let balance = svc.get_balance().await.expect("balance");
+                assert_eq!(
+                    (balance.confirmed_sats, balance.reserved_sats),
+                    expected,
+                    "{answers:?} at {minutes:?}"
+                );
+            }
+        }
+
+        /// Balance and UTXO list leave reserved coins out, and say how much is in flight.
+        #[tokio::test]
+        async fn balance_and_utxos_leave_out_reserved_coins() {
+            let svc = mnemonic_service(&[100_000]);
+            build_commit(&svc).await.expect("commit builds");
+
+            let balance = svc.get_balance().await.expect("balance");
+            assert_eq!(
+                (
+                    balance.confirmed_sats,
+                    balance.unconfirmed_sats,
+                    balance.total_sats,
+                    balance.reserved_sats
+                ),
+                (0, 0, 0, 100_000)
+            );
+            assert!(svc.list_utxos().await.expect("utxos").is_empty());
+        }
+
+        #[tokio::test]
+        async fn send_does_not_spend_the_coins_of_an_unbroadcast_commit() {
+            use crate::application::tx_broadcaster::tests::MockBroadcaster;
+            use crate::application::tx_broadcaster::TxBroadcaster;
+            use crate::application::wallet_send::{SendError, SendInput};
+
+            let svc = mnemonic_service(&[100_000]);
+            build_commit(&svc).await.expect("commit builds");
+            let broadcaster = Arc::new(MockBroadcaster::ok("Electrum"));
+            let chain: Vec<Arc<dyn TxBroadcaster>> = vec![broadcaster.clone()];
+
+            let result = svc
+                .send_to_address(
+                    &SendInput {
+                        address: commit_address().to_string(),
+                        amount_sats: 30_000,
+                        fee_rate_sat_per_kvb: 2_000,
+                        drain_wallet: false,
+                    },
+                    crate::domain::fee_rate::FeeRate::new(2_000, 1_000).expect("rate"),
+                    &chain,
+                )
+                .await;
+
+            assert!(
+                matches!(result, Err(SendError::InsufficientFunds { .. })),
+                "the commit's reserved coin must not fund the send, got: {result:?}"
+            );
+            assert!(broadcaster.sent_single().is_empty(), "nothing is broadcast");
+        }
     }
 
     // Acceptance test: get_balance on a never-synced wallet returns all-zero BalanceDto

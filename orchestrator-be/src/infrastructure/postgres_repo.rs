@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::application::proposals::AUTHORITY_IN_FLIGHT;
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{
@@ -106,6 +107,7 @@ fn row_to_proposal_no_sigs(
     let update_id_in_queue: Option<i32> = row.get("update_id_in_queue");
     let created_at: DateTime<Utc> = row.get("created_at");
     let updated_at: DateTime<Utc> = row.get("updated_at");
+    let broadcast_claimed_at: Option<DateTime<Utc>> = row.get("broadcast_claimed_at");
     Ok(Proposal {
         action_id: ActionId(action_id),
         seq_no: row.get::<i64, _>("seq_no") as u64,
@@ -124,13 +126,15 @@ fn row_to_proposal_no_sigs(
         update_id_in_queue: update_id_in_queue.map(|id| id as u32),
         created_at,
         updated_at,
+        broadcast_claimed_at,
     })
 }
 
 const SELECT_PROPOSAL_COLS: &str = r#"
     action_id, seq_no, authority, status, action_hex, required_signatures,
     broadcast_status, commit_txid, reveal_txid, broadcast_error,
-    target_action_id, activation_height, update_id_in_queue, created_at, updated_at, title
+    target_action_id, activation_height, update_id_in_queue, created_at, updated_at, title,
+    broadcast_claimed_at
 "#;
 
 #[async_trait::async_trait]
@@ -314,24 +318,81 @@ impl ProposalRepository for PostgresProposalRepository {
     }
 
     async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError> {
+        // Same predicate as `broadcast_claim_allowed` / `CLAIM_STALE_AFTER` (600s).
+        // Lock every row of this authority first: two claims of different proposals
+        // do not share a row, so `NOT EXISTS` alone can let both through.
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to begin tx: {e}")))?;
+
+        sqlx::query(
+            r#"
+            SELECT action_id FROM proposals
+            WHERE authority = (SELECT authority FROM proposals WHERE action_id = $1)
+            ORDER BY action_id
+            FOR UPDATE
+            "#,
+        )
+        .bind(&action_id.0)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to lock authority rows: {e}")))?;
+
         let row = sqlx::query(&format!(
             r#"
-            UPDATE proposals
-            SET broadcast_status = 'commit_broadcasted', updated_at = NOW()
-            WHERE action_id = $1 AND broadcast_status IN ('idle', 'failed')
+            UPDATE proposals AS p
+            SET broadcast_status = 'commit_broadcasted',
+                broadcast_claimed_at = NOW(),
+                broadcast_error = NULL,
+                commit_txid = NULL,
+                reveal_txid = NULL,
+                updated_at = NOW()
+            WHERE p.action_id = $1
+              AND (
+                    p.broadcast_status IN ('idle', 'failed')
+                 OR (
+                        p.broadcast_status = 'commit_broadcasted'
+                    AND p.commit_txid IS NULL
+                    AND p.reveal_txid IS NULL
+                    AND p.broadcast_claimed_at IS NOT NULL
+                    AND p.broadcast_claimed_at <= NOW() - INTERVAL '600 seconds'
+                    )
+                  )
+              AND NOT EXISTS (
+                    SELECT 1 FROM proposals AS o
+                    WHERE o.authority = p.authority
+                      AND o.action_id <> p.action_id
+                      AND o.status = 'approved'
+                      AND (
+                            o.broadcast_status IN ('commit_confirmed', 'reveal_broadcasted')
+                         OR (
+                                o.broadcast_status = 'commit_broadcasted'
+                            AND NOT (
+                                    o.commit_txid IS NULL
+                                AND o.reveal_txid IS NULL
+                                AND o.broadcast_claimed_at IS NOT NULL
+                                AND o.broadcast_claimed_at <= NOW() - INTERVAL '600 seconds'
+                                )
+                            )
+                          )
+                  )
             RETURNING {SELECT_PROPOSAL_COLS}
             "#
         ))
         .bind(&action_id.0)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to claim broadcast: {e}")))?;
 
         let Some(row) = row else {
-            return Err(AppError::Conflict(
-                "broadcast already in progress or completed".to_string(),
-            ));
+            return Err(AppError::Conflict(AUTHORITY_IN_FLIGHT.to_string()));
         };
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to commit claim: {e}")))?;
 
         let action_id_str: String = row.get("action_id");
         let signatures = load_signatures(&self.pool, &action_id_str).await?;

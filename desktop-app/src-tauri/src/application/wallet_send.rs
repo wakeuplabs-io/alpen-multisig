@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use crate::application::tx_broadcaster::{broadcast_single_with_fallback, TxBroadcaster};
+use crate::application::tx_broadcaster::{TxBroadcaster, TxOutcome};
 use crate::application::wallet_service::WalletService;
 use crate::application::wallet_transactions::fee_rate_sat_per_kvb;
 use crate::domain::fee_rate::FeeRate;
@@ -112,6 +112,10 @@ pub enum SendError {
     SignFailed { message: String },
     #[error("broadcast failed: {message}")]
     BroadcastFailed { message: String },
+    /// No broadcaster confirmed or refused the send, and one may hold it (#516): its coins stay
+    /// reserved. Sending again could pay twice.
+    #[error("the send may have been broadcast: {message}")]
+    BroadcastUncertain { message: String },
 }
 
 /// Stable error code for the tagged `{ "type", "message" }` IPC error shape
@@ -131,6 +135,7 @@ pub fn send_error_code(e: &SendError) -> &'static str {
         SendError::BuildFailed { .. } => "BuildFailed",
         SendError::SignFailed { .. } => "SignFailed",
         SendError::BroadcastFailed { .. } => "BroadcastFailed",
+        SendError::BroadcastUncertain { .. } => "BroadcastUncertain",
     }
 }
 
@@ -258,14 +263,19 @@ fn peek_change_spk(wallet: &bdk_wallet::Wallet) -> bdk_wallet::bitcoin::ScriptBu
 /// change script so the dry-run stays keychain-neutral; `None` on the real
 /// send, where BDK reveals + marks the change index (it will genuinely be
 /// used once the tx broadcasts).
+///
+/// `reserved`: inputs of this session's in-flight transactions (#516) — never
+/// selected, and left out of a drain, so the estimate matches the send.
 fn build_send_psbt(
     wallet: &mut bdk_wallet::Wallet,
     dest: &bdk_wallet::bitcoin::Address,
     input: &SendInput,
     rate: FeeRate,
     estimate_change_spk: Option<&bdk_wallet::bitcoin::ScriptBuf>,
+    reserved: Vec<bdk_wallet::bitcoin::OutPoint>,
 ) -> Result<bdk_wallet::bitcoin::Psbt, SendError> {
     let mut builder = wallet.build_tx();
+    builder.unspendable(reserved);
     if input.drain_wallet {
         builder.drain_wallet();
         builder.drain_to(dest.script_pubkey());
@@ -341,7 +351,14 @@ impl WalletService {
         let change_spk = peek_change_spk(&wallet);
 
         // Requested build — recipient + change, or drain.
-        let psbt = build_send_psbt(&mut wallet, &dest, input, rate, Some(&change_spk))?;
+        let psbt = build_send_psbt(
+            &mut wallet,
+            &dest,
+            input,
+            rate,
+            Some(&change_spk),
+            self.reserved_outpoints(),
+        )?;
         let (fee_sats, change_sats, amount_sats) = read_unsigned_send(&wallet, &psbt, &dest_spk)?;
 
         // Max boundary: a drain dry-run to the same destination at the same
@@ -353,7 +370,14 @@ impl WalletService {
                 drain_wallet: true,
                 ..input.clone()
             };
-            let drain_psbt = build_send_psbt(&mut wallet, &dest, &drain_input, rate, None)?;
+            let drain_psbt = build_send_psbt(
+                &mut wallet,
+                &dest,
+                &drain_input,
+                rate,
+                None,
+                self.reserved_outpoints(),
+            )?;
             read_unsigned_send(&wallet, &drain_psbt, &dest_spk)?.2
         };
 
@@ -377,7 +401,8 @@ impl WalletService {
     /// same branch. The caller is responsible for syncing the wallet beforehand
     /// (the IPC command does so best-effort, mirroring `admin_wallet_bump_fee`);
     /// a stale view is ultimately caught by the network and surfaces as
-    /// `BroadcastFailed`.
+    /// `BroadcastFailed`. A broadcast no source confirmed or refused, where one may hold the tx,
+    /// is `BroadcastUncertain` and keeps its coins reserved (#516).
     pub async fn send_to_address(
         &self,
         input: &SendInput,
@@ -398,15 +423,25 @@ impl WalletService {
             return Err(SendError::InvalidAmount);
         }
 
-        // 5. Build.
+        // 5. Build, reserving the inputs before the wallet lock is released (#516).
         let psbt = {
             let mut wallet = self.wallet.lock().await;
-            build_send_psbt(&mut wallet, &dest, input, rate, None)?
+            let psbt = build_send_psbt(
+                &mut wallet,
+                &dest,
+                input,
+                rate,
+                None,
+                self.reserved_outpoints(),
+            )?;
+            self.reserve_inputs(&psbt.unsigned_tx);
+            psbt
         };
 
         // 6. Sign through the session signer port (same flow as commit funding, R1.1).
+        //    A signing failure releases the reservation.
         let tx = self
-            .sign_and_finalize_psbt(psbt)
+            .sign_reserved_psbt(psbt)
             .await
             .map_err(|e| SendError::SignFailed {
                 message: e.to_string(),
@@ -418,8 +453,12 @@ impl WalletService {
             let fee = wallet
                 .calculate_fee(&tx)
                 .map(|fee| fee.to_sat())
-                .map_err(|e| SendError::BuildFailed {
-                    message: format!("send fee unknown: {e}"),
+                .map_err(|e| {
+                    // Never broadcast: hand the inputs back.
+                    self.release_reservation(tx.compute_txid());
+                    SendError::BuildFailed {
+                        message: format!("send fee unknown: {e}"),
+                    }
                 })?;
             let change = tx
                 .output
@@ -441,16 +480,17 @@ impl WalletService {
             input.amount_sats
         };
 
-        // 8. Broadcast: Electrum first, node RPC fallback.
-        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
-        broadcast_single_with_fallback(broadcasters, &tx_hex)
+        // 8. Broadcast: Electrum first, node RPC fallback; the reservation is settled from the
+        //    broadcasters' answer (#516).
+        self.broadcast_reserved_tx(broadcasters, &tx)
             .await
-            .map_err(|errors| SendError::BroadcastFailed {
-                message: errors
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
+            .map_err(|failure| {
+                let message = failure.message();
+                if failure.outcome == TxOutcome::Ambiguous {
+                    SendError::BroadcastUncertain { message }
+                } else {
+                    SendError::BroadcastFailed { message }
+                }
             })?;
 
         Ok(SendResultDto {
@@ -1355,6 +1395,12 @@ mod tests {
                     message: "m".into(),
                 },
                 "BroadcastFailed",
+            ),
+            (
+                SendError::BroadcastUncertain {
+                    message: "m".into(),
+                },
+                "BroadcastUncertain",
             ),
         ];
         for (err, code) in cases {

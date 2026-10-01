@@ -1,5 +1,8 @@
 //! In-memory proposal repository for POC and testing.
 
+use crate::application::proposals::{
+    broadcast_claim_allowed, BroadcastClaimFacts, AUTHORITY_IN_FLIGHT,
+};
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{
@@ -21,6 +24,44 @@ impl InMemoryProposalRepository {
         Self {
             proposals: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Put a row into a broadcast state and set its claim time. Tests only: no
+    /// port writes the claim timestamp directly.
+    #[cfg(test)]
+    pub(crate) fn stage_broadcast_claim(
+        &self,
+        action_id: &ActionId,
+        status: BroadcastStatus,
+        commit_txid: Option<&str>,
+        reveal_txid: Option<&str>,
+        claimed_at: Option<chrono::DateTime<Utc>>,
+        broadcast_error: Option<&str>,
+    ) -> Result<(), AppError> {
+        let mut proposals = self
+            .proposals
+            .write()
+            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
+        let Some(proposal) = proposals.get_mut(action_id) else {
+            return Err(AppError::NotFound);
+        };
+        proposal.broadcast_status = status;
+        proposal.commit_txid = commit_txid.map(str::to_string);
+        proposal.reveal_txid = reveal_txid.map(str::to_string);
+        proposal.broadcast_error = broadcast_error.map(str::to_string);
+        proposal.broadcast_claimed_at = claimed_at;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn broadcast_claimed_at(
+        &self,
+        action_id: &ActionId,
+    ) -> Option<chrono::DateTime<Utc>> {
+        self.proposals
+            .read()
+            .ok()
+            .and_then(|proposals| proposals.get(action_id)?.broadcast_claimed_at)
     }
 }
 
@@ -90,23 +131,37 @@ impl ProposalRepository for InMemoryProposalRepository {
     }
 
     async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError> {
+        // The write lock serializes claims in this process.
         let mut proposals = self
             .proposals
             .write()
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let Some(proposal) = proposals.get_mut(action_id) else {
+        let Some(own) = proposals.get(action_id).cloned() else {
             return Err(AppError::NotFound);
         };
-        match proposal.broadcast_status {
-            BroadcastStatus::Idle | BroadcastStatus::Failed => {}
-            _ => {
-                return Err(AppError::Conflict(
-                    "broadcast already in progress or completed".to_string(),
-                ))
-            }
+        let now = Utc::now();
+        let own_facts = BroadcastClaimFacts::from(&own);
+        let others: Vec<BroadcastClaimFacts> = proposals
+            .values()
+            .filter(|proposal| {
+                proposal.action_id != own.action_id && proposal.authority == own.authority
+            })
+            .map(BroadcastClaimFacts::from)
+            .collect();
+        if !broadcast_claim_allowed(&own_facts, &others, now) {
+            return Err(AppError::Conflict(AUTHORITY_IN_FLIGHT.to_string()));
         }
+        let Some(proposal) = proposals.get_mut(action_id) else {
+            return Err(AppError::Internal(anyhow::anyhow!(
+                "claim row disappeared while the lock was held"
+            )));
+        };
         proposal.broadcast_status = BroadcastStatus::CommitBroadcasted;
-        proposal.updated_at = Utc::now();
+        proposal.broadcast_error = None;
+        proposal.commit_txid = None;
+        proposal.reveal_txid = None;
+        proposal.updated_at = now;
+        proposal.broadcast_claimed_at = Some(now);
         Ok(proposal.clone())
     }
 
@@ -249,6 +304,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            broadcast_claimed_at: None,
         }
     }
 

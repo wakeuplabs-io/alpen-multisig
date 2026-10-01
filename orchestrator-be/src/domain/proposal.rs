@@ -125,6 +125,10 @@ pub struct Proposal {
     /// screen say how long a bundle has been sitting where it is instead of only that it is there.
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub updated_at: DateTime<Utc>,
+    /// When the current broadcast claim was taken. Absent until the first claim. Not on the
+    /// API payload: the response carries `broadcast_claim_stale`, read on the server clock.
+    #[serde(skip)]
+    pub broadcast_claimed_at: Option<DateTime<Utc>>,
 }
 
 impl Proposal {

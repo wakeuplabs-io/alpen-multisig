@@ -155,6 +155,14 @@ export function formatAdminWalletError(err: AdminWalletError): ErrorView {
 				body: `The transaction was signed but could not be sent. ${err.message}`,
 				severity: 'warning',
 			}
+		// #516: never invite a resend — it could pay twice. Nor point at the transaction list: an
+		// unsettled tx is not recorded there.
+		case 'BroadcastUncertain':
+			return {
+				title: 'Transaction may have been sent',
+				body: `No broadcast channel confirmed or refused it, so it may already be on the network. Its coins stay reserved (shown as in flight) and the app settles it automatically. Do not send again until it is confirmed or its coins are released. ${err.message}`,
+				severity: 'warning',
+			}
 		// Phase 6 — Send (PRD §4.3.5)
 		case 'InvalidAddress':
 			return {

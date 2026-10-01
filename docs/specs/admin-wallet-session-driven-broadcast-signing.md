@@ -318,7 +318,9 @@ during the blocking pre-sign window**. It binds the locked backend design (D1–
 > rail + error banner in `broadcast-phase-progress.tsx`. There is **no** separate confirmation-modal /
 > button / error-alert file, and — important — **there is no "Resubmit reveal" control wired into this
 > broadcast card today**. The resubmit IPC (`proposals_resubmit_reveal`, R1.0.1) exists on the backend but
-> is not surfaced on this screen. `canSign` is sourced by **`useAdminWalletCapability()`** in
+> is not surfaced on this screen — and no longer needs to be: since #516 the desktop's settle loop
+> resubmits a stored reveal automatically whenever its commit is live and every source answers that the
+> reveal is not (see "Settling what the broadcast left open" in `proposal-broadcast-commit-reveal.md`). `canSign` is sourced by **`useAdminWalletCapability()`** in
 > `domain/admin-wallet/hooks/use-admin-wallet-capability.ts` (via the `admin_wallet_can_sign` IPC) and
 > passed into `BroadcastDetailsCard` from `screens/broadcast-proposal-screen.tsx`. The controller's `error`
 > is a flat `string | null` today. The design below targets these real files; any reference to a "modal" or

@@ -410,6 +410,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         })
         .await
         .unwrap();
@@ -658,6 +659,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+
+        // A fresh empty claim reads as in flight to every desktop, and the raw claim time
+        // stays off the payload.
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "GET",
+                &format!("/proposals/{action_id}"),
+                None,
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        let body = response_json(resp).await;
+        assert_eq!(body["broadcast_status"], "commit_broadcasted");
+        assert_eq!(body["broadcast_claim_stale"], false);
+        assert!(body.get("broadcast_claimed_at").is_none());
 
         // Second claim → 409
         let resp = app

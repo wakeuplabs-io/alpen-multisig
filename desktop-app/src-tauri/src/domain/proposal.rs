@@ -39,6 +39,10 @@ pub struct Proposal {
     /// Whether the backend considers this proposal's action cancelable (live confirmation depth).
     #[serde(default)]
     pub is_cancelable: bool,
+    /// An empty `commit_broadcasted` claim past the backend's reclaim window. Decided on the
+    /// server clock. `false` from a backend that predates the field, which keeps the row in flight.
+    #[serde(default)]
+    pub broadcast_claim_stale: bool,
     /// Unix epoch milliseconds when the proposal was created. Used to derive expiry.
     pub created_at: i64,
     /// Unix epoch milliseconds of the last change. Lets a screen say how long a bundle has been

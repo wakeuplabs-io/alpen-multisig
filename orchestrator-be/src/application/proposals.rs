@@ -89,6 +89,7 @@ pub(crate) async fn create_update_action(
         update_id_in_queue: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        broadcast_claimed_at: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -337,6 +338,109 @@ pub struct ReportBroadcastProgressRequest {
     pub broadcast_error: Option<String>,
 }
 
+/// How long a `commit_broadcasted` row with no txids stays taken.
+///
+/// The desktop claims first and then waits up to 180s for the device to sign,
+/// so this sits well above that window. A claim older than this, with neither
+/// txid stored, never reached the network and may be taken again.
+pub(crate) const CLAIM_STALE_AFTER: chrono::Duration = chrono::Duration::seconds(600);
+
+/// Stable conflict text for a refused claim. The desktop matches this sentence.
+pub(crate) const AUTHORITY_IN_FLIGHT: &str = "a broadcast for this authority is already in flight";
+
+/// The fields `claim_broadcast` decides on. `claimed_at` is not part of the API payload.
+pub(crate) struct BroadcastClaimFacts {
+    pub proposal_status: ProposalStatus,
+    pub broadcast_status: BroadcastStatus,
+    pub commit_txid: Option<String>,
+    pub reveal_txid: Option<String>,
+    pub claimed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<&Proposal> for BroadcastClaimFacts {
+    fn from(proposal: &Proposal) -> Self {
+        Self {
+            proposal_status: proposal.status,
+            broadcast_status: proposal.broadcast_status,
+            commit_txid: proposal.commit_txid.clone(),
+            reveal_txid: proposal.reveal_txid.clone(),
+            claimed_at: proposal.broadcast_claimed_at,
+        }
+    }
+}
+
+fn txids_absent(facts: &BroadcastClaimFacts) -> bool {
+    facts.commit_txid.is_none() && facts.reveal_txid.is_none()
+}
+
+/// `true` when `claimed_at` is at least [`CLAIM_STALE_AFTER`] before `now`.
+/// A missing timestamp is not stale: the row cannot be proved old.
+fn claim_is_stale(facts: &BroadcastClaimFacts, now: chrono::DateTime<chrono::Utc>) -> bool {
+    match facts.claimed_at {
+        Some(at) => now.signed_duration_since(at) >= CLAIM_STALE_AFTER,
+        None => false,
+    }
+}
+
+fn own_row_is_claimable(facts: &BroadcastClaimFacts, now: chrono::DateTime<chrono::Utc>) -> bool {
+    match facts.broadcast_status {
+        BroadcastStatus::Idle | BroadcastStatus::Failed => true,
+        BroadcastStatus::CommitBroadcasted if txids_absent(facts) && claim_is_stale(facts, now) => {
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Another proposal of this authority blocks a new claim.
+///
+/// Only an `approved` row can. Closing the proposal (`superseded`, `expired`,
+/// `canceled`, `enacted`) leaves `broadcast_status` where it was, and reconcile
+/// does not walk those rows, so counting them would wedge the authority after
+/// the bundle can no longer be sent. `commit_confirmed` and `reveal_broadcasted`
+/// are on the network. A `commit_broadcasted` row blocks when it has a txid, or
+/// when its empty claim is still inside the window. An empty claim older than
+/// the window does not block: nothing was published. `idle`, `failed` and
+/// `reveal_confirmed` do not block.
+fn other_bundle_in_flight(facts: &BroadcastClaimFacts, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if facts.proposal_status != ProposalStatus::Approved {
+        return false;
+    }
+    match facts.broadcast_status {
+        BroadcastStatus::CommitConfirmed | BroadcastStatus::RevealBroadcasted => true,
+        BroadcastStatus::CommitBroadcasted => !txids_absent(facts) || !claim_is_stale(facts, now),
+        _ => false,
+    }
+}
+
+/// A `commit_broadcasted` row with no txid whose claim is past [`CLAIM_STALE_AFTER`].
+///
+/// Nothing reached the network and the row can be claimed again, so the desktop offers
+/// Send. Inside the window the claimer may still be at the device, and the row reads as
+/// in flight. Decided here, on the server clock, so every desktop agrees with the claim
+/// gate.
+pub(crate) fn empty_claim_is_stale(
+    proposal: &Proposal,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let facts = BroadcastClaimFacts::from(proposal);
+    facts.broadcast_status == BroadcastStatus::CommitBroadcasted
+        && txids_absent(&facts)
+        && claim_is_stale(&facts, now)
+}
+
+/// Same predicate as the `claim_broadcast` SQL in `postgres_repo`.
+pub(crate) fn broadcast_claim_allowed(
+    own: &BroadcastClaimFacts,
+    others: &[BroadcastClaimFacts],
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    own_row_is_claimable(own, now)
+        && !others
+            .iter()
+            .any(|other| other_bundle_in_flight(other, now))
+}
+
 /// Atomically claim broadcast coordination rights (`idle` → `commit_broadcasted`).
 pub(crate) async fn claim_broadcast_coordination(
     repo: &dyn ProposalRepository,
@@ -391,7 +495,17 @@ async fn confirm_reveal_if_mined(
     btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
 ) -> Proposal {
-    if proposal.broadcast_status != BroadcastStatus::RevealBroadcasted {
+    // The desktop pre-registers both txids at `commit_broadcasted` before it broadcasts (#516),
+    // so a row whose later reports never landed still carries the reveal txid to check. A `failed`
+    // row keeps its txids too: if that reveal was mined, the `failed` was a mistake, and leaving it
+    // would let the sweep below retire as Superseded a proposal whose own reveal used the seqno.
+    if !matches!(
+        proposal.broadcast_status,
+        BroadcastStatus::CommitBroadcasted
+            | BroadcastStatus::CommitConfirmed
+            | BroadcastStatus::RevealBroadcasted
+            | BroadcastStatus::Failed
+    ) {
         return proposal;
     }
     let Some(reveal_txid) = proposal.reveal_txid.clone() else {
@@ -841,6 +955,7 @@ pub(crate) async fn create_cancel_proposal(
         update_id_in_queue: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        broadcast_claimed_at: None,
     };
 
     repo.save_proposal(proposal.clone()).await?;
@@ -1466,6 +1581,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
         repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1590,7 +1706,481 @@ mod tests {
         .await
         .unwrap_err();
 
-        assert!(matches!(err, AppError::Conflict(_)));
+        let AppError::Conflict(message) = err else {
+            panic!("expected a conflict");
+        };
+        assert_eq!(message, AUTHORITY_IN_FLIGHT);
+    }
+
+    fn stale_claim_time() -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc::now() - CLAIM_STALE_AFTER - chrono::Duration::seconds(1)
+    }
+
+    #[tokio::test]
+    async fn stale_empty_claim_can_be_retaken() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+        let stale = stale_claim_time();
+        repo.stage_broadcast_claim(
+            &action_id,
+            BroadcastStatus::CommitBroadcasted,
+            None,
+            None,
+            Some(stale),
+            Some("stuck"),
+        )
+        .unwrap();
+
+        let reclaimed = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            reclaimed.broadcast_status,
+            BroadcastStatus::CommitBroadcasted
+        );
+        assert!(reclaimed.broadcast_error.is_none());
+        let claimed_at = repo.broadcast_claimed_at(&action_id).unwrap();
+        assert!(claimed_at > stale);
+    }
+
+    #[tokio::test]
+    async fn recent_empty_claim_stays_taken() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+        let recent = chrono::Utc::now() - chrono::Duration::seconds(60);
+        repo.stage_broadcast_claim(
+            &action_id,
+            BroadcastStatus::CommitBroadcasted,
+            None,
+            None,
+            Some(recent),
+            Some("signing"),
+        )
+        .unwrap();
+
+        let err = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap_err();
+
+        let AppError::Conflict(message) = err else {
+            panic!("expected a conflict");
+        };
+        assert_eq!(message, AUTHORITY_IN_FLIGHT);
+        let row = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(row.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert_eq!(row.broadcast_error.as_deref(), Some("signing"));
+        assert_eq!(repo.broadcast_claimed_at(&action_id), Some(recent));
+    }
+
+    #[tokio::test]
+    async fn claim_with_a_txid_is_never_retaken() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+
+        for (commit, reveal) in [(Some("commit"), None), (None, Some("reveal"))] {
+            repo.stage_broadcast_claim(
+                &action_id,
+                BroadcastStatus::CommitBroadcasted,
+                commit,
+                reveal,
+                Some(stale_claim_time()),
+                None,
+            )
+            .unwrap();
+            let err = claim_broadcast_coordination(
+                &repo,
+                Authority::StrataAdmin,
+                "mock://asm-membership",
+                &action_id,
+            )
+            .await
+            .unwrap_err();
+            assert!(matches!(err, AppError::Conflict(_)));
+            let row = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+            assert_eq!(row.commit_txid.as_deref(), commit);
+            assert_eq!(row.reveal_txid.as_deref(), reveal);
+        }
+    }
+
+    /// A retry of a dropped bundle must not keep the old txids: the claim runs before the device
+    /// signs, and the new txids are registered only after that. Leftover txids would make a crash
+    /// in between look like a published bundle.
+    #[tokio::test]
+    async fn claiming_a_failed_row_drops_its_txids() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        repo.stage_broadcast_claim(
+            &action_id,
+            BroadcastStatus::Failed,
+            Some("old-commit"),
+            Some("old-reveal"),
+            None,
+            Some("dropped"),
+        )
+        .unwrap();
+
+        let claimed = claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &action_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(claimed.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert!(claimed.commit_txid.is_none());
+        assert!(claimed.reveal_txid.is_none());
+        assert!(claimed.broadcast_error.is_none());
+    }
+
+    #[tokio::test]
+    async fn another_proposal_of_the_same_authority_is_refused_while_one_is_in_flight() {
+        let repo = new_repo();
+        let first = save_approved(&repo, 1).await;
+        let second = save_approved(&repo, 2).await;
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &first,
+        )
+        .await
+        .unwrap();
+
+        let blocks = [
+            (
+                BroadcastStatus::RevealBroadcasted,
+                Some("commit"),
+                Some("reveal"),
+                Some(stale_claim_time()),
+            ),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                Some("commit"),
+                None,
+                Some(stale_claim_time()),
+            ),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                None,
+                None,
+                Some(chrono::Utc::now()),
+            ),
+            (
+                BroadcastStatus::CommitConfirmed,
+                None,
+                None,
+                Some(stale_claim_time()),
+            ),
+        ];
+        for (status, commit, reveal, claimed_at) in blocks {
+            repo.stage_broadcast_claim(&first, status, commit, reveal, claimed_at, None)
+                .unwrap();
+            let err = claim_broadcast_coordination(
+                &repo,
+                Authority::StrataAdmin,
+                "mock://asm-membership",
+                &second,
+            )
+            .await
+            .unwrap_err();
+            assert!(matches!(err, AppError::Conflict(_)), "{status}");
+            let row = repo.find_by_action_id(&second).await.unwrap().unwrap();
+            assert_eq!(row.broadcast_status, BroadcastStatus::Idle);
+        }
+    }
+
+    /// Closing a proposal leaves its broadcast status where it was. Those rows must not keep
+    /// blocking the authority: reconcile never walks them, so nothing else would clear the gate.
+    #[tokio::test]
+    async fn a_closed_proposal_does_not_block_its_authority() {
+        let repo = new_repo();
+        let closed = save_approved(&repo, 1).await;
+        let cases = [
+            (
+                ProposalStatus::Superseded,
+                BroadcastStatus::RevealBroadcasted,
+            ),
+            (ProposalStatus::Expired, BroadcastStatus::CommitConfirmed),
+        ];
+        for (index, (proposal_status, broadcast_status)) in cases.into_iter().enumerate() {
+            repo.update_broadcast_status(
+                &closed,
+                broadcast_status,
+                Some(proposal_status),
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
+            let next = save_approved(&repo, (index + 2) as u64).await;
+            claim_broadcast_coordination(
+                &repo,
+                Authority::StrataAdmin,
+                "mock://asm-membership",
+                &next,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                repo.find_by_action_id(&next)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .broadcast_status,
+                BroadcastStatus::CommitBroadcasted,
+                "{proposal_status} at {broadcast_status} must not block"
+            );
+            repo.update_broadcast_status(
+                &next,
+                BroadcastStatus::RevealConfirmed,
+                None,
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    /// Send reopens only when the claim gate would take the row again. Inside the window the
+    /// claimer may still be at the device, and any txid means something may be on the network.
+    #[tokio::test]
+    async fn only_an_empty_claim_past_the_window_reads_as_stale() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        let recent = Utc::now() - chrono::Duration::seconds(30);
+        let cases = [
+            (
+                BroadcastStatus::CommitBroadcasted,
+                None,
+                Some(stale_claim_time()),
+                true,
+            ),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                None,
+                Some(recent),
+                false,
+            ),
+            (BroadcastStatus::CommitBroadcasted, None, None, false),
+            (
+                BroadcastStatus::CommitBroadcasted,
+                Some("commit"),
+                Some(stale_claim_time()),
+                false,
+            ),
+            (
+                BroadcastStatus::RevealBroadcasted,
+                Some("commit"),
+                Some(stale_claim_time()),
+                false,
+            ),
+            (
+                BroadcastStatus::Failed,
+                None,
+                Some(stale_claim_time()),
+                false,
+            ),
+        ];
+        for (status, commit, claimed_at, expected) in cases {
+            repo.stage_broadcast_claim(&action_id, status, commit, None, claimed_at, None)
+                .unwrap();
+            let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+            assert_eq!(
+                empty_claim_is_stale(&proposal, Utc::now()),
+                expected,
+                "{status} commit={commit:?} claimed_at={claimed_at:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_finished_or_foreign_or_stale_empty_claim_does_not_block() {
+        let repo = new_repo();
+        let first = save_approved(&repo, 1).await;
+        let second = save_approved(&repo, 2).await;
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &first,
+        )
+        .await
+        .unwrap();
+
+        repo.stage_broadcast_claim(
+            &first,
+            BroadcastStatus::CommitBroadcasted,
+            None,
+            None,
+            Some(stale_claim_time()),
+            None,
+        )
+        .unwrap();
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &second,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            repo.find_by_action_id(&second)
+                .await
+                .unwrap()
+                .unwrap()
+                .broadcast_status,
+            BroadcastStatus::CommitBroadcasted
+        );
+        repo.update_broadcast_status(
+            &second,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let third = save_approved(&repo, 3).await;
+        repo.update_broadcast_status(
+            &first,
+            BroadcastStatus::Failed,
+            None,
+            None,
+            None,
+            Some("dropped"),
+        )
+        .await
+        .unwrap();
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &third,
+        )
+        .await
+        .unwrap();
+        repo.update_broadcast_status(
+            &third,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit-3"),
+            Some("reveal-3"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let fourth = save_approved(&repo, 4).await;
+        repo.update_broadcast_status(
+            &first,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            None,
+        )
+        .await
+        .unwrap();
+        claim_broadcast_coordination(
+            &repo,
+            Authority::StrataAdmin,
+            "mock://asm-membership",
+            &fourth,
+        )
+        .await
+        .unwrap();
+        repo.update_broadcast_status(
+            &fourth,
+            BroadcastStatus::RevealConfirmed,
+            None,
+            Some("commit-4"),
+            Some("reveal-4"),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let foreign = Proposal {
+            action_id: ActionId("alpen-bundle".to_string()),
+            seq_no: 1,
+            authority: Authority::AlpenAdmin,
+            status: ProposalStatus::Approved,
+            required_signatures: 2,
+            action_hex: ACTION_HEX.to_string(),
+            title: None,
+            signatures: Vec::new(),
+            broadcast_status: BroadcastStatus::Idle,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
+        };
+        repo.save_proposal(foreign).await.unwrap();
+        repo.stage_broadcast_claim(
+            &first,
+            BroadcastStatus::RevealBroadcasted,
+            Some("commit"),
+            Some("reveal"),
+            Some(chrono::Utc::now()),
+            None,
+        )
+        .unwrap();
+        claim_broadcast_coordination(
+            &repo,
+            Authority::AlpenAdmin,
+            "mock://asm-membership",
+            &ActionId("alpen-bundle".to_string()),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -1758,6 +2348,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
         repo.save_proposal(alpen_proposal).await.unwrap();
 
@@ -1831,6 +2422,7 @@ mod tests {
                 update_id_in_queue: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                broadcast_claimed_at: None,
             };
             repo.save_proposal(proposal.clone()).await.unwrap();
 
@@ -1887,6 +2479,7 @@ mod tests {
             update_id_in_queue: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            broadcast_claimed_at: None,
         };
 
         let err = ensure_threshold_snapshot_current(&proposal, "mock://asm-membership")
@@ -2111,6 +2704,84 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(proposal.status, ProposalStatus::Approved);
+    }
+
+    /// #516: the desktop pre-registers both txids at `commit_broadcasted` before it broadcasts. If
+    /// its later reports never land, the row stays there — so a mined reveal must be noticed from
+    /// the earlier sub-statuses too, and the enactment check must then run on it.
+    #[tokio::test]
+    async fn reconcile_notices_a_mined_reveal_from_a_row_that_never_reached_reveal_broadcasted() {
+        for status in [
+            BroadcastStatus::CommitBroadcasted,
+            BroadcastStatus::CommitConfirmed,
+        ] {
+            let repo = new_repo();
+            let action_id = save_approved(&repo, 1).await;
+            repo.update_broadcast_status(
+                &action_id,
+                status,
+                None,
+                Some("commit"),
+                Some("reveal"),
+                None,
+            )
+            .await
+            .unwrap();
+
+            reconcile_enacted_for_authority(
+                &repo,
+                crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+                &mock_btc(),
+                Authority::StrataAdmin,
+            )
+            .await
+            .unwrap();
+
+            let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+            assert_eq!(
+                proposal.broadcast_status,
+                BroadcastStatus::RevealConfirmed,
+                "from {status}"
+            );
+            assert_eq!(proposal.status, ProposalStatus::Enacted, "from {status}");
+        }
+    }
+
+    /// #516: a desktop may report `failed` for a bundle that later lands — a report it could not
+    /// take back, or a node that answered "not found" for a reveal still propagating. The row keeps
+    /// its reveal txid, so a mined reveal promotes it like any other sub-status. Otherwise the sweep
+    /// would retire it as Superseded while it was its own reveal that consumed the seqno.
+    #[tokio::test]
+    async fn reconcile_promotes_a_failed_row_whose_reveal_was_mined() {
+        let repo = new_repo();
+        let action_id = save_approved(&repo, 1).await;
+        repo.update_broadcast_status(
+            &action_id,
+            BroadcastStatus::Failed,
+            None,
+            Some("commit"),
+            Some("reveal"),
+            Some("dropped: the bundle is no longer in the mempool or the chain"),
+        )
+        .await
+        .unwrap();
+
+        reconcile_enacted_for_authority(
+            &repo,
+            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
+            &mock_btc(),
+            Authority::StrataAdmin,
+        )
+        .await
+        .unwrap();
+
+        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
+        assert_eq!(
+            (proposal.broadcast_status, proposal.status),
+            (BroadcastStatus::RevealConfirmed, ProposalStatus::Enacted),
+            "a mined reveal wins over a mistaken `failed`, and the proposal is never Superseded"
+        );
+        assert_eq!(proposal.broadcast_error, None);
     }
 
     /// Upstream refuses `payload.seqno <= last_seqno`, so a proposal whose seqno *equals* the

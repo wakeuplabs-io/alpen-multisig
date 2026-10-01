@@ -11,6 +11,7 @@ import {
 	isBroadcastInFlightPhase,
 	isBroadcastLoadingPhase,
 	isBroadcastProgressPhase,
+	offersRetry,
 } from '@/domain/broadcast-proposal/model/broadcast-proposal'
 import { useCancelBroadcast } from '@/domain/cancel-proposal/hooks/use-cancel-broadcast'
 import { useFeePresets } from '@/domain/fee-selection/hooks/use-fee-presets'
@@ -173,7 +174,7 @@ export function CancelProposalBroadcastScreen() {
 						</div>
 					)}
 
-					{phase === 'error' && (
+					{phase === 'error' && offersRetry(error) && (
 						<div>
 							<button
 								type="button"

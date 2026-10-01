@@ -14,6 +14,7 @@ pub mod pending_reveals;
 pub mod proposals;
 pub mod psbt_signer;
 pub mod tx_broadcaster;
+pub mod tx_settle;
 pub mod wallet_send;
 pub mod wallet_service;
 pub mod wallet_session;

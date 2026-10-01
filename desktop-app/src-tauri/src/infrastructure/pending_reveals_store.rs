@@ -125,6 +125,7 @@ mod tests {
             reveal_tx_hex: "aabbcc".to_string(),
             reveal_txid: "reveal-txid-1".to_string(),
             commit_txid: "commit-txid-1".to_string(),
+            commit_tx_hex: None,
         }
     }
 

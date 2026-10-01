@@ -7,7 +7,7 @@
 //   4. Legacy bare strings degrade to unknown_error / retry (backward compatible).
 
 import assert from 'node:assert/strict'
-import { deriveBroadcastError } from '../broadcast-proposal'
+import { broadcastErrorTitle, deriveBroadcastError, offersRetry } from '../broadcast-proposal'
 
 // ── 1. Structured JSON parsing ───────────────────────────────────────────────
 
@@ -31,6 +31,10 @@ const mappings: Array<{ code: string; expected: string }> = [
 	{ code: 'device_disconnected', expected: 'reconnect-device' },
 	{ code: 'session_expired', expected: 're-auth' },
 	{ code: 'broadcast_unavailable', expected: 'manual-broadcast' },
+	{ code: 'broadcast_rejected', expected: 'retry' },
+	{ code: 'broadcast_uncertain', expected: 'await-network' },
+	{ code: 'reveal_not_broadcast', expected: 'await-network' },
+	{ code: 'bundle_in_flight', expected: 'await-network' },
 	{ code: 'unknown_error', expected: 'retry' },
 ]
 for (const { code, expected } of mappings) {
@@ -70,5 +74,36 @@ assert.equal(unavailable.recovery, 'manual-broadcast')
 assert.equal(unavailable.commitTxHex, 'deadbeef01')
 assert.equal(unavailable.revealTxHex, 'deadbeef02')
 console.log('deriveBroadcastError: broadcast_unavailable carries tx hexes OK')
+
+// ── 6. Retry is offered only when no commit is, or may be, live (#516) ────────
+
+const retryByCode: Array<{ code: string; retry: boolean }> = [
+	{ code: 'broadcast_rejected', retry: true },
+	{ code: 'unknown_error', retry: true },
+	{ code: 'broadcast_uncertain', retry: false },
+	{ code: 'reveal_not_broadcast', retry: false },
+	{ code: 'broadcast_unavailable', retry: false },
+	{ code: 'bundle_in_flight', retry: false },
+]
+for (const { code, retry } of retryByCode) {
+	assert.equal(offersRetry(deriveBroadcastError(JSON.stringify({ code, message: 'm' }))), retry, code)
+}
+assert.equal(offersRetry(null), true)
+console.log('offersRetry: never while the commit is or may be live OK')
+
+// ── 7. The error title never says "failed" while the commit is, or may be, live (#516) ──
+
+const titleByCode: Array<{ code: string; title: string }> = [
+	{ code: 'broadcast_rejected', title: 'Send failed' },
+	{ code: 'unknown_error', title: 'Send failed' },
+	{ code: 'broadcast_unavailable', title: 'Nothing was sent' },
+	{ code: 'broadcast_uncertain', title: 'Send not settled yet' },
+	{ code: 'reveal_not_broadcast', title: 'Send not settled yet' },
+	{ code: 'bundle_in_flight', title: 'Send not settled yet' },
+]
+for (const { code, title } of titleByCode) {
+	assert.equal(broadcastErrorTitle(deriveBroadcastError(JSON.stringify({ code, message: 'm' }))), title, code)
+}
+console.log('broadcastErrorTitle: says failed only when nothing is live OK')
 
 console.log('All deriveBroadcastError tests passed.')

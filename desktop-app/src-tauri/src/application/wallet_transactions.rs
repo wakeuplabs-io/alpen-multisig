@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::application::tx_broadcaster::{broadcast_single_with_fallback, TxBroadcaster};
+use crate::application::tx_broadcaster::{TxBroadcaster, TxOutcome};
 use crate::application::wallet_service::WalletService;
 use crate::domain::fee_rate::{FeeRate, MAX_BROADCAST_SAT_PER_KVB};
 use crate::infrastructure::admin_wallet::AdminWalletError;
@@ -143,6 +143,10 @@ pub enum BumpFeeError {
     InvalidFeeRate(#[from] crate::domain::fee_rate::FeeRateError),
     #[error("broadcast failed: {message}")]
     BroadcastFailed { message: String },
+    /// No broadcaster confirmed or refused the bump, and one may hold it (#516): its coins
+    /// stay reserved. Bumping again could pay twice.
+    #[error("the fee bump may have been broadcast: {message}")]
+    BroadcastUncertain { message: String },
 }
 
 /// Stable error code for the tagged `{ "type", "message" }` IPC error shape
@@ -165,6 +169,7 @@ pub fn bump_error_code(e: &BumpFeeError) -> &'static str {
         BumpFeeError::BuildFailed { .. } => "BuildFailed",
         BumpFeeError::SignFailed { .. } => "SignFailed",
         BumpFeeError::BroadcastFailed { .. } => "BroadcastFailed",
+        BumpFeeError::BroadcastUncertain { .. } => "BroadcastUncertain",
     }
 }
 
@@ -611,22 +616,28 @@ impl WalletService {
         };
 
         // 4. Sign through the session signer port (same flow as commit funding, R1.1).
+        //    The builders reserved the inputs (#516); a signing failure releases them.
         let tx = self
-            .sign_and_finalize_psbt(psbt)
+            .sign_reserved_psbt(psbt)
             .await
             .map_err(|e| BumpFeeError::SignFailed {
                 message: e.to_string(),
             })?;
 
         // 5. Result metadata — all prevouts are wallet-known, so the fee is exact.
-        let new_txid = tx.compute_txid().to_string();
+        //    Every early return from here to the broadcast hands the inputs back.
+        let parsed_new_txid = tx.compute_txid();
+        let new_txid = parsed_new_txid.to_string();
         let fee_sats = {
             let wallet = self.wallet.lock().await;
             wallet
                 .calculate_fee(&tx)
                 .map(|fee| fee.to_sat())
-                .map_err(|e| BumpFeeError::BuildFailed {
-                    message: format!("bump fee unknown: {e}"),
+                .map_err(|e| {
+                    self.release_reservation(parsed_new_txid);
+                    BumpFeeError::BuildFailed {
+                        message: format!("bump fee unknown: {e}"),
+                    }
                 })?
         };
         let vsize_vbytes = tx.vsize() as u64;
@@ -637,22 +648,24 @@ impl WalletService {
         // the fee, and it runs before the broadcast so a short package is never published.
         if let Some(p) = package {
             if let Some(realized) = package_rate_shortfall(p, fee_sats, vsize_vbytes, new_rate) {
+                self.release_reservation(parsed_new_txid);
                 return Err(BumpFeeError::FeeRateTooLow {
                     required_sat_per_kvb: realized,
                 });
             }
         }
 
-        // 6. Broadcast: Electrum first, node RPC fallback.
-        let tx_hex = bdk_wallet::bitcoin::consensus::encode::serialize_hex(&tx);
-        broadcast_single_with_fallback(broadcasters, &tx_hex)
+        // 6. Broadcast: Electrum first, node RPC fallback; the reservation is settled from the
+        //    broadcasters' answer (#516).
+        self.broadcast_reserved_tx(broadcasters, &tx)
             .await
-            .map_err(|errors| BumpFeeError::BroadcastFailed {
-                message: errors
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
+            .map_err(|failure| {
+                let message = failure.message();
+                if failure.outcome == TxOutcome::Ambiguous {
+                    BumpFeeError::BroadcastUncertain { message }
+                } else {
+                    BumpFeeError::BroadcastFailed { message }
+                }
             })?;
 
         // CPFP reports the resulting package rate (what miners evaluate); RBF the
@@ -690,7 +703,13 @@ impl WalletService {
             .build_fee_bump(parsed_txid)
             .map_err(|e| map_build_fee_bump_error(e, txid))?;
         builder.fee_rate(new_rate.to_bdk());
-        builder.finish().map_err(map_create_tx_error)
+        // Extra inputs the replacement may need must not be another in-flight tx's (#516);
+        // the replaced tx's own inputs are manually selected, which overrides this.
+        builder.unspendable(self.reserved_outpoints());
+        let psbt = builder.finish().map_err(map_create_tx_error)?;
+        // Reserved before the wallet lock is released for signing (#516).
+        self.reserve_inputs(&psbt.unsigned_tx);
+        Ok(psbt)
     }
 
     /// CPFP path: child PSBT spending the reveal's wallet-owned change output with
@@ -777,7 +796,7 @@ impl WalletService {
             bdk_wallet::KeychainKind::Internal => internal_wu,
         };
 
-        // What the child may spend besides the anchor. Three exclusions, each load-bearing:
+        // What the child may spend besides the anchor. Four exclusions, each load-bearing:
         //
         // - **Immature coinbase.** `manually_selected_only` skips BDK's `filter_utxos`, and
         //   with it the maturity check, so nothing downstream would stop the child from
@@ -795,6 +814,11 @@ impl WalletService {
         //   bump. Redundant while the rule above holds — a pending package's anchor is by
         //   definition unconfirmed and outside this package, so it is already excluded —
         //   and kept as the safety net for the day that rule is relaxed.
+        // - **Coins reserved by an in-flight transaction** (#516): built this session but
+        //   not yet seen by a sync, so BDK still lists them as unspent. Spending one would
+        //   double-spend that commit or send.
+        let reserved: std::collections::HashSet<OutPoint> =
+            self.reserved_outpoints().into_iter().collect();
         let tip_height = wallet.latest_checkpoint().height();
         let other_anchors: std::collections::HashSet<bdk_wallet::bitcoin::Txid> =
             pending_commit_to_reveal
@@ -806,6 +830,7 @@ impl WalletService {
             .list_unspent()
             .filter(|utxo| utxo.outpoint != anchor)
             .filter(|utxo| !other_anchors.contains(&utxo.outpoint.txid))
+            .filter(|utxo| !reserved.contains(&utxo.outpoint))
             .filter(|utxo| match &utxo.chain_position {
                 ChainPosition::Confirmed { anchor, .. } => {
                     let is_coinbase = wallet
@@ -877,6 +902,8 @@ impl WalletService {
             });
         }
 
+        // Reserved before the wallet lock is released for signing (#516).
+        self.reserve_inputs(&psbt.unsigned_tx);
         Ok((psbt, package))
     }
 }
@@ -2112,6 +2139,210 @@ mod tests {
             "another bundle's anchor is not funding, got: {result:?}"
         );
         assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// #516: a coin reserved by an in-flight commit (built, not yet seen by a sync) is not
+    /// funding — spending it would double-spend that commit.
+    #[tokio::test]
+    async fn cpfp_child_never_funds_itself_from_a_coin_reserved_by_an_in_flight_commit() {
+        let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
+        let reserved_coin = receive_output_in_latest_block(&mut wallet, 50_000);
+        let pending = pending_map_from(&commit_txid, &reveal);
+        let svc = signing_service(wallet);
+        svc.reserve_inputs(&Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: reserved_coin,
+                ..Default::default()
+            }],
+            output: vec![],
+        });
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::CpfpFundingUnavailable { .. })),
+            "a reserved coin is not funding, got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+    }
+
+    /// Dust-window package whose child must spend the anchor plus the one planted spare coin.
+    /// Returns `(wallet, commit_txid, reveal, spare)`.
+    fn dust_window_wallet_with_one_spare() -> (bdk_wallet::Wallet, String, Transaction, OutPoint) {
+        let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
+        let spare = receive_output_in_latest_block(&mut wallet, 50_000);
+        (wallet, commit_txid, reveal, spare)
+    }
+
+    fn hw_service(
+        wallet: bdk_wallet::Wallet,
+        device_sign: crate::infrastructure::hw_wallet::hw_psbt_signer::DeviceSignFn,
+    ) -> WalletService {
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::{HwDeviceType, HwPsbtSigner};
+        let signer = Arc::new(HwPsbtSigner::with_device_sign(
+            0xDEAD_BEEF,
+            HwDeviceType::Ledger,
+            "tpubTEST".to_string(),
+            Network::Regtest,
+            device_sign,
+        ));
+        WalletService::with_signer(wallet, signer, test_node_config())
+    }
+
+    /// #516: the wallet lock is released while the device signs the CPFP child (up to
+    /// 180 s). A commit built in that window must not take the child's spare coin.
+    #[tokio::test]
+    async fn commit_built_while_a_cpfp_child_waits_on_the_device_cannot_take_its_coins() {
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::DeviceSignFn;
+        use std::sync::mpsc;
+
+        let (wallet, commit_txid, reveal, spare) = dust_window_wallet_with_one_spare();
+        let pending = pending_map_from(&commit_txid, &reveal);
+        let on_device = Arc::new(tokio::sync::Notify::new());
+        let child_inputs = Arc::new(std::sync::Mutex::new(Vec::<OutPoint>::new()));
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let release_rx = Arc::new(std::sync::Mutex::new(release_rx));
+        let stub: DeviceSignFn = {
+            let on_device = Arc::clone(&on_device);
+            let child_inputs = Arc::clone(&child_inputs);
+            Arc::new(move |psbt, _xpub, _fp, _net| {
+                let mut seen = child_inputs.lock().unwrap();
+                if seen.is_empty() {
+                    seen.extend(psbt.unsigned_tx.input.iter().map(|i| i.previous_output));
+                    drop(seen);
+                    on_device.notify_one();
+                    // Parked "on the device" until the test lets go.
+                    let _ = release_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(std::time::Duration::from_secs(5));
+                }
+                Err("stub: signing is not the subject of this test".to_string())
+            })
+        };
+        let svc = Arc::new(hw_service(wallet, stub));
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let bump = tokio::spawn({
+            let svc = Arc::clone(&svc);
+            let chain = mock_chain(&[Arc::clone(&mock)]);
+            async move {
+                svc.bump_fee(&commit_txid, higher_rate(), &pending, &chain)
+                    .await
+            }
+        });
+        on_device.notified().await;
+
+        let commit = svc
+            .build_and_sign_tx(
+                bdk_wallet::bitcoin::Address::from_script(&external_script(), Network::Regtest)
+                    .expect("standard script"),
+                20_000,
+                bdk_wallet::bitcoin::FeeRate::from_sat_per_vb(2).expect("rate"),
+            )
+            .await;
+        release_tx.send(()).expect("child still parked");
+        let _ = bump.await.expect("bump task");
+
+        assert!(
+            child_inputs.lock().unwrap().contains(&spare),
+            "fixture: the child must be spending the spare coin"
+        );
+        assert!(
+            matches!(&commit, Err(crate::infrastructure::admin_wallet::AdminWalletError::WalletCreation(m)) if m.contains("Insufficient funds")),
+            "the child's coins must not fund a commit, got: {commit:?}"
+        );
+    }
+
+    /// #516: a bump the package-rate check (F-006) aborts after signing is never broadcast,
+    /// so its inputs go back to the spendable pool.
+    #[tokio::test]
+    async fn cpfp_child_aborted_by_the_package_rate_check_releases_its_coins() {
+        use crate::infrastructure::hw_wallet::hw_psbt_signer::DeviceSignFn;
+        use bdk_wallet::bitcoin::Witness;
+
+        let (wallet, commit_txid, reveal, _spare) = dust_window_wallet_with_one_spare();
+        let pending = pending_map_from(&commit_txid, &reveal);
+        // A "device" that returns an oversized witness: the signed child is far larger than
+        // the one that was priced, so the realized package rate falls short.
+        let stub: DeviceSignFn = Arc::new(|psbt, _xpub, _fp, _net| {
+            for input in &mut psbt.inputs {
+                input.final_script_witness = Some(Witness::from_slice(&[vec![0u8; 2_000]]));
+            }
+            Ok(())
+        });
+        let svc = hw_service(wallet, stub);
+        let mock = Arc::new(MockBroadcaster::ok("Electrum"));
+
+        let result = svc
+            .bump_fee(
+                &commit_txid,
+                higher_rate(),
+                &pending,
+                &mock_chain(&[Arc::clone(&mock)]),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(BumpFeeError::FeeRateTooLow { .. })),
+            "fixture: the package-rate check must abort, got: {result:?}"
+        );
+        assert!(mock.sent_single().is_empty(), "nothing may be broadcast");
+        assert!(
+            svc.reserved_outpoints().is_empty(),
+            "an aborted bump must hand its inputs back"
+        );
+    }
+
+    /// #516: a bump settles its coins from the broadcasters' own answer — released at once on
+    /// a rejection, kept (with an error of its own) when a source may hold it.
+    #[tokio::test]
+    async fn failed_bump_settles_its_inputs_from_the_broadcast_outcome() {
+        let cases = [
+            (
+                MockBroadcaster::failing("Electrum", "insufficient fee"),
+                true,
+            ),
+            (MockBroadcaster::ambiguous("Electrum"), false),
+        ];
+        for (broadcaster, released) in cases {
+            let (wallet, commit_txid, reveal, _spare) = dust_window_wallet_with_one_spare();
+            let pending = pending_map_from(&commit_txid, &reveal);
+            let svc = signing_service(wallet);
+
+            let result = svc
+                .bump_fee(
+                    &commit_txid,
+                    higher_rate(),
+                    &pending,
+                    &mock_chain(&[Arc::new(broadcaster)]),
+                )
+                .await;
+
+            if released {
+                assert!(
+                    matches!(result, Err(BumpFeeError::BroadcastFailed { .. })),
+                    "got: {result:?}"
+                );
+                assert!(svc.reserved_outpoints().is_empty());
+            } else {
+                assert!(
+                    matches!(result, Err(BumpFeeError::BroadcastUncertain { .. })),
+                    "got: {result:?}"
+                );
+                assert!(!svc.reserved_outpoints().is_empty());
+            }
+        }
     }
 
     /// The funding coin is the smallest one that closes the gap, not the largest one

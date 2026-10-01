@@ -84,7 +84,23 @@ function proposal(overrides: Partial<ProposalActionInput> = {}): ProposalActionI
 	)
 	assert.equal(actions.broadcastStarted, true, 'commit_broadcasted means broadcast started')
 	assert.equal(actions.canSign, false, 'once broadcast starts, signing is no longer offered')
-	assert.equal(actions.canBroadcast, false, 'cannot re-broadcast once broadcast started')
+	assert.equal(actions.canBroadcast, false, 'cannot re-broadcast while the claim is live')
+}
+
+// A stale empty claim never published a transaction. Send comes back; signing stays closed.
+{
+	const actions = deriveProposalActions(
+		proposal({
+			status: 'approved',
+			broadcastStatus: 'commit_broadcasted',
+			broadcastClaimStale: true,
+			requiredSignatures: 2,
+			signatures: [{ signerPubkey: SIGNER_A }, { signerPubkey: SIGNER_B }],
+		}),
+		SIGNER_C,
+	)
+	assert.equal(actions.canBroadcast, true, 'a stale empty claim can be sent again')
+	assert.equal(actions.canSign, false, 'the claim already closed signing')
 }
 
 // ── reveal_confirmed (the screenshot case): no signing ───────────────────────
