@@ -567,7 +567,7 @@ function ProposalCard({
 
 				{proposal.status === 'pending' && (
 					<div className="mt-1.5">
-						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+						<PendingExpiryCountdown createdAtMs={proposal.createdAtMs} expiresAtMs={proposal.expiresAtMs} />
 					</div>
 				)}
 			</div>

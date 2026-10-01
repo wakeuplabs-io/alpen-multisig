@@ -10,7 +10,6 @@ use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
 use desktop_app::application::tx_settle::{AbsenceTracker, AbsenceWindow, TxLookup};
 use desktop_app::application::wallet_session::WalletSession;
-use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
@@ -117,7 +116,7 @@ pub struct ProposalDto {
     pub broadcast_claim_stale: bool,
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
-    pub expires_at_ms: u64,
+    pub expires_at_ms: Option<u64>,
 }
 
 #[tauri::command]
@@ -221,7 +220,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
     let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     let created_at_ms = proposal.created_at as u64;
     let updated_at_ms = proposal.updated_at as u64;
-    let expires_at_ms = created_at_ms + PROPOSAL_EXPIRY_DAYS * 24 * 3600 * 1000;
+    let expires_at_ms = proposal.expires_at.map(|ms| ms as u64);
     ProposalDto {
         action_id: proposal.action_id,
         seq_no: proposal.seq_no,
@@ -253,6 +252,50 @@ fn build_client(base_url: String) -> Result<HttpOrchestratorClient, String> {
     let session = orchestrator_auth::get_session()?
         .ok_or_else(|| "no orchestrator session; authenticate first".to_string())?;
     Ok(HttpOrchestratorClient::new(base_url).with_bearer_token(session.token))
+}
+
+#[cfg(test)]
+mod map_proposal_tests {
+    use super::{map_proposal, Proposal};
+
+    fn backend_proposal(expires_at: Option<i64>) -> Proposal {
+        let mut json = serde_json::json!({
+            "action_id": "a1",
+            "seq_no": 1,
+            "authority": "strata_admin",
+            "status": "pending",
+            "required_signatures": 2,
+            "action_hex": "00",
+            "signatures": [],
+            "broadcast_status": "not_broadcasted",
+            "commit_txid": null,
+            "reveal_txid": null,
+            "broadcast_error": null,
+            "target_action_id": null,
+            "activation_height": null,
+            "update_id_in_queue": null,
+            "cancel_proposal": null,
+            "created_at": 1_000,
+            "updated_at": 1_000,
+        });
+        if let Some(ms) = expires_at {
+            json["expires_at"] = ms.into();
+        }
+        serde_json::from_value(json).expect("backend proposal")
+    }
+
+    /// #551: the expiry shown is the one the backend enforces, not a desktop constant.
+    #[test]
+    fn expiry_is_the_backend_value() {
+        let seven_days_ms = 7 * 24 * 3600 * 1000;
+        let dto = map_proposal(backend_proposal(Some(1_000 + seven_days_ms)));
+        assert_eq!(dto.expires_at_ms, Some(1_000 + seven_days_ms as u64));
+    }
+
+    #[test]
+    fn a_backend_without_the_field_yields_no_expiry() {
+        assert_eq!(map_proposal(backend_proposal(None)).expires_at_ms, None);
+    }
 }
 
 #[cfg(test)]

@@ -17,6 +17,9 @@ pub struct ProposalResponse {
     /// `commit_broadcasted` with no txid and a claim past the reclaim window: nothing was
     /// published and Send is open again. `false` while the claimer may still be at the device.
     pub broadcast_claim_stale: bool,
+    /// When the proposal stops being signable, from the window this backend enforces (#551).
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +91,7 @@ async fn proposal_response(state: &AppState, proposal: Proposal) -> ProposalResp
     ProposalResponse {
         is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
         broadcast_claim_stale: proposals::empty_claim_is_stale(&proposal, chrono::Utc::now()),
+        expires_at: proposals::expires_at(&proposal, state.proposal_expiry_days),
         proposal,
     }
 }
@@ -180,6 +184,7 @@ pub async fn list_proposals(
         .map(|proposal| ProposalResponse {
             is_cancelable: resolver.is_cancelable_for_hex(&proposal.action_hex),
             broadcast_claim_stale: proposals::empty_claim_is_stale(&proposal, chrono::Utc::now()),
+            expires_at: proposals::expires_at(&proposal, state.proposal_expiry_days),
             proposal,
         })
         .collect();

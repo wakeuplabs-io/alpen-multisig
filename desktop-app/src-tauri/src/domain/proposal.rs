@@ -43,11 +43,16 @@ pub struct Proposal {
     /// server clock. `false` from a backend that predates the field, which keeps the row in flight.
     #[serde(default)]
     pub broadcast_claim_stale: bool,
-    /// Unix epoch milliseconds when the proposal was created. Used to derive expiry.
+    /// Unix epoch milliseconds when the proposal was created.
     pub created_at: i64,
     /// Unix epoch milliseconds of the last change. Lets a screen say how long a bundle has been
     /// sitting where it is.
     pub updated_at: i64,
+    /// Unix epoch milliseconds when the proposal stops being signable, from the window the
+    /// backend enforces (#551). `None` from a backend that predates the field: no countdown is
+    /// better than one computed against a window we cannot know.
+    #[serde(default)]
+    pub expires_at: Option<i64>,
 }
 
 /// A signature attached to a proposal.

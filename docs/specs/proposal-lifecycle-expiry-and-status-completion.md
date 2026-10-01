@@ -12,10 +12,11 @@ coverage via the integration harness.
 ### Included
 
 - Expose `created_at` from the DB through domain → DTO → frontend type.
-- Derive and expose `expires_at_ms` in the Tauri DTO layer (7-day offset from `created_at`).
+- Serve `expires_at` from the orchestrator (`created_at` + `PROPOSAL_EXPIRY_DAYS`, the window it enforces) and
+  pass it through the Tauri DTO as `expires_at_ms` (#551 — the desktop no longer computes it).
 - Lazy expiry enforcement in `get_proposal` and `list_proposals` handlers.
 - `<PendingExpiryCountdown>` component rendered on dashboard list rows and the proposal detail page.
-- Expiry urgency state (red/orange warning when < 24 h remain).
+- Expiry urgency state (warning when < 24 h remain, capped at the last quarter of the lifetime — #551).
 - Expiry countdown on the manual signing screen.
 - Verify and, if missing, add the "Send" button for quorum-reached proposals not yet confirmed.
 - Post-approve quorum broadcast prompt.
@@ -57,11 +58,13 @@ Add `created_at` to `SELECT_PROPOSAL_COLS` so it is populated when mapping rows.
 Add two fields:
 
 ```rust
-pub created_at_ms: u64,   // Unix epoch ms
-pub expires_at_ms: u64,   // created_at_ms + 7 * 24 * 3600 * 1000
+pub created_at_ms: u64,           // Unix epoch ms
+pub expires_at_ms: Option<u64>,   // the orchestrator's `expires_at`; None from a backend without it
 ```
 
-Compute `expires_at_ms` in the `From<Proposal>` impl; do not add a DB column for it.
+The orchestrator computes `expires_at` with `application::proposals::expires_at`, the same function
+`expire_if_overdue` decides with, and serves it on every proposal response; no DB column. The desktop
+holds no copy of the window (#551).
 
 ### Frontend type changes
 
@@ -69,7 +72,7 @@ Compute `expires_at_ms` in the `From<Proposal>` impl; do not add a DB column for
 
 ```typescript
 createdAtMs: number
-expiresAtMs: number
+expiresAtMs: number | null
 ```
 
 ### Acceptance criteria
@@ -129,7 +132,8 @@ Props:
 
 ```typescript
 interface PendingExpiryCountdownProps {
-  expiresAtMs: number
+  createdAtMs: number
+  expiresAtMs: number | null
 }
 ```
 
@@ -137,8 +141,10 @@ Behaviour:
 
 - Display a human-readable countdown: `"Expires in 2 d 14 h"`, `"Expires in 5 h 32 m"`, `"Expires in 43 m"`.
 - Update every 60 seconds via `setInterval`.
-- When < 24 h remain: switch label colour to orange/amber and prepend `"⚠ Expiring soon — "`.
-- When < 1 h remain: switch colour to red.
+- When less than `min(24 h, lifetime / 4)` remains: prepend `"⚠ Expiring soon — "` (`expiryUrgency` in
+  `src/lib/proposal-expiry.ts`). The cap keeps a short window from warning from creation (#551).
+- When less than `min(1 h, lifetime / 4)` remains: switch to the darker neutral (#416: not red).
+- When `expiresAtMs` is `null` (backend predates the field): render nothing.
 - When `expiresAtMs <= Date.now()`: display `"Expired"` in red (defensive fallback; server should have already
   transitioned the status).
 - Model after the existing `activation-countdown.tsx` for interval management and cleanup.

@@ -291,7 +291,7 @@ export function SignScreen() {
 
 				{!isLoading && proposal !== null && proposal.status === 'pending' && (
 					<div className="mt-4 rounded-xl border border-accent-border bg-highlight-surface px-4 py-2.5">
-						<PendingExpiryCountdown expiresAtMs={proposal.expiresAtMs} />
+						<PendingExpiryCountdown createdAtMs={proposal.createdAtMs} expiresAtMs={proposal.expiresAtMs} />
 					</div>
 				)}
 

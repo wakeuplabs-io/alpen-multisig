@@ -39,6 +39,13 @@ const staleClaim = proposalSchema.parse({
 })
 assert.equal(staleClaim.broadcastClaimStale, true)
 
+// The expiry is the backend's (#551): served as is, and `null` when a backend predates the field,
+// so no countdown is drawn against a window the desktop would have to guess.
+assert.equal(proposalSchema.parse(proposalWithNullBroadcastFields).expiresAtMs, 2000000)
+const withoutExpiry: Record<string, unknown> = { ...proposalWithNullBroadcastFields }
+delete withoutExpiry.expiresAtMs
+assert.equal(proposalSchema.parse(withoutExpiry).expiresAtMs, null)
+
 import { AuthRole } from '../types/auth-role.ts'
 import { authChallengeSchema, authSessionSchema } from './ipc-schemas.ts'
 
