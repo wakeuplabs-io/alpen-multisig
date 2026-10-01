@@ -1,30 +1,27 @@
 import { useEffect, useState } from 'react'
+import { expiryUrgency, formatExpiryTimeLeft } from '@/lib/proposal-expiry'
 
 type Props = {
-	expiresAtMs: number
+	createdAtMs: number
+	/** From the backend that enforces the window; `null` from one that predates the field. */
+	expiresAtMs: number | null
 }
 
-function formatTimeLeft(ms: number): string {
-	if (ms <= 0) return 'Expired'
-	const totalSeconds = Math.floor(ms / 1000)
-	const days = Math.floor(totalSeconds / 86400)
-	const hours = Math.floor((totalSeconds % 86400) / 3600)
-	const minutes = Math.floor((totalSeconds % 3600) / 60)
-	if (days > 0) return `Expires in ${days} d ${hours} h`
-	if (hours > 0) return `Expires in ${hours} h ${minutes} m`
-	return `Expires in ${minutes} m`
-}
-
-export function PendingExpiryCountdown({ expiresAtMs }: Props) {
-	const [timeLeftMs, setTimeLeftMs] = useState(() => expiresAtMs - Date.now())
+export function PendingExpiryCountdown({ createdAtMs, expiresAtMs }: Props) {
+	const [nowMs, setNowMs] = useState(() => Date.now())
 
 	useEffect(() => {
-		setTimeLeftMs(expiresAtMs - Date.now())
+		setNowMs(Date.now())
 		const id = setInterval(() => {
-			setTimeLeftMs(expiresAtMs - Date.now())
+			setNowMs(Date.now())
 		}, 60_000)
 		return () => clearInterval(id)
 	}, [expiresAtMs])
+
+	// No countdown is better than one computed against a window we cannot know (#551).
+	if (expiresAtMs === null) return null
+
+	const timeLeftMs = expiresAtMs - nowMs
 
 	if (timeLeftMs <= 0) {
 		return (
@@ -35,16 +32,16 @@ export function PendingExpiryCountdown({ expiresAtMs }: Props) {
 		)
 	}
 
-	const isUrgent = timeLeftMs < 60 * 60 * 1000
-	const isWarning = timeLeftMs < 24 * 60 * 60 * 1000
+	const urgency = expiryUrgency(timeLeftMs, expiresAtMs - createdAtMs)
 
 	// Running out of time is a status, not a failure (#416): urgency is carried by
 	// the ⚠ and the wording, and shown as a darker neutral rather than red.
-	const label = isWarning ? `⚠ Expiring soon — ${formatTimeLeft(timeLeftMs)}` : formatTimeLeft(timeLeftMs)
+	const label =
+		urgency === 'none' ? formatExpiryTimeLeft(timeLeftMs) : `⚠ Expiring soon — ${formatExpiryTimeLeft(timeLeftMs)}`
 
 	return (
 		<span
-			className={`inline-flex items-center gap-1 text-label font-medium ${isUrgent ? 'text-emphasis' : 'text-emphasis-soft'}`}
+			className={`inline-flex items-center gap-1 text-label font-medium ${urgency === 'urgent' ? 'text-emphasis' : 'text-emphasis-soft'}`}
 		>
 			<span aria-hidden="true">⏱</span>
 			{label}

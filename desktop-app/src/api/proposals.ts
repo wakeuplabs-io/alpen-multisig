@@ -54,7 +54,8 @@ export type Proposal = {
 	createdAtMs: number
 	/** Last change of any kind, including every broadcast-status write. */
 	updatedAtMs: number
-	expiresAtMs: number
+	/** Served by the backend that enforces the window (#551); `null` from one that predates it. */
+	expiresAtMs: number | null
 }
 
 export type PrepareBroadcastResult = {
