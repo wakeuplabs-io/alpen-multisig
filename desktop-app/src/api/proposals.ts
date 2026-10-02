@@ -49,10 +49,13 @@ export type Proposal = {
 	cancelProposal: CancelProposalSummary | null
 	/** Whether the backend considers this action cancelable (live confirmation depth). */
 	isCancelable: boolean
+	/** An empty `commit_broadcasted` claim past the backend's reclaim window: Send is open again. */
+	broadcastClaimStale: boolean
 	createdAtMs: number
 	/** Last change of any kind, including every broadcast-status write. */
 	updatedAtMs: number
-	expiresAtMs: number
+	/** Served by the backend that enforces the window (#551); `null` from one that predates it. */
+	expiresAtMs: number | null
 }
 
 export type PrepareBroadcastResult = {

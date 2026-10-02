@@ -79,9 +79,12 @@ export const proposalSchema = z
 		updateIdInQueue: nullishToNull(z.number()),
 		cancelProposal: nullishToNull(cancelProposalSummarySchema),
 		isCancelable: z.boolean(),
+		// Absent from an older backend: stay in flight rather than offer a send it would refuse.
+		broadcastClaimStale: z.boolean().default(false),
 		createdAtMs: z.number(),
 		updatedAtMs: z.number(),
-		expiresAtMs: z.number(),
+		// Absent from an older backend: no countdown rather than one against a guessed window (#551).
+		expiresAtMs: nullishToNull(z.number()),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 

@@ -16,6 +16,7 @@ import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
 import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
 import type { WalletAdapter } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
+import { failedBroadcastDetail } from '@/lib/proposal-send-state'
 
 import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
 import { deriveBroadcastError, phaseForBroadcastStatus } from '../model/broadcast-proposal'
@@ -26,6 +27,16 @@ const inFlightActionIds = new Set<string>()
 
 /** Interval between confirmation polls while in `awaiting-confirmation`. */
 const CONFIRMATION_POLL_INTERVAL_MS = 8000
+
+/** A `failed` row the settle loop (or a rejected send) already closed. Retry is safe. */
+function settledFailure(broadcastError: string | null | undefined): BroadcastError {
+	return deriveBroadcastError(
+		JSON.stringify({
+			code: 'broadcast_rejected',
+			message: failedBroadcastDetail(broadcastError),
+		}),
+	)
+}
 
 /** Debounce for background re-prepares triggered by fee-rate changes (custom rate stepping). */
 const RATE_REFRESH_DEBOUNCE_MS = 350
@@ -120,6 +131,12 @@ export function useBroadcastProposal(
 			if (!res.ok) return
 			const p = res.data
 			applyProposal(p)
+			if (p.broadcastStatus === 'failed') {
+				clearConfirmationPoll()
+				setError(settledFailure(p.broadcastError))
+				setPhase('error')
+				return
+			}
 			if (phaseForBroadcastStatus(p.broadcastStatus, p.status) === 'done') {
 				clearConfirmationPoll()
 				setPhase('done')
@@ -177,7 +194,13 @@ export function useBroadcastProposal(
 				if (proposalRes.ok) {
 					const p = proposalRes.data
 					setProposal(p)
-					const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status)
+					if (p.broadcastStatus === 'failed') {
+						applyProposal(p)
+						setError(settledFailure(p.broadcastError))
+						setPhase('error')
+						return
+					}
+					const resumePhase = phaseForBroadcastStatus(p.broadcastStatus, p.status, p.broadcastClaimStale)
 					if (resumePhase !== null) {
 						applyProposal(p)
 						setBundle(res.data)

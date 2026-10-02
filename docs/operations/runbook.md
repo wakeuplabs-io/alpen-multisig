@@ -14,6 +14,7 @@
 | `ORCHESTRATOR_PROFILE=production` | Prod | Requires `DATABASE_URL` |
 | `DATABASE_URL` | Prod | Postgres for durable proposals |
 | `STRATA_ADMIN_STATE_RPC_URL` | Yes | ASM runner JSON-RPC |
+| `AUTH_SESSION_TTL_MS` | No | Bearer session lifetime from sign-in; default `86400000` (24 h, #582) |
 | `BITCOIN_RPC_*` | Yes | Used by `/ready` only |
 
 Broadcast configuration lives in **`desktop-app/.env`** only (see `desktop-app/.env.example`; loaded at Tauri startup via a fixed path, not CWD). As of R1.1, **no env flag gates broadcast** — signing capability is decided per-signer by network (`allowed_on`: mnemonic on regtest/testnet only, hardware on any network). The mnemonic-signing IPC remains dev/E2E-only, exposed in release builds via `ALLOW_DEV_MNEMONIC_SIGNING` and automatically in debug builds (P-040 — see `docs/specs/secret-custody-wave2.md`).

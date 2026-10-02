@@ -16,6 +16,9 @@ pub struct Config {
     pub proposal_expiry_days: u64,
 }
 
+/// Bearer session lifetime from sign-in when `AUTH_SESSION_TTL_MS` is unset: 24 hours (#582).
+const DEFAULT_AUTH_SESSION_TTL_MS: u64 = 24 * 60 * 60 * 1000;
+
 /// Whether the in-process ASM mock (`mock://` RPC URLs) is compiled into this build.
 /// `true` only for test builds and builds with the `dev-mocks` feature.
 const ASM_MOCKS_COMPILED: bool = cfg!(any(test, feature = "dev-mocks"));
@@ -53,7 +56,7 @@ impl Config {
                 .parse()
                 .context("AUTH_CHALLENGE_TTL_MS must be a valid u64")?,
             auth_session_ttl_ms: std::env::var("AUTH_SESSION_TTL_MS")
-                .unwrap_or_else(|_| "240000".to_string())
+                .unwrap_or_else(|_| DEFAULT_AUTH_SESSION_TTL_MS.to_string())
                 .parse()
                 .context("AUTH_SESSION_TTL_MS must be a valid u64")?,
             strata_admin_state_rpc_url,
@@ -94,6 +97,11 @@ mod tests {
         // Real URLs are always allowed.
         assert!(ensure_asm_rpc_url_allowed("http://127.0.0.1:8080", false).is_ok());
         assert!(ensure_asm_rpc_url_allowed("https://rpc.example.org", false).is_ok());
+    }
+
+    #[test]
+    fn default_session_ttl_is_24_hours() {
+        assert_eq!(DEFAULT_AUTH_SESSION_TTL_MS, 86_400_000);
     }
 
     #[test]

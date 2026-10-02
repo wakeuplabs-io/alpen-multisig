@@ -45,6 +45,8 @@ impl TestServer {
             .env("DATABASE_URL", database_url)
             .env("RUST_LOG", "warn")
             .env("STRATA_ADMIN_STATE_RPC_URL", "mock://asm-membership")
+            // Pinned so scenario A can assert the served expiry whatever the caller exported.
+            .env("PROPOSAL_EXPIRY_DAYS", "7")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
@@ -242,14 +244,16 @@ mod proposal_lifecycle {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64;
-        let expected_expiry = created.created_at + seven_days_ms;
-        // expires_at is computed by Tauri layer (created_at + 7d) — we verify via HTTP response field
-        // by fetching the proposal via the desktop-app client which returns created_at.
         assert!(
             (created.created_at - now_ms).abs() < 5_000,
             "created_at must be within 5s of now"
         );
-        let _ = expected_expiry;
+        // The backend serves the expiry it enforces (#551); the default window is 7 days.
+        assert_eq!(
+            created.expires_at,
+            Some(created.created_at + seven_days_ms),
+            "expires_at must be created_at + the backend's 7-day window"
+        );
 
         // 2. Signer B approves → quorum → auto-transition to approved.
         let approved = proposals::approve_action(

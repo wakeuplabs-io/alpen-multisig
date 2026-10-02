@@ -14,6 +14,17 @@ for (const status of ['commit_broadcasted', 'commit_confirmed', 'reveal_broadcas
 	assert.equal(phaseForBroadcastStatus(status), 'awaiting-confirmation', `${status} → awaiting-confirmation`)
 }
 
+assert.equal(
+	phaseForBroadcastStatus('commit_broadcasted', 'approved', true),
+	null,
+	'a stale empty claim returns to the send form',
+)
+assert.equal(
+	phaseForBroadcastStatus('commit_broadcasted', 'approved', false),
+	'awaiting-confirmation',
+	'a live claim stays on the confirmation screen: the claimer may be at the device',
+)
+
 // ── idle / failed → null (do not change phase) ────────────────────────────────
 assert.equal(phaseForBroadcastStatus('idle'), null, 'idle → null')
 assert.equal(phaseForBroadcastStatus('failed'), null, 'failed → null')

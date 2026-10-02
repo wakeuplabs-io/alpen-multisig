@@ -26,6 +26,16 @@ pub trait CommitFunding: Send + Sync {
         amount_sats: u64,
         fee_rate: bdk_wallet::bitcoin::FeeRate,
     ) -> Result<bitcoin::Transaction, CommitFundingError>;
+
+    /// The signed commit is not, and will not be, on the network — never broadcast, or
+    /// rejected by every source that answered: return its inputs to the spendable pool. A
+    /// commit that may be live is neither released nor recorded; its inputs stay reserved until
+    /// a wallet sync sees it or the session ends (#516).
+    fn release(&self, _commit_txid: bitcoin::Txid) {}
+
+    /// A transaction of the bundle was accepted by a broadcaster: record it in the wallet so its
+    /// inputs stay spent even if no sync ever sees it (#516).
+    async fn record_broadcast(&self, _tx: &bitcoin::Transaction) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +67,14 @@ impl CommitFunding for AdminWalletCommitFunding {
             .build_signed_commit(commit_address, amount_sats, fee_rate)
             .await
             .map_err(|e| CommitFundingError::AdminWallet(e.to_string()))
+    }
+
+    fn release(&self, commit_txid: bitcoin::Txid) {
+        self.wallet_service.release_reservation(commit_txid);
+    }
+
+    async fn record_broadcast(&self, tx: &bitcoin::Transaction) {
+        self.wallet_service.record_broadcast(tx).await;
     }
 }
 

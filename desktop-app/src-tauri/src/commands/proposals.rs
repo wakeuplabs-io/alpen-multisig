@@ -8,8 +8,8 @@ use desktop_app::application::pending_reveals::PendingReveals;
 use desktop_app::application::proposals;
 use desktop_app::application::proposals::{BroadcastError, ProposalError};
 use desktop_app::application::tx_broadcaster::TxBroadcaster;
+use desktop_app::application::tx_settle::{AbsenceTracker, AbsenceWindow, TxLookup};
 use desktop_app::application::wallet_session::WalletSession;
-use desktop_app::config::PROPOSAL_EXPIRY_DAYS;
 use desktop_app::domain::fee_rate::{FeeRate, FALLBACK_MIN_RELAY_SAT_PER_KVB};
 use desktop_app::domain::proposal::{
     CancelProposalSummary, Proposal, ProposalSignature, Signature,
@@ -21,6 +21,7 @@ use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
 use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
+use desktop_app::infrastructure::tx_lookups::{ElectrumTxLookup, NodeTxLookup};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -112,9 +113,10 @@ pub struct ProposalDto {
     pub update_id_in_queue: Option<u32>,
     pub cancel_proposal: Option<CancelProposalSummaryDto>,
     pub is_cancelable: bool,
+    pub broadcast_claim_stale: bool,
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
-    pub expires_at_ms: u64,
+    pub expires_at_ms: Option<u64>,
 }
 
 #[tauri::command]
@@ -218,7 +220,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
     let action_type = action_type_from_hex(&proposal.target_action_id, &proposal.action_hex);
     let created_at_ms = proposal.created_at as u64;
     let updated_at_ms = proposal.updated_at as u64;
-    let expires_at_ms = created_at_ms + PROPOSAL_EXPIRY_DAYS * 24 * 3600 * 1000;
+    let expires_at_ms = proposal.expires_at.map(|ms| ms as u64);
     ProposalDto {
         action_id: proposal.action_id,
         seq_no: proposal.seq_no,
@@ -238,6 +240,7 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         update_id_in_queue: proposal.update_id_in_queue,
         cancel_proposal: proposal.cancel_proposal.map(map_cancel_summary),
         is_cancelable: proposal.is_cancelable,
+        broadcast_claim_stale: proposal.broadcast_claim_stale,
         created_at_ms,
         updated_at_ms,
         expires_at_ms,
@@ -249,6 +252,50 @@ fn build_client(base_url: String) -> Result<HttpOrchestratorClient, String> {
     let session = orchestrator_auth::get_session()?
         .ok_or_else(|| "no orchestrator session; authenticate first".to_string())?;
     Ok(HttpOrchestratorClient::new(base_url).with_bearer_token(session.token))
+}
+
+#[cfg(test)]
+mod map_proposal_tests {
+    use super::{map_proposal, Proposal};
+
+    fn backend_proposal(expires_at: Option<i64>) -> Proposal {
+        let mut json = serde_json::json!({
+            "action_id": "a1",
+            "seq_no": 1,
+            "authority": "strata_admin",
+            "status": "pending",
+            "required_signatures": 2,
+            "action_hex": "00",
+            "signatures": [],
+            "broadcast_status": "not_broadcasted",
+            "commit_txid": null,
+            "reveal_txid": null,
+            "broadcast_error": null,
+            "target_action_id": null,
+            "activation_height": null,
+            "update_id_in_queue": null,
+            "cancel_proposal": null,
+            "created_at": 1_000,
+            "updated_at": 1_000,
+        });
+        if let Some(ms) = expires_at {
+            json["expires_at"] = ms.into();
+        }
+        serde_json::from_value(json).expect("backend proposal")
+    }
+
+    /// #551: the expiry shown is the one the backend enforces, not a desktop constant.
+    #[test]
+    fn expiry_is_the_backend_value() {
+        let seven_days_ms = 7 * 24 * 3600 * 1000;
+        let dto = map_proposal(backend_proposal(Some(1_000 + seven_days_ms)));
+        assert_eq!(dto.expires_at_ms, Some(1_000 + seven_days_ms as u64));
+    }
+
+    #[test]
+    fn a_backend_without_the_field_yields_no_expiry() {
+        assert_eq!(map_proposal(backend_proposal(None)).expires_at_ms, None);
+    }
 }
 
 #[cfg(test)]
@@ -312,7 +359,8 @@ pub async fn proposals_resubmit_reveal(
     node_config: tauri::State<'_, NodeConfigState>,
     pending: tauri::State<'_, PendingReveals>,
 ) -> Result<String, String> {
-    let client = build_client(input.base_url)?;
+    // Validates the base URL and the orchestrator session, as every proposal command does.
+    build_client(input.base_url)?;
     let cfg = node_config
         .0
         .read()
@@ -320,8 +368,11 @@ pub async fn proposals_resubmit_reveal(
         .clone();
     let env =
         broadcast_env::load_broadcast_env(&wallet_session, &cfg).map_err(|e| e.to_string())?;
-    let btc_rpc = HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass);
-    proposals::resubmit_reveal(&pending, &btc_rpc, &client, &input.action_id)
+    let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
+        HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
+    );
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), btc_rpc);
+    proposals::resubmit_reveal(&pending, &broadcasters, &input.action_id)
         .await
         .map_err(|e| match e {
             BroadcastError::NoPendingReveal { action_id } => {
@@ -501,6 +552,50 @@ mod broadcast_error_code_tests {
         assert!(msg.contains("Bitcoin node: timeout"), "{msg}");
     }
 
+    /// #516 IPC contract: a commit that was rejected, may be live, or is live without its
+    /// reveal each has its own code, and none carries the tx hexes — the send-manually panel is
+    /// only for a bundle no channel could reach.
+    #[test]
+    fn failed_commit_outcomes_map_to_their_own_codes_without_hexes() {
+        let errors = || vec![("Bitcoin node".to_string(), "why".to_string())];
+        let cases = [
+            (
+                BroadcastError::BroadcastRejected { errors: errors() },
+                "broadcast_rejected",
+            ),
+            (
+                BroadcastError::BroadcastUncertain {
+                    commit_txid: "c0".to_string(),
+                    errors: errors(),
+                },
+                "broadcast_uncertain",
+            ),
+            (
+                BroadcastError::RevealNotBroadcast {
+                    commit_txid: "c0".to_string(),
+                    reveal_txid: "r0".to_string(),
+                    errors: errors(),
+                },
+                "reveal_not_broadcast",
+            ),
+        ];
+        let parsed: serde_json::Value =
+            serde_json::from_str(&map_broadcast_error(BroadcastError::BundleInFlight {
+                commit_txid: "c0".to_string(),
+            }))
+            .unwrap();
+        assert_eq!(parsed["code"], "bundle_in_flight");
+        assert!(parsed.get("commitTxHex").is_none());
+        for (error, code) in cases {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&map_broadcast_error(error)).unwrap();
+            assert_eq!(parsed["code"], code);
+            assert!(parsed.get("commitTxHex").is_none() && parsed.get("revealTxHex").is_none());
+            let msg = parsed["message"].as_str().unwrap();
+            assert!(msg.contains("Bitcoin node: why"), "{msg}");
+        }
+    }
+
     /// BE-12: Confirmation timeout after broadcast (boundary=AFTER).
     ///
     /// When the confirmation poll exceeds `confirm_timeout_ms` after the broadcast
@@ -545,6 +640,10 @@ fn broadcast_error_code(
         BroadcastError::BitcoinRpc(_) => "BitcoinRpc",
         BroadcastError::Timeout { .. } => "Timeout",
         BroadcastError::AllBroadcastersFailed { .. } => "broadcast_unavailable",
+        BroadcastError::BroadcastRejected { .. } => "broadcast_rejected",
+        BroadcastError::BroadcastUncertain { .. } => "broadcast_uncertain",
+        BroadcastError::RevealNotBroadcast { .. } => "reveal_not_broadcast",
+        BroadcastError::BundleInFlight { .. } => "bundle_in_flight",
         BroadcastError::Setup(_) => "Unknown",
         BroadcastError::Orchestrator(_) => "Unknown",
     }
@@ -569,14 +668,10 @@ fn map_broadcast_error_with_boundary(
         errors,
     } = &error
     {
-        let errs = errors
-            .iter()
-            .map(|(name, msg)| format!("{name}: {msg}"))
-            .collect::<Vec<_>>()
-            .join("; ");
+        let errs = join_source_errors(errors);
         return serde_json::json!({
             "code": "broadcast_unavailable",
-            "message": format!("All broadcast channels failed ({errs}). Copy and broadcast the transactions manually."),
+            "message": format!("No broadcast channel could be reached ({errs}), so nothing was sent. Copy and broadcast the transactions manually."),
             "commitTxHex": commit_tx_hex,
             "revealTxHex": reveal_tx_hex,
             "canResubmit": false,
@@ -606,10 +701,42 @@ fn map_broadcast_error_with_boundary(
         }
         // Handled by the early return above; kept non-panicking per backend standards.
         BroadcastError::AllBroadcastersFailed { .. } => "all broadcast channels failed".to_string(),
+        // #516: the three outcomes of a failed commit broadcast, each with its own next step.
+        BroadcastError::BroadcastRejected { errors } => format!(
+            "The network rejected the commit ({}). Nothing was sent; you can retry the send.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::BroadcastUncertain {
+            commit_txid,
+            errors,
+        } => format!(
+            "The commit {commit_txid} may already be on the network: no broadcast channel confirmed or refused it ({}). Do not send again — check the proposal once the network has seen it.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::RevealNotBroadcast {
+            commit_txid,
+            errors,
+            ..
+        } => format!(
+            "The commit {commit_txid} is on the network, but its reveal was not accepted ({}). Do not send again: a new send would fund a second commit.",
+            join_source_errors(errors)
+        ),
+        BroadcastError::BundleInFlight { commit_txid } => format!(
+            "A bundle for this proposal was already sent from this app (commit {commit_txid}) and may be on the network. Do not send again: its coins stay reserved and the app settles it on its own."
+        ),
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::Orchestrator(e) => e.to_string(),
     };
     serde_json::json!({ "code": code, "message": message, "canResubmit": can_resubmit }).to_string()
+}
+
+/// `source: message` for every broadcaster, as the IPC messages quote them.
+fn join_source_errors(errors: &[(String, String)]) -> String {
+    errors
+        .iter()
+        .map(|(name, msg)| format!("{name}: {msg}"))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn map_broadcast_error(error: BroadcastError) -> String {
@@ -857,11 +984,7 @@ pub async fn proposals_broadcast(
     let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
         HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
     );
-    // Broadcaster chain: Electrum first (M3), then node fallback.
-    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
-        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
-        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
-    ];
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()
@@ -889,18 +1012,19 @@ pub async fn proposals_broadcast(
     .await
     .map_err(map_broadcast_error)?;
 
-    // Await the reveal confirmation in the background so the UI unblocks immediately. A slow
-    // block leaves the proposal at `reveal_broadcasted` (PendingConfirmation) — never `failed`.
-    spawn_reveal_confirmation(
-        std::sync::Arc::clone(&client),
-        std::sync::Arc::clone(&btc_rpc),
-        pending.inner().clone(),
-        input.action_id.clone(),
-        commit_txid.clone(),
-        reveal_txid.clone(),
-        env.confirm_poll_interval_ms,
-        env.confirm_timeout_ms,
-    );
+    // Watch the bundle in the background so the UI unblocks immediately. A slow block leaves the
+    // proposal at `reveal_broadcasted` (PendingConfirmation) — never `failed`; the settle loop
+    // carries on from there.
+    spawn_reveal_confirmation(RevealWatch {
+        client: std::sync::Arc::clone(&client),
+        lookups: lookup_chain(cfg.electrum_url(), btc_rpc),
+        broadcasters,
+        wallet: wallet_service,
+        pending: pending.inner().clone(),
+        action_id: input.action_id.clone(),
+        confirm_poll_interval_ms: env.confirm_poll_interval_ms,
+        confirm_timeout_ms: env.confirm_timeout_ms,
+    });
 
     Ok(BroadcastResultDto {
         action_id: input.action_id,
@@ -911,44 +1035,141 @@ pub async fn proposals_broadcast(
     })
 }
 
-/// Spawn the background reveal-confirmation poll. Owns `Arc` clones so it outlives the command;
-/// no `tauri::State` crosses the spawn boundary. Errors/outcomes are logged, never surfaced as
-/// a `failed` orchestrator state for a slow block.
-#[allow(clippy::too_many_arguments)]
-fn spawn_reveal_confirmation(
-    client: std::sync::Arc<HttpOrchestratorClient>,
+/// Broadcaster chain: Electrum first (M3), then node fallback.
+fn broadcaster_chain(
+    electrum_url: &str,
     btc_rpc: std::sync::Arc<dyn BitcoinRpcClient>,
+) -> Vec<std::sync::Arc<dyn TxBroadcaster>> {
+    vec![
+        std::sync::Arc::new(ElectrumBroadcaster::new(electrum_url)),
+        std::sync::Arc::new(NodeBroadcaster::new(btc_rpc)),
+    ]
+}
+
+/// The sources the settle rule asks (#516): the same two the broadcasters use.
+fn lookup_chain(
+    electrum_url: &str,
+    btc_rpc: std::sync::Arc<dyn BitcoinRpcClient>,
+) -> Vec<std::sync::Arc<dyn TxLookup>> {
+    vec![
+        std::sync::Arc::new(ElectrumTxLookup::new(electrum_url)),
+        std::sync::Arc::new(NodeTxLookup::new(btc_rpc)),
+    ]
+}
+
+/// What the background reveal watcher owns; no `tauri::State` crosses the spawn boundary.
+struct RevealWatch {
+    client: std::sync::Arc<HttpOrchestratorClient>,
+    lookups: Vec<std::sync::Arc<dyn TxLookup>>,
+    broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>>,
+    wallet: std::sync::Arc<desktop_app::application::wallet_service::WalletService>,
     pending: PendingReveals,
     action_id: String,
-    commit_txid: String,
-    reveal_txid: String,
     confirm_poll_interval_ms: u64,
     confirm_timeout_ms: u64,
-) {
+}
+
+/// Spawn the background watcher of a just-broadcast bundle: the settle rule, polled until the
+/// reveal confirms, the bundle drops, or the timeout hands over to the settle loop (#516).
+fn spawn_reveal_confirmation(watch: RevealWatch) {
     tauri::async_runtime::spawn(async move {
+        let funding = AdminWalletCommitFunding::new(watch.wallet);
+        let ctx = proposals::BundleSettleContext {
+            lookups: &watch.lookups,
+            broadcasters: &watch.broadcasters,
+            orchestrator: Some(watch.client.as_ref()),
+            funding: Some(&funding),
+            pending: &watch.pending,
+        };
         let outcome = proposals::await_reveal_confirmation(
-            client.as_ref(),
-            btc_rpc.as_ref(),
-            &action_id,
-            &commit_txid,
-            &reveal_txid,
-            confirm_poll_interval_ms,
-            confirm_timeout_ms,
-            &pending,
+            &ctx,
+            &watch.action_id,
+            AbsenceWindow::from_env(),
+            watch.confirm_poll_interval_ms,
+            watch.confirm_timeout_ms,
         )
         .await;
+        let action_id = &watch.action_id;
         match outcome {
-            Ok(proposals::ConfirmOutcome::Confirmed) => {
+            proposals::ConfirmOutcome::Confirmed => {
                 eprintln!("[broadcast] {action_id}: reveal confirmed; orchestrator promoted");
             }
-            Ok(proposals::ConfirmOutcome::PendingConfirmation) => {
+            proposals::ConfirmOutcome::PendingConfirmation => {
                 eprintln!(
-                    "[broadcast] {action_id}: reveal still unconfirmed after timeout; staying reveal_broadcasted"
+                    "[broadcast] {action_id}: bundle not settled before the timeout; the settle loop carries on"
                 );
             }
-            Err(e) => {
-                eprintln!("[broadcast] {action_id}: reveal confirmation poll errored: {e}");
+            proposals::ConfirmOutcome::Dropped => {
+                eprintln!(
+                    "[broadcast] {action_id}: bundle dropped from the network; reported failed"
+                );
             }
+        }
+    });
+}
+
+/// Interval of the settle loop (#516): `SETTLE_INTERVAL_SECS`, 30 s by default.
+fn settle_interval() -> std::time::Duration {
+    let secs = std::env::var("SETTLE_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(30);
+    std::time::Duration::from_secs(secs)
+}
+
+/// The settle loop (#516): every [`settle_interval`], one settle pass over the current wallet
+/// session's unsettled sends and fee bumps and over every stored bundle whose proposal is not
+/// closed — see `proposals::settle_in_flight`. Runs for the life of the app and follows whichever
+/// wallet session is current; a pass with nothing open does no I/O.
+pub fn spawn_settle_loop(
+    wallet_session: WalletSession,
+    pending: PendingReveals,
+    node_config: std::sync::Arc<
+        std::sync::RwLock<desktop_app::infrastructure::node_config_store::NodeConfig>,
+    >,
+) {
+    tauri::async_runtime::spawn(async move {
+        let interval = settle_interval();
+        let mut tracker = AbsenceTracker::new(AbsenceWindow::from_env());
+        loop {
+            tokio::time::sleep(interval).await;
+            let wallet = wallet_session.current();
+            let has_bundles = !pending.lock().unwrap_or_else(|e| e.into_inner()).is_empty();
+            if !has_bundles && !wallet.as_ref().is_some_and(|w| w.has_unsettled()) {
+                continue;
+            }
+            let Ok(cfg) = node_config.read().map(|c| c.clone()) else {
+                continue;
+            };
+            let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> =
+                std::sync::Arc::new(HttpBitcoinRpcClient::new(
+                    cfg.btc_rpc_url(),
+                    cfg.btc_rpc_user(),
+                    cfg.btc_rpc_pass(),
+                ));
+            let lookups = lookup_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
+            let broadcasters = broadcaster_chain(cfg.electrum_url(), btc_rpc);
+            let client = orchestrator_auth::authenticated_client();
+            let funding = wallet
+                .as_ref()
+                .map(|w| AdminWalletCommitFunding::new(std::sync::Arc::clone(w)));
+            let ctx = proposals::BundleSettleContext {
+                lookups: &lookups,
+                broadcasters: &broadcasters,
+                orchestrator: client.as_ref().map(|c| c as &dyn OrchestratorClient),
+                funding: funding
+                    .as_ref()
+                    .map(|f| f as &dyn desktop_app::application::commit_funding::CommitFunding),
+                pending: &pending,
+            };
+            proposals::settle_in_flight(
+                &ctx,
+                wallet.as_deref(),
+                &mut tracker,
+                std::time::Instant::now(),
+            )
+            .await;
         }
     });
 }
@@ -1044,11 +1265,7 @@ pub async fn proposals_broadcast_manual(
     let btc_rpc: std::sync::Arc<dyn BitcoinRpcClient> = std::sync::Arc::new(
         HttpBitcoinRpcClient::new(&env.btc_rpc_url, &env.btc_rpc_user, &env.btc_rpc_pass),
     );
-    // Broadcaster chain: Electrum first (M3), then node fallback.
-    let broadcasters: Vec<std::sync::Arc<dyn TxBroadcaster>> = vec![
-        std::sync::Arc::new(ElectrumBroadcaster::new(cfg.electrum_url())),
-        std::sync::Arc::new(NodeBroadcaster::new(std::sync::Arc::clone(&btc_rpc))),
-    ];
+    let broadcasters = broadcaster_chain(cfg.electrum_url(), std::sync::Arc::clone(&btc_rpc));
     let commit_funding = AdminWalletCommitFunding::new(std::sync::Arc::clone(&wallet_service));
     let reveal_change_address = wallet_service
         .reveal_change_address()

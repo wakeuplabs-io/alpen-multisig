@@ -26,7 +26,25 @@ if (parsed.success) {
 	assert.equal(parsed.data.commitTxid, undefined)
 	assert.equal(parsed.data.revealTxid, undefined)
 	assert.equal(parsed.data.broadcastError, undefined)
+	// A payload without the verdict must stay in flight, never offer a send the backend refuses.
+	assert.equal(parsed.data.broadcastClaimStale, false)
 }
+
+// The verdict survives the schema: zod strips unknown keys, and a stripped flag would
+// hide Send on a claim the backend already takes again.
+const staleClaim = proposalSchema.parse({
+	...proposalWithNullBroadcastFields,
+	broadcastStatus: 'commit_broadcasted',
+	broadcastClaimStale: true,
+})
+assert.equal(staleClaim.broadcastClaimStale, true)
+
+// The expiry is the backend's (#551): served as is, and `null` when a backend predates the field,
+// so no countdown is drawn against a window the desktop would have to guess.
+assert.equal(proposalSchema.parse(proposalWithNullBroadcastFields).expiresAtMs, 2000000)
+const withoutExpiry: Record<string, unknown> = { ...proposalWithNullBroadcastFields }
+delete withoutExpiry.expiresAtMs
+assert.equal(proposalSchema.parse(withoutExpiry).expiresAtMs, null)
 
 import { AuthRole } from '../types/auth-role.ts'
 import { authChallengeSchema, authSessionSchema } from './ipc-schemas.ts'

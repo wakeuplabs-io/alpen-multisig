@@ -63,3 +63,16 @@ assert.ok(
 )
 
 console.log('broadcast screens: admin-wallet wiring parity OK')
+
+// #516: the manual send screen gates its way back to a fresh send behind the same rule as the
+// broadcast screens — never while the bundle is, or may be, live, or waits to be sent by hand.
+const manualScreen = readFileSync(join(screensDir, 'manual-proposal-screen.tsx'), 'utf8')
+assert.ok(
+	manualScreen.includes('offersRetry(manual.broadcastErrorDetail) && ('),
+	'manual-proposal-screen.tsx: "Back to signing" must be gated by offersRetry',
+)
+assert.ok(
+	manualScreen.includes('broadcastErrorTitle(manual.broadcastErrorDetail)'),
+	'manual-proposal-screen.tsx: must not title a possibly live send "Send failed"',
+)
+console.log('manual send screen: no fresh send while the bundle may be live OK')

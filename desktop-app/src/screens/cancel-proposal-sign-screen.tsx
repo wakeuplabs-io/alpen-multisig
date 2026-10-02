@@ -12,7 +12,7 @@ import {
 } from '@/api/proposals'
 import { computeSighash } from '@/api/signing'
 import { ShieldAccentIcon } from '@/assets/icons'
-import { authorityLabelForRole } from '@/lib/authority-label'
+import { authorityDisplayName, authorityLabelForRole } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
 import { deviceSigningDisplay } from '@/lib/device-signing-display'
 import { useSession } from '@/hooks/use-session'
@@ -284,7 +284,7 @@ export function CancelProposalSignScreen() {
 						<div className="rounded-xl border border-[#e5e7eb] bg-white px-6 py-5 shadow-sm">
 							<p className="m-0 text-mono-sm font-semibold uppercase tracking-wider text-[#9ca3af]">Target proposal</p>
 							<p className="m-0 mt-1 text-body-sm font-medium text-[#111827]">
-								Proposal #{parentProposal.seqNo} · {parentProposal.authority}
+								Proposal #{parentProposal.seqNo} · {authorityDisplayName(parentProposal.authority)}
 							</p>
 							<p className="m-0 mt-0.5 text-label text-[#6b7280]">
 								This cancel action will remove the queued update from the activation queue.

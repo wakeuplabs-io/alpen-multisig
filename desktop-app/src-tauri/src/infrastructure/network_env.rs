@@ -33,6 +33,16 @@ pub fn network_from_env() -> Result<Network, InvalidNetwork> {
     parse_network(&network)
 }
 
+/// Resolves the network for a new Admin Wallet session: an explicit token wins,
+/// otherwise the process network from [`network_from_env`] — so the session is
+/// built on the same network the hardware xpub was fetched for.
+pub fn resolve_network(explicit: Option<&str>) -> Result<Network, InvalidNetwork> {
+    match explicit {
+        Some(network) => parse_network(network),
+        None => network_from_env(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,6 +67,24 @@ mod tests {
         let _guard = ENV_TEST_LOCK.lock().unwrap();
         std::env::remove_var("BITCOIN_NETWORK");
         assert_eq!(network_from_env().unwrap(), Network::Regtest);
+    }
+
+    #[test]
+    fn session_network_prefers_the_explicit_network() {
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("BITCOIN_NETWORK", "bitcoin");
+        let resolved = resolve_network(Some("signet"));
+        std::env::remove_var("BITCOIN_NETWORK");
+        assert_eq!(resolved.unwrap(), Network::Signet);
+    }
+
+    #[test]
+    fn session_network_falls_back_to_the_process_network() {
+        let _guard = ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("BITCOIN_NETWORK", "bitcoin");
+        let resolved = resolve_network(None);
+        std::env::remove_var("BITCOIN_NETWORK");
+        assert_eq!(resolved.unwrap(), Network::Bitcoin);
     }
 
     #[test]

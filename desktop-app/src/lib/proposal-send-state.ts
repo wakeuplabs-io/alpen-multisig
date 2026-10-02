@@ -23,15 +23,38 @@ export type ProposalSendState =
 	/** This proposal's sequence number is spent. Nothing to press, ever again. */
 	| { kind: 'superseded'; label: string; detail: string }
 
+/**
+ * A `commit_broadcasted` claim that never stored a txid and is past the backend's
+ * reclaim window. The claim ran, the bundle did not, and the backend takes the row
+ * again, so the app offers send. The backend decides `broadcastClaimStale` on its own
+ * clock: inside the window the claimer may still be at the device, and the row stays
+ * in flight for every other signer.
+ */
+export function isAbandonedCommitClaim(broadcastStatus: BroadcastStatus, broadcastClaimStale?: boolean): boolean {
+	return broadcastStatus === 'commit_broadcasted' && broadcastClaimStale === true
+}
+
 type SendStateInput = {
 	status: ProposalStatus
 	broadcastStatus: BroadcastStatus
+	/** Backend verdict on an empty `commit_broadcasted` claim — see `isAbandonedCommitClaim`. */
+	broadcastClaimStale?: boolean
 	/**
 	 * A safe harbor rotation the bridge accepted and applied nowhere, because the harbor was
 	 * already up. Decided by the caller — see `harborFrozeDestination` — since answering it needs
 	 * a live chain read and this module is pure.
 	 */
 	harborFrozeDestination?: boolean
+	/** Orchestrator `broadcast_error`. A `dropped:` prefix is a bundle the settle loop found gone. */
+	broadcastError?: string | null
+}
+
+/** Copy for a `failed` row (#516): never sent, or sent and later dropped from the network. */
+export function failedBroadcastDetail(broadcastError: string | null | undefined): string {
+	if (broadcastError?.startsWith('dropped:')) {
+		return 'The bundle dropped out of the network. You can send it again.'
+	}
+	return 'The bundle was not broadcast. You can send it again.'
 }
 
 /**
@@ -129,7 +152,20 @@ export function proposalSendState(proposal: SendStateInput): ProposalSendState {
 		case 'idle':
 			return { kind: 'ready' }
 		case 'failed':
-			return { kind: 'failed', ...STAGE.failed }
+			return {
+				kind: 'failed',
+				label: STAGE.failed.label,
+				detail: failedBroadcastDetail(proposal.broadcastError),
+			}
+		case 'commit_broadcasted':
+			if (isAbandonedCommitClaim(proposal.broadcastStatus, proposal.broadcastClaimStale)) {
+				return {
+					kind: 'failed',
+					label: STAGE.failed.label,
+					detail: failedBroadcastDetail(proposal.broadcastError),
+				}
+			}
+			return { kind: 'in-flight', ...STAGE.commit_broadcasted }
 		case 'reveal_confirmed':
 			return { kind: 'confirmed', ...STAGE.reveal_confirmed }
 		default:

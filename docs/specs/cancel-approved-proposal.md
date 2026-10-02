@@ -17,7 +17,7 @@ This spec covers the orchestrator backend (DB, application layer, API), the Taur
 - New frontend route `/proposals/:actionId/cancel` with dedicated cancel screen.
 - Cancel CTA and activation countdown on the existing `ProposalDetailScreen`.
 - Cancel proposals visible in `ProposalsDashboardScreen` with visual differentiation.
-- Edge case handling: already-enacted target, duplicate cancel, unsupported authority.
+- Edge case handling: already-enacted target, duplicate cancel, target not yet queued, zero-depth action.
 
 ### Not included
 
@@ -145,11 +145,12 @@ pub async fn create_cancel_proposal(
 
 Logic:
 
-1. Load target proposal; verify `status == Approved`.
-2. Verify target's authority is `AlpenAdmin` or `StrataAdmin` — return `400 Bad Request` for other authorities.
-3. Check for existing cancel proposal for this target via `find_cancel_for_target`. If found, return it (idempotent — no duplicate).
-4. Construct `action_hex` using `MultisigAction::Cancel(CancelAction { target_id: target.update_id })` with the provided `seq_no`.
-5. Persist new Proposal with `target_action_id`, `status = Pending`, and the first signature.
+1. Load target proposal; verify it belongs to the session's authority and `status == Approved`.
+2. Verify target's `broadcast_status == RevealConfirmed` — return `400 Bad Request` otherwise. A cancel names the update's id in the ASM queue, and the update is queued only once its reveal confirms.
+3. Verify the target action's confirmation depth is non-zero — return `400 Bad Request` naming the depth otherwise (a zero-depth action is never enqueued).
+4. Check for existing cancel proposal for this target via `find_cancel_for_target`. If found, return it (idempotent — no duplicate).
+5. Construct `action_hex` using `MultisigAction::Cancel(CancelAction { target_id: target.update_id })` with the provided `seq_no`.
+6. Persist new Proposal with `target_action_id`, `status = Pending`, and the first signature.
 
 ### Updates to Existing Application Functions
 
@@ -165,7 +166,7 @@ Logic:
 - Body: `{ "seqNo": u64, "signerPubkey": string, "signatureHex": string }`
 - Creates or returns existing cancel proposal.
 - Returns `200 OK` with the cancel `Proposal` JSON (same shape as existing proposal responses).
-- Errors: `404` if target not found; `400` if target not Approved or authority not supported; `409` if a cancel proposal already exists at quorum (no new sigs needed).
+- Errors: `404` if target not found; `400` if target not Approved, its reveal has not confirmed, or its confirmation depth is `0`; `409` if a cancel proposal already exists at quorum (no new sigs needed).
 
 **Modified: `GET /proposals/:action_id`**
 
@@ -303,8 +304,7 @@ Cancel proposal                            [Authority badge] [Session] [Disconne
 
 | Condition | Behavior |
 |---|---|
-| `proposal.status !== 'approved'` | Redirect to `/proposals/:actionId` |
-| Authority is not `alpen_admin` or `strata_admin` | Redirect to `/proposals/:actionId` |
+| No cancel exists yet and `canCancelProposal` is false (see below) | Redirect to `/proposals/:actionId` |
 | `activationHeight` already passed (target is now enacted) | Show `AlertBanner`: "This proposal has already been enacted. Cancellation is no longer possible." No actions rendered. |
 | Cancel proposal already exists at quorum | Skip directly to broadcast state |
 
@@ -312,10 +312,13 @@ Cancel proposal                            [Authority badge] [Session] [Disconne
 
 **File:** `src/screens/proposal-detail-screen.tsx`
 
-**Add Cancel CTA** — visible when ALL of:
-- `proposal.status === 'approved'`
-- `proposal.authority` is `alpen_admin` or `strata_admin`
-- `activationHeight` not yet passed (or unknown, to avoid false negatives)
+**Add Cancel CTA** — visible when no cancel exists for the target and `canCancelProposal`
+(`src/domain/proposal-detail/model/derive-proposal-actions.ts`) holds, i.e. ALL of:
+- `proposal.status === 'approved'` (once enacted, the status leaves `approved` and the CTA goes away)
+- `proposal.broadcastStatus === 'reveal_confirmed'` — the update is in the ASM queue. Quorum alone, or a reveal still in the mempool, is not enough: the cancel could not name the update.
+- `proposal.isCancelable` — the backend's answer from the action's live confirmation depth; no authority allow-list
+
+The dashboard asks the same predicate and shows its Cancel button only while the proposal is awaiting enactment.
 
 ```
 [Cancel this proposal]  →  navigates to /proposals/:actionId/cancel
@@ -352,6 +355,7 @@ Cancel proposals (`kind === 'cancel'`) appear in existing status-based sections 
 | Cancel proposal already exists for this target | Return existing cancel proposal from `POST /cancel` (idempotent). Frontend shows existing state. |
 | User is not a signer on the authority | Sign CTA is disabled. User can still copy existing cancel signatures for manual aggregation. |
 | Target action applies immediately (confirmation depth `0`: Sequencer Manager updates, Defcon 1) | Backend returns `400` naming the depth, not the authority. The proposal DTO carries `is_cancelable: false`, so no surface shows a Cancel CTA. |
+| Target approved but its reveal not confirmed (not sent, in the mempool, or failed) | No surface shows a Cancel CTA and a direct link redirects to the detail screen. `POST /cancel` returns `400` naming the reveal (#562). |
 | Cancel reaches quorum before target `activation_height` | "Broadcast cancel tx" CTA appears; reuses existing broadcast pipeline. |
 | Cancel tx and target activation in the same block | Protocol processes activations before incoming txs — cancel is rejected. Backend reconcile on next poll detects `Enacted` on target; UI updates accordingly. |
 | Two signers create cancel proposals concurrently | Second `POST /cancel` returns the existing cancel proposal (idempotency guard in `create_cancel_proposal`). |
@@ -387,6 +391,7 @@ Unit tests:
 - `create_cancel_proposal` happy path.
 - `create_cancel_proposal` returns existing cancel proposal (idempotency).
 - `create_cancel_proposal` returns `400` when target is not `Approved`.
+- `create_cancel_proposal` returns `400` when the target's reveal has not confirmed (idle, reveal in the mempool, failed), and persists nothing.
 - `create_cancel_proposal` returns `400` for a zero-depth target action (e.g. Defcon 1).
 - `activation_height` is persisted correctly after `RevealConfirmed` using mock ASM `lock_period`.
 

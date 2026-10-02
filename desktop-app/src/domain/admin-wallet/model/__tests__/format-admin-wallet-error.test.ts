@@ -89,6 +89,7 @@ const bumpVariants: AdminWalletError[] = [
 	{ type: 'BuildFailed', message: 'x' },
 	{ type: 'SignFailed', message: 'x' },
 	{ type: 'BroadcastFailed', message: 'x' },
+	{ type: 'BroadcastUncertain', message: 'x' },
 ]
 for (const variant of bumpVariants) {
 	const view = formatAdminWalletError(variant)
@@ -133,5 +134,15 @@ assert.ok(/RBF/.test(notReplaceable.body), 'not-replaceable copy must mention RB
 
 const feeTooLow = formatAdminWalletError({ type: 'FeeRateTooLow', message: 'at least 1100 sat/kvB required' })
 assert.ok(feeTooLow.body.includes('at least 1100'), 'fee-too-low copy must carry the required rate')
+
+// #516: a send that may be live must say so, say its coins stay reserved until the app settles it,
+// and never send the user to the transaction list (an unsettled tx is not recorded there) or to a resend.
+const uncertain = formatAdminWalletError({ type: 'BroadcastUncertain', message: 'Electrum: operation timed out' })
+assert.ok(/may/i.test(uncertain.title), 'uncertain title must not claim the send failed')
+assert.ok(/coins stay reserved \(shown as in flight\)/i.test(uncertain.body))
+assert.ok(/settles it automatically/i.test(uncertain.body))
+assert.ok(/do not send again until it is confirmed or its coins are released/i.test(uncertain.body))
+assert.ok(!/transaction list/i.test(uncertain.body), 'an unsettled tx is not in the transaction list')
+assert.ok(uncertain.body.includes('operation timed out'), 'uncertain copy must carry the backend detail')
 
 console.log('format-admin-wallet-error: all assertions passed.')

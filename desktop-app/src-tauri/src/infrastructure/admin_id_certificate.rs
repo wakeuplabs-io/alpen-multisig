@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn accepts_an_admin_id_on_a_test_network() {
-        // Ledger derives the Admin ID at m/84'/1'/73'/0/0 and renders `tb1…`.
+        // On test networks Ledger derives the Admin ID at m/84'/1'/73'/0/0 and renders `tb1…`.
         let sk = key(31);
         let pk = SecpPublicKey::from_secret_key(SECP256K1, &sk);
         let admin_id = Address::p2wpkh(&CompressedPublicKey(pk), KnownHrp::Testnets).to_string();

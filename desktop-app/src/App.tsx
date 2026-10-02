@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { AuthSessionProvider } from '@/contexts/auth-session-provider'
+import { NodeConfigProvider } from '@/contexts/node-config-provider'
 import { SessionProvider } from '@/contexts/session-provider'
 import { ProposalsDashboardScreen } from '@/screens/proposals-dashboard-screen'
 import { WalletSessionProvider } from '@/contexts/wallet-session-provider'
@@ -30,14 +31,16 @@ function RequireAuth({ children }: { children: ReactElement }) {
 
 function AppLayout() {
 	return (
-		<AuthSessionProvider>
-			<WalletSessionProvider>
-				<SessionProvider>
-					<SessionExpiryModal />
-					<Outlet />
-				</SessionProvider>
-			</WalletSessionProvider>
-		</AuthSessionProvider>
+		<NodeConfigProvider>
+			<AuthSessionProvider>
+				<WalletSessionProvider>
+					<SessionProvider>
+						<SessionExpiryModal />
+						<Outlet />
+					</SessionProvider>
+				</WalletSessionProvider>
+			</AuthSessionProvider>
+		</NodeConfigProvider>
 	)
 }
 

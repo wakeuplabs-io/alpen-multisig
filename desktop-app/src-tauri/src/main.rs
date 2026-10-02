@@ -27,6 +27,15 @@ fn main() {
             let config = load_node_config(app.handle());
             let node_config_arc = Arc::new(RwLock::new(config));
             let wallet_session = WalletSession::with_node_config(Arc::clone(&node_config_arc));
+            // Settles, in the background, every send and bundle whose broadcast got no
+            // definitive answer (#516).
+            commands::proposals::spawn_settle_loop(
+                wallet_session.clone(),
+                app.state::<desktop_app::application::pending_reveals::PendingReveals>()
+                    .inner()
+                    .clone(),
+                Arc::clone(&node_config_arc),
+            );
             app.manage(NodeConfigState(node_config_arc));
             app.manage(wallet_session);
             // Fee cache (M2): survives across fee_rates_estimate calls; estimators

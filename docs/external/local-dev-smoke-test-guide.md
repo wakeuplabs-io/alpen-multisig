@@ -285,6 +285,7 @@ was committed and revealed on your local network.
 | **Confirm & Broadcast** stays disabled | Make sure you funded the address shown on screen, then **Sync** in the wallet panel and wait for it to finish. |
 | Broadcast seems **stuck** on Commit or Reveal | Those steps wait for confirmations — mine more blocks: `./scripts/local-stack.sh --mine 1` (repeat). |
 | App can't reach the network | Open **Settings → Node** and confirm the mode is **Local**. Re‑check the stack with `./scripts/local-stack.sh --status`. |
+| Ledger: **"The Bitcoin app is open, but this network … needs the Bitcoin Test app"** | Local runs on a test network, so a Ledger must use the **Bitcoin Test** app (2.1.0 or later), not the Bitcoin app. Install it from Ledger Live after enabling **Settings → Experimental features → Developer mode**, open it on the device, and connect again. The Bitcoin app is for mainnet only. |
 | App won't open (Linux) — missing system library error | The app needs the WebKit/GTK system libraries. Install them (see below) and try again. |
 
 **App won't open on Linux (missing system libraries):** if the app fails to start with an error

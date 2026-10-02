@@ -13,6 +13,7 @@ import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-dec
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-proposal-actions'
+import { authorityDisplayName } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
 import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
@@ -131,7 +132,7 @@ export function ProposalDetail({
 						<div className="min-w-0 flex-1">
 							<h2 className="m-0 font-display text-display-md leading-[1.2] text-[#0a0a0a]">{title}</h2>
 							<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-								#{proposal.seqNo} · {inferProposalTypeLabel(proposal)} · {proposal.authority}
+								#{proposal.seqNo} · {authorityDisplayName(proposal.authority)} · {inferProposalTypeLabel(proposal)}
 							</p>
 						</div>
 						<StatusBadge status={displayStatus} />
@@ -238,7 +239,7 @@ export function ProposalDetail({
 							data-testid="e2e-detail-broadcast-failed"
 						>
 							<p className="m-0 text-body-sm font-medium text-danger-deep">{sendState.label}</p>
-							<p className="m-0 mt-1 text-label text-danger-deep">{proposal.broadcastError ?? sendState.detail}</p>
+							<p className="m-0 mt-1 text-label text-danger-deep">{sendState.detail}</p>
 						</div>
 					)}
 
@@ -256,7 +257,19 @@ export function ProposalDetail({
 
 					{/* Once the bundle is on its way there is nothing to press — say where it
 					    is instead, so a signer can tell whether it still needs sending (#432). */}
-					{(sendState.kind === 'in-flight' || sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
+					{sendState.kind === 'in-flight' && (
+						<button
+							type="button"
+							className="w-full rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-left transition hover:border-[#111827]"
+							data-testid="e2e-detail-broadcast-stage"
+							onClick={onBroadcast}
+						>
+							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
+							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
+							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
+						</button>
+					)}
+					{(sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
 						<div
 							className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
 							data-testid="e2e-detail-broadcast-stage"

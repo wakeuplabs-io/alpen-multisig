@@ -25,7 +25,7 @@ fn ledger_certificate_message_screens() {
     // Auto-approve would click through the screens before we could read them.
     std::env::set_var("LEDGER_SPECULOS_AUTO_APPROVE", "0");
 
-    let info = ledger::connect(Some(ADMIN_ID_PATH.to_string())).expect("ledger connect");
+    let info = ledger::connect(ADMIN_ID_PATH.to_string()).expect("ledger connect");
     let admin_id = info.address_sample.expect("admin id address");
     let message = format!("Admin ID: {admin_id}");
     eprintln!("admin id : {admin_id}");

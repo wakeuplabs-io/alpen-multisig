@@ -100,7 +100,11 @@ mod tests {
         let session = crate::application::wallet_session::WalletSession::empty();
         tokio::runtime::Runtime::new()
             .expect("runtime")
-            .block_on(session.init_from_mnemonic(TEST_MNEMONIC, None, None))
+            .block_on(session.init_from_mnemonic(
+                TEST_MNEMONIC,
+                None,
+                bdk_wallet::bitcoin::Network::Regtest,
+            ))
             .expect("session init for broadcast env smoke test");
         let node_config = crate::infrastructure::node_config_store::NodeConfig::default();
         let result =

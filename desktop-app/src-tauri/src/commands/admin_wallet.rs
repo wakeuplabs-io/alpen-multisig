@@ -19,6 +19,7 @@ use desktop_app::infrastructure::admin_wallet::AdminWalletError;
 use desktop_app::infrastructure::bitcoin_rpc::{BitcoinRpcClient, HttpBitcoinRpcClient};
 use desktop_app::infrastructure::electrum_broadcaster::ElectrumBroadcaster;
 use desktop_app::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
+use desktop_app::infrastructure::network_env::resolve_network;
 use desktop_app::infrastructure::node_broadcaster::NodeBroadcaster;
 use desktop_app::infrastructure::node_config_store::NodeConfigState;
 
@@ -39,7 +40,7 @@ pub async fn wallet_session_init(
         .init_from_mnemonic(
             &input.mnemonic,
             input.passphrase.as_deref(),
-            input.network.as_deref(),
+            resolve_network(input.network.as_deref()).map_err(|e| e.to_string())?,
         )
         .await
         .map_err(serialize_wallet_error)
@@ -59,6 +60,7 @@ pub async fn wallet_session_init_watch_only(
     input: WatchOnlyInitInput,
     wallet_session: tauri::State<'_, WalletSession>,
 ) -> Result<(), String> {
+    let network = resolve_network(input.network.as_deref()).map_err(|e| e.to_string())?;
     if let Some(fp) = input.master_fingerprint {
         let device_type =
             match input.device_type.as_deref() {
@@ -74,12 +76,12 @@ pub async fn wallet_session_init_watch_only(
                 ),
             };
         wallet_session
-            .init_from_xpub_with_hw(&input.xpub, fp, device_type, input.network.as_deref())
+            .init_from_xpub_with_hw(&input.xpub, fp, device_type, network)
             .await
             .map_err(serialize_wallet_error)
     } else {
         wallet_session
-            .init_from_xpub(&input.xpub, input.network.as_deref())
+            .init_from_xpub(&input.xpub, network)
             .await
             .map_err(serialize_wallet_error)
     }
@@ -614,7 +616,7 @@ mod tests {
         let session = WalletSession::empty();
         let xpub = derive_test_xpub();
         session
-            .init_from_xpub(&xpub, None)
+            .init_from_xpub(&xpub, bdk_wallet::bitcoin::Network::Regtest)
             .await
             .expect("watch-only init must succeed");
         assert!(

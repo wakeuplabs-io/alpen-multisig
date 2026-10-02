@@ -30,10 +30,13 @@ pub(crate) trait ProposalRepository: Send + Sync {
         status: Option<ProposalStatus>,
     ) -> Result<Vec<Proposal>, AppError>;
 
-    /// Atomically transition broadcast_status from `Idle` to `CommitBroadcasted`.
+    /// Take broadcast coordination for `action_id`.
     ///
-    /// Returns `Ok(proposal)` on success, `Err(Conflict)` if the proposal is not
-    /// in the `Idle` state (i.e. another caller already claimed it).
+    /// Succeeds from `idle` or `failed`, and from a `commit_broadcasted` row that
+    /// has no txids and a claim older than `CLAIM_STALE_AFTER`. Refuses when
+    /// another approved proposal of the same authority is already in flight.
+    /// A proposal that is no longer approved does not count.
+    /// `Err(Conflict)` carries `AUTHORITY_IN_FLIGHT`.
     async fn claim_broadcast(&self, action_id: &ActionId) -> Result<Proposal, AppError>;
 
     /// Update broadcast sub-status and related txids/error for an approved proposal.

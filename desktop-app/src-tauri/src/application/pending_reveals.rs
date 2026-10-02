@@ -8,6 +8,10 @@ pub struct PendingReveal {
     pub reveal_tx_hex: String,
     pub reveal_txid: String,
     pub commit_txid: String,
+    /// The signed commit, so the settle loop can record it in the wallet once found and look it up
+    /// by output script (#516). Absent in entries stored by earlier versions.
+    #[serde(default)]
+    pub commit_tx_hex: Option<String>,
 }
 
 pub type PendingReveals = Arc<Mutex<HashMap<String, PendingReveal>>>;
@@ -54,6 +58,7 @@ mod tests {
                     reveal_tx_hex: "aabbcc".to_string(),
                     reveal_txid: format!("reveal-{i}"),
                     commit_txid: format!("commit-{i}"),
+                    commit_tx_hex: None,
                 },
             );
         }
@@ -77,6 +82,7 @@ mod tests {
                 reveal_tx_hex: "aabbcc".to_string(),
                 reveal_txid: "txid-1".to_string(),
                 commit_txid: "commit-1".to_string(),
+                commit_tx_hex: None,
             },
         );
         let guard = store.lock().unwrap();
