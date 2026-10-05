@@ -152,6 +152,101 @@ The surface we need is small: `threshold_multisig_script`, `ClaimPayoutConnector
 **Output:** for every field, its source, and both signet claims validated (D1) and reconstructed (D2). **No-go if** any
 field has no obtainable source.
 
+## Execution sequence
+
+One step per branch, cut from the latest `develop`. Every step ends by adding its section to a single findings doc,
+`docs/2-discovery/22-block-payouts-spike-findings.md` (created by the first step that merges), and by updating the
+track verdict in this plan. Code is merged only when it will be reused (the vendored subset, the regtest fixture, the
+validation adapters) and then it must pass the full CI checklist. Throwaway probes stay on their branch.
+
+```mermaid
+flowchart LR
+  S0[S0 Questions to Alpen] --> S5[S5 D2 connector rebuild]
+  S0 --> S6[S6 A2 options and device]
+  S1[S1 A1 emulators] --> S6
+  S2[S2 C vendor or depend] --> S3[S3 B regtest fixture]
+  S2 --> S4[S4 D1 claim validation]
+  S2 --> S5
+  S3 --> S7[S7 Go/no-go]
+  S4 --> S7
+  S5 --> S7
+  S6 --> S7
+```
+
+S0, S1 and S2 start together. S0 waits on Alpen, so nothing that can run without its answers should wait for it.
+
+| Step | Track | Branch | Depends on | Timebox |
+|---|---|---|---|---|
+| S0 | 0 | — (issue only) | — | Send day 1 |
+| S1 | A1 | `spike/block-payouts-a1-emulators` | — | 2 days |
+| S2 | C | `spike/block-payouts-c-strata-bridge` | — | 3 days |
+| S3 | B | `spike/block-payouts-b-regtest-fixture` | S2 | 3 days |
+| S4 | D1 | `spike/block-payouts-d1-claim-validation` | S2 | 3 days |
+| S5 | D2 | `spike/block-payouts-d2-connector-rebuild` | S2, S0 (signet parameters) | 2 days |
+| S6 | A2 | `spike/block-payouts-a2-signing-options` | S0, S1 | 3 days |
+| S7 | — | `docs/block-payouts-spike-verdict` | S3–S6 | 1 day |
+
+### S0 — Questions to Alpen (Track 0)
+
+- Send the six Track 0 questions. Attach the S1 evidence when it lands; do not wait for it to send.
+- **Done when:** the questions are sent and each has an answer or an explicit "unknown".
+
+### S1 — Confirm the hardware signing finding on emulators (Track A, part 1)
+
+- Ledger on Speculos (`scripts/ledger-up.sh`), through the `ledger_bitcoin_client` path the app already uses:
+  1. Build the real connector (`OP_EQUAL` leaf + unstaking leaf, raw N/N internal key) and a PSBT spending it.
+  2. Try to express it as a wallet policy and sign. Record exactly where it fails: template rejected (leaf), key
+     rejected (internal key), or signing refused.
+  3. Repeat with an `OP_NUMEQUAL` (`multi_a`) variant, to separate the leaf problem from the internal key problem.
+- Trezor emulator (`scripts/trezor-up.sh`): confirm no script-path signing is available.
+- **Done when:** the findings doc states, per device, what was tried and the exact error, with logs. Code stays on the
+  branch.
+
+### S2 — Vendor or depend on `strata-bridge` (Track C)
+
+- Attempt the git dependency on `strata-bridge-tx-graph` @ `3b69ece` once, timeboxed to one day; record every conflict.
+- Vendor the subset listed in Track C into a workspace crate, with upstream tests (including the signet hex fixtures).
+  Measure what it takes to pass `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and our toolchain.
+- **Done when:** the decision is recorded with its evidence and the chosen option builds in the workspace with upstream
+  tests green. If vendored, the crate is merged.
+
+### S3 — Regtest block payout fixture (Track B)
+
+- In `e2e-tests/` (its harness already starts `bitcoind` through `corepc-node`), mirror upstream's connector test:
+  fund N claim payout connectors with locally generated keys.
+- Build the full shape: N `AdminBurn` inputs + fee input from a test Admin Wallet (key-path) + change. Sign the admin
+  leaf with software keys. Decide version 2 vs version 3 and record the size limit.
+- Verify each admin signature ourselves against the recomputed script-path sighash, then `testmempoolaccept`, broadcast
+  and mine.
+- **Done when:** the test passes in CI and the findings doc records the witness layout and the version decision.
+
+### S4 — Claim validation (Track D1)
+
+- Run `verify_contest` / `verify_ack` offline on the signet hex fixtures.
+- Implement `GraphTxSource` over electrs (`blockchain.scripthash.get_history`) and test it on regtest; add an Esplora
+  source for signet and validate both signet claims live.
+- **Done when:** both claims give the expected result (`f599a165…` no Ack, `eaf25a3e…` Ack) through a live source, and
+  the electrs adapter returns correct outspends on regtest.
+
+### S5 — Connector reconstruction (Track D2)
+
+- With Alpen's signet parameters, rebuild the claim payout connector for both signet claims and compare its
+  `script_pubkey` with the on-chain output at `ClaimTx::PAYOUT_VOUT`.
+- **Done when:** both match, and the D2 field table states the confirmed source of each field. If Alpen cannot provide
+  the parameters, record it as a named blocker.
+
+### S6 — Signing options and physical device (Track A, part 2)
+
+- With S1 evidence and Alpen's answers, evaluate the open options (script change, other HWI devices, PRD relaxation).
+- If any device can sign, run it on a physical device and record what co-signers see (external fee input, unknown
+  change address).
+- **Done when:** one option is chosen with Alpen, or the track is closed as a named blocker.
+
+### S7 — Go/no-go
+
+- Roll the track verdicts into one decision in the findings doc and in this plan's Outcome section.
+- **Done when:** the go/no-go is recorded with its blockers, ready to update the estimate.
+
 ## Inputs
 
 - False claim report contract: [`07-supplementary-false-claim-reports.md`](../0-prd/07-supplementary-false-claim-reports.md)
