@@ -4,7 +4,9 @@
 > **Goal:** evidence that produces a go/no-go, with blockers named, before full implementation of the Payout
 > Administrator flow ([PRD §6](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md)).
 > **Upstream pin:** `strata-bridge` @ `3b69ece` (contains the connector, `AdminBurnTx` and the false claim reference;
-> the admin leaf is identical at `70cc4e8`).
+> the admin leaf is identical at `70cc4e8`). `3b69ece` is the head of the unmerged draft
+> [PR #800](https://github.com/alpenlabs/strata-bridge/pull/800); `main` @ `5d3c8dc` (checked 2026-10-05) has the same
+> connector, leaf, `AdminBurnTx` and sighash, but not the false claim reference.
 
 ## What the spike validates
 
@@ -33,6 +35,18 @@ Facts from `strata-bridge` @ `3b69ece` that shape the steps:
 - **New verification work:** `verify_threshold` is ECDSA (`infrastructure/signing.rs`); admin signatures are Schnorr
   over a script-path sighash.
 - **Fee inputs are covered:** key-path signing from the Admin Wallet already works on Ledger and Trezor.
+- **The false claim reference is not on `main`.** `verify_contest` / `verify_ack` exist only in draft
+  [PR #800](https://github.com/alpenlabs/strata-bridge/pull/800) ("[DO NOT MERGE]", opened for comments). They assume
+  a flat operator list (`n_watchtowers = operators.len() - 1`).
+- **Admin keys and threshold are bridge params.** On `main`, `[keys.admin]` (`pubkeys`, `threshold`) lives in the
+  bridge `params.toml`
+  ([`params.rs`](https://github.com/alpenlabs/strata-bridge/blob/5d3c8dc4bef3246b88b2aa0cdfbe857891422e03/crates/common/src/params.rs)),
+  which is consensus-critical and fixed at genesis.
+- **The operator set is a schedule on `main`.** Each operator has an activation and optional deactivation height; the
+  N/N is a `CovenantId` (aggregate key + admin activation height) that changes when an operator exits
+  ([`covenant.rs`](https://github.com/alpenlabs/strata-bridge/blob/5d3c8dc4bef3246b88b2aa0cdfbe857891422e03/crates/primitives/src/covenant.rs)).
+- **New lifecycle paths on `main`:** safe-harbour sweep (`SweepTx`) races the payout, and `bridge-sm` rejects claims
+  that confirm before their graph is signed.
 
 ## Tracks
 
@@ -61,11 +75,16 @@ Known collisions at `3b69ece`: `asm` @ `93b5ca8c` (ours `b84eb28`); strata-commo
 `v0.1.0-alpha-rc23`); `bitcoin-bosd` v0.12 (ours v0.11); `musig2` git fork with a `[patch]` not inherited by
 dependents; unpinned `bitcoin-script`; toolchain `nightly-2026-05-01` (ours `nightly-2026-01-01`).
 
+The gap is wider on `main` @ `5d3c8dc`: `asm` `v0.5.0-rc.1`, strata-common `v0.4.0` (plus `v0.4.0-rc.3` for
+`strata-identifiers` via alpen), toolchain `nightly-2026-09-01`.
+
 Needed surface: `threshold_multisig_script`, `ClaimPayoutConnector`, `AdminBurnTx`, `ContestProofConnector`,
 `verify_contest`, `verify_ack`, `ClaimTx` / `ContestTx` output indices.
 
 - Default: vendor that subset verbatim, with upstream tests and signet hex fixtures as differential tests.
 - Alternative: git dependency, attempted once to measure the conflict cost.
+- The source revision is an external input: `3b69ece` (draft PR #800) or a `main` commit once the false claim
+  reference lands there.
 
 **No-go** not expected; the cost of the chosen option must be named.
 
@@ -73,7 +92,8 @@ Needed surface: `threshold_multisig_script`, `ClaimPayoutConnector`, `AdminBurnT
 
 **D1 — Which claims to block.** `verify_contest` / `verify_ack` offline on upstream's signet hex fixtures;
 `GraphTxSource` over electrs (`blockchain.scripthash.get_history`) for regtest/production and over Esplora for signet;
-operator-set config versioning.
+operator-set config modelled on upstream's operator set schedule (operators active at the claim height), not a flat
+list.
 
 **D2 — How to rebuild each input.**
 
@@ -81,9 +101,9 @@ operator-set config versioning.
 |---|---|
 | Claim outpoint | Claim txid (user input) + `ClaimTx::PAYOUT_VOUT` |
 | Amount | Chain (prevout) |
-| N/N internal key | Bridge config |
-| Admin pubkeys (ordered) + threshold | Payout Admin config — order matters, the script does not sort |
-| Unstaking image | Not on chain; needed as the sibling leaf hash in the control block — external input |
+| N/N internal key | Bridge `params.toml` operator schedule — aggregate of the operators active at the claim height |
+| Admin pubkeys (ordered) + threshold | Bridge `params.toml` `[keys.admin]` — order matters, the script does not sort |
+| Unstaking image | Per operator stake (`KeyData.unstaking_image`, exchanged at setup); not on chain nor in params; needed as the sibling leaf hash in the control block — external input |
 
 Self-check: the rebuilt connector's `script_pubkey` must equal the on-chain output at `ClaimTx::PAYOUT_VOUT`.
 
@@ -132,7 +152,8 @@ S1 and S2 start together.
 
 ### S2 — Vendor or depend on `strata-bridge`
 
-- Attempt the git dependency on `strata-bridge-tx-graph` @ `3b69ece` once; record every conflict.
+- Attempt the git dependency on `strata-bridge-tx-graph` @ `3b69ece` once; record every conflict. Repeat the
+  conflict list against `main` so the cost of moving the pin is known.
 - Vendor the Track C subset into a workspace crate with upstream tests (including the signet hex fixtures). Measure
   what it takes to pass `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and our toolchain.
 - **Done when:** the decision is recorded with its evidence and the chosen option builds with upstream tests green.
@@ -142,6 +163,7 @@ S1 and S2 start together.
 - In `e2e-tests/` (its harness starts `bitcoind` through `corepc-node`), fund N claim payout connectors with locally
   generated keys.
 - Build N `AdminBurn` inputs + fee input from a test Admin Wallet + change; sign the admin leaf with software keys.
+  Upstream's `admin_burn_payout` test in `tx-graph/src/game_graph.rs` is the single-input reference.
 - Verify each signature against the recomputed script-path sighash; `testmempoolaccept`, broadcast, mine.
 - **Done when:** the test passes in CI and the findings doc records the witness layout and the version decision.
 
@@ -161,8 +183,8 @@ S1 and S2 start together.
 
 ### S6 — Connector reconstruction
 
-- With the signet connector parameters (ordered admin pubkeys, threshold, unstaking image), rebuild the claim payout
-  connector for both signet claims and compare its `script_pubkey` with the chain.
+- With the signet connector parameters (signet bridge `params.toml` and the unstaking image of each claim's stake),
+  rebuild the claim payout connector for both signet claims and compare its `script_pubkey` with the chain.
 - **Done when:** both match and the D2 table has a confirmed source per field, or a named blocker.
 
 ### S7 — Go/no-go
@@ -174,11 +196,16 @@ S1 and S2 start together.
 
 - False claim report contract: [`07-supplementary-false-claim-reports.md`](../0-prd/07-supplementary-false-claim-reports.md).
 - `ClaimPayoutConnector` unit test: [`claim_payout.rs` L296-314 @ `70cc4e8`](https://github.com/alpenlabs/strata-bridge/blob/70cc4e82d13c15285e4ade371499f0a6f31cd239/crates/connectors/src/claim_payout.rs#L296-L314).
-- Reference implementation, `strata-bridge` @ `3b69ece`:
+- Reference implementation, `strata-bridge` @ `3b69ece` (draft [PR #800](https://github.com/alpenlabs/strata-bridge/pull/800)):
   [`verify_contest.rs`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/verify_contest.rs#L210-L241),
   [`verify_ack.rs`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/verify_ack.rs#L190-L217),
   [`VerifyParams`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/verify_contest.rs#L24-L38),
   [`AdminBurnTx`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/transactions/not_presigned.rs).
+- `strata-bridge` `main` @ `5d3c8dc`:
+  [`params.rs`](https://github.com/alpenlabs/strata-bridge/blob/5d3c8dc4bef3246b88b2aa0cdfbe857891422e03/crates/common/src/params.rs)
+  (admin multisig, operator schedule),
+  [`game_graph.rs`](https://github.com/alpenlabs/strata-bridge/blob/5d3c8dc4bef3246b88b2aa0cdfbe857891422e03/crates/tx-graph/src/game_graph.rs)
+  (`KeyData`, `admin_burn_payout` test).
 - Signet test claims:
   [`f599a165…`](https://mempool.space/signet/tx/f599a16569f0ad0fdafb4fa0dabcb4be4776447afe327a14deff63f0a41671e9)
   (operator 3, deposit 1, no Ack) and
