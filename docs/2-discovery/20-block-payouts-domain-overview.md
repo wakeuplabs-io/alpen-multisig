@@ -60,7 +60,7 @@ Optional: the user may supply the **deposit index** exactly, or a range; if unkn
 
 ### Reference implementation (`strata-bridge` @ `3b69ece`)
 
-Alpen's reference lives in the `tx-graph` crate. Both modules are pure functions with no I/O, tested against real signet transactions.
+Alpen's reference lives in the `tx-graph` crate. Both modules are pure functions with no I/O, tested against real signet transactions. They exist only in the unmerged draft [PR #800](https://github.com/alpenlabs/strata-bridge/pull/800) ("[DO NOT MERGE]"); `main` @ `5d3c8dc` (checked 2026-10-05) does not include them.
 
 | Function | What it does |
 |----------|--------------|
@@ -95,6 +95,13 @@ The application needs bridge parameters to validate reports and rebuild connecto
 
 **Dynamic operator set:** operators may be added or removed; the bridge key changes with each update. Claims may correspond to **old or new** operator lists — config cannot be blindly overwritten; historical versions must be retained.
 
+**Upstream shape on `main`.** The bridge `params.toml` ([`params.rs` @ `5d3c8dc`](https://github.com/alpenlabs/strata-bridge/blob/5d3c8dc4bef3246b88b2aa0cdfbe857891422e03/crates/common/src/params.rs)) already models this:
+
+- `[[keys.operators]]` is an operator set schedule: index, covenant key, P2P key, payout descriptor, `activation_height`, optional `deactivation_height`. The N/N for a claim is the aggregate of the operators active at its height (`CovenantId`).
+- `[keys.admin]` holds the admin multisig (`pubkeys` in script order, `threshold`) used by the `AdminBurn` leaf.
+- Params are consensus-critical and fixed at genesis, so changing the admin set is a coordinated params change across operators.
+- The unstaking image is not in params: it is per operator stake (`KeyData.unstaking_image`, exchanged at setup).
+
 ### What the app derives after validation
 
 From a validated Claim, the app derives the **claim payout connector outpoint(s)** to include as `block_payout` inputs (see [`04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md)).
@@ -103,7 +110,7 @@ From a validated Claim, the app derives the **claim payout connector outpoint(s)
 
 ## The block payout transaction (`strata-bridge` @ `3b69ece`)
 
-Upstream calls it the **Admin Burn** transaction. What the code fixes:
+Upstream calls it the **Admin Burn** transaction. The connector, leaf, `AdminBurnTx` and sighash below are unchanged on `main` @ `5d3c8dc`. What the code fixes:
 
 **Claim payout connector** ([`claim_payout.rs`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/connectors/src/claim_payout.rs)), output `ClaimTx::PAYOUT_VOUT` of the Claim:
 
@@ -127,7 +134,7 @@ With stock firmware, no supported device is known to sign the `AdminBurn` leaf:
 - **Ledger** signs through BIP-388 wallet policies: tap leaves must be `multi_a`, `sortedmulti_a` or miniscript (the `OP_EQUAL` leaf is not), and keys must be `xpub`s with a derivation (the raw N/N internal key is not). See the [Ledger wallet policy docs](https://github.com/LedgerHQ/app-bitcoin-new/blob/master/doc/wallet.md).
 - **Trezor** signs taproot by key-path only.
 
-Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. Resolution options and the questions for Alpen are in [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
+Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. How the spike checks this: [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
 
 ---
 

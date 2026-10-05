@@ -60,7 +60,7 @@ The discovery plan was organised around five focused POCs. Each one reduced a sp
 | [`20-block-payouts-domain-overview.md`](./20-block-payouts-domain-overview.md) | Domain overview — false claim reports, bridge config, mock vs real contract |
 | [`../0-prd/07-supplementary-false-claim-reports.md`](../0-prd/07-supplementary-false-claim-reports.md) | **Frozen client input** — Claim/Contest/Ack validation, config, design decisions ([Notion](https://app.notion.com/p/Strata-multisig-app-supplementary-info-3c8901ba000f80839664e0189abc9c4c)) |
 | [`../0-prd/04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md) | On-chain shape of Claim and Admin Block Payouts transactions |
-| [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md) | Spike plan — desk findings (admin leaf not signable by stock HW firmware), questions for Alpen, four tracks with go/no-go criteria |
+| [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md) | Spike plan — technical context, four tracks with go/no-go criteria, step-by-step execution sequence |
 
 ### Reference material
 
