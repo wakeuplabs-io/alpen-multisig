@@ -127,7 +127,7 @@ With stock firmware, no supported device is known to sign the `AdminBurn` leaf:
 - **Ledger** signs through BIP-388 wallet policies: tap leaves must be `multi_a`, `sortedmulti_a` or miniscript (the `OP_EQUAL` leaf is not), and keys must be `xpub`s with a derivation (the raw N/N internal key is not). See the [Ledger wallet policy docs](https://github.com/LedgerHQ/app-bitcoin-new/blob/master/doc/wallet.md).
 - **Trezor** signs taproot by key-path only.
 
-Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. Resolution options and the questions for Alpen are in [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
+Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. How the spike checks this: [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
 
 ---
 
