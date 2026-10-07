@@ -27,9 +27,10 @@ Facts from `strata-bridge` @ `3b69ece` that shape the steps:
   ([`general.rs`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/primitives/src/scripts/general.rs));
   miniscript `multi_a` ends in `OP_NUMEQUAL`.
 - **Stock firmware cannot sign it** (S1a, 2026-10-07). Trezor core 2.12.5, including Safe 7, signs taproot by
-  key-path only. Ledger Bitcoin app 2.5.1, with or without the miniscript line, cannot register this leaf: it ends
-  in `OP_EQUAL`, the N/N internal key is a raw aggregate, and the `UnstakingBurn` sibling is outside the policy
-  language. Detail and the disassembled script: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md).
+  key-path only. Ledger Bitcoin app 2.5.1, with or without the miniscript line, cannot register this output: the
+  leaf ends in `OP_EQUAL`, the N/N internal key is a raw aggregate that no derived key expression can produce, and
+  the `UnstakingBurn` sibling (`sha256(h)`) fails the sanity check because it requires no signature.
+  Detail and the disassembled script: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md).
 - **Upstream builds the transaction** with [`AdminBurnTx`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/transactions/not_presigned.rs):
   one connector in input 0, version 3 (TRUC, 10,000 vB limit). PRD §6.4.2 needs several connectors per transaction.
 - **Sighash is `TapSighashType::Default`** for every connector spend.
@@ -55,7 +56,7 @@ Facts from `strata-bridge` @ `3b69ece` that shape the steps:
 
 - **S1a (done, desk):** stock Trezor (including Safe 7 at core 2.12.5) and stock Ledger (Bitcoin app through 2.5.1,
   with or without miniscript) cannot sign the `AdminBurn` leaf. Software signing can. See the findings doc.
-- Confirm on emulators where signing fails: leaf shape vs. internal key.
+- Confirm on emulators where signing fails: template parse, registration sanity, or `scriptPubKey` mismatch.
 - Evaluate the signing options that remain (upstream script change, other HWI devices, requirement change).
 - If any device can sign: physical-device run, recording what co-signers see (external fee input, unknown change
   address).
@@ -158,13 +159,17 @@ Docs only. No emulator and no code.
 
 ### S1 — Confirm the hardware signing finding on emulators
 
-- Ledger on Speculos (`scripts/ledger-up.sh`), through the `ledger_bitcoin_client` path the app already uses:
-  1. Build the real connector (`OP_EQUAL` leaf + unstaking leaf, raw N/N internal key) and a PSBT spending it.
-  2. Express it as a wallet policy and sign. Record where it fails: template rejected (leaf), key rejected (internal
-     key), or signing refused.
-  3. Repeat with an `OP_NUMEQUAL` (`multi_a`) variant to separate the two problems.
+- Ledger on Speculos (`scripts/ledger-up.sh`), through the `ledger_bitcoin_client` path the app already uses.
+  Ledger registers a descriptor template, not a script, and the on-chain connector has no descriptor. Build the real
+  connector and a PSBT spending it, then submit the closest policies, one per blocker:
+  1. Raw internal key or raw admin keys: expect the template parse error ("Expected /** or /<M;N>/* in key
+     expression").
+  2. Derived keys, `multi_a` leaf, `UnstakingBurn` as `sha256(h)`: expect `EC_REGISTER_WALLET_POLICY_NOT_SANE`.
+  3. A registrable stand-in (derived keys, `multi_a`, a signed sibling): expect a `scriptPubKey` mismatch with the
+     PSBT input, so the input is treated as external and is not signed.
 - Trezor emulator (`scripts/trezor-up.sh`): confirm no script-path signing is available.
-- **Done when:** the findings doc states, per device, what was tried and the exact error, with logs.
+- **Done when:** the findings doc states, per device and per probe, what was submitted and the exact error or
+  device behaviour, with logs. A result that differs from the expected outcome reopens S1a.
 
 ### S2 — Vendor or depend on `strata-bridge`
 

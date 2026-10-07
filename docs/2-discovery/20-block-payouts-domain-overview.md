@@ -137,8 +137,9 @@ software (upstream's `admin_burn_payout` test). No stock device this app support
   and no tapscript extension.
 - **Ledger** Bitcoin app through 2.5.1 (9 September 2026): apps before tapleaves have no script-path signer. Apps
   with miniscript (`multi_a` / taproot miniscript, from 2.1.2 and 2.2.0 onward) still cannot register this output.
-  The leaf ends in `OP_EQUAL` rather than `OP_NUMEQUAL`, the N/N internal key is a raw aggregate rather than an
-  xpub, and the `UnstakingBurn` sibling is outside the policy language.
+  The leaf ends in `OP_EQUAL` rather than `OP_NUMEQUAL`. The N/N internal key is a raw aggregate, and every
+  Ledger key expression, `musig()` included, is derived. The `UnstakingBurn` sibling is miniscript `sha256(h)`, but
+  registration rejects it because it requires no signature.
 
 Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. Script, witness, and the
 firmware citations: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md). Spike plan:

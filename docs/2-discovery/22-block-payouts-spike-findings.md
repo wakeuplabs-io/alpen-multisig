@@ -124,8 +124,9 @@ Worked example, image `0x44…44` (39 bytes):
 82012088a820444444444444444444444444444444444444444444444444444444444444444487
 ```
 
-This leaf is not `pk`, `multi_a`, `sortedmulti_a`, or a taproot miniscript template. `block_payout` does not spend
-it. Every `AdminBurn` control block still commits to its leaf hash.
+This leaf is the miniscript fragment `sha256(h)`: `SIZE <20> EQUALVERIFY SHA256 <h> EQUAL`, byte for byte. It is
+valid miniscript, but it is not *sane*: nothing in it requires a signature. `block_payout` does not spend it. Every
+`AdminBurn` control block still commits to its leaf hash.
 
 ### Tap tree and control block
 
@@ -263,31 +264,56 @@ on `master` at the 2.5.1 line:
 - The key information vector is a list of **xpubs** (optionally with origin). The device decodes each entry into
   `serialized_extended_pubkey_t` (`get_pubkey_from_merkle_tree` in `policy.c`). The 2.1.0 policy doc stated the
   same limit in one sentence: "Key expressions only support xpubs at this time (no hex-encoded pubkeys)."
-- `musig()` is allowed as a taproot key expression (internal key or a tapleaf key) from app 2.4.0. It aggregates
-  participant xpubs on the device. It does not accept a raw 32-byte aggregate.
+- Every key expression is derived. A placeholder must be followed by `/**` or `/<M;N>/*`, with unhardened `M` and
+  `N` ([`wallet.c`](https://github.com/LedgerHQ/app-bitcoin-new/blob/dab93a1af0e623d107c227c35a3fb51da4f7585c/src/common/wallet.c#L545-L556)
+  for V2 policies; V1 policies must end in `/**`). The key the device uses is always a child two levels below an
+  xpub, never the xpub's own point.
+- `musig()` is allowed as a taproot key expression (internal key or a tapleaf key) from app 2.4.0. Only
+  `musig(...)/**` and `musig(...)/<M;N>/*` are supported: at most 5 participant xpubs, aggregated first, and the
+  aggregate is then derived. Participants derived before aggregation are not supported
+  ([`doc/musig.md`](https://github.com/LedgerHQ/app-bitcoin-new/blob/dab93a1af0e623d107c227c35a3fb51da4f7585c/doc/musig.md)).
+- Registration rejects any miniscript leaf that is not sane. Each tapleaf is checked, and a leaf that can be
+  satisfied without a signature fails with "Miniscript does not always require a signature"
+  ([`policy.c`](https://github.com/LedgerHQ/app-bitcoin-new/blob/dab93a1af0e623d107c227c35a3fb51da4f7585c/src/handler/lib/policy.c#L1841-L1844),
+  status `EC_REGISTER_WALLET_POLICY_NOT_SANE` in `register_wallet.c`).
 
 Three blockers, each enough on its own. Changing `OP_EQUAL` to `OP_NUMEQUAL` removes only the first.
 
 1. **The leaf is not `multi_a`.** Ledger emits `<k> OP_NUMEQUAL`. This leaf emits `<K> OP_EQUAL`. A policy parser
-   that only accepts the miniscript fragment will not register the script that is actually on chain.
-2. **The internal key is not an xpub.** It is the raw N/N x-only aggregate of the operators active at the claim
-   height. The admin's device does not hold the operator seeds, so it cannot rebuild that point with `musig()`.
-   A wallet policy has nowhere to put a raw x-only internal key.
-3. **The sibling leaf is not a policy script.** `UnstakingBurn` (`OP_SIZE`, `OP_SHA256`, `OP_EQUAL`) is not
-   `multi_a` and not taproot miniscript. Registering the tree means registering every leaf. A policy that cannot
-   name leaf 1 cannot name the output the admin is spending, even if leaf 0 were rewritten.
+   that only accepts the miniscript fragment will not register the script that is actually on chain. (With a
+   single admin, `<A> OP_CHECKSIG OP_1 OP_EQUAL` is miniscript `thresh(1,pk(A))`. Blocker 2 still applies.)
+2. **The internal key cannot be expressed.** It is the BIP-327 KeyAgg of the raw operator pubkeys active at the
+   claim height, with no derivation after aggregation (`key_agg.rs`, `TaprootTweak::Script`). Aggregation only
+   needs public keys, so missing seeds is not the obstacle. Derivation is: every Ledger key expression, `musig()`
+   included, ends in a derivation step, and no xpub derives to a given point. A plain `@i/**` cannot produce the
+   aggregate either. A wallet policy has nowhere to put a raw x-only internal key.
+3. **The sibling leaf fails registration.** `UnstakingBurn` is miniscript `sha256(h)`, so the policy language can
+   write it. Registration then rejects the policy because that leaf requires no signature. Registering the tree
+   means registering every leaf, so the output the admin is spending cannot be registered, even if leaf 0 were
+   rewritten.
 
 `AdminBurn` keys are also raw x-only pubkeys from `params.toml`, not xpubs at a `/**` or `/<0;1>` placeholder.
 That is a fourth mismatch for the keys inside the leaf. Blockers 1–3 already close the policy.
 
 ### What this does not decide
 
-- S1 still runs the connector through Speculos and the Trezor emulator and records the error string. The expected
-  failures are: Trezor has no script-path message; Ledger rejects the policy (leaf, internal key, or both). An
-  `OP_NUMEQUAL` variant should still fail Ledger on the internal key and on `UnstakingBurn`.
-- S5 still needs a decision with Alpen if the product requires a hardware signature: change the leaf to miniscript
-  `multi_a` **and** give every key, including the internal key, a form a wallet policy can express **and** express
-  `UnstakingBurn` (or drop it from the tree the app registers); or accept a software signer for this leaf; or
-  change the PRD. This desk pass does not pick one.
+- S1 still runs the emulators and records the error strings. Ledger registers a descriptor template, not a script,
+  and the on-chain connector has no descriptor. S1 can only submit the closest policies. The expected outcomes are:
+  - **Trezor:** no script-path message exists. `SPENDTAPROOT` signs the key-path sighash with the BIP-86-tweaked key.
+  - **Ledger, raw internal key or raw admin keys:** the template does not parse ("Expected /** or /<M;N>/* in key
+    expression"). There is no syntax for an underived key.
+  - **Ledger, `UnstakingBurn` written as `sha256(h)`:** registration fails with `EC_REGISTER_WALLET_POLICY_NOT_SANE`.
+  - **Ledger, a registrable stand-in policy (`multi_a`, derived keys, signed sibling):** the device derives a
+    different `scriptPubKey`. `compare_wallet_script_at_path` does not match, so the input is treated as external
+    and is not signed.
+- S5 still needs a decision with Alpen if the product requires a hardware signature. For Ledger, every one of these
+  is an upstream protocol change:
+  - the leaf ends in `OP_NUMEQUAL` (`multi_a`);
+  - each admin key is an xpub child at the same `/<M;N>/*` index as the rest of the policy;
+  - the N/N internal key is `musig(...)/<M;N>/*`, a derived aggregate of at most 5 operator xpubs;
+  - `UnstakingBurn` requires a signature or leaves the tree.
+
+  The alternatives are to accept a software signer for this leaf, or to change the PRD. This desk pass does not
+  pick one.
 - A custom firmware or a custom Ledger Bitcoin app could sign the leaf. That is outside stock devices and outside
   the matrix of devices this app supports today.
