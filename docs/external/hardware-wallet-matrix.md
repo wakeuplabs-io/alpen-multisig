@@ -11,6 +11,16 @@ The Strata Multisig application supports hardware wallets that provide the follo
 - **On-device display** — Signer must review action details before signing
 - **HID interface** — USB communication for desktop integration
 
+## Out of scope: `block_payout` `AdminBurn`
+
+The Supported rows below cover the flows this application signs today: taproot key-path spends and raw ECDSA
+message signing (SPS-65). They do not cover a Payout Administrator signing the bridge `AdminBurn` leaf.
+
+That leaf is a taproot script-path spend. Desk research on 2026-10-07 found that stock Trezor firmware, including
+Safe 7 at core 2.12.5, and the Ledger Bitcoin app through 2.5.1 (with or without miniscript) cannot sign it. An
+admin can still sign the same leaf with software keys. The disassembled script and the firmware citations are in
+[`docs/2-discovery/22-block-payouts-spike-findings.md`](../2-discovery/22-block-payouts-spike-findings.md).
+
 ## Supported Devices
 
 ### Trezor

@@ -1,6 +1,7 @@
 # Block Payouts — Spike Plan
 
-> **Status:** Planned, not started. Discovery material — not SSOT, not committed scope.
+> **Status:** S1a desk research recorded (2026-10-07). Remaining steps not started. Discovery material — not SSOT,
+> not committed scope. Findings: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md).
 > **Goal:** evidence that produces a go/no-go, with blockers named, before full implementation of the Payout
 > Administrator flow ([PRD §6](../0-prd/06-prd-hardware-signer-and-block-payouts-update.md)).
 > **Upstream pin:** `strata-bridge` @ `3b69ece` (contains the connector, `AdminBurnTx` and the false claim reference;
@@ -25,10 +26,10 @@ Facts from `strata-bridge` @ `3b69ece` that shape the steps:
 - **The `AdminBurn` leaf is not miniscript.** `threshold_multisig_script` ends in `<K> OP_EQUAL`
   ([`general.rs`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/primitives/src/scripts/general.rs));
   miniscript `multi_a` ends in `OP_NUMEQUAL`.
-- **Stock firmware likely cannot sign it.** Ledger wallet policies (BIP-388) require miniscript leaves and `xpub` keys
-  with derivation — the leaf and the raw N/N internal key do not fit
-  ([docs](https://github.com/LedgerHQ/app-bitcoin-new/blob/master/doc/wallet.md)). Trezor signs taproot by key-path
-  only (`hw_wallet/trezor.rs`).
+- **Stock firmware cannot sign it** (S1a, 2026-10-07). Trezor core 2.12.5, including Safe 7, signs taproot by
+  key-path only. Ledger Bitcoin app 2.5.1, with or without the miniscript line, cannot register this leaf: it ends
+  in `OP_EQUAL`, the N/N internal key is a raw aggregate, and the `UnstakingBurn` sibling is outside the policy
+  language. Detail and the disassembled script: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md).
 - **Upstream builds the transaction** with [`AdminBurnTx`](https://github.com/alpenlabs/strata-bridge/blob/3b69ece5068b76def66dda15ef6f4fa747087b54/crates/tx-graph/src/transactions/not_presigned.rs):
   one connector in input 0, version 3 (TRUC, 10,000 vB limit). PRD §6.4.2 needs several connectors per transaction.
 - **Sighash is `TapSighashType::Default`** for every connector spend.
@@ -52,6 +53,8 @@ Facts from `strata-bridge` @ `3b69ece` that shape the steps:
 
 ### A — Hardware signing
 
+- **S1a (done, desk):** stock Trezor (including Safe 7 at core 2.12.5) and stock Ledger (Bitcoin app through 2.5.1,
+  with or without miniscript) cannot sign the `AdminBurn` leaf. Software signing can. See the findings doc.
 - Confirm on emulators where signing fails: leaf shape vs. internal key.
 - Evaluate the signing options that remain (upstream script change, other HWI devices, requirement change).
 - If any device can sign: physical-device run, recording what co-signers see (external fee input, unknown change
@@ -112,13 +115,14 @@ Self-check: the rebuilt connector's `script_pubkey` must equal the on-chain outp
 ## Execution sequence
 
 One step per branch, cut from the latest `develop`. Every step adds its section to a single findings doc,
-`docs/2-discovery/22-block-payouts-spike-findings.md` (created by the first step that merges), and updates the track
+`docs/2-discovery/22-block-payouts-spike-findings.md` (opened by S1a), and updates the track
 verdict here. Code is merged only when it will be reused (vendored subset, regtest fixture, validation adapters) and
 then passes the full CI checklist. Throwaway probes stay on their branch.
 
 ```mermaid
 flowchart LR
-  S1[S1 A emulators] --> S5[S5 A signing options]
+  S1a[S1a A desk] --> S1[S1 A emulators]
+  S1 --> S5[S5 A signing options]
   S2[S2 C upstream code] --> S3[S3 B regtest fixture]
   S2 --> S4[S4 D1 claim validation]
   S2 --> S6[S6 D2 connector rebuild]
@@ -130,6 +134,7 @@ flowchart LR
 
 | Step | Track | Branch | Depends on |
 |---|---|---|---|
+| S1a | A | docs only (this plan's findings doc) | — |
 | S1 | A | `spike/block-payouts-a1-emulators` | — |
 | S2 | C | `spike/block-payouts-c-strata-bridge` | — |
 | S3 | B | `spike/block-payouts-b-regtest-fixture` | S2 |
@@ -138,7 +143,18 @@ flowchart LR
 | S6 | D2 | `spike/block-payouts-d2-connector-rebuild` | S2, signet connector parameters (external) |
 | S7 | — | `docs/block-payouts-spike-verdict` | S3–S6 |
 
-S1 and S2 start together.
+S1a is recorded. S1 and S2 start together. S1 does not wait on S1a; the desk verdict tells S1 which error to expect.
+
+### S1a — Desk research: `AdminBurn` against current Trezor and Ledger apps
+
+Docs only. No emulator and no code.
+
+- Disassemble the claim payout connector (leaf 0, leaf 1, internal key, witness, sighash) at `3b69ece` and `main`
+  @ `5d3c8dc`.
+- Check production Trezor firmware, including Safe 7, and the Ledger Bitcoin app with and without miniscript.
+- **Done when:** the findings doc states whether an admin can sign the leaf in software and on each device family,
+  with the script hex and the firmware versions pinned. Recorded 2026-10-07: software yes; stock Trezor and stock
+  Ledger no.
 
 ### S1 — Confirm the hardware signing finding on emulators
 
