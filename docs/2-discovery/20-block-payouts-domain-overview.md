@@ -129,12 +129,21 @@ Upstream calls it the **Admin Burn** transaction. The connector, leaf, `AdminBur
 
 ### Hardware signing constraint
 
-With stock firmware, no supported device is known to sign the `AdminBurn` leaf:
+S1a (2026-10-07) checked current firmware against the disassembled leaf. A Payout Admin can sign `AdminBurn` in
+software (upstream's `admin_burn_payout` test). No stock device this app supports can sign that input:
 
-- **Ledger** signs through BIP-388 wallet policies: tap leaves must be `multi_a`, `sortedmulti_a` or miniscript (the `OP_EQUAL` leaf is not), and keys must be `xpub`s with a derivation (the raw N/N internal key is not). See the [Ledger wallet policy docs](https://github.com/LedgerHQ/app-bitcoin-new/blob/master/doc/wallet.md).
-- **Trezor** signs taproot by key-path only.
+- **Trezor**, including Safe 7 at core 2.12.5 (16 September 2026), Safe 5, Safe 3, and Model T on the same tag, and
+  Model One on legacy 1.14.1: taproot signing is key-path only. The witness writer emits a single Schnorr signature
+  and no tapscript extension.
+- **Ledger** Bitcoin app through 2.5.1 (9 September 2026): apps before tapleaves have no script-path signer. Apps
+  with miniscript (`multi_a` / taproot miniscript, from 2.1.2 and 2.2.0 onward) still cannot register this output.
+  The leaf ends in `OP_EQUAL` rather than `OP_NUMEQUAL`. The N/N internal key is a raw aggregate, and every
+  Ledger key expression, `musig()` included, is derived. The `UnstakingBurn` sibling is miniscript `sha256(h)`, but
+  registration rejects it because it requires no signature.
 
-Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. How the spike checks this: [`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
+Fee inputs are unaffected: key-path signing from the Admin Wallet already works on both. Script, witness, and the
+firmware citations: [`22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md). Spike plan:
+[`21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md).
 
 ---
 
@@ -187,5 +196,6 @@ References:
 - False claim reports: [`docs/0-prd/07-supplementary-false-claim-reports.md`](../0-prd/07-supplementary-false-claim-reports.md)
 - Block payout tx shape: [`docs/0-prd/04-relevant-block-payouts-transactions.md`](../0-prd/04-relevant-block-payouts-transactions.md)
 - Spike plan: [`docs/2-discovery/21-block-payouts-spike-plan.md`](./21-block-payouts-spike-plan.md)
+- Spike findings (S1a hardware desk research): [`docs/2-discovery/22-block-payouts-spike-findings.md`](./22-block-payouts-spike-findings.md)
 - Mock UI spec (obsolete input format): [`docs/specs/block-payouts-ui-mock.md`](../specs/block-payouts-ui-mock.md)
 - ASM vs Bitcoin L1 difference: [`docs/2-discovery/10-asm-bitcoin-state-model.md`](./10-asm-bitcoin-state-model.md)
