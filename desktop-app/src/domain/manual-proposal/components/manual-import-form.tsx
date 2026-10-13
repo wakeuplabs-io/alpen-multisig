@@ -20,6 +20,7 @@ export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 	function handleDrop(e: React.DragEvent<HTMLDivElement>) {
 		e.preventDefault()
 		setIsDragging(false)
+		if (isValidating) return
 		const file = e.dataTransfer.files?.[0]
 		if (file) onLoadJson(file)
 	}
