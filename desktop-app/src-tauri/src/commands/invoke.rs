@@ -83,6 +83,7 @@ fn attach_production(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         super::fee_rates::fee_rates_estimate,
         super::system::write_clipboard,
         super::system::save_json_file,
+        super::system::read_dropped_json,
     ])
 }
 
@@ -163,5 +164,6 @@ fn attach_with_dev_signing(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> 
         super::fee_rates::fee_rates_estimate,
         super::system::write_clipboard,
         super::system::save_json_file,
+        super::system::read_dropped_json,
     ])
 }

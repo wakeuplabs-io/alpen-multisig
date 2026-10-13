@@ -10,6 +10,16 @@ fn main() {
         desktop_app::infrastructure::pending_reveals_store::new_with_persistence();
     commands::invoke::attach_invoke_handlers(tauri::Builder::default())
         .manage(pending_reveals)
+        .manage(commands::system::DroppedFilesState::default())
+        // Native file drops carry the dropped paths; record them so `read_dropped_json` can
+        // read back only what the user actually dropped (#606).
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                window
+                    .state::<commands::system::DroppedFilesState>()
+                    .record(paths);
+            }
+        })
         .setup(|app| {
             use desktop_app::application::fee_estimation::FeeCacheState;
             use desktop_app::application::wallet_session::WalletSession;

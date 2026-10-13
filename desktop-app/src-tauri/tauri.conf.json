@@ -15,8 +15,7 @@
 				"title": "Strata Multisig",
 				"width": 900,
 				"height": 700,
-				"resizable": true,
-				"dragDropEnabled": false
+				"resizable": true
 			}
 		],
 		"security": {

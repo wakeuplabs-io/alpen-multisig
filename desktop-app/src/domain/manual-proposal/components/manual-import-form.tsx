@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { ImportJsonIcon } from '@/assets/icons'
+import { useJsonFileDrop } from '@/domain/manual-proposal/hooks/use-json-file-drop'
 
 type Props = {
 	isValidating: boolean
@@ -9,20 +10,12 @@ type Props = {
 
 export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 	const fileInputRef = useRef<HTMLInputElement>(null)
-	const [isDragging, setIsDragging] = useState(false)
+	const { isDragging, error: dropError } = useJsonFileDrop({ isEnabled: !isValidating, onFile: onLoadJson })
 
 	function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0]
 		if (file) onLoadJson(file)
 		e.target.value = ''
-	}
-
-	function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-		e.preventDefault()
-		setIsDragging(false)
-		if (isValidating) return
-		const file = e.dataTransfer.files?.[0]
-		if (file) onLoadJson(file)
 	}
 
 	return (
@@ -41,12 +34,6 @@ export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 				aria-label="Load proposal from JSON file"
 				onClick={() => !isValidating && fileInputRef.current?.click()}
 				onKeyDown={(e) => e.key === 'Enter' && !isValidating && fileInputRef.current?.click()}
-				onDragOver={(e) => {
-					e.preventDefault()
-					setIsDragging(true)
-				}}
-				onDragLeave={() => setIsDragging(false)}
-				onDrop={handleDrop}
 				className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition
 					${isDragging ? 'border-[#111827] bg-[#f3f4f6]' : 'border-[#e5e7eb] bg-[#f9fafb] hover:border-[#9ca3af] hover:bg-[#f3f4f6]'}
 					${isValidating ? 'cursor-not-allowed opacity-60' : ''}`}
@@ -58,7 +45,7 @@ export function ManualImportForm({ isValidating, error, onLoadJson }: Props) {
 				</div>
 			</div>
 
-			{error && <p className="text-label text-danger">{error}</p>}
+			{(dropError ?? error) && <p className="text-label text-danger">{dropError ?? error}</p>}
 		</div>
 	)
 }

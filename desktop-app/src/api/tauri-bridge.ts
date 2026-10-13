@@ -10,6 +10,11 @@ export async function saveJsonFile(content: string, filename: string): Promise<v
 	await invoke('save_json_file', { content, filename })
 }
 
+/** Reads a `.json` file from the last native drop onto the window; any other path is refused. */
+export async function readDroppedJson(path: string): Promise<string> {
+	return invoke<string>('read_dropped_json', { path })
+}
+
 // Thin wrapper around Tauri's invoke() that normalises results into ApiResult<T>.
 // Pass a Zod schema to reject unknown IPC enum variants at the boundary (P-008).
 
