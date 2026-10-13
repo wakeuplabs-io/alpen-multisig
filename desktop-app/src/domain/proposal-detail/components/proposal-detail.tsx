@@ -157,7 +157,7 @@ export function ProposalDetail({
 						</div>
 					</div>
 
-					{hasQuorum && (
+					{showsSendButton(sendState) && (
 						<p className="m-0 mt-3 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#0f9d7a]">
 							<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
 							Quorum reached — ready to send

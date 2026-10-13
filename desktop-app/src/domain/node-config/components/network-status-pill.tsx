@@ -23,7 +23,7 @@ export function NetworkStatusPill({ mode, localNodeStatus, onClick }: Props) {
 	const statusLabel = `Network: ${MODE_LABELS[mode]}, ${isConnected ? 'connected' : 'connection issue'}`
 	const dot = (
 		<span
-			className={`h-2 w-2 shrink-0 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-emphasis-soft'}`}
+			className={`h-2 w-2 shrink-0 rounded-full ${isConnected ? 'bg-[#447CFC]' : 'bg-emphasis-soft'}`}
 			aria-hidden
 		/>
 	)

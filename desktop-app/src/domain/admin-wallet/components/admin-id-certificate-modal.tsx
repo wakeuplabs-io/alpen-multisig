@@ -129,7 +129,7 @@ export function AdminIdCertificateModal({ isOpen, onClose, adminId, verify }: Ad
 					>
 						<p
 							aria-label="Admin ID Verification Certificate"
-							className="m-0 min-w-0 flex-1 break-all"
+							className={`m-0 min-w-0 flex-1${certificate ? ' break-all' : ''}`}
 							data-testid="e2e-admin-id-certificate-value"
 						>
 							{certificate ? certificate.certificate : CERTIFICATE_WAITING}
