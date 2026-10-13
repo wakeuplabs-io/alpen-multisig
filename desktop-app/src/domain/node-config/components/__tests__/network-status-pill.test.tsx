@@ -54,9 +54,9 @@ for (const [mode, label] of [
 	const html = renderToStaticMarkup(<NetworkStatusPill mode={mode} localNodeStatus={REACHABLE} />)
 	assert.ok(html.includes(`>${label}<`), `mode ${mode} must render the ${label} label`)
 }
-assert.ok(readOnly.includes('bg-emerald-500'), 'a reachable node must show the green dot')
+assert.ok(readOnly.includes('bg-[#447CFC]'), 'a reachable node must show the blue connected dot')
 const issue = renderToStaticMarkup(<NetworkStatusPill mode="custom" localNodeStatus={UNREACHABLE} />)
-assert.ok(!issue.includes('bg-emerald-500'), 'an unreachable service must not show the green dot')
+assert.ok(!issue.includes('bg-[#447CFC]'), 'an unreachable service must not show the blue connected dot')
 assert.ok(issue.includes('connection issue'), 'an unreachable service must be announced as a connection issue')
 const unknown = renderToStaticMarkup(<NetworkStatusPill mode="local" localNodeStatus={null} />)
 assert.ok(unknown.includes('connection issue'), 'an unchecked node must not claim to be connected')
