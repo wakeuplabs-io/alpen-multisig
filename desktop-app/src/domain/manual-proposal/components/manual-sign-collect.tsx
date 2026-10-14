@@ -1,11 +1,11 @@
 import { writeClipboard } from '@/api/tauri-bridge'
 import { useState } from 'react'
-import type { Proposal } from '@/api/proposals'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon } from '@/assets/icons'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import type { DecodedProposalData } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import type { ManualImportData, ManualSignature } from '@/domain/manual-proposal/model/manual-proposal.types'
+import { buildSyntheticProposal } from '@/domain/manual-proposal/model/synthetic-proposal'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
@@ -41,29 +41,7 @@ export function ManualSignCollect({
 }: Props) {
 	const [bundleCopied, setBundleCopied] = useState(false)
 
-	const syntheticProposal: Proposal = {
-		actionId: `manual-${importData.sighashHex.slice(0, 16)}`,
-		seqNo: importData.seqNo,
-		authority: importData.authority,
-		status: 'pending',
-		requiredSignatures: requiredSignatures ?? 0,
-		actionHex: importData.actionHex,
-		actionType: importData.actionType,
-		// The manual bundle carries no title: it is rebuilt from the sighash payload alone.
-		title: null,
-		signatures: localSignatures.map(({ signerPubkey, signatureHex }) => ({ signerPubkey, signatureHex })),
-		broadcastStatus: 'idle',
-		kind: importData.actionType === 'cancel' ? 'cancel' : 'update',
-		targetActionId: null,
-		activationHeight: null,
-		updateIdInQueue: null,
-		cancelProposal: null,
-		isCancelable: false,
-		broadcastClaimStale: false,
-		createdAtMs: 0,
-		updatedAtMs: 0,
-		expiresAtMs: 0,
-	}
+	const syntheticProposal = buildSyntheticProposal({ importData, localSignatures, requiredSignatures, hasQuorum })
 
 	const bundle = {
 		actionHex: importData.actionHex,
@@ -123,7 +101,7 @@ export function ManualSignCollect({
 				<div className="flex items-center justify-between gap-3 rounded-xl border border-[#a7f3d0] bg-[#ecfdf5] px-4 py-3">
 					<p className="m-0 inline-flex items-center gap-1.5 text-body-sm font-medium text-[#065f46]">
 						<CheckCircleEmeraldIcon width={14} height={14} className="block shrink-0" />
-						Quorum reached — ready to broadcast
+						Signed bundle — copy or download to share
 					</p>
 					<div className="flex items-center gap-1.5">
 						<button

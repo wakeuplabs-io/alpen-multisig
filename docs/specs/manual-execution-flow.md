@@ -247,8 +247,12 @@ Quorum is computed from the multisig config fetched via the same
   signatures are stored with `source: 'pasted'`.
 - **Copy bundle** / **Download bundle** — same as Part A, reads from local state.
 
-When `collectedSignatures >= requiredSignatures`, a "Quorum reached" banner appears and the
-**Broadcast** button becomes active.
+When `collectedSignatures >= requiredSignatures`, the synthetic proposal below turns `approved`,
+so `ProposalDetail` shows "Quorum reached — ready to send" with the **Send** button, which opens
+Step 3. Below quorum it stays `pending` and no Send is offered. The status is built by
+`buildSyntheticProposal` (`domain/manual-proposal/model/synthetic-proposal.ts`): the detail view
+offers Send only for an `approved` proposal, so a hard-coded `pending` left the screen saying
+"ready to broadcast" with nothing to press (#605).
 
 ### Step 3 — Broadcast
 
@@ -260,7 +264,7 @@ const syntheticProposal: Proposal = {
   actionId: `manual-${sighashHex.slice(0, 16)}`,   // local identifier only
   seqNo,
   authority,
-  status: 'approved',
+  status: hasQuorum ? 'approved' : 'pending',
   requiredSignatures,
   actionHex,
   actionType: derivedActionType,
