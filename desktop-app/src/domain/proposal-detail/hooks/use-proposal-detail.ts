@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getProposalByActionId, type Proposal } from '@/api/proposals'
 
 type UseProposalDetailReturn = {
@@ -6,6 +6,8 @@ type UseProposalDetailReturn = {
 	isLoading: boolean
 	error: string | null
 	reload: () => void
+	/** Fetches again without toggling `isLoading`, so the screen keeps showing what it has. */
+	refresh: () => void
 }
 
 export function useProposalDetail(baseUrl: string, actionId: string): UseProposalDetailReturn {
@@ -32,5 +34,12 @@ export function useProposalDetail(baseUrl: string, actionId: string): UseProposa
 		}
 	}, [baseUrl, actionId, tick])
 
-	return { proposal, isLoading, error, reload: () => setTick((t) => t + 1) }
+	// A failed background read keeps the proposal on screen: the next one tries again.
+	const refresh = useCallback(() => {
+		void getProposalByActionId({ baseUrl, actionId }).then((res) => {
+			if (res.ok) setProposal(res.data)
+		})
+	}, [baseUrl, actionId])
+
+	return { proposal, isLoading, error, reload: () => setTick((t) => t + 1), refresh }
 }

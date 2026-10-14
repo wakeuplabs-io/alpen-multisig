@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
@@ -16,7 +17,12 @@ import { Breadcrumbs } from '@/components/breadcrumbs'
 import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
-import { PROPOSAL_STATUS_STYLE, isTerminalProposalStatus, showsActivationCountdown } from '@/lib/proposal-status'
+import {
+	PROPOSAL_STATUS_STYLE,
+	isActivationReached,
+	isTerminalProposalStatus,
+	showsActivationCountdown,
+} from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
@@ -32,9 +38,16 @@ export function ProposalDetailScreen() {
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
 
-	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
+	const { proposal, isLoading, error, reload, refresh } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
 	const currentBlockHeight = useBlockHeight()
+
+	// The tip is polled and the proposal is not: once the activation block is reached, read it again
+	// on every new block until the backend reports it enacted (#602).
+	const activationReached = proposal !== null && isActivationReached(proposal, currentBlockHeight)
+	useEffect(() => {
+		if (activationReached) refresh()
+	}, [activationReached, currentBlockHeight, refresh])
 
 	async function handleBack() {
 		await disconnectSession()

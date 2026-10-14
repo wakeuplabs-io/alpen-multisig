@@ -96,6 +96,29 @@ export function showsActivationCountdown(proposal: ActivationCountdownInput): bo
 	return proposal.status === 'approved' && proposal.activationHeight !== null && proposal.actionType !== 'defcon_1'
 }
 
+type ActivationReachedInput = {
+	status: ProposalStatus
+	broadcastStatus: BroadcastStatus
+	activationHeight: number | null
+}
+
+/**
+ * Whether the tip has reached the block at which the ASM applies a queued update, while the
+ * proposal still reads as awaiting enactment.
+ *
+ * The tip is polled; the proposal is not. Past this block the stored status is stale — the backend
+ * promotes the proposal to `enacted` on the next read — so this is the cue to fetch it again.
+ */
+export function isActivationReached(proposal: ActivationReachedInput, tipHeight: number | null): boolean {
+	return (
+		proposal.status === 'approved' &&
+		proposal.broadcastStatus === 'reveal_confirmed' &&
+		proposal.activationHeight !== null &&
+		tipHeight !== null &&
+		tipHeight >= proposal.activationHeight
+	)
+}
+
 /** Statuses a proposal never leaves. */
 export function isTerminalProposalStatus(status: ProposalStatus): boolean {
 	return status === 'enacted' || status === 'canceled' || status === 'expired' || status === 'superseded'

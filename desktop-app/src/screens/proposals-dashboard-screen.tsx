@@ -10,6 +10,7 @@ import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { isActivationReached } from '@/lib/proposal-status'
 import { COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE } from '@/lib/defcon-copy'
 import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
@@ -67,6 +68,24 @@ export function ProposalsDashboardScreen() {
 	useEffect(() => {
 		void loadProposals()
 	}, [loadProposals, selectedRole])
+
+	// The tip is polled and the list is not: once a proposal's activation block is reached, read the
+	// list again on every new block until the backend reports it enacted (#602). Silent — the
+	// dashboard swaps the list for a spinner while `isLoading`, and a failed read keeps what it shows.
+	const hasActivationReached = useMemo(
+		() => proposals.some((proposal) => isActivationReached(proposal, currentBlockHeight)),
+		[proposals, currentBlockHeight],
+	)
+	useEffect(() => {
+		if (!hasActivationReached) return
+		let cancelled = false
+		void listProposals({ baseUrl: getOrchestratorBaseUrl() }).then((response) => {
+			if (!cancelled && response.ok) setProposals(response.data)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [hasActivationReached, currentBlockHeight])
 
 	const quorumReached = useMemo(
 		() => proposals.filter((proposal) => proposal.status === 'approved' || hasReachedQuorum(proposal)),
