@@ -13,6 +13,7 @@ import {
 	type SignerRow,
 	type SignerSetChange,
 } from '@/domain/signer-set-change/model/build-signer-set-change'
+import { approvalRoster } from '@/domain/proposal-detail/model/approval-roster'
 
 export type { SignerRow, SignerSetChange }
 export type { SafeHarborChange }
@@ -96,7 +97,8 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 		// `allSigners` is the pending-signer roster `ApprovalsList` derives its rows from — it must
 		// always read the proposal's own authority, never the target of the action it decodes to
 		//. This call is unchanged by the retarget below: same request, same timing, so the
-		// approval surface carries zero regression risk from this commit.
+		// approval surface carries zero regression risk from this commit. An enacted rotation of
+		// that same authority swaps it for the members at signing time, further below.
 		void Promise.all([decodeActionHex(proposal.actionHex), getMultisigConfig(proposal.authority)]).then(
 			([actionRes, ownConfigRes]) => {
 				if (cancelled) return
@@ -158,11 +160,14 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 
 				if (target === proposal.authority) {
 					// No retarget: the config already read above for `allSigners` is also the target's.
+					// Once enacted, that config is post-rotation, so the approvals roster comes from
+					// the reconstructed Before column instead — a removed signer could still approve.
+					const signerSetChange = buildTableOrNull(action, ownConfigRes, proposal)
 					setDecodedData({
 						...NOTHING_DECODED,
 						proposalKey,
-						signerSetChange: buildTableOrNull(action, ownConfigRes, proposal),
-						allSigners,
+						signerSetChange,
+						allSigners: proposal.status === 'enacted' ? approvalRoster(allSigners, signerSetChange) : allSigners,
 					})
 					return
 				}
