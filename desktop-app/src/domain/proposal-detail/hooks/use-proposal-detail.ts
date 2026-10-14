@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getProposalByActionId, type Proposal } from '@/api/proposals'
+import { createProposalReadGate } from '@/lib/proposal-read-gate'
 
 type UseProposalDetailReturn = {
 	proposal: Proposal | null
@@ -15,13 +16,16 @@ export function useProposalDetail(baseUrl: string, actionId: string): UseProposa
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [tick, setTick] = useState(0)
+	// The load and the refresh write the same state: a slower, older response must not land.
+	const [gate] = useState(createProposalReadGate)
 
 	useEffect(() => {
-		let cancelled = false
+		const ticket = gate.beginLoad()
 		setIsLoading(true)
 		setError(null)
 		void getProposalByActionId({ baseUrl, actionId }).then((res) => {
-			if (cancelled) return
+			gate.settle(ticket)
+			if (!gate.isLatest(ticket)) return
 			if (res.ok) {
 				setProposal(res.data)
 			} else {
@@ -29,17 +33,16 @@ export function useProposalDetail(baseUrl: string, actionId: string): UseProposa
 			}
 			setIsLoading(false)
 		})
-		return () => {
-			cancelled = true
-		}
-	}, [baseUrl, actionId, tick])
+	}, [gate, baseUrl, actionId, tick])
 
 	// A failed background read keeps the proposal on screen: the next one tries again.
 	const refresh = useCallback(() => {
+		const ticket = gate.beginRefresh()
+		if (ticket === null) return
 		void getProposalByActionId({ baseUrl, actionId }).then((res) => {
-			if (res.ok) setProposal(res.data)
+			if (gate.isLatest(ticket) && res.ok) setProposal(res.data)
 		})
-	}, [baseUrl, actionId])
+	}, [gate, baseUrl, actionId])
 
 	return { proposal, isLoading, error, reload: () => setTick((t) => t + 1), refresh }
 }

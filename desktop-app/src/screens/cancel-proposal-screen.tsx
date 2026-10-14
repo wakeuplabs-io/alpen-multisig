@@ -8,6 +8,7 @@ import { useCancelProposalDetails } from '@/domain/cancel-proposal/hooks/use-can
 import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useActivationRefresh } from '@/hooks/use-activation-refresh'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { useSignerPubkey } from '@/hooks/use-signer-pubkey'
@@ -16,7 +17,7 @@ import { DisconnectButton } from '@/components/disconnect-button'
 import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { deviceCopy } from '@/lib/device-copy'
-import { showsActivationCountdown } from '@/lib/proposal-status'
+import { isActivationReached, showsActivationCountdown } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
 
@@ -33,10 +34,11 @@ export function CancelProposalScreen() {
 	const signerLabel = deviceCopy(adapter.vendor).label
 	const panel = useWalletPanelData()
 
-	const { proposal, isLoading, error, reload } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
+	const { proposal, isLoading, error, reload, refresh } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
 	const cancelDetails = useCancelProposalDetails(getOrchestratorBaseUrl(), proposal?.cancelProposal?.actionId ?? null)
 	const currentBlockHeight = useBlockHeight()
+	useActivationRefresh(proposal !== null && isActivationReached(proposal, currentBlockHeight), refresh)
 
 	async function handleBack() {
 		await disconnectSession()

@@ -6,10 +6,12 @@ import { listProposals, type Proposal } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
 import { ProposalsDashboard } from '@/domain/proposals-dashboard/components/proposals-dashboard'
+import { useActivationRefresh } from '@/hooks/use-activation-refresh'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSafeHarborActivated } from '@/hooks/use-safe-harbor-status'
 import { useSession } from '@/hooks/use-session'
 import { authorityLabelForRole } from '@/lib/authority-label'
+import { createProposalReadGate } from '@/lib/proposal-read-gate'
 import { isActivationReached } from '@/lib/proposal-status'
 import { COUNCIL_DASHBOARD_SAFE_HARBOR_NOTE } from '@/lib/defcon-copy'
 import { AuthRole } from '@/types/auth-role'
@@ -43,7 +45,12 @@ export function ProposalsDashboardScreen() {
 		await disconnectSession()
 	}
 
+	// The visible load and the silent refresh both write `proposals`: a slower, older response must
+	// not land over a newer one.
+	const [readGate] = useState(createProposalReadGate)
+
 	const loadProposals = useCallback(async () => {
+		const ticket = readGate.beginLoad()
 		setIsLoading(true)
 		setError(null)
 		try {
@@ -52,40 +59,41 @@ export function ProposalsDashboardScreen() {
 			if (!currentSession.ok) {
 				throw new Error(currentSession.error)
 			}
-			setSignerPubkey(currentSession.data?.signerPubkey ?? null)
 			const response = await listProposals({ baseUrl: getOrchestratorBaseUrl() })
 			if (!response.ok) {
 				throw new Error(response.error)
 			}
-			setProposals(response.data)
+			if (readGate.isLatest(ticket)) {
+				setSignerPubkey(currentSession.data?.signerPubkey ?? null)
+				setProposals(response.data)
+			}
 		} catch (loadError) {
-			setError(String(loadError))
+			if (readGate.isLatest(ticket)) setError(String(loadError))
 		} finally {
-			setIsLoading(false)
+			readGate.settle(ticket)
+			if (readGate.isLatest(ticket)) setIsLoading(false)
 		}
-	}, [ensureOrchestratorSession])
+	}, [readGate, ensureOrchestratorSession])
 
 	useEffect(() => {
 		void loadProposals()
 	}, [loadProposals, selectedRole])
 
 	// The tip is polled and the list is not: once a proposal's activation block is reached, read the
-	// list again on every new block until the backend reports it enacted (#602). Silent — the
-	// dashboard swaps the list for a spinner while `isLoading`, and a failed read keeps what it shows.
+	// list again until the backend reports it enacted (#602). Silent — the dashboard swaps the list
+	// for a spinner while `isLoading`, and a failed read keeps what it shows.
+	const refreshProposals = useCallback(() => {
+		const ticket = readGate.beginRefresh()
+		if (ticket === null) return
+		void listProposals({ baseUrl: getOrchestratorBaseUrl() }).then((response) => {
+			if (readGate.isLatest(ticket) && response.ok) setProposals(response.data)
+		})
+	}, [readGate])
 	const hasActivationReached = useMemo(
 		() => proposals.some((proposal) => isActivationReached(proposal, currentBlockHeight)),
 		[proposals, currentBlockHeight],
 	)
-	useEffect(() => {
-		if (!hasActivationReached) return
-		let cancelled = false
-		void listProposals({ baseUrl: getOrchestratorBaseUrl() }).then((response) => {
-			if (!cancelled && response.ok) setProposals(response.data)
-		})
-		return () => {
-			cancelled = true
-		}
-	}, [hasActivationReached, currentBlockHeight])
+	useActivationRefresh(hasActivationReached, refreshProposals)
 
 	const quorumReached = useMemo(
 		() => proposals.filter((proposal) => proposal.status === 'approved' || hasReachedQuorum(proposal)),

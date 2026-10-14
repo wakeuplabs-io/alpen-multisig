@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
@@ -11,6 +10,7 @@ import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-det
 import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useActivationRefresh } from '@/hooks/use-activation-refresh'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
 import { Breadcrumbs } from '@/components/breadcrumbs'
@@ -42,12 +42,7 @@ export function ProposalDetailScreen() {
 	const decodedData = useDecodedProposal(proposal)
 	const currentBlockHeight = useBlockHeight()
 
-	// The tip is polled and the proposal is not: once the activation block is reached, read it again
-	// on every new block until the backend reports it enacted (#602).
-	const activationReached = proposal !== null && isActivationReached(proposal, currentBlockHeight)
-	useEffect(() => {
-		if (activationReached) refresh()
-	}, [activationReached, currentBlockHeight, refresh])
+	useActivationRefresh(proposal !== null && isActivationReached(proposal, currentBlockHeight), refresh)
 
 	async function handleBack() {
 		await disconnectSession()
