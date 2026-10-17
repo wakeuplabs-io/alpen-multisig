@@ -14,6 +14,16 @@ pub struct Config {
     pub bitcoin_rpc_pass: String,
     /// How many days a pending proposal stays valid before it expires. Env: PROPOSAL_EXPIRY_DAYS.
     pub proposal_expiry_days: u64,
+    /// The network's SPS-50 magic bytes, the same value the ASM and the desktop use; the
+    /// reconcile only confirms a reveal tagged with them (#605). Env: BITCOIN_MAGIC_BYTES_HEX
+    /// (4 bytes hex, default `414c504e`, "ALPN").
+    pub bitcoin_magic_bytes: [u8; 4],
+}
+
+fn parse_magic_bytes(hex_str: &str) -> anyhow::Result<[u8; 4]> {
+    let bytes = hex::decode(hex_str.trim()).context("BITCOIN_MAGIC_BYTES_HEX must be hex")?;
+    <[u8; 4]>::try_from(bytes.as_slice())
+        .map_err(|_| anyhow::anyhow!("BITCOIN_MAGIC_BYTES_HEX must be exactly 4 bytes"))
 }
 
 /// Bearer session lifetime from sign-in when `AUTH_SESSION_TTL_MS` is unset: 24 hours (#582).
@@ -80,6 +90,10 @@ impl Config {
                 .unwrap_or_else(|_| "7".to_string())
                 .parse()
                 .context("PROPOSAL_EXPIRY_DAYS must be a valid u64")?,
+            bitcoin_magic_bytes: parse_magic_bytes(
+                &std::env::var("BITCOIN_MAGIC_BYTES_HEX")
+                    .unwrap_or_else(|_| "414c504e".to_string()),
+            )?,
         })
     }
 }
@@ -87,6 +101,13 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn magic_bytes_are_four_hex_bytes() {
+        assert_eq!(parse_magic_bytes("414c504e").unwrap(), *b"ALPN");
+        assert!(parse_magic_bytes("aabbcc").is_err());
+        assert!(parse_magic_bytes("zz").is_err());
+    }
 
     #[test]
     fn mock_asm_rpc_url_rejected_unless_mocks_compiled() {

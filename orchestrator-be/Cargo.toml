@@ -28,6 +28,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tower-http = { version = "0.5", features = ["trace", "cors", "request-id"] }
 dotenvy = "0.15"
 async-trait = "0.1"
+futures = "0.3"
 bitcoin = { workspace = true }
 rand = { workspace = true }
 hex = "0.4"

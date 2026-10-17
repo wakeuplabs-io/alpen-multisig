@@ -117,6 +117,17 @@ pub struct ProposalDto {
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
     pub expires_at_ms: Option<u64>,
+    /// `None` from an orchestrator that predates #605.
+    pub broadcast_attempts: Option<Vec<BroadcastAttemptDto>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BroadcastAttemptDto {
+    pub broadcaster_pubkey: Option<String>,
+    pub commit_txid: String,
+    pub reveal_txid: String,
+    pub created_at_ms: u64,
 }
 
 #[tauri::command]
@@ -147,6 +158,10 @@ pub struct BroadcastInput {
     pub base_url: String,
     pub action_id: String,
     pub fee_rate_sat_per_kvb: u64,
+    /// Send this signer's own pair beside another signer's pair in flight, instead of claiming
+    /// the row (#605).
+    #[serde(default)]
+    pub additional_pair: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -244,6 +259,17 @@ fn map_proposal(proposal: Proposal) -> ProposalDto {
         created_at_ms,
         updated_at_ms,
         expires_at_ms,
+        broadcast_attempts: proposal.broadcast_attempts.map(|attempts| {
+            attempts
+                .into_iter()
+                .map(|attempt| BroadcastAttemptDto {
+                    broadcaster_pubkey: attempt.broadcaster_pubkey,
+                    commit_txid: attempt.commit_txid,
+                    reveal_txid: attempt.reveal_txid,
+                    created_at_ms: attempt.created_at.max(0) as u64,
+                })
+                .collect()
+        }),
     }
 }
 
@@ -343,6 +369,26 @@ mod wallet_session_state_tests {
             let _ = proposals_broadcast(input, s, nc, p, ec);
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HasStoredBundleInput {
+    pub action_id: String,
+}
+
+/// Whether this desktop still holds a commit + reveal bundle for the proposal (#605). The settle
+/// loop keeps one until it is mined or dropped, so `false` means any pair this signer sent before
+/// is no longer on its way from here, and another may be offered.
+#[tauri::command]
+pub fn proposals_has_stored_bundle(
+    input: HasStoredBundleInput,
+    pending: tauri::State<'_, PendingReveals>,
+) -> bool {
+    pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(&input.action_id)
 }
 
 #[derive(Debug, Deserialize)]
@@ -644,6 +690,7 @@ fn broadcast_error_code(
         BroadcastError::BroadcastUncertain { .. } => "broadcast_uncertain",
         BroadcastError::RevealNotBroadcast { .. } => "reveal_not_broadcast",
         BroadcastError::BundleInFlight { .. } => "bundle_in_flight",
+        BroadcastError::PairNotRegistered => "Unknown",
         BroadcastError::Setup(_) => "Unknown",
         BroadcastError::Orchestrator(_) => "Unknown",
     }
@@ -724,6 +771,10 @@ fn map_broadcast_error_with_boundary(
         BroadcastError::BundleInFlight { commit_txid } => format!(
             "A bundle for this proposal was already sent from this app (commit {commit_txid}) and may be on the network. Do not send again: its coins stay reserved and the app settles it on its own."
         ),
+        BroadcastError::PairNotRegistered => {
+            "This commit and reveal was not registered, because the proposal already tracks another pair. Nothing was broadcast."
+                .to_string()
+        }
         BroadcastError::Setup(msg) => msg.clone(),
         BroadcastError::Orchestrator(e) => e.to_string(),
     };
@@ -996,6 +1047,11 @@ pub async fn proposals_broadcast(
         .map_err(|e| e.to_string())?;
 
     // Submit synchronously — returns within seconds once both txs are broadcast.
+    let mode = if input.additional_pair {
+        proposals::SendMode::AdditionalPair
+    } else {
+        proposals::SendMode::Claim
+    };
     let (commit_txid, reveal_txid) = proposals::submit_commit_then_reveal(
         client.as_ref(),
         &broadcasters,
@@ -1008,6 +1064,7 @@ pub async fn proposals_broadcast(
         reveal_change_spk,
         &pending,
         &envelope_cache,
+        mode,
     )
     .await
     .map_err(map_broadcast_error)?;

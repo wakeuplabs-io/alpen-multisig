@@ -1,4 +1,4 @@
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
@@ -30,6 +30,9 @@ import { authorityLabelForRole } from '@/lib/authority-label'
 export function BroadcastProposalScreen() {
 	const navigate = useNavigate()
 	const { actionId } = useParams<{ actionId: string }>()
+	// Opened from "Send your own commit + reveal" on the detail screen (#605).
+	const [searchParams] = useSearchParams()
+	const additionalPair = searchParams.get('pair') === 'additional'
 	const { wallet, adapter, selectedRole, sessionTimeLabel, sessionWarning, disconnectSession } = useSession()
 	const { signerKind, backendSignerKind, canSign, canSignReason, isAdminWalletMode, cardProps } =
 		useBroadcastAdminWallet(adapter)
@@ -48,6 +51,7 @@ export function BroadcastProposalScreen() {
 		feeRateSatPerKvb,
 		signerKind,
 		adapter,
+		additionalPair,
 	)
 
 	// Read live from the node, exactly like the create and sign screens: the note states a fact
@@ -99,7 +103,9 @@ export function BroadcastProposalScreen() {
 					Send proposal
 				</h1>
 				<p className="m-0 mt-1 text-body-sm text-[#6b7280]">
-					Quorum has been reached. Review the commit details, then send via the commit/reveal flow.
+					{additionalPair
+						? 'Another signer\u2019s commit + reveal is already on its way. Send your own beside it — at a higher fee if theirs is stuck. Whichever reveal is mined first is the one the ASM acts on; the other is ignored.'
+						: 'Quorum has been reached. Review the commit details, then send via the commit/reveal flow.'}
 				</p>
 
 				<div className="mt-5 rounded-xl border border-[#e5e7eb] bg-white px-6 py-4 shadow-sm">

@@ -85,6 +85,17 @@ export const proposalSchema = z
 		updatedAtMs: z.number(),
 		// Absent from an older backend: no countdown rather than one against a guessed window (#551).
 		expiresAtMs: nullishToNull(z.number()),
+		// `null` from an older backend: no pairs listed, and no second pair offered (#605).
+		broadcastAttempts: nullishToNull(
+			z.array(
+				z.object({
+					broadcasterPubkey: nullishToNull(z.string()),
+					commitTxid: z.string(),
+					revealTxid: z.string(),
+					createdAtMs: z.number(),
+				}),
+			),
+		),
 	})
 	.transform((p) => ({ ...p, kind: p.targetActionId !== null ? ('cancel' as const) : ('update' as const) }))
 

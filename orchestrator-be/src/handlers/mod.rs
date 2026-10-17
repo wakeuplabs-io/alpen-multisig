@@ -51,6 +51,14 @@ pub fn router(state: AppState) -> Router {
             patch(proposals::report_broadcast_progress),
         )
         .route(
+            "/proposals/:action_id/broadcast/attempts",
+            post(proposals::register_broadcast_attempt),
+        )
+        .route(
+            "/proposals/:action_id/broadcast/attempts/check",
+            get(proposals::check_broadcast_attempt),
+        )
+        .route(
             "/proposals/:action_id/cancel",
             post(proposals::create_cancel_proposal),
         )
@@ -448,6 +456,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             broadcast_claimed_at: None,
+            broadcast_attempts: Vec::new(),
         })
         .await
         .unwrap();
@@ -720,6 +729,126 @@ mod tests {
                 "POST",
                 &format!("/proposals/{action_id}/broadcast/claim"),
                 None,
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    /// #605: a signer who did not send the pair in flight registers their own beside it; the
+    /// payload lists both pairs and the row tracks the new one. A second one of theirs is refused.
+    #[tokio::test]
+    async fn test_another_signer_registers_their_own_pair() {
+        let app = test_app();
+        let token_a = login(app.clone(), SIGNER_A_SK, SIGNER_A_PK).await;
+        let signer_b = signer_b_pk();
+        let token_b = login(app.clone(), SIGNER_B_SK, &signer_b).await;
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/proposals",
+                Some(create_body(SIGNER_A_PK)),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        let action_id = response_json(resp).await["action_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/approve"),
+                Some(json!({ "signer_pubkey": signer_b, "signature_hex": "sig_b" })),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        app.clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/proposals/{action_id}"),
+                Some(json!({ "proposal_status": "approved" })),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+
+        // Signer A claims and pre-registers its pair.
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/proposals/{action_id}/broadcast/claim"),
+                None,
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let (commit_a, reveal_a) = ("a".repeat(64), "b".repeat(64));
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "PATCH",
+                &format!("/proposals/{action_id}/broadcast"),
+                Some(json!({
+                    "broadcast_status": "commit_broadcasted",
+                    "commit_txid": commit_a,
+                    "reveal_txid": reveal_a,
+                })),
+                Some(&token_a),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Asked before signing: A already has a pair on its way, B may send one.
+        let check_uri = format!("/proposals/{action_id}/broadcast/attempts/check");
+        for (token, expected) in [(&token_a, StatusCode::CONFLICT), (&token_b, StatusCode::OK)] {
+            let resp = app
+                .clone()
+                .oneshot(json_request("GET", &check_uri, None, Some(token)))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), expected);
+        }
+
+        // Signer B registers its own.
+        let (commit_b, reveal_b) = ("c".repeat(64), "d".repeat(64));
+        let attempts_uri = format!("/proposals/{action_id}/broadcast/attempts");
+        let body_b = json!({ "commit_txid": commit_b, "reveal_txid": reveal_b });
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &attempts_uri,
+                Some(body_b.clone()),
+                Some(&token_b),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = response_json(resp).await;
+        assert_eq!(body["broadcast_status"], "commit_broadcasted");
+        assert_eq!(body["reveal_txid"], reveal_b);
+        let attempts = body["broadcast_attempts"].as_array().unwrap();
+        assert_eq!(attempts.len(), 2);
+        assert_eq!(
+            attempts[0]["broadcaster_pubkey"],
+            SIGNER_A_PK.to_lowercase()
+        );
+        assert_eq!(attempts[1]["broadcaster_pubkey"], signer_b.to_lowercase());
+
+        let resp = app
+            .oneshot(json_request(
+                "POST",
+                &attempts_uri,
+                Some(json!({ "commit_txid": "e".repeat(64), "reveal_txid": "f".repeat(64) })),
                 Some(&token_b),
             ))
             .await

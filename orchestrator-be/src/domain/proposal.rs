@@ -129,12 +129,31 @@ pub struct Proposal {
     /// API payload: the response carries `broadcast_claim_stale`, read on the server clock.
     #[serde(skip)]
     pub broadcast_claimed_at: Option<DateTime<Utc>>,
+    /// Every commit + reveal pair registered for this proposal, oldest first (#605). The row's
+    /// `commit_txid`/`reveal_txid` are the pair it tracks now: the latest one registered, or the
+    /// one that was mined. The others stay listed — any of them may still be mined first.
+    #[serde(default)]
+    pub broadcast_attempts: Vec<BroadcastAttempt>,
 }
 
 impl Proposal {
     pub fn is_cancel(&self) -> bool {
         self.target_action_id.is_some()
     }
+}
+
+/// One commit + reveal pair sent for a proposal (#605).
+///
+/// Every pair carries the same signed payload, so the ASM acts on whichever is mined first and
+/// rejects the rest on the sequence number.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BroadcastAttempt {
+    /// The signer whose session registered the pair. `None` for pairs registered before #605.
+    pub broadcaster_pubkey: Option<String>,
+    pub commit_txid: String,
+    pub reveal_txid: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub created_at: DateTime<Utc>,
 }
 
 /// A signature submitted for a proposal by a signer.

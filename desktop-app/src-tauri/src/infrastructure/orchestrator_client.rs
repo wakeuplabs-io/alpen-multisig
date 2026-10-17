@@ -190,6 +190,33 @@ impl OrchestratorClient for HttpOrchestratorClient {
         self.send_and_parse(req).await
     }
 
+    async fn check_broadcast_attempt(
+        &self,
+        action_id: &str,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(self.client.get(format!(
+            "{}/proposals/{action_id}/broadcast/attempts/check",
+            self.base_url
+        )))?;
+        self.send_and_parse(req).await
+    }
+
+    async fn register_broadcast_attempt(
+        &self,
+        action_id: &str,
+        request: crate::application::orchestrator_client::RegisterBroadcastAttemptRequest,
+    ) -> Result<Proposal, OrchestratorError> {
+        let req = self.with_auth_headers(
+            self.client
+                .post(format!(
+                    "{}/proposals/{action_id}/broadcast/attempts",
+                    self.base_url
+                ))
+                .json(&request),
+        )?;
+        self.send_and_parse(req).await
+    }
+
     async fn report_broadcast_progress(
         &self,
         action_id: &str,

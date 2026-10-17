@@ -1,4 +1,5 @@
 import type { BroadcastStatus, ProposalStatus } from '@/api/proposals'
+import { normalizePubkey } from '@/lib/pubkey'
 
 /**
  * What the proposal screens should offer for sending the commit+reveal bundle,
@@ -181,4 +182,54 @@ export function showsSendButton(state: ProposalSendState): boolean {
 /** Button caption, so both screens word the retry identically. */
 export function sendButtonLabel(state: ProposalSendState): string {
 	return state.kind === 'failed' ? 'Retry send' : 'Send'
+}
+
+type AdditionalPairInput = {
+	status: ProposalStatus
+	broadcastStatus: BroadcastStatus
+	revealTxid?: string
+	broadcastAttempts?: ReadonlyArray<{ broadcasterPubkey: string | null }> | null
+}
+
+/**
+ * An approved proposal with a commit + reveal pair on its way: registered with its txids, not yet
+ * mined, not failed. The only state another pair can be sent beside (#605).
+ */
+export function hasPairInFlight(proposal: Omit<AdditionalPairInput, 'broadcastAttempts'>): boolean {
+	if (proposal.status !== 'approved') return false
+	return (
+		(proposal.broadcastStatus === 'commit_broadcasted' && proposal.revealTxid !== undefined) ||
+		proposal.broadcastStatus === 'commit_confirmed' ||
+		proposal.broadcastStatus === 'reveal_broadcasted'
+	)
+}
+
+/**
+ * Whether this signer may send their own commit + reveal pair beside the one in flight (#605).
+ *
+ * A low-fee bundle can sit in the mempool with nobody else able to advance it. Every pair carries
+ * the same signed payload, so whichever reveal is mined first is the one the ASM acts on. Offered
+ * only beside a pair that is on its way — an empty claim is a signer still at the device, and
+ * `idle` / `failed` already offer Send — and only to a signer with no pair of their own on its
+ * way: whoever has one bumps its fee instead.
+ *
+ * `holdsBundle` is whether this desktop still keeps a bundle for the proposal (`null` when
+ * unknown). A signer whose earlier pair this desktop no longer keeps — dropped, or registered by a
+ * session that died before broadcasting it — may send another; the orchestrator lets them only once
+ * its node finds that earlier commit nowhere (`decide_additional_pair`).
+ */
+export function canSendAdditionalPair(
+	proposal: AdditionalPairInput,
+	signerPubkey: string | null,
+	holdsBundle: boolean | null = null,
+): boolean {
+	if (signerPubkey === null || !hasPairInFlight(proposal)) return false
+	// No list at all is an orchestrator without the registration endpoint (#605).
+	if (proposal.broadcastAttempts === undefined || proposal.broadcastAttempts === null) return false
+	if (holdsBundle === true) return false
+	const own = normalizePubkey(signerPubkey)
+	const sentBefore = proposal.broadcastAttempts.some(
+		(attempt) => attempt.broadcasterPubkey !== null && normalizePubkey(attempt.broadcasterPubkey) === own,
+	)
+	return !sentBefore || holdsBundle === false
 }

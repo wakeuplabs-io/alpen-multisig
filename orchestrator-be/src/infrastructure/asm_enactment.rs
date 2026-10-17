@@ -20,6 +20,10 @@ pub(crate) const MOCK_ENACTED_URL: &str = "mock://asm-enacted";
 /// before supersession.
 #[cfg(any(test, feature = "dev-mocks"))]
 pub(crate) const MOCK_ENACTED_AHEAD_URL: &str = "mock://asm-enacted-ahead";
+/// Enactment is true, and `role_around_block` accepts the reveal. The fixture for a cancel whose
+/// reveal this read confirms and whose target was already marked enacted.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_ENACTED_ACCEPTED_URL: &str = "mock://asm-enacted-accepted";
 /// A chain whose role sequence number has moved past the proposals under test: nothing enacts, and
 /// `last_seqno` answers 5. The fixture for supersession.
 #[cfg(any(test, feature = "dev-mocks"))]
@@ -478,7 +482,7 @@ fn operator_set_post_conditions_met(
 #[cfg(any(test, feature = "dev-mocks"))]
 fn mock_is_enacted(rpc_url: &str) -> Option<bool> {
     match rpc_url {
-        MOCK_ENACTED_URL | MOCK_ENACTED_AHEAD_URL => Some(true),
+        MOCK_ENACTED_URL | MOCK_ENACTED_AHEAD_URL | MOCK_ENACTED_ACCEPTED_URL => Some(true),
         MOCK_MEMBERSHIP_URL | MOCK_SEQNO_AHEAD_URL => Some(false),
         _ => None,
     }

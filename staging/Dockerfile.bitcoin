@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-ARG BITCOIN_VERSION=28.1
+# Bitcoin Core 29: the ASM runner is built for it (`bitcoind-async-client` feature `29_0`), and its
+# `strata_asm_getAsmState`, which the orchestrator reads to confirm a reveal (#605), fails on 28.
+ARG BITCOIN_VERSION=29.0
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
       amd64) BITCOIN_ARCH=x86_64-linux-gnu ;; \

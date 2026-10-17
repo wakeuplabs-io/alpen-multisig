@@ -1,15 +1,18 @@
+import { useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getOrchestratorBaseUrl } from '@/api/orchestrator-auth'
 import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
+import { importNotice as noticeForImport } from '@/domain/proposal-detail/model/imported-pair'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
 import { canCancelProposal } from '@/domain/proposal-detail/model/derive-proposal-actions'
 import { useDecodedProposal } from '@/domain/proposal-detail/hooks/use-decoded-proposal'
 import { useProposalDetail } from '@/domain/proposal-detail/hooks/use-proposal-detail'
+import { useStoredBundle } from '@/domain/proposal-detail/hooks/use-stored-bundle'
 import { useActivationRefresh } from '@/hooks/use-activation-refresh'
 import { useBlockHeight } from '@/hooks/use-block-height'
 import { useSession } from '@/hooks/use-session'
@@ -41,6 +44,8 @@ export function ProposalDetailScreen() {
 	const { proposal, isLoading, error, reload, refresh } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
 	const currentBlockHeight = useBlockHeight()
+	const [importNotice, setImportNotice] = useState<string | null>(null)
+	const holdsBundle = useStoredBundle(actionId, proposal?.updatedAtMs)
 
 	useActivationRefresh(proposal !== null && isActivationReached(proposal, currentBlockHeight), refresh)
 
@@ -50,6 +55,7 @@ export function ProposalDetailScreen() {
 
 	async function handlePasteSignatures(sigs: PastedSignature[], broadcastState: ImportBroadcastState) {
 		if (!actionId || !proposal) return
+		setImportNotice(null)
 		for (const sig of sigs) {
 			const res = await approveProposal({ baseUrl: getOrchestratorBaseUrl(), actionId, ...sig })
 			if (!res.ok) {
@@ -63,13 +69,16 @@ export function ProposalDetailScreen() {
 		if (hasNewBroadcastData) {
 			const effectiveBroadcastStatus = broadcastState.broadcastStatus ?? proposal.broadcastStatus
 			// Sync broadcast state without proposalStatus so this call always succeeds.
-			await reportBroadcastProgress({
+			const synced = await reportBroadcastProgress({
 				baseUrl: getOrchestratorBaseUrl(),
 				actionId,
 				broadcastStatus: effectiveBroadcastStatus,
 				commitTxid: broadcastState.commitTxid ?? undefined,
 				revealTxid: broadcastState.revealTxid ?? undefined,
 			})
+			// A pair the row does not track answers 200 and leaves the row as it is (#605): say what
+			// happened rather than let the import look applied.
+			if (synced.ok) setImportNotice(noticeForImport(broadcastState.revealTxid, synced.data.revealTxid))
 			// If reveal is confirmed, attempt enacted transition in a separate call.
 			// Backend validates against ASM — 409 means not yet confirmed; non-fatal,
 			// reload reconcile will transition when ASM confirms.
@@ -79,6 +88,10 @@ export function ProposalDetailScreen() {
 					actionId,
 					broadcastStatus: 'reveal_confirmed',
 					proposalStatus: 'enacted',
+					// Name the imported reveal. A report with no reveal does not move a row that
+					// already tracks a pair, so this cannot enact a different one (#605).
+					commitTxid: broadcastState.commitTxid ?? undefined,
+					revealTxid: broadcastState.revealTxid ?? undefined,
 				})
 			}
 		}
@@ -131,6 +144,15 @@ export function ProposalDetailScreen() {
 						</div>
 					)}
 
+					{importNotice !== null && (
+						<div
+							className="mb-3 rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3"
+							data-testid="e2e-detail-import-notice"
+						>
+							<p className="m-0 text-body text-[#111827]">{importNotice}</p>
+						</div>
+					)}
+
 					{error && (
 						<div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3">
 							<p className="m-0 text-body text-danger-deep">{error}</p>
@@ -152,6 +174,8 @@ export function ProposalDetailScreen() {
 								decodedData={decodedData}
 								onSign={() => navigate(`/proposals/${actionId}/sign`)}
 								onBroadcast={() => navigate(`/proposals/${actionId}/broadcast`)}
+								holdsBundle={holdsBundle}
+								onSendAdditionalPair={() => navigate(`/proposals/${actionId}/broadcast?pair=additional`)}
 								onPasteSignatures={(sigs, broadcastState) => void handlePasteSignatures(sigs, broadcastState)}
 								onManualExecute={() =>
 									navigate('/manual', {

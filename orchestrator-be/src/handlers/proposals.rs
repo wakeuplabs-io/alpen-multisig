@@ -369,6 +369,61 @@ pub async fn claim_broadcast(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RegisterBroadcastAttemptBody {
+    pub commit_txid: String,
+    pub reveal_txid: String,
+}
+
+/// Coordination-only: a signer registers their own commit + reveal pair beside the one in
+/// flight, before broadcasting it (#605).
+#[tracing::instrument(skip(state, auth, body), fields(action_id, authority = ?auth.authority))]
+pub async fn register_broadcast_attempt(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+    Json(body): Json<RegisterBroadcastAttemptBody>,
+) -> Result<Json<ProposalResponse>> {
+    let action_id = ActionId(action_id);
+    let proposal = proposals::register_additional_pair(
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &state.asm_rpc_url,
+        state.btc_client.as_ref(),
+        &action_id,
+        &body.commit_txid,
+        &body.reveal_txid,
+    )
+    .await?;
+    Ok(Json(proposal_response(&state, proposal).await))
+}
+
+/// Coordination-only: whether this signer may send their own pair now, asked before the device
+/// signs anything (#605). `409` with the same text the registration would answer.
+#[tracing::instrument(skip(state, auth), fields(action_id, authority = ?auth.authority))]
+pub async fn check_broadcast_attempt(
+    State(state): State<AppState>,
+    auth: AuthenticatedSession,
+    Path(action_id): Path<String>,
+) -> Result<Json<ProposalResponse>> {
+    let action_id = ActionId(action_id);
+    let proposal = proposals::check_additional_pair(
+        state.repo.as_ref(),
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
+        &state.asm_rpc_url,
+        state.btc_client.as_ref(),
+        &action_id,
+    )
+    .await?;
+    Ok(Json(proposal_response(&state, proposal).await))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ReportBroadcastProgressBody {
     pub broadcast_status: String,
     pub proposal_status: Option<String>,
@@ -389,7 +444,10 @@ pub async fn report_broadcast_progress(
     let proposal = proposals::report_broadcast_progress(
         state.repo.as_ref(),
         &state.asm_rpc_url,
-        auth.authority,
+        proposals::SessionContext {
+            authority: auth.authority,
+            signer_pubkey: &auth.signer_pubkey,
+        },
         &action_id,
         state.btc_client.as_ref(),
         proposals::ReportBroadcastProgressRequest {

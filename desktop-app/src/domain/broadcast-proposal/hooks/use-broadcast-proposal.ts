@@ -5,7 +5,6 @@ import {
 	prepareBroadcast,
 	reportBroadcastProgress,
 	resolveBroadcastStatus,
-	type BroadcastInput,
 	type BroadcastResult,
 	type PrepareBroadcastResult,
 	type Proposal,
@@ -16,9 +15,9 @@ import { adminWalletCapabilitySchema } from '@/api/ipc-schemas'
 import { initAdminWalletForAdapter } from '@/contexts/session-provider-vendor-branch'
 import type { WalletAdapter } from '@/wallet/types'
 import { deviceCopy } from '@/lib/device-copy'
-import { failedBroadcastDetail } from '@/lib/proposal-send-state'
+import { failedBroadcastDetail, hasPairInFlight } from '@/lib/proposal-send-state'
 
-import type { BroadcastError, BroadcastPhase } from '../model/broadcast-proposal'
+import type { BroadcastError, BroadcastPhase, SentPair } from '../model/broadcast-proposal'
 import { deriveBroadcastError, phaseForBroadcastStatus } from '../model/broadcast-proposal'
 
 export type SignerKind = 'hardware' | 'mnemonic'
@@ -65,10 +64,6 @@ export function mergeBroadcastWithProposal(broadcast: BroadcastResult, proposal:
 	}
 }
 
-function buildBroadcastInput(baseUrl: string, actionId: string, feeRateSatPerKvb: number): BroadcastInput {
-	return { baseUrl, actionId, feeRateSatPerKvb }
-}
-
 /**
  * `feeRateSatPerKvb === null` means fee presets are still loading: prepare is
  * deferred and broadcast is a no-op until a real rate is available. This both
@@ -81,6 +76,11 @@ export function useBroadcastProposal(
 	feeRateSatPerKvb: number | null,
 	signerKind: SignerKind = 'mnemonic',
 	adapter?: WalletAdapter,
+	/**
+	 * Opened to send this signer's own pair beside another signer's pair in flight (#605). Honoured
+	 * only while such a pair is in flight: on a row that has none, the screen sends as usual.
+	 */
+	additionalPair = false,
 ): UseBroadcastProposalReturn {
 	const [phase, setPhase] = useState<BroadcastPhase>('idle')
 	const [bundle, setBundle] = useState<PrepareBroadcastResult | null>(null)
@@ -90,6 +90,7 @@ export function useBroadcastProposal(
 	const broadcastStarted = useRef(false)
 	const hasPreparedOnce = useRef(false)
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+	const sendsAdditionalPair = useRef(false)
 
 	const clearConfirmationPoll = useCallback(() => {
 		if (pollRef.current !== null) {
@@ -124,41 +125,59 @@ export function useBroadcastProposal(
 	 * the reveal has a confirmation. This keeps the UI converging even if the background
 	 * confirmation task never ran (e.g. the app was reopened later).
 	 */
-	const startConfirmationPoll = useCallback(() => {
-		clearConfirmationPoll()
-		const tick = async () => {
-			const res = await getProposalByActionId({ baseUrl, actionId })
-			if (!res.ok) return
-			const p = res.data
-			applyProposal(p)
-			if (p.broadcastStatus === 'failed') {
-				clearConfirmationPoll()
-				setError(settledFailure(p.broadcastError))
-				setPhase('error')
-				return
+	/**
+	 * Polls until the proposal confirms or fails. `sent` is the pair this screen just sent: the row may
+	 * move to another signer's pair (#605), so the chain is asked about this one, and its confirmation
+	 * is reported. Without it (a resumed screen) the row's pair is watched.
+	 */
+	const startConfirmationPoll = useCallback(
+		(sent?: SentPair) => {
+			clearConfirmationPoll()
+			const tick = async () => {
+				const res = await getProposalByActionId({ baseUrl, actionId })
+				if (!res.ok) return
+				const p = res.data
+				applyProposal(p)
+				const watched = sent ?? { commitTxid: p.commitTxid, revealTxid: p.revealTxid }
+				// A `failed` row means no listed pair is left: a failed pair falls back to any other whose
+				// commit the node still has (#605). Whichever pair it names, this one is gone too.
+				if (p.broadcastStatus === 'failed') {
+					clearConfirmationPoll()
+					setError(settledFailure(p.broadcastError))
+					setPhase('error')
+					return
+				}
+				// Confirmed on whichever pair was mined first: the proposal is on its way either way.
+				if (phaseForBroadcastStatus(p.broadcastStatus, p.status) === 'done') {
+					clearConfirmationPoll()
+					setPhase('done')
+					return
+				}
+				// Not yet promoted by the background task — reconcile against the chain.
+				const resolved = await resolveBroadcastStatus(watched)
+				if (resolved.ok && resolved.data.broadcastStatus === 'reveal_confirmed') {
+					const promoted = await reportBroadcastProgress({
+						baseUrl,
+						actionId,
+						broadcastStatus: 'reveal_confirmed',
+						commitTxid: watched.commitTxid,
+						revealTxid: watched.revealTxid,
+					})
+					if (!promoted.ok) return
+					applyProposal(promoted.data)
+					// A 200 is not a confirmation (#605): beside other pairs the orchestrator keeps the
+					// row at `reveal_broadcasted` until its own node sees the block. Keep polling until
+					// the row it wrote back is done.
+					if (phaseForBroadcastStatus(promoted.data.broadcastStatus, promoted.data.status) === 'done') {
+						clearConfirmationPoll()
+						setPhase('done')
+					}
+				}
 			}
-			if (phaseForBroadcastStatus(p.broadcastStatus, p.status) === 'done') {
-				clearConfirmationPoll()
-				setPhase('done')
-				return
-			}
-			// Not yet promoted by the background task — reconcile against the chain.
-			const resolved = await resolveBroadcastStatus({ commitTxid: p.commitTxid, revealTxid: p.revealTxid })
-			if (resolved.ok && resolved.data.broadcastStatus === 'reveal_confirmed') {
-				const promoted = await reportBroadcastProgress({
-					baseUrl,
-					actionId,
-					broadcastStatus: 'reveal_confirmed',
-					commitTxid: p.commitTxid,
-					revealTxid: p.revealTxid,
-				})
-				if (promoted.ok) applyProposal(promoted.data)
-				clearConfirmationPoll()
-				setPhase('done')
-			}
-		}
-		pollRef.current = setInterval(() => void tick(), CONFIRMATION_POLL_INTERVAL_MS)
-	}, [baseUrl, actionId, applyProposal, clearConfirmationPoll])
+			pollRef.current = setInterval(() => void tick(), CONFIRMATION_POLL_INTERVAL_MS)
+		},
+		[baseUrl, actionId, applyProposal, clearConfirmationPoll],
+	)
 
 	// Stop any active poll when the hook unmounts.
 	useEffect(() => clearConfirmationPoll, [clearConfirmationPoll])
@@ -176,7 +195,7 @@ export function useBroadcastProposal(
 		}
 		const run = () => {
 			void Promise.all([
-				prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
+				prepareBroadcast({ baseUrl, actionId, feeRateSatPerKvb }),
 				getProposalByActionId({ baseUrl, actionId }),
 			]).then(([res, proposalRes]) => {
 				if (!active) return
@@ -194,6 +213,13 @@ export function useBroadcastProposal(
 				if (proposalRes.ok) {
 					const p = proposalRes.data
 					setProposal(p)
+					// Beside a pair in flight there is nothing to resume: this signer sends their own.
+					sendsAdditionalPair.current = additionalPair && hasPairInFlight(p)
+					if (sendsAdditionalPair.current) {
+						setBundle(res.data)
+						setPhase('confirming')
+						return
+					}
 					if (p.broadcastStatus === 'failed') {
 						applyProposal(p)
 						setError(settledFailure(p.broadcastError))
@@ -224,14 +250,14 @@ export function useBroadcastProposal(
 			active = false
 			if (debounce !== null) clearTimeout(debounce)
 		}
-	}, [actionId, baseUrl, feeRateSatPerKvb, applyProposal, startConfirmationPoll])
+	}, [actionId, baseUrl, feeRateSatPerKvb, additionalPair, applyProposal, startConfirmationPoll])
 
 	async function prepare() {
 		if (feeRateSatPerKvb === null) return
 		setPhase('preparing')
 		setError(null)
 		const [res, proposalRes] = await Promise.all([
-			prepareBroadcast(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb)),
+			prepareBroadcast({ baseUrl, actionId, feeRateSatPerKvb }),
 			getProposalByActionId({ baseUrl, actionId }),
 		])
 		if (!res.ok) {
@@ -284,7 +310,12 @@ export function useBroadcastProposal(
 			setPhase('broadcasting')
 		}
 		try {
-			const res = await broadcastProposal(buildBroadcastInput(baseUrl, actionId, feeRateSatPerKvb))
+			const res = await broadcastProposal({
+				baseUrl,
+				actionId,
+				feeRateSatPerKvb,
+				additionalPair: sendsAdditionalPair.current,
+			})
 			if (!res.ok) {
 				setError(deriveBroadcastError(res.error))
 				setPhase('error')
@@ -303,7 +334,9 @@ export function useBroadcastProposal(
 				nextPhase = phaseForBroadcastStatus(res.data.broadcastStatus, res.data.proposalStatus) ?? nextPhase
 			}
 			setPhase(nextPhase)
-			if (nextPhase === 'awaiting-confirmation') startConfirmationPoll()
+			if (nextPhase === 'awaiting-confirmation') {
+				startConfirmationPoll({ commitTxid: res.data.commitTxid, revealTxid: res.data.revealTxid })
+			}
 		} finally {
 			broadcastStarted.current = false
 			inFlightActionIds.delete(actionId)

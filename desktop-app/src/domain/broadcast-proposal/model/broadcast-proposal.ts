@@ -200,3 +200,9 @@ export function isBroadcastConfirmDisabled(input: BroadcastConfirmGateInput): bo
 		input.adminWalletInfo.balanceSats === 0
 	)
 }
+
+/** The commit + reveal pair a send screen watches until the proposal confirms (#605). */
+export type SentPair = {
+	commitTxid?: string
+	revealTxid?: string
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { BroadcastStatus, ProposalStatus } from '@/api/proposals'
 import { resolveBroadcastStatus } from '@/api/proposals'
+import { importedTxid } from '@/domain/proposal-detail/model/imported-pair'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
 export type ImportBroadcastState = {
@@ -79,15 +80,11 @@ function parseBundleJson(
 			}
 		}
 
-		// Parse txids — sync if present and absent/different in DB
-		const rawCommit = obj['commitTxid'] ?? obj['commit_txid']
-		if (typeof rawCommit === 'string' && rawCommit !== existingCommitTxid) {
-			commitTxid = rawCommit
-		}
-		const rawReveal = obj['revealTxid'] ?? obj['reveal_txid']
-		if (typeof rawReveal === 'string' && rawReveal !== existingRevealTxid) {
-			revealTxid = rawReveal
-		}
+		// Parse txids — sync if present and absent/different in DB, and always name the pair when
+		// the status advances (#605)
+		const advancesStatus = broadcastStatus !== null
+		commitTxid = importedTxid(obj['commitTxid'] ?? obj['commit_txid'], existingCommitTxid, advancesStatus)
+		revealTxid = importedTxid(obj['revealTxid'] ?? obj['reveal_txid'], existingRevealTxid, advancesStatus)
 
 		// Parse proposal status
 		const rawStatus = obj['status']

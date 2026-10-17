@@ -56,6 +56,21 @@ export type Proposal = {
 	updatedAtMs: number
 	/** Served by the backend that enforces the window (#551); `null` from one that predates it. */
 	expiresAtMs: number | null
+	/**
+	 * Every commit + reveal pair sent for the proposal, oldest first (#605). `null` from an
+	 * orchestrator that predates the field, and absent on proposals built locally (the manual
+	 * generator), which have no orchestrator row. Either way no second pair can be registered.
+	 */
+	broadcastAttempts?: BroadcastAttempt[] | null
+}
+
+/** One commit + reveal pair sent for a proposal. The ASM acts on whichever reveal is mined first (#605). */
+export type BroadcastAttempt = {
+	/** The signer who sent it; `null` for pairs sent before the backend kept track. */
+	broadcasterPubkey: string | null
+	commitTxid: string
+	revealTxid: string
+	createdAtMs: number
 }
 
 export type PrepareBroadcastResult = {
@@ -119,6 +134,14 @@ export function getProposalByActionId(input: GetProposalInput): Promise<ApiResul
 	return tauriCall('proposals_get', { input }, proposalSchema)
 }
 
+/**
+ * Whether this desktop still holds a commit + reveal bundle for the proposal (#605). It keeps one
+ * until the bundle is mined or dropped from the network.
+ */
+export function hasStoredBundle(actionId: string): Promise<ApiResult<boolean>> {
+	return tauriCall<boolean>('proposals_has_stored_bundle', { input: { actionId } })
+}
+
 // Pre-broadcast guard for a Cancel proposal: is its target action still queued on the ASM?
 export function checkCancelTargetQueued(input: GetProposalInput): Promise<ApiResult<boolean>> {
 	return tauriCall<boolean>('proposals_check_cancel_target_queued', { input })
@@ -132,6 +155,8 @@ export type BroadcastInput = {
 	baseUrl: string
 	actionId: string
 	feeRateSatPerKvb: number
+	/** Send this signer's own pair beside another signer's pair in flight, without claiming (#605). */
+	additionalPair?: boolean
 }
 
 export function prepareBroadcast(input: BroadcastInput): Promise<ApiResult<PrepareBroadcastResult>> {

@@ -42,6 +42,19 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     continue-on-error: false
+    # A real Postgres for the orchestrator's repository tests (`--ignored postgres_`).
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -116,6 +129,13 @@ jobs:
 
       - name: Test workspace
         run: cargo test --workspace
+
+      # Ignored by default because they need outside services: the repository SQL against the
+      # Postgres service above, and the commit + reveal reconcile against a regtest bitcoind (#605).
+      - name: Orchestrator integration tests (Postgres, regtest bitcoind)
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: cargo test -p orchestrator-be -- --ignored postgres_ regtest_
 
       # Everything above builds with debug_assertions. Dependencies can gate impls on it (trezor-thp
       # derives Debug only in debug builds), so code that compiles here can still break the release

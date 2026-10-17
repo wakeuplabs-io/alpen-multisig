@@ -27,11 +27,15 @@ async fn main() -> anyhow::Result<()> {
 
     let config = config::Config::from_env().context("failed to load config")?;
 
-    let btc_client = Arc::new(infrastructure::bitcoin_rpc::HttpBitcoinRpcClient::new(
-        &config.bitcoin_rpc_url,
-        &config.bitcoin_rpc_user,
-        &config.bitcoin_rpc_pass,
-    ));
+    let btc_client = Arc::new(
+        infrastructure::bitcoin_rpc::HttpBitcoinRpcClient::new(
+            &config.bitcoin_rpc_url,
+            &config.bitcoin_rpc_user,
+            &config.bitcoin_rpc_pass,
+        )
+        .with_magic_bytes(config.bitcoin_magic_bytes),
+    );
+    warn_without_txindex(btc_client.clone());
 
     let state = if let Some(database_url) = &config.database_url {
         let pool = PgPoolOptions::new()
@@ -92,4 +96,27 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await.context("server error")?;
 
     Ok(())
+}
+
+/// A node without `-txindex` cannot find a mined reveal, so the orchestrator can verify none and
+/// confirms no proposal (#605). Checked once in the background so a slow node does not hold back
+/// startup; the operator sees it in the log.
+fn warn_without_txindex(btc_client: Arc<infrastructure::bitcoin_rpc::HttpBitcoinRpcClient>) {
+    tokio::spawn(async move {
+        use infrastructure::bitcoin_rpc::TxIndex;
+        match btc_client.txindex().await {
+            Ok(TxIndex::Synced) => {
+                tracing::info!("bitcoin node keeps a transaction index (-txindex)")
+            }
+            Ok(TxIndex::Syncing) => tracing::warn!(
+                "bitcoin node is still building its transaction index: until it is synced, the \
+                 orchestrator cannot verify a mined reveal and confirms no proposal"
+            ),
+            Ok(TxIndex::Missing) => tracing::error!(
+                "bitcoin node runs without -txindex: the orchestrator cannot verify a mined reveal \
+                 and confirms no proposal; restart bitcoind with -txindex=1"
+            ),
+            Err(e) => tracing::warn!(error = %e, "could not check the bitcoin node for -txindex"),
+        }
+    });
 }

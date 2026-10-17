@@ -67,6 +67,93 @@ pub(crate) async fn threshold_for_authority(
     Ok(u16::from(authority_config.config().threshold()))
 }
 
+/// The height of the last block the ASM has processed (`strata_asm_getStatus`, `cur_block`).
+pub(crate) async fn asm_processed_height(rpc_url: &str) -> Result<u64, AppError> {
+    // The in-process mocks (refused outside dev/test builds): an ASM at genesis, or one far ahead.
+    if rpc_url == "mock://asm-ahead" {
+        return Ok(u64::MAX);
+    }
+    if is_mock_url(rpc_url) || rpc_url.starts_with("mock://") {
+        return Ok(0);
+    }
+    asm_rpc::fetch_processed_height(rpc_url)
+        .await
+        .map_err(AppError::BadRequest)
+}
+
+/// What the ASM's administration state says about the role that signs `action`, as of one block
+/// (#605): what [`crate::application::proposals`] needs to tell whether the ASM executed a reveal.
+#[derive(Debug, Clone)]
+pub(crate) struct RoleAtBlock {
+    pub last_seqno: u64,
+    pub max_seqno_gap: std::num::NonZero<u8>,
+    /// The role's signer configuration: keys in index order, and threshold.
+    pub config: strata_crypto::threshold_signature::ThresholdConfig,
+    /// The confirmation depth of the action's update type; `None` when it applies immediately, or
+    /// for a cancel.
+    pub queue_depth: Option<u16>,
+    /// The ASM's queued updates: id, action, activation height.
+    pub queued: Vec<(u32, strata_asm_txs_admin::actions::UpdateAction, u64)>,
+}
+
+impl RoleAtBlock {
+    fn of(admin: &AdministrationSubprotoState, action: &MultisigAction) -> Option<Self> {
+        let role = admin.resolve_action_role(action);
+        let authority = admin.authority(role)?;
+        let queue_depth = match action {
+            MultisigAction::Update(update) => admin.confirmation_depth(update.update_tx_type()),
+            MultisigAction::Cancel(_) => None,
+        };
+        Some(Self {
+            last_seqno: authority.last_seqno(),
+            max_seqno_gap: admin.max_seqno_gap(),
+            config: authority.config().clone(),
+            queue_depth,
+            queued: admin
+                .queued()
+                .iter()
+                .map(|queued| {
+                    (
+                        *queued.id(),
+                        queued.action().clone(),
+                        u64::from(queued.activation_height()),
+                    )
+                })
+                .collect(),
+        })
+    }
+}
+
+/// The role that signs `action`, before and after the ASM processed the block `block_hash`
+/// (#605): as of `parent_hash`, and as of `block_hash`. The role is the one the ASM resolves from
+/// the action itself. `None` when the ASM has not processed one of the two blocks yet.
+pub(crate) async fn role_around_block(
+    rpc_url: &str,
+    action: &MultisigAction,
+    seq_no: u64,
+    block_height: u64,
+    block_hash: &str,
+    parent_hash: &str,
+) -> Result<Option<(RoleAtBlock, RoleAtBlock)>, AppError> {
+    if let Some(views) = mock_role_around_block(rpc_url, action, seq_no, block_height, block_hash) {
+        return Ok(views);
+    }
+    let before = asm_rpc::fetch_admin_state_at(rpc_url, parent_hash)
+        .await
+        .map_err(AppError::BadRequest)?;
+    let after = asm_rpc::fetch_admin_state_at(rpc_url, block_hash)
+        .await
+        .map_err(AppError::BadRequest)?;
+    let (Some(before), Some(after)) = (before, after) else {
+        return Ok(None);
+    };
+    let role = |admin: &AdministrationSubprotoState| {
+        RoleAtBlock::of(admin, action)
+            .ok_or_else(|| asm_rpc::missing_authority(admin.resolve_action_role(action)))
+    };
+    Ok(Some((role(&before)?, role(&after)?)))
+}
+
 /// Return the confirmation depth (in blocks) before the update in `action_hex` activates.
 ///
 /// Resolved from the action, never from the authority: the Security Council signs both Defcon 1
@@ -395,6 +482,111 @@ fn mock_threshold(rpc_url: &str, authority: Authority) -> Option<u16> {
 #[cfg(not(any(test, feature = "dev-mocks")))]
 fn mock_threshold(_rpc_url: &str, _authority: Authority) -> Option<u16> {
     None
+}
+
+/// An ASM whose state did not change in the reveal's block: it did not execute the reveal.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) const MOCK_ASM_NOT_ACCEPTED_URL: &str = "mock://asm-not-accepted";
+
+/// The membership fixture's role around a reveal's block. Before it: `last_seqno` 0, a gap of 10,
+/// the fixture signers, the uniform depth of 2016. After it, under [`MOCK_MEMBERSHIP_URL`], what
+/// the ASM leaves once it accepted an action at `seq_no` — taken, and queued when it waits — and,
+/// under [`MOCK_ASM_NOT_ACCEPTED_URL`], the same as before. Whether the reveal *could* have been
+/// accepted (window, signatures) is still decided against the state before.
+#[cfg(any(test, feature = "dev-mocks"))]
+fn mock_role_around_block(
+    rpc_url: &str,
+    action: &MultisigAction,
+    seq_no: u64,
+    block_height: u64,
+    block_hash: &str,
+) -> Option<Option<(RoleAtBlock, RoleAtBlock)>> {
+    // The block is known, but this read could not judge it. Callers use the hash `unjudged`.
+    if block_hash == "unjudged" {
+        return Some(None);
+    }
+    let accepted = match rpc_url {
+        MOCK_MEMBERSHIP_URL
+        | crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL
+        | crate::infrastructure::asm_enactment::MOCK_ENACTED_ACCEPTED_URL => true,
+        MOCK_ASM_NOT_ACCEPTED_URL => false,
+        _ => return None,
+    };
+    let config = mock_threshold_config(MOCK_MEMBERSHIP_URL, Authority::StrataAdmin)?;
+    let queue_depth = match action {
+        MultisigAction::Update(_) => Some(2016),
+        MultisigAction::Cancel(_) => None,
+    };
+    // A cancel's target sits in the queue until the cancel takes it out.
+    let queued = match action {
+        MultisigAction::Cancel(cancel) => vec![(
+            *cancel.target_id(),
+            cancel.update().clone(),
+            block_height + 2016,
+        )],
+        MultisigAction::Update(_) => Vec::new(),
+    };
+    let before = RoleAtBlock {
+        last_seqno: 0,
+        max_seqno_gap: std::num::NonZero::new(10)?,
+        config,
+        queue_depth,
+        queued,
+    };
+    let mut after = before.clone();
+    if accepted {
+        after.last_seqno = seq_no;
+        match (action, queue_depth) {
+            (MultisigAction::Update(update), Some(depth)) => {
+                after
+                    .queued
+                    .push((0, update.clone(), block_height + u64::from(depth)))
+            }
+            (MultisigAction::Cancel(cancel), _) => {
+                after.queued.retain(|(id, _, _)| id != cancel.target_id())
+            }
+            _ => {}
+        }
+    }
+    Some(Some((before, after)))
+}
+
+#[cfg(not(any(test, feature = "dev-mocks")))]
+fn mock_role_around_block(
+    _rpc_url: &str,
+    _action: &MultisigAction,
+    _seq_no: u64,
+    _block_height: u64,
+    _block_hash: &str,
+) -> Option<Option<(RoleAtBlock, RoleAtBlock)>> {
+    None
+}
+
+/// The membership fixture's signers — 1·G at index 0 and 2·G at index 1 — at the fixture threshold
+/// of 2, for every URL `mock_threshold` answers.
+#[cfg(any(test, feature = "dev-mocks"))]
+pub(crate) fn mock_threshold_config(
+    rpc_url: &str,
+    authority: Authority,
+) -> Option<strata_crypto::threshold_signature::ThresholdConfig> {
+    use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+    use strata_crypto::keys::compressed::CompressedPublicKey;
+    let threshold = mock_threshold(rpc_url, authority)?;
+    let secp = Secp256k1::new();
+    let keys = [1u8, 2]
+        .into_iter()
+        .map(|scalar| {
+            let mut secret = [0u8; 32];
+            secret[31] = scalar;
+            let key = PublicKey::from_secret_key(&secp, &SecretKey::from_slice(&secret).ok()?);
+            CompressedPublicKey::from_slice(&key.serialize()).ok()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    strata_crypto::threshold_signature::ThresholdConfig::try_new(
+        keys,
+        std::num::NonZero::new(u8::try_from(threshold).ok()?)?,
+    )
+    .ok()
 }
 
 /// Every depth set to `depth`. Upstream's `get` still overrides the variants it hardcodes, which is

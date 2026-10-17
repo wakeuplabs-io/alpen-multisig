@@ -1,10 +1,13 @@
 use std::str::FromStr;
 
-use crate::application::proposals::AUTHORITY_IN_FLIGHT;
+use crate::application::proposals::{
+    broadcast_write_for_report, decide_additional_pair, report_effect, AdditionalPair,
+    AUTHORITY_IN_FLIGHT,
+};
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
 use crate::domain::proposal::{
-    ActionId, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
+    ActionId, BroadcastAttempt, BroadcastStatus, Proposal, ProposalSignature, ProposalStatus,
 };
 use crate::error::AppError;
 use chrono::{DateTime, Utc};
@@ -20,6 +23,20 @@ impl PostgresProposalRepository {
         Self { pool }
     }
 }
+
+/// Broadcast sub-status write shared by `update_broadcast_status` and
+/// `update_reported_pair_status`. Binds: status, proposal status, commit, reveal, error, action id.
+const UPDATE_BROADCAST_STATUS: &str = r#"
+    UPDATE proposals
+    SET
+        broadcast_status  = $1,
+        status            = COALESCE($2, status),
+        commit_txid       = COALESCE($3, commit_txid),
+        reveal_txid       = COALESCE($4, reveal_txid),
+        broadcast_error   = $5,
+        updated_at        = NOW()
+    WHERE action_id = $6
+"#;
 
 fn authority_to_db(authority: Authority) -> &'static str {
     match authority {
@@ -95,6 +112,67 @@ async fn load_signatures(
         .collect())
 }
 
+async fn load_broadcast_attempts<'e, E>(
+    executor: E,
+    action_id: &str,
+) -> Result<Vec<BroadcastAttempt>, AppError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let rows = sqlx::query(
+        r#"
+        SELECT broadcaster_pubkey, commit_txid, reveal_txid, created_at
+        FROM broadcast_attempts
+        WHERE action_id = $1
+        ORDER BY created_at ASC, reveal_txid ASC
+        "#,
+    )
+    .bind(action_id)
+    .fetch_all(executor)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to load broadcast attempts: {e}")))?;
+
+    Ok(rows.iter().map(row_to_broadcast_attempt).collect())
+}
+
+/// Every pair of the listed proposals in one query, grouped by action id, each list oldest first.
+async fn load_broadcast_attempts_for(
+    pool: &PgPool,
+    action_ids: &[String],
+) -> Result<std::collections::HashMap<String, Vec<BroadcastAttempt>>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT action_id, broadcaster_pubkey, commit_txid, reveal_txid, created_at
+        FROM broadcast_attempts
+        WHERE action_id = ANY($1)
+        ORDER BY created_at ASC, reveal_txid ASC
+        "#,
+    )
+    .bind(action_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to load broadcast attempts: {e}")))?;
+
+    let mut by_action: std::collections::HashMap<String, Vec<BroadcastAttempt>> =
+        std::collections::HashMap::new();
+    for row in &rows {
+        by_action
+            .entry(row.get("action_id"))
+            .or_default()
+            .push(row_to_broadcast_attempt(row));
+    }
+    Ok(by_action)
+}
+
+fn row_to_broadcast_attempt(row: &sqlx::postgres::PgRow) -> BroadcastAttempt {
+    BroadcastAttempt {
+        broadcaster_pubkey: row.get("broadcaster_pubkey"),
+        commit_txid: row.get("commit_txid"),
+        reveal_txid: row.get("reveal_txid"),
+        created_at: row.get("created_at"),
+    }
+}
+
 fn row_to_proposal_no_sigs(
     row: &sqlx::postgres::PgRow,
     action_id: String,
@@ -127,6 +205,7 @@ fn row_to_proposal_no_sigs(
         created_at,
         updated_at,
         broadcast_claimed_at,
+        broadcast_attempts: Vec::new(),
     })
 }
 
@@ -224,6 +303,8 @@ impl ProposalRepository for PostgresProposalRepository {
         let signatures = load_signatures(&self.pool, &action_id_str).await?;
         let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
         proposal.signatures = signatures;
+        proposal.broadcast_attempts =
+            load_broadcast_attempts(&self.pool, &proposal.action_id.0).await?;
         Ok(Some(proposal))
     }
 
@@ -305,12 +386,17 @@ impl ProposalRepository for PostgresProposalRepository {
         }
         .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to list proposals: {e}")))?;
 
+        let action_ids: Vec<String> = rows.iter().map(|row| row.get("action_id")).collect();
+        let mut attempts = load_broadcast_attempts_for(&self.pool, &action_ids).await?;
+
         let mut proposals = Vec::with_capacity(rows.len());
         for row in rows {
             let action_id_str: String = row.get("action_id");
             let signatures = load_signatures(&self.pool, &action_id_str).await?;
             let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
             proposal.signatures = signatures;
+            proposal.broadcast_attempts =
+                attempts.remove(&proposal.action_id.0).unwrap_or_default();
             proposals.push(proposal);
         }
 
@@ -398,7 +484,150 @@ impl ProposalRepository for PostgresProposalRepository {
         let signatures = load_signatures(&self.pool, &action_id_str).await?;
         let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
         proposal.signatures = signatures;
+        proposal.broadcast_attempts =
+            load_broadcast_attempts(&self.pool, &proposal.action_id.0).await?;
         Ok(proposal)
+    }
+
+    async fn register_additional_pair(
+        &self,
+        action_id: &ActionId,
+        attempt: BroadcastAttempt,
+        abandoned: &[String],
+    ) -> Result<Proposal, AppError> {
+        // Lock the row so two registrations — or one beside a claim or a report — are decided
+        // one after the other on what the previous one wrote.
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to begin tx: {e}")))?;
+
+        let row = sqlx::query(&format!(
+            "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE action_id = $1 FOR UPDATE"
+        ))
+        .bind(&action_id.0)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to lock proposal: {e}")))?;
+        let Some(row) = row else {
+            return Err(AppError::NotFound);
+        };
+        let mut current = row_to_proposal_no_sigs(&row, action_id.0.clone())?;
+        current.broadcast_attempts = load_broadcast_attempts(&mut *tx, &action_id.0).await?;
+
+        match decide_additional_pair(&current, &attempt, abandoned) {
+            Err(refusal) => return Err(AppError::Conflict(refusal.to_string())),
+            // Dropping the transaction releases the lock; the row is left as it is.
+            Ok(AdditionalPair::AlreadyRegistered) => {
+                drop(tx);
+                return self
+                    .find_by_action_id(action_id)
+                    .await?
+                    .ok_or(AppError::NotFound);
+            }
+            Ok(AdditionalPair::Register) => {}
+        }
+
+        sqlx::query(
+            r#"
+            INSERT INTO broadcast_attempts(action_id, broadcaster_pubkey, commit_txid, reveal_txid, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(&action_id.0)
+        .bind(attempt.broadcaster_pubkey.as_deref())
+        .bind(&attempt.commit_txid)
+        .bind(&attempt.reveal_txid)
+        .bind(attempt.created_at)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("failed to register broadcast attempt: {e}"))
+        })?;
+
+        sqlx::query(
+            r#"
+            UPDATE proposals
+            SET broadcast_status = 'commit_broadcasted',
+                commit_txid = $2,
+                reveal_txid = $3,
+                broadcast_error = NULL,
+                broadcast_claimed_at = NOW(),
+                updated_at = NOW()
+            WHERE action_id = $1
+            "#,
+        )
+        .bind(&action_id.0)
+        .bind(&attempt.commit_txid)
+        .bind(&attempt.reveal_txid)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to track the new pair: {e}")))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to commit tx: {e}")))?;
+
+        self.find_by_action_id(action_id)
+            .await?
+            .ok_or(AppError::NotFound)
+    }
+
+    async fn enact_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError> {
+        let updated = sqlx::query(
+            r#"
+            UPDATE proposals
+            SET status = 'enacted', updated_at = NOW()
+            WHERE action_id = $1
+              AND status = 'approved'
+              AND broadcast_status = 'reveal_confirmed'
+            "#,
+        )
+        .bind(&action_id.0)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to enact proposal: {e}")))?;
+        Ok(updated.rows_affected() > 0)
+    }
+
+    async fn expire_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError> {
+        let updated = sqlx::query(
+            r#"
+            UPDATE proposals
+            SET status = 'expired', updated_at = NOW()
+            WHERE action_id = $1
+              AND status = 'approved'
+              AND broadcast_status = 'reveal_confirmed'
+            "#,
+        )
+        .bind(&action_id.0)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to expire proposal: {e}")))?;
+        Ok(updated.rows_affected() > 0)
+    }
+
+    async fn supersede_if_unchanged(
+        &self,
+        action_id: &ActionId,
+        observed: BroadcastStatus,
+    ) -> Result<bool, AppError> {
+        let updated = sqlx::query(
+            r#"
+            UPDATE proposals
+            SET status = 'superseded', updated_at = NOW()
+            WHERE action_id = $1
+              AND status = 'approved'
+              AND broadcast_status = $2
+            "#,
+        )
+        .bind(&action_id.0)
+        .bind(observed.to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to supersede proposal: {e}")))?;
+        Ok(updated.rows_affected() > 0)
     }
 
     async fn update_broadcast_status(
@@ -412,31 +641,171 @@ impl ProposalRepository for PostgresProposalRepository {
     ) -> Result<Option<Proposal>, AppError> {
         let proposal_status_db = proposal_status.map(status_to_db);
 
-        sqlx::query(
+        sqlx::query(UPDATE_BROADCAST_STATUS)
+            .bind(status.to_string())
+            .bind(proposal_status_db)
+            .bind(commit_txid)
+            .bind(reveal_txid)
+            .bind(error)
+            .bind(&action_id.0)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to update broadcast status: {e}"))
+            })?;
+
+        self.find_by_action_id(action_id).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn update_reported_pair_status(
+        &self,
+        action_id: &ActionId,
+        status: BroadcastStatus,
+        proposal_status: Option<ProposalStatus>,
+        commit_txid: Option<&str>,
+        reveal_txid: Option<&str>,
+        error: Option<&str>,
+        attempt: Option<BroadcastAttempt>,
+        live: &[String],
+    ) -> Result<Option<Proposal>, AppError> {
+        let proposal_status_db = proposal_status.map(status_to_db);
+
+        // One transaction, under the row lock: what the report does is decided against the row as
+        // it stands now (#605).
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to begin tx: {e}")))?;
+
+        let row = sqlx::query(&format!(
+            "SELECT {SELECT_PROPOSAL_COLS} FROM proposals WHERE action_id = $1 FOR UPDATE"
+        ))
+        .bind(&action_id.0)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to lock proposal: {e}")))?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let mut current = row_to_proposal_no_sigs(&row, action_id.0.clone())?;
+        current.broadcast_attempts = load_broadcast_attempts(&mut *tx, &action_id.0).await?;
+        let effect = match report_effect(
+            &current,
+            reveal_txid,
+            status,
+            proposal_status,
+            attempt.as_ref(),
+        ) {
+            Ok(effect) => effect,
+            Err(refusal) => {
+                drop(tx);
+                return Err(AppError::Conflict(refusal.to_string()));
+            }
+        };
+        if let Some(attempt) = attempt.filter(|_| effect.lists_pair) {
+            // Txids arrive lowercase. The case-sensitive primary key keeps a pair once.
+            sqlx::query(
+                r#"
+                INSERT INTO broadcast_attempts(action_id, broadcaster_pubkey, commit_txid, reveal_txid, created_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (action_id, reveal_txid) DO NOTHING
+                "#,
+            )
+            .bind(&action_id.0)
+            .bind(attempt.broadcaster_pubkey.as_deref())
+            .bind(&attempt.commit_txid)
+            .bind(&attempt.reveal_txid)
+            .bind(attempt.created_at)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to record broadcast attempt: {e}"))
+            })?;
+            let kept = current
+                .broadcast_attempts
+                .iter()
+                .any(|kept| kept.reveal_txid.eq_ignore_ascii_case(&attempt.reveal_txid));
+            if !kept {
+                current.broadcast_attempts.push(attempt);
+            }
+        }
+        if !effect.moves_row {
+            tx.commit()
+                .await
+                .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to commit tx: {e}")))?;
+            return self.find_by_action_id(action_id).await;
+        }
+
+        // A failed report for the tracked pair puts the row back on an earlier live one (#605).
+        let write =
+            broadcast_write_for_report(&current, status, commit_txid, reveal_txid, error, live);
+        sqlx::query(UPDATE_BROADCAST_STATUS)
+            .bind(write.status.to_string())
+            .bind(proposal_status_db)
+            .bind(write.commit_txid.as_deref())
+            .bind(write.reveal_txid.as_deref())
+            .bind(write.error.as_deref())
+            .bind(&action_id.0)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to update broadcast status: {e}"))
+            })?;
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to commit tx: {e}")))?;
+
+        self.find_by_action_id(action_id).await
+    }
+
+    async fn confirm_tracked_reveal(
+        &self,
+        action_id: &ActionId,
+        observed_reveal: Option<&str>,
+        commit_txid: &str,
+        reveal_txid: &str,
+    ) -> Result<Option<Proposal>, AppError> {
+        // One UPDATE: the winner's txids are written only while the row still tracks the reveal
+        // the reconcile observed, and the broadcast has not already confirmed.
+        let updated = sqlx::query(
             r#"
             UPDATE proposals
-            SET
-                broadcast_status  = $1,
-                status            = COALESCE($2, status),
-                commit_txid       = COALESCE($3, commit_txid),
-                reveal_txid       = COALESCE($4, reveal_txid),
-                broadcast_error   = $5,
-                updated_at        = NOW()
-            WHERE action_id = $6
+            SET broadcast_status = 'reveal_confirmed',
+                status = 'approved',
+                commit_txid = LOWER($2),
+                reveal_txid = LOWER($3),
+                broadcast_error = NULL,
+                updated_at = NOW()
+            WHERE action_id = $1
+              AND status IN ('approved', 'superseded')
+              AND (
+                    status = 'superseded'
+                    OR broadcast_status IN (
+                        'commit_broadcasted', 'commit_confirmed', 'reveal_broadcasted', 'failed'
+                    )
+                  )
+              AND (
+                    ($4::text IS NULL AND reveal_txid IS NULL)
+                    OR ($4::text IS NOT NULL AND LOWER(reveal_txid) = LOWER($4))
+                  )
             "#,
         )
-        .bind(status.to_string())
-        .bind(proposal_status_db)
+        .bind(&action_id.0)
         .bind(commit_txid)
         .bind(reveal_txid)
-        .bind(error)
-        .bind(&action_id.0)
+        .bind(observed_reveal)
         .execute(&self.pool)
         .await
         .map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("failed to update broadcast status: {e}"))
+            AppError::Internal(anyhow::anyhow!("failed to confirm tracked reveal: {e}"))
         })?;
 
+        if updated.rows_affected() == 0 {
+            return Ok(None);
+        }
         self.find_by_action_id(action_id).await
     }
 
@@ -460,6 +829,8 @@ impl ProposalRepository for PostgresProposalRepository {
         let signatures = load_signatures(&self.pool, &action_id_str).await?;
         let mut proposal = row_to_proposal_no_sigs(&row, action_id_str)?;
         proposal.signatures = signatures;
+        proposal.broadcast_attempts =
+            load_broadcast_attempts(&self.pool, &proposal.action_id.0).await?;
         Ok(Some(proposal))
     }
 
@@ -501,7 +872,7 @@ impl ProposalRepository for PostgresProposalRepository {
         Ok(())
     }
 
-    async fn enact_cancel(
+    async fn enact_executed_cancel(
         &self,
         cancel_action_id: &ActionId,
         target_action_id: &ActionId,
@@ -512,11 +883,14 @@ impl ProposalRepository for PostgresProposalRepository {
             })?;
 
         let result = sqlx::query(
-            "UPDATE proposals SET status = $1, updated_at = NOW() WHERE action_id = $2 AND status = $3",
+            "UPDATE proposals SET status = $1, updated_at = NOW() \
+             WHERE action_id = $2 AND status IN ($3, $4, $5)",
         )
         .bind(status_to_db(ProposalStatus::Canceled))
         .bind(&target_action_id.0)
         .bind(status_to_db(ProposalStatus::Approved))
+        .bind(status_to_db(ProposalStatus::Superseded))
+        .bind(status_to_db(ProposalStatus::Enacted))
         .execute(&mut *tx)
         .await
         .map_err(|e| {
@@ -544,5 +918,270 @@ impl ProposalRepository for PostgresProposalRepository {
         })?;
 
         Ok(true)
+    }
+}
+
+/// #605 against a real Postgres: run with
+/// `TEST_DATABASE_URL=postgres://… cargo test -p orchestrator-be -- --ignored postgres_`.
+/// The in-memory repository covers the same rules in every run; this exercises the SQL itself.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::proposals::OWN_PAIR_EXISTS;
+
+    const COMMIT_A: &str = "aa00000000000000000000000000000000000000000000000000000000000000";
+    const REVEAL_A: &str = "aa11111111111111111111111111111111111111111111111111111111111111";
+    const COMMIT_B: &str = "bb00000000000000000000000000000000000000000000000000000000000000";
+    const REVEAL_B: &str = "bb11111111111111111111111111111111111111111111111111111111111111";
+    const COMMIT_C: &str = "cc00000000000000000000000000000000000000000000000000000000000000";
+    const REVEAL_C: &str = "cc11111111111111111111111111111111111111111111111111111111111111";
+    const SIGNER_A: &str = "02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const SIGNER_B: &str = "03bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    async fn repo() -> Option<PostgresProposalRepository> {
+        let url = std::env::var("TEST_DATABASE_URL").ok()?;
+        let pool = PgPool::connect(&url)
+            .await
+            .expect("connect TEST_DATABASE_URL");
+        sqlx::migrate!().run(&pool).await.expect("migrations");
+        Some(PostgresProposalRepository::new(pool))
+    }
+
+    fn attempt(signer: &str, commit: &str, reveal: &str) -> BroadcastAttempt {
+        BroadcastAttempt {
+            broadcaster_pubkey: Some(signer.to_string()),
+            commit_txid: commit.to_string(),
+            reveal_txid: reveal.to_string(),
+            created_at: Utc::now(),
+        }
+    }
+
+    /// An approved proposal whose claimer (signer A) reported its pair as sent.
+    async fn save_with_pair_of_a(repo: &PostgresProposalRepository) -> ActionId {
+        let nanos = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+        let action_id = ActionId(format!("pg-605-{nanos}"));
+        repo.save_proposal(Proposal {
+            action_id: action_id.clone(),
+            seq_no: u64::try_from(nanos).unwrap_or_default(),
+            authority: Authority::StrataAdmin,
+            status: ProposalStatus::Approved,
+            required_signatures: 2,
+            action_hex: "deadbeef".to_string(),
+            title: None,
+            signatures: vec![ProposalSignature {
+                signer_pubkey: SIGNER_A.to_string(),
+                signature_hex: "sig0".to_string(),
+            }],
+            broadcast_status: BroadcastStatus::CommitBroadcasted,
+            commit_txid: None,
+            reveal_txid: None,
+            broadcast_error: None,
+            target_action_id: None,
+            activation_height: None,
+            update_id_in_queue: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            broadcast_claimed_at: Some(Utc::now()),
+            broadcast_attempts: Vec::new(),
+        })
+        .await
+        .unwrap();
+        repo.update_reported_pair_status(
+            &action_id,
+            BroadcastStatus::RevealBroadcasted,
+            None,
+            Some(COMMIT_A),
+            Some(REVEAL_A),
+            None,
+            Some(attempt(SIGNER_A, COMMIT_A, REVEAL_A)),
+            &[],
+        )
+        .await
+        .unwrap();
+        action_id
+    }
+
+    fn reveals(proposal: &Proposal) -> Vec<&str> {
+        proposal
+            .broadcast_attempts
+            .iter()
+            .map(|attempt| attempt.reveal_txid.as_str())
+            .collect()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs TEST_DATABASE_URL"]
+    async fn postgres_registers_reports_and_confirms_pairs() {
+        let Some(repo) = repo().await else {
+            return;
+        };
+        let action_id = save_with_pair_of_a(&repo).await;
+
+        // Another signer's pair becomes the tracked one; a retry of it changes nothing.
+        let registered = repo
+            .register_additional_pair(&action_id, attempt(SIGNER_B, COMMIT_B, REVEAL_B), &[])
+            .await
+            .unwrap();
+        assert_eq!(registered.reveal_txid.as_deref(), Some(REVEAL_B));
+        assert_eq!(
+            registered.broadcast_status,
+            BroadcastStatus::CommitBroadcasted
+        );
+        assert_eq!(reveals(&registered), [REVEAL_A, REVEAL_B]);
+        let again = repo
+            .register_additional_pair(&action_id, attempt(SIGNER_B, COMMIT_B, REVEAL_B), &[])
+            .await
+            .unwrap();
+        assert_eq!(again.broadcast_attempts, registered.broadcast_attempts);
+
+        // A second pair of their own is refused, unless the earlier one is nowhere.
+        let err = repo
+            .register_additional_pair(&action_id, attempt(SIGNER_A, COMMIT_C, REVEAL_C), &[])
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Conflict(ref m) if m == OWN_PAIR_EXISTS),
+            "{err:?}"
+        );
+
+        // A report about the replaced pair does not move the row.
+        let after = repo
+            .update_reported_pair_status(
+                &action_id,
+                BroadcastStatus::Failed,
+                None,
+                Some(COMMIT_A),
+                Some(REVEAL_A),
+                Some("dropped"),
+                Some(attempt(SIGNER_A, COMMIT_A, REVEAL_A)),
+                &[],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_B));
+        assert!(after.broadcast_error.is_none());
+        let after = repo
+            .update_reported_pair_status(
+                &action_id,
+                BroadcastStatus::RevealBroadcasted,
+                None,
+                Some(COMMIT_C),
+                Some(REVEAL_C),
+                None,
+                Some(attempt(SIGNER_A, COMMIT_C, REVEAL_C)),
+                &[],
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        // The row stays on B; the reported pair is listed beside it.
+        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_B));
+        assert_eq!(reveals(&after), [REVEAL_A, REVEAL_B, REVEAL_C]);
+
+        // The listing carries every pair.
+        let listed = repo
+            .list_by_status(Authority::StrataAdmin, Some(ProposalStatus::Approved))
+            .await
+            .unwrap();
+        let mine = listed
+            .iter()
+            .find(|proposal| proposal.action_id == action_id)
+            .expect("listed");
+        assert_eq!(reveals(mine), [REVEAL_A, REVEAL_B, REVEAL_C]);
+
+        // A confirmation decided against a row that moved on does not apply; one that did, does.
+        let stale = repo
+            .confirm_tracked_reveal(&action_id, Some(REVEAL_A), COMMIT_A, REVEAL_A)
+            .await
+            .unwrap();
+        assert!(stale.is_none());
+        let confirmed = repo
+            .confirm_tracked_reveal(
+                &action_id,
+                Some(&REVEAL_B.to_uppercase()),
+                &COMMIT_A.to_uppercase(),
+                &REVEAL_A.to_uppercase(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
+        assert_eq!(confirmed.commit_txid.as_deref(), Some(COMMIT_A));
+        assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_A));
+
+        // Once confirmed, nothing is registered beside it.
+        let err = repo
+            .register_additional_pair(&action_id, attempt(SIGNER_A, COMMIT_C, REVEAL_C), &[])
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Conflict(_)), "{err:?}");
+    }
+
+    /// A `failed` report for the tracked pair goes back to an earlier pair the node still has, and
+    /// is marked `failed` when none is left.
+    #[tokio::test]
+    #[ignore = "needs TEST_DATABASE_URL"]
+    async fn postgres_a_failed_pair_falls_back_only_to_a_live_one() {
+        let Some(repo) = repo().await else {
+            return;
+        };
+        let action_id = save_with_pair_of_a(&repo).await;
+        repo.register_additional_pair(&action_id, attempt(SIGNER_B, COMMIT_B, REVEAL_B), &[])
+            .await
+            .unwrap();
+        let fail = |commit, reveal, live: Vec<String>| {
+            let repo = &repo;
+            let action_id = &action_id;
+            async move {
+                repo.update_reported_pair_status(
+                    action_id,
+                    BroadcastStatus::Failed,
+                    None,
+                    Some(commit),
+                    Some(reveal),
+                    Some("rejected"),
+                    None,
+                    &live,
+                )
+                .await
+                .unwrap()
+                .unwrap()
+            }
+        };
+
+        let back = fail(COMMIT_B, REVEAL_B, vec![REVEAL_A.to_string()]).await;
+        assert_eq!(back.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert_eq!(back.reveal_txid.as_deref(), Some(REVEAL_A));
+        assert!(back.broadcast_error.is_none());
+
+        let failed = fail(COMMIT_A, REVEAL_A, Vec::new()).await;
+        assert_eq!(failed.broadcast_status, BroadcastStatus::Failed);
+        assert_eq!(failed.reveal_txid.as_deref(), Some(REVEAL_A));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs TEST_DATABASE_URL"]
+    async fn postgres_lets_a_signer_replace_a_pair_that_is_nowhere() {
+        let Some(repo) = repo().await else {
+            return;
+        };
+        let action_id = save_with_pair_of_a(&repo).await;
+        repo.register_additional_pair(&action_id, attempt(SIGNER_B, COMMIT_B, REVEAL_B), &[])
+            .await
+            .unwrap();
+
+        let replaced = repo
+            .register_additional_pair(
+                &action_id,
+                attempt(SIGNER_A, COMMIT_C, REVEAL_C),
+                &[REVEAL_A.to_string()],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(replaced.reveal_txid.as_deref(), Some(REVEAL_C));
+        assert_eq!(reveals(&replaced), [REVEAL_A, REVEAL_B, REVEAL_C]);
     }
 }

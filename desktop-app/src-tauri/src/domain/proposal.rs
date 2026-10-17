@@ -53,6 +53,21 @@ pub struct Proposal {
     /// better than one computed against a window we cannot know.
     #[serde(default)]
     pub expires_at: Option<i64>,
+    /// Every commit + reveal pair registered for the proposal, oldest first (#605). `None` from a
+    /// backend that predates the field: it cannot register another pair, so none is offered.
+    #[serde(default)]
+    pub broadcast_attempts: Option<Vec<BroadcastAttempt>>,
+}
+
+/// One commit + reveal pair sent for a proposal (#605). The ASM acts on whichever is mined first.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct BroadcastAttempt {
+    /// The signer whose session registered the pair; `None` for pairs that predate #605.
+    pub broadcaster_pubkey: Option<String>,
+    pub commit_txid: String,
+    pub reveal_txid: String,
+    /// Unix epoch milliseconds.
+    pub created_at: i64,
 }
 
 /// A signature attached to a proposal.

@@ -104,6 +104,13 @@ pub struct ReportBroadcastProgressRequest {
     pub broadcast_error: Option<String>,
 }
 
+/// A signer's own commit + reveal pair, registered beside the one in flight (#605).
+#[derive(Debug, Clone, Serialize)]
+pub struct RegisterBroadcastAttemptRequest {
+    pub commit_txid: String,
+    pub reveal_txid: String,
+}
+
 /// Abstracts the orchestrator HTTP API.
 #[async_trait::async_trait]
 pub trait OrchestratorClient: Send + Sync {
@@ -159,6 +166,19 @@ pub trait OrchestratorClient: Send + Sync {
 
     /// Claim broadcast coordination slot before desktop submits to Bitcoin (P-066).
     async fn claim_broadcast(&self, action_id: &str) -> Result<Proposal, OrchestratorError>;
+
+    /// Whether this signer may register their own pair now (#605), asked before the device signs
+    /// a commit. Answers like the registration: `409` with the orchestrator's refusal.
+    async fn check_broadcast_attempt(&self, action_id: &str)
+        -> Result<Proposal, OrchestratorError>;
+
+    /// Register this signer's own commit + reveal pair beside the one in flight, before it is
+    /// broadcast (#605). The row then tracks the new pair.
+    async fn register_broadcast_attempt(
+        &self,
+        action_id: &str,
+        request: RegisterBroadcastAttemptRequest,
+    ) -> Result<Proposal, OrchestratorError>;
 
     /// Report broadcast sub-status after local Bitcoin steps (P-066).
     async fn report_broadcast_progress(

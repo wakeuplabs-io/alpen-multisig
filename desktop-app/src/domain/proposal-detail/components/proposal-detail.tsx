@@ -16,7 +16,8 @@ import { deriveProposalActions } from '@/domain/proposal-detail/model/derive-pro
 import { authorityDisplayName } from '@/lib/authority-label'
 import { inferProposalTypeLabel } from '@/lib/proposal-type-label'
 import { PROPOSAL_STATUS_STYLE, proposalDisplayStatus, type DisplayStatus } from '@/lib/proposal-status'
-import { proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
+import { canSendAdditionalPair, proposalSendState, showsSendButton, sendButtonLabel } from '@/lib/proposal-send-state'
+import { describeBroadcastPairs } from '@/domain/proposal-detail/model/broadcast-pairs'
 import { harborFrozeDestination } from '@/lib/safe-harbor-redundancy'
 
 type Props = {
@@ -30,6 +31,10 @@ type Props = {
 	deviceDisplay?: DeviceSigningDisplay
 	onSign: () => void
 	onBroadcast: () => void
+	/** Send this signer's own commit + reveal beside the pair in flight (#605). Omitted where there is no row. */
+	onSendAdditionalPair?: () => void
+	/** Whether this desktop still keeps a bundle for the proposal; `null` when unknown (#605). */
+	holdsBundle?: boolean | null
 	onPasteSignatures?: (sigs: PastedSignature[], broadcastState: ImportBroadcastState) => void
 	onManualExecute?: () => void
 }
@@ -87,6 +92,8 @@ export function ProposalDetail({
 	deviceDisplay,
 	onSign,
 	onBroadcast,
+	onSendAdditionalPair,
+	holdsBundle = null,
 	onPasteSignatures,
 	onManualExecute: _onManualExecute,
 }: Props) {
@@ -101,6 +108,9 @@ export function ProposalDetail({
 		harborFrozeDestination: harborFrozeDestination(proposal, decodedData.safeHarborActivated),
 	})
 	const lastChange = lastChangeLabel(proposal.updatedAtMs)
+	const offersAdditionalPair =
+		onSendAdditionalPair !== undefined && canSendAdditionalPair(proposal, signerPubkey, holdsBundle)
+	const broadcastPairs = describeBroadcastPairs(proposal, signerPubkey)
 
 	const displayStatus = proposalDisplayStatus(proposal)
 
@@ -198,8 +208,35 @@ export function ProposalDetail({
 				isPending={displayStatus === 'pending' && !hasQuorum}
 			/>
 
+			{/* ── Broadcast pairs ── more than one signer sent a commit + reveal (#605) */}
+			{broadcastPairs.length > 1 && (
+				<div
+					className="space-y-3 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white p-6 py-5 shadow-sm"
+					data-testid="e2e-detail-broadcast-pairs"
+				>
+					<SectionLabel>Commit + reveal pairs</SectionLabel>
+					<p className="m-0 text-label text-[#6b7280]">
+						The first reveal mined is the one the ASM acts on; the others are ignored.
+					</p>
+					{broadcastPairs.map((pair) => (
+						<div key={pair.revealTxid} className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
+							<div className="mb-1 flex items-center justify-between gap-3">
+								<span className="text-label font-medium text-[#111827]">Sent by {pair.sender}</span>
+								<span className="text-mono-sm font-medium text-[#6b7280]">{pair.state}</span>
+							</div>
+							<p className="m-0 truncate font-mono text-label text-[#111827]" title={pair.commitTxid}>
+								Commit {pair.commitTxid}
+							</p>
+							<p className="m-0 truncate font-mono text-label text-[#111827]" title={pair.revealTxid}>
+								Reveal {pair.revealTxid}
+							</p>
+						</div>
+					))}
+				</div>
+			)}
+
 			{/* ── Broadcast TXIDs ── */}
-			{(proposal.commitTxid ?? proposal.revealTxid) && (
+			{broadcastPairs.length <= 1 && (proposal.commitTxid ?? proposal.revealTxid) && (
 				<div className="space-y-4 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white p-6 py-5 shadow-sm">
 					{proposal.commitTxid && (
 						<div>
@@ -267,6 +304,19 @@ export function ProposalDetail({
 							<p className="m-0 text-body-sm font-medium text-[#111827]">{sendState.label}</p>
 							<p className="m-0 mt-1 text-label text-[#6b7280]">{sendState.detail}</p>
 							{lastChange !== null && <p className="m-0 mt-1 text-label text-[#9ca3af]">{lastChange}</p>}
+						</button>
+					)}
+					{/* A pair can sit unconfirmed for a long time; any signer who has not sent one can
+					    send their own beside it — whichever reveal is mined first wins (#605). */}
+					{offersAdditionalPair && (
+						<button
+							type="button"
+							data-testid="e2e-detail-send-additional-pair"
+							className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#111827] bg-white px-4 py-2.5 text-body font-medium text-[#111827] transition hover:bg-[#f9fafb]"
+							onClick={onSendAdditionalPair}
+						>
+							<SendIcon width={14} height={14} />
+							Send your own commit + reveal
 						</button>
 					)}
 					{(sendState.kind === 'confirmed' || sendState.kind === 'superseded') && (
