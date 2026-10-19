@@ -10,8 +10,8 @@ use crate::domain::proposal::{
 };
 use crate::error::AppError;
 use crate::infrastructure::asm_role_membership::{
-    last_seqno_for_authority, lock_period_for_action, role_around_block, threshold_for_authority,
-    update_id_in_queue_for_action, RoleAtBlock,
+    last_seqno_for_authority, lock_period_for_action, threshold_for_authority,
+    update_id_in_queue_for_action,
 };
 use crate::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 use chrono::{DateTime, Utc};
@@ -477,10 +477,6 @@ pub(crate) const NO_PAIR_IN_FLIGHT: &str =
 /// Conflict text when the caller already registered a pair for this proposal (#605).
 pub(crate) const OWN_PAIR_EXISTS: &str = "you already sent a commit and reveal for this proposal";
 
-/// Conflict text when the pair being registered is already listed under another signer (#605).
-pub(crate) const PAIR_ALREADY_LISTED: &str =
-    "this commit and reveal is already listed for this proposal";
-
 /// Conflict text when the caller already listed [`MAX_PAIRS_PER_SIGNER`] pairs (#605).
 pub(crate) const PAIR_LIMIT_REACHED: &str =
     "you already sent the most commit and reveal pairs allowed for this proposal";
@@ -531,65 +527,6 @@ pub(crate) fn reports_tracked_pair(
         (Some(reported), Some(tracked)) => reported.eq_ignore_ascii_case(tracked),
         (None, Some(_)) => false,
     }
-}
-
-/// What a desktop's report does, decided by both repositories under their lock (#605).
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ReportEffect {
-    /// The report moves the row: status, txids, error.
-    pub moves_row: bool,
-    /// The report's pair is added to the listed pairs.
-    pub lists_pair: bool,
-}
-
-/// What a report naming `reported_reveal` does to `current` (#605).
-///
-/// It moves the row only when it names the pair the row tracks (or tags an empty claim), the row
-/// is not confirmed already — a confirmed pair is the one the ASM executed, and a `failed` or an
-/// earlier status would put a loser in its place — and the proposal is still approved, unless the
-/// report asks for a proposal status. It does not mark a `canceled` target `enacted`: a cancel
-/// that landed during the report already wrote that, and putting `enacted` back leaves both rows
-/// where no later read applies the cancel. Its pair is listed whenever the proposal is approved or
-/// superseded, even beside the tracked one: a pair sent by the manual fallback and imported later
-/// may be the one the ASM executed, and the reconcile counts only a reveal it did. A pair that
-/// would take its signer
-/// past [`MAX_PAIRS_PER_SIGNER`] is refused when the report would move the row (a
-/// pre-registration), and otherwise just not listed.
-pub(crate) fn report_effect(
-    current: &Proposal,
-    reported_reveal: Option<&str>,
-    status: BroadcastStatus,
-    proposal_status: Option<ProposalStatus>,
-    attempt: Option<&BroadcastAttempt>,
-) -> Result<ReportEffect, &'static str> {
-    let approved = current.status == ProposalStatus::Approved;
-    let undoes_a_cancel = current.status == ProposalStatus::Canceled
-        && proposal_status == Some(ProposalStatus::Enacted);
-    let settled = (current.broadcast_status == BroadcastStatus::RevealConfirmed
-        && status != BroadcastStatus::RevealConfirmed)
-        || (!approved && proposal_status.is_none())
-        || undoes_a_cancel;
-    let moves_row =
-        reports_tracked_pair(reported_reveal, current.reveal_txid.as_deref()) && !settled;
-    // A superseded row still lists a pair. An immediate action can be retired before its
-    // executed reveal is imported; the import is what brings that reveal back.
-    let lists_pair = match attempt {
-        Some(attempt) if approved || current.status == ProposalStatus::Superseded => {
-            if exceeds_pair_limit(current, attempt) {
-                if moves_row {
-                    return Err(PAIR_LIMIT_REACHED);
-                }
-                false
-            } else {
-                true
-            }
-        }
-        _ => false,
-    };
-    Ok(ReportEffect {
-        moves_row,
-        lists_pair,
-    })
 }
 
 /// Whether the row still carries the reveal a reconcile observed (#605). Either side moving on
@@ -661,13 +598,10 @@ pub(crate) fn decide_additional_pair(
             .iter()
             .any(|reveal| reveal.eq_ignore_ascii_case(&kept.reveal_txid))
     };
-    if proposal.broadcast_attempts.iter().any(same_reveal) {
-        return Err(PAIR_ALREADY_LISTED);
-    }
     if proposal
         .broadcast_attempts
         .iter()
-        .any(|kept| same_signer(kept) && !given_up(kept))
+        .any(|kept| (same_signer(kept) && !given_up(kept)) || same_reveal(kept))
     {
         return Err(OWN_PAIR_EXISTS);
     }
@@ -680,8 +614,7 @@ fn tx_nowhere(result: &Result<u64, AppError>) -> bool {
     match result {
         Err(AppError::BadRequest(message)) => {
             let message = message.to_ascii_lowercase();
-            (message.contains("no such mempool or blockchain transaction")
-                || message.contains("genesis block coinbase"))
+            message.contains("no such mempool or blockchain transaction")
                 && !message.contains("being indexed")
         }
         _ => false,
@@ -714,10 +647,9 @@ async fn abandoned_pairs_of(
         .collect()
 }
 
-/// The reveal txids of the listed pairs that may still be on their way (#605): every pair except
-/// one whose commit the node answers is nowhere — neither in its mempool nor in a block. A node
-/// that could not answer (a timeout, an index still syncing) does not make a pair dead: marking the
-/// row `failed` beside a live pair would stop its watchers and reopen the authority's claim gate.
+/// The reveal txids of the listed pairs whose commit the node has: in its mempool or in a block
+/// (#605). A pair whose commit is nowhere, or that the node could not place, is not counted: it
+/// cannot be shown as the pair in flight.
 async fn live_pairs(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> Vec<String> {
     let lookups = proposal
         .broadcast_attempts
@@ -727,7 +659,12 @@ async fn live_pairs(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> V
             let lookup = btc_client
                 .get_block_height_for_txid(&kept.commit_txid)
                 .await;
-            (!tx_nowhere(&lookup)).then(|| kept.reveal_txid.clone())
+            let live = match lookup {
+                Ok(_) => true,
+                Err(AppError::BadRequest(message)) => message.contains("not yet confirmed"),
+                Err(_) => false,
+            };
+            live.then(|| kept.reveal_txid.clone())
         });
     futures::future::join_all(lookups)
         .await
@@ -855,7 +792,6 @@ enum RevealHeight {
     Mined {
         height: u64,
         tx: Option<bitcoin::Transaction>,
-        block: Option<crate::infrastructure::bitcoin_rpc::MinedBlock>,
     },
     Unmined,
     /// The node keeps no transaction index, so it cannot find a mined transaction at all.
@@ -872,7 +808,6 @@ fn classify_reveal_height(
         Ok(mined) => RevealHeight::Mined {
             height: mined.height,
             tx: mined.tx,
-            block: mined.block,
         },
         Err(AppError::BadRequest(message)) if reveal_not_in_a_block(&message) => {
             RevealHeight::Unmined
@@ -891,106 +826,88 @@ fn node_has_no_txindex(message: &str) -> bool {
     message.contains("-txindex") && !message.contains("being indexed")
 }
 
-/// The signed payload a mined `reveal` carries for `proposal` (#605), read the way the ASM routes
-/// and parses it: its first output carries the SPS-50 tag of the administration subprotocol under
-/// the network's `magic` bytes (the ASM's tx filter; without it the ASM never sees the
-/// transaction), and its envelope decodes (`strata_asm_txs_admin::parser::parse_tx`) to this
-/// proposal's sequence number and action. Like the ASM, it does not ask which commit the reveal
-/// spends: the reconcile records the one it does.
-/// Whether the ASM *accepted* it is [`asm_executed`]'s call.
-fn proposal_payload(reveal: &bitcoin::Transaction, proposal: &Proposal, magic: [u8; 4]) -> Payload {
-    use ssz::{Decode, Encode};
-    let carried = (|| {
-        let leaf = reveal.input.first()?.witness.taproot_leaf_script()?;
-        let payload =
-            strata_l1_envelope_fmt::parser::parse_envelope_payload(&leaf.script.into()).ok()?;
-        let signed = strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(&payload).ok()?;
-        let action = hex::decode(&proposal.action_hex).ok()?;
-        (signed.seqno == proposal.seq_no && signed.action.as_ssz_bytes() == action)
-            .then_some(signed)
-    })();
-    let Some(signed) = carried else {
-        return Payload::Foreign;
-    };
-    let tagged = strata_l1_txfmt::ParseConfig::new(strata_l1_txfmt::MagicBytes::new(magic))
-        .try_parse_tx(reveal)
-        .is_ok_and(|tag| {
-            tag.subproto_id() == strata_asm_txs_admin::constants::ADMINISTRATION_SUBPROTOCOL_ID
-        });
-    if tagged {
-        Payload::Carries(signed)
-    } else {
-        Payload::Untagged
-    }
-}
-
-/// What a mined reveal carries, as [`proposal_payload`] reads it (#605).
-#[derive(Debug)]
-enum Payload {
-    /// This proposal's signed payload, tagged for the ASM.
-    Carries(strata_asm_txs_admin::parser::SignedPayload),
-    /// This proposal's payload without the administration tag under the configured magic bytes:
-    /// either a transaction the ASM never saw, or `BITCOIN_MAGIC_BYTES_HEX` set to another network's.
-    /// The orchestrator cannot tell which, so it does not decide on it.
-    Untagged,
-    /// Not this proposal's payload at all.
-    Foreign,
-}
-
-/// Whether the ASM executed `signed`, carried by a reveal mined at `height`, judged from the role
-/// that signs it as the ASM's state stood `before` that block and `after` it (#605).
-///
-/// Before: the payload passes the ASM's own `verify_action_signature` — its sequence number above
-/// the role's `last_seqno` and within `max_seqno_gap` of it, its signatures valid against the role's
-/// configuration of that moment (keys in index order, threshold). After: the role's `last_seqno`
-/// reached it, and the action left the trace the ASM leaves — an update with a confirmation depth
-/// queued to activate at `height + depth`; a cancel's target, queued before, gone. A reveal the ASM
-/// rejected for its window or its signatures leaves none of it. The two states cannot show what
-/// happened *inside* the block: another action of the same role in it — one that took the sequence
-/// number first, or a queued update that matured first — can lend a rejected reveal its effect (the
-/// spec's accepted limits).
-fn asm_executed(
-    before: &RoleAtBlock,
-    after: &RoleAtBlock,
-    signed: &strata_asm_txs_admin::parser::SignedPayload,
-    height: u64,
+/// Whether a mined `reveal` is a commit + reveal of `proposal` (#605): it spends `commit_txid`,
+/// and its envelope carries this proposal's sequence number and action, signed by a quorum of its
+/// approvers. Read the way the ASM reads it (`strata_asm_txs_admin::parser::parse_tx`).
+/// Registration takes any txid, so this is what keeps an unrelated mined transaction — or one
+/// carrying this action without the signatures the ASM needs — from becoming the pair the
+/// reconcile confirms.
+fn reveal_carries_proposal(
+    reveal: &bitcoin::Transaction,
+    commit_txid: &str,
+    proposal: &Proposal,
 ) -> bool {
-    use strata_asm_txs_admin::actions::MultisigAction;
-    let seq_no = signed.seqno;
-    let in_window = seq_no > before.last_seqno
-        && seq_no <= before.last_seqno + u64::from(before.max_seqno_gap.get());
-    if !in_window || after.last_seqno < seq_no {
+    use ssz::{Decode, Encode};
+    let Some(input) = reveal.input.first() else {
         return false;
-    }
-    let sighash =
-        strata_asm_txs_admin::signing_message::SigningMessage::for_action(&signed.action, seq_no)
-            .compute_sighash()
-            .0;
-    if strata_crypto::threshold_signature::verify_threshold_signatures(
-        &before.config,
-        signed.signatures.signatures(),
-        &sighash,
-    )
-    .is_err()
+    };
+    if !input
+        .previous_output
+        .txid
+        .to_string()
+        .eq_ignore_ascii_case(commit_txid)
     {
         return false;
     }
-    match &signed.action {
-        MultisigAction::Update(update) => match before.queue_depth {
-            Some(depth) => after.queued.iter().any(|(_, queued, activation)| {
-                queued == update && *activation == height + u64::from(depth)
-            }),
-            None => true,
-        },
-        MultisigAction::Cancel(cancel) => {
-            let target = *cancel.target_id();
-            before
-                .queued
-                .iter()
-                .any(|(id, queued, _)| *id == target && queued == cancel.update())
-                && !after.queued.iter().any(|(id, _, _)| *id == target)
+    let Some(leaf) = input.witness.taproot_leaf_script() else {
+        return false;
+    };
+    let Ok(payload) = strata_l1_envelope_fmt::parser::parse_envelope_payload(&leaf.script.into())
+    else {
+        return false;
+    };
+    let Ok(signed) = strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(&payload) else {
+        return false;
+    };
+    let Ok(action) = hex::decode(&proposal.action_hex) else {
+        return false;
+    };
+    signed.seqno == proposal.seq_no
+        && signed.action.as_ssz_bytes() == action
+        && signed_by_quorum(&signed, proposal)
+}
+
+/// Whether the payload's signatures include at least `required_signatures` distinct approvers of
+/// `proposal`, each a valid signature over the payload's own sighash (#605). Every signature is
+/// checked with the ASM's own verifier against one approver's key at a time, so this needs neither
+/// the role's key order nor an ASM call; the approvers were checked against the role when they
+/// signed.
+fn signed_by_quorum(
+    signed: &strata_asm_txs_admin::parser::SignedPayload,
+    proposal: &Proposal,
+) -> bool {
+    use strata_crypto::keys::compressed::CompressedPublicKey;
+    use strata_crypto::threshold_signature::{
+        verify_threshold_signatures, IndexedSignature, ThresholdConfig,
+    };
+    let sighash = strata_asm_txs_admin::signing_message::SigningMessage::for_action(
+        &signed.action,
+        signed.seqno,
+    )
+    .compute_sighash()
+    .0;
+    let approvers: Vec<ThresholdConfig> = proposal
+        .signatures
+        .iter()
+        .filter_map(|approval| hex::decode(&approval.signer_pubkey).ok())
+        .filter_map(|key| CompressedPublicKey::from_slice(&key).ok())
+        .filter_map(|key| ThresholdConfig::try_new(vec![key], std::num::NonZero::<u8>::MIN).ok())
+        .collect();
+    let mut signed_by = vec![false; approvers.len()];
+    for signature in signed.signatures.signatures() {
+        let mut bytes = [0u8; 65];
+        bytes[0] = signature.recovery_id();
+        bytes[1..33].copy_from_slice(signature.r());
+        bytes[33..].copy_from_slice(signature.s());
+        let alone = [IndexedSignature::new(0, bytes)];
+        if let Some(approver) = approvers
+            .iter()
+            .position(|key| verify_threshold_signatures(key, &alone, &sighash).is_ok())
+        {
+            signed_by[approver] = true;
         }
     }
+    signed_by.iter().filter(|signed| **signed).count() >= usize::from(proposal.required_signatures)
 }
 
 /// What a progress report writes. A `failed` report for the pair the row tracks puts the row back
@@ -1055,7 +972,6 @@ fn reveal_not_in_a_block(message: &str) -> bool {
     message.contains("not yet confirmed")
         || message.contains("no such mempool or blockchain transaction")
         || message.contains("no such transaction")
-        || message.contains("genesis block coinbase")
 }
 
 /// What the node says about every pair of a proposal (#605).
@@ -1075,11 +991,7 @@ enum MinedPair {
 /// the proposal (#605): the lowest block height, and within one block the reveal the block lists
 /// first — the one the ASM executed. A mined reveal that is not a commit + reveal of this proposal
 /// does not count, however low its block. The lookups run side by side.
-async fn first_mined_pair(
-    proposal: &Proposal,
-    btc_client: &dyn BitcoinRpcClient,
-    asm_rpc_url: &str,
-) -> MinedPair {
+async fn first_mined_pair(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> MinedPair {
     let tracked = proposal.reveal_txid.as_deref();
     // A malformed txid (stored before reports were validated) can never be mined, and its failing
     // lookup would hold back every other pair; this includes one on the row itself.
@@ -1108,112 +1020,47 @@ async fn first_mined_pair(
     });
     let answers = futures::future::join_all(lookups).await;
 
-    // Reveals the ASM executed, judged from its own state; and reveals a test double reports mined
-    // without the transaction, which cannot be judged.
-    let mut executed: Vec<(u64, String, &str)> = Vec::new();
-    let mut unjudged: Vec<(u64, String, &str)> = Vec::new();
-    // Mined reveals whose block we know but whose ASM judgment failed. One of them may be the
-    // transaction the ASM actually ran: before and after the block are the same for every reveal
-    // in it, so a later one would also look executed.
-    let mut unjudged_heights: Vec<u64> = Vec::new();
-    let mut unknown = false;
+    let mut mined: Vec<(u64, String, &str)> = Vec::new();
     let mut not_indexed = false;
     for ((commit, reveal), answer) in candidates.iter().zip(answers) {
-        let (height, tx, block) = match answer {
-            RevealHeight::Mined { height, tx, block } => (height, tx, block),
-            RevealHeight::Unmined => continue,
-            RevealHeight::NotIndexed => {
-                not_indexed = true;
-                continue;
+        match answer {
+            RevealHeight::Mined { height, tx } => {
+                // A row tagged with its reveal only (a partial import) takes the commit the reveal
+                // spends. With neither, the pair cannot be checked, nor confirmed.
+                let commit = match (commit, tx.as_ref().and_then(|tx| tx.input.first())) {
+                    (Some(commit), _) => commit.to_string(),
+                    (None, Some(input)) => input.previous_output.txid.to_string(),
+                    (None, None) => continue,
+                };
+                // `None` only from a test double that reads no transaction.
+                if tx
+                    .as_ref()
+                    .is_some_and(|tx| !reveal_carries_proposal(tx, &commit, proposal))
+                {
+                    tracing::warn!(
+                        action_id = %proposal.action_id.0,
+                        reveal,
+                        "a listed reveal is mined but does not carry this proposal; ignored"
+                    );
+                    continue;
+                }
+                mined.push((height, commit, reveal));
             }
-            RevealHeight::Unknown => {
-                unknown = true;
-                continue;
-            }
-        };
-        // The commit is the one the mined reveal spends, whatever was listed with it — a row tagged
-        // with its reveal only (a partial import) included. A test double that reads no
-        // transaction takes the listed one.
-        let commit = match (tx.as_ref().and_then(|tx| tx.input.first()), commit) {
-            (Some(input), _) => input.previous_output.txid.to_string(),
-            (None, Some(commit)) => commit.to_string(),
-            (None, None) => continue,
-        };
-        let Some(tx) = tx else {
-            unjudged.push((height, commit, reveal));
-            continue;
-        };
-        let signed = match proposal_payload(&tx, proposal, btc_client.magic_bytes()) {
-            Payload::Carries(signed) => signed,
-            Payload::Foreign => continue,
-            Payload::Untagged => {
-                tracing::error!(
-                    action_id = %proposal.action_id.0,
-                    reveal,
-                    "a listed reveal carries this proposal but not the administration tag under \
-                     the configured magic bytes; check BITCOIN_MAGIC_BYTES_HEX"
-                );
-                unknown = true;
-                continue;
-            }
-        };
-        let Some(block) = block else {
-            unknown = true;
-            continue;
-        };
-        match role_around_block(
-            asm_rpc_url,
-            &signed.action,
-            signed.seqno,
-            height,
-            &block.hash,
-            &block.parent_hash,
-        )
-        .await
-        {
-            Ok(Some((before, after))) if asm_executed(&before, &after, &signed, height) => {
-                executed.push((height, commit, reveal));
-            }
-            Ok(Some(_)) => {
-                tracing::warn!(
-                    action_id = %proposal.action_id.0,
-                    reveal,
-                    "a listed reveal is mined but the ASM did not execute it; ignored"
-                );
-            }
-            // The ASM has not processed that block yet, or could not be asked. The height is
-            // known, so a reveal already judged in that same block must not win on this read.
-            Ok(None) => {
-                unknown = true;
-                unjudged_heights.push(height);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    action_id = %proposal.action_id.0,
-                    "reconcile: ASM state around the reveal's block unavailable: {e}"
-                );
-                unknown = true;
-                unjudged_heights.push(height);
-            }
+            RevealHeight::Unmined => {}
+            RevealHeight::NotIndexed => not_indexed = true,
+            RevealHeight::Unknown => return MinedPair::Unknown,
         }
     }
-
-    // The ASM executes one reveal per sequence number: one it did execute decides, whatever the
-    // node or the ASM could not say about the others. Without one, an open question is open.
-    let mined = if !executed.is_empty() {
-        executed
-    } else if unknown {
-        return MinedPair::Unknown;
-    } else if not_indexed {
-        return MinedPair::NotIndexed;
-    } else {
-        unjudged
-    };
     let Some(lowest) = mined.iter().map(|(height, _, _)| *height).min() else {
-        return MinedPair::None;
+        return if not_indexed {
+            MinedPair::NotIndexed
+        } else {
+            MinedPair::None
+        };
     };
-    if unjudged_heights.contains(&lowest) {
-        return MinedPair::Unknown;
+    // A pair the node cannot look up may have been mined lower than the one it found.
+    if not_indexed {
+        return MinedPair::NotIndexed;
     }
     let mut first: Vec<(String, &str)> = mined
         .into_iter()
@@ -1255,119 +1102,27 @@ async fn confirm_reveal_if_mined(
     btc_client: &dyn BitcoinRpcClient,
     asm_rpc_url: &str,
 ) -> Proposal {
-    try_confirm_reveal(repo, proposal, btc_client, asm_rpc_url)
-        .await
-        .proposal
-}
-
-/// Whether the node had seen every block the ASM has processed (#605): its tip read *before* the
-/// reveal lookups against the ASM's height read now, after them. The ASM only moves forward, so
-/// this covers every block it had when the caller read its sequence number; a node that caught up
-/// during the lookups does not pass for one that answered with those blocks.
-async fn node_caught_up_with_asm(
-    tip_before_lookups: Result<u64, AppError>,
-    asm_rpc_url: &str,
-) -> Result<bool, AppError> {
-    let tip = tip_before_lookups?;
-    let asm_height =
-        crate::infrastructure::asm_role_membership::asm_processed_height(asm_rpc_url).await?;
-    Ok(tip >= asm_height)
-}
-
-/// The proposal after [`confirm_reveal_if_mined`], and whether the node and the ASM answered
-/// everything it asked (#605). An inconclusive read — a lookup that failed, a block the ASM has not
-/// processed, a node without `-txindex` — must not let the same cycle retire the proposal: the
-/// reveal it could not judge may be the one that took the sequence number.
-struct RevealCheck {
-    proposal: Proposal,
-    inconclusive: bool,
-}
-
-async fn try_confirm_reveal(
-    repo: &dyn ProposalRepository,
-    proposal: Proposal,
-    btc_client: &dyn BitcoinRpcClient,
-    asm_rpc_url: &str,
-) -> RevealCheck {
-    let decided = |proposal| RevealCheck {
-        proposal,
-        inconclusive: false,
-    };
     // The desktop pre-registers both txids at `commit_broadcasted` before it broadcasts (#516),
     // so a row whose later reports never landed still carries the reveal txid to check. A `failed`
     // row keeps its txids too: if that reveal was mined, the `failed` was a mistake, and leaving it
     // would let the sweep below retire as Superseded a proposal whose own reveal used the seqno.
-    // A superseded row is judged too, whatever its broadcast status. An immediate action can be
-    // retired while it is still idle, and the import of the reveal that executed it is what
-    // brings the row back.
-    let in_flight = matches!(
+    if !matches!(
         proposal.broadcast_status,
         BroadcastStatus::CommitBroadcasted
             | BroadcastStatus::CommitConfirmed
             | BroadcastStatus::RevealBroadcasted
             | BroadcastStatus::Failed
-    );
-    if !in_flight && proposal.status != ProposalStatus::Superseded {
-        return decided(proposal);
+    ) {
+        return proposal;
     }
     let observed_reveal = proposal.reveal_txid.clone();
     // Name the winner's txids, so a pair registered after this read cannot be the one `COALESCE`
     // leaves in place. The write applies only while the row still tracks the reveal this read
     // observed: a pair registered in between is left for the next reconcile, which sees both
     // (#605).
-    // The node's tip before it is asked about the reveals: "not mined" below is an answer only if
-    // the node already had every block the ASM had processed by the time the caller read its
-    // sequence number.
-    let tip_before_lookups = btc_client.get_chain_tip().await;
-    let (commit_txid, reveal_txid) = match first_mined_pair(&proposal, btc_client, asm_rpc_url)
-        .await
-    {
-        MinedPair::First(commit_txid, reveal_txid) => (commit_txid, reveal_txid),
-        MinedPair::NotIndexed => {
-            tracing::warn!(
-                action_id = %proposal.action_id.0,
-                "the node keeps no transaction index, so no mined reveal can be verified; \
-                 restart bitcoind with -txindex=1"
-            );
-            return RevealCheck {
-                proposal,
-                inconclusive: true,
-            };
-        }
-        MinedPair::Unknown => {
-            return RevealCheck {
-                proposal,
-                inconclusive: true,
-            }
-        }
-        MinedPair::None => {
-            // "Not mined" is an answer only from a node that has seen every block the ASM has
-            // processed: one behind it would read an executed reveal as unmined, and the sweep
-            // would retire the proposal it carried.
-            return match node_caught_up_with_asm(tip_before_lookups, asm_rpc_url).await {
-                Ok(true) => decided(proposal),
-                Ok(false) => {
-                    tracing::warn!(
-                        action_id = %proposal.action_id.0,
-                        "the bitcoin node is behind the ASM; a reveal it does not see is left open"
-                    );
-                    RevealCheck {
-                        proposal,
-                        inconclusive: true,
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        action_id = %proposal.action_id.0,
-                        "reconcile: could not compare the node with the ASM: {e}"
-                    );
-                    RevealCheck {
-                        proposal,
-                        inconclusive: true,
-                    }
-                }
-            };
-        }
+    let MinedPair::First(commit_txid, reveal_txid) = first_mined_pair(&proposal, btc_client).await
+    else {
+        return proposal;
     };
     let updated = repo
         .confirm_tracked_reveal(
@@ -1382,22 +1137,15 @@ async fn try_confirm_reveal(
             if !updated.is_cancel() {
                 record_reveal_confirmed_facts(repo, &updated, btc_client, asm_rpc_url).await;
             }
-            decided(updated)
+            updated
         }
-        // The row moved on after this read; the next read decides.
-        Ok(None) => RevealCheck {
-            proposal,
-            inconclusive: true,
-        },
+        Ok(None) => proposal,
         Err(e) => {
             tracing::warn!(
                 action_id = %proposal.action_id.0,
                 "failed to persist reveal confirmation: {e}"
             );
-            RevealCheck {
-                proposal,
-                inconclusive: true,
-            }
+            proposal
         }
     }
 }
@@ -1437,16 +1185,10 @@ async fn live_last_seqno(asm_rpc_url: &str, authority: Authority) -> Option<u64>
 async fn supersede_if_seq_no_consumed(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
     proposal: &Proposal,
     last_seqno: Option<u64>,
 ) -> Result<(), AppError> {
     if last_seqno.is_none_or(|last| proposal.seq_no > last) {
-        return Ok(());
-    }
-    // A cancel is never queued, so an empty queue plus a consumed seqno is also what this cancel
-    // executing looks like when its pair was never listed. Leave it approved until a pair shows up.
-    if proposal.is_cancel() && proposal.broadcast_status == BroadcastStatus::Idle {
         return Ok(());
     }
     match update_id_in_queue_for_action(asm_rpc_url, &proposal.action_hex).await {
@@ -1460,20 +1202,20 @@ async fn supersede_if_seq_no_consumed(
             return Ok(());
         }
     }
-    // The queue read is another RPC, and a cancel mined during it leaves this same empty queue.
-    // Judged again here, with no lookup left between this and the write.
-    if cancel_blocks_target(repo, asm_rpc_url, btc_client, proposal).await? {
-        return Ok(());
-    }
     tracing::info!(
         action_id = %proposal.action_id.0,
         seq_no = proposal.seq_no,
         "superseding proposal: the role's sequence number has passed it"
     );
-    // Only while the row is still the one this read judged. A confirmation that landed in
-    // between keeps its pair; the next read decides.
-    repo.supersede_if_unchanged(&proposal.action_id, proposal.broadcast_status)
-        .await?;
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        proposal.broadcast_status,
+        Some(ProposalStatus::Superseded),
+        None,
+        None,
+        None,
+    )
+    .await?;
     Ok(())
 }
 
@@ -1487,220 +1229,26 @@ async fn bitcoin_tip_for_enactment(
     btc_client.get_chain_tip().await.map(Some)
 }
 
-/// What a cancel of this target means for the target's reconcile this cycle.
-#[derive(Debug, PartialEq, Eq)]
-enum CancelOfTarget {
-    /// No cancel, or one that has not reached the chain. The target is decided on its own.
-    None,
-    /// Its reveal is confirmed. It owns the target: neither activation nor retirement.
-    OnChain,
-    /// Still in flight, and this read could not judge its reveal. Neither retirement nor the
-    /// enacted write runs: a cancel leaves the same shape as enactment for a queued update whose
-    /// only trace is "sequence number consumed, gone from the queue". The activation height is
-    /// still stored, so the countdown is not what this hold stops.
-    Open,
-}
-
+/// Whether a cancel of this proposal already reached the chain, so the sweep must not decide the
+/// target's lifecycle this cycle.
+///
 /// A cancel that confirms takes its target out of the admin queue while the target's seqno is
 /// already consumed — the exact shape `supersede_if_seq_no_consumed` reads as "dead". Left alone,
-/// a cancelled Defcon 3 would land on `Superseded` instead of `Canceled`. A cancel confirmed
-/// later repairs that row (`enact_executed_cancel` accepts `superseded` too); judging it here is what
-/// keeps the target `approved` while the pair is already on the row. The other
+/// a cancelled Defcon 3 would land on `Superseded` instead of `Canceled`, and `enact_cancel` would
+/// then refuse (it requires an Approved target) and retire the cancel as `Expired`. The other
 /// ordering loses too: the cancel writes `Canceled`, and this sweep's copy — read before that
 /// write — puts the target back. Only the cancel decides a cancelled target.
 ///
 /// An `Expired` cancel is the case where the target enacted first, so it holds nothing up.
-///
-/// A cancel still in flight may already have executed: only the reconcile confirms it (#605), and
-/// the target can be read first. Its reveal is judged here. A read that cannot judge it (`Open`)
-/// holds the target the same way: the enacted write would be terminal, and the next read could
-/// not undo it.
-async fn cancel_of_target(
+async fn cancel_reached_chain(
     repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
     target_action_id: &ActionId,
-) -> Result<CancelOfTarget, AppError> {
-    let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
-        return Ok(CancelOfTarget::None);
-    };
-    // A superseded cancel can still be carrying the reveal that executed: the sweep retires the
-    // row before that pair is listed. Judge it here, or the target is enacted and this cancel is
-    // then expired.
-    let in_flight = matches!(
-        cancel.broadcast_status,
-        BroadcastStatus::CommitBroadcasted
-            | BroadcastStatus::CommitConfirmed
-            | BroadcastStatus::RevealBroadcasted
-            | BroadcastStatus::Failed
-    );
-    let cancel = if cancel.status == ProposalStatus::Approved
-        || (cancel.status == ProposalStatus::Superseded && in_flight)
-    {
-        let checked = try_confirm_reveal(repo, cancel, btc_client, asm_rpc_url).await;
-        if checked.inconclusive {
-            return Ok(CancelOfTarget::Open);
-        }
-        checked.proposal
-    } else {
-        cancel
-    };
-    // No pair on the row. The cancel may already have been broadcast manually, and for an
-    // EeStfVk — or a Defcon 3 whose harbor is on and whose tip has passed activation — that
-    // leaves the same ASM shape as enactment. Hold until a pair is listed or the cancel is
-    // judged. A reveal we looked up and found unmined is not this case.
-    if cancel.broadcast_status == BroadcastStatus::Idle
-        && matches!(
-            cancel.status,
-            ProposalStatus::Approved | ProposalStatus::Superseded
-        )
-    {
-        return Ok(CancelOfTarget::Open);
-    }
-    if cancel.broadcast_status == BroadcastStatus::RevealConfirmed
-        && cancel.status != ProposalStatus::Expired
-    {
-        Ok(CancelOfTarget::OnChain)
-    } else {
-        Ok(CancelOfTarget::None)
-    }
-}
-
-/// What [`enact_confirmed_cancel`] was able to decide.
-#[derive(PartialEq, Eq)]
-enum CancelWrite {
-    /// The cancel was applied, or this read could not decide. The caller must not expire it.
-    Done,
-    /// The ASM says this cancel did not execute.
-    DidNotExecute,
-}
-
-/// Enact a cancel whose reveal is already confirmed, when the ASM says it executed.
-///
-/// Called from the target's read: that read may be the only one that sees the cancel. A cancel the
-/// ASM does not show as executed is left for its own reconcile. `Ok(false)` from `enact_executed_cancel`
-/// means the target was no longer approved — expire the cancel only while it is still approved, so
-/// a second pass over a cancel this read just enacted does not mark it expired.
-async fn enact_confirmed_cancel(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
-    cancel: &Proposal,
-) -> Result<CancelWrite, AppError> {
-    if !matches!(
-        cancel.status,
-        ProposalStatus::Approved | ProposalStatus::Enacted
-    ) || cancel.broadcast_status != BroadcastStatus::RevealConfirmed
-    {
-        return Ok(CancelWrite::Done);
-    }
-    let bitcoin_tip = match bitcoin_tip_for_enactment(&cancel.action_hex, btc_client).await {
-        Ok(tip) => tip,
-        Err(e) => {
-            tracing::warn!(
-                action_id = %cancel.action_id.0,
-                "reconcile: bitcoin tip lookup failed for cancel: {e}"
-            );
-            return Ok(CancelWrite::Done);
-        }
-    };
-    let enacted = match crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
-        asm_rpc_url,
-        cancel.authority,
-        cancel.seq_no,
-        &cancel.action_hex,
-        cancel.activation_height,
-        bitcoin_tip,
-    )
-    .await
-    {
-        Ok(enacted) => enacted,
-        Err(e) => {
-            tracing::warn!(
-                action_id = %cancel.action_id.0,
-                "reconcile: ASM enactment check failed for cancel: {e}"
-            );
-            return Ok(CancelWrite::Done);
-        }
-    };
-    if !enacted {
-        return Ok(CancelWrite::DidNotExecute);
-    }
-    let Some(target_action_id) = &cancel.target_action_id else {
-        return Ok(CancelWrite::Done);
-    };
-    // Includes a target already marked `enacted`. The confirm that got us here passed
-    // `asm_executed`; a later sweep must not expire this cancel just because that write missed.
-    let applied = repo
-        .enact_executed_cancel(&cancel.action_id, target_action_id)
-        .await?;
-    if !applied {
-        expire_cancel_if_still_approved(repo, &cancel.action_id).await?;
-    }
-    Ok(CancelWrite::Done)
-}
-
-/// A cancel whose reveal just confirmed owns its target, including one this sweep already marked
-/// `enacted` from the shape a cancel leaves behind.
-async fn settle_confirmed_cancel(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
-    proposal: Proposal,
-) -> Result<Proposal, AppError> {
-    if proposal.is_cancel() && proposal.broadcast_status == BroadcastStatus::RevealConfirmed {
-        enact_confirmed_cancel(repo, asm_rpc_url, btc_client, &proposal).await?;
-        if let Some(reloaded) = repo.find_by_action_id(&proposal.action_id).await? {
-            return Ok(reloaded);
-        }
-    }
-    Ok(proposal)
-}
-
-/// The target enacted first, so the cancel is moot. The write matches only a row still
-/// `approved`: a concurrent read that already enacted this cancel is left in place.
-async fn expire_cancel_if_still_approved(
-    repo: &dyn ProposalRepository,
-    cancel_action_id: &ActionId,
-) -> Result<(), AppError> {
-    repo.expire_if_approved(cancel_action_id).await?;
-    Ok(())
-}
-
-/// `true` when a cancel owns this target, or its reveal could not be judged, so this read must not
-/// enact or supersede it.
-///
-/// Called again immediately before either write. A cancel whose reveal lands during the enactment
-/// lookups is caught there; the write itself still requires the row to be `approved`.
-async fn cancel_blocks_target(
-    repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
-    proposal: &Proposal,
 ) -> Result<bool, AppError> {
-    if proposal.is_cancel() {
+    let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
         return Ok(false);
-    }
-    let cancel = cancel_of_target(repo, asm_rpc_url, btc_client, &proposal.action_id).await?;
-    if cancel == CancelOfTarget::Open
-        && proposal.broadcast_status == BroadcastStatus::RevealConfirmed
-        && proposal.activation_height.is_none()
-    {
-        if let Err(e) =
-            compute_and_store_activation_height(proposal, repo, btc_client, asm_rpc_url).await
-        {
-            tracing::warn!(
-                action_id = %proposal.action_id.0,
-                "reconcile: activation height still unavailable while its cancel is unjudged: {e}"
-            );
-        }
-    }
-    if cancel == CancelOfTarget::OnChain {
-        if let Some(cancel_proposal) = repo.find_cancel_for_target(&proposal.action_id).await? {
-            enact_confirmed_cancel(repo, asm_rpc_url, btc_client, &cancel_proposal).await?;
-        }
-    }
-    Ok(cancel != CancelOfTarget::None)
+    };
+    Ok(cancel.broadcast_status == BroadcastStatus::RevealConfirmed
+        && cancel.status != ProposalStatus::Expired)
 }
 
 /// Advance one approved proposal: notice a reveal that confirmed, decide enactment, or retire it.
@@ -1721,17 +1269,10 @@ async fn reconcile_one(
     // First: did its reveal confirm while nobody was watching? Both the enactment check and the
     // sweep below read the broadcast status, so a missed confirmation would make an executed
     // proposal look dead.
-    let checked = try_confirm_reveal(repo, proposal, btc_client, asm_rpc_url).await;
-    // A reveal that could not be judged may be the one that took the sequence number: neither
-    // decide enactment nor retire the proposal on this read (#605).
-    if checked.inconclusive {
-        return Ok(());
-    }
-    let proposal = checked.proposal;
+    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
 
-    // A cancel on chain owns this proposal. One whose reveal this read could not judge holds it
-    // too. Judged again before the write below.
-    if cancel_blocks_target(repo, asm_rpc_url, btc_client, &proposal).await? {
+    // A cancel that is already on chain owns this proposal's outcome — see `cancel_reached_chain`.
+    if !proposal.is_cancel() && cancel_reached_chain(repo, &proposal.action_id).await? {
         return Ok(());
     }
 
@@ -1774,33 +1315,37 @@ async fn reconcile_one(
     };
 
     if !enacted {
-        if cancel_blocks_target(repo, asm_rpc_url, btc_client, &proposal).await? {
-            return Ok(());
-        }
-        return supersede_if_seq_no_consumed(repo, asm_rpc_url, btc_client, &proposal, last_seqno)
-            .await;
+        return supersede_if_seq_no_consumed(repo, asm_rpc_url, &proposal, last_seqno).await;
     }
 
     if let Some(target_action_id) = &proposal.target_action_id {
-        // The reveal is already confirmed, so this cancel passed `asm_executed` on the read that
-        // confirmed it. An enacted target is the shape that confirm is allowed to correct; expiring
-        // the cancel here would drop the reveal.
         let applied = repo
-            .enact_executed_cancel(&proposal.action_id, target_action_id)
+            .enact_cancel(&proposal.action_id, target_action_id)
             .await?;
         if !applied {
-            expire_cancel_if_still_approved(repo, &proposal.action_id).await?;
+            repo.update_broadcast_status(
+                &proposal.action_id,
+                BroadcastStatus::RevealConfirmed,
+                Some(ProposalStatus::Expired),
+                None,
+                None,
+                None,
+            )
+            .await?;
         }
         return Ok(());
     }
 
-    if cancel_blocks_target(repo, asm_rpc_url, btc_client, &proposal).await? {
-        return Ok(());
-    }
-    if repo.enact_if_approved(&proposal.action_id).await? {
-        cascade_enact_associated_cancel(repo, asm_rpc_url, btc_client, &proposal.action_id).await?;
-    }
-    Ok(())
+    repo.update_broadcast_status(
+        &proposal.action_id,
+        BroadcastStatus::RevealConfirmed,
+        Some(ProposalStatus::Enacted),
+        None,
+        None,
+        None,
+    )
+    .await?;
+    cascade_enact_associated_cancel(repo, &proposal.action_id).await
 }
 
 /// Promote `approved` + `reveal_confirmed` proposals when ASM shows enactment post-conditions,
@@ -1903,16 +1448,11 @@ pub(crate) async fn reconcile_enacted_for_action(
     reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await
 }
 
-/// When a target proposal becomes `Enacted`, settle its cancel.
-///
-/// A cancel still in flight, or idle, is left: the reveal that executed may not be the pair on
-/// the row, and an expired row takes no import. A cancel already `reveal_confirmed` is applied
-/// (`enact_confirmed_cancel`) — that write may be the one the cancel's own read missed. It is
-/// expired only when the ASM says the cancel did not execute.
+/// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
+/// proposal (if any, and still pending/approved) is now moot — the ASM would reject its
+/// broadcast, so mark it `Expired` so it stops appearing as actionable.
 async fn cascade_enact_associated_cancel(
     repo: &dyn ProposalRepository,
-    asm_rpc_url: &str,
-    btc_client: &dyn BitcoinRpcClient,
     target_action_id: &ActionId,
 ) -> Result<(), AppError> {
     let Some(cancel) = repo.find_cancel_for_target(target_action_id).await? else {
@@ -1924,21 +1464,15 @@ async fn cascade_enact_associated_cancel(
     ) {
         return Ok(());
     }
-    // Idle, or a pair still in flight. Expiring either is terminal: the reveal that executed may
-    // not be the pair on the row yet, and an expired row takes no import.
-    if cancel.broadcast_status != BroadcastStatus::RevealConfirmed {
-        return Ok(());
-    }
-    // Confirmed, but the enact write may not have finished. Apply it now. Expire only when the
-    // ASM says this cancel did not execute; an error leaves the row for the next read.
-    if enact_confirmed_cancel(repo, asm_rpc_url, btc_client, &cancel).await?
-        != CancelWrite::DidNotExecute
-    {
-        return Ok(());
-    }
-    // Matches only a row still `approved`. The cancel's own read may have enacted it while this
-    // check was in flight; that write must not be overwritten.
-    expire_cancel_if_still_approved(repo, &cancel.action_id).await?;
+    repo.update_broadcast_status(
+        &cancel.action_id,
+        cancel.broadcast_status,
+        Some(ProposalStatus::Expired),
+        None,
+        None,
+        None,
+    )
+    .await?;
     Ok(())
 }
 
@@ -2084,12 +1618,15 @@ pub(crate) async fn report_broadcast_progress(
         .as_deref()
         .map(|txid| txid.to_ascii_lowercase());
 
-    // A report about a pair the row does not track does not move the row (#605): its `failed` or
-    // `reveal_broadcasted` would overwrite the pair now in flight. Its pair is still listed — a
-    // pair sent by the manual fallback and imported later may be the one the ASM executed, and the
-    // reconcile counts only a reveal it did. What the report does is decided in the write, under
-    // the row lock (`report_effect`). A report about the pair the row tracks keeps the row's commit:
-    // only the reveal identifies the pair.
+    // A report about a pair the row does not track changes nothing (#605): its `failed` or
+    // `reveal_broadcasted` would overwrite the pair now in flight, and its txids are not recorded
+    // either — the import screen reports any bundle against the open proposal, so they may belong
+    // to another action. Every pair of this proposal is already listed: it was reported while the
+    // row tracked it, or registered. A report that names no reveal does not qualify either, once
+    // the row is tagged. Checked here to skip the work, and again in the write: a pair that lands
+    // after this read, including one that tags an empty claim, is not overwritten and not listed.
+    // A report about the pair the row tracks cannot change its commit: the reconcile checks that
+    // the mined reveal spends it, and a wrong one would leave a winning pair unconfirmed (#605).
     let commit_txid = match (&raw.commit_txid, &raw.reveal_txid, reveal_txid.as_deref()) {
         (Some(tracked_commit), Some(tracked), Some(reported))
             if tracked.eq_ignore_ascii_case(reported) =>
@@ -2107,23 +1644,39 @@ pub(crate) async fn report_broadcast_progress(
         ))
     })?;
     let requested_status = requested_proposal_status(body.proposal_status.as_deref())?;
-    // A proposal status rides only on a report about the tracked pair.
-    let tracked = reports_tracked_pair(reveal_txid.as_deref(), raw.reveal_txid.as_deref());
-    let requested_status = requested_status.filter(|_| tracked);
+    if !reports_tracked_pair(reveal_txid.as_deref(), raw.reveal_txid.as_deref()) {
+        log_report_for_replaced_pair(action_id, reveal_txid.as_deref(), &raw);
+        return Ok(raw);
+    }
 
-    // Which reveal confirmed, and whether the ASM can accept it, is the node's and the role's call,
-    // never the report's (#605): a member can get a reveal mined that carries this action with
-    // signatures the ASM rejects. The report records its pair as sent, and the reconcile confirms
-    // only the pair mined first whose reveal passes the ASM's own checks against the role's signer
-    // configuration — for a lone pair too. A node that does not see it yet, or that keeps no
-    // transaction index and so cannot read it, leaves the row for the next read.
+    // With other pairs listed, which reveal confirmed is the node's call, not the report's (#605):
+    // an earlier pair may be mined in a lower block. The report records its pair as sent, and the
+    // reconcile promotes the pair mined first. A node that does not see it yet leaves the row for
+    // the next read. A lone pair has nothing to race, so its report is taken as before. So is any
+    // report a node without `-txindex` cannot check: it can never find a mined reveal, and the
+    // proposal would otherwise never confirm — the operator is told at startup.
     let competing_pairs = raw.broadcast_attempts.iter().any(|attempt| {
         !reveal_txid
             .as_deref()
             .is_some_and(|reported| attempt.reveal_txid.eq_ignore_ascii_case(reported))
     });
-    let confirming = broadcast_status == BroadcastStatus::RevealConfirmed
-        && raw.broadcast_status != BroadcastStatus::RevealConfirmed;
+    let mut confirming = broadcast_status == BroadcastStatus::RevealConfirmed
+        && raw.broadcast_status != BroadcastStatus::RevealConfirmed
+        && competing_pairs;
+    if let (true, Some(reveal)) = (confirming, reveal_txid.as_deref()) {
+        if matches!(
+            classify_reveal_height(btc_client.get_mined_reveal(reveal).await),
+            RevealHeight::NotIndexed
+        ) {
+            tracing::warn!(
+                action_id = %action_id.0,
+                reveal,
+                "the node keeps no transaction index; taking the desktop's reveal_confirmed for \
+                 a proposal with several pairs without checking which one was mined first"
+            );
+            confirming = false;
+        }
+    }
     let broadcast_status = if confirming {
         BroadcastStatus::RevealBroadcasted
     } else {
@@ -2141,16 +1694,6 @@ pub(crate) async fn report_broadcast_progress(
                         "proposal must have broadcast_status reveal_confirmed before enacted (current: {})",
                         raw.broadcast_status
                     )));
-                }
-                if !raw.is_cancel() {
-                    match cancel_of_target(repo, asm_rpc_url, btc_client, &raw.action_id).await? {
-                        CancelOfTarget::None => {}
-                        CancelOfTarget::Open | CancelOfTarget::OnChain => {
-                            return Err(AppError::Conflict(
-                                "a cancel of this proposal is still unresolved".to_string(),
-                            ));
-                        }
-                    }
                 }
                 if !crate::infrastructure::asm_enactment::is_proposal_enacted_on_asm(
                     asm_rpc_url,
@@ -2173,7 +1716,8 @@ pub(crate) async fn report_broadcast_progress(
         Some(RequestedProposalStatus::Expired) => Some(ProposalStatus::Expired),
     };
 
-    // Listed in the same write as the status (#605). A `failed` report lists nothing: a pair that reached the orchestrator is listed already, and one whose
+    // Listed in the same write as the status, and only when that write applies (#605). A `failed`
+    // report lists nothing: a pair that reached the orchestrator is listed already, and one whose
     // pre-registration never landed was never broadcast.
     let attempt = if broadcast_status == BroadcastStatus::Failed {
         None
@@ -2200,23 +1744,12 @@ pub(crate) async fn report_broadcast_progress(
         )
         .await?
         .ok_or(AppError::NotFound)?;
-    // A pair reported mined — the tracked one, or one just listed beside it — is judged now.
-    if confirming {
-        let confirmed = confirm_reveal_if_mined(repo, updated, btc_client, asm_rpc_url).await;
-        return settle_confirmed_cancel(repo, asm_rpc_url, btc_client, confirmed).await;
-    }
-    if updated.is_cancel() && updated.status == ProposalStatus::Enacted {
-        if let Some(target_action_id) = updated.target_action_id.clone() {
-            repo.enact_executed_cancel(&updated.action_id, &target_action_id)
-                .await?;
-            if let Some(reloaded) = repo.find_by_action_id(action_id).await? {
-                return Ok(reloaded);
-            }
-        }
-    }
     if !reports_tracked_pair(reveal_txid.as_deref(), updated.reveal_txid.as_deref()) {
         log_report_for_replaced_pair(action_id, reveal_txid.as_deref(), &updated);
         return Ok(updated);
+    }
+    if confirming {
+        return Ok(confirm_reveal_if_mined(repo, updated, btc_client, asm_rpc_url).await);
     }
 
     if updated.broadcast_status == BroadcastStatus::RevealConfirmed && !updated.is_cancel() {
@@ -4241,7 +3774,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_confirmed_cancel_corrects_a_target_already_enacted() {
+    async fn reconcile_marks_cancel_expired_when_target_already_enacted() {
         let repo = new_repo();
         let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
 
@@ -4276,18 +3809,6 @@ mod tests {
         .await
         .unwrap();
 
-        // The cancel has a pair in flight that this node does not have, so it does not hold the
-        // target. An idle cancel would: its reveal may already be on chain and unlisted.
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
         // Target reaches RevealConfirmed and gets enacted normally before the cancel does.
         repo.update_broadcast_status(
             &target.action_id,
@@ -4315,9 +3836,9 @@ mod tests {
             .unwrap();
         assert_eq!(target.status, ProposalStatus::Enacted);
 
-        // The cancel's reveal is confirmed on a later read. That confirm already passed
-        // `asm_executed`, so the target marked enacted above is corrected instead of the cancel
-        // being expired.
+        // The cancel reaches RevealConfirmed afterwards, but its target is no longer Approved —
+        // the ASM would have rejected the cancel tx, so it should be marked Expired without
+        // touching the already-enacted target.
         repo.update_broadcast_status(
             &cancel.action_id,
             BroadcastStatus::RevealConfirmed,
@@ -4342,14 +3863,14 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
+        assert_eq!(cancel.status, ProposalStatus::Expired);
 
         let target = repo
             .find_by_action_id(&target.action_id)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
+        assert_eq!(target.status, ProposalStatus::Enacted);
     }
 
     // ---------------------------------------------------------------------------
@@ -5059,10 +4580,10 @@ mod tests {
     }
 
     /// The import read an empty claim, then the claimer's pre-registration tagged the row before
-    /// the import wrote. The write leaves the row on the tracked pair, and only lists the imported
-    /// one: the reconcile counts it only if the ASM executed it (#605).
+    /// the import wrote. The write must not list the imported reveal: it may belong to another
+    /// action, and the reconcile would confirm this proposal on it (#605).
     #[tokio::test]
-    async fn a_report_the_write_does_not_apply_only_lists_its_pair() {
+    async fn a_report_the_write_rejects_is_not_recorded() {
         let repo = new_repo();
         let action_id = save_with_pair_of_a(&repo).await;
         register_pair_of_b(&repo, &action_id).await.unwrap();
@@ -5094,7 +4615,7 @@ mod tests {
             .iter()
             .map(|attempt| attempt.reveal_txid.as_str())
             .collect();
-        assert_eq!(reveals, [REVEAL_A, REVEAL_B, REVEAL_C]);
+        assert_eq!(reveals, [REVEAL_A, REVEAL_B]);
     }
 
     const DROPPED_FOR_TEST: &str = "dropped";
@@ -5188,11 +4709,11 @@ mod tests {
         assert!(stored.activation_height.is_none());
     }
 
-    /// A report about a pair the row does not track leaves the row where it is, and lists the pair:
-    /// it may have been sent by the manual fallback. One that belongs to another action is listed
-    /// too, and never counts — the reconcile takes only a reveal of this proposal the ASM executed.
+    /// The import screen reports any bundle against the open proposal, so an untracked pair may
+    /// belong to another action. Recording it would let the reconcile confirm this proposal on a
+    /// reveal mined for that other action.
     #[tokio::test]
-    async fn a_report_about_an_untracked_pair_only_lists_it() {
+    async fn a_report_about_an_untracked_pair_changes_nothing() {
         let repo = new_repo();
         let action_id = save_with_pair_of_a(&repo).await;
         register_pair_of_b(&repo, &action_id).await.unwrap();
@@ -5202,25 +4723,20 @@ mod tests {
             "mock://asm-membership",
             session_of(&sig_a()),
             &action_id,
-            &NodeView::default(),
+            &mock_btc(),
             report("reveal_confirmed", Some(COMMIT_C), Some(REVEAL_C)),
         )
         .await
         .unwrap();
         assert_eq!(after.broadcast_status, BroadcastStatus::CommitBroadcasted);
         assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_B));
-        assert_eq!(after.broadcast_attempts.len(), 3, "the pair is listed");
+        assert_eq!(
+            after.broadcast_attempts.len(),
+            2,
+            "the pair is not recorded"
+        );
 
-        // Mined, but a reveal of another action: it never counts.
-        let btc = MinedReveals(vec![(
-            REVEAL_C,
-            800_005,
-            envelope_reveal(
-                COMMIT_C,
-                1,
-                &crate::infrastructure::action_codec::test_fixture_council_rotation_action_hex(),
-            ),
-        )]);
+        let btc = MinedTxids([(REVEAL_C, 800_005)].into_iter().collect());
         let reconciled = confirm_reveal_if_mined(&repo, after, &btc, "mock://asm-membership").await;
         assert_eq!(
             reconciled.broadcast_status,
@@ -5283,10 +4799,10 @@ mod tests {
         assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_B));
     }
 
-    /// A lone pair's `reveal_confirmed` is not taken on the desktop's word either: the node must
-    /// find the reveal mined, and it must pass the ASM's checks against the role (#605).
+    /// A lone pair has nothing to race: its `reveal_confirmed` is taken even when the node cannot
+    /// find the reveal, as on a node without `-txindex` once the reveal left the mempool.
     #[tokio::test]
-    async fn a_lone_pairs_confirmed_report_waits_for_the_node() {
+    async fn a_lone_pairs_confirmed_report_is_taken_without_the_node() {
         let repo = new_repo();
         let action_id = save_with_pair_of_a(&repo).await;
 
@@ -5300,56 +4816,9 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(after.broadcast_status, BroadcastStatus::RevealBroadcasted);
 
-        let confirmed = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            &action_id,
-            &MinedReveals(vec![(
-                REVEAL_A,
-                800_010,
-                envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
-            )]),
-            report("reveal_confirmed", Some(COMMIT_A), Some(REVEAL_A)),
-        )
-        .await
-        .unwrap();
-        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_A));
-    }
-
-    /// The claimer's own lone pair, mined with the approvals at indices that are not the role's,
-    /// is rejected by the ASM — and is not confirmed on its sender's report, nor given an
-    /// activation height.
-    #[tokio::test]
-    async fn a_lone_pair_the_asm_rejects_is_not_confirmed_on_its_report() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let envelope = Envelope::new(&signed_payload_by(1, &test_fixture_action_hex(), &[2, 1]));
-        let swapped = envelope.reveal(
-            bitcoin::OutPoint::new(COMMIT_A.parse().unwrap(), 0),
-            bitcoin::TxOut {
-                value: bitcoin::Amount::from_sat(10_000),
-                script_pubkey: envelope.script_pubkey(),
-            },
-            bitcoin::ScriptBuf::new(),
-            1_000,
-        );
-
-        let after = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            &action_id,
-            &MinedReveals(vec![(REVEAL_A, 800_010, swapped)]),
-            report("reveal_confirmed", Some(COMMIT_A), Some(REVEAL_A)),
-        )
-        .await
-        .unwrap();
-        assert_eq!(after.broadcast_status, BroadcastStatus::RevealBroadcasted);
-        assert_eq!(after.activation_height, None);
+        assert_eq!(after.broadcast_status, BroadcastStatus::RevealConfirmed);
+        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_A));
     }
 
     /// A report must name real txids: a malformed one would be listed and fail every lookup.
@@ -5587,7 +5056,7 @@ mod tests {
             unreadable: "reveal",
         };
 
-        let winner = first_mined_pair(&proposal, &btc, "mock://asm-membership").await;
+        let winner = first_mined_pair(&proposal, &btc).await;
 
         assert_eq!(
             winner,
@@ -5685,13 +5154,11 @@ mod tests {
         strata_asm_txs_admin::parser::SignedPayload::new(seq_no, action, signatures).as_ssz_bytes()
     }
 
-    /// The taproot envelope a commit pays to, built the way the desktop builds it, and the SPS-50
-    /// tag its reveal carries in its first output (`ALPN`, the default magic bytes).
+    /// The taproot envelope a commit pays to, built the way the desktop builds it.
     struct Envelope {
         keypair: bitcoin::key::Keypair,
         script: bitcoin::ScriptBuf,
         spend_info: bitcoin::taproot::TaprootSpendInfo,
-        tag: Option<bitcoin::ScriptBuf>,
     }
 
     impl Envelope {
@@ -5712,27 +5179,11 @@ mod tests {
                 .unwrap()
                 .finalize(&secp, internal_key)
                 .unwrap();
-            use ssz::Decode;
-            let action = strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(payload)
-                .map(|signed| signed.action)
-                .ok();
-            let tag = action.map(|action| {
-                strata_l1_txfmt::ParseConfig::new(strata_l1_txfmt::MagicBytes::new(*b"ALPN"))
-                    .encode_script_buf(&action.tag().as_ref())
-                    .unwrap()
-            });
             Self {
                 keypair,
                 script,
                 spend_info,
-                tag,
             }
-        }
-
-        /// The same envelope, its reveal carrying no SPS-50 tag: the ASM never sees it.
-        fn untagged(mut self) -> Self {
-            self.tag = None;
-            self
         }
 
         fn script_pubkey(&self) -> bitcoin::ScriptBuf {
@@ -5761,18 +5212,10 @@ mod tests {
                     sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
                     witness: bitcoin::Witness::new(),
                 }],
-                output: self
-                    .tag
-                    .iter()
-                    .map(|tag| bitcoin::TxOut {
-                        value: bitcoin::Amount::ZERO,
-                        script_pubkey: tag.clone(),
-                    })
-                    .chain([bitcoin::TxOut {
-                        value: prevout.value - bitcoin::Amount::from_sat(fee),
-                        script_pubkey: to,
-                    }])
-                    .collect(),
+                output: vec![bitcoin::TxOut {
+                    value: prevout.value - bitcoin::Amount::from_sat(fee),
+                    script_pubkey: to,
+                }],
             };
             let leaf_hash = bitcoin::TapLeafHash::from_script(&self.script, LeafVersion::TapScript);
             let sighash = SighashCache::new(&tx)
@@ -5836,10 +5279,6 @@ mod tests {
                 return Ok(MinedReveal {
                     height: *height,
                     tx: Some(tx.clone()),
-                    block: Some(crate::infrastructure::bitcoin_rpc::MinedBlock {
-                        hash: format!("block-{height}"),
-                        parent_hash: format!("parent-{height}"),
-                    }),
                 });
             }
             Err(AppError::BadRequest(format!(
@@ -5852,111 +5291,45 @@ mod tests {
         }
     }
 
-    /// Two reveals of this proposal in one block. The earlier one's ASM read fails. The later one
-    /// must not be confirmed: before and after the block are the same for both.
     #[tokio::test]
-    async fn a_same_block_reveal_whose_judgment_failed_holds_the_read() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        register_pair_of_b(&repo, &action_id).await.unwrap();
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let action = test_fixture_action_hex();
-        let btc = SameBlock {
-            judged: (REVEAL_B, envelope_reveal(COMMIT_B, 1, &action)),
-            unjudged: (REVEAL_A, envelope_reveal(COMMIT_A, 1, &action)),
-        };
-
-        let winner = first_mined_pair(&proposal, &btc, "mock://asm-membership").await;
-
-        assert_eq!(winner, MinedPair::Unknown);
-    }
-
-    /// `judged` is a reveal the ASM can be asked about. `unjudged` shares its block, and the ASM
-    /// read for that hash does not answer.
-    struct SameBlock {
-        judged: (&'static str, bitcoin::Transaction),
-        unjudged: (&'static str, bitcoin::Transaction),
-    }
-
-    #[async_trait::async_trait]
-    impl BitcoinRpcClient for SameBlock {
-        async fn estimate_fee_rate_sats_per_vb(
-            &self,
-            _target_blocks: u16,
-        ) -> Result<u64, AppError> {
-            Ok(1)
-        }
-
-        async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
-            self.get_mined_reveal(txid).await.map(|mined| mined.height)
-        }
-
-        async fn get_mined_reveal(&self, txid: &str) -> Result<MinedReveal, AppError> {
-            let (tx, hash) = if txid == self.judged.0 {
-                (&self.judged.1, "block")
-            } else if txid == self.unjudged.0 {
-                (&self.unjudged.1, "unjudged")
-            } else {
-                return Err(AppError::BadRequest(format!(
-                    "getrawtransaction: tx {txid} has no blockhash — not yet confirmed"
-                )));
-            };
-            Ok(MinedReveal {
-                height: 800_010,
-                tx: Some(tx.clone()),
-                block: Some(crate::infrastructure::bitcoin_rpc::MinedBlock {
-                    hash: hash.to_string(),
-                    parent_hash: "parent".to_string(),
-                }),
-            })
-        }
-
-        async fn get_chain_tip(&self) -> Result<u64, AppError> {
-            Ok(800_000)
-        }
-    }
-
-    #[tokio::test]
-    async fn a_reveal_carries_the_proposal_only_with_its_tag_seq_no_and_action() {
+    async fn a_reveal_carries_the_proposal_only_with_its_commit_seq_no_and_action() {
         let repo = new_repo();
         let action_id = save_with_pair_of_a(&repo).await;
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.seq_no, 1);
-        let read = |reveal: &bitcoin::Transaction, magic: &[u8; 4]| match proposal_payload(
-            reveal, &proposal, *magic,
-        ) {
-            Payload::Carries(_) => "carries",
-            Payload::Untagged => "untagged",
-            Payload::Foreign => "foreign",
-        };
-        let carries = |reveal: &bitcoin::Transaction| read(reveal, b"ALPN") == "carries";
         let reveal = envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex());
-        assert!(carries(&reveal));
+        assert!(reveal_carries_proposal(&reveal, COMMIT_B, &proposal));
+        assert!(
+            !reveal_carries_proposal(&reveal, COMMIT_A, &proposal),
+            "spends another commit"
+        );
         let other_seq_no = envelope_reveal(COMMIT_B, 2, &test_fixture_action_hex());
-        assert!(!carries(&other_seq_no));
+        assert!(!reveal_carries_proposal(&other_seq_no, COMMIT_B, &proposal));
         let other_action = envelope_reveal(
             COMMIT_B,
             1,
             &crate::infrastructure::action_codec::test_fixture_council_rotation_action_hex(),
         );
-        assert!(!carries(&other_action));
-        // Fully signed, but with no tag in its first output: the ASM never routes it to the
-        // administration subprotocol.
-        let untagged = Envelope::new(&signed_payload(1, &test_fixture_action_hex())).untagged();
-        let reveal = untagged.reveal(
-            bitcoin::OutPoint::new(COMMIT_B.parse().unwrap(), 0),
-            bitcoin::TxOut {
-                value: bitcoin::Amount::from_sat(10_000),
-                script_pubkey: untagged.script_pubkey(),
-            },
-            bitcoin::ScriptBuf::new(),
-            1_000,
-        );
-        assert_eq!(read(&reveal, b"ALPN"), "untagged");
-        // Tagged, but under other magic bytes than the network's.
-        let tagged = envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex());
-        assert_eq!(read(&tagged, b"TEST"), "untagged", "wrong magic");
-        assert_eq!(read(&other_action, b"ALPN"), "foreign");
+        assert!(!reveal_carries_proposal(&other_action, COMMIT_B, &proposal));
+        // The right action without the quorum the ASM needs: unsigned, or one approver of two, or
+        // the approvers' keys signing twice.
+        for secrets in [&[][..], &[1], &[1, 1], &[3, 4]] {
+            let envelope =
+                Envelope::new(&signed_payload_by(1, &test_fixture_action_hex(), secrets));
+            let reveal = envelope.reveal(
+                bitcoin::OutPoint::new(COMMIT_B.parse().unwrap(), 0),
+                bitcoin::TxOut {
+                    value: bitcoin::Amount::from_sat(10_000),
+                    script_pubkey: envelope.script_pubkey(),
+                },
+                bitcoin::ScriptBuf::new(),
+                1_000,
+            );
+            assert!(
+                !reveal_carries_proposal(&reveal, COMMIT_B, &proposal),
+                "signed by {secrets:?}"
+            );
+        }
         let plain = bitcoin::Transaction {
             version: bitcoin::transaction::Version::TWO,
             lock_time: bitcoin::absolute::LockTime::ZERO,
@@ -5966,126 +5339,7 @@ mod tests {
             }],
             output: vec![],
         };
-        assert!(!carries(&plain));
-    }
-
-    /// The role around a block: the fixture signers at these secret scalars, `last_seqno`, a gap
-    /// of 10, the given depth, and the given queue.
-    fn role_at(
-        secrets: &[u8],
-        last_seqno: u64,
-        queue_depth: Option<u16>,
-        queued: Vec<(u32, strata_asm_txs_admin::actions::UpdateAction, u64)>,
-    ) -> RoleAtBlock {
-        use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-        use strata_crypto::keys::compressed::CompressedPublicKey;
-        let secp = Secp256k1::new();
-        let keys = secrets
-            .iter()
-            .map(|scalar| {
-                let mut secret = [0u8; 32];
-                secret[31] = *scalar;
-                let key =
-                    PublicKey::from_secret_key(&secp, &SecretKey::from_slice(&secret).unwrap());
-                CompressedPublicKey::from_slice(&key.serialize()).unwrap()
-            })
-            .collect();
-        RoleAtBlock {
-            last_seqno,
-            max_seqno_gap: std::num::NonZero::new(10).unwrap(),
-            config: strata_crypto::threshold_signature::ThresholdConfig::try_new(
-                keys,
-                std::num::NonZero::new(2).unwrap(),
-            )
-            .unwrap(),
-            queue_depth,
-            queued,
-        }
-    }
-
-    fn decoded(payload: &[u8]) -> strata_asm_txs_admin::parser::SignedPayload {
-        use ssz::Decode;
-        strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(payload).unwrap()
-    }
-
-    fn fixture_update() -> strata_asm_txs_admin::actions::UpdateAction {
-        match decoded(&signed_payload(1, &test_fixture_action_hex())).action {
-            strata_asm_txs_admin::actions::MultisigAction::Update(update) => update,
-            other => panic!("fixture is an update: {other:?}"),
-        }
-    }
-
-    /// The ASM executed a reveal only when, against the role as it stood before the block, its
-    /// sequence number is in the window and its signatures verify — and the role after the block
-    /// carries the trace it leaves (#605). Everything the ASM rejects leaves none.
-    #[test]
-    fn the_asm_executed_a_reveal_only_as_the_asm_would() {
-        const HEIGHT: u64 = 800_010;
-        let action = test_fixture_action_hex();
-        let queued_at = |depth: u64| vec![(0, fixture_update(), HEIGHT + depth)];
-        let before = role_at(&[1, 2], 0, Some(2016), Vec::new());
-        let after = role_at(&[1, 2], 1, Some(2016), queued_at(2016));
-        let executed = |secrets: &[u8], before: &RoleAtBlock, after: &RoleAtBlock| {
-            asm_executed(
-                before,
-                after,
-                &decoded(&signed_payload_by(1, &action, secrets)),
-                HEIGHT,
-            )
-        };
-
-        assert!(executed(&[1, 2], &before, &after));
-        // Signatures the ASM rejects: both approvals at each other's index, one of two, one key
-        // twice, keys outside the role, none.
-        for secrets in [&[2, 1][..], &[1], &[1, 1], &[3, 4], &[]] {
-            assert!(!executed(secrets, &before, &after), "signed by {secrets:?}");
-        }
-        // The sequence number was already taken before the block.
-        let taken = role_at(&[1, 2], 1, Some(2016), Vec::new());
-        assert!(!executed(&[1, 2], &taken, &after));
-        // The ASM's state did not move in the block: it rejected it, or has not taken it.
-        assert!(!executed(&[1, 2], &before, &before));
-        // Queued, but not for this block's activation: another reveal of the same action.
-        let elsewhere = role_at(&[1, 2], 1, Some(2016), queued_at(2017));
-        assert!(!executed(&[1, 2], &before, &elsewhere));
-        // An update that applies at once leaves no queue entry.
-        let immediate = role_at(&[1, 2], 0, None, Vec::new());
-        let applied = role_at(&[1, 2], 1, None, Vec::new());
-        assert!(executed(&[1, 2], &immediate, &applied));
-
-        // Beyond the allowed sequence gap.
-        let far = decoded(&signed_payload_by(12, &action, &[1, 2]));
-        let far_after = role_at(&[1, 2], 12, Some(2016), queued_at(2016));
-        assert!(!asm_executed(&before, &far_after, &far, HEIGHT));
-
-        // A rotation of this very role: signed under the configuration before the block, which is
-        // the one the ASM checks, even though the role's keys changed in it.
-        let rotating_before = role_at(&[3, 4], 0, None, Vec::new());
-        let rotated = role_at(&[5, 6], 1, None, Vec::new());
-        assert!(executed(&[3, 4], &rotating_before, &rotated));
-    }
-
-    /// A cancel was executed when its target, queued before the block, is gone after it.
-    #[test]
-    fn the_asm_executed_a_cancel_only_if_its_target_left_the_queue() {
-        use ssz::Encode;
-        const HEIGHT: u64 = 800_010;
-        let cancel = strata_asm_txs_admin::actions::MultisigAction::Cancel(
-            strata_asm_txs_admin::actions::CancelAction::new(7, fixture_update()),
-        );
-        let payload = decoded(&signed_payload_by(
-            1,
-            &hex::encode(cancel.as_ssz_bytes()),
-            &[1, 2],
-        ));
-        let queued = vec![(7, fixture_update(), 900_000)];
-        let before = role_at(&[1, 2], 0, None, queued.clone());
-        let after = role_at(&[1, 2], 1, None, Vec::new());
-        assert!(asm_executed(&before, &after, &payload, HEIGHT));
-        let still_queued = role_at(&[1, 2], 1, None, queued);
-        assert!(!asm_executed(&before, &still_queued, &payload, HEIGHT));
-        let never_queued = role_at(&[1, 2], 0, None, Vec::new());
-        assert!(!asm_executed(&never_queued, &after, &payload, HEIGHT));
+        assert!(!reveal_carries_proposal(&plain, COMMIT_B, &proposal));
     }
 
     /// Any txid can be registered. One mined after the registration that is not a commit + reveal
@@ -6133,83 +5387,6 @@ mod tests {
         .await;
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_A));
-    }
-
-    /// A member's reveal carries both approvals but at indices that are not the role's: the ASM
-    /// rejects it, so it does not win and the row stays in flight.
-    #[tokio::test]
-    async fn a_reveal_with_signatures_at_the_wrong_indices_does_not_win() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        register_pair_of_b(&repo, &action_id).await.unwrap();
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let envelope = Envelope::new(&signed_payload_by(1, &test_fixture_action_hex(), &[2, 1]));
-        let swapped = envelope.reveal(
-            bitcoin::OutPoint::new(COMMIT_B.parse().unwrap(), 0),
-            bitcoin::TxOut {
-                value: bitcoin::Amount::from_sat(10_000),
-                script_pubkey: envelope.script_pubkey(),
-            },
-            bitcoin::ScriptBuf::new(),
-            1_000,
-        );
-
-        let unchanged = confirm_reveal_if_mined(
-            &repo,
-            proposal,
-            &MinedReveals(vec![(REVEAL_B, 800_005, swapped)]),
-            "mock://asm-membership",
-        )
-        .await;
-        assert_eq!(
-            unchanged.broadcast_status,
-            BroadcastStatus::CommitBroadcasted
-        );
-        let stored = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        assert_eq!(stored.activation_height, None);
-    }
-
-    /// A valid reveal mined, but the ASM has not taken the sequence number: not confirmed.
-    #[tokio::test]
-    async fn a_reveal_the_asm_has_not_taken_is_not_confirmed() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let unchanged = confirm_reveal_if_mined(
-            &repo,
-            proposal,
-            &MinedReveals(vec![(
-                REVEAL_A,
-                800_010,
-                envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
-            )]),
-            crate::infrastructure::asm_role_membership::MOCK_ASM_NOT_ACCEPTED_URL,
-        )
-        .await;
-        assert_eq!(
-            unchanged.broadcast_status,
-            BroadcastStatus::RevealBroadcasted
-        );
-        assert_eq!(unchanged.activation_height, None);
-    }
-
-    /// The role's configuration cannot be read: a mined reveal is not taken on trust.
-    #[tokio::test]
-    async fn a_mined_reveal_waits_when_the_role_cannot_be_read() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let winner = first_mined_pair(
-            &proposal,
-            &MinedReveals(vec![(
-                REVEAL_A,
-                800_010,
-                envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
-            )]),
-            "mock://unreachable-asm",
-        )
-        .await;
-        assert_eq!(winner, MinedPair::Unknown);
     }
 
     /// A pair first reported after it was mined (the manual fallback, imported later) still wins:
@@ -6319,1435 +5496,11 @@ mod tests {
         assert_eq!(claimed.broadcast_status, BroadcastStatus::CommitBroadcasted);
     }
 
-    /// Answers every lookup with a failed call: a node that is down.
-    struct NodeDown;
-
-    #[async_trait::async_trait]
-    impl BitcoinRpcClient for NodeDown {
-        async fn estimate_fee_rate_sats_per_vb(
-            &self,
-            _target_blocks: u16,
-        ) -> Result<u64, AppError> {
-            Ok(1)
-        }
-
-        async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
-            Err(AppError::BadRequest(
-                "Bitcoin RPC request timed out".to_string(),
-            ))
-        }
-
-        async fn get_chain_tip(&self) -> Result<u64, AppError> {
-            Ok(800_000)
-        }
-    }
-
-    /// A node that cannot answer does not make the earlier pair dead: the row goes back to it
-    /// rather than `failed`, which would stop its watchers and reopen the claim gate.
+    /// A node without `-txindex` cannot find any mined reveal, so a `reveal_confirmed` report
+    /// beside other pairs is taken as reported rather than leaving the proposal in flight for
+    /// good — as after a retry that follows a failed send.
     #[tokio::test]
-    async fn a_node_that_cannot_answer_keeps_the_earlier_pair() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        register_pair_of_b(&repo, &action_id).await.unwrap();
-
-        let mut failed = report("failed", Some(COMMIT_B), Some(REVEAL_B));
-        failed.broadcast_error = Some("rejected".to_string());
-        let after = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &action_id,
-            &NodeDown,
-            failed,
-        )
-        .await
-        .unwrap();
-        assert_eq!(after.broadcast_status, BroadcastStatus::CommitBroadcasted);
-        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_A));
-    }
-
-    /// A reconcile that cannot judge a mined reveal neither confirms it nor retires the proposal
-    /// in the same read, even with its sequence number consumed: that reveal may be the one the ASM
-    /// executed.
-    #[tokio::test]
-    async fn an_inconclusive_reconcile_does_not_retire_the_proposal() {
-        let repo = new_repo();
-        let action_id = save_approved(&repo, 1).await;
-        repo.update_broadcast_status(
-            &action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_authority(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
-            &NodeDown,
-            Authority::StrataAdmin,
-        )
-        .await
-        .unwrap();
-
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        assert_eq!(proposal.status, ProposalStatus::Approved);
-        assert_eq!(
-            proposal.broadcast_status,
-            BroadcastStatus::RevealBroadcasted
-        );
-    }
-
-    /// The ASM does not ask which commit a reveal spends, so neither does the reconcile: a pair
-    /// listed with the wrong commit still confirms, on the commit the reveal really spends.
-    #[tokio::test]
-    async fn a_pair_listed_with_the_wrong_commit_confirms_on_the_one_spent() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let mut proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        proposal.commit_txid = Some(COMMIT_B.to_string());
-        let winner = first_mined_pair(
-            &proposal,
-            &MinedReveals(vec![(
-                REVEAL_A,
-                800_010,
-                envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
-            )]),
-            "mock://asm-membership",
-        )
-        .await;
-        assert_eq!(
-            winner,
-            MinedPair::First(COMMIT_A.to_string(), REVEAL_A.to_string())
-        );
-    }
-
-    /// A confirmed row only moves forward, and a closed proposal takes no broadcast report.
-    #[tokio::test]
-    async fn a_settled_proposal_does_not_move_back() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        register_pair_of_b(&repo, &action_id).await.unwrap();
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let confirmed = confirm_reveal_if_mined(
-            &repo,
-            proposal,
-            &MinedReveals(vec![(
-                REVEAL_B,
-                800_010,
-                envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex()),
-            )]),
-            "mock://asm-membership",
-        )
-        .await;
-        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
-
-        let mut failed = report("failed", Some(COMMIT_B), Some(REVEAL_B));
-        failed.broadcast_error = Some("dropped".to_string());
-        let after = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &action_id,
-            &NodeView {
-                mempool: vec![COMMIT_A],
-                ..NodeView::default()
-            },
-            failed,
-        )
-        .await
-        .unwrap();
-        assert_eq!(after.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_B));
-
-        repo.update_broadcast_status(
-            &action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Superseded),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let closed = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &action_id,
-            &mock_btc(),
-            report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
-        )
-        .await
-        .unwrap();
-        assert_eq!(closed.status, ProposalStatus::Superseded);
-    }
-
-    /// The manual fallback: a pair sent while the orchestrator was down, mined and executed, and
-    /// imported afterwards onto a row that tracks another pair. It is listed and confirmed, so the
-    /// proposal is not retired as if its sequence number had gone to another action.
-    #[tokio::test]
-    async fn a_manual_pair_imported_after_it_was_executed_confirms() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let confirmed = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &action_id,
-            &MinedReveals(vec![(
-                REVEAL_B,
-                800_010,
-                envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex()),
-            )]),
-            report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
-        )
-        .await
-        .unwrap();
-        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_B));
-    }
-
-    /// A listed txid whose lookup the node can never answer does not hold back a reveal the ASM
-    /// executed: one executed reveal decides. The genesis coinbase, which Bitcoin Core refuses to
-    /// look up, counts as not mined.
-    #[tokio::test]
-    async fn an_unanswerable_listed_txid_does_not_veto_an_executed_reveal() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let mut proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        proposal.broadcast_attempts.push(BroadcastAttempt {
-            broadcaster_pubkey: Some(sig_b().signer_pubkey),
-            commit_txid: COMMIT_B.to_string(),
-            reveal_txid: REVEAL_B.to_string(),
-            created_at: Utc::now(),
-        });
-
-        /// Mines A's reveal, and fails every other lookup.
-        struct OneAnswer;
-
-        #[async_trait::async_trait]
-        impl BitcoinRpcClient for OneAnswer {
-            async fn estimate_fee_rate_sats_per_vb(
-                &self,
-                _target_blocks: u16,
-            ) -> Result<u64, AppError> {
-                Ok(1)
-            }
-
-            async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
-                Err(AppError::BadRequest(
-                    "Bitcoin RPC request timed out".to_string(),
-                ))
-            }
-
-            async fn get_mined_reveal(&self, txid: &str) -> Result<MinedReveal, AppError> {
-                if txid == REVEAL_A {
-                    return Ok(MinedReveal {
-                        height: 800_010,
-                        tx: Some(envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex())),
-                        block: Some(crate::infrastructure::bitcoin_rpc::MinedBlock {
-                            hash: "block".to_string(),
-                            parent_hash: "parent".to_string(),
-                        }),
-                    });
-                }
-                Err(AppError::BadRequest(
-                    "Bitcoin RPC request timed out".to_string(),
-                ))
-            }
-
-            async fn get_chain_tip(&self) -> Result<u64, AppError> {
-                Ok(800_000)
-            }
-        }
-
-        let winner = first_mined_pair(&proposal, &OneAnswer, "mock://asm-membership").await;
-        assert_eq!(
-            winner,
-            MinedPair::First(COMMIT_A.to_string(), REVEAL_A.to_string())
-        );
-        // With nothing executed, the open question stays open.
-        let nothing = first_mined_pair(&proposal, &NodeDown, "mock://asm-membership").await;
-        assert_eq!(nothing, MinedPair::Unknown);
-        assert!(matches!(
-            classify_reveal_height(Err(AppError::BadRequest(
-                "The genesis block coinbase is not considered an ordinary transaction and cannot \
-                 be retrieved"
-                    .to_string()
-            ))),
-            RevealHeight::Unmined
-        ));
-    }
-
-    /// "Not mined" from a node behind the ASM is not an answer: the reveal the ASM executed may be
-    /// in a block this node has not seen, and the sweep would retire the proposal it carried.
-    #[tokio::test]
-    async fn a_node_behind_the_asm_leaves_the_read_open() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-
-        let caught_up = try_confirm_reveal(
-            &repo,
-            proposal.clone(),
-            &NodeView::default(),
-            "mock://asm-membership",
-        )
-        .await;
-        assert!(!caught_up.inconclusive);
-        let behind =
-            try_confirm_reveal(&repo, proposal, &NodeView::default(), "mock://asm-ahead").await;
-        assert!(behind.inconclusive);
-    }
-
-    /// A cancel mined and executed but not confirmed yet holds its target: read first, the target
-    /// would look dead (seqno consumed, gone from the queue) and be retired as `Superseded`, and
-    /// the cancel then `Expired`. The cancel is judged first, confirmed, and owns the target.
-    #[tokio::test]
-    async fn a_target_waits_for_its_cancel_in_flight() {
-        use ssz::Encode;
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let target = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel_hex = hex::encode(
-            strata_asm_txs_admin::actions::MultisigAction::Cancel(
-                strata_asm_txs_admin::actions::CancelAction::new(0, fixture_update()),
-            )
-            .as_ssz_bytes(),
-        );
-        let cancel = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            target.action_id.clone(),
-            2,
-            &cancel_hex,
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-        approve_action(&repo, session_of(&sig_b()), &cancel.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        // The ASM has moved past both seqnos and the target is out of the queue: read alone, the
-        // target is what the sweep retires.
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
-            &MinedReveals(vec![(
-                REVEAL_C,
-                800_010,
-                envelope_reveal(COMMIT_C, 2, &cancel_hex),
-            )]),
-            Authority::StrataAdmin,
-            &target.action_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        let cancel = repo
-            .find_by_action_id(&cancel.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::RevealConfirmed);
-    }
-
-    /// The cancel stays unmined through the checks before the admin-queue read, and is mined by
-    /// the look that sits after that read. That look owns the target, so it is not superseded.
-    #[tokio::test]
-    async fn a_cancel_that_lands_during_the_read_holds_its_target() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-
-        struct LandsLater {
-            calls: Arc<AtomicUsize>,
-            tx: bitcoin::Transaction,
-        }
-
-        #[async_trait::async_trait]
-        impl BitcoinRpcClient for LandsLater {
-            async fn estimate_fee_rate_sats_per_vb(
-                &self,
-                _target_blocks: u16,
-            ) -> Result<u64, AppError> {
-                Ok(1)
-            }
-
-            async fn get_block_height_for_txid(&self, txid: &str) -> Result<u64, AppError> {
-                self.get_mined_reveal(txid).await.map(|mined| mined.height)
-            }
-
-            async fn get_mined_reveal(&self, txid: &str) -> Result<MinedReveal, AppError> {
-                // Two looks run before the queue read. The third is the one after it.
-                if txid != REVEAL_C || self.calls.fetch_add(1, Ordering::SeqCst) < 2 {
-                    return Err(AppError::BadRequest(format!(
-                        "getrawtransaction: tx {txid} has no blockhash — not yet confirmed"
-                    )));
-                }
-                Ok(MinedReveal {
-                    height: 800_010,
-                    tx: Some(self.tx.clone()),
-                    block: Some(crate::infrastructure::bitcoin_rpc::MinedBlock {
-                        hash: "block-800010".to_string(),
-                        parent_hash: "parent-800010".to_string(),
-                    }),
-                })
-            }
-
-            async fn get_chain_tip(&self) -> Result<u64, AppError> {
-                Ok(800_000)
-            }
-        }
-
-        use ssz::Encode;
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let target = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel_hex = hex::encode(
-            strata_asm_txs_admin::actions::MultisigAction::Cancel(
-                strata_asm_txs_admin::actions::CancelAction::new(0, fixture_update()),
-            )
-            .as_ssz_bytes(),
-        );
-        let cancel = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            target.action_id.clone(),
-            2,
-            &cancel_hex,
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-        approve_action(&repo, session_of(&sig_b()), &cancel.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        let calls = Arc::new(AtomicUsize::new(0));
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
-            &LandsLater {
-                calls: Arc::clone(&calls),
-                tx: envelope_reveal(COMMIT_C, 2, &cancel_hex),
-            },
-            Authority::StrataAdmin,
-            &target.action_id,
-        )
-        .await
-        .unwrap();
-        assert!(calls.load(Ordering::SeqCst) >= 3);
-
-        let target = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        let cancel = repo
-            .find_by_action_id(&cancel.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::RevealConfirmed);
-    }
-
-    /// An approved target whose reveal already confirmed, and a cancel of it still in flight.
-    async fn target_with_cancel_in_flight(
-        repo: &InMemoryProposalRepository,
-    ) -> (ActionId, ActionId) {
-        let target = save_approved_proposal(repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel = create_cancel_proposal(
-            repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            target.action_id.clone(),
-            2,
-            "cafebabe",
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-        approve_action(repo, session_of(&sig_b()), &cancel.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-        (target.action_id, cancel.action_id)
-    }
-
-    /// The cancel's reveal cannot be read. The node answers for the target's reveal.
-    fn cancel_reveal_unreadable() -> RevealLookup {
-        RevealLookup {
-            heights: [(REVEAL_A, 800_010)].into_iter().collect(),
-            unreadable: REVEAL_C,
-        }
-    }
-
-    /// An open read of the cancel must not mark the target enacted. The predicate can already be
-    /// true for a cancel that did execute (sequence number consumed, update gone from the queue),
-    /// and both writes would be terminal.
-    #[tokio::test]
-    async fn an_unjudged_cancel_does_not_enact_its_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-enacted",
-            &cancel_reveal_unreadable(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Approved);
-    }
-
-    /// The same open read still holds retirement: the target looks dead (seqno passed, and the
-    /// cancel may have taken it out of the queue) and must not be marked superseded.
-    #[tokio::test]
-    async fn an_unjudged_cancel_still_holds_its_target() {
-        let repo = new_repo();
-        let (target_id, _) = target_with_cancel_in_flight(&repo).await;
-
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
-            &cancel_reveal_unreadable(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-    }
-
-    /// What the hold does not stop is the countdown. A reveal confirmation whose height lookup
-    /// failed is retried while the cancel stays unjudged.
-    #[tokio::test]
-    async fn an_unjudged_cancel_still_records_the_activation_height() {
-        let repo = new_repo();
-        let (target_id, _) = target_with_cancel_in_flight(&repo).await;
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-membership",
-            &cancel_reveal_unreadable(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        assert_eq!(target.activation_height, Some(800_010 + 2016));
-    }
-
-    /// Opening the target is enough. The cancel's reveal is already confirmed and the ASM shows
-    /// it executed, so this read cancels the target instead of leaving it approved.
-    #[tokio::test]
-    async fn a_confirmed_cancel_cancels_its_target_on_the_targets_read() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-enacted",
-            &mock_btc(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// The sweep retired the target before the cancel's reveal was on the row. Confirming that
-    /// reveal later repairs the target to `canceled` instead of expiring the cancel.
-    #[tokio::test]
-    async fn a_late_cancel_repairs_a_superseded_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Superseded),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-enacted",
-            &mock_btc(),
-            Authority::StrataAdmin,
-            &cancel_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// No pair on the cancel. The target's ASM shape can be what a cancel leaves, so this read
-    /// neither enacts the target nor expires the cancel.
-    #[tokio::test]
-    async fn an_idle_cancel_holds_its_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(&cancel_id, BroadcastStatus::Idle, None, None, None, None)
-            .await
-            .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-enacted",
-            &mock_btc(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Approved);
-    }
-
-    /// The cancel is newer, so the sweep reads it first. Its seqno is consumed and it is not in
-    /// the queue — true of every cancel — and that must not retire it. The target stays put too.
-    #[tokio::test]
-    async fn an_idle_cancel_is_not_superseded_ahead_of_its_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(&cancel_id, BroadcastStatus::Idle, None, None, None, None)
-            .await
-            .unwrap();
-
-        reconcile_enacted_for_authority(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
-            &mock_btc(),
-            Authority::StrataAdmin,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Approved);
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::Idle);
-    }
-
-    /// A cancel already retired while still idle keeps holding the target.
-    #[tokio::test]
-    async fn a_superseded_idle_cancel_still_holds_its_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::Idle,
-            Some(ProposalStatus::Superseded),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
-            &mock_btc(),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-    }
-
-    /// The detail report must not mark the target enacted while its cancel has no judged reveal.
-    #[tokio::test]
-    async fn reporting_the_target_enacted_is_refused_while_its_cancel_is_idle() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(&cancel_id, BroadcastStatus::Idle, None, None, None, None)
-            .await
-            .unwrap();
-
-        let err = report_broadcast_progress(
-            &repo,
-            "mock://asm-enacted",
-            session_of(&sig_a()),
-            &target_id,
-            &mock_btc(),
-            ReportBroadcastProgressRequest {
-                broadcast_status: "reveal_confirmed".to_string(),
-                proposal_status: Some("enacted".to_string()),
-                commit_txid: Some(COMMIT_A.to_string()),
-                reveal_txid: Some(REVEAL_A.to_string()),
-                broadcast_error: None,
-            },
-        )
-        .await
-        .unwrap_err();
-
-        assert!(matches!(err, AppError::Conflict(_)));
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Approved);
-    }
-
-    /// This read confirms the cancel, and the target was already marked enacted. The cancel is not
-    /// expired; it corrects the target.
-    #[tokio::test]
-    async fn a_cancel_confirmed_this_read_repairs_an_enacted_target() {
-        use ssz::Encode;
-        let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel_hex = hex::encode(
-            strata_asm_txs_admin::actions::MultisigAction::Cancel(
-                strata_asm_txs_admin::actions::CancelAction::new(0, fixture_update()),
-            )
-            .as_ssz_bytes(),
-        );
-        let cancel = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            target.action_id.clone(),
-            2,
-            &cancel_hex,
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-        approve_action(&repo, session_of(&sig_b()), &cancel.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_ENACTED_ACCEPTED_URL,
-            &MinedReveals(vec![(
-                REVEAL_C,
-                800_010,
-                envelope_reveal(COMMIT_C, 2, &cancel_hex),
-            )]),
-            Authority::StrataAdmin,
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo
-            .find_by_action_id(&target.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo
-            .find_by_action_id(&cancel.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// The listed pair is unmined. Enacting the target must not expire the cancel: the reveal that
-    /// executed may not be that pair, and an expired row takes no import.
-    #[tokio::test]
-    async fn enacting_the_target_does_not_expire_an_in_flight_cancel() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-
-        reconcile_enacted_for_action(
-            &repo,
-            "mock://asm-enacted",
-            &MinedReveals(vec![]),
-            Authority::StrataAdmin,
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Enacted);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Approved);
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::RevealBroadcasted);
-    }
-
-    /// The target was marked enacted before this cascade saw the cancel's reveal. The reveal is
-    /// already confirmed and the ASM shows the cancel executed, so cascade applies it.
-    #[tokio::test]
-    async fn enacting_the_target_applies_a_reveal_confirmed_cancel() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        cascade_enact_associated_cancel(&repo, "mock://asm-enacted", &mock_btc(), &target_id)
-            .await
-            .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// The ASM says that confirmed cancel did not execute. Cascade expires it and leaves the
-    /// target enacted.
-    #[tokio::test]
-    async fn enacting_the_target_expires_a_cancel_the_asm_did_not_execute() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        cascade_enact_associated_cancel(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
-            &mock_btc(),
-            &target_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Enacted);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Expired);
-    }
-
-    /// The expire matches a row still `approved`. One a concurrent read already enacted stays enacted.
-    #[tokio::test]
-    async fn expire_if_approved_leaves_an_enacted_cancel() {
-        let repo = new_repo();
-        let (_, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        let applied = repo.expire_if_approved(&cancel_id).await.unwrap();
-
-        assert!(!applied);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::RevealConfirmed);
-    }
-
-    /// The ASM check errors after the target is already enacted. Cascade leaves the confirmed
-    /// cancel in place so the next read can still apply it.
-    #[tokio::test]
-    async fn an_asm_error_does_not_expire_a_reveal_confirmed_cancel() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        cascade_enact_associated_cancel(&repo, "mock://asm-unreadable", &mock_btc(), &target_id)
-            .await
-            .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Enacted);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Approved);
-        assert_eq!(cancel.broadcast_status, BroadcastStatus::RevealConfirmed);
-    }
-
-    /// The sweep already retired the cancel. The reveal that executed is listed afterwards, and
-    /// the target's read confirms it instead of enacting the target and expiring the cancel.
-    #[tokio::test]
-    async fn a_superseded_cancel_is_judged_before_its_target_is_enacted() {
-        use ssz::Encode;
-        let repo = new_repo();
-        let target = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &target.action_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel_hex = hex::encode(
-            strata_asm_txs_admin::actions::MultisigAction::Cancel(
-                strata_asm_txs_admin::actions::CancelAction::new(0, fixture_update()),
-            )
-            .as_ssz_bytes(),
-        );
-        let cancel = create_cancel_proposal(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_a()),
-            target.action_id.clone(),
-            2,
-            &cancel_hex,
-            "cancel_sig",
-        )
-        .await
-        .unwrap();
-        approve_action(&repo, session_of(&sig_b()), &cancel.action_id, &sig_b())
-            .await
-            .unwrap();
-        transition_to_approved(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &cancel.action_id,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            Some(ProposalStatus::Superseded),
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        reconcile_enacted_for_action(
-            &repo,
-            crate::infrastructure::asm_enactment::MOCK_ENACTED_ACCEPTED_URL,
-            &MinedReveals(vec![(
-                REVEAL_C,
-                800_010,
-                envelope_reveal(COMMIT_C, 2, &cancel_hex),
-            )]),
-            Authority::StrataAdmin,
-            &target.action_id,
-        )
-        .await
-        .unwrap();
-
-        let target = repo
-            .find_by_action_id(&target.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo
-            .find_by_action_id(&cancel.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// The detail report marks the cancel enacted. The target this sweep already superseded is
-    /// canceled in that same write.
-    #[tokio::test]
-    async fn reporting_a_cancel_enacted_cancels_a_superseded_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Superseded),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        repo.update_broadcast_status(
-            &cancel_id,
-            BroadcastStatus::RevealConfirmed,
-            None,
-            Some(COMMIT_C),
-            Some(REVEAL_C),
-            None,
-        )
-        .await
-        .unwrap();
-
-        report_broadcast_progress(
-            &repo,
-            "mock://asm-enacted",
-            session_of(&sig_a()),
-            &cancel_id,
-            &mock_btc(),
-            ReportBroadcastProgressRequest {
-                broadcast_status: "reveal_confirmed".to_string(),
-                proposal_status: Some("enacted".to_string()),
-                commit_txid: Some(COMMIT_C.to_string()),
-                reveal_txid: Some(REVEAL_C.to_string()),
-                broadcast_error: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-        let cancel = repo.find_by_action_id(&cancel_id).await.unwrap().unwrap();
-        assert_eq!(cancel.status, ProposalStatus::Enacted);
-    }
-
-    /// Confirming the cancel's reveal corrects a target already marked enacted.
-    #[tokio::test]
-    async fn confirming_a_cancel_repairs_an_enacted_target() {
-        let repo = new_repo();
-        let (target_id, cancel_id) = target_with_cancel_in_flight(&repo).await;
-        repo.update_broadcast_status(
-            &target_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Enacted),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let cancel = repo
-            .update_broadcast_status(
-                &cancel_id,
-                BroadcastStatus::RevealConfirmed,
-                None,
-                Some(COMMIT_C),
-                Some(REVEAL_C),
-                None,
-            )
-            .await
-            .unwrap()
-            .unwrap();
-
-        let settled = settle_confirmed_cancel(&repo, "mock://asm-enacted", &mock_btc(), cancel)
-            .await
-            .unwrap();
-
-        assert_eq!(settled.status, ProposalStatus::Enacted);
-        let target = repo.find_by_action_id(&target_id).await.unwrap().unwrap();
-        assert_eq!(target.status, ProposalStatus::Canceled);
-    }
-
-    /// Enacting writes only an approved row. A target a cancel already marked `canceled` stays
-    /// canceled.
-    #[tokio::test]
-    async fn an_enacted_write_does_not_overwrite_a_canceled_target() {
-        let repo = new_repo();
-        let proposal = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Canceled),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        assert!(!repo.enact_if_approved(&proposal.action_id).await.unwrap());
-        let kept = repo
-            .find_by_action_id(&proposal.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(kept.status, ProposalStatus::Canceled);
-    }
-
-    /// The report decided `enacted` before the lock. By the write, a cancel has already marked the
-    /// target `canceled`. The report must not put `enacted` back.
-    #[tokio::test]
-    async fn a_report_does_not_enact_a_target_a_cancel_already_canceled() {
-        let repo = new_repo();
-        let proposal = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::RevealConfirmed,
-            Some(ProposalStatus::Canceled),
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-
-        let updated = repo
-            .update_reported_pair_status(
-                &proposal.action_id,
-                BroadcastStatus::RevealConfirmed,
-                Some(ProposalStatus::Enacted),
-                Some(COMMIT_A),
-                Some(REVEAL_A),
-                None,
-                None,
-                &[],
-            )
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(updated.status, ProposalStatus::Canceled);
-    }
-
-    /// A supersede applies only to the row this read judged. Once a reveal is confirmed, a stale
-    /// supersede does not put it back, and a superseded row can be confirmed again.
-    #[tokio::test]
-    async fn a_stale_supersede_does_not_overwrite_a_confirmation() {
-        let repo = new_repo();
-        let proposal = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(COMMIT_A),
-            Some(REVEAL_A),
-            None,
-        )
-        .await
-        .unwrap();
-
-        assert!(repo
-            .supersede_if_unchanged(&proposal.action_id, BroadcastStatus::RevealBroadcasted)
-            .await
-            .unwrap());
-        let superseded = repo
-            .find_by_action_id(&proposal.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(superseded.status, ProposalStatus::Superseded);
-        let effect = report_effect(
-            &superseded,
-            Some(REVEAL_B),
-            BroadcastStatus::RevealBroadcasted,
-            None,
-            Some(&BroadcastAttempt {
-                broadcaster_pubkey: None,
-                commit_txid: COMMIT_B.to_string(),
-                reveal_txid: REVEAL_B.to_string(),
-                created_at: chrono::Utc::now(),
-            }),
-        )
-        .unwrap();
-        assert!(effect.lists_pair);
-        assert!(!effect.moves_row);
-
-        let restored = repo
-            .confirm_tracked_reveal(&proposal.action_id, Some(REVEAL_A), COMMIT_A, REVEAL_A)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(restored.status, ProposalStatus::Approved);
-        assert_eq!(restored.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert!(!repo
-            .supersede_if_unchanged(&proposal.action_id, BroadcastStatus::RevealBroadcasted)
-            .await
-            .unwrap());
-        let kept = repo
-            .find_by_action_id(&proposal.action_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(kept.status, ProposalStatus::Approved);
-        assert_eq!(kept.broadcast_status, BroadcastStatus::RevealConfirmed);
-    }
-
-    /// An immediate action retired while still idle comes back when its executed reveal is
-    /// imported. Listing the pair is not enough: this read has to confirm it.
-    #[tokio::test]
-    async fn an_imported_reveal_restores_a_superseded_idle_proposal() {
-        let repo = new_repo();
-        let proposal = save_approved_proposal(&repo, Authority::StrataAdmin, 1).await;
-        repo.update_broadcast_status(
-            &proposal.action_id,
-            BroadcastStatus::Idle,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        assert!(repo
-            .supersede_if_unchanged(&proposal.action_id, BroadcastStatus::Idle)
-            .await
-            .unwrap());
-
-        let restored = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &proposal.action_id,
-            &MinedReveals(vec![(
-                REVEAL_B,
-                800_010,
-                envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex()),
-            )]),
-            report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(restored.status, ProposalStatus::Approved);
-        assert_eq!(restored.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert_eq!(restored.reveal_txid.as_deref(), Some(REVEAL_B));
-    }
-
-    /// A pair already listed under another signer is refused as such, not as the caller's own.
-    #[tokio::test]
-    async fn a_pair_listed_under_another_signer_is_refused_as_listed() {
-        let repo = new_repo();
-        let action_id = save_with_pair_of_a(&repo).await;
-        let err = register_additional_pair(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &NodeView::default(),
-            &action_id,
-            COMMIT_A,
-            REVEAL_A,
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            matches!(err, AppError::Conflict(ref m) if m == PAIR_ALREADY_LISTED),
-            "{err:?}"
-        );
-    }
-
-    /// A node without `-txindex` cannot read any mined reveal, so nothing can be verified and a
-    /// `reveal_confirmed` report is not taken: the row waits at `reveal_broadcasted`.
-    #[tokio::test]
-    async fn a_node_without_txindex_confirms_nothing() {
+    async fn a_node_without_txindex_takes_the_report_beside_other_pairs() {
         let repo = new_repo();
         let action_id = save_with_pair_of_a(&repo).await;
         register_pair_of_b(&repo, &action_id).await.unwrap();
@@ -7765,10 +5518,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            confirmed.broadcast_status,
-            BroadcastStatus::RevealBroadcasted
-        );
+        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_B));
     }
 
@@ -7915,7 +5665,6 @@ mod tests {
                 800_010,
                 envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
             )]),
-            "mock://asm-membership",
         )
         .await;
         assert_eq!(
@@ -8096,18 +5845,8 @@ mod tests {
 
         /// A commit + reveal pair of the fixture action at `seq_no`, both left in the mempool.
         async fn send_pair(&self, seq_no: u64) -> (String, String) {
-            self.send_pair_signed_by(seq_no, &[1, 2]).await
-        }
-
-        /// The same pair, its payload signed by the fixture keys with these secret scalars at
-        /// indices 0, 1, ….
-        async fn send_pair_signed_by(&self, seq_no: u64, secrets: &[u8]) -> (String, String) {
             use std::str::FromStr;
-            let envelope = Envelope::new(&signed_payload_by(
-                seq_no,
-                &test_fixture_action_hex(),
-                secrets,
-            ));
+            let envelope = Envelope::new(&signed_payload(seq_no, &test_fixture_action_hex()));
             let address =
                 bitcoin::Address::from_script(&envelope.script_pubkey(), bitcoin::Network::Regtest)
                     .unwrap();
@@ -8261,55 +6000,6 @@ mod tests {
         assert_eq!(stored.activation_height, Some(height + 2016));
     }
 
-    /// A member's pair carries both approvals at indices that are not the role's: mined first, it
-    /// is rejected by the ASM, and neither its sender's report nor the reconcile confirms it.
-    /// A's valid reveal, mined later, does.
-    #[tokio::test]
-    #[ignore = "needs bitcoind on PATH"]
-    async fn regtest_a_reveal_the_asm_rejects_does_not_win() {
-        let chain = Regtest::start(true).await;
-        let (commit_a, reveal_a) = chain.send_pair(1).await;
-        let (commit_m, reveal_m) = chain.send_pair_signed_by(1, &[2, 1]).await;
-        let repo = new_repo();
-        let action_id = save_with_pair(&repo, 1, &commit_a, &reveal_a).await;
-        register_additional_pair(
-            &repo,
-            session_of(&sig_b()),
-            "mock://asm-membership",
-            &chain.node,
-            &action_id,
-            &commit_m,
-            &reveal_m,
-        )
-        .await
-        .unwrap();
-
-        chain.mine(&[&commit_m, &reveal_m]).await;
-        let reported = report_broadcast_progress(
-            &repo,
-            "mock://asm-membership",
-            session_of(&sig_b()),
-            &action_id,
-            &chain.node,
-            report("reveal_confirmed", Some(&commit_m), Some(&reveal_m)),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            reported.broadcast_status,
-            BroadcastStatus::RevealBroadcasted
-        );
-        assert_eq!(reported.activation_height, None);
-
-        let height = chain.mine(&[&commit_a, &reveal_a]).await;
-        let confirmed =
-            confirm_reveal_if_mined(&repo, reported, &chain.node, "mock://asm-membership").await;
-        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
-        assert_eq!(confirmed.reveal_txid.as_deref(), Some(reveal_a.as_str()));
-        let stored = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        assert_eq!(stored.activation_height, Some(height + 2016));
-    }
-
     /// Both reveals in one block: the one the block lists first is the one the ASM executed.
     #[tokio::test]
     #[ignore = "needs bitcoind on PATH"]
@@ -8347,11 +6037,11 @@ mod tests {
     }
 
     /// Without `-txindex` the node cannot find B's mined reveal once it left the mempool. The row
-    /// stays in flight instead of confirming A's unmined pair or skipping B's, and a lone pair's
-    /// report is not taken either: nothing can be verified.
+    /// stays in flight instead of confirming A's unmined pair or skipping B's; a lone pair's
+    /// report is still taken.
     #[tokio::test]
     #[ignore = "needs bitcoind on PATH"]
-    async fn regtest_a_node_without_txindex_confirms_nothing() {
+    async fn regtest_a_node_without_txindex_leaves_several_pairs_in_flight() {
         let chain = Regtest::start(false).await;
         let (commit_a, reveal_a) = chain.send_pair(1).await;
         let (commit_b, reveal_b) = chain.send_pair(1).await;
@@ -8379,7 +6069,7 @@ mod tests {
         );
         assert_eq!(chain.node.txindex().await.unwrap(), TxIndex::Missing);
 
-        // A lone pair on the same node: its desktop's report cannot be verified, so it waits.
+        // A lone pair on the same node: its desktop's report confirms it.
         let (commit_c, reveal_c) = chain.send_pair(2).await;
         // Its own repository: one broadcast in flight per authority.
         let lone_repo = new_repo();
@@ -8395,10 +6085,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(
-            confirmed.broadcast_status,
-            BroadcastStatus::RevealBroadcasted
-        );
+        assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
     }
 
     /// A registration whose session died before broadcasting leaves a commit the node finds

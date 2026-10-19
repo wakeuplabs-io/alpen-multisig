@@ -26,15 +26,7 @@ pub(crate) trait BitcoinRpcClient: Send + Sync {
         Ok(MinedReveal {
             height: self.get_block_height_for_txid(txid).await?,
             tx: None,
-            block: None,
         })
-    }
-
-    /// The SPS-50 magic bytes of the network this node serves: the ASM processes an admin
-    /// transaction only when its first output carries the tag under these bytes (#605). A test
-    /// double answers the default.
-    fn magic_bytes(&self) -> [u8; 4] {
-        DEFAULT_MAGIC_BYTES
     }
 
     /// Return the current chain tip height (`getblockcount`).
@@ -55,16 +47,6 @@ pub(crate) struct MinedReveal {
     pub height: u64,
     /// The decoded transaction. `None` only from a client that does not read transactions.
     pub tx: Option<bitcoin::Transaction>,
-    /// The hashes of its block and of that block's parent, which name the ASM states before and
-    /// after the block. `None` only from a client that does not read them.
-    pub block: Option<MinedBlock>,
-}
-
-/// Where a mined transaction sits: its block and the block before it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MinedBlock {
-    pub hash: String,
-    pub parent_hash: String,
 }
 
 /// The node's transaction index, as `getindexinfo` reports it (#605).
@@ -82,11 +64,7 @@ pub(crate) struct HttpBitcoinRpcClient {
     user: String,
     pass: String,
     client: reqwest::Client,
-    magic_bytes: [u8; 4],
 }
-
-/// The magic bytes when none are configured: the same default as the desktop (`ALPN`).
-pub(crate) const DEFAULT_MAGIC_BYTES: [u8; 4] = *b"ALPN";
 
 impl HttpBitcoinRpcClient {
     pub(crate) fn new(base_url: &str, user: &str, pass: &str) -> Self {
@@ -95,14 +73,7 @@ impl HttpBitcoinRpcClient {
             user: user.to_string(),
             pass: pass.to_string(),
             client: http_client::shared(),
-            magic_bytes: DEFAULT_MAGIC_BYTES,
         }
-    }
-
-    /// The network's SPS-50 magic bytes, as configured for the ASM and the desktop.
-    pub(crate) fn with_magic_bytes(mut self, magic_bytes: [u8; 4]) -> Self {
-        self.magic_bytes = magic_bytes;
-        self
     }
 
     /// Whether the node keeps a transaction index (#605). Without one, `getrawtransaction` cannot
@@ -238,36 +209,7 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
     }
 
     async fn get_mined_reveal(&self, txid: &str) -> Result<MinedReveal, AppError> {
-        let result = self.call("getrawtransaction", json!([txid, true])).await?;
-        let blockhash = result
-            .get("blockhash")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                AppError::BadRequest(format!(
-                    "getrawtransaction: tx {txid} has no blockhash — not yet confirmed"
-                ))
-            })?
-            .to_string();
-        let header = self
-            .call("getblockheader", json!([blockhash, true]))
-            .await?;
-        let height = header
-            .get("height")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| {
-                AppError::BadRequest(format!(
-                    "getblockheader: missing `height` for blockhash {blockhash}"
-                ))
-            })?;
-        let parent_hash = header
-            .get("previousblockhash")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                AppError::BadRequest(format!(
-                    "getblockheader: missing `previousblockhash` for blockhash {blockhash}"
-                ))
-            })?
-            .to_string();
+        let (result, height) = self.locate(txid).await?;
         let tx = result
             .get("hex")
             .and_then(Value::as_str)
@@ -280,10 +222,6 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
         Ok(MinedReveal {
             height,
             tx: Some(tx),
-            block: Some(MinedBlock {
-                hash: blockhash,
-                parent_hash,
-            }),
         })
     }
 
@@ -309,10 +247,6 @@ impl BitcoinRpcClient for HttpBitcoinRpcClient {
             .ok_or_else(|| {
                 AppError::BadRequest(format!("getblock: tx {txid} is not in block {blockhash}"))
             })
-    }
-
-    fn magic_bytes(&self) -> [u8; 4] {
-        self.magic_bytes
     }
 
     async fn get_chain_tip(&self) -> Result<u64, AppError> {

@@ -1,8 +1,9 @@
 //! In-memory proposal repository for POC and testing.
 
 use crate::application::proposals::{
-    broadcast_claim_allowed, broadcast_write_for_report, decide_additional_pair, report_effect,
-    row_still_has_reveal, AdditionalPair, BroadcastClaimFacts, AUTHORITY_IN_FLIGHT,
+    broadcast_claim_allowed, broadcast_write_for_report, decide_additional_pair,
+    exceeds_pair_limit, reports_tracked_pair, row_still_has_reveal, AdditionalPair,
+    BroadcastClaimFacts, AUTHORITY_IN_FLIGHT, PAIR_LIMIT_REACHED,
 };
 use crate::application::traits::ProposalRepository;
 use crate::domain::authority::Authority;
@@ -218,62 +219,6 @@ impl ProposalRepository for InMemoryProposalRepository {
         Ok(proposal.clone())
     }
 
-    async fn enact_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError> {
-        let mut proposals = self
-            .proposals
-            .write()
-            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let Some(proposal) = proposals.get_mut(action_id) else {
-            return Ok(false);
-        };
-        if proposal.status != ProposalStatus::Approved
-            || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        {
-            return Ok(false);
-        }
-        proposal.status = ProposalStatus::Enacted;
-        proposal.updated_at = Utc::now();
-        Ok(true)
-    }
-
-    async fn expire_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError> {
-        let mut proposals = self
-            .proposals
-            .write()
-            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let Some(proposal) = proposals.get_mut(action_id) else {
-            return Ok(false);
-        };
-        if proposal.status != ProposalStatus::Approved
-            || proposal.broadcast_status != BroadcastStatus::RevealConfirmed
-        {
-            return Ok(false);
-        }
-        proposal.status = ProposalStatus::Expired;
-        proposal.updated_at = Utc::now();
-        Ok(true)
-    }
-
-    async fn supersede_if_unchanged(
-        &self,
-        action_id: &ActionId,
-        observed: BroadcastStatus,
-    ) -> Result<bool, AppError> {
-        let mut proposals = self
-            .proposals
-            .write()
-            .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
-        let Some(proposal) = proposals.get_mut(action_id) else {
-            return Ok(false);
-        };
-        if proposal.status != ProposalStatus::Approved || proposal.broadcast_status != observed {
-            return Ok(false);
-        }
-        proposal.status = ProposalStatus::Superseded;
-        proposal.updated_at = Utc::now();
-        Ok(true)
-    }
-
     async fn update_broadcast_status(
         &self,
         action_id: &ActionId,
@@ -313,8 +258,9 @@ impl ProposalRepository for InMemoryProposalRepository {
         attempt: Option<BroadcastAttempt>,
         live: &[String],
     ) -> Result<Option<Proposal>, AppError> {
-        // Decided and written under one write lock, like the registration it must not overwrite
-        // (#605).
+        // Checked and written under one write lock, like the registration it must not overwrite.
+        // The pair is listed only when this same write applies, so a report that lost the race
+        // cannot leave a foreign reveal for the reconcile to confirm (#605).
         let mut proposals = self
             .proposals
             .write()
@@ -322,24 +268,22 @@ impl ProposalRepository for InMemoryProposalRepository {
         let Some(proposal) = proposals.get_mut(action_id) else {
             return Ok(None);
         };
-        let effect = report_effect(
-            proposal,
-            reveal_txid,
-            status,
-            proposal_status,
-            attempt.as_ref(),
-        )
-        .map_err(|refusal| AppError::Conflict(refusal.to_string()))?;
-        if let Some(attempt) = attempt.filter(|_| effect.lists_pair) {
-            let kept = proposal
-                .broadcast_attempts
-                .iter()
-                .any(|kept| kept.reveal_txid.eq_ignore_ascii_case(&attempt.reveal_txid));
-            if !kept {
-                proposal.broadcast_attempts.push(attempt);
+        if reports_tracked_pair(reveal_txid, proposal.reveal_txid.as_deref()) {
+            if attempt
+                .as_ref()
+                .is_some_and(|attempt| exceeds_pair_limit(proposal, attempt))
+            {
+                return Err(AppError::Conflict(PAIR_LIMIT_REACHED.to_string()));
             }
-        }
-        if effect.moves_row {
+            if let Some(attempt) = attempt {
+                let kept = proposal
+                    .broadcast_attempts
+                    .iter()
+                    .any(|kept| kept.reveal_txid.eq_ignore_ascii_case(&attempt.reveal_txid));
+                if !kept {
+                    proposal.broadcast_attempts.push(attempt);
+                }
+            }
             // After the attempt is listed, so a failed second pair puts the row back on an
             // earlier one the node still has (#605).
             let write =
@@ -370,21 +314,16 @@ impl ProposalRepository for InMemoryProposalRepository {
         let Some(proposal) = proposals.get_mut(action_id) else {
             return Ok(None);
         };
-        let confirmable = match proposal.status {
-            ProposalStatus::Superseded => true,
-            ProposalStatus::Approved => matches!(
-                proposal.broadcast_status,
-                BroadcastStatus::CommitBroadcasted
-                    | BroadcastStatus::CommitConfirmed
-                    | BroadcastStatus::RevealBroadcasted
-                    | BroadcastStatus::Failed
-            ),
-            _ => false,
-        };
+        let confirmable = matches!(
+            proposal.broadcast_status,
+            BroadcastStatus::CommitBroadcasted
+                | BroadcastStatus::CommitConfirmed
+                | BroadcastStatus::RevealBroadcasted
+                | BroadcastStatus::Failed
+        );
         if !confirmable || !row_still_has_reveal(observed_reveal, proposal.reveal_txid.as_deref()) {
             return Ok(None);
         }
-        proposal.status = ProposalStatus::Approved;
         proposal.broadcast_status = BroadcastStatus::RevealConfirmed;
         proposal.commit_txid = Some(commit_txid.to_ascii_lowercase());
         proposal.reveal_txid = Some(reveal_txid.to_ascii_lowercase());
@@ -439,7 +378,7 @@ impl ProposalRepository for InMemoryProposalRepository {
         Ok(())
     }
 
-    async fn enact_executed_cancel(
+    async fn enact_cancel(
         &self,
         cancel_action_id: &ActionId,
         target_action_id: &ActionId,
@@ -449,17 +388,12 @@ impl ProposalRepository for InMemoryProposalRepository {
             .write()
             .map_err(|_| AppError::Internal(anyhow::anyhow!("repo lock poisoned")))?;
 
-        let target_open = proposals
+        let target_is_approved = proposals
             .get(target_action_id)
-            .map(|p| {
-                matches!(
-                    p.status,
-                    ProposalStatus::Approved | ProposalStatus::Superseded | ProposalStatus::Enacted
-                )
-            })
+            .map(|p| p.status == ProposalStatus::Approved)
             .unwrap_or(false);
 
-        if !target_open {
+        if !target_is_approved {
             return Ok(false);
         }
 

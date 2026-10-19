@@ -55,23 +55,6 @@ pub(crate) trait ProposalRepository: Send + Sync {
         abandoned: &[String],
     ) -> Result<Proposal, AppError>;
 
-    /// Mark `approved` + `reveal_confirmed` as `enacted`. A row that is no longer `approved`
-    /// — a cancel wrote `canceled` during this read — is left as it is.
-    async fn enact_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError>;
-
-    /// Mark `approved` + `reveal_confirmed` as `expired`. A row a concurrent read already
-    /// enacted is left as it is.
-    async fn expire_if_approved(&self, action_id: &ActionId) -> Result<bool, AppError>;
-
-    /// Mark `approved` as `superseded`, but only while `broadcast_status` is still `observed`.
-    ///
-    /// A confirmation that landed after this read started does not match, and is left in place.
-    async fn supersede_if_unchanged(
-        &self,
-        action_id: &ActionId,
-        observed: BroadcastStatus,
-    ) -> Result<bool, AppError>;
-
     /// Update broadcast sub-status and related txids/error for an approved proposal.
     async fn update_broadcast_status(
         &self,
@@ -139,15 +122,15 @@ pub(crate) trait ProposalRepository: Send + Sync {
         update_id: u32,
     ) -> Result<(), AppError>;
 
-    /// Atomically mark a cancel proposal as `Enacted` and its target as `Canceled`, when the
-    /// target is `Approved`, `Superseded`, or `Enacted`.
+    /// Atomically mark a cancel proposal as `Enacted` and its target as `Canceled`,
+    /// but only if the target is still `Approved`.
     ///
-    /// `Superseded` is the row this sweep writes when a cancel's pair is not on it yet.
-    /// `Enacted` is the shape a cancel leaves for an `EeStfVk` or a Defcon 3 whose harbor is
-    /// already on. The confirm that calls this has passed `asm_executed`.
-    ///
-    /// Returns `Ok(false)` without writing when the target is already `Canceled` or gone.
-    async fn enact_executed_cancel(
+    /// Returns `Ok(true)` if the target was `Approved` and both transitions were applied.
+    /// Returns `Ok(false)` without mutating anything if the target was no longer `Approved`
+    /// (e.g. it was already `Enacted`, `Canceled`, or `Expired` via another path) — in that
+    /// case the ASM would have rejected the cancel tx, so the cancel proposal did not actually
+    /// take effect and the caller must decide how to reflect that.
+    async fn enact_cancel(
         &self,
         cancel_action_id: &ActionId,
         target_action_id: &ActionId,

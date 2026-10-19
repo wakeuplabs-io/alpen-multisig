@@ -5,7 +5,7 @@ import { approveProposal, reportBroadcastProgress } from '@/api/proposals'
 import { ShieldAccentIcon } from '@/assets/icons'
 import type { ImportBroadcastState } from '@/domain/proposal-detail/components/import-bundle-modal'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
-import { importNotice as noticeForImport } from '@/domain/proposal-detail/model/imported-pair'
+import { IMPORTED_PAIR_IGNORED_NOTICE, importedPairIgnored } from '@/domain/proposal-detail/model/imported-pair'
 import { ActivationCountdown } from '@/domain/cancel-proposal/components/activation-countdown'
 import { PendingExpiryCountdown } from '@/components/pending-expiry-countdown'
 import { ProposalDetail } from '@/domain/proposal-detail/components/proposal-detail'
@@ -76,9 +76,11 @@ export function ProposalDetailScreen() {
 				commitTxid: broadcastState.commitTxid ?? undefined,
 				revealTxid: broadcastState.revealTxid ?? undefined,
 			})
-			// A pair the row does not track answers 200 and leaves the row as it is (#605): say what
-			// happened rather than let the import look applied.
-			if (synced.ok) setImportNotice(noticeForImport(broadcastState.revealTxid, synced.data.revealTxid))
+			// A pair the row does not track is ignored with a 200 (#605): say so rather than let the
+			// import look applied.
+			if (synced.ok && importedPairIgnored(broadcastState.revealTxid, synced.data.revealTxid)) {
+				setImportNotice(IMPORTED_PAIR_IGNORED_NOTICE)
+			}
 			// If reveal is confirmed, attempt enacted transition in a separate call.
 			// Backend validates against ASM — 409 means not yet confirmed; non-fatal,
 			// reload reconcile will transition when ASM confirms.

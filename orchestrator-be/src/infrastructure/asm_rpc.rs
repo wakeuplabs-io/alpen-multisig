@@ -30,42 +30,6 @@ pub(crate) async fn fetch_admin_state(
     decode_admin_state(&fetch_anchor_state(rpc_url).await?)
 }
 
-/// The administration subprotocol's state right after the ASM processed `block_hash`
-/// (`strata_asm_getAsmState`), or `None` when the ASM has not processed that block (#605).
-pub(crate) async fn fetch_admin_state_at(
-    rpc_url: &str,
-    block_hash: &str,
-) -> Result<Option<AdministrationSubprotoState>, String> {
-    let result = rpc_call(rpc_url, "strata_asm_getAsmState", json!([block_hash])).await?;
-    if result.is_null() {
-        return Ok(None);
-    }
-    let raw_state = result
-        .pointer("/state")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "getAsmState result missing `state` array".to_string())?;
-    let bytes = raw_state
-        .iter()
-        .map(|v| {
-            v.as_u64()
-                .and_then(|n| u8::try_from(n).ok())
-                .ok_or_else(|| format!("state entry is not a byte: {v}"))
-        })
-        .collect::<Result<Vec<u8>, String>>()?;
-    let anchor = AnchorState::from_ssz_bytes(&bytes)
-        .map_err(|err| format!("failed to SSZ-decode AnchorState at {block_hash}: {err}"))?;
-    decode_admin_state(&anchor).map(Some)
-}
-
-/// The height of the last block the ASM has processed (`cur_block` of `strata_asm_getStatus`).
-pub(crate) async fn fetch_processed_height(rpc_url: &str) -> Result<u64, String> {
-    let status = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
-    status
-        .pointer("/cur_block/height")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| "status result missing `cur_block.height`".to_string())
-}
-
 async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, String> {
     let client = http_client::shared();
     let payload = json!({
