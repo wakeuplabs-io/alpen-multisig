@@ -407,7 +407,8 @@ acts on; the others are refused on the sequence number and cost only their fees.
   `reveal_txid`, `created_at`; key `(action_id, reveal_txid)`). A progress report carrying both
   txids of the pair the row tracks (or of an untagged claim) records the pair with the reporting signer (idempotent), so the claimer's pre-registration
   is the first pair. Pairs registered before #605 are backfilled with no broadcaster.
-- **When.** Only beside a pair on its way: `approved` and `commit_broadcasted` with a txid,
+- **When.** A pair already listed under another signer is refused as such (`409`, "already listed
+  for this proposal"). Only beside a pair on its way: `approved` and `commit_broadcasted` with a txid,
   `commit_confirmed` or `reveal_broadcasted` (`decide_additional_pair`). An empty claim is a
   signer still at the device; `idle`, `failed` and a stale empty claim go through the claim. One
   pair per signer: whoever already sent one bumps its fee (CPFP on the reveal change), and the
@@ -451,9 +452,11 @@ acts on; the others are refused on the sequence number and cost only their fees.
   and the row stays in flight. A pair first reported after it was mined (the manual fallback,
   imported later) still counts: what it carries decides, not when it was registered.
 - **A failed pair falls back only to a live one.** A `failed` report for the pair the row tracks,
-  when another pair is listed, sets the row back to the newest other pair whose commit the node still
-  has — in its mempool or in a block — at `commit_broadcasted`, and clears the error. A pair whose
-  commit is nowhere, or that the node could not place, is not a fallback: the row becomes `failed`,
+  when another pair is listed, sets the row back to the newest other pair that may still be on its
+  way, at `commit_broadcasted`, and clears the error. Only a pair whose commit the node answers is
+  nowhere — neither in its mempool nor in a block — is dead; a node that could not answer (a timeout,
+  an index still syncing) does not make a pair dead, since `failed` beside a live pair would stop its
+  watchers and reopen the authority's claim gate. With no other pair left, the row becomes `failed`,
   and a fresh claim may send again. A `failed` report never lists its pair: a pair that reached the
   orchestrator is listed already, and one whose pre-registration never landed was never broadcast.
 - **Reconcile picks the pair mined first.** `confirm_reveal_if_mined` looks up the row's reveal and
@@ -532,6 +535,16 @@ acts on; the others are refused on the sequence number and cost only their fees.
   whose pair was dropped cannot send another: when the row tracks a pair whose sender's desktop died
   before broadcasting it and every other pair was dropped, only a signer who has sent no pair can move
   the proposal until that desktop returns and reports `failed`.
+- **Deferred to #616.** The orchestrator does not yet ask the ASM whether a reveal executed:
+  - A lone pair's report is still the desktop's word.
+  - The quorum check uses the proposal's approvers, not the role's `ThresholdConfig` in index order,
+    so a member can get a reveal mined with approvals the ASM rejects, and it is confirmed.
+  - A reveal without the administration tag, or beyond `max_seqno_gap`, can be confirmed.
+  - A read that cannot judge a reveal can still let the sweep retire the proposal.
+  - A cancel of a target can lose the race against its target's read.
+
+  #616 judges every reveal from the ASM's state around its block and makes the sweep and cancel
+  writes conditional. It requires `-txindex=1` and Bitcoin Core ≥ 29.
 
 ### Frontend (`desktop-app/src`)
 

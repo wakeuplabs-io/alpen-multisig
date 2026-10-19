@@ -477,6 +477,10 @@ pub(crate) const NO_PAIR_IN_FLIGHT: &str =
 /// Conflict text when the caller already registered a pair for this proposal (#605).
 pub(crate) const OWN_PAIR_EXISTS: &str = "you already sent a commit and reveal for this proposal";
 
+/// Conflict text when the pair being registered is already listed under another signer (#605).
+pub(crate) const PAIR_ALREADY_LISTED: &str =
+    "this commit and reveal is already listed for this proposal";
+
 /// Conflict text when the caller already listed [`MAX_PAIRS_PER_SIGNER`] pairs (#605).
 pub(crate) const PAIR_LIMIT_REACHED: &str =
     "you already sent the most commit and reveal pairs allowed for this proposal";
@@ -598,10 +602,13 @@ pub(crate) fn decide_additional_pair(
             .iter()
             .any(|reveal| reveal.eq_ignore_ascii_case(&kept.reveal_txid))
     };
+    if proposal.broadcast_attempts.iter().any(same_reveal) {
+        return Err(PAIR_ALREADY_LISTED);
+    }
     if proposal
         .broadcast_attempts
         .iter()
-        .any(|kept| (same_signer(kept) && !given_up(kept)) || same_reveal(kept))
+        .any(|kept| same_signer(kept) && !given_up(kept))
     {
         return Err(OWN_PAIR_EXISTS);
     }
@@ -647,9 +654,10 @@ async fn abandoned_pairs_of(
         .collect()
 }
 
-/// The reveal txids of the listed pairs whose commit the node has: in its mempool or in a block
-/// (#605). A pair whose commit is nowhere, or that the node could not place, is not counted: it
-/// cannot be shown as the pair in flight.
+/// The reveal txids of the listed pairs that may still be on their way (#605): every pair except
+/// one whose commit the node answers is nowhere — neither in its mempool nor in a block. A node
+/// that could not answer (a timeout, an index still syncing) does not make a pair dead: marking the
+/// row `failed` beside a live pair would stop its watchers and reopen the authority's claim gate.
 async fn live_pairs(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> Vec<String> {
     let lookups = proposal
         .broadcast_attempts
@@ -659,12 +667,7 @@ async fn live_pairs(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> V
             let lookup = btc_client
                 .get_block_height_for_txid(&kept.commit_txid)
                 .await;
-            let live = match lookup {
-                Ok(_) => true,
-                Err(AppError::BadRequest(message)) => message.contains("not yet confirmed"),
-                Err(_) => false,
-            };
-            live.then(|| kept.reveal_txid.clone())
+            (!tx_nowhere(&lookup)).then(|| kept.reveal_txid.clone())
         });
     futures::future::join_all(lookups)
         .await
@@ -6176,5 +6179,74 @@ mod tests {
         async fn get_chain_tip(&self) -> Result<u64, AppError> {
             Ok(800_000)
         }
+    }
+
+    /// Answers every lookup with a failed call: a node that is down.
+    struct NodeDown;
+
+    #[async_trait::async_trait]
+    impl BitcoinRpcClient for NodeDown {
+        async fn estimate_fee_rate_sats_per_vb(
+            &self,
+            _target_blocks: u16,
+        ) -> Result<u64, AppError> {
+            Ok(1)
+        }
+
+        async fn get_block_height_for_txid(&self, _txid: &str) -> Result<u64, AppError> {
+            Err(AppError::BadRequest(
+                "Bitcoin RPC request timed out".to_string(),
+            ))
+        }
+
+        async fn get_chain_tip(&self) -> Result<u64, AppError> {
+            Ok(800_000)
+        }
+    }
+
+    /// A node that cannot answer does not make the earlier pair dead: the row goes back to it
+    /// rather than `failed`, which would stop its watchers and reopen the claim gate.
+    #[tokio::test]
+    async fn a_node_that_cannot_answer_keeps_the_earlier_pair() {
+        let repo = new_repo();
+        let action_id = save_with_pair_of_a(&repo).await;
+        register_pair_of_b(&repo, &action_id).await.unwrap();
+
+        let mut failed = report("failed", Some(COMMIT_B), Some(REVEAL_B));
+        failed.broadcast_error = Some("rejected".to_string());
+        let after = report_broadcast_progress(
+            &repo,
+            "mock://asm-membership",
+            session_of(&sig_b()),
+            &action_id,
+            &NodeDown,
+            failed,
+        )
+        .await
+        .unwrap();
+        assert_eq!(after.broadcast_status, BroadcastStatus::CommitBroadcasted);
+        assert_eq!(after.reveal_txid.as_deref(), Some(REVEAL_A));
+    }
+
+    /// A pair already listed under another signer is refused as such, not as the caller's own.
+    #[tokio::test]
+    async fn a_pair_listed_under_another_signer_is_refused_as_listed() {
+        let repo = new_repo();
+        let action_id = save_with_pair_of_a(&repo).await;
+        let err = register_additional_pair(
+            &repo,
+            session_of(&sig_b()),
+            "mock://asm-membership",
+            &NodeView::default(),
+            &action_id,
+            COMMIT_A,
+            REVEAL_A,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, AppError::Conflict(ref m) if m == PAIR_ALREADY_LISTED),
+            "{err:?}"
+        );
     }
 }
