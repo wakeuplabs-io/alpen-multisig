@@ -1,8 +1,12 @@
 # Supply-chain policy (P-011). See https://embarkstudios.github.io/cargo-deny/
 [advisories]
 version = 2
-# No advisory ignores. Keep in sync with .cargo/audit.toml.
+# Keep in sync with .cargo/audit.toml.
 unmaintained = "none"
+ignore = [
+    # webpki-roots 0.25 via bdk_electrum 0.21 -> electrum-client 0.23; fix needs bdk_electrum 0.24 (#617).
+    "RUSTSEC-2026-0381",
+]
 yanked = "deny"
 
 [licenses]

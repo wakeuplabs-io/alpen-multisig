@@ -3,4 +3,6 @@
 [advisories]
 ignore = [
     "RUSTSEC-2023-0071",
+    # webpki-roots 0.25 via bdk_electrum 0.21 -> electrum-client 0.23; fix needs bdk_electrum 0.24 (#617).
+    "RUSTSEC-2026-0381",
 ]
