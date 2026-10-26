@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** Planned — Phase 0 (this document). No code has moved.
+**Status:** In progress — Phase 0 done (#622), Phase 1 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -91,8 +91,8 @@ Consequences:
 
 | Phase | Name | Visible change | Closes | Touches | Status |
 |---|---|---|---|---|---|
-| 0 | Master plan (this document) | none | — | `docs/` | In review |
-| 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | Planned |
+| 0 | Master plan (this document) | none | — | `docs/` | Done (#622) |
+| 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | In review |
 | 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Planned |
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Planned |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Planned |
@@ -214,6 +214,11 @@ protocol. Landing it first keeps it out of the bump diff.
 do not, record why here and fold this phase into Phase 5. Do not pin a third nightly.
 
 **Not touched:** `asm/rust-toolchain.toml`. It belongs to the submodule and moves with it in Phase 5.
+
+**Result:** go. `v0.1-alpha.11` and every transitive crate build on `nightly-2026-07-01` (rustc 1.98.0-nightly
+`f46ec5218`). The fallout was two new clippy lints, five sites, all in
+`desktop-app/src-tauri/src/infrastructure/broadcast_tx.rs`: `useless_borrows_in_formatting` (×3) and
+`byte_char_slices` (×2, tests). rustfmt reported no changes.
 
 ### Phase 2 — Bitcoin Core 30.2 binary
 
