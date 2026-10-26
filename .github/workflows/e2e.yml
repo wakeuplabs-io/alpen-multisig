@@ -31,7 +31,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2026-01-01
+          toolchain: nightly-2026-07-01
 
       - uses: Swatinem/rust-cache@v2
         with:

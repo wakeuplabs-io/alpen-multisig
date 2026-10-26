@@ -69,7 +69,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2026-01-01
+          toolchain: nightly-2026-07-01
           components: rustfmt, clippy
 
       # Caching the downloaded .deb archives turns the slowest CI step (mirror-bound apt downloads,

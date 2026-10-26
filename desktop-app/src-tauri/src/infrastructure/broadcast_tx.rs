@@ -49,7 +49,7 @@ pub fn build_signed_payload_bytes(
                 .ok_or_else(|| {
                     format!(
                         "signer {} not found in canonical key set",
-                        &sig.signer_pubkey
+                        sig.signer_pubkey
                     )
                 })? as u8;
 
@@ -90,7 +90,7 @@ pub fn build_signed_payload_bytes(
                     found.ok_or_else(|| {
                         format!(
                             "could not recover signature for signer {}",
-                            &sig.signer_pubkey
+                            sig.signer_pubkey
                         )
                     })?
                 }
@@ -105,7 +105,7 @@ pub fn build_signed_payload_bytes(
                 n => {
                     return Err(format!(
                         "unexpected signature length {n} for signer {}",
-                        &sig.signer_pubkey
+                        sig.signer_pubkey
                     ))
                 }
             };
@@ -417,7 +417,7 @@ mod build_reveal_tx_tests {
         let commit_address_script = commit_address.script_pubkey();
         let commit_tx = build_minimal_commit_tx(commit_address_script.clone());
 
-        let magic_bytes = MagicBytes::new([b'A', b'L', b'P', b'N']);
+        let magic_bytes = MagicBytes::new(*b"ALPN");
         let fee_sats = 500;
 
         let reveal_tx = build_reveal_tx(
@@ -485,7 +485,7 @@ mod build_reveal_tx_tests {
             derive_commit_address(&envelope_keypair, PAYLOAD, network).unwrap();
         let commit_address_script = commit_address.script_pubkey();
         let commit_tx = build_minimal_commit_tx(commit_address_script.clone());
-        let magic_bytes = MagicBytes::new([b'A', b'L', b'P', b'N']);
+        let magic_bytes = MagicBytes::new(*b"ALPN");
 
         let reveal_tx = build_reveal_tx(
             &envelope_keypair,
