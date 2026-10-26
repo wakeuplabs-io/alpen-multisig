@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phase 0 done (#622), Phase 1 in review.
+**Status:** In progress — Phases 0–1 done (#622, #623), Phase 2 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -92,8 +92,8 @@ Consequences:
 | Phase | Name | Visible change | Closes | Touches | Status |
 |---|---|---|---|---|---|
 | 0 | Master plan (this document) | none | — | `docs/` | Done (#622) |
-| 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | In review |
-| 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Planned |
+| 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | Done (#623) |
+| 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | In review |
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Planned |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Planned |
 | 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Planned |
@@ -224,13 +224,28 @@ do not, record why here and fold this phase into Phase 5. Do not pin a third nig
 
 | # | Contents |
 |---|---|
-| 1 | `.github/workflows/ci.yml` `BITCOIN_CORE_VERSION` → `30.2`; `staging/Dockerfile.bitcoin` `28.1` → `30.2`; note in `docs/operations/runbook.md` for local `bitcoind` |
+| 1 | `.github/workflows/ci.yml` `BITCOIN_CORE_VERSION` → `30.2`; `staging/Dockerfile.bitcoin` `28.1` → `30.2`; the local `bitcoind` note in `e2e-tests/README.md` (where the install note lives) |
 
 **Spike first.** Check whether the harness at `corepc-node 0.10` / `29_0` runs green against a `bitcoind`
 30.2 binary, and whether the `v0.1-alpha.11` runner in the Docker stack does. If either fails, record the
 error here and fold the binary move into Phase 5, where the features switch to `30_2` together.
 
 **Verification:** the 9 regtest suites ran (not skipped), and `bitcoind --version` printed 30.2 in that run.
+
+**Result:** go. The binary moves now. The crate features stay at `29_0` until Phase 5. Everything below ran
+against `bitcoind` v30.2.0, from the release tarball with its `SHA256SUMS` checked:
+
+- **In process:** `cargo test --workspace` passed all 23 test binaries, and all 12 `e2e-tests` suites ran
+  rather than skipping. `cargo test -p orchestrator-be -- --ignored postgres_ regtest_` passed 8/8, three
+  runs in a row.
+- **Docker stack** (`./scripts/local-stack.sh --clean` with the 30.2 image): the `v0.1-alpha.11` runner
+  followed the chain (`strata_asm_getStatus` 104 → 106), electrs indexed to the same height, and the
+  orchestrator came up healthy.
+- **WebDriver:** `wallet-smoke`, `proposal-add-signer`, `proposal-co-sign-mnemonic` and
+  `proposal-broadcast-quorum` all passed. The last one confirms the commit and reveal on-chain.
+
+`regtest-dev-api` reports unhealthy because its healthcheck calls `curl`, which the image does not ship. It
+did the same on 28.1 and serves `/mine` normally. That is out of scope here.
 
 ### Phase 3 — Seams, with no behavior change
 
