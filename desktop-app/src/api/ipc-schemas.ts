@@ -192,6 +192,10 @@ export const rawOrchestratorAuthSessionSchema = z.object({
 	expires_at_unix_ms: z.number(),
 })
 
+// admin-id.ts schemas
+/** Admin ID per signer key (lowercase hex, no `0x`); keys that are not valid compressed keys are absent. */
+export const adminIdsSchema = z.record(z.string(), z.string())
+
 // asm-state.ts schemas
 export const multisigConfigSchema = z.object({
 	signers: z.array(z.string()),

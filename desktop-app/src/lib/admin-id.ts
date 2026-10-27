@@ -77,3 +77,15 @@ export function truncateAdminId(value: string, prefix = 10, suffix = 8): string 
 	if (value.length <= prefix + suffix + 1) return value
 	return `${value.slice(0, prefix)}…${value.slice(-suffix)}`
 }
+
+export type AdminIdVariant = 'truncated' | 'full'
+
+/**
+ * The text a signer row prints: its Admin ID, `…` while it resolves, `Unknown` when there is none. Never the public
+ * key: a signer is identified by its Admin ID wherever the app lists one.
+ */
+export function adminIdDisplay(adminId: string | undefined, variant: AdminIdVariant): string {
+	if (adminId === undefined) return '…'
+	if (!isDisplayableAdminId(adminId)) return ADMIN_ID_UNKNOWN
+	return variant === 'full' ? adminId : truncateAdminId(adminId)
+}
