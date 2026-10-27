@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–5 done (#622–#627), Phase 6 in review (#628).
+**Status:** Done — Phases 0–7 (#622–#629). The release gate in §2 is lifted.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -97,8 +97,8 @@ Consequences:
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Done (#625) |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Done (#626) |
 | 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Done (#627) |
-| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | In review (#628) |
-| 7 | Device QA, staging reset, docs, reserve | none | AC 5 (device) | `docs/`, staging | Planned |
+| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | Done (#628) |
+| 7 | Device QA, environment reset, docs, reserve | none | AC 5 (device) | `docs/` | Done (#629) |
 
 Rules:
 
@@ -110,6 +110,7 @@ Rules:
   bigger commit.
 - **Release gate:** no release ships between Phase 4 and Phase 7. `develop` may carry the address display
   (Phase 4) on the old pin, which is correct on its own. The bump is not released until Phase 7 closes.
+  Phase 7 has closed, so the bump follows the normal release process.
 
 ## 3. Architecture
 
@@ -479,6 +480,87 @@ Verification:
 - Close-out (§7).
 - **Reserve:** walk findings, and a re-pin to `v0.5.0` final if it is tagged before release. If the final
   tag changes the signed message or the on-the-wire identity, that is new scope, not reserve.
+
+Decisions taken here:
+
+- **"Staging" is the local stack.** The environment is brought up, down and reset only through
+  `./scripts/local-stack.sh`. Nothing ran against the EC2 deployment.
+- **The Ledger is Speculos.** The Nano S+ build of the Bitcoin Test app 2.4.2, the same one G10 measured.
+  No physical device.
+
+**Result:** done. Two commits: the docs, and this close-out.
+
+**Environment.** `local-stack.sh --clean` on Bitcoin Core 30.2. The runbook check read `council in
+genesis` at height 101, and `proposals` was empty. The local Postgres has no volume, so `--clean` empties
+it as the runbook says. The script's help text, which says `postgres-data — NOT cleaned`, is out of date.
+
+**Signed messages on the devices.** The app's own renderer (`signing::render_signing_message`, regtest)
+produced three messages, and the app's own device adapters signed them: a signer update adding one
+Admin ID, a Safe Harbor address update, and a Defcon 1.
+
+| Device | What it painted | Signed |
+|---|---|---|
+| Ledger (Speculos, Nano S+, 2.4.2) | `Message hash` for all three, equal to the SHA-256 of the v0.5 message | yes, all three |
+| Trezor emulator (Safe 3, 2.8.7) | The message text, starting `Strata ASM Administration v1 Network: regtest Action: …` | yes, all three |
+
+- **The Nano S+ shows the hash, not the text.** This is the [#420](https://github.com/wakeuplabs-io/alpen-multisig/issues/420)
+  case, which is already settled, and not a defect. The device can be checked against the message only
+  through the hash. The messages it hashed carry `Network: regtest`, `Add Member: bcrt1q…` and
+  `Safe Harbor`.
+- **On the Trezor, the first page was captured.** It shows `Network:` on every action. The later pages
+  were confirmed without being captured, so the device text was not read for the member line or the
+  Harbor line.
+- **Identity across HRPs.** The Trezor signed as `bc1qm0fnq…`. That is the same witness program as the
+  council signer `bcrt1qm0fnq…` in genesis.
+
+Evidence is outside the repo, in `issues/evidence/60-P7-*`.
+
+**Device QA specs**, against the reset stack:
+
+- `qa:certificate-trezor` and `qa:certificate-ledger` pass. They were updated in Phase 6 and had not run
+  until now.
+- `qa:login-trezor` and `qa:login-ledger` pass. Both sign in, so membership resolves at the new pin on
+  both devices (AC 6).
+
+**WebDriver regression:** these pass on the reset stack.
+
+- `proposal-add-signer`, which also refuses a compressed key
+- `proposal-co-sign-mnemonic`
+- `proposal-broadcast-quorum`
+- `signing-no-sighash`
+- `admin-id-single-source`
+- `wallet-smoke`
+
+The added signer reached the ASM state. The orchestrator moved the proposal to `enacted` after its
+activation height (136) and the next list read.
+
+**CI checklist (§5):** green.
+
+- `cargo test --workspace`: 731 tests across 23 binaries. The `e2e-tests` suites ran against `bitcoind`
+  30.2 and none skipped.
+- Frontend: 96/96 test files.
+
+**Not done:**
+
+- **The hand-off was not done by hand.** It is covered in two parts. `admin-id-single-source` shows the
+  session's Admin ID on the chain HRP. `proposal-add-signer` accepts that format and refuses a key.
+- **Safe Harbor and Defcon 1 were signed at the message level.** They went through the app's renderer
+  and device adapters, not through the full create-and-sign UI.
+
+**Reserve:** no walk finding needed a code change. `v0.5.0` final was not tagged on 2026-10-27, so there
+was no re-pin.
+
+**Acceptance criteria (§1.3):**
+
+| AC | Status | Evidence |
+|---|---|---|
+| 1 | Met | Phases 4 and 6 |
+| 2 | Met | Phase 4 |
+| 3 | Met | Phase 5. `proposal-add-signer` refuses a compressed key |
+| 4 | Met | `SignerId`. The Trezor's `bc1` and genesis's `bcrt1` are one program |
+| 5 | Met | e2e suites. Speculos hash equals the v0.5 message digest. Trezor text shows `Network:`. "Read on a Ledger" is met by Speculos, by decision |
+| 6 | Met | `qa:login-{ledger,trezor}` and mnemonic sign-in |
+| 7 | Met | Phase 6 |
 
 ## 5. Verification (every phase)
 
