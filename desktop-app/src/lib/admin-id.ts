@@ -41,6 +41,12 @@ export function normalizeAdminId(value: string): string {
 	return value.trim().toLowerCase()
 }
 
+/** Whether `adminId` is one of `adminIds`, compared in canonical form. An empty ID is in no set. */
+export function includesAdminId(adminIds: readonly string[], adminId: string): boolean {
+	const target = normalizeAdminId(adminId)
+	return target !== '' && adminIds.some((id) => normalizeAdminId(id) === target)
+}
+
 export const ADMIN_ID_LABEL = 'Admin ID'
 
 export const ADMIN_ID_SAFETY_CAPTION = 'For authentication only — never send funds to this address.'

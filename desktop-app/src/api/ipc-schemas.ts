@@ -155,6 +155,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 	z.object({
 		kind: z.literal('multisig_update'),
 		role: z.string(),
+		/** Admin IDs on the chain's network, as are `removeKeys`. */
 		addKeys: z.array(z.string()),
 		removeKeys: z.array(z.string()),
 		newThreshold: z.number(),
@@ -198,6 +199,7 @@ export const adminIdsSchema = z.record(z.string(), z.string())
 
 // asm-state.ts schemas
 export const multisigConfigSchema = z.object({
+	/** Admin IDs on the chain's network, in the ASM's canonical order. */
 	signers: z.array(z.string()),
 	threshold: z.number(),
 })

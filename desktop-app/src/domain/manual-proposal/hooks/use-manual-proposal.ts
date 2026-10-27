@@ -26,12 +26,26 @@ import type {
 } from '@/domain/manual-proposal/model/manual-proposal.types'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 import { useSession } from '@/hooks/use-session'
+import { adminIdsForPubkeys } from '@/api/admin-id'
+import { includesAdminId } from '@/lib/admin-id'
+import { normalizePubkey } from '@/lib/pubkey'
 
 const AUTHORITIES = ['alpen_admin', 'strata_admin', 'sequencer_manager', 'security_council', 'payout_admin'] as const
 
 function isValidHex(s: string): boolean {
 	const clean = s.trim().replace(/^0x/i, '')
 	return clean.length > 0 && clean.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(clean)
+}
+
+/**
+ * True only when the wallet's key is known not to be in the role's set, which the ASM lists as Admin IDs. Unknown —
+ * no wallet key, or its Admin ID not resolved — is not a refusal, as before.
+ */
+async function walletIsNotSigner(publicKeyHex: string | undefined, signers: readonly string[]): Promise<boolean> {
+	if (!publicKeyHex) return false
+	const result = await adminIdsForPubkeys([publicKeyHex])
+	const adminId = result.ok ? result.data[normalizePubkey(publicKeyHex)] : undefined
+	return adminId !== undefined && !includesAdminId(signers, adminId)
 }
 
 function normalizeHex(s: string): string {
@@ -243,8 +257,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 				return
 			}
 
-			const pubkey = wallet?.publicKeyHex?.toLowerCase()
-			if (pubkey && configRes.ok && !configRes.data.signers.some((s) => s.toLowerCase() === pubkey)) {
+			if (configRes.ok && (await walletIsNotSigner(wallet?.publicKeyHex, configRes.data.signers))) {
 				setImportErrors({ authority: `Your key is not a signer for ${importForm.authority}` })
 				return
 			}
@@ -328,8 +341,7 @@ export function useManualProposal(initialBundle: ManualBundleJson | null, feeRat
 				return
 			}
 
-			const pubkey = wallet?.publicKeyHex?.toLowerCase()
-			if (pubkey && configRes.ok && !configRes.data.signers.some((s) => s.toLowerCase() === pubkey)) {
+			if (configRes.ok && (await walletIsNotSigner(wallet?.publicKeyHex, configRes.data.signers))) {
 				setImportErrors({ authority: `Your key is not a signer for ${bundle.authority}` })
 				return
 			}

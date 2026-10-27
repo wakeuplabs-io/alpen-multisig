@@ -1,4 +1,3 @@
-import { useAdminIds } from '@/hooks/use-admin-ids'
 import { adminIdDisplay } from '@/lib/admin-id'
 import type { SignerSetChange } from '../model/build-signer-set-change'
 
@@ -9,9 +8,8 @@ type Props = {
 export function SignerSetChangeTable({ change }: Props) {
 	const signerCountBefore = change.rows.filter((row) => row.inBefore).length
 	const signerCountAfter = change.rows.filter((row) => row.inAfter).length
-	// Rows stay keyed by the signer's key; what a signer reads is its Admin ID (feedback item 60).
-	const adminIds = useAdminIds(change.rows.map((row) => row.pubkey))
-	const signerLabel = (pubkey: string) => adminIdDisplay(adminIds.get(pubkey), 'full')
+	// Rows are keyed by Admin ID, which is what a signer reads (feedback item 60).
+	const signerLabel = (adminId: string) => adminIdDisplay(adminId, 'full')
 
 	return (
 		<table
@@ -37,21 +35,21 @@ export function SignerSetChangeTable({ change }: Props) {
 			</thead>
 			<tbody>
 				{change.rows.map((row) => (
-					<tr key={row.pubkey} className="border-b border-[#f3f4f6] last:border-0">
+					<tr key={row.adminId} className="border-b border-[#f3f4f6] last:border-0">
 						<td className="px-4 py-2.5 align-top">
 							{row.inBefore ? (
 								<span
 									className={`break-all font-mono text-mono-sm leading-relaxed ${
 										row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'
 									}`}
-									aria-label={row.isRemoved ? `Removed signer ${signerLabel(row.pubkey)}` : undefined}
+									aria-label={row.isRemoved ? `Removed signer ${signerLabel(row.adminId)}` : undefined}
 								>
 									{row.isRemoved && (
 										<span className="mr-1 text-emphasis-soft" aria-hidden="true">
 											−
 										</span>
 									)}
-									{signerLabel(row.pubkey)}
+									{signerLabel(row.adminId)}
 								</span>
 							) : (
 								<span className="text-[#9ca3af]" aria-label="Not present before">
@@ -65,14 +63,14 @@ export function SignerSetChangeTable({ change }: Props) {
 									className={`break-all font-mono text-mono-sm leading-relaxed ${
 										row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'
 									}`}
-									aria-label={row.isAdded ? `Added signer ${signerLabel(row.pubkey)}` : undefined}
+									aria-label={row.isAdded ? `Added signer ${signerLabel(row.adminId)}` : undefined}
 								>
 									{row.isAdded && (
 										<span className="mr-1 text-[#0f9d7a]" aria-hidden="true">
 											+
 										</span>
 									)}
-									{signerLabel(row.pubkey)}
+									{signerLabel(row.adminId)}
 								</span>
 							) : (
 								<span className="text-[#9ca3af]" aria-label="Not present after">

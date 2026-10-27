@@ -10,5 +10,5 @@ import type { SignerSetChange } from '@/domain/signer-set-change/model/build-sig
  */
 export function approvalRoster(currentSigners: string[], change: SignerSetChange | null): string[] {
 	if (change === null) return currentSigners
-	return change.rows.filter((row) => row.inBefore).map((row) => row.pubkey)
+	return change.rows.filter((row) => row.inBefore).map((row) => row.adminId)
 }

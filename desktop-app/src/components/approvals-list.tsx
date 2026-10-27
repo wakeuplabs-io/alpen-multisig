@@ -1,14 +1,18 @@
 import { CopyButton } from '@/components/copy-button'
 import { SignaturePenMutedIcon } from '@/assets/icons'
 import { SignerAdminId } from '@/components/signer-admin-id'
+import { useAdminIds } from '@/hooks/use-admin-ids'
+import { normalizeAdminId } from '@/lib/admin-id'
+import { pendingSigners } from '@/lib/pending-signers'
+import { normalizePubkey } from '@/lib/pubkey'
 
 type Approval = { signerPubkey: string; signatureHex: string }
 
 type Props = {
 	signatures: Approval[]
-	/** Every signer of the authority, so the ones still missing can be listed. */
+	/** Every signer of the authority as the ASM lists it (Admin IDs), so the ones still missing can be listed. */
 	allSigners: string[]
-	/** The connected signer, highlighted with a YOU badge. */
+	/** The connected signer's key, highlighted with a YOU badge. */
 	signerPubkey: string | null
 	requiredSignatures: number
 	/**
@@ -35,9 +39,13 @@ export function ApprovalsList({
 	title = 'Approvals',
 	isPending,
 }: Props) {
-	const pending = allSigners.filter(
-		(signer) => !signatures.some((s) => s.signerPubkey.toLowerCase() === signer.toLowerCase()),
+	// Signatures and the session carry keys; the role's set carries Admin IDs. Compared as Admin IDs.
+	const adminIds = useAdminIds([...signatures.map((s) => s.signerPubkey), ...(signerPubkey ? [signerPubkey] : [])])
+	const pending = pendingSigners(
+		allSigners,
+		signatures.map((s) => adminIds.get(normalizePubkey(s.signerPubkey))),
 	)
+	const myAdminId = signerPubkey ? adminIds.get(normalizePubkey(signerPubkey)) : undefined
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
@@ -69,11 +77,11 @@ export function ApprovalsList({
 
 				{/* Pending rows — signers of the authority not yet in signatures */}
 				{pending.map((signer, i) => {
-					const isMe = signerPubkey !== null && signer.toLowerCase() === signerPubkey.toLowerCase()
+					const isMe = !!myAdminId && normalizeAdminId(signer) === normalizeAdminId(myAdminId)
 					return (
 						<div key={`pending-${i}`} className="flex items-center gap-3 px-6 py-3">
 							<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d1d5db] bg-white" />
-							<SignerAdminId pubkey={signer} className="flex-1 font-mono text-label text-[#6b7280]" />
+							<SignerAdminId adminId={signer} className="flex-1 font-mono text-label text-[#6b7280]" />
 							{isMe && (
 								<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
 									YOU

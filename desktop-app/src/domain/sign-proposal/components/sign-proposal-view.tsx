@@ -76,7 +76,7 @@ function MultisigUpdateDetails({
 							{changes.addKeys.map((key) => (
 								<li key={key}>
 									<code className="block break-all font-mono text-mono-sm leading-5 text-[#166534]">
-										<SignerAdminId pubkey={key} variant="full" />
+										<SignerAdminId adminId={key} variant="full" />
 									</code>
 								</li>
 							))}
@@ -93,7 +93,7 @@ function MultisigUpdateDetails({
 							{changes.removeKeys.map((key) => (
 								<li key={key}>
 									<code className="block break-all font-mono text-mono-sm leading-5 text-emphasis-soft line-through">
-										<SignerAdminId pubkey={key} variant="full" />
+										<SignerAdminId adminId={key} variant="full" />
 									</code>
 								</li>
 							))}

@@ -119,7 +119,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 									>
 										{isPendingRemoval && <span className="shrink-0 text-body-sm font-medium text-[#111827]">–</span>}
 										<SignerAdminId
-											pubkey={signer}
+											adminId={signer}
 											variant="full"
 											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#111827] line-through' : 'text-[#374151]'}`}
 										/>

@@ -5,17 +5,18 @@ import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SignerSetChangeTable } from '../signer-set-change-table.tsx'
 
-const KEY_A = `02${'a'.repeat(64)}`
-const KEY_B = `02${'b'.repeat(64)}`
-const KEY_C = `02${'c'.repeat(64)}`
+// Three regtest Admin IDs: the rows carry what the ASM lists.
+const KEY_A = 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080'
+const KEY_B = 'bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m'
+const KEY_C = 'bcrt1q86edcefehpvevtaaqm8acjtxkakj04nska9c5y'
 
 const html = renderToStaticMarkup(
 	<SignerSetChangeTable
 		change={{
 			rows: [
-				{ pubkey: KEY_A, inBefore: true, inAfter: true, isAdded: false, isRemoved: false },
-				{ pubkey: KEY_B, inBefore: true, inAfter: false, isAdded: false, isRemoved: true },
-				{ pubkey: KEY_C, inBefore: false, inAfter: true, isAdded: true, isRemoved: false },
+				{ adminId: KEY_A, inBefore: true, inAfter: true, isAdded: false, isRemoved: false },
+				{ adminId: KEY_B, inBefore: true, inAfter: false, isAdded: false, isRemoved: true },
+				{ adminId: KEY_C, inBefore: false, inAfter: true, isAdded: true, isRemoved: false },
 			],
 			thresholdBefore: 2,
 			thresholdAfter: 2,
@@ -26,15 +27,15 @@ const html = renderToStaticMarkup(
 assert.ok(html.includes('data-testid="e2e-signer-set-change-table"'), 'the shared E2E selector is stable')
 assert.match(html, /<th[^>]*scope="col"[^>]*>Before<\/th>/, 'Before is a semantic column header')
 assert.match(html, /<th[^>]*scope="col"[^>]*>After<\/th>/, 'After is a semantic column header')
-// Signers read as their Admin ID (feedback item 60). A static render runs no effects, so every row shows the
-// placeholder the Admin ID resolves into; the display rule itself is pinned in signer-admin-id.test.tsx.
-for (const key of [KEY_A, KEY_B, KEY_C]) {
-	assert.ok(!html.includes(key), 'a signer is never printed as its public key')
+// Signers read as their Admin ID (feedback item 60), printed straight from the row: no lookup, no placeholder.
+for (const id of [KEY_A, KEY_B, KEY_C]) {
+	assert.ok(html.includes(id), 'every signer prints its Admin ID')
 }
-assert.ok(html.includes('−</span>…'), 'removed signers have a textual minus marker')
+assert.ok(!html.includes('…'), 'no row waits on a resolution')
+assert.ok(html.includes(`−</span>${KEY_B}`), 'removed signers have a textual minus marker')
 assert.ok(html.includes('line-through'), 'removed signers are struck through')
-assert.ok(html.includes('+</span>…'), 'added signers have a textual plus marker')
-assert.ok(html.includes('aria-label="Removed signer …"'), 'the removed-signer label names the Admin ID, not the key')
+assert.ok(html.includes(`+</span>${KEY_C}`), 'added signers have a textual plus marker')
+assert.ok(html.includes(`aria-label="Removed signer ${KEY_B}"`), 'the removed-signer label names the Admin ID')
 assert.ok(html.includes('>—</span>'), 'missing sides use an em dash rather than a blank cell')
 assert.ok(html.includes('2 of 2'), 'threshold and signer cardinality are rendered together')
 
