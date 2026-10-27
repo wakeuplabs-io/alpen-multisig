@@ -121,7 +121,7 @@ Rules:
 | P2WPKH rendering | `src-tauri/src/infrastructure/admin_wallet/wallet.rs:97` (`admin_id_path`), `:119` (`device_hrp_network`), `:131` (`render_address_with_hrp`) | Admin ID derivation already exists for the wallet card |
 | Admin ID presentation (TS) | `desktop-app/src/lib/admin-id.ts` (`truncateAdminId`, `adminIdText`, P2WPKH regex `bc\|tb\|bcrt`) | Format and truncate only. The frontend has no pubkey → address helper, so derivation stays in Rust |
 | Reset runbook | [`asm-pin-bump-reset.md`](../operations/asm-pin-bump-reset.md) | DB truncate, runner rebuild, `local-stack.sh --clean`, genesis check |
-| Pin procedure | [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md), [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md) | The five places the pin lives. Explicit "unsupported" arms instead of `_ =>` |
+| Pin procedure | [ADR-001](../architecture/adrs/001-alpen-crate-dependencies.md), [ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md), [ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md) | The five places the pin lives. Explicit "unsupported" arms instead of `_ =>` |
 | Precedent | [`2-discovery/19-asm-bump-impact-assessment.md`](../2-discovery/19-asm-bump-impact-assessment.md) §8 | The breaking bump lands alone, as one compile boundary and one revert target |
 
 ### 3.2 What the pin drags in
@@ -334,7 +334,7 @@ Core 30.2 move, as ADR-007 did.
 
 | # | Contents |
 |---|---|
-| 1 | ADR-008 (docs) |
+| 1 | [ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md) (docs) |
 | 2 | Pins in the five places and the submodule; `strata-common` `v0.4.0`, `ssz-gen` `v0.17.0`, `bitcoin-bosd` `v0.12.0`, `strata-asm-admin-threshold-sig`; Core features `30_2` (and the binary, if Phase 2 folded); upstream Harbor renames; `for_action` takes the real network; threshold types → `P2wpkhAddress` in membership (both `asm_role_membership.rs`), enactment `add/remove_members`, `fetch_multisig_config`, `broadcast_tx` signature index, `signed_by_quorum`, `verify_threshold`; params JSON `"keys"` → addresses and `safe_harbor_*` keys; e2e harness and fixtures. This is the commit that cannot be split |
 | 3 | Signer-update input: `addKeys`/`removeKeys` become addresses over IPC (`api/action-builder.ts`, `ipc-schemas.ts:158-159`, `commands/action_builder.rs:128-148`, `domain/action.rs`); validators `create-proposal/model/validators/{types,signer-update}.ts` accept P2WPKH on the active network and reject a pubkey; label and placeholder in `signer-update-form-fields.tsx:189-199` (AC 3) |
 | 4 | Frontend comparisons that still match pubkey hex against ASM-provided signers move to the address the IPC now returns (`derive-proposal-actions.ts`, `approvals-list.tsx`, `signer-update.ts` `removesCurrentMembers`, `build-signer-set-change.ts`) |
