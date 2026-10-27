@@ -5,7 +5,7 @@
  * works for the council because the local stack maps that role to the same signer pair as the
  * Strata administrator, so no second mnemonic is needed.
  *
- * What this covers that a unit test cannot: the four canonical signing lines reach the screen
+ * What this covers that a unit test cannot: the five canonical signing lines reach the screen
  * through the real IPC renderer — the same one the device signs over — and the type-to-confirm
  * gate really holds the submit control shut in a running app.
  */
@@ -13,11 +13,19 @@ import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemon
 
 const SECURITY_COUNCIL = 'Security Council'
 
-/** The message the signer compares against their device. Sequence is filled from the chain. */
-const CANONICAL_LINES = ['Strata ASM Administration v1', 'Action: Defcon 1', 'Authorized By: Strata Security Council']
+/**
+ * The message the signer compares against their device. Sequence is filled from the chain. The
+ * network is the local stack's, and it is signed over: a wrong one would fail verification.
+ */
+const CANONICAL_LINES = [
+	'Strata ASM Administration v1',
+	'Network: regtest',
+	'Action: Defcon 1',
+	'Authorized By: Strata Security Council',
+]
 
 describe('Strata Multisig proposal — Defcon 1', () => {
-	it('offers Defcon 1 only to the council, renders the four lines, and gates on type-to-confirm', async function () {
+	it('offers Defcon 1 only to the council, renders the five lines, and gates on type-to-confirm', async function () {
 		this.timeout(180000)
 		await loginMnemonicToProposals(DEMO_MNEMONIC, SECURITY_COUNCIL)
 
@@ -40,7 +48,7 @@ describe('Strata Multisig proposal — Defcon 1', () => {
 		const signerUpdateCard = await $('//button[.//p[contains(text(),"Signer update")]]')
 		await expect(signerUpdateCard).not.toBeExisting()
 
-		// AC 4 — the four lines, verbatim, with no `Action Details:` block. The sequence number is
+		// AC 4 — the five lines, verbatim, with no `Action Details:` block. The sequence number is
 		// auto-detected from chain, so the message resolves without typing anything.
 		const message = await $('[data-testid="e2e-defcon-1-signing-message"]')
 		await message.waitForDisplayed({ timeout: 60000 })
@@ -50,9 +58,9 @@ describe('Strata Multisig proposal — Defcon 1', () => {
 		})
 
 		const lines = (await message.getText()).split('\n')
-		await expect(lines.length).toBe(4)
-		await expect(lines.slice(0, 3)).toEqual(CANONICAL_LINES)
-		await expect(lines[3]).toMatch(/^Sequence: \d+$/)
+		await expect(lines.length).toBe(5)
+		await expect(lines.slice(0, 4)).toEqual(CANONICAL_LINES)
+		await expect(lines[4]).toMatch(/^Sequence: \d+$/)
 
 		// AC 5 — the gate. Empty and near-miss both hold the control shut; the correct word in
 		// lower case opens it, because the match is case-insensitive and nothing else.
