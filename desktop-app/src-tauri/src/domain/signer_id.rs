@@ -6,7 +6,7 @@
 //! both, and treats every rendering of one program as the same signer.
 
 use bitcoin::hashes::Hash;
-use bitcoin::CompressedPublicKey;
+use bitcoin::{Address, CompressedPublicKey, Network, WitnessProgram, WitnessVersion};
 
 /// The P2WPKH witness program (`hash160` of the compressed public key) of an admin signer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,12 +20,18 @@ impl SignerId {
         let key = CompressedPublicKey::from_slice(&bytes).ok()?;
         Some(Self(key.wpubkey_hash().to_byte_array()))
     }
+
+    /// The Admin ID: this program as a P2WPKH address on `network` (`bc1q…`, `tb1q…`, `bcrt1q…`).
+    pub fn admin_id(&self, network: Network) -> String {
+        let program = WitnessProgram::new(WitnessVersion::V0, &self.0)
+            .expect("a 20-byte v0 program is always a valid P2WPKH program");
+        Address::from_witness_program(program, network).to_string()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::{Address, Network};
 
     /// The generator point, a valid compressed key.
     const KEY: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
@@ -62,6 +68,20 @@ mod tests {
             );
         }
         assert_eq!(signer.0, key.wpubkey_hash().to_byte_array());
+    }
+
+    #[test]
+    fn admin_id_renders_the_program_on_the_given_network() {
+        let signer = SignerId::from_pubkey_hex(KEY).expect("valid key");
+        // BIP-173 test vector: the P2WPKH address of the generator point.
+        assert_eq!(
+            signer.admin_id(Network::Bitcoin),
+            "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+        );
+        assert_eq!(
+            signer.admin_id(Network::Regtest),
+            "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"
+        );
     }
 
     #[test]
