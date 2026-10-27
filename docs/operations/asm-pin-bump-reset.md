@@ -62,7 +62,7 @@ discarded — it holds anchor states produced by the old STF.
 git submodule update --init --recursive          # asm/ now at the new pin
 cargo build --release --bin strata-asm-runner --manifest-path asm/Cargo.toml
 
-rm -rf /tmp/asm-runner-db                        # [database].path in asm-config.toml
+rm -rf /tmp/asm-runner-db /tmp/asm-runner-moho-db  # [database] asm_path and moho_path in asm-config.toml
 ```
 
 Under Docker Compose the equivalent is a rebuild without cache plus a volume drop:
@@ -86,11 +86,21 @@ no Security Council in it. The chain has to be recreated.
 docker compose -f staging/docker-compose.local.yml down -v
 ```
 
-Confirm `staging/asm-params.template.json` carries the four new fields before restarting:
-`strata_security_council`, and the `strata_security_council_multisig_update`, `defcon3` and
-`safe_harbour_address_update` confirmation depths, plus `safe_harbour_address` under `Bridge`.
+Confirm `staging/asm-params.template.json` matches the pinned `AsmParams` before restarting. The
+`e2e-tests` lib tests deserialize both it and `scripts/asm-params.example.json`, so a green
+`cargo test --workspace` already proves the shape. At `v0.5.0-rc.1` ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)):
 
-> **The staging `safe_harbour_address` is a throwaway.** Its payload is the secp256k1 generator
+- each role lists `"signers"` as P2WPKH addresses on the anchor's network, which the runner checks;
+- the depths and the bridge field say `safe_harbor_*`;
+- `Checkpoint` carries `sequencer_key`;
+- `anchor.epoch_start_timestamp` is the timestamp of the anchor's difficulty epoch start, checked
+  against L1 at startup. On regtest that is the genesis block, `1296688602`.
+
+The runner config (`staging/asm-config-regtest.toml`, `scripts/asm-config.toml`) moves with the pin
+too: `asm_path`/`moho_path`, `hashblock_connection_string`, and an `[execution]` section. `bitcoind`
+must publish `zmqpubhashblock`.
+
+> **The staging `safe_harbor_address` is a throwaway.** Its payload is the secp256k1 generator
 > point, whose private key is `1`. That is fine for regtest and must never reach any other
 > environment. The production value is an open question with Alpen — see
 > [`specs/security-council.md`](../specs/security-council.md) §9.
@@ -116,15 +126,16 @@ curl -s localhost:8080 -H 'content-type: application/json' \
 ```
 
 Two things to read off it: `cur_block.height` restarted from a low number rather than continuing the
-old chain, and the served state actually contains the new keys. The state comes back as a byte array,
-so grep it for a council key from `staging/asm-params.template.json` — x-only, i.e. the key without
-its `02`/`03` prefix:
+old chain, and the served state actually contains the new signers. `cur_state` is the anchor state's
+raw SSZ bytes, a JSON byte array. Signers are stored as their 20-byte witness program, so grep it for
+the program of a council signer from `staging/asm-params.template.json`. `dbd33038…c07e` is
+`bcrt1qm0fnqwycsmy5mtnkjxfg40x2es3u8sr7zzrfw8`:
 
 ```bash
 curl -s localhost:8080 -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"strata_asm_getStatus","params":[]}' \
-  | python3 -c "import json,sys; s=bytes(json.load(sys.stdin)['result']['cur_state']['state']).hex(); \
-      print('council in genesis' if '300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7' in s else 'OLD GENESIS')"
+  | python3 -c "import json,sys; s=bytes(json.load(sys.stdin)['result']['cur_state']).hex(); \
+      print('council in genesis' if 'dbd330389886c94dae7691928abccacc23c3c07e' in s else 'OLD GENESIS')"
 ```
 
 `council in genesis` is the pass. `OLD GENESIS` means the datadir survived step 3 and the chain still

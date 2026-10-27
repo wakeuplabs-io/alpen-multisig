@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–3 done (#622–#625), Phase 4 in review.
+**Status:** In progress — Phases 0–4 done (#622–#626), Phase 5 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -95,9 +95,9 @@ Consequences:
 | 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | Done (#623) |
 | 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Done (#624) |
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Done (#625) |
-| 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | In review |
-| 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Planned |
-| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri`, WebDriver specs | Planned |
+| 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Done (#626) |
+| 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | In review |
+| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | Planned |
 | 7 | Device QA, staging reset, docs, reserve | none | AC 5 (device) | `docs/`, staging | Planned |
 
 Rules:
@@ -349,6 +349,68 @@ validator, and the rendered message contains `Network:`, `Member: bcrt1q…` and
 
 **State:** run the reset runbook on the local stack before the manual walk.
 
+**Result:** done in six commits, each green:
+
+1. ADR-008.
+2. The bump itself, the commit that cannot be split.
+3. The signer-update input takes an Admin ID.
+4. Frontend comparisons against the ASM roster.
+5. The WebDriver specs paste Admin IDs. This was item 4 of Phase 6.
+6. This note and the runbook.
+
+Decisions taken here:
+
+- **e2e harness:** it runs upstream's `strata_asm_worker::test_utils::TestAsmWorkerContext` on the new
+  worker builder. Our `worker_context.rs` is gone.
+- **Signer identity:** `SignerId` (the 20-byte program) is the desktop domain type for a signer-update
+  member. It replaces `CompressedPubKey`, which had no other users and is deleted. The IPC field names
+  `addKeys`/`removeKeys` stay, and now carry Admin IDs.
+- **Admin IDs at the IPC boundary:** signers the ASM lists cross the IPC as Admin IDs rendered in Rust on
+  the process network (`BITCOIN_NETWORK`). The frontend compares them as lowercase strings. Keys from the
+  backend and the session go through `admin_ids_for_pubkeys` first.
+- **The add-signer field:** it refuses a compressed key by name. The HRP it expects is read off the
+  current signer set, because the frontend has no network of its own: `NodeConfig` does not carry one.
+  Rust re-checks the checksum and the network in `build_admin_multisig_update_hex`.
+
+What the upstream review in §3.3 did not list, found while doing it:
+
+- **The envelope has no action discriminant.** The reveal carries `SignedPayload::into_envelope_bytes`,
+  and the SPS-50 tag names the type. The orchestrator reads a reveal back with `parse_tx` under the
+  proposal's own tag.
+- **An OL STF rotation is queued, not applied.** The checkpoint subprotocol keeps it in
+  `pending_transitions` until a verified checkpoint passes the enactment height. Enactment therefore
+  accepts the active predicate or a pending one, and the VK e2e pins that the active one does not move.
+  A sequencer update is compared against `sequencer_key`, which is a `Buf32` now, not a predicate.
+- **Runtime shapes the compiler does not see.** None of these fails `cargo build`. All are fixed, and
+  the e2e lib tests deserialize both params files:
+  - `strata_asm_getStatus` returns `cur_state` as raw SSZ bytes.
+  - The params JSON lists `"signers"` as addresses, says `harbor`, and names the checkpoint
+    `sequencer_key`.
+  - The runner checks `anchor.epoch_start_timestamp` against L1. On regtest that is genesis,
+    `1296688602`.
+  - The runner config takes `asm_path`/`moho_path`, `hashblock_connection_string` and an
+    `[execution]` section.
+  - `bitcoind` publishes `zmqpubhashblock`.
+- **`check_authority_memberships` still compared key strings.** Phase 3 had not moved it to `SignerId`.
+  After the bump every connect card would have read "not a member".
+- **The desktop dev membership mock had an invalid second key** (65 characters). It now lists the regtest
+  Admin IDs of G and 2·G.
+
+Verification:
+
+- `cargo test --workspace`: 731 tests across 23 binaries. All 12 `e2e-tests` suites ran against
+  `bitcoind` 30.2 and none skipped.
+- `cargo test -p orchestrator-be -- --ignored postgres_ regtest_`: 8/8.
+- Frontend: 95/95 test files.
+- Local stack: reset with `local-stack.sh --clean`, proposals truncated, and the runbook check reads
+  `council in genesis`.
+- WebDriver: `proposal-add-signer`, `proposal-co-sign-mnemonic`, `proposal-broadcast-quorum`,
+  `signing-no-sighash` and `wallet-smoke` pass. The added signer then shows up in the ASM's strata
+  administrator set, and the orchestrator reconciles the proposal to `enacted`.
+
+Of the manual walk in §5, this covers item 1 without a device, item 4 and item 5. Items 2 and 3 (Safe
+Harbor and a Defcon or VK action signed on a device) and the reading on a Ledger stay with Phase 7.
+
 ### Phase 6 — Post-bump cleanup
 
 | # | Contents |
@@ -356,7 +418,9 @@ validator, and the rendered message contains `Network:`, `Member: bcrt1q…` and
 | 1 | Our tag `safe_harbour_address_update` → `safe_harbor_address_update` across TS, `commands/action_builder.rs:34` and `commands/proposals.rs`, with `serde(alias)` accepting the old value (AC 7) |
 | 2 | Delete `buildAsmConfigSnippet` (`connect-wallet/utils/hw-wallet-connect-utils.ts:8-19`), which has no callers and emits the old `"keys"` format |
 | 3 | Display uses the chain's HRP everywhere an Admin ID of another signer is shown. The device-native HRP is kept only for the user's own device verification |
-| 4 | Update `e2e-webdriver/test/specs/proposal-add-signer.e2e.js` and `signing-no-sighash.e2e.js` to paste addresses |
+
+The WebDriver specs that pasted compressed keys moved to Phase 5. They could not pass once the input
+changed.
 
 ### Phase 7 — Device QA, staging reset, docs, reserve
 
