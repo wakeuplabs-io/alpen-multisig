@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–1 done (#622, #623), Phase 2 in review.
+**Status:** In progress — Phases 0–2 done (#622, #623, #624), Phase 3 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -93,8 +93,8 @@ Consequences:
 |---|---|---|---|---|---|
 | 0 | Master plan (this document) | none | — | `docs/` | Done (#622) |
 | 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | Done (#623) |
-| 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | In review |
-| 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Planned |
+| 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Done (#624) |
+| 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | In review |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Planned |
 | 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Planned |
 | 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri`, WebDriver specs | Planned |
@@ -259,6 +259,26 @@ Prepare the signature changes so the bump only flips them.
 
 **Tests:** existing tests stay green unchanged. Unit tests cover the helper (same key → same program;
 `bc1`/`bcrt1` renderings of one program are equal) and the config parse.
+
+**Result:** done as planned. Three commits, each green.
+
+1. **Orchestrator network.** `Config.bitcoin_network` comes from `BITCOIN_NETWORK`. The default is
+   `regtest`, and an unknown token fails startup. `AppState.network` reaches `signed_by_quorum` through
+   `report_broadcast_progress`, `reconcile_enacted_for_{authority,action}`, `reconcile_one`,
+   `confirm_reveal_if_mined`, `first_mined_pair` and `reveal_carries_proposal`. `staging/orchestrator.env`
+   and `staging/docker-compose.yml` set it.
+2. **Desktop signing path.** The three wrappers take the network. The IPC commands read it from
+   `network_env::network_from_env`, and the broadcast application layer passes the `network` it already
+   received. At this pin the leaf parameter is named `_network`.
+3. **`SignerId`.** A new `domain/signer_id.rs` in each crate, byte-identical in both. It drives orchestrator
+   role membership, desktop sign-in membership (`application/authentication.rs`) and the broadcast signature
+   index (`broadcast_tx.rs`).
+
+`asm_enactment.rs` compares one action against state, so both sides are always the same kind. It stays as
+it is and moves in Phase 5.
+
+Every existing test passed unchanged. On the local stack (no `--clean`), the WebDriver chain passed:
+`proposal-add-signer` → `proposal-co-sign-mnemonic` → `proposal-broadcast-quorum`.
 
 ### Phase 4 — Admin ID on screen, before the bump
 
