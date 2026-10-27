@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import type { AdminIdVerifyContext } from '../model/hw-device'
+import type { SessionAdminId } from '../hooks/use-session-admin-id'
 import { CopyButton } from '@/components/copy-button'
 import { ShieldCheckMutedIcon, AlertTriangleIcon } from '@/assets/icons'
 import { isDisplayableAdminId, ADMIN_ID_LABEL, ADMIN_ID_SAFETY_CAPTION } from '../model/admin-id-presentation'
+import { adminIdDisplay } from '@/lib/admin-id'
 import { AdminIdCertificateModal } from './admin-id-certificate-modal'
 
 export type AdminIdRowProps = {
-	/** The Admin ID (PRD 06 §3.b.ii.2), or undefined when unknown. */
-	adminId: string | undefined
+	/** The session's Admin ID (PRD 06 §3.b.ii.2). */
+	adminId: SessionAdminId
 	/** When set, renders a "Verify on device" affordance for the Admin ID (P2WPKH). */
 	verify?: AdminIdVerifyContext
 }
@@ -15,8 +17,10 @@ export type AdminIdRowProps = {
 /**
  * Admin ID card (PRD 06 §4.a): shows the signer's authentication identity in full so it
  * can be visually verified, with copy-to-clipboard, and warns that it must never receive
- * funds. The value shown is the one handed to the device for verification, so the signer
- * compares the device screen against this exact string and nothing derived from it.
+ * funds. The row shows and copies the chain rendering, the one every signer list and the
+ * add-signer field use. On a hardware session the certificate modal gets the device's
+ * rendering instead, because its message and Verify step are what the signer compares
+ * against the device screen.
  */
 export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 	const [isCertificateOpen, setIsCertificateOpen] = useState(false)
@@ -27,19 +31,18 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 		</span>
 	)
 
-	if (!isDisplayableAdminId(adminId)) {
+	const value = adminId.display
+	if (!isDisplayableAdminId(value)) {
 		return (
 			<div
 				className="rounded-xl border border-accent-border bg-bg-surface px-4 py-3"
 				data-testid="e2e-wallet-admin-id-row"
 			>
 				{label}
-				<p className="mt-1.5 text-label text-[#9ca3af]">Unknown</p>
+				<p className="mt-1.5 text-label text-[#9ca3af]">{adminIdDisplay(value, 'full')}</p>
 			</div>
 		)
 	}
-
-	const value = adminId
 
 	return (
 		<div
@@ -74,7 +77,8 @@ export function AdminIdRow({ adminId, verify }: AdminIdRowProps) {
 			<AdminIdCertificateModal
 				isOpen={isCertificateOpen}
 				onClose={() => setIsCertificateOpen(false)}
-				adminId={value}
+				adminId={verify ? adminId.device : value}
+				shownAdminId={value}
 				verify={verify}
 			/>
 		</div>

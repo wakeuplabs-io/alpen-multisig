@@ -13,7 +13,7 @@ import {
 	ADMIN_ID_LABEL,
 	ADMIN_ID_SAFETY_CAPTION,
 } from '../admin-id-presentation.ts'
-import { adminIdText, adminIdChipLabel, matchesDeviceAddress } from '@/lib/admin-id'
+import { adminIdDisplay, matchesDeviceAddress } from '@/lib/admin-id'
 
 const PUBKEY = '02f8b7d1a1b9f0f4e8f1c2d3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8'
 const ADDR = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq'
@@ -58,14 +58,14 @@ assert.equal(isDisplayableAdminId(ADDR.slice(0, -1)), false, 'one character too 
 // Four surfaces used to answer this question separately, and one of them answered
 // it from the public key, so the header chip and the panel it opens disagreed.
 
-assert.equal(adminIdText(ADDR), ADDR, 'a displayable Admin ID is shown as-is')
-assert.equal(adminIdText(PUBKEY), 'Unknown', 'a public key is not an Admin ID to show')
-assert.equal(adminIdText(undefined), 'Unknown')
-assert.equal(adminIdText('Mnemonic signer'), 'Unknown', 'a label is never displayed as an identity')
+assert.equal(adminIdDisplay(ADDR, 'full'), ADDR, 'a displayable Admin ID is shown as-is')
+assert.equal(adminIdDisplay(PUBKEY, 'full'), 'Unknown', 'a public key is not an Admin ID to show')
+assert.equal(adminIdDisplay('', 'full'), 'Unknown', 'nothing to resolve reads as unknown')
+assert.equal(adminIdDisplay(undefined, 'full'), '…', 'still resolving is not unknown')
+assert.equal(adminIdDisplay('Mnemonic signer', 'full'), 'Unknown', 'a label is never displayed as an identity')
 
-assert.equal(adminIdChipLabel(ADDR), truncateAdminId(ADDR), 'chips show the truncated Admin ID')
-assert.equal(adminIdChipLabel(PUBKEY), 'Unknown', 'a chip never falls back to the public key')
-assert.equal(adminIdChipLabel(undefined), 'Unknown')
+assert.equal(adminIdDisplay(ADDR, 'truncated'), truncateAdminId(ADDR), 'chips show the truncated Admin ID')
+assert.equal(adminIdDisplay(PUBKEY, 'truncated'), 'Unknown', 'a chip never falls back to the public key')
 
 // ── Truncation and device comparison are shape-agnostic ──────────────────────
 

@@ -142,8 +142,17 @@ describe('G9 — Admin ID Verification Certificate on Ledger', () => {
 		await modal.waitForDisplayed({ timeout: 15000 })
 		await shoot('02-modal-unsigned')
 
+		// The card shows the chain's HRP; the certificate signs what the device renders. When
+		// the two differ, the modal says so next to the card's value.
 		const message = await $('[data-testid="e2e-admin-id-certificate-message"]')
-		expect((await message.getText()).trim()).toBe(`Admin ID: ${adminId}`)
+		const signed = (await message.getText()).trim()
+		expect(signed.startsWith('Admin ID: ')).toBe(true)
+		const deviceAdminId = signed.slice('Admin ID: '.length)
+		expect(deviceAdminId).toMatch(P2WPKH_RE)
+		if (signed !== `Admin ID: ${adminId}`) {
+			const note = await $('[data-testid="e2e-certificate-device-prefix-note"]')
+			expect(await note.getText()).toContain(adminId)
+		}
 
 		const sign = await $('[data-testid="e2e-admin-id-certificate-sign"]')
 		await sign.waitForClickable({ timeout: 15000 })
@@ -173,7 +182,7 @@ describe('G9 — Admin ID Verification Certificate on Ledger', () => {
 		// The requirement §3.c.i is about: the signer reads the Admin ID off the device itself.
 		// The device wraps it across lines, so compare the reassembled payload.
 		const rendered = verifyScreens.join('').replace(/[\s|]/g, '')
-		expect(rendered).toContain(adminId)
+		expect(rendered).toContain(deviceAdminId)
 
 		await confirmed.waitForDisplayed({ timeout: 120000 })
 		await shoot('04-verified-on-device')

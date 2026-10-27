@@ -14,6 +14,7 @@ import { useMnemonicSigningEnabled } from '@/domain/connect-wallet/hooks/use-mne
 import type { WalletAccountInfo, WalletAdapter, WalletKind, WalletVendor } from '@/wallet/types'
 import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 type Props = {
 	adapter: WalletAdapter
@@ -82,6 +83,11 @@ export function HwWalletConnect({
 	}
 
 	const signerPubkeyHex = state.phase === 'selected' ? (state.selectedEntry?.publicKeyHex ?? null) : null
+	const adminId = useSessionAdminId(
+		state.selectedEntry
+			? { addressSample: state.selectedEntry.address, publicKeyHex: state.selectedEntry.publicKeyHex }
+			: null,
+	)
 	// The certificate modal's Step 2 needs a device to render the Admin ID on. A mnemonic
 	// session has none, so it gets no context and the step explains itself instead (D3).
 	const adminIdVerify: AdminIdVerifyContext | undefined =
@@ -140,7 +146,7 @@ export function HwWalletConnect({
 					<AuthoritySelectionPhase
 						selectedAuthorityId={authoritySelection.selectedAuthorityId}
 						options={resolvedOptions}
-						adminId={state.selectedEntry.address}
+						adminId={adminId}
 						adminIdVerify={adminIdVerify}
 						isChecking={isChecking}
 						onSelectAuthority={authoritySelection.onSelectAuthority}
@@ -156,7 +162,7 @@ export function HwWalletConnect({
 					<AuthenticateSessionPhase
 						authorityLabel={authoritySelection.selectedAuthorityLabel ?? 'Selected authority'}
 						adapterLabel={deviceCopy(walletVendor).label}
-						adminId={state.selectedEntry.address}
+						adminId={adminId}
 						isAuthenticating={authoritySelection.isAuthenticating}
 						authError={authoritySelection.authError}
 						authOkMessage={authoritySelection.authOkMessage}

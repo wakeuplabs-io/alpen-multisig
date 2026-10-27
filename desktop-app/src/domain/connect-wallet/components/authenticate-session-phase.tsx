@@ -1,6 +1,8 @@
 import { CopyButton } from '@/components/copy-button'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
-import { ADMIN_ID_LABEL, adminIdText, isDisplayableAdminId } from '@/lib/admin-id'
+import { ADMIN_ID_LABEL, adminIdDisplay, isDisplayableAdminId } from '@/lib/admin-id'
+import type { SessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
+
 import type { SigningStepInfo } from '@/contexts/session-context'
 import { useDeviceMessageDisplay } from '@/hooks/use-device-message-display'
 import type { WalletVendor } from '@/wallet/types'
@@ -8,8 +10,8 @@ import type { WalletVendor } from '@/wallet/types'
 type Props = {
 	authorityLabel: string
 	adapterLabel: string
-	/** The Admin ID: the P2WPKH address the signer's device derived (PRD 06 §3.b.ii.2). */
-	adminId: string
+	/** The Admin ID the signer's device derived (PRD 06 §3.b.ii.2), shown on the chain's HRP. */
+	adminId: SessionAdminId
 	isAuthenticating: boolean
 	authError: string | null
 	authOkMessage: string | null
@@ -86,9 +88,9 @@ export function AuthenticateSessionPhase({
 								className="m-0 min-w-0 break-all font-mono text-label text-[#111827]"
 								data-testid="e2e-authenticate-admin-id-value"
 							>
-								{adminIdText(adminId)}
+								{adminIdDisplay(adminId.display, 'full')}
 							</p>
-							{isDisplayableAdminId(adminId) && <CopyButton text={adminId} variant="icon" />}
+							{isDisplayableAdminId(adminId.display) && <CopyButton text={adminId.display} variant="icon" />}
 						</div>
 					</div>
 					<div className="grid grid-cols-2 gap-3">

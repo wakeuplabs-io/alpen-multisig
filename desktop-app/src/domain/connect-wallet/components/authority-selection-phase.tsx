@@ -10,6 +10,7 @@ import {
 import { ScreenBottomBar } from '@/components/screen-bottom-bar'
 import { ConnectAdminIdCard } from '@/domain/connect-wallet/components/connect-admin-id-card'
 import type { AdminIdVerifyContext } from '@/domain/admin-wallet/model/hw-device'
+import type { SessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 export type AuthorityOption = {
 	id: string
@@ -25,7 +26,7 @@ type Props = {
 	selectedAuthorityId: string | null
 	options: AuthorityOption[]
 	/** Admin ID derived at connect — shown before the membership check runs (#410). */
-	adminId: string | undefined
+	adminId: SessionAdminId
 	/** Present for hardware sessions: lets the certificate modal verify on the device. */
 	adminIdVerify?: AdminIdVerifyContext
 	isChecking?: boolean

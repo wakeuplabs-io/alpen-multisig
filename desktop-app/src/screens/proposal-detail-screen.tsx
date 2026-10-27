@@ -28,6 +28,7 @@ import {
 } from '@/lib/proposal-status'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 type LocationState = { signerPubkey?: string | null }
 
@@ -40,6 +41,7 @@ export function ProposalDetailScreen() {
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData()
+	const adminId = useSessionAdminId(wallet)
 
 	const { proposal, isLoading, error, reload, refresh } = useProposalDetail(getOrchestratorBaseUrl(), actionId ?? '')
 	const decodedData = useDecodedProposal(proposal)
@@ -122,7 +124,7 @@ export function ProposalDetailScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.addressSample}
+						adminId={adminId}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>

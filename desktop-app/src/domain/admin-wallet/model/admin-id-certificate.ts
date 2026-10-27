@@ -23,6 +23,14 @@ export const CERTIFICATE_VERIFY_BUTTON = 'Verify'
 export const CERTIFICATE_STEP_2_HELP =
 	'Click the "Verify" button to compare and verify that the Admin ID (in bitcoin address format) that appears on your hardware signer screen matches the signed Admin ID shown above.'
 /**
+ * Shown when the device names the Admin ID under a different HRP than the app does (a Trezor shows `bc1q…` on every
+ * network). The certificate and the Verify step use the device's rendering, so without this line the signer sees an
+ * Admin ID in the modal that is not the one on the card that opened it.
+ */
+export function certificateDevicePrefixNote(shownAdminId: string): string {
+	return `Your hardware signer names this Admin ID with a different prefix. It is the same Admin ID as ${shownAdminId}: the certificate and the Verify step use the device's form.`
+}
+/**
  * Shown instead of an enabled Verify button when the session signs with a mnemonic.
  * The step is disabled with a reason rather than hidden: a step that disappears looks
  * like a broken modal, and the signer never learns why it does not apply to them.

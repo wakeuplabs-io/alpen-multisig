@@ -61,8 +61,13 @@ describe('Strata Multisig — Admin ID Verification Certificate', () => {
 		await connectWithWords.click()
 
 		await $('//h1[contains(.,"Select multisig")]').waitForDisplayed({ timeout: 60000 })
-		const connectAdminId = (await (await $('[data-testid="e2e-connect-admin-id-value"]')).getText()).trim()
-		expect(connectAdminId).toMatch(P2WPKH_RE)
+		const connectValue = await $('[data-testid="e2e-connect-admin-id-value"]')
+		// The value resolves in Rust, so the card reads `…` for a moment first.
+		await browser.waitUntil(async () => P2WPKH_RE.test((await connectValue.getText()).trim()), {
+			timeout: 15000,
+			timeoutMsg: 'the connect card never showed a P2WPKH Admin ID',
+		})
+		const connectAdminId = (await connectValue.getText()).trim()
 
 		await openCertificateModal('e2e-connect-admin-id-verify')
 

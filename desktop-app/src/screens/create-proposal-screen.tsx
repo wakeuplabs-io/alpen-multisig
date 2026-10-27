@@ -10,6 +10,7 @@ import { ScreenShell } from '@/screens/screen-shell'
 import { ShieldAccentIcon } from '@/assets/icons'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 export function CreateProposalScreen() {
 	const navigate = useNavigate()
@@ -24,6 +25,7 @@ export function CreateProposalScreen() {
 	} = useSession()
 	const createProposal = useCreateProposal()
 	const panel = useWalletPanelData()
+	const adminId = useSessionAdminId(wallet)
 
 	if (wallet === null) {
 		return <Navigate to="/" replace />
@@ -56,7 +58,7 @@ export function CreateProposalScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.addressSample}
+						adminId={adminId}
 					/>
 					<DisconnectButton onClick={() => void handleDisconnect()} />
 				</>

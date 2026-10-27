@@ -4,6 +4,7 @@ import type { AddressWithBalanceView, UnconfirmedTxView } from '@/domain/admin-w
 import type { SyncStatusDto } from '@/domain/admin-wallet/model/types'
 import { networkFromPath } from '@/domain/admin-wallet/model/network-from-path'
 import { DisabledWalletCard } from './disabled-wallet-card'
+import type { SessionAdminId } from '../hooks/use-session-admin-id'
 import { AdminIdRow } from './admin-id-row'
 import { WalletBalance } from './wallet-balance'
 import { ReceiveAddressRow } from './receive-address-row'
@@ -14,8 +15,8 @@ import { SyncChip } from './sync-chip'
 
 export type WalletPanelContentProps = {
 	disabledError: AdminWalletError | null
-	/** Admin ID — the P2WPKH address shown at the top of the panel (PRD 06 §3.b.ii.2, §4.a). */
-	adminId: string | undefined
+	/** The session's Admin ID, shown at the top of the panel (PRD 06 §3.b.ii.2, §4.a). */
+	adminId: SessionAdminId
 	confirmedBalanceSats: number
 	unconfirmedBalanceSats: number
 	/** Coins held by in-flight transactions (#516). */

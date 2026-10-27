@@ -64,22 +64,6 @@ export function isDisplayableAdminId(value: string | undefined): value is string
 }
 
 /**
- * The Admin ID as a surface should print it, or `'Unknown'`.
- *
- * One rule, because four surfaces used to answer this question separately and one of them
- * answered it from the public key — so a screen's header chip and the panel that chip
- * opens showed the same identity in two incompatible shapes.
- */
-export function adminIdText(value: string | undefined): string {
-	return isDisplayableAdminId(value) ? value : ADMIN_ID_UNKNOWN
-}
-
-/** The same rule for chips and dense rows, truncated. */
-export function adminIdChipLabel(value: string | undefined): string {
-	return isDisplayableAdminId(value) ? truncateAdminId(value) : ADMIN_ID_UNKNOWN
-}
-
-/**
  * True when the address the device rendered is the one the app expects for the same
  * key and path. Bech32 is case-insensitive (BIP-173) and devices may pad the string,
  * so both sides are trimmed and lowercased before comparing.
@@ -101,6 +85,9 @@ export type AdminIdVariant = 'truncated' | 'full'
 /**
  * The text a signer row prints: its Admin ID, `…` while it resolves, `Unknown` when there is none. Never the public
  * key: a signer is identified by its Admin ID wherever the app lists one.
+ *
+ * The session's own Admin ID goes through the same rule. Surfaces that each answered this separately are how a
+ * screen's header chip once showed the public key while the panel it opens showed the address.
  */
 export function adminIdDisplay(adminId: string | undefined, variant: AdminIdVariant): string {
 	if (adminId === undefined) return '…'

@@ -133,8 +133,17 @@ describe('G9 — Admin ID Verification Certificate on Trezor', () => {
 		await modal.waitForDisplayed({ timeout: 15000 })
 		await shoot('02-modal-unsigned')
 
+		// The card shows the chain's HRP; the certificate signs what the device renders. When
+		// the two differ, the modal says so next to the card's value.
 		const message = await $('[data-testid="e2e-admin-id-certificate-message"]')
-		expect((await message.getText()).trim()).toBe(`Admin ID: ${adminId}`)
+		const signed = (await message.getText()).trim()
+		expect(signed.startsWith('Admin ID: ')).toBe(true)
+		const deviceAdminId = signed.slice('Admin ID: '.length)
+		expect(deviceAdminId).toMatch(P2WPKH_RE)
+		if (signed !== `Admin ID: ${adminId}`) {
+			const note = await $('[data-testid="e2e-certificate-device-prefix-note"]')
+			expect(await note.getText()).toContain(adminId)
+		}
 
 		const sign = await $('[data-testid="e2e-admin-id-certificate-sign"]')
 		await sign.waitForClickable({ timeout: 15000 })
@@ -148,7 +157,7 @@ describe('G9 — Admin ID Verification Certificate on Trezor', () => {
 		// message, not the address alone — a Trezor names the signing key on its own `Signing address`
 		// screen whatever the message is, so looking for the address would pass even if the device
 		// stopped showing the message.
-		expect(reassemble(signScreens)).toContain(reassemble([`Admin ID: ${adminId}`]))
+		expect(reassemble(signScreens)).toContain(reassemble([`Admin ID: ${deviceAdminId}`]))
 
 		await chip.waitForDisplayed({ timeout: 120000 })
 		const certificate = (await (await $('[data-testid="e2e-admin-id-certificate-value"]')).getText()).trim()
@@ -163,7 +172,7 @@ describe('G9 — Admin ID Verification Certificate on Trezor', () => {
 		const confirmed = await $('[data-testid="e2e-wallet-verify-on-device-result"]')
 		const verifyScreens = await confirmOnDevice(() => confirmed.isDisplayed())
 		fs.writeFileSync(path.join(EVIDENCE, 'g9-b1-trezor-device-address.txt'), verifyScreens.join('\n---\n'))
-		expect(reassemble(verifyScreens)).toContain(adminId)
+		expect(reassemble(verifyScreens)).toContain(deviceAdminId)
 
 		await confirmed.waitForDisplayed({ timeout: 120000 })
 		await shoot('04-verified-on-device')
