@@ -4,16 +4,3 @@ export function truncateAddr(addr: string, opts?: { headChars?: number; tailChar
 	if (addr.length <= headChars + tailChars) return addr
 	return `${addr.slice(0, headChars)}…${addr.slice(-tailChars)}`
 }
-
-export function buildAsmConfigSnippet(publicKeyHex: string): string {
-	return `{
-  "authorities": {
-    "strata_administrator": {
-      "config": {
-        "keys": ["${publicKeyHex}"],
-        "threshold": 1
-      }
-    }
-  }
-}`
-}
