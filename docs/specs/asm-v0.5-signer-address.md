@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–4 done (#622–#626), Phase 5 in review.
+**Status:** In progress — Phases 0–5 done (#622–#627), Phase 6 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -96,8 +96,8 @@ Consequences:
 | 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Done (#624) |
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Done (#625) |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Done (#626) |
-| 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | In review |
-| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | Planned |
+| 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Done (#627) |
+| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | In review |
 | 7 | Device QA, staging reset, docs, reserve | none | AC 5 (device) | `docs/`, staging | Planned |
 
 Rules:
@@ -186,7 +186,8 @@ e2e suites **skip silently** instead of failing.
 - Device HRP: Trezor always yields `bc1…`, Ledger yields `tb1…` off mainnet. Never compare Admin IDs as
   strings. Compare witness programs.
 - Our own `'safe_harbour_address_update'` tag in about 20 TS files, `commands/action_builder.rs:34` (serde)
-  and `commands/proposals.rs:210,1420`. It is stored as `action_type`.
+  and `commands/proposals.rs:210,1420`. It is not stored: `action_type_from_hex` rebuilds it from
+  `action_hex` on every read (corrected in Phase 6).
 - `desktop-app/src-tauri/tests/g10_ledger_challenge_screens.rs:179`: a fixture of the rendered message.
 - The dev membership mock in `orchestrator-be/src/infrastructure/asm_role_membership.rs:304-337` has
   hardcoded pubkeys.
@@ -323,7 +324,8 @@ WebDriver `proposal-add-signer` now reads the added signer by Admin ID. The chai
 Carried to later phases:
 
 - The session's own chip still shows the device-native HRP (`bc1q…` for a mnemonic or Trezor session),
-  while listed signers use the chain's (`bcrt1q…`). Both are the same program. Phase 6 settles the HRP.
+  while listed signers use the chain's (`bcrt1q…`). Both are the same program. Phase 6 settles the HRP
+  (settled: the chain's, see its result).
 - The desktop `signer_id.rs` now has `admin_id`, so it is no longer byte-identical to the orchestrator
   copy, which has no use for it.
 
@@ -415,12 +417,52 @@ Harbor and a Defcon or VK action signed on a device) and the reading on a Ledger
 
 | # | Contents |
 |---|---|
-| 1 | Our tag `safe_harbour_address_update` → `safe_harbor_address_update` across TS, `commands/action_builder.rs:34` and `commands/proposals.rs`, with `serde(alias)` accepting the old value (AC 7) |
+| 1 | Our tag `safe_harbour_address_update` → `safe_harbor_address_update` across TS, `commands/action_builder.rs:34` and `commands/proposals.rs` (AC 7) |
 | 2 | Delete `buildAsmConfigSnippet` (`connect-wallet/utils/hw-wallet-connect-utils.ts:8-19`), which has no callers and emits the old `"keys"` format |
 | 3 | Display uses the chain's HRP everywhere an Admin ID of another signer is shown. The device-native HRP is kept only for the user's own device verification |
 
 The WebDriver specs that pasted compressed keys moved to Phase 5. They could not pass once the input
 changed.
+
+**Result:** done in four commits, each green.
+
+1. **The tag.** Rust and TS move in one commit, because `PROPOSAL_ACTION_TYPES` is closed and a mismatch
+   fails the parse of the whole list. There is **no `serde(alias)`**. `DecodedAction` only derives
+   `Serialize`, and nothing stores the tag: `action_type_from_hex` rebuilds it from `action_hex` on every
+   read, and the manual import derives it with `actionTypeFromDecoded`. Comments that cited upstream's
+   `SafeHarbour::update_address` and `activate_safe_harbour()` follow the rename. Nothing outside `asm/`
+   and `docs/` says `harbour` any more.
+2. **`buildAsmConfigSnippet`** is deleted.
+3. **The session's Admin ID on the chain's HRP.** Phase 4 left the user's own Admin ID on the device's
+   HRP, and that turned out to be a defect, not a cosmetic difference: the Phase 5 add-signer field only
+   accepts the chain's HRP. So a Trezor signer, or a mnemonic one, copied an Admin ID that the field
+   refused. `useSessionAdminId` resolves the session key through the Phase 4 `admin_ids_for_pubkeys`
+   (no new IPC) and returns two renderings:
+   - **Chain rendering.** The chip, the wallet panel row and both connect steps show and copy this one.
+   - **Device rendering.** On a hardware session the certificate modal keeps this one, because its
+     message and its Verify step are what the signer compares against the device screen. When the two
+     differ, the modal says so next to the card's value.
+
+   A mnemonic session has no device to compare against, and its `bc1q…` only exists because it derives
+   on mainnet (§6). So its certificate signs the chain rendering, which `build_certificate` accepts on any
+   network. The session surfaces now go through `adminIdDisplay`, the same as any signer row (`…` while it
+   resolves), so `adminIdText` and `adminIdChipLabel` are removed. Rule 9 in `architecture.test.ts` pins
+   the split.
+4. This note.
+
+The desktop and orchestrator copies of `signer_id.rs` still differ only by `admin_id`, which the
+orchestrator has no use for. They stay as they are.
+
+Verification:
+
+- `cargo test --workspace`: 731 tests across 23 binaries. The 12 `e2e-tests` suites ran again against
+  `bitcoind` 30.2 and none skipped.
+- Frontend: 96/96 test files, including the new `use-session-admin-id` test and Rule 9.
+- WebDriver on the local stack: `admin-id-single-source` (all four surfaces now show `bcrt1q…`),
+  `admin-id-certificate`, `wallet-smoke`, `proposal-add-signer` and `signing-no-sighash` pass.
+- Not run: the hand-off by hand (copy your own Admin ID and paste it into another session's add-signer
+  field), and the device specs `g9-certificate-{trezor,ledger}.qa.js`. The device specs are updated to
+  compare the device screen against the signed Admin ID. Both go to Phase 7.
 
 ### Phase 7 — Device QA, staging reset, docs, reserve
 
