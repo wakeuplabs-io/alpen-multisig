@@ -4,10 +4,21 @@
  */
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 
+// The form still takes a compressed key (until the ASM v0.5 pin), but every listed signer reads as its Admin ID
+// on the chain's network, so each candidate carries both: the key to type, the Admin ID to look for.
 const CANDIDATE_SIGNERS = [
-	'03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c',
-	'02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5',
-	'0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+	{
+		pubkey: '03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c',
+		adminId: 'bcrt1q86edcefehpvevtaaqm8acjtxkakj04nska9c5y',
+	},
+	{
+		pubkey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5',
+		adminId: 'bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m',
+	},
+	{
+		pubkey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+		adminId: 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080',
+	},
 ]
 
 describe('Strata Multisig proposal — add signer', () => {
@@ -33,15 +44,15 @@ describe('Strata Multisig proposal — add signer', () => {
 		await title.setValue(proposalTitle)
 
 		const formText = await $('body').getText()
-		const newSigner = CANDIDATE_SIGNERS.find((candidate) => !formText.includes(candidate))
+		const newSigner = CANDIDATE_SIGNERS.find((candidate) => !formText.includes(candidate.adminId))
 		expect(newSigner).toBeDefined()
 		const pubkeyIn = await $('input[data-testid="e2e-new-signer-pubkey-input"]')
 		await pubkeyIn.waitForDisplayed({ timeout: 60000 })
-		await pubkeyIn.setValue(newSigner)
+		await pubkeyIn.setValue(newSigner.pubkey)
 		await $('button[data-testid="e2e-new-signer-add-button"]').click()
 
 		await browser.waitUntil(
-			async () => (await $('span[data-testid="e2e-added-signer-value"]').getText()) === newSigner,
+			async () => (await $('span[data-testid="e2e-added-signer-value"]').getText()) === newSigner.pubkey,
 			{ timeout: 15000, timeoutMsg: 'added signer pubkey should appear in list' },
 		)
 
@@ -54,7 +65,8 @@ describe('Strata Multisig proposal — add signer', () => {
 		await previewChange.waitForDisplayed({ timeout: 30000 })
 		const previewChangeText = await previewChange.getText()
 		expect(previewChangeText).toContain('+')
-		expect(previewChangeText).toContain(newSigner)
+		expect(previewChangeText).toContain(newSigner.adminId)
+		expect(previewChangeText).not.toContain(newSigner.pubkey)
 
 		const signBtn = await $('button[data-testid="e2e-create-proposal-sign-submit"]')
 		await signBtn.waitForClickable({ timeout: 60000 })
