@@ -187,7 +187,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 			</div>
 
 			<div>
-				<label className="text-body-sm font-medium text-[#6b7280]">Add new signer (compressed pubkey hex)</label>
+				<label className="text-body-sm font-medium text-[#6b7280]">Add new signer (Admin ID)</label>
 				<div className="mt-1.5 flex gap-2">
 					<input
 						type="text"
@@ -197,7 +197,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								? 'border-danger focus:border-danger focus:ring-danger'
 								: 'border-[#e5e7eb] focus:border-accent focus:ring-accent'
 						}`}
-						placeholder="02… or 03… (33-byte hex)"
+						placeholder="bc1q…, tb1q… or bcrt1q… (P2WPKH address)"
 						value={newSignerInput}
 						onChange={(e) => {
 							setNewSignerInput(e.target.value)

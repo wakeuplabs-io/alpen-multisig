@@ -29,6 +29,18 @@
  */
 const P2WPKH_ADDRESS_PATTERN = /^(?:bc|tb|bcrt)1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$/i
 
+/** The HRP of a P2WPKH Admin ID (`bc`, `tb`, `bcrt`), lowercased; null when it is not one. */
+export function adminIdHrp(value: string): string | null {
+	const trimmed = value.trim()
+	if (!P2WPKH_ADDRESS_PATTERN.test(trimmed)) return null
+	return trimmed.slice(0, trimmed.lastIndexOf('1')).toLowerCase()
+}
+
+/** Canonical form for comparing Admin IDs: bech32 is case-insensitive (BIP-173). */
+export function normalizeAdminId(value: string): string {
+	return value.trim().toLowerCase()
+}
+
 export const ADMIN_ID_LABEL = 'Admin ID'
 
 export const ADMIN_ID_SAFETY_CAPTION = 'For authentication only — never send funds to this address.'

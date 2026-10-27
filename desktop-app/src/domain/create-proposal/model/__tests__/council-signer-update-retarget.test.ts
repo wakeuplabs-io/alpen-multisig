@@ -9,13 +9,15 @@ import { multisigTargetAuthority } from '../multisig-target.ts'
 import { isSignerUpdateActionType } from '../action-type-predicates.ts'
 import { removesCurrentMembers } from '../validators/signer-update.ts'
 
-const KEY_A = `02${'a'.repeat(64)}`
-const KEY_B = `02${'b'.repeat(64)}`
-const KEY_C = `02${'c'.repeat(64)}`
-const KEY_X = `02${'1'.repeat(64)}`
-const KEY_Y = `02${'2'.repeat(64)}`
-const KEY_Z = `02${'3'.repeat(64)}`
-const KEY_W = `02${'4'.repeat(64)}`
+// Regtest Admin IDs, as the ASM lists signers. Shape only: the form does not verify checksums.
+const adminId = (c: string) => `bcrt1q${c.repeat(38)}`
+const KEY_A = adminId('q')
+const KEY_B = adminId('p')
+const KEY_C = adminId('z')
+const KEY_X = adminId('r')
+const KEY_Y = adminId('y')
+const KEY_Z = adminId('9')
+const KEY_W = adminId('x')
 
 const ADMIN = { signers: [KEY_A, KEY_B, KEY_C], threshold: 3 }
 const COUNCIL = { signers: [KEY_X, KEY_Y, KEY_Z, KEY_W], threshold: 2 }

@@ -97,8 +97,9 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
 						role: multisigTargetAuthority(formData.actionType, sessionAuthority),
-						addKeys: formData.keysToAdd.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
-						removeKeys: formData.keysToRemove.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
+						// Admin IDs; Rust checks the checksum and the network.
+						addKeys: formData.keysToAdd.map((row) => row.value.trim()).filter((k) => k.length > 0),
+						removeKeys: formData.keysToRemove.map((row) => row.value.trim()).filter((k) => k.length > 0),
 						newThreshold: threshold,
 					}),
 				)
