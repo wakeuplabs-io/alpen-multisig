@@ -14,7 +14,7 @@ export function decodedActionAuthorizingAuthority(action: DecodedAction): string
 			return action.authority
 		// Upstream's `authorized_role()` for tx type 14 is `StrataAdministrator`: the council can
 		// sweep to the safe harbor but must not also pick where the funds land.
-		case 'safe_harbour_address_update':
+		case 'safe_harbor_address_update':
 			return 'strata_admin'
 		case 'defcon_1':
 		case 'defcon_3':

@@ -135,7 +135,7 @@ function SafeHarborAddressDetails({
 	action,
 	signingMessage,
 }: {
-	action: Extract<DecodedAction, { kind: 'safe_harbour_address_update' }>
+	action: Extract<DecodedAction, { kind: 'safe_harbor_address_update' }>
 	signingMessage: string | null
 }) {
 	// Read here and not only on the dashboard: this is the screen where the signer commits, and a
@@ -288,7 +288,7 @@ export function SignProposalView({
 				<MultisigUpdateDetails action={decodedAction} currentThreshold={currentThreshold} />
 			) : decodedAction.kind === 'vk_update' ? (
 				<VkUpdateDetails action={decodedAction} />
-			) : decodedAction.kind === 'safe_harbour_address_update' ? (
+			) : decodedAction.kind === 'safe_harbor_address_update' ? (
 				<SafeHarborAddressDetails action={decodedAction} signingMessage={signingMessage} />
 			) : defconLevel !== null ? (
 				<DefconDetails level={defconLevel} />

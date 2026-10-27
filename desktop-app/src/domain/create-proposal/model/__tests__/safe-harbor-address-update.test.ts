@@ -51,7 +51,7 @@ function issues(
 		currentSafeHarborAddress,
 	}).safeParse({
 		...draft,
-		actionType: 'safe_harbour_address_update',
+		actionType: 'safe_harbor_address_update',
 		newSafeHarborAddress,
 	})
 	if (result.success) return []
@@ -66,7 +66,7 @@ function issues(
 for (const authority of OTHER_AUTHORITIES) {
 	const offered = getActionTypeOptions(authority).map((option) => option.actionType)
 	assert.ok(
-		!offered.includes('safe_harbour_address_update'),
+		!offered.includes('safe_harbor_address_update'),
 		`claim 2 (AC 1a): ${authority} must not be offered the safe harbor address update`,
 	)
 }

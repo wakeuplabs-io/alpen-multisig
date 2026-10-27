@@ -25,7 +25,7 @@ const HARBOR_ACTIVATING_ACTIONS: readonly ActionType[] = ['defcon_1', 'defcon_3'
 /**
  * The proposals that executed without changing anything.
  *
- * Activating the safe harbor is idempotent upstream: `activate_safe_harbour()` is a bare
+ * Activating the safe harbor is idempotent upstream: `activate_safe_harbor()` is a bare
  * `set_activated(true)` with no guard, on a flag that is never reset. So an action that enacts
  * after the harbor is already up is accepted, runs, consumes a council sequence number and its
  * fees, and leaves the bridge exactly as it found it. `Enacted` is true of it — the ASM applied
@@ -92,5 +92,5 @@ export function harborFrozeDestination(
 	proposal: { actionType: ActionType; status: ProposalStatus },
 	harborActivated: boolean,
 ): boolean {
-	return harborActivated && proposal.status === 'superseded' && proposal.actionType === 'safe_harbour_address_update'
+	return harborActivated && proposal.status === 'superseded' && proposal.actionType === 'safe_harbor_address_update'
 }

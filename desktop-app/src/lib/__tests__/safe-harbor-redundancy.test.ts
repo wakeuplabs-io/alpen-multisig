@@ -113,7 +113,7 @@ assert.equal(changedNothingActionIds([proposal({ actionId: 'solo', seqNo: 7 })])
 // The action type is the tripwire: a superseded Defcon really did lose its sequence number to
 // something else, and telling its signer the harbor froze a destination would be nonsense.
 
-const rotation = { actionType: 'safe_harbour_address_update', status: 'superseded' } as const
+const rotation = { actionType: 'safe_harbor_address_update', status: 'superseded' } as const
 assert.equal(harborFrozeDestination(rotation, true), true)
 assert.equal(harborFrozeDestination(rotation, false), false, 'with the harbor down it lost a race')
 assert.equal(
@@ -122,7 +122,7 @@ assert.equal(
 	'a Defcon is applied whatever the harbor is doing',
 )
 assert.equal(
-	harborFrozeDestination({ actionType: 'safe_harbour_address_update', status: 'enacted' }, true),
+	harborFrozeDestination({ actionType: 'safe_harbor_address_update', status: 'enacted' }, true),
 	false,
 	'an enacted rotation installed its destination — the harbor cannot have been up',
 )

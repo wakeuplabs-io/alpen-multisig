@@ -47,7 +47,7 @@ export function useSafeHarborActionHex(address: string): SafeHarborActionHex {
 			const decoded = await decodeActionHex(built.data.actionHex)
 			if (cancelled) return
 			const descriptorHex =
-				decoded.ok && decoded.data.kind === 'safe_harbour_address_update' ? decoded.data.addressHex : null
+				decoded.ok && decoded.data.kind === 'safe_harbor_address_update' ? decoded.data.addressHex : null
 			setState({ descriptorHex, error: null })
 		})()
 		return () => {

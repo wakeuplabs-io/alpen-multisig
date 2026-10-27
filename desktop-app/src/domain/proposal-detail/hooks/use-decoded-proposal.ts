@@ -120,7 +120,7 @@ export function useDecodedProposal(proposal: Proposal | null): DecodedProposalDa
 				// the same reason the retarget below is: the answer is only known after the decode,
 				// so one `Promise.all` cannot cover both. It re-checks `cancelled` on its own, and
 				// `allSigners` above is untouched by it.
-				if (actionRes.data.kind === 'safe_harbour_address_update') {
+				if (actionRes.data.kind === 'safe_harbor_address_update') {
 					const proposed = {
 						address: actionRes.data.address,
 						addressHex: actionRes.data.addressHex,

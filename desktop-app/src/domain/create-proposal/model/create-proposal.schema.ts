@@ -14,7 +14,7 @@ export const CREATE_ACTION_TYPES = [
 	'council_signer_update',
 	'operator_set_update',
 	'sequencer_key_update',
-	'safe_harbour_address_update',
+	'safe_harbor_address_update',
 	'defcon_1',
 	'defcon_3',
 ] as const

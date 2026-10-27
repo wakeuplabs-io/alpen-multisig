@@ -33,7 +33,7 @@ pub enum DecodedAction {
     /// Both forms of one destination: `addressHex` is the BOSD descriptor, which is what the
     /// device displays and therefore what a signer compares; `address` is the same value rendered
     /// for the process's active network, which is what an operator recognises.
-    #[serde(rename = "safe_harbour_address_update", rename_all = "camelCase")]
+    #[serde(rename = "safe_harbor_address_update", rename_all = "camelCase")]
     SafeHarborAddressUpdate {
         address_hex: String,
         address: String,

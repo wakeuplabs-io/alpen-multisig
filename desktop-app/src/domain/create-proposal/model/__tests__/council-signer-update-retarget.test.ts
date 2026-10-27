@@ -65,11 +65,11 @@ function issuesOn(
 
 // Claim 1 (AC 1) — the council entry joins the administrator's menu, after signer_update and
 // before vk_update, and the default selection does not move: it is the first entry, unchanged.
-// `safe_harbour_address_update` goes at the end for the same reason, which is why the whole
+// `safe_harbor_address_update` goes at the end for the same reason, which is why the whole
 // order is asserted rather than only the council entry's presence.
 assert.deepEqual(
 	getActionTypeOptions('strata_admin').map((option) => option.actionType),
-	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update', 'safe_harbour_address_update'],
+	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update', 'safe_harbor_address_update'],
 	'claim 1: strata_admin menu order',
 )
 assert.equal(getDefaultActionType('strata_admin'), 'signer_update', 'claim 1: default selection unchanged')

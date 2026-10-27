@@ -184,7 +184,7 @@ console.log('ipc-schemas: P-023 errorCode field on ApiResult OK')
 // so an unregistered value is a parse error rather than an unknown-action fallback — and for
 // `actionType` that empties the whole list, because `listProposals` parses
 // `z.array(proposalSchema)`.
-for (const actionType of ['defcon_1', 'defcon_3', 'council_signer_update', 'safe_harbour_address_update'] as const) {
+for (const actionType of ['defcon_1', 'defcon_3', 'council_signer_update', 'safe_harbor_address_update'] as const) {
 	assert.equal(
 		proposalSchema.safeParse({ ...proposalWithNullBroadcastFields, actionType }).success,
 		true,
@@ -197,7 +197,7 @@ for (const actionType of ['defcon_1', 'defcon_3', 'council_signer_update', 'safe
 for (const decoded of [
 	{ kind: 'defcon_1' },
 	{ kind: 'defcon_3' },
-	{ kind: 'safe_harbour_address_update', addressHex: '04' + '79'.repeat(32), address: 'bcrt1p' },
+	{ kind: 'safe_harbor_address_update', addressHex: '04' + '79'.repeat(32), address: 'bcrt1p' },
 	{ kind: 'cancel', targetUpdateId: 7, targetActionHex: 'ab' },
 ]) {
 	assert.equal(decodedActionSchema.safeParse(decoded).success, true, `decodedActionSchema must accept ${decoded.kind}`)

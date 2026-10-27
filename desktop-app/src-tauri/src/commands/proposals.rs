@@ -207,7 +207,7 @@ fn action_type_from_hex(target_action_id: &Option<String>, action_hex: &str) -> 
             "sequencer_key_update".to_string()
         }
         Ok(desktop_app::domain::action::Action::SafeHarborAddressUpdate(_)) => {
-            "safe_harbour_address_update".to_string()
+            "safe_harbor_address_update".to_string()
         }
         Ok(desktop_app::domain::action::Action::Defcon1) => "defcon_1".to_string(),
         Ok(desktop_app::domain::action::Action::Defcon3) => "defcon_3".to_string(),
@@ -1416,7 +1416,7 @@ mod tests {
             (Action::Defcon3, "defcon_3"),
             (
                 Action::SafeHarborAddressUpdate(destination),
-                "safe_harbour_address_update",
+                "safe_harbor_address_update",
             ),
             (
                 signer_update(Authority::SecurityCouncil),

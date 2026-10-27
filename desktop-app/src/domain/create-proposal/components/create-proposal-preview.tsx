@@ -179,7 +179,7 @@ export function CreateProposalPreview({
 						<span className="break-all font-mono text-body text-[#111827]">{newSequencerKeyHex.trim() || '—'}</span>
 					</div>
 				</div>
-			) : actionType === 'safe_harbour_address_update' ? (
+			) : actionType === 'safe_harbor_address_update' ? (
 				<div>
 					<p className="m-0 mb-2 text-label font-semibold uppercase tracking-[0.12em] text-[#9ca3af]">
 						New Sweep Destination
