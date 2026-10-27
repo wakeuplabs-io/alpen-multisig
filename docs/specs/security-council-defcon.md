@@ -12,7 +12,7 @@
 
 Define the full stack for Security Council signers to create and enact Defcon 1 proposals: immediate (depth-0) safe-harbor activation with no cancellation path. The end-to-end flow: authenticate as council signer → create Defcon 1 proposal → sign → reach quorum → broadcast via commit/reveal → Enacted (safe harbor activated in the reveal block).
 
-This spec covers orchestrator-be (authority→role mapping, per-action lock period, enactment detection), desktop-app (create form, type-to-confirm gate, lifecycle display), and signer safety (four-line message, destructive UX, no "Approved" label, no cancel CTA).
+This spec covers orchestrator-be (authority→role mapping, per-action lock period, enactment detection), desktop-app (create form, type-to-confirm gate, lifecycle display), and signer safety (five-line message, destructive UX, no "Approved" label, no cancel CTA).
 
 ## Scope
 
@@ -21,7 +21,7 @@ This spec covers orchestrator-be (authority→role mapping, per-action lock peri
 - Defcon 1 proposal creation, signature collection, and quorum detection.
 - Orchestrator per-action lock-period model (V1 lays the spine for V2/V5).
 - Enactment detection via `safe_harbour.is_activated()` post-condition.
-- Frontend create form with the four canonical signing-message lines rendered verbatim.
+- Frontend create form with the five canonical signing-message lines rendered verbatim.
 - Type-to-confirm gate (`DEFCON 1`) before hardware wallet signing.
 - Lifecycle UI state: Pending → Approved → Enacted (never Canceled).
 - Broadcast via existing commit/reveal pipeline.
@@ -49,7 +49,7 @@ This spec covers orchestrator-be (authority→role mapping, per-action lock peri
 See [`security-council.md`](./security-council.md) §2–3 for full upstream description. Minimum recap for this contract:
 
 - Defcon 1 is a unit-struct action with no payload (`Defcon1Update` in the upstream admin subprotocol).
-- Signing message is exactly four lines: `Strata ASM Administration v1`, `Action: Defcon 1`, `Authorized By: Strata Security Council`, `Sequence: <seq_no>`. No `Action Details:` block because there is no payload (see [`security-council.md`](./security-council.md) §3.1).
+- Signing message is exactly five lines: `Strata ASM Administration v1`, `Network: <network>`, `Action: Defcon 1`, `Authorized By: Strata Security Council`, `Sequence: <seq_no>`. No `Action Details:` block because there is no payload (see [`security-council.md`](./security-council.md) §3.1).
 - Confirmation depth is hardcoded `0` upstream — Defcon 1 is the emergency lever and applies immediately.
 - Observable post-condition: `bridge.safe_harbour().is_activated() == true` in the **submission block itself**; the action **never enters** the admin queue (see [`security-council.md`](./security-council.md) §3.2).
 - `e2e_defcon_probe.rs` proves the signing message and enactment post-conditions against real regtest ASM.
@@ -260,6 +260,7 @@ Create Defcon 1 proposal                  [Security Council badge] [Session] [Di
 ──────────────────────────────────────────────────────────────────────────────────────
   ┌─ Signing message (read-only, monospace) ─────────────────────────────────────────┐
   │  Strata ASM Administration v1                                                    │
+  │  Network: regtest                                                                │
   │  Action: Defcon 1                                                                │
   │  Authorized By: Strata Security Council                                          │
   │  Sequence: [input field for seq no]                                              │
@@ -285,7 +286,7 @@ Create Defcon 1 proposal                  [Security Council badge] [Session] [Di
 4. Duplicate `(action, seq_no)` submissions are rejected naming the existing `ActionId` (see
    "Proposal Creation" in Backend Contract, and the correction under [AC 3](#3-actionid-is-stable-and-duplicate-rejection-works)).
 
-**Signing message rendering:** The four lines are rendered verbatim from the signing-message bytes, monospace, in a read-only text area. No abbreviations, no line wrapping beyond the natural message boundary.
+**Signing message rendering:** The five lines are rendered verbatim from the signing-message bytes, monospace, in a read-only text area. No abbreviations, no line wrapping beyond the natural message boundary.
 
 ### Lifecycle Display
 
@@ -344,9 +345,9 @@ This capability ensures governance can proceed even if the orchestrator is unrea
 
 Defcon 1 authorizes sweeping **all bridge funds** with no de-escalation path (`safe_harbour.is_activated()` is never reset to `false`). This drives four critical safeguards:
 
-### 1. Four-line signing message is the reviewable artifact
+### 1. Five-line signing message is the reviewable artifact
 
-The hardware signer displays exactly the four canonical lines — no payload, no details block. The form displays these same four lines in monospace in the UI. A signer comparing the two must see byte-identical text. If the hardware signer shows anything different, the update is either not for Defcon 1 or has been tampered with.
+The hardware signer displays exactly the five canonical lines — no payload, no details block. The form displays these same five lines in monospace in the UI. A signer comparing the two must see byte-identical text. If the hardware signer shows anything different, the update is either not for Defcon 1 or has been tampered with.
 
 **Implementation:** Do not abbreviate or reformat the message. Render it verbatim from the signing-message bytes.
 
@@ -415,6 +416,7 @@ signature the duplicate arrived with.
 **Then** the text is exactly:
 ```
 Strata ASM Administration v1
+Network: <network>
 Action: Defcon 1
 Authorized By: Strata Security Council
 Sequence: <seq_no>
@@ -604,7 +606,7 @@ Backend integration tests are part of the standard test suite. Verify:
 Desktop app tests use granular scripts (see `desktop-app/package.json` for available commands). Verify:
 
 - **Type-to-confirm validation:** Sign button disabled until input matches "DEFCON 1" (case-insensitive).
-- **Four-line message rendering:** Signing message displays verbatim without wrapping or abbreviation.
+- **Five-line message rendering:** Signing message displays verbatim without wrapping or abbreviation.
 - **Non-council access blocked:** (AC 1) a non-council session's action-type menu on `/proposals/create`
   offers no Defcon 1, and the form schema refuses the action even if the field is set by other means;
   (AC 1a) `/proposals/create/defcon-1` is not a registered route, so `App.tsx`'s catch-all answers it

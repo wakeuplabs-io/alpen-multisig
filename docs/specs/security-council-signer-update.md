@@ -110,23 +110,28 @@ Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
   `strata_security_council_multisig_update` (`params/.../confirmation_depth.rs:43-45`); depth `0`
   means "apply immediately, never enqueued".
 - **The signing message is rendered by upstream and pinned in a test**
-  (`strata_security_council_multisig.rs:52-75`):
+  (`strata_security_council_multisig.rs:67-79`):
 
   ```
   Strata ASM Administration v1
+  Network: regtest
   Action: Strata Security Council Multisig Update
   Authorized By: Strata Administrator
   Sequence: 7
   Action Details:
     New Threshold: 2
     Members to Add: 1
-    1. Add Member: 020202…0202
+    1. Add Member: bcrt1qqgpqyqszqgpqyqszqgpqyqszqgpqyqszazmwwa
     Members to Remove: 0
   ```
 
+  Since asm `v0.5.0-rc.1` the message carries a `Network:` line and members render as P2WPKH
+  addresses on that network, not as compressed keys (see
+  [`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md)).
+
   The action name carries **what is being changed**; `Authorized By` carries **who is signing**. The
   two are different lines because they are different roles. Both labels are frozen by contract
-  (`roles.rs:42-45`, `updates.rs:76-79`): external signers hash the rendered payload.
+  (`roles.rs:44-53`, `updates.rs:78-95`): external signers hash the rendered payload.
 - **No upstream end-to-end coverage.** `asm/tests/harness/admin.rs:251-277` supports
   `Role::StrataSecurityCouncil`, but no test in `asm/tests/asm/admin.rs` ever passes it — every
   multisig-update test uses `Role::StrataAdministrator`. Only the signing-message unit test exercises
@@ -461,8 +466,8 @@ change and stays allowed.
 
 **Given** a council signer update carrying one added member and threshold 2, at sequence 7
 **When** the signing message is rendered
-**Then** it reads exactly the nine lines upstream pins in
-`strata_security_council_multisig.rs:52-75`, with `Action: Strata Security Council Multisig Update`
+**Then** it reads exactly the ten lines upstream pins in
+`strata_security_council_multisig.rs:67-79`, with `Action: Strata Security Council Multisig Update`
 and `Authorized By: Strata Administrator` on separate lines, and it is byte-identical to what the
 hardware signer displays.
 

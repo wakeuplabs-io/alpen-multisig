@@ -124,19 +124,23 @@ Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
 - **Activation is unaffected.** Only Defcon signals toggle `activated`
   (`subprotocol.rs:165-168`); a rotation never activates or deactivates the harbor.
 - **The signing message is rendered by upstream and pinned in a test**
-  (`safe_harbour_address.rs:62-88`):
+  (`safe_harbor_address.rs:78-89`):
 
   ```
   Strata ASM Administration v1
-  Action: Safe Harbour Address Update
+  Network: regtest
+  Action: Safe Harbor Address Update
   Authorized By: Strata Administrator
   Sequence: 17
   Action Details:
-    New Safe Harbour Address: 0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+    New Safe Harbor Address: 0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
   ```
 
+  Since asm `v0.5.0-rc.1` the message carries a `Network:` line and the labels read `Harbor`
+  (asm#284; see [`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md)).
+
   The detail line is `hex(descriptor.to_bytes())` — **the descriptor, not an address**. Both labels
-  are frozen by contract (`roles.rs:42-45`, `updates.rs:76-79`): external signers hash the rendered
+  are frozen by contract (`roles.rs:44-53`, `updates.rs:78-95`): external signers hash the rendered
   payload.
 - **The read.** The address lives in the bridge section of the anchor state
   (`bridge.safe_harbour().address()`), and there is a dedicated RPC,
@@ -459,8 +463,8 @@ other valid address is allowed.
 
 **Given** a safe harbor address update at sequence 17 carrying the generator-point descriptor
 **When** the signing message is rendered
-**Then** it reads exactly the six lines upstream pins in `safe_harbour_address.rs:62-88`, with
-`Action: Safe Harbour Address Update` and `Authorized By: Strata Administrator` on separate lines,
+**Then** it reads exactly the seven lines upstream pins in `safe_harbor_address.rs:78-89`, with
+`Action: Safe Harbor Address Update` and `Authorized By: Strata Administrator` on separate lines,
 the destination rendered as descriptor hex, and it is byte-identical to what the hardware signer
 displays.
 
