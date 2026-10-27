@@ -8,6 +8,7 @@
 //!   4. Broadcast reveal tx and confirm inclusion
 //!   5. Parse SPS payload and verify threshold signatures
 
+use bitcoin::Network;
 use std::num::NonZero;
 use std::process::Command;
 
@@ -15,17 +16,16 @@ use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey, SECP256K1};
 use rand::rngs::OsRng;
-use ssz::encode::Encode;
+use strata_asm_admin_threshold_sig::P2wpkhAddress;
+use strata_asm_admin_threshold_sig::{
+    verify_threshold_signatures, ThresholdConfig, ThresholdConfigUpdate,
+};
 use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_asm_txs_admin::test_utils::create_signature_set;
 use strata_asm_txs_test_utils::TEST_MAGIC_BYTES;
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::{
-    verify_threshold_signatures, ThresholdConfig, ThresholdConfigUpdate,
-};
 use strata_l1_txfmt::ParseConfig;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -44,29 +44,31 @@ async fn e2e_admin_commit_reveal_broadcast_and_verify() {
 
     // Step 1: signer setup (3 signers, threshold = 2).
     let privkeys: Vec<SecretKey> = (0..3).map(|_| SecretKey::new(&mut OsRng)).collect();
-    let pubkeys: Vec<CompressedPublicKey> = privkeys
+    let pubkeys: Vec<P2wpkhAddress> = privkeys
         .iter()
-        .map(|sk| CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk)))
+        .map(|sk| P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, sk)))
         .collect();
     let threshold = NonZero::new(2).expect("threshold should be non-zero");
     let config = ThresholdConfig::try_new(pubkeys, threshold).expect("valid threshold config");
 
     // Step 2: build an admin signer-set update action.
-    let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(
+    let new_signer = P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(
         SECP256K1,
         &SecretKey::new(&mut OsRng),
     ));
-    let config_update = ThresholdConfigUpdate::new(vec![new_signer], vec![], threshold);
+    let config_update = ThresholdConfigUpdate::try_new(vec![new_signer], vec![], threshold)
+        .expect("valid config update");
     let action = MultisigAction::Update(UpdateAction::StrataAdminMultisig(
         StrataAdminMultisigUpdate::new(config_update),
     ));
 
     // Step 3: sign payload (2-of-3 signatures over SPS-65 sighash).
     let seqno = 1u64;
-    let sighash = SigningMessage::for_action(&action, seqno).compute_sighash();
+    let sighash = SigningMessage::for_action(&action, seqno, Network::Regtest).compute_sighash();
     let signer_indices: Vec<u8> = vec![0, 2];
-    let signatures = create_signature_set(&privkeys, &signer_indices, &action, seqno);
-    let payload = SignedPayload::new(seqno, action.clone(), signatures).as_ssz_bytes();
+    let signatures =
+        create_signature_set(&privkeys, &signer_indices, &action, seqno, Network::Regtest);
+    let payload = SignedPayload::new(seqno, action.clone(), signatures).into_envelope_bytes();
 
     // Step 4: build reveal tx with real commit funding output.
     let secp = Secp256k1::new();

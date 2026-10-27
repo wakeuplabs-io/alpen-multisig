@@ -1,9 +1,8 @@
-//! Admin signer identity as the ASM will key it: the 20-byte P2WPKH witness program.
+//! Admin signer identity as the ASM keys it: the 20-byte P2WPKH witness program.
 //!
-//! At the current ASM pin a role's signer set is a list of compressed public keys. From the v0.5
-//! pin on it is a list of P2WPKH witness programs, and the Admin ID (`bc1q…`, `tb1q…`,
-//! `bcrt1q…`) is that program rendered for one network. Comparing signers by program works for
-//! both, and treats every rendering of one program as the same signer.
+//! A role's signer set is a list of P2WPKH witness programs, and the Admin ID (`bc1q…`, `tb1q…`,
+//! `bcrt1q…`) is that program rendered for one network. Comparing signers by program treats every
+//! rendering of one program as the same signer.
 
 use bitcoin::hashes::Hash;
 use bitcoin::CompressedPublicKey;
@@ -19,6 +18,11 @@ impl SignerId {
         let bytes = hex::decode(pubkey_hex).ok()?;
         let key = CompressedPublicKey::from_slice(&bytes).ok()?;
         Some(Self(key.wpubkey_hash().to_byte_array()))
+    }
+
+    /// The signer behind a witness program, as the ASM stores it.
+    pub fn from_program(program: [u8; 20]) -> Self {
+        Self(program)
     }
 }
 

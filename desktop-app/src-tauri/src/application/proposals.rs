@@ -1522,9 +1522,10 @@ mod tests {
         StartOrchestratorAuthRequest,
     };
     use crate::application::tx_broadcaster::tests::MockBroadcaster;
-    use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+    use crate::domain::action::{Action, MultisigUpdate};
     use crate::domain::authority::Authority;
     use crate::domain::proposal::{Proposal as OrcProposal, ProposalSignature};
+    use crate::domain::signer_id::SignerId;
     use crate::infrastructure::action_codec;
     use crate::infrastructure::node_broadcaster::NodeBroadcaster;
     use crate::infrastructure::signing;
@@ -1561,11 +1562,12 @@ mod tests {
         let demo_bytes = [0x42u8; 32];
         let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
         let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
-        let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+        let new_signer =
+            SignerId::from_pubkey_hex(&hex::encode(new_signer_pk.serialize())).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![new_signer],
-            remove_keys: vec![],
+            add_signers: vec![new_signer],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).expect("non-zero"),
         })
     }
@@ -1576,19 +1578,19 @@ mod tests {
 
     /// Action with 4 keys — produces a payload large enough for taproot envelope (>= 126 bytes).
     fn large_demo_action_hex() -> String {
-        let keys: Vec<CompressedPubKey> = (1u8..=4)
+        let keys: Vec<SignerId> = (1u8..=4)
             .map(|i| {
                 let mut seed = [0x42u8; 32];
                 seed[0] = i;
                 let sk = SecretKey::from_slice(&seed).expect("valid key");
                 let pk = PublicKey::from_secret_key(SECP256K1, &sk);
-                CompressedPubKey::new(pk.serialize())
+                SignerId::from_pubkey_hex(&hex::encode(pk.serialize())).unwrap()
             })
             .collect();
         let action = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: keys,
-            remove_keys: vec![],
+            add_signers: keys,
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).expect("non-zero"),
         });
         action_codec::encode_hex(&action).expect("encode ok")

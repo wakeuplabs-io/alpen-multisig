@@ -3,10 +3,10 @@
 
 use serde_json::{json, Value};
 use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
-use strata_asm_params::Role;
+use strata_asm_admin_types::Role;
+use strata_asm_common::{AnchorState, SectionStateExt, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
-use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
+use strata_asm_proto_bridge::{BridgeStateV1, BridgeSubprotoV1};
 use strata_asm_proto_checkpoint::{CheckpointState, CheckpointSubprotocol};
 
 use crate::error::AppError;
@@ -71,14 +71,15 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
 }
 
 fn decode_state_bytes_from_status(status_result: &Value) -> Result<Vec<u8>, String> {
+    // `cur_state` is an `Option<AnchorState>`, which serializes as its SSZ bytes (asm v0.5).
     let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
+        .get("cur_state")
+        .filter(|v| !v.is_null())
+        .ok_or_else(|| "status result missing `cur_state` bytes".to_string())?;
 
     let items = raw_state
         .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
+        .ok_or_else(|| "`cur_state` is not an array".to_string())?;
 
     items
         .iter()
@@ -117,13 +118,13 @@ pub(crate) fn decode_admin_state(
     })
 }
 
-pub(crate) fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeV1State, String> {
-    let id = BridgeV1Subproto::ID;
+pub(crate) fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeStateV1, String> {
+    let id = BridgeSubprotoV1::ID;
     let section = anchor.find_section(id).ok_or_else(|| {
         format!("AnchorState has no bridge-v1 subprotocol section (expected id {id})")
     })?;
     section
-        .try_to_state::<BridgeV1Subproto>()
+        .try_to_state::<BridgeSubprotoV1>()
         .map_err(|e| format!("BridgeV1 section SSZ decode failed: {e:?}"))
 }
 

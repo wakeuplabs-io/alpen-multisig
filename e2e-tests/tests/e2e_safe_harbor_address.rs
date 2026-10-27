@@ -9,22 +9,24 @@
 //! administrator and the Defcon that freezes the harbor by the council, and mixing them would hide
 //! a mistake in either gate.
 
+use bitcoin::Network;
 use std::num::NonZero;
 use std::process::Command;
 
-use alpen_multisig_e2e_tests::fixtures::{decode_administration_subproto, decode_bridge_subproto};
+use alpen_multisig_e2e_tests::fixtures::{
+    decode_administration_subproto, decode_bridge_subproto, regtest_signer_config,
+};
 use alpen_multisig_e2e_tests::test_harness::{AsmTestHarness, AsmTestHarnessBuilder};
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoind_async_client::traits::Reader;
-use ssz::Encode;
-use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role, UpdateTxType};
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfig};
+use strata_asm_admin_types::{ConfirmationDepths, Role, UncheckedThresholdConfig, UpdateTxType};
+use strata_asm_params::AdministrationInitConfig;
 use strata_asm_proto_admin::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::updates::Defcon1Update;
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::test_utils::create_signature_set;
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::ThresholdConfig;
 
 use desktop_app::domain::action::{Action, SafeHarborDescriptor};
 use desktop_app::infrastructure::action_codec;
@@ -38,7 +40,7 @@ const CANCEL_SEQNO: u64 = 8;
 const DEFCON_SEQNO: u64 = 1;
 const FIRST_UPDATE_ID: u32 = 0;
 
-/// The destination the harness starts on is **not** fixed: `SafeHarbourAddress::arbitrary` derives
+/// The destination the harness starts on is **not** fixed: `SafeHarborAddress::arbitrary` derives
 /// a P2TR descriptor from a fresh keypair, so every run begins somewhere different. Each path reads
 /// it and compares against what it read — which is the stronger assertion anyway, since a hardcoded
 /// value would also pass on a chain that never applied anything.
@@ -57,13 +59,13 @@ impl HarborFixture {
     fn new() -> Self {
         let admin_keys = vec![fixed_key(1), fixed_key(2)];
         let council_keys = vec![fixed_key(3), fixed_key(4)];
-        let unrelated_config = threshold_config(&[fixed_key(7)], 1);
+        let unrelated_config = genesis_config(&[fixed_key(7)], 1);
 
         let admin_config = AdministrationInitConfig {
-            strata_administrator: threshold_config(&admin_keys, 2),
+            strata_administrator: genesis_config(&admin_keys, 2),
             strata_sequencer_manager: unrelated_config.clone(),
             alpen_administrator: unrelated_config,
-            strata_security_council: threshold_config(&council_keys, 2),
+            strata_security_council: genesis_config(&council_keys, 2),
             confirmation_depths: ConfirmationDepths {
                 strata_admin_multisig_update: ADMIN_UPDATE_DEPTH,
                 strata_seq_manager_multisig_update: HARBOR_UPDATE_DEPTH,
@@ -75,7 +77,7 @@ impl HarborFixture {
                 ee_stf_vk_update: HARBOR_UPDATE_DEPTH,
                 strata_security_council_multisig_update: HARBOR_UPDATE_DEPTH,
                 defcon3: HARBOR_UPDATE_DEPTH,
-                safe_harbour_address_update: HARBOR_UPDATE_DEPTH,
+                safe_harbor_address_update: HARBOR_UPDATE_DEPTH,
             },
             max_seqno_gap: NonZero::new(10).expect("non-zero sequence gap"),
         };
@@ -268,7 +270,7 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Constraint 1, against a real chain. `SafeHarbour::update_address` returns `false` while the
+/// Constraint 1, against a real chain. `SafeHarbor::update_address` returns `false` while the
 /// harbor is activated and the bridge subprotocol drops that boolean — so everything else about
 /// this rotation succeeds and the destination does not move.
 async fn run_swallowed_rotation() -> anyhow::Result<()> {
@@ -357,8 +359,9 @@ async fn submit_action(
     signer_keys: &[SecretKey],
     signer_indices: &[u8],
 ) -> anyhow::Result<u64> {
-    let signatures = create_signature_set(signer_keys, signer_indices, action, seqno);
-    let payload = SignedPayload::new(seqno, action.clone(), signatures).as_ssz_bytes();
+    let signatures =
+        create_signature_set(signer_keys, signer_indices, action, seqno, Network::Regtest);
+    let payload = SignedPayload::new(seqno, action.clone(), signatures).into_envelope_bytes();
     let reveal = harness.build_envelope_tx(action.tag(), payload).await?;
     let block_hash = harness.submit_and_mine_tx(&reveal).await?;
     Ok(harness.client.get_block_height(&block_hash).await?)
@@ -391,7 +394,7 @@ fn safe_harbor_descriptor_hex(harness: &AsmTestHarness) -> anyhow::Result<String
     let bridge = decode_bridge_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("bridge section must be present"))?;
     Ok(hex::encode(
-        bridge.safe_harbour().address().as_descriptor().to_bytes(),
+        bridge.safe_harbor().address().as_descriptor().to_bytes(),
     ))
 }
 
@@ -401,12 +404,12 @@ fn safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool> {
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let bridge = decode_bridge_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("bridge section must be present"))?;
-    Ok(bridge.safe_harbour().is_activated())
+    Ok(bridge.safe_harbor().is_activated())
 }
 
 fn assert_fixture_depths(state: &AdministrationSubprotoState) -> anyhow::Result<()> {
     anyhow::ensure!(
-        state.confirmation_depth(UpdateTxType::SafeHarbourAddressUpdate)
+        state.confirmation_depth(UpdateTxType::SafeHarborAddressUpdate)
             == Some(HARBOR_UPDATE_DEPTH),
         "tx14 must use the safe harbor depth"
     );
@@ -432,11 +435,11 @@ fn signer_indices(config: &ThresholdConfig, signer_keys: &[SecretKey]) -> anyhow
     signer_keys
         .iter()
         .map(|secret_key| {
-            let public_key = compressed_key(secret_key);
+            let signer = signer(secret_key);
             config
-                .keys()
+                .signers()
                 .iter()
-                .position(|candidate| candidate == &public_key)
+                .position(|candidate| candidate == &signer)
                 .ok_or_else(|| anyhow::anyhow!("signer is absent from live authority config"))?
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("signer index exceeds u8"))
@@ -448,14 +451,15 @@ fn fixed_key(byte: u8) -> SecretKey {
     SecretKey::from_slice(&[byte; 32]).expect("fixed test key must be valid")
 }
 
-fn threshold_config(keys: &[SecretKey], threshold: u8) -> ThresholdConfig {
-    ThresholdConfig::try_new(
-        keys.iter().map(compressed_key).collect(),
+/// A role's genesis signer set, as the regtest params file writes it.
+fn genesis_config(keys: &[SecretKey], threshold: u8) -> UncheckedThresholdConfig {
+    let signers: Vec<P2wpkhAddress> = keys.iter().map(signer).collect();
+    regtest_signer_config(
+        &signers,
         NonZero::new(threshold).expect("non-zero threshold"),
     )
-    .expect("valid threshold config")
 }
 
-fn compressed_key(secret_key: &SecretKey) -> CompressedPublicKey {
-    CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, secret_key))
+fn signer(secret_key: &SecretKey) -> P2wpkhAddress {
+    P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, secret_key))
 }

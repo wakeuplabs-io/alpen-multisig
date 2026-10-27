@@ -10,6 +10,7 @@ use std::str::FromStr;
 use bitcoin::{Address, Network, ScriptBuf};
 
 use crate::domain::authority::Authority;
+use crate::domain::signer_id::SignerId;
 
 /// An x-only (even-parity) secp256k1 public key (32 bytes, no 02/03 prefix).
 ///
@@ -69,49 +70,9 @@ pub struct OperatorSetUpdate {
     pub remove_members: Vec<u32>,
 }
 
-/// A compressed secp256k1 public key (33 bytes).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CompressedPubKey([u8; 33]);
-
-/// Failure to construct a `CompressedPubKey`.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum PubKeyError {
-    #[error("invalid hex: {0}")]
-    Hex(String),
-    #[error("expected 33 bytes, got {0}")]
-    WrongLength(usize),
-}
-
-impl CompressedPubKey {
-    /// Wraps a 33-byte array.
-    pub fn new(bytes: [u8; 33]) -> Self {
-        Self(bytes)
-    }
-
-    /// Parses a hex-encoded compressed public key.
-    pub fn from_hex(s: &str) -> Result<Self, PubKeyError> {
-        let bytes = hex::decode(s).map_err(|e| PubKeyError::Hex(e.to_string()))?;
-        let len = bytes.len();
-        let arr: [u8; 33] = bytes
-            .try_into()
-            .map_err(|_| PubKeyError::WrongLength(len))?;
-        Ok(Self(arr))
-    }
-
-    /// Hex-encoded representation.
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.0)
-    }
-
-    /// Raw 33-byte slice.
-    pub fn as_bytes(&self) -> &[u8; 33] {
-        &self.0
-    }
-}
-
 /// The bridge's safe harbor destination: the x-only key of a P2TR output.
 ///
-/// Upstream models this as a `SafeHarbourAddress`, which wraps a BOSD `Descriptor` restricted to
+/// Upstream models this as a `SafeHarborAddress`, which wraps a BOSD `Descriptor` restricted to
 /// taproot. This type deliberately holds the bare 32-byte key instead, for two reasons:
 ///
 /// - the BOSD types belong to `infrastructure::action_codec`, which is by contract the only module
@@ -189,7 +150,7 @@ impl SafeHarborDescriptor {
         let script = address.script_pubkey();
         let bytes = script.as_bytes();
         // A taproot output is exactly `OP_1 PUSH32 <32 bytes>`; anything else is another script
-        // type, which upstream's `SafeHarbourAddress::try_from` refuses as well.
+        // type, which upstream's `SafeHarborAddress::try_from` refuses as well.
         if !script.is_p2tr() || bytes.len() != 34 {
             return Err(SafeHarborDescriptorError::NotP2tr);
         }
@@ -271,8 +232,8 @@ pub struct MultisigUpdate {
     /// `SecurityCouncil`. Deriving the authorizing role from this field is upstream's job, and it
     /// already does it. See `docs/specs/security-council-signer-update.md` Constraint 2.
     pub role: Authority,
-    pub add_keys: Vec<CompressedPubKey>,
-    pub remove_keys: Vec<CompressedPubKey>,
+    pub add_signers: Vec<SignerId>,
+    pub remove_signers: Vec<SignerId>,
     pub new_threshold: NonZeroU8,
 }
 
@@ -330,31 +291,12 @@ mod tests {
     const EVEN_KEY_HEX: &str = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 
     #[test]
-    fn test_compressed_pubkey_from_hex_ok() {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).expect("valid 33-byte hex");
-        assert_eq!(pk.to_hex(), VALID_HEX);
-    }
-
-    #[test]
-    fn test_compressed_pubkey_rejects_short_length() {
-        let short = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709e";
-        let err = CompressedPubKey::from_hex(short).unwrap_err();
-        assert!(matches!(err, PubKeyError::WrongLength(32)));
-    }
-
-    #[test]
-    fn test_compressed_pubkey_rejects_invalid_hex() {
-        let err = CompressedPubKey::from_hex("zz").unwrap_err();
-        assert!(matches!(err, PubKeyError::Hex(_)));
-    }
-
-    #[test]
     fn test_action_builds() {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         let update = MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         };
         let action = Action::MultisigUpdate(update.clone());
@@ -460,7 +402,7 @@ mod tests {
     #[test]
     fn safe_harbor_rejects_a_non_taproot_address() {
         // P2WPKH over a 20-byte program: parses as an address, is not a taproot output. Upstream's
-        // `SafeHarbourAddress::try_from` refuses the same value, one layer later. Built from raw
+        // `SafeHarborAddress::try_from` refuses the same value, one layer later. Built from raw
         // opcodes (`OP_0 PUSH20 <hash>`) so the fixture needs no hash traits in scope.
         let mut raw = vec![0x00, 0x14];
         raw.extend_from_slice(&[0xAA; 20]);

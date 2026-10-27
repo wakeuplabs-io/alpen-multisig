@@ -3,10 +3,10 @@
 //! This does not re-validate signatures or queue semantics. Concurrent overlapping updates may
 //! produce ambiguous post-condition matches (same class of risk as threshold snapshot checks).
 
-use strata_asm_params::Role;
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfigUpdate};
+use strata_asm_admin_types::Role;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-use strata_crypto::threshold_signature::ThresholdConfigUpdate;
-use strata_predicate::{PredicateKey, PredicateTypeId};
+use strata_predicate::PredicateKey;
 
 use crate::domain::authority::Authority;
 use crate::error::AppError;
@@ -51,12 +51,17 @@ pub(crate) async fn is_proposal_enacted_on_asm(
 
     match &action {
         MultisigAction::Update(UpdateAction::OlStfVk(update)) => {
+            // Enactment queues the rotation; it takes effect when the verified checkpoint tip
+            // passes the enactment height. Either place means the admin applied it.
             let checkpoint =
                 asm_rpc::decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
-            Ok(predicate_keys_match(
-                update.key(),
-                checkpoint.checkpoint_predicate(),
-            ))
+            Ok(
+                predicate_keys_match(update.key(), checkpoint.checkpoint_predicate())
+                    || checkpoint
+                        .pending_transitions()
+                        .iter()
+                        .any(|t| predicate_keys_match(update.key(), t.predicate())),
+            )
         }
         MultisigAction::Update(UpdateAction::EeStfVk(update)) => {
             if authority != Authority::AlpenAdmin {
@@ -73,18 +78,12 @@ pub(crate) async fn is_proposal_enacted_on_asm(
             Ok(ee_stf_vk_enacted(alpen.last_seqno(), seq_no, still_queued))
         }
         MultisigAction::Update(UpdateAction::Sequencer(update)) => {
-            // SequencerUpdate carries a Buf32 (raw 32-byte key). The ASM handler wraps it as
-            // PredicateKey::new(Bip340Schnorr, key_bytes) and relays it to the checkpoint
-            // subprotocol, which stores it in `sequencer_predicate` (distinct from
-            // `checkpoint_predicate` which OlStfVk updates).
+            // SequencerUpdate carries a Buf32 (raw 32-byte Schnorr key). The checkpoint
+            // subprotocol stores it as-is in `sequencer_key`, distinct from the
+            // `checkpoint_predicate` that OlStfVk rotates.
             let checkpoint =
                 asm_rpc::decode_checkpoint_state(&anchor).map_err(AppError::BadRequest)?;
-            let expected =
-                PredicateKey::new(PredicateTypeId::Bip340Schnorr, update.pub_key().0.to_vec());
-            Ok(predicate_keys_match(
-                &expected,
-                checkpoint.sequencer_predicate(),
-            ))
+            Ok(checkpoint.sequencer_key() == update.pub_key())
         }
         MultisigAction::Update(UpdateAction::OperatorSet(update)) => {
             let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
@@ -108,7 +107,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
         MultisigAction::Update(UpdateAction::Defcon1(_)) => {
             let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let safe_harbor_activated = bridge.safe_harbour().is_activated();
+            let safe_harbor_activated = bridge.safe_harbor().is_activated();
             let defcon1_queued = admin
                 .queued()
                 .iter()
@@ -142,15 +141,15 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 council.last_seqno(),
                 seq_no,
                 still_queued,
-                bridge.safe_harbour().is_activated(),
+                bridge.safe_harbor().is_activated(),
                 bitcoin_tip,
                 activation_height,
             ))
         }
-        MultisigAction::Update(UpdateAction::SafeHarbourAddress(update)) => {
+        MultisigAction::Update(UpdateAction::SafeHarborAddress(update)) => {
             let bridge = asm_rpc::decode_bridge_state(&anchor).map_err(AppError::BadRequest)?;
             let admin = asm_rpc::decode_admin_state(&anchor).map_err(AppError::BadRequest)?;
-            let target = UpdateAction::SafeHarbourAddress(update.clone());
+            let target = UpdateAction::SafeHarborAddress(update.clone());
             let still_queued = admin.queued().iter().any(|q| q.action() == &target);
             // The role is named literally: an arm that matches one action variant knows its role,
             // and for tx type 14 upstream's `authorized_role()` is the administrator — the council
@@ -162,7 +161,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 administrator.last_seqno(),
                 seq_no,
                 still_queued,
-                &bridge.safe_harbour().address().as_descriptor().to_bytes(),
+                &bridge.safe_harbor().address().as_descriptor().to_bytes(),
                 &update.address().as_descriptor().to_bytes(),
             ))
         }
@@ -191,12 +190,7 @@ pub(crate) async fn is_proposal_enacted_on_asm(
                 |role| {
                     let authority_config = admin.authority(role)?;
                     Some(AuthoritySnapshot {
-                        keys: authority_config
-                            .config()
-                            .keys()
-                            .iter()
-                            .map(|k| hex::encode(k.serialize()))
-                            .collect(),
+                        signers: authority_config.config().signers().to_vec(),
                         threshold: authority_config.config().threshold(),
                         last_seqno: authority_config.last_seqno(),
                     })
@@ -225,7 +219,7 @@ fn ee_stf_vk_enacted(last_seqno: u64, seq_no: u64, still_queued: bool) -> bool {
 /// enters the admin queue. A queued Defcon 1 means upstream changed that depth, not that this
 /// proposal enacted.
 ///
-/// The seqno term is what makes the answer this proposal's: `safe_harbour().is_activated()` is
+/// The seqno term is what makes the answer this proposal's: `safe_harbor().is_activated()` is
 /// never reset, so the other two terms hold for every Defcon 1 once any of them has enacted.
 ///
 /// It is an equality, not `>=`, and this arm is the only one in the module that needs it.
@@ -269,14 +263,14 @@ fn defcon3_enacted(
 /// A safe harbor rotation is enacted when the destination the bridge actually holds is the one
 /// the action proposed — never on the strength of the sequence number alone.
 ///
-/// That distinction is the whole point. `SafeHarbour::update_address` refuses the change while the
+/// That distinction is the whole point. `SafeHarbor::update_address` refuses the change while the
 /// harbor is activated, and the bridge subprotocol **discards** the boolean it returns: no log, no
 /// error, and by then the signature has verified, the seqno is consumed and the queue entry is
 /// drained. Such a rotation is accepted on chain and changes nothing, so the address term is what
 /// keeps it out of `Enacted` — it resolves as `Superseded` instead. See Constraint 1 in
 /// docs/specs/security-council-safe-harbor-address.md.
 ///
-/// Takes bytes rather than `SafeHarbourAddress` so this crate names no protocol type for it: the
+/// Takes bytes rather than `SafeHarborAddress` so this crate names no protocol type for it: the
 /// caller reads the installed destination through inherent methods, and the truth table below can
 /// be written without a chain.
 ///
@@ -358,22 +352,22 @@ fn multisig_config_update_target(
         | UpdateAction::EeStfVk(_)
         | UpdateAction::Defcon1(_)
         | UpdateAction::Defcon3(_)
-        | UpdateAction::SafeHarbourAddress(_) => None,
+        | UpdateAction::SafeHarborAddress(_) => None,
     }
 }
 
 /// The three terms an enactment check reads off one role, at one instant.
 ///
-/// `keys` is hex of `CompressedPublicKey::serialize()` — 33 bytes, compressed. Not x-only: the
-/// `OperatorSet` arm next door uses 32-byte x-only hex, and the two are not interchangeable.
+/// `signers` are P2WPKH witness programs, the same type the update carries. Not x-only keys: the
+/// `OperatorSet` arm next door compares 32-byte x-only hex, and the two are not interchangeable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AuthoritySnapshot {
-    keys: Vec<String>,
+    signers: Vec<P2wpkhAddress>,
     threshold: u8,
     last_seqno: u64,
 }
 
-/// `keys` and `threshold` come from the **target** role; `last_seqno` from the **authorizing**
+/// `signers` and `threshold` come from the **target** role; `last_seqno` from the **authorizing**
 /// role. Neither term is derived from the other, and collapsing the two roles into one is the
 /// regression AC 7a exists to catch.
 ///
@@ -394,7 +388,7 @@ fn multisig_update_enacted(
         .ok_or_else(|| format!("admin state missing authority for role `{authorizing_role:?}`"))?;
 
     Ok(multisig_update_post_conditions_met(
-        &target.keys,
+        &target.signers,
         target.threshold,
         authorizing.last_seqno,
         seq_no,
@@ -403,7 +397,7 @@ fn multisig_update_enacted(
 }
 
 fn multisig_update_post_conditions_met(
-    canonical_keys: &[String],
+    canonical_signers: &[P2wpkhAddress],
     threshold: u8,
     last_seqno: u64,
     seq_no: u64,
@@ -415,25 +409,14 @@ fn multisig_update_post_conditions_met(
     if threshold != config.new_threshold().get() {
         return false;
     }
-    for pk in config.add_members() {
-        let hex_key = hex::encode(pk.serialize());
-        if !canonical_keys
+    config
+        .add_members()
+        .iter()
+        .all(|signer| canonical_signers.contains(signer))
+        && !config
+            .remove_members()
             .iter()
-            .any(|k| k.eq_ignore_ascii_case(&hex_key))
-        {
-            return false;
-        }
-    }
-    for pk in config.remove_members() {
-        let hex_key = hex::encode(pk.serialize());
-        if canonical_keys
-            .iter()
-            .any(|k| k.eq_ignore_ascii_case(&hex_key))
-        {
-            return false;
-        }
-    }
-    true
+            .any(|signer| canonical_signers.contains(signer))
 }
 
 /// Checks whether the current operator set satisfies the post-conditions of an operator set
@@ -493,13 +476,9 @@ fn mock_is_enacted(_rpc_url: &str) -> Option<bool> {
 mod tests {
     use super::*;
     use std::num::NonZeroU8;
-    use strata_crypto::keys::compressed::CompressedPublicKey;
 
-    fn key_hex(byte: u8) -> String {
-        let mut bytes = [0u8; 33];
-        bytes[0] = 0x02;
-        bytes[32] = byte;
-        hex::encode(bytes)
+    fn signer(byte: u8) -> P2wpkhAddress {
+        P2wpkhAddress::from_byte_array([byte; 20])
     }
 
     /// Generate a valid x-only public key for testing by using small scalar multiples of G.
@@ -540,27 +519,31 @@ mod tests {
 
     #[test]
     fn post_conditions_require_last_seqno_at_least_proposal_seq() {
-        let config = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
-        let keys = vec![key_hex(1), key_hex(2)];
+        let config =
+            ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).unwrap()).unwrap();
+        let signers = vec![signer(1), signer(2)];
         assert!(!multisig_update_post_conditions_met(
-            &keys, 2, 0, 1, &config
+            &signers, 2, 0, 1, &config
         ));
-        assert!(multisig_update_post_conditions_met(&keys, 2, 1, 1, &config));
+        assert!(multisig_update_post_conditions_met(
+            &signers, 2, 1, 1, &config
+        ));
     }
 
     #[test]
     fn post_conditions_require_added_keys_present_and_removed_absent() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let removed = CompressedPublicKey::from_slice(&hex::decode(key_hex(2)).unwrap()).unwrap();
+        let added = signer(3);
+        let removed = signer(2);
         let config =
-            ThresholdConfigUpdate::new(vec![added], vec![removed], NonZeroU8::new(2).unwrap());
+            ThresholdConfigUpdate::try_new(vec![added], vec![removed], NonZeroU8::new(2).unwrap())
+                .unwrap();
 
-        let before = vec![key_hex(1), key_hex(2)];
+        let before = vec![signer(1), signer(2)];
         assert!(!multisig_update_post_conditions_met(
             &before, 2, 1, 1, &config
         ));
 
-        let after = vec![key_hex(1), key_hex(3)];
+        let after = vec![signer(1), signer(3)];
         assert!(multisig_update_post_conditions_met(
             &after, 2, 1, 1, &config
         ));
@@ -606,7 +589,7 @@ mod tests {
         assert!(operator_set_post_conditions_met(&current, &[], &[]));
     }
 
-    /// The seqno term is what makes the answer per proposal: `safe_harbour().is_activated()` is
+    /// The seqno term is what makes the answer per proposal: `safe_harbor().is_activated()` is
     /// never reset, so without it every later Defcon 1 reads as enacted on the strength of the
     /// first one's activation.
     #[test]
@@ -642,7 +625,7 @@ mod tests {
     const HARBOR_A: &[u8] = &[0x04; 33];
     const HARBOR_B: &[u8] = &[0x05; 33];
 
-    /// The defect this whole slice turns on. `SafeHarbour::update_address` refuses the change once
+    /// The defect this whole slice turns on. `SafeHarbor::update_address` refuses the change once
     /// the harbor is activated and the bridge subprotocol drops the `false` it returns — so the
     /// transaction is accepted, the seqno is consumed, the queue entry drains, and the destination
     /// is exactly what it was. Answering from the seqno alone would report that as `Enacted`.
@@ -729,13 +712,16 @@ mod tests {
         assert!(!action_needs_chain_tip("deadbeef"));
     }
 
-    /// `UpdateAction::Sequencer` enactment is detected by comparing the proposed key
-    /// (wrapped as `Bip340Schnorr` predicate) against `checkpoint.sequencer_predicate()`.
+    /// `UpdateAction::OlStfVk` enactment compares the proposed predicate against the active and
+    /// the queued checkpoint predicates, by type and condition.
     #[test]
-    fn sequencer_predicate_keys_match_detects_enactment() {
-        let key_bytes = [0x03u8; 32];
-        let matching = PredicateKey::new(PredicateTypeId::Bip340Schnorr, key_bytes.to_vec());
-        let different = PredicateKey::new(PredicateTypeId::Bip340Schnorr, vec![0x04u8; 32]);
+    fn predicate_keys_match_compares_type_and_condition() {
+        use strata_predicate::PredicateTypeId;
+
+        let matching =
+            PredicateKey::try_new(PredicateTypeId::Bip340Schnorr, vec![0x03u8; 32]).unwrap();
+        let different =
+            PredicateKey::try_new(PredicateTypeId::Bip340Schnorr, vec![0x04u8; 32]).unwrap();
 
         assert!(predicate_keys_match(&matching, &matching));
         assert!(!predicate_keys_match(&matching, &different));
@@ -751,16 +737,18 @@ mod tests {
     /// would then be asserting something already proven — see this phase's spec §8.
     #[test]
     fn council_rotation_targets_the_council_and_the_administrator_authorizes_it() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(3).unwrap())
+                .unwrap();
 
         let council = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 1,
         };
@@ -783,7 +771,7 @@ mod tests {
         );
     }
 
-    /// AC 7a, half one — and the **only** test that goes red if `keys` and `threshold` are ever
+    /// AC 7a, half one — and the **only** test that goes red if `signers` and `threshold` are ever
     /// read off the authorizing role. The administrator's set disagrees with `config` on both
     /// terms, so the swap answers `false` where `true` is expected.
     ///
@@ -792,16 +780,18 @@ mod tests {
     /// reader which substitution happened.
     #[test]
     fn council_rotation_ignores_the_administrators_signer_set() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(3).unwrap())
+                .unwrap();
 
         let council = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(5)],
+            signers: vec![signer(5)],
             threshold: 7,
             last_seqno: 1,
         };
@@ -830,16 +820,18 @@ mod tests {
     /// whether the rotation was authorized.
     #[test]
     fn council_rotation_ignores_the_councils_own_seqno() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(3).unwrap())
+                .unwrap();
 
         let council = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 100,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(2)],
+            signers: vec![signer(2)],
             threshold: 1,
             last_seqno: 1,
         };
@@ -866,11 +858,13 @@ mod tests {
     /// so reading both from one role must answer exactly as it always did.
     #[test]
     fn an_administrator_signer_update_reads_one_role_for_all_three_terms() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(2).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(2).unwrap())
+                .unwrap();
 
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 2,
             last_seqno: 1,
         };
@@ -893,9 +887,10 @@ mod tests {
     /// here would tell `reconcile_one` to supersede a rotation that may still be live.
     #[test]
     fn a_missing_target_authority_is_an_error_not_a_negative_answer() {
-        let config = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
+        let config =
+            ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).unwrap()).unwrap();
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(1)],
+            signers: vec![signer(1)],
             threshold: 1,
             last_seqno: 1,
         };
@@ -921,7 +916,7 @@ mod tests {
         use strata_predicate::{PredicateKey, PredicateTypeId};
 
         let action = MultisigAction::Update(UpdateAction::AsmStfVk(AsmStfVkUpdate::new(
-            PredicateKey::new(PredicateTypeId::Bip340Schnorr, vec![0u8; 32]),
+            PredicateKey::try_new(PredicateTypeId::Bip340Schnorr, vec![0u8; 32]).unwrap(),
         )));
         assert_eq!(multisig_config_update_target(&action), None);
     }
@@ -935,7 +930,8 @@ mod tests {
             StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
         };
 
-        let config = || ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).unwrap());
+        let config =
+            || ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).unwrap()).unwrap();
 
         let cases = [
             (

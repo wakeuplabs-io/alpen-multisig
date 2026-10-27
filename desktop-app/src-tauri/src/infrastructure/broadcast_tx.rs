@@ -8,13 +8,13 @@ use bitcoin::{
     transaction::Version,
     Address, Amount, Network, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
 };
-use ssz::{Decode, Encode};
+use ssz::Decode;
+use strata_asm_admin_threshold_sig::{IndexedSignature, SignatureSet};
 use strata_asm_txs_admin::actions::MultisigAction;
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::{IndexedSignature, SignatureSet};
-use strata_l1_envelope_fmt::builder::EnvelopeScriptBuilder;
+use strata_l1_envelope_fmt::EnvelopeScriptBuilder;
 use strata_l1_txfmt::{MagicBytes, ParseConfig};
 
 use crate::domain::proposal::ProposalSignature;
@@ -22,16 +22,16 @@ use crate::domain::signer_id::SignerId;
 use crate::infrastructure::admin_wallet::wallet::{device_hrp_network, render_address_with_hrp};
 use crate::infrastructure::hw_wallet::hw_psbt_signer::HwDeviceType;
 
-/// Build the SSZ-encoded `SignedPayload` bytes to embed in the reveal envelope.
+/// Build the `SignedPayload` envelope bytes to embed in the reveal envelope.
 ///
 /// Converts stored hex signatures to `IndexedSignature`s using the canonical
-/// ordered pubkey set from ASM. Tries all four recovery IDs for 64-byte compact
+/// ordered signer set from ASM (Admin IDs). Tries all four recovery IDs for 64-byte compact
 /// signatures and rearranges 65-byte mnemonic-format signatures (r||s||recid → recid||r||s).
 pub fn build_signed_payload_bytes(
     seq_no: u64,
     action_hex: &str,
     signatures: &[ProposalSignature],
-    canonical_pubkeys_hex: &[String],
+    canonical_admin_ids: &[String],
     sighash: &[u8; 32],
 ) -> Result<Vec<u8>, String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
@@ -45,12 +45,12 @@ pub fn build_signed_payload_bytes(
         .iter()
         .map(|sig| {
             let signer = SignerId::from_pubkey_hex(&sig.signer_pubkey);
-            let index = canonical_pubkeys_hex
+            let index = canonical_admin_ids
                 .iter()
-                .position(|k| signer.is_some() && SignerId::from_pubkey_hex(k) == signer)
+                .position(|id| signer.is_some() && SignerId::from_admin_id(id) == signer)
                 .ok_or_else(|| {
                     format!(
-                        "signer {} not found in canonical key set",
+                        "signer {} not found in canonical signer set",
                         sig.signer_pubkey
                     )
                 })? as u8;
@@ -119,22 +119,23 @@ pub fn build_signed_payload_bytes(
     let sig_set = SignatureSet::new(indexed).map_err(|e| format!("invalid signature set: {e}"))?;
 
     let signed_payload = SignedPayload::new(seq_no, action, sig_set);
-    Ok(signed_payload.as_ssz_bytes())
+    // The envelope carries the action without its enum discriminant; the SPS-50 tag built from
+    // the same action names its type.
+    Ok(signed_payload.into_envelope_bytes())
 }
 
 /// Compute the SPS-65 sighash for a proposal's action and sequence number.
 ///
-/// `_network` is not read at this pin. From the v0.5 pin on it feeds `SigningMessage::for_action`,
-/// whose message names the network.
+/// `network` is the chain's: the signed message names it, so a wrong one fails verification.
 pub fn compute_sighash(
     seq_no: u64,
     action_hex: &str,
-    _network: bitcoin::Network,
+    network: bitcoin::Network,
 ) -> Result<[u8; 32], String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ action: {e:?}"))?;
-    Ok(SigningMessage::for_action(&action, seq_no)
+    Ok(SigningMessage::for_action(&action, seq_no, network)
         .compute_sighash()
         .0)
 }
@@ -391,7 +392,7 @@ mod build_reveal_tx_tests {
 
     #[test]
     fn change_output_uses_change_spk_not_envelope_keypair() {
-        use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+        use crate::domain::action::{Action, MultisigUpdate};
         use crate::domain::authority::Authority;
         use crate::infrastructure::action_codec;
         use ssz::Decode;
@@ -406,11 +407,11 @@ mod build_reveal_tx_tests {
         // Build a valid MultisigAction via the project's action codec.
         const SIGNER_HEX: &str =
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
-        let pk = CompressedPubKey::from_hex(SIGNER_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(SIGNER_HEX).unwrap();
         let action_domain = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         });
         let action_hex = action_codec::encode_hex(&action_domain).unwrap();
@@ -464,7 +465,7 @@ mod build_reveal_tx_tests {
     /// BDK/bitcoin-crate change silently disabled RBF in the reveal path.
     #[test]
     fn reveal_tx_input_signals_rbf_bip125() {
-        use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+        use crate::domain::action::{Action, MultisigUpdate};
         use crate::domain::authority::Authority;
         use crate::infrastructure::action_codec;
         use ssz::Decode;
@@ -478,11 +479,11 @@ mod build_reveal_tx_tests {
 
         const SIGNER_HEX: &str =
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
-        let pk = CompressedPubKey::from_hex(SIGNER_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(SIGNER_HEX).unwrap();
         let action_domain = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         });
         let action_hex = action_codec::encode_hex(&action_domain).unwrap();
@@ -538,5 +539,60 @@ mod recovery_id_tests {
         let err =
             build_signed_payload_bytes(1, "00", &sigs, &[pk.to_string()], &sighash).unwrap_err();
         assert!(err.contains("invalid SSZ action") || err.contains("recover"));
+    }
+
+    /// The signature index is the signer's position in the ASM's set, which lists Admin IDs:
+    /// the stored key is matched to its Admin ID by witness program.
+    #[test]
+    fn indexes_each_signature_by_its_admin_ids_position() {
+        use bitcoin::secp256k1::SecretKey;
+
+        use crate::domain::action::{Action, MultisigUpdate};
+        use crate::domain::authority::Authority;
+        use crate::infrastructure::action_codec;
+
+        let action_hex = action_codec::encode_hex(&Action::MultisigUpdate(MultisigUpdate {
+            role: Authority::StrataAdmin,
+            add_signers: vec![],
+            remove_signers: vec![],
+            new_threshold: std::num::NonZeroU8::new(1).unwrap(),
+        }))
+        .unwrap();
+        let sighash = compute_sighash(3, &action_hex, Network::Regtest).unwrap();
+
+        // 2·G signs; the ASM lists G first and 2·G second.
+        let mut secret = [0u8; 32];
+        secret[31] = 2;
+        let secret = SecretKey::from_slice(&secret).unwrap();
+        let secp = Secp256k1::new();
+        let pubkey = secret.public_key(&secp);
+        let (recid, compact) = secp
+            .sign_ecdsa_recoverable(&Message::from_digest(sighash), &secret)
+            .serialize_compact();
+        let mut mnemonic_format = compact.to_vec();
+        mnemonic_format.push(recid.to_i32() as u8);
+        let sigs = vec![ProposalSignature {
+            signer_pubkey: hex::encode(pubkey.serialize()),
+            signature_hex: hex::encode(&mnemonic_format),
+        }];
+        let canonical = [
+            "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080".to_string(),
+            "bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m".to_string(),
+        ];
+
+        let payload = build_signed_payload_bytes(3, &action_hex, &sigs, &canonical, &sighash)
+            .expect("the signer is in the set");
+
+        let mut indexed = [0u8; 65];
+        indexed[0] = recid.to_i32() as u8;
+        indexed[1..].copy_from_slice(&compact);
+        let action = MultisigAction::from_ssz_bytes(&hex::decode(&action_hex).unwrap()).unwrap();
+        let expected = SignedPayload::new(
+            3,
+            action,
+            SignatureSet::new(vec![IndexedSignature::new(1, indexed)]).unwrap(),
+        )
+        .into_envelope_bytes();
+        assert_eq!(payload, expected);
     }
 }

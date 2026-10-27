@@ -853,21 +853,23 @@ fn reveal_carries_proposal(
     {
         return false;
     }
-    let Some(leaf) = input.witness.taproot_leaf_script() else {
+    let Ok(action_bytes) = hex::decode(&proposal.action_hex) else {
         return false;
     };
-    let Ok(payload) = strata_l1_envelope_fmt::parser::parse_envelope_payload(&leaf.script.into())
+    let Ok(action) = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(&action_bytes)
     else {
         return false;
     };
-    let Ok(signed) = strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(&payload) else {
-        return false;
-    };
-    let Ok(action) = hex::decode(&proposal.action_hex) else {
+    // The envelope carries no action discriminant: the SPS-50 tag's tx type selects the type to
+    // decode. Decoding under this proposal's own tag is what the ASM does for a reveal tagged for
+    // it, and a reveal tagged for anything else cannot carry this action.
+    let tag = action.tag();
+    let input = strata_asm_common::TxInputRef::new(reveal, tag.as_ref());
+    let Some(signed) = strata_asm_txs_admin::parser::parse_tx(&input) else {
         return false;
     };
     signed.seqno == proposal.seq_no
-        && signed.action.as_ssz_bytes() == action
+        && signed.action.as_ssz_bytes() == action_bytes
         && signed_by_quorum(&signed, proposal, network)
 }
 
@@ -877,20 +879,19 @@ fn reveal_carries_proposal(
 /// the role's key order nor an ASM call; the approvers were checked against the role when they
 /// signed.
 ///
-/// `_network` is not read at this pin. From the v0.5 pin on it feeds
-/// `SigningMessage::for_action`, whose message names the network.
+/// `network` names the chain in the signed message, so a wrong value fails every check.
 fn signed_by_quorum(
     signed: &strata_asm_txs_admin::parser::SignedPayload,
     proposal: &Proposal,
-    _network: bitcoin::Network,
+    network: bitcoin::Network,
 ) -> bool {
-    use strata_crypto::keys::compressed::CompressedPublicKey;
-    use strata_crypto::threshold_signature::{
-        verify_threshold_signatures, IndexedSignature, ThresholdConfig,
+    use strata_asm_admin_threshold_sig::{
+        verify_threshold_signatures, IndexedSignature, P2wpkhAddress, ThresholdConfig,
     };
     let sighash = strata_asm_txs_admin::signing_message::SigningMessage::for_action(
         &signed.action,
         signed.seqno,
+        network,
     )
     .compute_sighash()
     .0;
@@ -898,8 +899,14 @@ fn signed_by_quorum(
         .signatures
         .iter()
         .filter_map(|approval| hex::decode(&approval.signer_pubkey).ok())
-        .filter_map(|key| CompressedPublicKey::from_slice(&key).ok())
-        .filter_map(|key| ThresholdConfig::try_new(vec![key], std::num::NonZero::<u8>::MIN).ok())
+        .filter_map(|key| bitcoin::secp256k1::PublicKey::from_slice(&key).ok())
+        .filter_map(|key| {
+            ThresholdConfig::try_new(
+                vec![P2wpkhAddress::from_pubkey(&key)],
+                std::num::NonZero::<u8>::MIN,
+            )
+            .ok()
+        })
         .collect();
     let mut signed_by = vec![false; approvers.len()];
     for signature in signed.signatures.signatures() {
@@ -5217,15 +5224,18 @@ mod tests {
 
     /// The same payload, signed by the fixture keys with these secret scalars.
     fn signed_payload_by(seq_no: u64, action_hex: &str, secrets: &[u8]) -> Vec<u8> {
-        use ssz::{Decode, Encode};
+        use ssz::Decode;
         let action = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(
             &hex::decode(action_hex).unwrap(),
         )
         .unwrap();
-        let sighash =
-            strata_asm_txs_admin::signing_message::SigningMessage::for_action(&action, seq_no)
-                .compute_sighash()
-                .0;
+        let sighash = strata_asm_txs_admin::signing_message::SigningMessage::for_action(
+            &action,
+            seq_no,
+            bitcoin::Network::Regtest,
+        )
+        .compute_sighash()
+        .0;
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let message = bitcoin::secp256k1::Message::from_digest(sighash);
         let signatures = secrets
@@ -5241,11 +5251,12 @@ mod tests {
                 let mut bytes = [0u8; 65];
                 bytes[0] = recovery.to_i32() as u8;
                 bytes[1..].copy_from_slice(&compact);
-                strata_crypto::threshold_signature::IndexedSignature::new(index as u8, bytes)
+                strata_asm_admin_threshold_sig::IndexedSignature::new(index as u8, bytes)
             })
             .collect();
-        let signatures = strata_crypto::threshold_signature::SignatureSet::new(signatures).unwrap();
-        strata_asm_txs_admin::parser::SignedPayload::new(seq_no, action, signatures).as_ssz_bytes()
+        let signatures = strata_asm_admin_threshold_sig::SignatureSet::new(signatures).unwrap();
+        strata_asm_txs_admin::parser::SignedPayload::new(seq_no, action, signatures)
+            .into_envelope_bytes()
     }
 
     /// The taproot envelope a commit pays to, built the way the desktop builds it.
@@ -5260,7 +5271,7 @@ mod tests {
             let secp = bitcoin::secp256k1::Secp256k1::new();
             let keypair = bitcoin::key::Keypair::from_seckey_slice(&secp, &[7u8; 32]).unwrap();
             let (internal_key, _) = keypair.x_only_public_key();
-            let script = strata_l1_envelope_fmt::builder::EnvelopeScriptBuilder::with_pubkey(
+            let script = strata_l1_envelope_fmt::EnvelopeScriptBuilder::with_pubkey(
                 &internal_key.serialize(),
             )
             .unwrap()

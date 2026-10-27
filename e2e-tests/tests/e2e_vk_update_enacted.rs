@@ -12,7 +12,9 @@
 //!   5. Mine `ol_stf_vk_update` confirmation_depth + 1 blocks.
 //!   6. Assert the queue is empty — the VK update has been enacted/relayed to
 //!      the checkpoint subprotocol.
-//!   7. Assert the checkpoint subprotocol state reflects `PredicateTypeId::AlwaysAccept`.
+//!   7. Assert the checkpoint subprotocol queued the rotation to `PredicateTypeId::AlwaysAccept`.
+//!      It becomes the active predicate only when a verified checkpoint passes the enactment
+//!      height, and this chain carries no checkpoints, so the active one must not move.
 
 #![allow(
     unused_crate_dependencies,
@@ -23,8 +25,8 @@ use std::process::Command;
 
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
-    checkpoint_ol_stf_vk_type, decode_administration_subproto, ol_stf_vk_confirmation_depth,
-    parse_admin_section, strata_admin_keys_hex, SignerUpdateEnactedFixture, DEMO_COSIGN_MNEMONIC,
+    decode_administration_subproto, decode_checkpoint_subproto, ol_stf_vk_confirmation_depth,
+    parse_admin_section, strata_admin_admin_ids, SignerUpdateEnactedFixture, DEMO_COSIGN_MNEMONIC,
     FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
@@ -83,6 +85,16 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
         .build()
         .await?;
 
+    // The harness draws the genesis checkpoint predicate at random, so the test compares
+    // against what genesis holds rather than against a fixed type.
+    let (_, genesis_state) = harness
+        .get_latest_asm_state()?
+        .ok_or_else(|| anyhow::anyhow!("ASM state must be present after genesis"))?;
+    let genesis_predicate = decode_checkpoint_subproto(&genesis_state)
+        .ok_or_else(|| anyhow::anyhow!("checkpoint section missing at genesis"))?
+        .checkpoint_predicate()
+        .clone();
+
     // Build an OlStfVk update with the AlwaysAccept predicate (type_id=1, no condition bytes).
     let action = Action::VkUpdate(VkUpdate {
         authority: Authority::StrataAdmin,
@@ -133,7 +145,7 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
     let sighash_bytes: [u8; 32] = hex::decode(&sighash.sighash_hex)?
         .try_into()
         .map_err(|_| anyhow::anyhow!("sighash must be 32 bytes"))?;
-    let json_keys = strata_admin_keys_hex(&admin_section);
+    let json_keys = strata_admin_admin_ids(&admin_section);
     let payload_bytes = anyhow_string(broadcast_tx::build_signed_payload_bytes(
         seq_no,
         &action_hex,
@@ -211,13 +223,22 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
         admin.queued().len()
     );
 
-    // Verify the VK type was actually applied in the checkpoint subprotocol.
-    let vk_type = checkpoint_ol_stf_vk_type(&asm_state)
+    // Verify the checkpoint subprotocol received the rotation: queued as a pending transition,
+    // while the active predicate stays put until a checkpoint passes the boundary.
+    let checkpoint = decode_checkpoint_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("checkpoint section missing after activation"))?;
+    let pending: Vec<_> = checkpoint
+        .pending_transitions()
+        .iter()
+        .map(|t| PredicateTypeId::try_from(t.predicate().id()).ok())
+        .collect();
     anyhow::ensure!(
-        vk_type == PredicateTypeId::AlwaysAccept,
-        "checkpoint predicate must be AlwaysAccept after VK update (got {:?})",
-        vk_type
+        pending == vec![Some(PredicateTypeId::AlwaysAccept)],
+        "the rotation to AlwaysAccept must be queued in the checkpoint state (got {pending:?})"
+    );
+    anyhow::ensure!(
+        checkpoint.checkpoint_predicate() == &genesis_predicate,
+        "no checkpoint has passed the boundary, so the active predicate must not have moved"
     );
 
     Ok(())

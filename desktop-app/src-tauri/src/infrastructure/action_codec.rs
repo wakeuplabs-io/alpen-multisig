@@ -8,25 +8,25 @@ use std::num::NonZeroU8;
 
 use bitcoin_bosd::Descriptor;
 use ssz::{Decode, Encode};
-use strata_asm_proto_bridge_v1_types::SafeHarbourAddress;
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfigUpdate};
+use strata_asm_bridge_types::SafeHarborAddress;
 use strata_asm_txs_admin::actions::updates::{
     AlpenAdminMultisigUpdate, Defcon1Update, Defcon3Update, EeStfVkUpdate, OlStfVkUpdate,
-    OperatorSetUpdate as StrataOperatorSetUpdate, SafeHarbourAddressUpdate,
+    OperatorSetUpdate as StrataOperatorSetUpdate, SafeHarborAddressUpdate,
     SequencerUpdate as StrataSequencerUpdate, StrataAdminMultisigUpdate,
     StrataSecurityCouncilMultisigUpdate, StrataSeqManagerMultisigUpdate,
 };
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_crypto::EvenPublicKey;
 use strata_identifiers::Buf32;
 use strata_predicate::{PredicateKey, PredicateTypeId};
 
 use crate::domain::action::{
-    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, PubKeyError,
-    SafeHarborDescriptor, SafeHarborDescriptorError, SequencerKeyUpdate, VkUpdate,
+    Action, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SafeHarborDescriptor,
+    SafeHarborDescriptorError, SequencerKeyUpdate, VkUpdate,
 };
 use crate::domain::authority::Authority;
+use crate::domain::signer_id::SignerId;
 
 /// Errors produced when encoding/decoding an `Action`.
 #[derive(Debug, thiserror::Error)]
@@ -39,8 +39,6 @@ pub enum CodecError {
     Hex(String),
     #[error("unsupported action variant: {0}")]
     UnsupportedVariant(&'static str),
-    #[error("invalid public key: {0}")]
-    PubKey(#[from] PubKeyError),
     #[error("invalid safe harbor address: {0}")]
     SafeHarborAddress(#[from] SafeHarborDescriptorError),
     /// Upstream refused the descriptor. Unreachable for a value this application built — the
@@ -198,10 +196,10 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
             let descriptor = Descriptor::new_p2tr(destination.as_key()).map_err(|e| {
                 CodecError::SafeHarborRejectedUpstream(format!("not a valid P2TR payload: {e}"))
             })?;
-            let address = SafeHarbourAddress::try_from(descriptor)
+            let address = SafeHarborAddress::try_from(descriptor)
                 .map_err(|e| CodecError::SafeHarborRejectedUpstream(e.to_string()))?;
-            Ok(MultisigAction::Update(UpdateAction::SafeHarbourAddress(
-                SafeHarbourAddressUpdate::new(address),
+            Ok(MultisigAction::Update(UpdateAction::SafeHarborAddress(
+                SafeHarborAddressUpdate::new(address),
             )))
         }
         Action::Defcon1 => Ok(MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update))),
@@ -212,30 +210,23 @@ fn to_strata_action(action: &Action) -> Result<MultisigAction, CodecError> {
 fn predicate_key_from_domain(update: &VkUpdate) -> Result<PredicateKey, CodecError> {
     let type_id = PredicateTypeId::try_from(update.type_id)
         .map_err(|_| CodecError::UnsupportedPredicateType(update.type_id))?;
-    Ok(PredicateKey::new(type_id, update.condition.clone()))
+    PredicateKey::try_new(type_id, update.condition.clone())
+        .map_err(|e| CodecError::Encode(format!("invalid predicate key: {e}")))
 }
 
 fn threshold_config_update_from_domain(
     update: &MultisigUpdate,
 ) -> Result<ThresholdConfigUpdate, CodecError> {
-    let add_keys = update
-        .add_keys
-        .iter()
-        .map(to_strata_pubkey)
-        .collect::<Result<Vec<_>, _>>()?;
-    let remove_keys = update
-        .remove_keys
-        .iter()
-        .map(to_strata_pubkey)
-        .collect::<Result<Vec<_>, _>>()?;
+    let add_members = update.add_signers.iter().map(to_strata_signer).collect();
+    let remove_members = update.remove_signers.iter().map(to_strata_signer).collect();
     let threshold =
         std::num::NonZero::new(update.new_threshold.get()).ok_or(CodecError::InvalidThreshold)?;
-    Ok(ThresholdConfigUpdate::new(add_keys, remove_keys, threshold))
+    ThresholdConfigUpdate::try_new(add_members, remove_members, threshold)
+        .map_err(|e| CodecError::Encode(format!("invalid signer update: {e}")))
 }
 
-fn to_strata_pubkey(pk: &CompressedPubKey) -> Result<CompressedPublicKey, CodecError> {
-    CompressedPublicKey::from_slice(pk.as_bytes())
-        .map_err(|e| CodecError::Encode(format!("invalid pubkey: {e}")))
+fn to_strata_signer(signer: &SignerId) -> P2wpkhAddress {
+    P2wpkhAddress::from_byte_array(signer.program())
 }
 
 // ─── Strata → Domain ────────────────────────────────────────────────────────
@@ -299,7 +290,7 @@ fn from_strata_action(action: MultisigAction) -> Result<Action, CodecError> {
         }
         MultisigAction::Update(UpdateAction::Defcon1(_)) => Ok(Action::Defcon1),
         MultisigAction::Update(UpdateAction::Defcon3(_)) => Ok(Action::Defcon3),
-        MultisigAction::Update(UpdateAction::SafeHarbourAddress(update)) => {
+        MultisigAction::Update(UpdateAction::SafeHarborAddress(update)) => {
             // `to_bytes()` is the BOSD wire form — the type tag plus the payload — which is also
             // the string the signing message renders and the device displays.
             let hex = hex::encode(update.address().as_descriptor().to_bytes());
@@ -314,28 +305,28 @@ fn multisig_update_from_threshold_config(
     role: Authority,
     config: &ThresholdConfigUpdate,
 ) -> Result<MultisigUpdate, CodecError> {
-    let add_keys = config
+    let add_signers = config
         .add_members()
         .iter()
-        .map(from_strata_pubkey)
-        .collect::<Result<Vec<_>, _>>()?;
-    let remove_keys = config
+        .map(from_strata_signer)
+        .collect();
+    let remove_signers = config
         .remove_members()
         .iter()
-        .map(from_strata_pubkey)
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(from_strata_signer)
+        .collect();
     let new_threshold =
         NonZeroU8::new(config.new_threshold().get()).ok_or(CodecError::InvalidThreshold)?;
     Ok(MultisigUpdate {
         role,
-        add_keys,
-        remove_keys,
+        add_signers,
+        remove_signers,
         new_threshold,
     })
 }
 
-fn from_strata_pubkey(pk: &CompressedPublicKey) -> Result<CompressedPubKey, CodecError> {
-    Ok(CompressedPubKey::new(pk.serialize()))
+fn from_strata_signer(signer: &P2wpkhAddress) -> SignerId {
+    SignerId::from_program(signer.to_byte_array())
 }
 
 fn to_strata_even_pubkey(pk: &EvenPubKey) -> Result<EvenPublicKey, CodecError> {
@@ -360,11 +351,11 @@ mod tests {
     const VALID_HEX: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
 
     fn sample_action() -> Action {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         })
     }
@@ -374,7 +365,7 @@ mod tests {
     /// bytes to the action the Security Council means to sign.
     #[test]
     fn defcon_1_round_trips_and_encodes_upstreams_defcon_1_tx_type() {
-        use strata_asm_params::UpdateTxType;
+        use strata_asm_admin_types::UpdateTxType;
 
         let encoded = encode(&Action::Defcon1).expect("encode ok");
 
@@ -393,7 +384,7 @@ mod tests {
     /// would be rejected — or worse, accepted as another action.
     #[test]
     fn safe_harbor_round_trips_and_encodes_upstreams_tx_type_14() {
-        use strata_asm_params::UpdateTxType;
+        use strata_asm_admin_types::UpdateTxType;
 
         // x-only key of the generator point G, the destination the local stack ships with.
         let destination = SafeHarborDescriptor::from_hex(
@@ -411,12 +402,12 @@ mod tests {
         };
         assert_eq!(
             update.update_tx_type(),
-            UpdateTxType::SafeHarbourAddressUpdate
+            UpdateTxType::SafeHarborAddressUpdate
         );
 
         // The destination survives the trip unchanged, which is the half of the round trip that
         // matters: a payload dropped or truncated here would sweep the bridge somewhere else.
-        let UpdateAction::SafeHarbourAddress(installed) = update else {
+        let UpdateAction::SafeHarborAddress(installed) = update else {
             panic!("decoded as the wrong update variant");
         };
         assert_eq!(
@@ -431,7 +422,7 @@ mod tests {
     /// and not the round trip, is here to catch.
     #[test]
     fn defcon_3_round_trips_and_encodes_upstreams_defcon_3_tx_type() {
-        use strata_asm_params::UpdateTxType;
+        use strata_asm_admin_types::UpdateTxType;
 
         let encoded = encode(&Action::Defcon3).expect("encode ok");
 
@@ -472,9 +463,13 @@ mod tests {
         // — what the upstream crate produces for the same `MultisigAction`.
         let pk_bytes = hex::decode(VALID_HEX).unwrap();
         let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
-        let strata_pk = CompressedPublicKey::from(secp_pk);
-        let config_update =
-            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_pk = P2wpkhAddress::from_pubkey(&secp_pk);
+        let config_update = ThresholdConfigUpdate::try_new(
+            vec![strata_pk],
+            vec![],
+            std::num::NonZero::new(2).unwrap(),
+        )
+        .expect("valid config update");
         let strata_update = StrataAdminMultisigUpdate::new(config_update);
         let strata_action =
             MultisigAction::Update(UpdateAction::StrataAdminMultisig(strata_update));
@@ -485,11 +480,11 @@ mod tests {
     }
 
     fn sample_council_signer_update_action() -> Action {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::SecurityCouncil,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         })
     }
@@ -501,9 +496,9 @@ mod tests {
     /// the one that would catch that, where the round trip alone would not.
     #[test]
     fn council_signer_update_round_trips_and_encodes_upstreams_tx_type_15() {
-        use strata_asm_params::UpdateTxType;
+        use strata_asm_admin_types::UpdateTxType;
 
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         let action = sample_council_signer_update_action();
         let encoded = encode(&action).expect("encode ok");
 
@@ -520,8 +515,8 @@ mod tests {
 
         let admin_action = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         });
         let admin_encoded = encode(&admin_action).expect("encode ok");
@@ -537,9 +532,13 @@ mod tests {
     fn council_signer_update_encode_matches_direct_strata_ssz() {
         let pk_bytes = hex::decode(VALID_HEX).unwrap();
         let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
-        let strata_pk = CompressedPublicKey::from(secp_pk);
-        let config_update =
-            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_pk = P2wpkhAddress::from_pubkey(&secp_pk);
+        let config_update = ThresholdConfigUpdate::try_new(
+            vec![strata_pk],
+            vec![],
+            std::num::NonZero::new(2).unwrap(),
+        )
+        .expect("valid config update");
         let strata_update = StrataSecurityCouncilMultisigUpdate::new(config_update);
         let strata_action =
             MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(strata_update));
@@ -550,11 +549,11 @@ mod tests {
     }
 
     fn sample_alpen_admin_action() -> Action {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::AlpenAdmin,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         })
     }
@@ -579,9 +578,13 @@ mod tests {
     fn test_alpen_admin_multisig_encode_matches_direct_strata_ssz() {
         let pk_bytes = hex::decode(VALID_HEX).unwrap();
         let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
-        let strata_pk = CompressedPublicKey::from(secp_pk);
-        let config_update =
-            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_pk = P2wpkhAddress::from_pubkey(&secp_pk);
+        let config_update = ThresholdConfigUpdate::try_new(
+            vec![strata_pk],
+            vec![],
+            std::num::NonZero::new(2).unwrap(),
+        )
+        .expect("valid config update");
         let strata_update = AlpenAdminMultisigUpdate::new(config_update);
         let strata_action = MultisigAction::Update(UpdateAction::AlpenAdminMultisig(strata_update));
         let direct_bytes = strata_action.as_ssz_bytes();
@@ -629,11 +632,11 @@ mod tests {
     }
 
     fn sample_seq_manager_action() -> Action {
-        let pk = CompressedPubKey::from_hex(VALID_HEX).unwrap();
+        let pk = SignerId::from_pubkey_hex(VALID_HEX).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::SequencerManager,
-            add_keys: vec![pk],
-            remove_keys: vec![],
+            add_signers: vec![pk],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).unwrap(),
         })
     }
@@ -658,9 +661,13 @@ mod tests {
     fn test_seq_manager_multisig_encode_matches_direct_strata_ssz() {
         let pk_bytes = hex::decode(VALID_HEX).unwrap();
         let secp_pk = bitcoin::secp256k1::PublicKey::from_slice(&pk_bytes).unwrap();
-        let strata_pk = CompressedPublicKey::from(secp_pk);
-        let config_update =
-            ThresholdConfigUpdate::new(vec![strata_pk], vec![], std::num::NonZero::new(2).unwrap());
+        let strata_pk = P2wpkhAddress::from_pubkey(&secp_pk);
+        let config_update = ThresholdConfigUpdate::try_new(
+            vec![strata_pk],
+            vec![],
+            std::num::NonZero::new(2).unwrap(),
+        )
+        .expect("valid config update");
         let strata_update = StrataSeqManagerMultisigUpdate::new(config_update);
         let strata_action =
             MultisigAction::Update(UpdateAction::StrataSeqManagerMultisig(strata_update));

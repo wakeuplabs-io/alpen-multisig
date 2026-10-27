@@ -4,10 +4,10 @@
 //! which asserts against real ASM state without a backend.
 
 use ssz::Decode;
-use strata_asm_params::Role;
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfigUpdate};
+use strata_asm_admin_types::Role;
 use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
 use crate::domain::auth::AuthRole;
 use crate::domain::authority::Authority;
@@ -56,12 +56,7 @@ pub fn is_multisig_update_enacted_in_admin_state(
         |role| {
             let authority_config = admin.authority(role)?;
             Some(AuthoritySnapshot {
-                keys: authority_config
-                    .config()
-                    .keys()
-                    .iter()
-                    .map(|k| hex::encode(k.serialize()))
-                    .collect(),
+                signers: authority_config.config().signers().to_vec(),
                 threshold: authority_config.config().threshold(),
                 last_seqno: authority_config.last_seqno(),
             })
@@ -104,17 +99,17 @@ fn multisig_config_update_target(
         | UpdateAction::EeStfVk(_)
         | UpdateAction::Defcon1(_)
         | UpdateAction::Defcon3(_)
-        | UpdateAction::SafeHarbourAddress(_) => None,
+        | UpdateAction::SafeHarborAddress(_) => None,
     }
 }
 
 /// The three terms an enactment check reads off one role, at one instant.
 ///
-/// `keys` is hex of `CompressedPublicKey::serialize()` — 33 bytes, compressed. Not x-only: the
-/// `OperatorSet` arm next door uses 32-byte x-only hex, and the two are not interchangeable.
+/// `signers` are P2WPKH witness programs, the same type the update carries. Not x-only keys: the
+/// `OperatorSet` arm next door compares 32-byte x-only hex, and the two are not interchangeable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AuthoritySnapshot {
-    keys: Vec<String>,
+    signers: Vec<P2wpkhAddress>,
     threshold: u8,
     last_seqno: u64,
 }
@@ -140,7 +135,7 @@ fn multisig_update_enacted(
         .ok_or_else(|| format!("admin state missing authority for role `{authorizing_role:?}`"))?;
 
     Ok(multisig_update_post_conditions_met(
-        &target.keys,
+        &target.signers,
         target.threshold,
         authorizing.last_seqno,
         seq_no,
@@ -149,7 +144,7 @@ fn multisig_update_enacted(
 }
 
 fn multisig_update_post_conditions_met(
-    canonical_keys: &[String],
+    canonical_signers: &[P2wpkhAddress],
     threshold: u8,
     last_seqno: u64,
     seq_no: u64,
@@ -161,25 +156,14 @@ fn multisig_update_post_conditions_met(
     if threshold != config.new_threshold().get() {
         return false;
     }
-    for pk in config.add_members() {
-        let hex_key = hex::encode(pk.serialize());
-        if !canonical_keys
+    config
+        .add_members()
+        .iter()
+        .all(|signer| canonical_signers.contains(signer))
+        && !config
+            .remove_members()
             .iter()
-            .any(|k| k.eq_ignore_ascii_case(&hex_key))
-        {
-            return false;
-        }
-    }
-    for pk in config.remove_members() {
-        let hex_key = hex::encode(pk.serialize());
-        if canonical_keys
-            .iter()
-            .any(|k| k.eq_ignore_ascii_case(&hex_key))
-        {
-            return false;
-        }
-    }
-    true
+            .any(|signer| canonical_signers.contains(signer))
 }
 
 #[cfg(test)]
@@ -187,16 +171,14 @@ mod tests {
     use super::*;
     use std::num::NonZeroU8;
 
-    use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths};
+    use strata_asm_admin_types::ConfirmationDepths;
+    use strata_asm_admin_types::UncheckedThresholdConfig;
+    use strata_asm_params::AdministrationInitConfig;
     use strata_asm_txs_admin::actions::updates::{AlpenAdminMultisigUpdate, AsmStfVkUpdate};
     use strata_asm_txs_admin::actions::CancelAction;
-    use strata_crypto::keys::compressed::CompressedPublicKey;
 
-    fn key_hex(byte: u8) -> String {
-        let mut bytes = [0u8; 33];
-        bytes[0] = 0x02;
-        bytes[32] = byte;
-        hex::encode(bytes)
+    fn signer(byte: u8) -> P2wpkhAddress {
+        P2wpkhAddress::from_byte_array([byte; 20])
     }
 
     /// A four-role admin state with one signer and threshold 1 everywhere, built through
@@ -207,12 +189,12 @@ mod tests {
     /// the two-role tests above go through the `multisig_update_enacted` seam instead, and why
     /// the tests using this helper assert about wiring rather than about sequence numbers.
     fn single_signer_admin_state() -> AdministrationSubprotoState {
-        let key = CompressedPublicKey::from_slice(&hex::decode(key_hex(1)).unwrap()).unwrap();
+        let address = signer(1)
+            .to_address(bitcoin::Network::Regtest)
+            .into_unchecked();
         let threshold = NonZeroU8::new(1).unwrap();
-        let single_signer_config = || {
-            strata_crypto::threshold_signature::ThresholdConfig::try_new(vec![key], threshold)
-                .unwrap()
-        };
+        let single_signer_config =
+            || UncheckedThresholdConfig::try_new(vec![address.clone()], threshold).unwrap();
 
         AdministrationSubprotoState::new(&AdministrationInitConfig::new(
             single_signer_config(),
@@ -230,7 +212,7 @@ mod tests {
                 asm_stf_vk_update: 0,
                 ee_stf_vk_update: 0,
                 defcon3: 0,
-                safe_harbour_address_update: 0,
+                safe_harbor_address_update: 0,
             },
             NonZeroU8::new(1).unwrap(),
         ))
@@ -256,23 +238,25 @@ mod tests {
     }
 
     /// AC 7 — the desktop copy wires the same two roles as the backend: keys/threshold from the
-    /// target, `last_seqno` from the authorizer. The only test that goes red if keys and threshold
+    /// target, `last_seqno` from the authorizer. The only test that goes red if signers and threshold
     /// are read off the administrator, whose set disagrees with `config`.
     ///
     /// Both roles stand at the same `last_seqno` on purpose: that term belongs to the next test,
     /// and leaving it able to fail here would make the two fail together under a seqno swap.
     #[test]
     fn council_rotation_targets_the_council_and_the_administrator_authorizes_it() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(3).unwrap())
+                .expect("valid config update");
 
         let council = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 1,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(2)],
+            signers: vec![signer(2)],
             threshold: 1,
             last_seqno: 1,
         };
@@ -300,16 +284,18 @@ mod tests {
     /// administrator's `last_seqno` may decide whether the rotation was authorized.
     #[test]
     fn council_rotation_ignores_the_councils_own_seqno() {
-        let added = CompressedPublicKey::from_slice(&hex::decode(key_hex(3)).unwrap()).unwrap();
-        let config = ThresholdConfigUpdate::new(vec![added], vec![], NonZeroU8::new(3).unwrap());
+        let added = signer(3);
+        let config =
+            ThresholdConfigUpdate::try_new(vec![added], vec![], NonZeroU8::new(3).unwrap())
+                .expect("valid config update");
 
         let council = AuthoritySnapshot {
-            keys: vec![key_hex(1), key_hex(3)],
+            signers: vec![signer(1), signer(3)],
             threshold: 3,
             last_seqno: 100,
         };
         let administrator = AuthoritySnapshot {
-            keys: vec![key_hex(2)],
+            signers: vec![signer(2)],
             threshold: 1,
             last_seqno: 1,
         };
@@ -347,7 +333,9 @@ mod tests {
 
         // A no-op relative to the config the state was built with: add nothing, remove nothing,
         // same threshold. Only the wiring is under test, not the arithmetic.
-        let config_update = ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(1).unwrap());
+        let config_update =
+            ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(1).unwrap())
+                .expect("valid config update");
         let action = MultisigAction::Update(UpdateAction::AlpenAdminMultisig(
             AlpenAdminMultisigUpdate::new(config_update),
         ));
@@ -373,10 +361,11 @@ mod tests {
     #[test]
     fn an_action_that_is_not_a_multisig_update_answers_before_the_guard() {
         let action = MultisigAction::Update(UpdateAction::AsmStfVk(AsmStfVkUpdate::new(
-            strata_predicate::PredicateKey::new(
+            strata_predicate::PredicateKey::try_new(
                 strata_predicate::PredicateTypeId::Bip340Schnorr,
                 vec![7u8; 32],
-            ),
+            )
+            .unwrap(),
         )));
         let action_hex = hex::encode(ssz::Encode::as_ssz_bytes(&action));
 
@@ -400,7 +389,8 @@ mod tests {
         let cancel = MultisigAction::Cancel(CancelAction::new(
             0,
             UpdateAction::AlpenAdminMultisig(AlpenAdminMultisigUpdate::new(
-                ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(1).unwrap()),
+                ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(1).unwrap())
+                    .expect("valid config update"),
             )),
         ));
         let cancel_hex = hex::encode(ssz::Encode::as_ssz_bytes(&cancel));

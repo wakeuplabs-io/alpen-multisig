@@ -4,7 +4,8 @@ host = "0.0.0.0"
 port = 8080
 
 [database]
-path = "/data/asm-db"
+asm_path = "/data/asm-db"
+moho_path = "/data/moho-db"
 
 [bitcoin]
 # Render private-network hostname for the bitcoin service.
@@ -12,4 +13,11 @@ path = "/data/asm-db"
 rpc_url = "http://bitcoin:18443"
 rpc_user = "user"
 rpc_password = "password"
-rawblock_connection_string = "tcp://bitcoin:28332"
+hashblock_connection_string = "tcp://bitcoin:28332"
+
+# The chain starts under spec 0, executed by the always-accept predicate the genesis names.
+[execution]
+genesis_spec_id = 0
+[[execution.targets]]
+predicate = "AlwaysAccept"
+spec_id = 0

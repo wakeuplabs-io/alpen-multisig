@@ -1,7 +1,7 @@
 use crate::domain::auth::AuthRole;
 use crate::domain::authority::Authority;
 
-/// Return the ordered list of hex-encoded compressed public keys for an authority's signer set.
+/// Return the ordered list of Admin IDs for an authority's signer set.
 ///
 /// The order is canonical (as stored in ASM state) and determines the signer index used in
 /// `IndexedSignature`. Called during broadcast to map stored pubkeys to their indices.
@@ -28,10 +28,11 @@ fn mock_ordered_keys(rpc_url: &str, authority: Authority) -> Option<Vec<String>>
     }
     match authority {
         // One signer pair for all three: the local stack authenticates every role with one wallet.
+        // G and 2·G, as regtest Admin IDs.
         Authority::StrataAdmin | Authority::SequencerManager | Authority::SecurityCouncil => {
             Some(vec![
-                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
-                "02c6047f9441ed7d6d3045406e95c07cd85a1a3f1f3ff2b4f6f3f5b4f0c709ee5".to_string(),
+                "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080".to_string(),
+                "bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m".to_string(),
             ])
         }
         _ => None,

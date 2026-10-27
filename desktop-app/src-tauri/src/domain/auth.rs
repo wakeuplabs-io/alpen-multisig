@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use strata_asm_params::Role;
+use strata_asm_admin_types::Role;
 
 use crate::domain::authority::Authority;
 

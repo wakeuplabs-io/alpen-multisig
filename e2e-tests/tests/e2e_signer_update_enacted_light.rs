@@ -28,9 +28,9 @@ use std::process::Command;
 
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
-    decode_administration_subproto, parse_admin_section, strata_admin_confirmation_depth,
-    strata_admin_keys_hex, SignerUpdateEnactedFixture, DEFAULT_REPO_ASM, DEMO_COSIGN_MNEMONIC,
-    FAST_ENACTMENT,
+    decode_administration_subproto, parse_admin_section, strata_admin_admin_ids,
+    strata_admin_confirmation_depth, SignerUpdateEnactedFixture, DEFAULT_REPO_ASM,
+    DEMO_COSIGN_MNEMONIC, FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::key::UntweakedKeypair;
@@ -39,13 +39,13 @@ use bitcoin::Amount;
 use bitcoind_async_client::traits::Reader;
 use rand::rngs::OsRng;
 use ssz::Decode;
-use strata_asm_params::Role;
+use strata_asm_admin_types::Role;
 use strata_asm_txs_admin::actions::MultisigAction;
-use strata_crypto::keys::compressed::CompressedPublicKey;
 
-use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::action::{Action, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
 use desktop_app::domain::proposal::ProposalSignature;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::{action_codec, broadcast_tx, signing};
 
 fn anyhow_string<T>(r: Result<T, String>) -> anyhow::Result<T> {
@@ -105,15 +105,14 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
         .build()
         .await?;
 
-    let json_keys = strata_admin_keys_hex(&admin_section);
+    let json_keys = strata_admin_admin_ids(&admin_section);
 
-    let d_bytes: [u8; 33] = hex::decode(&d_hex)?
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("d_hex must be 33 bytes"))?;
+    let d_signer = SignerId::from_pubkey_hex(&d_hex)
+        .ok_or_else(|| anyhow::anyhow!("d_hex must be a compressed public key"))?;
     let action = Action::MultisigUpdate(MultisigUpdate {
         role: Authority::StrataAdmin,
-        add_keys: vec![CompressedPubKey::new(d_bytes)],
-        remove_keys: vec![],
+        add_signers: vec![d_signer],
+        remove_signers: vec![],
         new_threshold: NonZeroU8::new(2).expect("non-zero threshold"),
     });
     let action_hex = action_codec::encode_hex(&action)?;
@@ -230,20 +229,22 @@ async fn run_signer_update_enacted(fixture: &SignerUpdateEnactedFixture) -> anyh
     let authority = admin
         .authority(Role::StrataAdministrator)
         .ok_or_else(|| anyhow::anyhow!("strata administrator authority missing"))?;
-    let canonical_hex: Vec<String> = authority
+    let canonical: Vec<SignerId> = authority
         .config()
-        .keys()
+        .signers()
         .iter()
-        .map(|k: &CompressedPublicKey| hex::encode(k.serialize()))
+        .map(|signer| SignerId::from_program(signer.to_byte_array()))
         .collect();
+    let is_signer =
+        |hex: &str| SignerId::from_pubkey_hex(hex).is_some_and(|s| canonical.contains(&s));
     anyhow::ensure!(
-        canonical_hex.contains(&d_hex),
-        "fixture {}: signer D not in enacted keys: {canonical_hex:?}",
+        is_signer(&d_hex),
+        "fixture {}: signer D not in enacted signers: {canonical:?}",
         fixture.name
     );
     anyhow::ensure!(
-        canonical_hex.contains(&a_hex) && canonical_hex.contains(&b_hex),
-        "fixture {}: original A/B missing from enacted keys: {canonical_hex:?}",
+        is_signer(&a_hex) && is_signer(&b_hex),
+        "fixture {}: original A/B missing from enacted signers: {canonical:?}",
         fixture.name
     );
     anyhow::ensure!(

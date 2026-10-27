@@ -6,36 +6,36 @@
       "blkid": "REPLACE_WITH_64_HEX_CHARS_FROM_getblockhash_101"
     },
     "next_target": 545259519,
-    "epoch_start_timestamp": 0,
+    "epoch_start_timestamp": 1296688602,
     "network": "regtest"
   },
   "subprotocols": [
     {
       "Admin": {
         "strata_administrator": {
-          "keys": [
-            "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
-            "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e",
-            "03950345fe8eb7dc8975c774aacb3f1afcae77a88bb0ab1cce227e7690aa62229f"
+          "signers": [
+            "bcrt1qm0fnqwycsmy5mtnkjxfg40x2es3u8sr7zzrfw8",
+            "bcrt1qry6ppvqzpzsyfsz3lzqw8aqyc7vjq2nx78cujs",
+            "bcrt1qds726rmdrl40eans3p40ttjq3qx3fflu72qs7v"
           ],
           "threshold": 2
         },
         "strata_sequencer_manager": {
-          "keys": [
-            "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+          "signers": [
+            "bcrt1q86edcefehpvevtaaqm8acjtxkakj04nska9c5y"
           ],
           "threshold": 1
         },
         "alpen_administrator": {
-          "keys": [
-            "03dd6d7dbd51e832af4c8eba8a7bf08ae616054b3e2e2e0823a8167c4def1e427c"
+          "signers": [
+            "bcrt1q86edcefehpvevtaaqm8acjtxkakj04nska9c5y"
           ],
           "threshold": 1
         },
         "strata_security_council": {
-          "keys": [
-            "02300dc42e67165c78256d5ef816bad845428841f54f1ecb6da8a3eb1d066f4df7",
-            "029b8c2ba19ce259e500c1b57c664b60bbb81820938af58a5fab3158fc1386119e"
+          "signers": [
+            "bcrt1qm0fnqwycsmy5mtnkjxfg40x2es3u8sr7zzrfw8",
+            "bcrt1qry6ppvqzpzsyfsz3lzqw8aqyc7vjq2nx78cujs"
           ],
           "threshold": 2
         },
@@ -50,14 +50,14 @@
           "ee_stf_vk_update": 144,
           "strata_security_council_multisig_update": 144,
           "defcon3": 144,
-          "safe_harbour_address_update": 144
+          "safe_harbor_address_update": 144
         },
         "max_seqno_gap": 10
       }
     },
     {
       "Checkpoint": {
-        "sequencer_predicate": "AlwaysAccept",
+        "sequencer_key": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "checkpoint_predicate": "AlwaysAccept",
         "genesis_l1_height": 101,
         "genesis_ol_blkid": "0000000000000000000000000000000000000000000000000000000000000000"
@@ -72,7 +72,7 @@
         "assignment_duration": 10000,
         "operator_fee": 100000000,
         "recovery_delay": 1008,
-        "safe_harbour_address": "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        "safe_harbor_address": "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
       }
     }
   ]

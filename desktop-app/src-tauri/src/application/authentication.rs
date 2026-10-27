@@ -212,7 +212,7 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
     let is_member = signer.is_some()
         && role_keys
             .iter()
-            .any(|key| SignerId::from_pubkey_hex(key) == signer);
+            .any(|admin_id| SignerId::from_admin_id(admin_id) == signer);
     if !is_member {
         return Err("signer key is not a member of the selected role".to_string());
     }
@@ -333,8 +333,12 @@ mod tests {
         signer_pubkey_hex: String,
         fetched_at_unix_ms: u64,
     ) -> (HashMap<AuthRole, Vec<String>>, u64) {
+        // The ASM lists Admin IDs; the session holds the key.
+        let admin_id = SignerId::from_pubkey_hex(&signer_pubkey_hex)
+            .expect("test signer is a valid key")
+            .admin_id(bitcoin::Network::Regtest);
         let mut role_to_keys = HashMap::new();
-        role_to_keys.insert(role, vec![signer_pubkey_hex]);
+        role_to_keys.insert(role, vec![admin_id]);
         (role_to_keys, fetched_at_unix_ms)
     }
 

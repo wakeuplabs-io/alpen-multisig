@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use strata_asm_params::{Role, UpdateTxType};
+use strata_asm_admin_types::{Role, UpdateTxType};
 use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::MultisigAction;
 
@@ -23,15 +23,13 @@ pub(crate) async fn is_signer_member_for_authority(
     let role_membership = fetch_role_membership(rpc_url)
         .await
         .map_err(AppError::BadRequest)?;
-    let keys = role_membership
+    let signers = role_membership
         .get(&role)
         .ok_or_else(|| asm_rpc::missing_authority(role))?;
     let Some(signer) = SignerId::from_pubkey_hex(signer_pubkey) else {
         return Ok(false);
     };
-    Ok(keys
-        .iter()
-        .any(|key| SignerId::from_pubkey_hex(key) == Some(signer)))
+    Ok(signers.contains(&signer))
 }
 
 // TODO: decouple mock from implementation
@@ -119,7 +117,7 @@ fn depth_for_action(
 pub(crate) enum ConfirmationDepthResolver {
     Live(AdministrationSubprotoState),
     #[cfg(any(test, feature = "dev-mocks"))]
-    Mock(strata_asm_params::ConfirmationDepths),
+    Mock(strata_asm_admin_types::ConfirmationDepths),
     Unavailable,
 }
 
@@ -238,22 +236,22 @@ fn authority_to_role(authority: Authority) -> Result<Role, String> {
     }
 }
 
-async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String>>, String> {
+async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<SignerId>>, String> {
     let admin = asm_rpc::fetch_admin_state(rpc_url).await?;
 
     // A role the chain does not carry is "not a member", never "membership unknowable". This is
     // read for every authority on every auth challenge, so one authority missing from an older
     // genesis must not refuse the login of the three that are there.
-    let mut role_to_keys = HashMap::new();
+    let mut role_to_signers = HashMap::new();
     for role in [
         Role::StrataAdministrator,
         Role::StrataSequencerManager,
         Role::AlpenAdministrator,
         Role::StrataSecurityCouncil,
     ] {
-        match authority_keys_hex(&admin, role) {
-            Ok(keys) => {
-                role_to_keys.insert(role, keys);
+        match authority_signers(&admin, role) {
+            Ok(signers) => {
+                role_to_signers.insert(role, signers);
             }
             Err(e) => {
                 tracing::warn!(role = ?role, error = %e, "skipping authority absent from admin state")
@@ -261,22 +259,22 @@ async fn fetch_role_membership(rpc_url: &str) -> Result<HashMap<Role, Vec<String
         }
     }
 
-    Ok(role_to_keys)
+    Ok(role_to_signers)
 }
 
-fn authority_keys_hex(
+fn authority_signers(
     admin: &AdministrationSubprotoState,
     role: Role,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<SignerId>, String> {
     let authority = admin
         .authority(role)
         .ok_or_else(|| format!("admin state missing authority for role `{:?}`", role))?;
 
     Ok(authority
         .config()
-        .keys()
+        .signers()
         .iter()
-        .map(|k| hex::encode(k.serialize()))
+        .map(|address| SignerId::from_program(address.to_byte_array()))
         .collect())
 }
 
@@ -404,8 +402,8 @@ fn mock_threshold(_rpc_url: &str, _authority: Authority) -> Option<u16> {
 /// Every depth set to `depth`. Upstream's `get` still overrides the variants it hardcodes, which is
 /// the point: a fixture cannot give Defcon 1 a lock period.
 #[cfg(any(test, feature = "dev-mocks"))]
-fn uniform_confirmation_depths(depth: u16) -> strata_asm_params::ConfirmationDepths {
-    strata_asm_params::ConfirmationDepths {
+fn uniform_confirmation_depths(depth: u16) -> strata_asm_admin_types::ConfirmationDepths {
+    strata_asm_admin_types::ConfirmationDepths {
         strata_admin_multisig_update: depth,
         strata_seq_manager_multisig_update: depth,
         alpen_admin_multisig_update: depth,
@@ -416,7 +414,7 @@ fn uniform_confirmation_depths(depth: u16) -> strata_asm_params::ConfirmationDep
         asm_stf_vk_update: depth,
         ee_stf_vk_update: depth,
         defcon3: depth,
-        safe_harbour_address_update: depth,
+        safe_harbor_address_update: depth,
     }
 }
 
@@ -444,12 +442,12 @@ fn mock_lock_period(_rpc_url: &str, _action: &MultisigAction) -> Option<u64> {
 mod tests {
     use std::num::NonZeroU8;
 
+    use strata_asm_admin_threshold_sig::ThresholdConfigUpdate;
     use strata_asm_txs_admin::actions::updates::{
-        Defcon1Update, Defcon3Update, OperatorSetUpdate, SafeHarbourAddressUpdate,
+        Defcon1Update, Defcon3Update, OperatorSetUpdate, SafeHarborAddressUpdate,
         StrataAdminMultisigUpdate, StrataSecurityCouncilMultisigUpdate,
     };
     use strata_asm_txs_admin::actions::{CancelAction, UpdateAction};
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
     use super::*;
 
@@ -459,7 +457,8 @@ mod tests {
 
     fn signer_update() -> MultisigAction {
         let config_update =
-            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+            ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).expect("threshold"))
+                .expect("valid config update");
         MultisigAction::Update(UpdateAction::StrataAdminMultisig(
             StrataAdminMultisigUpdate::new(config_update),
         ))
@@ -471,7 +470,8 @@ mod tests {
     /// created by the same authority, so only the action can tell them apart.
     fn council_signer_update() -> MultisigAction {
         let config_update =
-            ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+            ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).expect("threshold"))
+                .expect("valid config update");
         MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
             StrataSecurityCouncilMultisigUpdate::new(config_update),
         ))
@@ -480,7 +480,7 @@ mod tests {
     /// Tx type 14 — sets the bridge's sweep destination, authorized by the Strata administrator
     /// for the same segregation reason as tx 15: the council fires the sweep, the administrator
     /// picks where the funds land.
-    fn safe_harbour_address_update() -> MultisigAction {
+    fn safe_harbor_address_update() -> MultisigAction {
         // x-only key of the secp256k1 generator point, the destination the local stack ships with.
         let payload = [
             0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87,
@@ -488,10 +488,10 @@ mod tests {
             0x16, 0xF8, 0x17, 0x98,
         ];
         let descriptor = bitcoin_bosd::Descriptor::new_p2tr(&payload).expect("valid x-only key");
-        let address = strata_asm_proto_bridge_v1_types::SafeHarbourAddress::try_from(descriptor)
+        let address = strata_asm_bridge_types::SafeHarborAddress::try_from(descriptor)
             .expect("p2tr descriptor accepted");
-        MultisigAction::Update(UpdateAction::SafeHarbourAddress(
-            SafeHarbourAddressUpdate::new(address),
+        MultisigAction::Update(UpdateAction::SafeHarborAddress(
+            SafeHarborAddressUpdate::new(address),
         ))
     }
 
@@ -560,7 +560,7 @@ mod tests {
     /// `authorized_role()`, not from a list this application maintains.
     #[test]
     fn safe_harbor_update_is_authorized_for_the_administrator_and_refused_for_the_council() {
-        let update = safe_harbour_address_update();
+        let update = safe_harbor_address_update();
 
         require_authorized_for_action(Authority::StrataAdmin, &update)
             .expect("the Strata administrator sets the sweep destination");
@@ -568,7 +568,7 @@ mod tests {
         let err = require_authorized_for_action(Authority::SecurityCouncil, &update)
             .expect_err("the council must not choose where the sweep lands");
         let message = err.to_string();
-        assert!(message.contains("Safe Harbour Address Update"), "{message}");
+        assert!(message.contains("Safe Harbor Address Update"), "{message}");
         assert!(message.contains("Strata Administrator"), "{message}");
     }
 
@@ -629,11 +629,11 @@ mod tests {
     fn strata_admin_and_safe_harbor_updates_resolve_to_their_own_depths() {
         let mut depths = uniform_confirmation_depths(NON_ZERO_BASELINE);
         depths.strata_admin_multisig_update = 11;
-        depths.safe_harbour_address_update = 23;
+        depths.safe_harbor_address_update = 23;
 
         assert_eq!(depth_for_action(&signer_update(), |t| depths.get(t)), 11);
         assert_eq!(
-            depth_for_action(&safe_harbour_address_update(), |t| depths.get(t)),
+            depth_for_action(&safe_harbor_address_update(), |t| depths.get(t)),
             23
         );
     }

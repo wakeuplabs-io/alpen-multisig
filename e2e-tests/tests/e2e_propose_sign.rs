@@ -16,9 +16,10 @@ use desktop_app::application::orchestrator_client::{
     CompleteOrchestratorAuthRequest, OrchestratorClient, StartOrchestratorAuthRequest,
 };
 use desktop_app::application::proposals;
-use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::action::{Action, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
 use desktop_app::domain::proposal::Signature;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use desktop_app::infrastructure::signing;
@@ -131,11 +132,12 @@ fn build_demo_action() -> Action {
     let demo_bytes = [0x42u8; 32];
     let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
     let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
-    let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+    let new_signer =
+        SignerId::from_pubkey_hex(&hex::encode(new_signer_pk.serialize())).expect("valid key");
     Action::MultisigUpdate(MultisigUpdate {
         role: Authority::StrataAdmin,
-        add_keys: vec![new_signer],
-        remove_keys: vec![],
+        add_signers: vec![new_signer],
+        remove_signers: vec![],
         new_threshold: NonZeroU8::new(2).expect("non-zero"),
     })
 }

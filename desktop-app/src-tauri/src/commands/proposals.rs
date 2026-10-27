@@ -1379,20 +1379,19 @@ pub async fn proposals_broadcast_manual(
 mod tests {
     use super::*;
 
-    use desktop_app::domain::action::{
-        Action, CompressedPubKey, MultisigUpdate, SafeHarborDescriptor,
-    };
+    use desktop_app::domain::action::{Action, MultisigUpdate, SafeHarborDescriptor};
     use desktop_app::domain::authority::Authority;
+    use desktop_app::domain::signer_id::SignerId;
     use desktop_app::infrastructure::action_codec::encode_hex;
 
     fn signer_update(role: Authority) -> Action {
         Action::MultisigUpdate(MultisigUpdate {
             role,
-            add_keys: vec![CompressedPubKey::from_hex(
+            add_signers: vec![SignerId::from_pubkey_hex(
                 "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
             )
             .unwrap()],
-            remove_keys: vec![],
+            remove_signers: vec![],
             new_threshold: std::num::NonZeroU8::new(2).unwrap(),
         })
     }

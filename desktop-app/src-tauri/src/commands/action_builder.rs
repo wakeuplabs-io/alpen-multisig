@@ -1,10 +1,11 @@
 use std::num::NonZeroU8;
 
 use desktop_app::domain::action::{
-    Action, CompressedPubKey, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SafeHarborDescriptor,
+    Action, EvenPubKey, MultisigUpdate, OperatorSetUpdate, SafeHarborDescriptor,
     SequencerKeyUpdate, VkUpdate,
 };
 use desktop_app::domain::authority::Authority;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::asm_status_rpc;
 use desktop_app::infrastructure::broadcast_env;
@@ -16,6 +17,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "kind")]
 pub enum DecodedAction {
     #[serde(rename = "multisig_update", rename_all = "camelCase")]
+    /// `addKeys` and `removeKeys` are Admin IDs on the process network.
     MultisigUpdate {
         role: String,
         add_keys: Vec<String>,
@@ -66,12 +68,21 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
         };
     }
     match action_codec::decode_hex(&hex) {
-        Ok(Action::MultisigUpdate(update)) => DecodedAction::MultisigUpdate {
-            role: update.role.as_str().to_string(),
-            add_keys: update.add_keys.iter().map(|k| k.to_hex()).collect(),
-            remove_keys: update.remove_keys.iter().map(|k| k.to_hex()).collect(),
-            new_threshold: update.new_threshold.get(),
-        },
+        Ok(Action::MultisigUpdate(update)) => {
+            // The signers are only witness programs: without the network there is no Admin ID to
+            // show, and showing none would read as "no signers change".
+            let Ok(network) = network_env::network_from_env() else {
+                return DecodedAction::Unknown { raw_hex: hex };
+            };
+            let admin_ids =
+                |signers: &[SignerId]| signers.iter().map(|s| s.admin_id(network)).collect();
+            DecodedAction::MultisigUpdate {
+                role: update.role.as_str().to_string(),
+                add_keys: admin_ids(&update.add_signers),
+                remove_keys: admin_ids(&update.remove_signers),
+                new_threshold: update.new_threshold.get(),
+            }
+        }
         Ok(Action::VkUpdate(update)) => DecodedAction::VkUpdate {
             authority: update.authority.as_str().to_string(),
             type_id: update.type_id,
@@ -98,6 +109,7 @@ pub fn decode_action_hex(action_hex: String) -> DecodedAction {
     }
 }
 
+/// `addKeys` and `removeKeys` are Admin IDs, which must be on the process network.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildAdminMultisigUpdateHexInput {
@@ -128,23 +140,22 @@ pub fn build_admin_multisig_update_hex(
     let new_threshold = NonZeroU8::new(input.new_threshold)
         .ok_or_else(|| "newThreshold must be > 0".to_string())?;
 
-    let add_keys = input
-        .add_keys
-        .iter()
-        .map(|k| CompressedPubKey::from_hex(k.trim()).map_err(|e| format!("invalid add key: {e}")))
-        .collect::<Result<Vec<_>, _>>()?;
-    let remove_keys = input
-        .remove_keys
-        .iter()
-        .map(|k| {
-            CompressedPubKey::from_hex(k.trim()).map_err(|e| format!("invalid remove key: {e}"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let network = network_env::network_from_env().map_err(|e| e.to_string())?;
+    let parse = |ids: &[String], what: &str| {
+        ids.iter()
+            .map(|id| {
+                SignerId::parse_admin_id(id, network)
+                    .map_err(|e| format!("invalid {what} signer `{}`: {e}", id.trim()))
+            })
+            .collect::<Result<Vec<_>, _>>()
+    };
+    let add_signers = parse(&input.add_keys, "add")?;
+    let remove_signers = parse(&input.remove_keys, "remove")?;
 
     let action = Action::MultisigUpdate(MultisigUpdate {
         role: authority,
-        add_keys,
-        remove_keys,
+        add_signers,
+        remove_signers,
         new_threshold,
     });
 
@@ -328,16 +339,41 @@ mod tests {
     /// wire-level shape of the segregation invariant. This test replaces
     /// `decode_council_signer_update_names_the_target_role`, which built the `Action` by hand and
     /// asserted a subset of what this asserts.
+    /// AC 3: the signer field takes an Admin ID on the active network. A compressed key — the
+    /// format it used to take — and an Admin ID for another network are both refused.
+    #[test]
+    fn signer_update_refuses_a_public_key_and_another_networks_admin_id() {
+        let build = |id: &str| {
+            build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
+                role: "strata_admin".to_string(),
+                add_keys: vec![id.to_string()],
+                remove_keys: vec![],
+                new_threshold: 1,
+            })
+        };
+
+        let err = build("02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5")
+            .expect_err("a public key is not an Admin ID");
+        assert!(err.contains("not a compressed public key"), "{err}");
+
+        let err = build("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
+            .expect_err("a mainnet Admin ID is not on regtest");
+        assert!(err.contains("regtest"), "{err}");
+
+        build("bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m").expect("a regtest Admin ID builds");
+    }
+
     #[test]
     fn council_signer_update_signing_message_names_both_roles_on_separate_lines() {
         use desktop_app::infrastructure::signing::render_signing_message;
 
-        let pk = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5".to_string();
+        // The Admin ID of 2·G on regtest, the network the tests run on.
+        let admin_id = "bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m".to_string();
         let seqno = 7;
 
         let council_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
             role: "security_council".to_string(),
-            add_keys: vec![pk.clone()],
+            add_keys: vec![admin_id.clone()],
             remove_keys: vec![],
             new_threshold: 2,
         })
@@ -346,7 +382,7 @@ mod tests {
 
         let admin_hex = build_admin_multisig_update_hex(BuildAdminMultisigUpdateHexInput {
             role: "strata_admin".to_string(),
-            add_keys: vec![pk.clone()],
+            add_keys: vec![admin_id.clone()],
             remove_keys: vec![],
             new_threshold: 2,
         })
@@ -364,19 +400,20 @@ mod tests {
             format!(
                 concat!(
                     "Strata ASM Administration v1\n",
+                    "Network: regtest\n",
                     "Action: Strata Security Council Multisig Update\n",
                     "Authorized By: Strata Administrator\n",
                     "Sequence: {seqno}\n",
                     "Action Details:\n",
                     "  New Threshold: 2\n",
                     "  Members to Add: 1\n",
-                    "  1. Add Member: {pk}\n",
+                    "  1. Add Member: {admin_id}\n",
                     "  Members to Remove: 0"
                 ),
                 seqno = seqno,
-                pk = pk
+                admin_id = admin_id
             ),
-            "the signer must see the exact canonical nine-line message"
+            "the signer must see the exact canonical ten-line message"
         );
 
         assert_ne!(
@@ -419,13 +456,14 @@ mod tests {
             lines,
             vec![
                 "Strata ASM Administration v1",
-                "Action: Safe Harbour Address Update",
+                "Network: regtest",
+                "Action: Safe Harbor Address Update",
                 "Authorized By: Strata Administrator",
                 "Sequence: 17",
                 "Action Details:",
-                &format!("  New Safe Harbour Address: {descriptor_hex}"),
+                &format!("  New Safe Harbor Address: {descriptor_hex}"),
             ],
-            "the signer must see the exact canonical six-line message"
+            "the signer must see the exact canonical seven-line message"
         );
 
         // The address is what the signer typed; it is deliberately *not* what they will be asked

@@ -16,20 +16,21 @@
 //! would be broadcast to the Bitcoin network via `bitcoind-async-client` or
 //! copied as raw hex for manual broadcast.
 
+use bitcoin::Network;
 use std::num::NonZero;
 
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use rand::rngs::OsRng;
 
+use strata_asm_admin_threshold_sig::verify_threshold_signatures;
+use strata_asm_admin_threshold_sig::P2wpkhAddress;
+use strata_asm_admin_threshold_sig::ThresholdConfig;
+use strata_asm_admin_threshold_sig::ThresholdConfigUpdate;
 use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
 use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 use strata_asm_txs_admin::signing_message::SigningMessage;
 use strata_asm_txs_admin::test_utils::create_test_admin_tx;
 use strata_asm_txs_test_utils::TEST_MAGIC_BYTES;
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::verify_threshold_signatures;
-use strata_crypto::threshold_signature::ThresholdConfig;
-use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 use strata_l1_txfmt::ParseConfig;
 
 /// Full end-to-end flow: create an admin signer-set update, sign it, build the
@@ -42,9 +43,9 @@ fn e2e_build_and_verify_admin_signer_update() {
     // ---------------------------------------------------------------
     let privkeys: Vec<SecretKey> = (0..3).map(|_| SecretKey::new(&mut OsRng)).collect();
 
-    let pubkeys: Vec<CompressedPublicKey> = privkeys
+    let pubkeys: Vec<P2wpkhAddress> = privkeys
         .iter()
-        .map(|sk| CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk)))
+        .map(|sk| P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, sk)))
         .collect();
 
     let threshold = NonZero::new(2).unwrap();
@@ -55,16 +56,17 @@ fn e2e_build_and_verify_admin_signer_update() {
     // Step 2: Build a MultisigAction — update the Strata Admin signer set
     // This is the simplest update: add a new key, keep threshold at 2.
     // ---------------------------------------------------------------
-    let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(
+    let new_signer = P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(
         SECP256K1,
         &SecretKey::new(&mut OsRng),
     ));
 
-    let config_update = ThresholdConfigUpdate::new(
+    let config_update = ThresholdConfigUpdate::try_new(
         vec![new_signer], // add_keys
         vec![],           // remove_keys
         threshold,        // new threshold (unchanged)
-    );
+    )
+    .expect("valid config update");
 
     let strata_update = StrataAdminMultisigUpdate::new(config_update);
 
@@ -75,7 +77,7 @@ fn e2e_build_and_verify_admin_signer_update() {
     // Formula: SHA256(SHA256("strata/admin/strata_admin_multisig_update") || seqno_be || payload)
     // ---------------------------------------------------------------
     let seqno: u64 = 1; // first action, seqno must be > last_seqno (0)
-    let sighash = SigningMessage::for_action(&action, seqno).compute_sighash();
+    let sighash = SigningMessage::for_action(&action, seqno, Network::Regtest).compute_sighash();
 
     // Sighash is a 32-byte hash that each signer will sign
     assert_eq!(sighash.0.len(), 32, "sighash must be 32 bytes");
@@ -94,7 +96,8 @@ fn e2e_build_and_verify_admin_signer_update() {
     //   - Returns a complete Bitcoin reveal transaction
     // ---------------------------------------------------------------
     let signer_indices: Vec<u8> = vec![0, 2]; // signers 0 and 2 reach threshold of 2
-    let reveal_tx = create_test_admin_tx(&privkeys, &signer_indices, &action, seqno);
+    let reveal_tx =
+        create_test_admin_tx(&privkeys, &signer_indices, &action, seqno, Network::Regtest);
 
     // ---------------------------------------------------------------
     // Step 7: Parse back and verify

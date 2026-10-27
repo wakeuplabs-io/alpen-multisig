@@ -18,7 +18,7 @@ RPC_HOST="127.0.0.1"
 RPC_PORT="18443"
 RPC_USER="user"
 RPC_PASSWORD="password"
-ZMQ_RAWBLOCK="tcp://127.0.0.1:28332"
+ZMQ_HASHBLOCK="tcp://127.0.0.1:28332"
 
 load_bitcoin_section() {
   [[ -f "$CONFIG" ]] || return 0
@@ -44,8 +44,8 @@ load_bitcoin_section() {
           RPC_USER="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ ^rpc_password[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
           RPC_PASSWORD="${BASH_REMATCH[1]}"
-        elif [[ "$line" =~ ^rawblock_connection_string[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
-          ZMQ_RAWBLOCK="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^hashblock_connection_string[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
+          ZMQ_HASHBLOCK="${BASH_REMATCH[1]}"
         fi
         ;;
     esac
@@ -80,9 +80,9 @@ cmd_start() {
     -rpcuser="$RPC_USER" \
     -rpcpassword="$RPC_PASSWORD" \
     -rpcport="$RPC_PORT" \
-    -zmqpubrawblock="$ZMQ_RAWBLOCK" \
+    -zmqpubhashblock="$ZMQ_HASHBLOCK" \
     -fallbackfee=0.00001
-  echo "bitcoind started (datadir=$DATADIR, rpc=$RPC_HOST:$RPC_PORT, zmq=$ZMQ_RAWBLOCK)"
+  echo "bitcoind started (datadir=$DATADIR, rpc=$RPC_HOST:$RPC_PORT, zmq=$ZMQ_HASHBLOCK)"
 }
 
 cmd_stop() {

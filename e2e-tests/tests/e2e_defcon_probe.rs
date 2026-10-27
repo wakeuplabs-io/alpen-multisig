@@ -15,11 +15,12 @@
 //! Defcon 1 activating in its reveal block is covered by `e2e_safe_harbor_address.rs` and
 //! `e2e_council_rotation.rs`, which both fire one.
 
+use bitcoin::Network;
 use std::process::Command;
 
 use alpen_multisig_e2e_tests::fixtures::{
     administration_init_config, decode_administration_subproto, decode_bridge_subproto,
-    defcon3_confirmation_depth, parse_admin_section, strata_security_council_keys_hex,
+    defcon3_confirmation_depth, parse_admin_section, strata_security_council_admin_ids,
     SignerUpdateEnactedFixture, DEMO_COSIGN_MNEMONIC, FAST_ENACTMENT,
 };
 use alpen_multisig_e2e_tests::test_harness::{AsmTestHarness, AsmTestHarnessBuilder};
@@ -29,12 +30,13 @@ use bitcoin::Amount;
 use bitcoind_async_client::traits::Reader;
 use rand::rngs::OsRng;
 use ssz::Encode;
-use strata_asm_params::Role;
+use strata_asm_admin_types::Role;
 use strata_asm_txs_admin::actions::updates::{Defcon1Update, Defcon3Update};
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::signing_message::SigningMessage;
 
 use desktop_app::domain::proposal::ProposalSignature;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::{broadcast_tx, signing};
 
 fn anyhow_string<T>(r: Result<T, String>) -> anyhow::Result<T> {
@@ -67,18 +69,19 @@ async fn e2e_defcon3_canceled_never_activates_the_safe_harbor() {
         .expect("a cancelled defcon 3 never activates the safe harbor");
 }
 
-/// The signer sees exactly these four lines. Defcon 1 carries no payload, so the rendered
-/// message must have no `Action Details:` block at all — a signer who sees one is looking at
-/// a different action.
+/// The signer sees exactly these five lines, the network among them. Defcon 1 carries no
+/// payload, so the rendered message must have no `Action Details:` block at all — a signer who
+/// sees one is looking at a different action.
 #[test]
-fn defcon1_signing_message_renders_the_four_canonical_lines() {
+fn defcon1_signing_message_renders_the_five_canonical_lines() {
     let action = MultisigAction::Update(UpdateAction::Defcon1(Defcon1Update));
 
-    let message = SigningMessage::for_action(&action, 1);
+    let message = SigningMessage::for_action(&action, 1, Network::Regtest);
 
     assert_eq!(
         message.as_str(),
         "Strata ASM Administration v1\n\
+         Network: regtest\n\
          Action: Defcon 1\n\
          Authorized By: Strata Security Council\n\
          Sequence: 1",
@@ -266,7 +269,7 @@ async fn submit_council_action(
 
     // The fixture gives the council the same two keys as the administrator, so the demo
     // mnemonic pair can reach the council threshold of 2.
-    let council_keys = strata_security_council_keys_hex(admin_section);
+    let council_keys = strata_security_council_admin_ids(admin_section);
     let a_hex = anyhow_string(signing::list_mnemonic_addresses(
         fixture.mnemonic,
         passphrase,
@@ -281,9 +284,17 @@ async fn submit_council_action(
     ))?[0]
         .public_key_hex
         .clone();
+    let council_signers: Vec<_> = council_keys
+        .iter()
+        .map(|id| SignerId::from_admin_id(id))
+        .collect();
     anyhow::ensure!(
-        council_keys == vec![a_hex.clone(), b_hex.clone()],
-        "fixture strata_security_council keys must match the demo mnemonics"
+        council_signers
+            == vec![
+                SignerId::from_pubkey_hex(&a_hex),
+                SignerId::from_pubkey_hex(&b_hex)
+            ],
+        "fixture strata_security_council signers must match the demo mnemonics"
     );
 
     let action_hex = hex::encode(action.as_ssz_bytes());
@@ -380,7 +391,7 @@ fn bridge_safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let bridge = decode_bridge_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("bridge section missing"))?;
-    Ok(bridge.safe_harbour().is_activated())
+    Ok(bridge.safe_harbor().is_activated())
 }
 
 fn council_last_seqno(harness: &AsmTestHarness) -> anyhow::Result<u64> {

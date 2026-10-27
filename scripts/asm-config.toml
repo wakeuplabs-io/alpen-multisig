@@ -3,10 +3,18 @@ host = "127.0.0.1"
 port = 8080
 
 [database]
-path = "/tmp/asm-runner-db"
+asm_path = "/tmp/asm-runner-db"
+moho_path = "/tmp/asm-runner-moho-db"
 
 [bitcoin]
 rpc_url = "http://127.0.0.1:18443"
 rpc_user = "user"
 rpc_password = "password"
-rawblock_connection_string = "tcp://127.0.0.1:28332"
+hashblock_connection_string = "tcp://127.0.0.1:28332"
+
+# The chain starts under spec 0, executed by the always-accept predicate the genesis names.
+[execution]
+genesis_spec_id = 0
+[[execution.targets]]
+predicate = "AlwaysAccept"
+spec_id = 0
