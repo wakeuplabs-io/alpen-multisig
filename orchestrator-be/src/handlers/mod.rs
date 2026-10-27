@@ -116,6 +116,7 @@ mod tests {
             auth_session_ttl_ms,
             btc_client,
             proposal_expiry_days,
+            bitcoin::Network::Regtest,
         ))
     }
 
@@ -476,6 +477,7 @@ mod tests {
                 240_000,
                 btc_client,
                 7,
+                bitcoin::Network::Regtest,
             ))
         };
 
