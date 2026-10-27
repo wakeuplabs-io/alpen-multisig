@@ -1,6 +1,6 @@
 import { CopyButton } from '@/components/copy-button'
 import { SignaturePenMutedIcon } from '@/assets/icons'
-import { truncatePubkey } from '@/lib/pubkey'
+import { SignerAdminId } from '@/components/signer-admin-id'
 
 type Approval = { signerPubkey: string; signatureHex: string }
 
@@ -55,7 +55,7 @@ export function ApprovalsList({
 							<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0f9d7a]">
 								<SignaturePenMutedIcon width={10} height={10} style={{ filter: 'brightness(10)' }} />
 							</span>
-							<span className="flex-1 font-mono text-label text-[#111827]">{truncatePubkey(sig.signerPubkey)}</span>
+							<SignerAdminId pubkey={sig.signerPubkey} className="flex-1 font-mono text-label text-[#111827]" />
 							{isMe && (
 								<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
 									YOU
@@ -73,7 +73,7 @@ export function ApprovalsList({
 					return (
 						<div key={`pending-${i}`} className="flex items-center gap-3 px-6 py-3">
 							<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#d1d5db] bg-white" />
-							<span className="flex-1 font-mono text-label text-[#6b7280]">{truncatePubkey(signer)}</span>
+							<SignerAdminId pubkey={signer} className="flex-1 font-mono text-label text-[#6b7280]" />
 							{isMe && (
 								<span className="rounded-full border border-accent-border bg-bg-surface px-2 py-0.5 text-[10px] font-medium text-emphasis">
 									YOU

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { BroadcastStatus, ProposalStatus } from '@/api/proposals'
 import { resolveBroadcastStatus } from '@/api/proposals'
+import { SignerAdminId } from '@/components/signer-admin-id'
 import { importedTxid } from '@/domain/proposal-detail/model/imported-pair'
 import type { PastedSignature } from '@/domain/proposal-detail/model/pasted-signature'
 
@@ -267,7 +268,7 @@ export function ImportBundleModal({
 								</p>
 								{preview.newSigs.map((s, i) => (
 									<p key={i} className="m-0 truncate font-mono text-mono-sm text-[#374151]">
-										{s.signerPubkey.slice(0, 14)}…{s.signerPubkey.slice(-8)}
+										<SignerAdminId pubkey={s.signerPubkey} />
 									</p>
 								))}
 							</div>

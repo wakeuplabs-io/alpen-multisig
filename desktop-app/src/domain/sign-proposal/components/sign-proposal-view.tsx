@@ -3,6 +3,7 @@ import type { DecodedAction } from '@/api/signing'
 import { vkPredicateLabelFromTypeId } from '@/lib/vk-predicate'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SignerAdminId } from '@/components/signer-admin-id'
 import { SigningMessagePanel } from '@/components/signing-message-panel'
 import { DefconCallout } from '@/components/defcon-callout'
 import { SafeHarborNote } from '@/components/safe-harbor-note'
@@ -74,7 +75,9 @@ function MultisigUpdateDetails({
 						<ul className="mt-2 flex flex-col gap-1.5 list-none m-0 p-0">
 							{changes.addKeys.map((key) => (
 								<li key={key}>
-									<code className="block break-all font-mono text-mono-sm leading-5 text-[#166534]">{key}</code>
+									<code className="block break-all font-mono text-mono-sm leading-5 text-[#166534]">
+										<SignerAdminId pubkey={key} variant="full" />
+									</code>
 								</li>
 							))}
 						</ul>
@@ -90,7 +93,7 @@ function MultisigUpdateDetails({
 							{changes.removeKeys.map((key) => (
 								<li key={key}>
 									<code className="block break-all font-mono text-mono-sm leading-5 text-emphasis-soft line-through">
-										{key}
+										<SignerAdminId pubkey={key} variant="full" />
 									</code>
 								</li>
 							))}

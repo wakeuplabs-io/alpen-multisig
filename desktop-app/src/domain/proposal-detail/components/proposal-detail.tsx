@@ -4,6 +4,7 @@ import { saveJsonFile, writeClipboard } from '@/api/tauri-bridge'
 import { CheckCircleEmeraldIcon, CopyClipboardIcon, DownloadIcon, ImportJsonIcon, SendIcon } from '@/assets/icons'
 import { ApprovalsList } from '@/components/approvals-list'
 import { DeviceSigningHint } from '@/components/device-signing-hint'
+import { SignerAdminId } from '@/components/signer-admin-id'
 import { SignerSetChangeTable } from '@/domain/signer-set-change/components/signer-set-change-table'
 import { SafeHarborChangeTable } from '@/domain/safe-harbor-change/components/safe-harbor-change-table'
 import type { DeviceSigningDisplay } from '@/lib/device-signing-display'
@@ -221,7 +222,16 @@ export function ProposalDetail({
 					{broadcastPairs.map((pair) => (
 						<div key={pair.revealTxid} className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5">
 							<div className="mb-1 flex items-center justify-between gap-3">
-								<span className="text-label font-medium text-[#111827]">Sent by {pair.sender}</span>
+								<span className="text-label font-medium text-[#111827]">
+									Sent by{' '}
+									{pair.sender.kind === 'signer' ? (
+										<SignerAdminId pubkey={pair.sender.pubkey} className="font-mono" />
+									) : pair.sender.kind === 'you' ? (
+										'You'
+									) : (
+										'Unknown'
+									)}
+								</span>
 								<span className="text-mono-sm font-medium text-[#6b7280]">{pair.state}</span>
 							</div>
 							<p className="m-0 truncate font-mono text-label text-[#111827]" title={pair.commitTxid}>

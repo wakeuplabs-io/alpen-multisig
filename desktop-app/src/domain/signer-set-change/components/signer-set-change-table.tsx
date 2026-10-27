@@ -1,3 +1,5 @@
+import { useAdminIds } from '@/hooks/use-admin-ids'
+import { adminIdDisplay } from '@/lib/admin-id'
 import type { SignerSetChange } from '../model/build-signer-set-change'
 
 type Props = {
@@ -7,6 +9,9 @@ type Props = {
 export function SignerSetChangeTable({ change }: Props) {
 	const signerCountBefore = change.rows.filter((row) => row.inBefore).length
 	const signerCountAfter = change.rows.filter((row) => row.inAfter).length
+	// Rows stay keyed by the signer's key; what a signer reads is its Admin ID (feedback item 60).
+	const adminIds = useAdminIds(change.rows.map((row) => row.pubkey))
+	const signerLabel = (pubkey: string) => adminIdDisplay(adminIds.get(pubkey), 'full')
 
 	return (
 		<table
@@ -39,14 +44,14 @@ export function SignerSetChangeTable({ change }: Props) {
 									className={`break-all font-mono text-mono-sm leading-relaxed ${
 										row.isRemoved ? 'text-emphasis-soft line-through' : 'text-[#374151]'
 									}`}
-									aria-label={row.isRemoved ? `Removed signer ${row.pubkey}` : undefined}
+									aria-label={row.isRemoved ? `Removed signer ${signerLabel(row.pubkey)}` : undefined}
 								>
 									{row.isRemoved && (
 										<span className="mr-1 text-emphasis-soft" aria-hidden="true">
 											−
 										</span>
 									)}
-									{row.pubkey}
+									{signerLabel(row.pubkey)}
 								</span>
 							) : (
 								<span className="text-[#9ca3af]" aria-label="Not present before">
@@ -60,14 +65,14 @@ export function SignerSetChangeTable({ change }: Props) {
 									className={`break-all font-mono text-mono-sm leading-relaxed ${
 										row.isAdded ? 'font-medium text-[#0f9d7a]' : 'text-[#374151]'
 									}`}
-									aria-label={row.isAdded ? `Added signer ${row.pubkey}` : undefined}
+									aria-label={row.isAdded ? `Added signer ${signerLabel(row.pubkey)}` : undefined}
 								>
 									{row.isAdded && (
 										<span className="mr-1 text-[#0f9d7a]" aria-hidden="true">
 											+
 										</span>
 									)}
-									{row.pubkey}
+									{signerLabel(row.pubkey)}
 								</span>
 							) : (
 								<span className="text-[#9ca3af]" aria-label="Not present after">

@@ -26,10 +26,15 @@ const html = renderToStaticMarkup(
 assert.ok(html.includes('data-testid="e2e-signer-set-change-table"'), 'the shared E2E selector is stable')
 assert.match(html, /<th[^>]*scope="col"[^>]*>Before<\/th>/, 'Before is a semantic column header')
 assert.match(html, /<th[^>]*scope="col"[^>]*>After<\/th>/, 'After is a semantic column header')
-assert.ok(html.includes(KEY_A), 'unchanged keys remain reviewable')
-assert.ok(html.includes(`−</span>${KEY_B}`), 'removed keys have a textual minus marker')
-assert.ok(html.includes('line-through'), 'removed keys are struck through')
-assert.ok(html.includes(`+</span>${KEY_C}`), 'added keys have a textual plus marker')
+// Signers read as their Admin ID (feedback item 60). A static render runs no effects, so every row shows the
+// placeholder the Admin ID resolves into; the display rule itself is pinned in signer-admin-id.test.tsx.
+for (const key of [KEY_A, KEY_B, KEY_C]) {
+	assert.ok(!html.includes(key), 'a signer is never printed as its public key')
+}
+assert.ok(html.includes('−</span>…'), 'removed signers have a textual minus marker')
+assert.ok(html.includes('line-through'), 'removed signers are struck through')
+assert.ok(html.includes('+</span>…'), 'added signers have a textual plus marker')
+assert.ok(html.includes('aria-label="Removed signer …"'), 'the removed-signer label names the Admin ID, not the key')
 assert.ok(html.includes('>—</span>'), 'missing sides use an em dash rather than a blank cell')
 assert.ok(html.includes('2 of 2'), 'threshold and signer cardinality are rendered together')
 

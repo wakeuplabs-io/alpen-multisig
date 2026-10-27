@@ -21,11 +21,11 @@ const inFlight = describeBroadcastPairs(
 assert.deepEqual(
 	inFlight.map((p) => [p.sender, p.state]),
 	[
-		['02aaaaaaaaaa…aaaaaaaa', 'Sent'],
-		['You', 'Current'],
-		['Unknown', 'Sent'],
+		[{ kind: 'signer', pubkey: ALICE }, 'Sent'],
+		[{ kind: 'you' }, 'Current'],
+		[{ kind: 'unknown' }, 'Sent'],
 	],
-	'oldest first; the tracked pair is matched case-insensitively',
+	'oldest first; the tracked pair is matched case-insensitively; another signer is carried by key, for its Admin ID',
 )
 
 // Mined: the row now tracks the winner, and the rest were not used.

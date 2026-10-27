@@ -1,4 +1,5 @@
 import { TrashIcon, UndoIcon } from '@/assets/icons'
+import { SignerAdminId } from '@/components/signer-admin-id'
 import { useState } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { normalizeSignerKey, type CreateProposalFormValues } from '../model/create-proposal.schema'
@@ -117,11 +118,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2"
 									>
 										{isPendingRemoval && <span className="shrink-0 text-body-sm font-medium text-[#111827]">–</span>}
-										<span
+										<SignerAdminId
+											pubkey={signer}
+											variant="full"
 											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#111827] line-through' : 'text-[#374151]'}`}
-										>
-											{signer}
-										</span>
+										/>
 										{isPendingRemoval ? (
 											<button
 												type="button"
