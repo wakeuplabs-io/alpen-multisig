@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–2 done (#622, #623, #624), Phase 3 in review.
+**Status:** In progress — Phases 0–3 done (#622–#625), Phase 4 in review.
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -94,8 +94,8 @@ Consequences:
 | 0 | Master plan (this document) | none | — | `docs/` | Done (#622) |
 | 1 | Toolchain `nightly-2026-07-01` at the current pin | none | prerequisite | `rust-toolchain.toml`, workflows, our tree's lint fallout | Done (#623) |
 | 2 | Bitcoin Core 30.2 binary | none | prerequisite | CI, `staging/Dockerfile.bitcoin`, dev notes | Done (#624) |
-| 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | In review |
-| 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Planned |
+| 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Done (#625) |
+| 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | In review |
 | 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Planned |
 | 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri`, WebDriver specs | Planned |
 | 7 | Device QA, staging reset, docs, reserve | none | AC 5 (device) | `docs/`, staging | Planned |
@@ -296,6 +296,36 @@ the pubkey until Phase 5.
 `build-signer-set-change`, `broadcast-pairs`, `cancel-details-card`). Keep the guards in
 `admin-wallet/architecture.test.ts` (Rule 9) and `admin-id-presentation.test.ts`. Run a manual walk of one
 signer update and one cancel on the local stack.
+
+**Result:** done. Derivation stays in Rust, so there is no second implementation in TS:
+
+- `SignerId::admin_id(network)` and the IPC command `admin_ids_for_pubkeys` run on the process network,
+  pinned by the BIP-173 vector for the generator point.
+- In the UI, `useAdminIds` turns every row a screen renders in one commit into a single IPC call. Answers
+  are cached for the process.
+- `<SignerAdminId>` prints the Admin ID, `…` while it resolves, or `Unknown`. It never prints the public
+  key.
+
+Surfaces:
+
+- Approvals, in the proposal detail and the cancel card.
+- The signer-set change table, in the preview, the detail and the cancel summary.
+- "Sent by": `describeBroadcastPairs` now returns a typed sender instead of a truncated key.
+- The sign view's signers to add and remove.
+- The import preview.
+- The signer-update form's current signers.
+- The wallet-binding error, which no longer prints keys.
+- The connect screen's debug row (AC 2).
+
+WebDriver `proposal-add-signer` now reads the added signer by Admin ID. The chain `proposal-add-signer` →
+`proposal-co-sign-mnemonic` → `proposal-broadcast-quorum` passes, as does `signing-no-sighash`.
+
+Carried to later phases:
+
+- The session's own chip still shows the device-native HRP (`bc1q…` for a mnemonic or Trezor session),
+  while listed signers use the chain's (`bcrt1q…`). Both are the same program. Phase 6 settles the HRP.
+- The desktop `signer_id.rs` now has `admin_id`, so it is no longer byte-identical to the orchestrator
+  copy, which has no use for it.
 
 ### Phase 5 — The bump to `v0.5.0-rc.1`
 
