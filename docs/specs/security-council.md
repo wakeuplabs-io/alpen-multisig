@@ -14,6 +14,8 @@ per-phase delivery specs are history, in
 
 All upstream claims below were read from the `asm` submodule at tags `v0.1-alpha.11` and `v0.3.1`,
 with file and line references. Where the two tags differ, [§7.1](#71-upstream-version-notes) says so.
+The workspace pin has since moved to `v0.5.0-rc.1` ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)); §7.1 records what
+that changes for this feature.
 
 ---
 
@@ -360,6 +362,18 @@ us are `ThresholdConfigUpdate::new` → `try_new` (now fallible, via the `strata
 cascade) and a split of `AdministrationTxParseError::MalformedTransaction` into two variants. Wire
 format, signing-message bytes, role assignments, confirmation-depth semantics and cancel semantics
 are the same at both tags.
+
+**At `v0.5.0-rc.1`** (the current pin, [ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)) the
+role assignments, the four actions and the confirmation-depth and cancel semantics are unchanged, but
+the wire format and the signed message are not:
+
+- Admin signers are 20-byte P2WPKH witness programs ([asm#277](https://github.com/alpenlabs/asm/pull/277)),
+  so a council rotation carries addresses, not compressed keys.
+- Every signed message carries a `Network:` line, and `SafeHarbour*` is now `SafeHarbor*`
+  ([asm#284](https://github.com/alpenlabs/asm/pull/284)).
+
+Signatures and `action_hex` from `v0.1-alpha.11` do not carry over; see
+[`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md).
 
 ### 7.2 Coverage upstream does not have
 

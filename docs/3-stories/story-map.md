@@ -174,7 +174,7 @@ Format: `As a <actor>, I want to <goal>, so that <motivation>.` Each story carri
 
 > All creation stories share the same shape: the signer composes the update payload for a specific type and submits it — together with their own signature — as a new pending proposal. ActionId is `hash(MultisigAction, SeqNo)`; duplicate `(action, seqno)` submissions are rejected (Backend PRD).
 
-> **Upstream coverage:** the discovery gap recorded in `2-discovery/08-alpen-crate-prd-coverage.md` is closed. Since ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)) every update type below has an upstream counterpart, except the retired US-E9/US-E10 and the Payout Administrator's, which has no role upstream.
+> **Upstream coverage:** the discovery gap recorded in `2-discovery/08-alpen-crate-prd-coverage.md` is closed. Since ASM pin `v0.1-alpha.11` ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)), and still at the current pin `v0.5.0-rc.1` ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)), every update type below has an upstream counterpart, except the retired US-E9/US-E10 and the Payout Administrator's, which has no role upstream.
 
 | ID | Story title | Actor | Authority | Update type | Slice |
 |---|---|---|---|---|---|
@@ -388,7 +388,7 @@ Surfaced from `2-discovery/`:
 - **HW wallet SPS-65 digest gap (affects all signing stories):** No consumer device natively signs a raw SPS-65 digest. POC-5 validated a synthetic PSBT binding on Trezor, but not yet against real on-chain ASM. This is a design constraint that could reshape US-F1/US-F2/US-I4 acceptance criteria.
 - **Strata node RPC surface (affects Slice 1+):** No documented/verified RPC for reading current ASM state (signer sets, last_seqno, queued updates, confirmation_depth). Required for Activity D, authority access control, and fee/standardness validation.
 - **Payout Admin architecture unknown (affects Slice 4):** Payout is not part of SPS-65 — it is a Bitcoin-native UTXO spend from a bridge multisig script. Script templates and spending conditions are not documented. Slice 4 may need its own mini-discovery.
-- **~~Security Council and Alpen Admin role definitions~~ — resolved.** When this was written only Strata Admin and Sequencer Manager existed upstream. As of ASM `v0.1-alpha.11` the Security Council role and all four of its update types are defined and proven against a regtest ASM; Alpen Admin is implemented. Payout Administrator remains the one authority with no upstream role. See [`specs/security-council.md`](../specs/security-council.md).
+- **~~Security Council and Alpen Admin role definitions~~ — resolved.** When this was written only Strata Admin and Sequencer Manager existed upstream. As of ASM `v0.1-alpha.11` the Security Council role and all four of its update types are defined and proven against a regtest ASM, and they still are at the current pin `v0.5.0-rc.1` ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)); Alpen Admin is implemented. Payout Administrator remains the one authority with no upstream role. See [`specs/security-council.md`](../specs/security-council.md).
 
 ---
 

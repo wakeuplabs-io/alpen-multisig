@@ -84,6 +84,13 @@ slice.
 
 Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
 
+> **Current pin: `v0.5.0-rc.1`** ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)). The recap below was not re-read at the new tag, so
+> its file and line references are those of `v0.1-alpha.11`. What changed for this action: the
+> threshold config lives in `strata-asm-admin-threshold-sig`, and its signers are 20-byte P2WPKH
+> witness programs (`P2wpkhAddress`), not 33-byte compressed keys. The signed message carries a
+> `Network:` line and lists each new member as `Add Member: <bech32>`. See
+> [`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md).
+
 - **The action.** `UpdateTxType::StrataSecurityCouncilMultisigUpdate = 15`
   (`params/src/subprotocols/admin/updates.rs:32`), SSZ union selector **3**
   (`txs/src/actions/updates/mod.rs:45` — fourth variant, zero-based). Payload is a bare

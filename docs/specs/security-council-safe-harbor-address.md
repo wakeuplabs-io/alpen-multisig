@@ -86,6 +86,13 @@ Two things are new, and both are new *kinds* of thing rather than new instances:
 
 Read from the `asm` submodule at the pinned `v0.1-alpha.11` (rev `b84eb28`).
 
+> **Current pin: `v0.5.0-rc.1`** ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)). The recap below was not re-read at the new tag, so
+> its file and line references are those of `v0.1-alpha.11`. What changed for this action:
+> [asm#284](https://github.com/alpenlabs/asm/pull/284) renames `SafeHarbour*` to `SafeHarbor*`. The
+> descriptor SSZ is unchanged, but the signed message now says `Safe Harbor` and carries a
+> `Network:` line, so its digest differs. Our own action tag is `safe_harbor_address_update`. See
+> [`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md).
+
 - **The action.** `UpdateTxType::SafeHarbourAddressUpdate = 14`
   (`params/src/subprotocols/admin/updates.rs:30`), SSZ union selector **11**
   (`txs/src/actions/updates/mod.rs:52` — twelfth variant, zero-based). Payload is

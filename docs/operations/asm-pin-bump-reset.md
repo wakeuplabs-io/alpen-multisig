@@ -1,8 +1,15 @@
 # Runbook: resetting state after an ASM pin bump
 
 **Applies to:** any bump of the `alpenlabs/asm` pin that changes the admin wire format.
-**First use:** the `e0461f8` → `v0.1-alpha.11` bump for Security Council
-([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
+**Used for:**
+
+- `e0461f8` → `v0.1-alpha.11`, for Security Council
+  ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
+- `v0.1-alpha.11` → `v0.5.0-rc.1`, for P2WPKH signers and the Harbor rename
+  ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)). Run on the local stack in
+  Phases 5 and 7 of [`asm-v0.5-signer-address.md`](../specs/asm-v0.5-signer-address.md).
+
+The environment is reset with `./scripts/local-stack.sh --clean`, which covers steps 1 and 3 below.
 
 ## Why this is mandatory, not hygiene
 
@@ -19,6 +26,13 @@ and neither produces an error:
 There is also a schema break the compiler cannot see: `AdministrationInitConfig` and
 `ConfirmationDepths` derive `Deserialize` with no `#[serde(default)]`, so any params file missing
 the four new fields fails to deserialize at startup.
+
+At `v0.5.0-rc.1` the break is different, and louder:
+
+- A signer-set `action_hex` from before the bump no longer decodes. Its signers shrink from 33-byte
+  keys to 20-byte P2WPKH programs, so decoding fails closed instead of meaning something else.
+- Every signature collected before the bump fails verification. The signed message gained a
+  `Network:` line, lists members as bech32, and says `Harbor` instead of `Harbour`.
 
 Skipping any step below leaves the system in a state where the wrong thing happens quietly.
 
