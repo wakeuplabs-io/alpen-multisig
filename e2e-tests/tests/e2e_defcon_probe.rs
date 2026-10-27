@@ -287,7 +287,11 @@ async fn submit_council_action(
     );
 
     let action_hex = hex::encode(action.as_ssz_bytes());
-    let sighash = anyhow_string(signing::compute_sighash(seq_no, &action_hex))?;
+    let sighash = anyhow_string(signing::compute_sighash(
+        seq_no,
+        &action_hex,
+        bitcoin::Network::Regtest,
+    ))?;
     let sig_a = anyhow_string(signing::sign_with_mnemonic_path(
         fixture.mnemonic,
         passphrase,

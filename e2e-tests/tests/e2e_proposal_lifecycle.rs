@@ -139,7 +139,8 @@ fn sign_challenge(sk_hex: &str, challenge_hex: &str) -> String {
 }
 
 fn sign_action(sk_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
-    let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash");
+    let sighash =
+        signing::compute_sighash(seq_no, action_hex, bitcoin::Network::Regtest).expect("sighash");
     let s = signing::sign_sighash(sk_hex, &sighash.sighash_hex).expect("sign");
     Signature {
         signer_pubkey: s.public_key_hex,

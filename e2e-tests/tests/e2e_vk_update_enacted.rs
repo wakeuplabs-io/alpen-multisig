@@ -92,7 +92,11 @@ async fn run_ol_stf_vk_update_enacted(fixture: &SignerUpdateEnactedFixture) -> a
     let action_hex = action_codec::encode_hex(&action)?;
 
     // Sign with A and B (StrataAdmin requires threshold = 2).
-    let sighash = anyhow_string(signing::compute_sighash(seq_no, &action_hex))?;
+    let sighash = anyhow_string(signing::compute_sighash(
+        seq_no,
+        &action_hex,
+        bitcoin::Network::Regtest,
+    ))?;
     let path_a = format!("{path_prefix}/0");
     let path_b = format!("{path_prefix}/0");
     let sig_a = anyhow_string(signing::sign_with_mnemonic_path(

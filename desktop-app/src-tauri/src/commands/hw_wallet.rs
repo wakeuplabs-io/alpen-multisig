@@ -78,7 +78,8 @@ pub async fn hw_wallet_sign(
     derivation_path: String,
 ) -> Result<SignatureResult, String> {
     let device = parse_device_kind(&vendor)?;
-    let message = signing::render_signing_message(seqno, &action_hex)?;
+    let network = network_from_env().map_err(|e| e.to_string())?;
+    let message = signing::render_signing_message(seqno, &action_hex, network)?;
     tokio::task::spawn_blocking(move || device.sign_bitcoin_message(&message, &derivation_path))
         .await
         .map_err(|e| e.to_string())?

@@ -75,7 +75,11 @@ async fn run_enactment_predicate(fixture: &SignerUpdateEnactedFixture) -> anyhow
     });
     let action_hex = action_codec::encode_hex(&action)?;
 
-    let sighash = anyhow_string(signing::compute_sighash(seq_no, &action_hex))?;
+    let sighash = anyhow_string(signing::compute_sighash(
+        seq_no,
+        &action_hex,
+        bitcoin::Network::Regtest,
+    ))?;
     let path_a = format!("{path_prefix}/0");
     let path_b = format!("{path_prefix}/0");
     let sig_a = anyhow_string(signing::sign_with_mnemonic_path(

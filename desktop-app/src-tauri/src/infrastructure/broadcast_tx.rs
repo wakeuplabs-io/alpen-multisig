@@ -121,7 +121,14 @@ pub fn build_signed_payload_bytes(
 }
 
 /// Compute the SPS-65 sighash for a proposal's action and sequence number.
-pub fn compute_sighash(seq_no: u64, action_hex: &str) -> Result<[u8; 32], String> {
+///
+/// `_network` is not read at this pin. From the v0.5 pin on it feeds `SigningMessage::for_action`,
+/// whose message names the network.
+pub fn compute_sighash(
+    seq_no: u64,
+    action_hex: &str,
+    _network: bitcoin::Network,
+) -> Result<[u8; 32], String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid SSZ action: {e:?}"))?;

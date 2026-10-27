@@ -354,9 +354,10 @@ mod tests {
         .action_hex;
 
         let council_message =
-            render_signing_message(seqno, &council_hex).expect("council message renders");
-        let admin_message =
-            render_signing_message(seqno, &admin_hex).expect("administrator message renders");
+            render_signing_message(seqno, &council_hex, bitcoin::Network::Regtest)
+                .expect("council message renders");
+        let admin_message = render_signing_message(seqno, &admin_hex, bitcoin::Network::Regtest)
+            .expect("administrator message renders");
 
         assert_eq!(
             council_message,
@@ -410,7 +411,8 @@ mod tests {
             .expect("build should succeed")
             .action_hex;
 
-        let message = render_signing_message(seqno, &action_hex).expect("message renders");
+        let message = render_signing_message(seqno, &action_hex, bitcoin::Network::Regtest)
+            .expect("message renders");
         let lines: Vec<&str> = message.lines().collect();
 
         assert_eq!(

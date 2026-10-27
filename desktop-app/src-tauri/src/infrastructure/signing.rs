@@ -54,7 +54,14 @@ pub struct VerifyResult {
 
 /// Compute the SPS-65 tagged sighash for a given action and sequence number.
 /// The action is passed as SSZ-serialized hex (MultisigAction uses SSZ, not serde).
-pub fn compute_sighash(seqno: u64, action_hex: &str) -> Result<SighashResult, String> {
+///
+/// `_network` is not read at this pin. From the v0.5 pin on it feeds `SigningMessage::for_action`,
+/// whose message names the network.
+pub fn compute_sighash(
+    seqno: u64,
+    action_hex: &str,
+    _network: bitcoin::Network,
+) -> Result<SighashResult, String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
@@ -135,7 +142,14 @@ pub fn list_mnemonic_addresses(
 
 /// Return the canonical human-readable signing message for a given action and sequence number.
 /// This is the string Trezor (and any Bitcoin `signMessage`-compatible wallet) must sign.
-pub fn render_signing_message(seqno: u64, action_hex: &str) -> Result<String, String> {
+///
+/// `_network` is not read at this pin. From the v0.5 pin on it feeds `SigningMessage::for_action`,
+/// whose message names the network.
+pub fn render_signing_message(
+    seqno: u64,
+    action_hex: &str,
+    _network: bitcoin::Network,
+) -> Result<String, String> {
     let action_bytes = hex::decode(action_hex).map_err(|e| format!("invalid action hex: {e}"))?;
     let action = MultisigAction::from_ssz_bytes(&action_bytes)
         .map_err(|e| format!("invalid ssz-encoded action: {e:?}"))?;
@@ -294,22 +308,27 @@ mod tests {
 
     #[test]
     fn test_compute_sighash_returns_valid_32_byte_hash() {
-        let result = compute_sighash(1, &demo_action_hex()).expect("should succeed");
+        let result = compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest)
+            .expect("should succeed");
         assert_eq!(result.sighash_hex.len(), 64, "32 bytes = 64 hex chars");
         assert_eq!(result.seqno, 1);
     }
 
     #[test]
     fn test_compute_sighash_deterministic() {
-        let h1 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
-        let h2 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
+        let h1 = compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest)
+            .expect("should succeed");
+        let h2 = compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest)
+            .expect("should succeed");
         assert_eq!(h1.sighash_hex, h2.sighash_hex);
     }
 
     #[test]
     fn test_compute_sighash_different_seqno() {
-        let h1 = compute_sighash(1, &demo_action_hex()).expect("should succeed");
-        let h2 = compute_sighash(2, &demo_action_hex()).expect("should succeed");
+        let h1 = compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest)
+            .expect("should succeed");
+        let h2 = compute_sighash(2, &demo_action_hex(), bitcoin::Network::Regtest)
+            .expect("should succeed");
         assert_ne!(h1.sighash_hex, h2.sighash_hex);
     }
 
@@ -318,7 +337,8 @@ mod tests {
     #[test]
     fn test_sign_sighash_success() {
         let keys = generate_demo_keys(1);
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let result = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex)
             .expect("signing should succeed");
@@ -346,7 +366,8 @@ mod tests {
     #[test]
     fn test_verify_threshold_full_flow_2_of_3() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let sig0 = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
         let sig2 = sign_sighash(&keys[2].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
@@ -368,7 +389,8 @@ mod tests {
     #[test]
     fn test_verify_threshold_below_threshold() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let sig0 = sign_sighash(&keys[0].secret_key_hex, &sighash.sighash_hex).expect("sign ok");
 
@@ -383,7 +405,8 @@ mod tests {
     #[test]
     fn test_verify_threshold_empty_signatures() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let pub_keys: Vec<String> = keys.iter().map(|k| k.public_key_hex.clone()).collect();
         let result = verify_threshold(&pub_keys, 2, &[], &sighash.sighash_hex).expect("verify ok");
@@ -412,7 +435,8 @@ mod tests {
         // prefix), producing a signature that the ASM validator would silently reject.
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let path = "m/86'/0'/73'/0/0";
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let result =
             sign_with_mnemonic_path(mnemonic, "", path, &sighash.sighash_hex).expect("sign ok");
@@ -439,7 +463,8 @@ mod tests {
     #[test]
     fn test_verify_threshold_invalid_signature() {
         let keys = generate_demo_keys(3);
-        let sighash = compute_sighash(1, &demo_action_hex()).expect("sighash ok");
+        let sighash =
+            compute_sighash(1, &demo_action_hex(), bitcoin::Network::Regtest).expect("sighash ok");
 
         let fake_sig = "00".repeat(64);
 
@@ -462,8 +487,10 @@ mod tests {
         let defcon1_hex = action_codec::encode_hex(&Action::Defcon1).expect("encode ok");
         let defcon3_hex = action_codec::encode_hex(&Action::Defcon3).expect("encode ok");
 
-        let defcon1 = render_signing_message(seqno, &defcon1_hex).expect("defcon 1 renders");
-        let defcon3 = render_signing_message(seqno, &defcon3_hex).expect("defcon 3 renders");
+        let defcon1 = render_signing_message(seqno, &defcon1_hex, bitcoin::Network::Regtest)
+            .expect("defcon 1 renders");
+        let defcon3 = render_signing_message(seqno, &defcon3_hex, bitcoin::Network::Regtest)
+            .expect("defcon 3 renders");
 
         assert!(!defcon3.trim().is_empty(), "a blank message signs nothing");
         assert_ne!(

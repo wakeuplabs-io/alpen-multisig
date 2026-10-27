@@ -141,7 +141,8 @@ fn build_demo_action() -> Action {
 }
 
 fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
-    let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
+    let sighash = signing::compute_sighash(seq_no, action_hex, bitcoin::Network::Regtest)
+        .expect("sighash ok");
     let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
     Signature {
         signer_pubkey: sig.public_key_hex,
@@ -228,7 +229,8 @@ async fn test_e2e_propose_approve_verify() {
     assert_eq!(final_state.action_hex, action_hex);
 
     // 6. Verify threshold: initial signature is valid
-    let sighash = signing::compute_sighash(seq_no, &action_hex).expect("sighash ok");
+    let sighash = signing::compute_sighash(seq_no, &action_hex, bitcoin::Network::Regtest)
+        .expect("sighash ok");
 
     let pubkeys: Vec<String> = final_state
         .signatures
