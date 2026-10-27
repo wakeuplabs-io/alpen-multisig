@@ -5,6 +5,7 @@ use strata_asm_proto_administration::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::authority::Authority;
+use crate::domain::signer_id::SignerId;
 use crate::error::AppError;
 use crate::infrastructure::{action_codec, asm_rpc};
 
@@ -25,9 +26,12 @@ pub(crate) async fn is_signer_member_for_authority(
     let keys = role_membership
         .get(&role)
         .ok_or_else(|| asm_rpc::missing_authority(role))?;
+    let Some(signer) = SignerId::from_pubkey_hex(signer_pubkey) else {
+        return Ok(false);
+    };
     Ok(keys
         .iter()
-        .any(|key| key.eq_ignore_ascii_case(signer_pubkey)))
+        .any(|key| SignerId::from_pubkey_hex(key) == Some(signer)))
 }
 
 // TODO: decouple mock from implementation

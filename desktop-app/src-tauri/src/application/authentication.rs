@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::domain::auth::{
     AuthChallenge, AuthRole, AuthSession, MembershipCache, PendingChallenge,
 };
+use crate::domain::signer_id::SignerId;
 use crate::infrastructure::{asm_status_rpc, challenge_verifier};
 
 const CHALLENGE_TTL_MS: u64 = 120_000;
@@ -207,9 +208,11 @@ pub fn complete_auth(input: CompleteAuthInput) -> Result<AuthSession, String> {
         )?,
     }
 
-    let is_member = role_keys
-        .iter()
-        .any(|key| key.eq_ignore_ascii_case(&input.signer_pubkey_hex));
+    let signer = SignerId::from_pubkey_hex(&input.signer_pubkey_hex);
+    let is_member = signer.is_some()
+        && role_keys
+            .iter()
+            .any(|key| SignerId::from_pubkey_hex(key) == signer);
     if !is_member {
         return Err("signer key is not a member of the selected role".to_string());
     }
