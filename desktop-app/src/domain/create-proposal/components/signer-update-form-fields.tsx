@@ -220,7 +220,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						+ Add
 					</button>
 				</div>
-				{newSignerError && <p className={fieldErrorClass}>{newSignerError}</p>}
+				{newSignerError && (
+					<p className={fieldErrorClass} data-testid="e2e-new-signer-error">
+						{newSignerError}
+					</p>
+				)}
 			</div>
 
 			<div className="max-w-40">

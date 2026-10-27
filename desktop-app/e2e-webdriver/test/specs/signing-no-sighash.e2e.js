@@ -13,9 +13,9 @@
  */
 import { DEMO_MNEMONIC, loginMnemonicToProposals } from '../helpers/login-mnemonic.mjs'
 
-// Deterministic, on-curve, and not in the staging signer set. Chosen over a fixed fixture that
-// later became a real member — the reason `proposal-add-signer` no longer reaches the preview.
-const NEW_SIGNER = '02bc0269811cd8173a66d4573c6ceb89b10aae14b6160ebb924766eda723486071'
+// The regtest Admin ID of a deterministic key that is not in the staging signer set. Chosen over a fixed
+// fixture that later became a real member — the reason `proposal-add-signer` no longer reaches the preview.
+const NEW_SIGNER = 'bcrt1q0yxaj53drhzjm2wxggkd4zhvapkqawu6lpatcz'
 
 describe('Strata Multisig signing — no SPS-65 sighash on screen', () => {
 	it('reaches the review step without showing the sighash', async function () {
@@ -42,7 +42,7 @@ describe('Strata Multisig signing — no SPS-65 sighash on screen', () => {
 
 		await browser.waitUntil(
 			async () => (await $('span[data-testid="e2e-added-signer-value"]').getText()) === NEW_SIGNER,
-			{ timeout: 15000, timeoutMsg: 'added signer pubkey should appear in list' },
+			{ timeout: 15000, timeoutMsg: 'added signer Admin ID should appear in list' },
 		)
 
 		const previewBtn = await $('button[data-testid="e2e-create-proposal-preview"]')
