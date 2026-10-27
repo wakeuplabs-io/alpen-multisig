@@ -11,7 +11,7 @@ identified by a P2WPKH address) and [asm#284](https://github.com/alpenlabs/asm/p
 → commit `7ada090580ac12af9cd411254415090725efcec1`. Today: `b84eb28` = `v0.1-alpha.11`
 ([ADR-007](../architecture/adrs/007-asm-pin-for-security-council.md)).
 
-**Status:** In progress — Phases 0–5 done (#622–#627), Phase 6 in review.
+**Status:** In progress — Phases 0–5 done (#622–#627), Phase 6 in review (#628).
 
 A phase marked ✅ means the engineering step shipped, not that every acceptance criterion in §1.3 is met.
 §1.3 stays the measure.
@@ -97,7 +97,7 @@ Consequences:
 | 3 | Seams: network in the orchestrator, network parameter on the signing path, identity by witness program | none | prerequisite for AC 4, 5 | `orchestrator-be`, `src-tauri` | Done (#625) |
 | 4 | Admin ID on screen (derived from the pubkey, before the bump) | display only | AC 1, 2 | `src-tauri` (IPC), `desktop-app` | Done (#626) |
 | 5 | **The bump to `v0.5.0-rc.1`** | protocol | AC 3, 4, 5, 6 | everything; ADR-008 | Done (#627) |
-| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | In review |
+| 6 | Post-bump cleanup | minor | AC 7; the rest of AC 1 | `desktop-app`, `src-tauri` | In review (#628) |
 | 7 | Device QA, staging reset, docs, reserve | none | AC 5 (device) | `docs/`, staging | Planned |
 
 Rules:
