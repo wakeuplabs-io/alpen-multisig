@@ -4,9 +4,12 @@
  *
  * The Admin ID is rendered in four places: the multisig-selection step, the
  * authenticate step, the session chip in the header, and the wallet panel that chip
- * opens. All four are supposed to resolve to the same `WalletAccountInfo.addressSample`,
- * captured once at connect. Nothing in the type system enforces that — they are separate
- * props on separate component trees — so the claim is checked against the running app.
+ * opens. All four are supposed to show the same rendering of the session's key: the one on
+ * the chain's HRP, which is what every signer list shows and the add-signer field accepts.
+ * The mnemonic signer derives on mainnet, so its device-side value is `bc1q…`; a surface
+ * that printed that instead would hand out an Admin ID the add-signer field refuses.
+ * Nothing in the type system enforces that — they are separate props on separate
+ * component trees — so the claim is checked against the running app.
  *
  * If the strings ever differ, the signer is comparing a different value against their
  * device screen depending on which one they happen to be looking at, which is precisely
@@ -19,8 +22,8 @@
 import { DEMO_MNEMONIC } from '../helpers/login-mnemonic.mjs'
 import { openWalletPanel } from '../helpers/wallet-panel.mjs'
 
-/** P2WPKH — the output type the Admin ID is, on any network the app connects to. */
-const P2WPKH_RE = /^(bc|tb|bcrt)1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$/i
+/** P2WPKH on regtest — the chain the stack runs, and the only HRP a surface may show. */
+const REGTEST_P2WPKH_RE = /^bcrt1q[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$/i
 
 describe('Strata Multisig — Admin ID is one address everywhere', () => {
 	it('shows the same P2WPKH Admin ID at both connect steps, in the chip and in the panel', async function () {
@@ -54,9 +57,12 @@ describe('Strata Multisig — Admin ID is one address everywhere', () => {
 		await $('//h1[contains(.,"Select multisig")]').waitForDisplayed({ timeout: 60000 })
 		const connectValue = await $('[data-testid="e2e-connect-admin-id-value"]')
 		await connectValue.waitForDisplayed({ timeout: 30000 })
+		// The value resolves in Rust, so the card reads `…` for a moment first.
+		await browser.waitUntil(async () => REGTEST_P2WPKH_RE.test((await connectValue.getText()).trim()), {
+			timeout: 15000,
+			timeoutMsg: 'the connect card never showed a regtest P2WPKH Admin ID',
+		})
 		const atSelection = (await connectValue.getText()).trim()
-
-		expect(atSelection).toMatch(P2WPKH_RE)
 
 		await browser.waitUntil(
 			async () => {

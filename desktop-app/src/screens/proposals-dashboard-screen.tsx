@@ -18,6 +18,7 @@ import { AuthRole } from '@/types/auth-role'
 import { ScreenShell } from '@/screens/screen-shell'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 export function ProposalsDashboardScreen() {
 	const navigate = useNavigate()
@@ -29,6 +30,7 @@ export function ProposalsDashboardScreen() {
 	const [signerPubkey, setSignerPubkey] = useState<string | null>(null)
 
 	const panel = useWalletPanelData()
+	const adminId = useSessionAdminId(wallet)
 	const currentBlockHeight = useBlockHeight()
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
@@ -131,7 +133,7 @@ export function ProposalsDashboardScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.addressSample}
+						adminId={adminId}
 					/>
 
 					<DisconnectButton onClick={() => void handleDisconnect()} />

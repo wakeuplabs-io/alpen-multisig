@@ -14,12 +14,13 @@ pub(crate) fn test_fixture_action_hex() -> String {
     use std::num::NonZeroU8;
 
     use ssz::Encode;
+    use strata_asm_admin_threshold_sig::ThresholdConfigUpdate;
     use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
     use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
     let config_update =
-        ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+        ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).expect("threshold"))
+            .expect("valid config update");
     let action = MultisigAction::Update(UpdateAction::StrataAdminMultisig(
         StrataAdminMultisigUpdate::new(config_update),
     ));
@@ -32,12 +33,13 @@ pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
     use std::num::NonZeroU8;
 
     use ssz::Encode;
+    use strata_asm_admin_threshold_sig::ThresholdConfigUpdate;
     use strata_asm_txs_admin::actions::updates::StrataSecurityCouncilMultisigUpdate;
     use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
-    use strata_crypto::threshold_signature::ThresholdConfigUpdate;
 
     let config_update =
-        ThresholdConfigUpdate::new(vec![], vec![], NonZeroU8::new(2).expect("threshold"));
+        ThresholdConfigUpdate::try_new(vec![], vec![], NonZeroU8::new(2).expect("threshold"))
+            .expect("valid config update");
     let action = MultisigAction::Update(UpdateAction::StrataSecurityCouncilMultisig(
         StrataSecurityCouncilMultisigUpdate::new(config_update),
     ));
@@ -51,7 +53,7 @@ pub(crate) fn test_fixture_council_rotation_action_hex() -> String {
 #[cfg(test)]
 pub(crate) fn test_fixture_safe_harbor_address_action_hex() -> String {
     use ssz::Encode;
-    use strata_asm_txs_admin::actions::updates::SafeHarbourAddressUpdate;
+    use strata_asm_txs_admin::actions::updates::SafeHarborAddressUpdate;
     use strata_asm_txs_admin::actions::{MultisigAction, UpdateAction};
 
     let payload = [
@@ -60,10 +62,10 @@ pub(crate) fn test_fixture_safe_harbor_address_action_hex() -> String {
         0x17, 0x98,
     ];
     let descriptor = bitcoin_bosd::Descriptor::new_p2tr(&payload).expect("valid x-only key");
-    let address = strata_asm_proto_bridge_v1_types::SafeHarbourAddress::try_from(descriptor)
+    let address = strata_asm_bridge_types::SafeHarborAddress::try_from(descriptor)
         .expect("p2tr descriptor accepted");
-    let action = MultisigAction::Update(UpdateAction::SafeHarbourAddress(
-        SafeHarbourAddressUpdate::new(address),
+    let action = MultisigAction::Update(UpdateAction::SafeHarborAddress(
+        SafeHarborAddressUpdate::new(address),
     ));
     hex::encode(action.as_ssz_bytes())
 }

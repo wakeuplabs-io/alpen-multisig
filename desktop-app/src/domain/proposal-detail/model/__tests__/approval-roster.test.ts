@@ -2,11 +2,12 @@ import assert from 'node:assert/strict'
 import { buildSignerSetChange } from '../../../signer-set-change/model/build-signer-set-change.ts'
 import { approvalRoster } from '../approval-roster.ts'
 
-const SIGNER_A = '02' + 'a'.repeat(64)
-const SIGNER_B = '02' + 'b'.repeat(64)
-const SIGNER_C = '03' + 'c'.repeat(64)
-const SIGNER_D = '03' + 'd'.repeat(64)
-const SIGNER_E = '02' + 'e'.repeat(64)
+// Regtest Admin IDs: the roster is the ASM's signer set, which lists Admin IDs.
+const SIGNER_A = 'bcrt1q' + 'q'.repeat(38)
+const SIGNER_B = 'bcrt1q' + 'p'.repeat(38)
+const SIGNER_C = 'bcrt1q' + 'z'.repeat(38)
+const SIGNER_D = 'bcrt1q' + 'r'.repeat(38)
+const SIGNER_E = 'bcrt1q' + 'y'.repeat(38)
 
 // ── REGRESSION #603: an enacted removal keeps the removed signer in the roster ─
 // The live config is already post-rotation, so D is gone from it. D was a member when the
@@ -45,13 +46,13 @@ const SIGNER_E = '02' + 'e'.repeat(64)
 	assert.deepEqual(approvalRoster(current, null), current)
 }
 
-// ── Pubkeys from the action are normalized like the rest of the roster ───────
+// ── Admin IDs from the action are normalized like the rest of the roster ─────
 {
 	const change = buildSignerSetChange({
 		signers: [SIGNER_A, SIGNER_B],
 		threshold: 2,
 		addKeys: [],
-		removeKeys: [`0x${SIGNER_D.toUpperCase()}`],
+		removeKeys: [` ${SIGNER_D.toUpperCase()} `],
 		newThreshold: 2,
 		isEnacted: true,
 	})

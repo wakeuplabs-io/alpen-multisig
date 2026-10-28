@@ -1,6 +1,7 @@
 import { SessionChip } from '@/components/session-chip'
-import { adminIdChipLabel } from '@/lib/admin-id'
+import { adminIdDisplay } from '@/lib/admin-id'
 import type { WalletPanelData } from '../hooks/use-wallet-panel-data'
+import type { SessionAdminId } from '../hooks/use-session-admin-id'
 import { WalletPanel, WALLET_PANEL_ID } from './wallet-panel'
 import { WalletPanelHeader } from './wallet-panel-header'
 import { WalletPanelContent } from './wallet-panel-content'
@@ -9,8 +10,8 @@ export type WalletSessionControlProps = {
 	panel: WalletPanelData
 	sessionTimeLabel: string
 	sessionWarning: boolean
-	/** Admin ID — the P2WPKH address the device derived (PRD 06 §3.b.ii.2); truncated in the chip. */
-	adminId: string | undefined
+	/** The session's Admin ID (PRD 06 §3.b.ii.2); the chip shows its chain rendering, truncated. */
+	adminId: SessionAdminId
 }
 
 /**
@@ -20,7 +21,7 @@ export type WalletSessionControlProps = {
  * authority badge and disconnect button.
  */
 export function WalletSessionControl({ panel, sessionTimeLabel, sessionWarning, adminId }: WalletSessionControlProps) {
-	const signerLabel = adminIdChipLabel(adminId)
+	const signerLabel = adminIdDisplay(adminId.display, 'truncated')
 
 	return (
 		<>

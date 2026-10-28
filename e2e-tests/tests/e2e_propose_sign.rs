@@ -16,9 +16,10 @@ use desktop_app::application::orchestrator_client::{
     CompleteOrchestratorAuthRequest, OrchestratorClient, StartOrchestratorAuthRequest,
 };
 use desktop_app::application::proposals;
-use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::action::{Action, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
 use desktop_app::domain::proposal::Signature;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::action_codec;
 use desktop_app::infrastructure::orchestrator_client::HttpOrchestratorClient;
 use desktop_app::infrastructure::signing;
@@ -131,17 +132,19 @@ fn build_demo_action() -> Action {
     let demo_bytes = [0x42u8; 32];
     let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
     let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
-    let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+    let new_signer =
+        SignerId::from_pubkey_hex(&hex::encode(new_signer_pk.serialize())).expect("valid key");
     Action::MultisigUpdate(MultisigUpdate {
         role: Authority::StrataAdmin,
-        add_keys: vec![new_signer],
-        remove_keys: vec![],
+        add_signers: vec![new_signer],
+        remove_signers: vec![],
         new_threshold: NonZeroU8::new(2).expect("non-zero"),
     })
 }
 
 fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
-    let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
+    let sighash = signing::compute_sighash(seq_no, action_hex, bitcoin::Network::Regtest)
+        .expect("sighash ok");
     let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
     Signature {
         signer_pubkey: sig.public_key_hex,
@@ -228,7 +231,8 @@ async fn test_e2e_propose_approve_verify() {
     assert_eq!(final_state.action_hex, action_hex);
 
     // 6. Verify threshold: initial signature is valid
-    let sighash = signing::compute_sighash(seq_no, &action_hex).expect("sighash ok");
+    let sighash = signing::compute_sighash(seq_no, &action_hex, bitcoin::Network::Regtest)
+        .expect("sighash ok");
 
     let pubkeys: Vec<String> = final_state
         .signatures

@@ -47,6 +47,7 @@ flowchart LR
 | Security Council — signer update build plan (V3 phases) | [`specs/security-council-signer-update-implementation.md`](./specs/security-council-signer-update-implementation.md) | Current |
 | Security Council — safe harbor address functional contract (V4) | [`specs/security-council-safe-harbor-address.md`](./specs/security-council-safe-harbor-address.md) | Current |
 | Security Council — safe harbor address build plan (V4 phases) | [`specs/security-council-safe-harbor-address-implementation.md`](./specs/security-council-safe-harbor-address-implementation.md) | Current |
+| ASM v0.5 bump — signer address (P2WPKH) and Harbor (feedback item 60) | [`specs/asm-v0.5-signer-address.md`](./specs/asm-v0.5-signer-address.md) | Current |
 | Phase 1 research evidence | [`2-discovery/README.md`](./2-discovery/README.md) | Historical / reference |
 | POC / walking-skeleton specs | [`archive/poc-specs/`](./archive/poc-specs/) | Historical |
 | Codebase reviews and implementation audits | [`assessment/audits/`](./assessment/audits/) (see resolution banners) | Historical / reference |

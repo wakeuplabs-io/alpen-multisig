@@ -1,7 +1,8 @@
-import { normalizePubkey } from '@/lib/pubkey'
+import { normalizeAdminId } from '@/lib/admin-id'
 
 export type SignerRow = {
-	pubkey: string
+	/** The signer's Admin ID, normalized: the ASM lists signers by Admin ID, and so do decoded actions. */
+	adminId: string
 	inBefore: boolean
 	inAfter: boolean
 	isAdded: boolean
@@ -15,7 +16,7 @@ export type SignerSetChange = {
 }
 
 export type BuildSignerSetChangeInput = {
-	/** The target's current signer set — pre-rotation, unless `isEnacted`. */
+	/** The target's current signer set as Admin IDs — pre-rotation, unless `isEnacted`. */
 	signers: string[]
 	/** The target's current threshold — pre-rotation, unless `isEnacted`. */
 	threshold: number
@@ -35,35 +36,35 @@ export type BuildSignerSetChangeInput = {
  */
 export function buildSignerSetChange(input: BuildSignerSetChangeInput): SignerSetChange {
 	const { signers, threshold, addKeys, removeKeys, newThreshold, isEnacted } = input
-	const addSet = new Set(addKeys.map(normalizePubkey))
-	const removeSet = new Set(removeKeys.map(normalizePubkey))
+	const addSet = new Set(addKeys.map(normalizeAdminId))
+	const removeSet = new Set(removeKeys.map(normalizeAdminId))
 
 	const beforeSigners = isEnacted
-		? [...signers.filter((key) => !addSet.has(normalizePubkey(key))), ...removeKeys]
+		? [...signers.filter((id) => !addSet.has(normalizeAdminId(id))), ...removeKeys]
 		: signers
 	const afterSigners = isEnacted
 		? signers
-		: [...signers.filter((key) => !removeSet.has(normalizePubkey(key))), ...addKeys]
+		: [...signers.filter((id) => !removeSet.has(normalizeAdminId(id))), ...addKeys]
 
 	const rowMap = new Map<string, SignerRow>()
-	for (const pubkey of beforeSigners) {
-		const normalized = normalizePubkey(pubkey)
+	for (const adminId of beforeSigners) {
+		const normalized = normalizeAdminId(adminId)
 		rowMap.set(normalized, {
-			pubkey: normalized,
+			adminId: normalized,
 			inBefore: true,
 			inAfter: false,
 			isAdded: false,
 			isRemoved: false,
 		})
 	}
-	for (const pubkey of afterSigners) {
-		const normalized = normalizePubkey(pubkey)
+	for (const adminId of afterSigners) {
+		const normalized = normalizeAdminId(adminId)
 		const existing = rowMap.get(normalized)
 		if (existing) {
 			existing.inAfter = true
 		} else {
 			rowMap.set(normalized, {
-				pubkey: normalized,
+				adminId: normalized,
 				inBefore: false,
 				inAfter: true,
 				isAdded: true,

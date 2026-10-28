@@ -158,6 +158,7 @@ pub async fn list_proposals(
         state.repo.as_ref(),
         &state.asm_rpc_url,
         state.btc_client.as_ref(),
+        state.network,
         auth.authority,
     )
     .await?;
@@ -203,6 +204,7 @@ pub async fn get_proposal(
         state.repo.as_ref(),
         &state.asm_rpc_url,
         state.btc_client.as_ref(),
+        state.network,
         auth.authority,
         &action_id,
     )
@@ -450,6 +452,7 @@ pub async fn report_broadcast_progress(
         },
         &action_id,
         state.btc_client.as_ref(),
+        state.network,
         proposals::ReportBroadcastProgressRequest {
             broadcast_status: body.broadcast_status,
             proposal_status: body.proposal_status,

@@ -17,15 +17,19 @@ import {
 	CERTIFICATE_STEP_2_NO_DEVICE,
 	CERTIFICATE_VERIFY_BUTTON,
 	certificateBlock,
+	certificateDevicePrefixNote,
 } from '../model/admin-id-certificate'
 import { VerifyOnDeviceButton } from './verify-on-device-button'
 import type { AdminIdVerifyContext } from '../model/hw-device'
+import { normalizeAdminId } from '@/lib/admin-id'
 
 export type AdminIdCertificateModalProps = {
 	isOpen: boolean
 	onClose: () => void
-	/** The Admin ID this certificate attests to (PRD 06 §3.b.ii.2). */
+	/** The Admin ID this certificate attests to, as the device renders it (PRD 06 §3.b.ii.2). */
 	adminId: string | undefined
+	/** The same Admin ID as the card that opened the modal shows it, on the chain's HRP. */
+	shownAdminId?: string
 	/**
 	 * Present only for hardware sessions. Absent means a mnemonic signer, and Step 2 is
 	 * disabled with an explanation rather than hidden — there is no device screen to
@@ -46,7 +50,13 @@ const BOX_CLASSNAME = 'rounded-lg border px-3 py-2.5 font-mono text-label leadin
  * The layout, and every literal in it, come from the three wireframes in
  * `docs/0-prd/assets/`. Presentation only: the certificate is built and verified in Rust.
  */
-export function AdminIdCertificateModal({ isOpen, onClose, adminId, verify }: AdminIdCertificateModalProps) {
+export function AdminIdCertificateModal({
+	isOpen,
+	onClose,
+	adminId,
+	shownAdminId,
+	verify,
+}: AdminIdCertificateModalProps) {
 	const { message, state, sign, reset } = useAdminIdCertificate(adminId, isOpen)
 	const { copied, error: copyError, copy } = useClipboardCopy()
 	const copyButtonRef = useRef<HTMLButtonElement>(null)
@@ -57,6 +67,8 @@ export function AdminIdCertificateModal({ isOpen, onClose, adminId, verify }: Ad
 	const certificate = state.status === 'signed' ? state.certificate : null
 	const isWaiting = state.status === 'waiting'
 	const isReady = message !== null
+	const hasDevicePrefix =
+		adminId !== undefined && shownAdminId !== undefined && normalizeAdminId(adminId) !== normalizeAdminId(shownAdminId)
 
 	// The Sign button unmounts the moment the certificate arrives, taking the focus with
 	// it. Hand focus to the copy button that replaces it in the flow — otherwise focus
@@ -191,6 +203,14 @@ export function AdminIdCertificateModal({ isOpen, onClose, adminId, verify }: Ad
 						{CERTIFICATE_STEP_2_HEADING}
 					</h3>
 					<p className="m-0 mt-2 text-mono-sm leading-[1.45] text-[#6b7280]">{CERTIFICATE_STEP_2_HELP}</p>
+					{hasDevicePrefix && (
+						<p
+							className="m-0 mt-2 break-all text-mono-sm leading-[1.45] text-[#6b7280]"
+							data-testid="e2e-certificate-device-prefix-note"
+						>
+							{certificateDevicePrefixNote(shownAdminId)}
+						</p>
+					)}
 					{verify ? (
 						<VerifyOnDeviceButton
 							deviceType={verify.deviceType}

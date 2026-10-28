@@ -14,7 +14,7 @@ const actionValidators: Record<CreateProposalFormValues['actionType'], ActionVal
 	council_signer_update: validateSignerUpdate,
 	operator_set_update: validateOperatorSetUpdate,
 	sequencer_key_update: validateSequencerKeyUpdate,
-	safe_harbour_address_update: validateSafeHarborAddressUpdate,
+	safe_harbor_address_update: validateSafeHarborAddressUpdate,
 	vk_update: validateVkUpdate,
 	defcon_1: validateDefcon('defcon_1'),
 	defcon_3: validateDefcon('defcon_3'),

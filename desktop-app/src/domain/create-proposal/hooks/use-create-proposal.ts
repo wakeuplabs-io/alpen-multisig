@@ -97,14 +97,15 @@ export function useCreateProposal(): UseCreateProposalReturn {
 				return unwrapActionHex(
 					await buildAdminMultisigUpdateHex({
 						role: multisigTargetAuthority(formData.actionType, sessionAuthority),
-						addKeys: formData.keysToAdd.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
-						removeKeys: formData.keysToRemove.map((row) => normalizePubkey(row.value)).filter((k) => k.length > 0),
+						// Admin IDs; Rust checks the checksum and the network.
+						addKeys: formData.keysToAdd.map((row) => row.value.trim()).filter((k) => k.length > 0),
+						removeKeys: formData.keysToRemove.map((row) => row.value.trim()).filter((k) => k.length > 0),
 						newThreshold: threshold,
 					}),
 				)
 			}
 			// The address, not the descriptor: the conversion is Rust's, and so is the network check.
-			case 'safe_harbour_address_update':
+			case 'safe_harbor_address_update':
 				return unwrapActionHex(await buildSafeHarborAddressUpdateHex({ address: formData.newSafeHarborAddress.trim() }))
 			case 'sequencer_key_update':
 				return unwrapActionHex(

@@ -1,4 +1,5 @@
 import { TrashIcon, UndoIcon } from '@/assets/icons'
+import { SignerAdminId } from '@/components/signer-admin-id'
 import { useState } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { normalizeSignerKey, type CreateProposalFormValues } from '../model/create-proposal.schema'
@@ -117,11 +118,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 										className="flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2"
 									>
 										{isPendingRemoval && <span className="shrink-0 text-body-sm font-medium text-[#111827]">–</span>}
-										<span
+										<SignerAdminId
+											adminId={signer}
+											variant="full"
 											className={`min-w-0 flex-1 break-all font-mono text-body-sm ${isPendingRemoval ? 'text-[#111827] line-through' : 'text-[#374151]'}`}
-										>
-											{signer}
-										</span>
+										/>
 										{isPendingRemoval ? (
 											<button
 												type="button"
@@ -186,7 +187,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 			</div>
 
 			<div>
-				<label className="text-body-sm font-medium text-[#6b7280]">Add new signer (compressed pubkey hex)</label>
+				<label className="text-body-sm font-medium text-[#6b7280]">Add new signer (Admin ID)</label>
 				<div className="mt-1.5 flex gap-2">
 					<input
 						type="text"
@@ -196,7 +197,7 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 								? 'border-danger focus:border-danger focus:ring-danger'
 								: 'border-[#e5e7eb] focus:border-accent focus:ring-accent'
 						}`}
-						placeholder="02… or 03… (33-byte hex)"
+						placeholder="bc1q…, tb1q… or bcrt1q… (P2WPKH address)"
 						value={newSignerInput}
 						onChange={(e) => {
 							setNewSignerInput(e.target.value)
@@ -219,7 +220,11 @@ export function SignerUpdateFormFields({ isLoadingConfig, currentSigners }: Prop
 						+ Add
 					</button>
 				</div>
-				{newSignerError && <p className={fieldErrorClass}>{newSignerError}</p>}
+				{newSignerError && (
+					<p className={fieldErrorClass} data-testid="e2e-new-signer-error">
+						{newSignerError}
+					</p>
+				)}
 			</div>
 
 			<div className="max-w-40">

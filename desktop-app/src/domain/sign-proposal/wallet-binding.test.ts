@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { assertWalletPubkeyBinding } from './wallet-binding.ts'
+import { assertWalletPubkeyBinding, WALLET_BINDING_MISMATCH } from './wallet-binding.ts'
 
 // matching pubkeys (same case) must not throw
 assertWalletPubkeyBinding('02aabbcc', '02aabbcc')
@@ -16,9 +16,10 @@ try {
 } catch (e) {
 	threw = true
 	assert.ok(e instanceof Error)
+	assert.equal(e.message, WALLET_BINDING_MISMATCH)
 	assert.ok(
-		e.message.includes('03ddeeff') && e.message.includes('02aabbcc'),
-		`error message should include both pubkeys, got: ${e.message}`,
+		!e.message.includes('03ddeeff') && !e.message.includes('02aabbcc'),
+		`the message names the session by Admin ID and prints no public key, got: ${e.message}`,
 	)
 }
 assert.equal(threw, true, 'expected assertWalletPubkeyBinding to throw on pubkey mismatch')

@@ -5,12 +5,13 @@
 //! future profiles can gate file-based fixtures behind an explicit env var.
 
 mod signer_update_enacted;
+mod signers;
 
 pub use signer_update_enacted::{
     administration_init_config, assert_mnemonic_matches_strata_admin_keys,
-    checkpoint_ol_stf_vk_type, decode_administration_subproto, decode_bridge_subproto,
-    decode_checkpoint_subproto, defcon3_confirmation_depth, ol_stf_vk_confirmation_depth,
-    parse_admin_section, strata_admin_confirmation_depth, strata_admin_keys_hex,
-    strata_security_council_keys_hex, SignerUpdateEnactedFixture, DEFAULT_REPO_ASM,
-    DEMO_COSIGN_MNEMONIC, FAST_ENACTMENT,
+    decode_administration_subproto, decode_bridge_subproto, decode_checkpoint_subproto,
+    defcon3_confirmation_depth, ol_stf_vk_confirmation_depth, parse_admin_section,
+    strata_admin_admin_ids, strata_admin_confirmation_depth, strata_security_council_admin_ids,
+    SignerUpdateEnactedFixture, DEFAULT_REPO_ASM, DEMO_COSIGN_MNEMONIC, FAST_ENACTMENT,
 };
+pub use signers::regtest_signer_config;

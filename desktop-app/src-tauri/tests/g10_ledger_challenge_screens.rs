@@ -176,15 +176,17 @@ fn governance_message_screen_is_model_dependent() {
     }
     std::env::set_var("LEDGER_SPECULOS_AUTO_APPROVE", "0");
 
-    // A real signer-set update, as `SigningMessage::for_action` renders it.
+    // A real signer-set update, as `SigningMessage::for_action` renders it (upstream's own
+    // vector in `strata_admin_multisig.rs`).
     let message = "Strata ASM Administration v1\n\
+         Network: regtest\n\
          Action: Strata Administrator Multisig Update\n\
          Authorized By: Strata Administrator\n\
          Sequence: 4\n\
          Action Details:\n  \
          New Threshold: 2\n  \
          Members to Add: 1\n  \
-         1. Add Member: 020202020202020202020202020202020202020202020202020202020202020202\n  \
+         1. Add Member: bcrt1qqgpqyqszqgpqyqszqgpqyqszqgpqyqszazmwwa\n  \
          Members to Remove: 0";
 
     let shot_dir = std::env::var("G10_SHOT_DIR").unwrap_or_else(|_| "/tmp".into());

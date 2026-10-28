@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 // ── 1. Module export resolves ────────────────────────────────────────────────
 import { ApprovalsList } from '../approvals-list.tsx'
+import { pendingSigners } from '../../lib/pending-signers.ts'
 assert.equal(typeof ApprovalsList, 'function', 'ApprovalsList must be exported')
 console.log('ApprovalsList: module export OK')
 
@@ -36,14 +37,21 @@ assert.ok(listSource.includes('No signatures yet.'), 'an empty list must say so 
 console.log('ApprovalsList: signed / pending / you / empty states OK')
 
 // ── 3. Pending rows come from the authority signer set ──────────────────────
+// The ASM lists Admin IDs and the backend stores keys, so the list compares the two as Admin IDs.
 assert.ok(
-	/allSigners\.filter\(/.test(listSource),
-	'pending rows must be derived from allSigners minus the collected signatures',
+	listSource.includes('pendingSigners(') && listSource.includes('useAdminIds('),
+	'pending rows must be allSigners minus the signatures, compared as Admin IDs',
 )
-assert.ok(
-	listSource.includes('.toLowerCase()'),
-	'signer comparison must be case-insensitive — pubkey hex casing varies by source',
+const SIGNER_A = 'bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080'
+const SIGNER_B = 'bcrt1qq6hag67dl53wl99vzg42z8eyzfz2xlkvwk6f7m'
+assert.deepEqual(pendingSigners([SIGNER_A, SIGNER_B], [SIGNER_A.toUpperCase()]), [SIGNER_B], 'case does not matter')
+assert.deepEqual(pendingSigners([SIGNER_A, SIGNER_B], []), [SIGNER_A, SIGNER_B], 'nobody signed: all pending')
+assert.deepEqual(
+	pendingSigners([SIGNER_A, SIGNER_B], [SIGNER_A, undefined]),
+	[],
+	'while a signature resolves, no one is listed as pending',
 )
+assert.deepEqual(pendingSigners([SIGNER_A], ['']), [SIGNER_A], 'a key with no Admin ID matches no signer')
 console.log('ApprovalsList: pending rows derived from allSigners OK')
 
 // ── 4. Both screens use this one list ───────────────────────────────────────

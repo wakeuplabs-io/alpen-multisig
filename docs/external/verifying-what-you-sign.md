@@ -108,6 +108,7 @@ use any tool that verifies through public key recovery.
 
 ```
 Strata ASM Administration v1
+Network: <network>
 Action: <action type>
 Authorized By: <role>
 Sequence: <number>
@@ -116,35 +117,41 @@ Action Details:
   <detail line>
 ```
 
-Example of a signer-set change:
+Example of a signer-set change on regtest:
 
 ```
 Strata ASM Administration v1
+Network: regtest
 Action: Alpen Administrator Multisig Update
 Authorized By: Alpen Administrator
 Sequence: 7
 Action Details:
   New Threshold: 2
   Members to Add: 1
-  1. Add Member: 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+  1. Add Member: bcrt1qqgpqyqszqgpqyqszqgpqyqszqgpqyqszazmwwa
   Members to Remove: 0
 ```
 
 What to check before approving:
 
+- **`Network`** is the chain you mean to act on: `bitcoin` for mainnet, otherwise `testnet`,
+  `testnet4`, `signet` or `regtest`. The network is signed over, so a signature made for one chain
+  cannot be replayed on another.
 - **`Action`** names the change you asked for. The full vocabulary is `Cancel`, `Strata
   Administrator Multisig Update`, `Strata Sequencer Manager Multisig Update`, `Alpen Administrator
-  Multisig Update`, `Bridge Operator Set Update`, `Sequencer Update`, `OL STF VK Update`, `ASM STF VK
-  Update`, `EE STF VK Update`. Anything else is not a message this protocol produces.
+  Multisig Update`, `Strata Security Council Multisig Update`, `Bridge Operator Set Update`,
+  `Sequencer Update`, `OL STF VK Update`, `ASM STF VK Update`, `EE STF VK Update`, `Defcon 1`,
+  `Defcon 3`, `Safe Harbor Address Update`. Anything else is not a message this protocol produces.
 - **`Authorized By`** is one of `Strata Administrator`, `Strata Sequencer Manager`, `Alpen
-  Administrator`. You do not need to cross-check it against the action: the role is *derived* from
-  the action type, so a mismatched pair cannot be constructed.
+  Administrator`, `Strata Security Council`. You do not need to cross-check it against the action:
+  the role is *derived* from the action type, so a mismatched pair cannot be constructed.
 - **`Sequence`** matches the proposal you are signing. The number is inside the signed message, so a
   signature for sequence 7 cannot be replayed as sequence 8. Note that this procedure cannot tell you
   which sequence number is the *current* one — for that you need a source other than the machine
   running the app.
-- Every key under `Action Details` is one you meant to add or remove. **Read the whole key**, not the
-  first and last few characters — that is exactly what an attacker substituting a key would rely on.
+- Every member or key under `Action Details` is one you meant to add or remove. **Read the whole
+  value**, not the first and last few characters — that is exactly what an attacker substituting a
+  member would rely on.
 - Counts are always printed, including `Members to Remove: 0`. A count that does not match the list
   below it means something is wrong.
 
@@ -153,17 +160,17 @@ already-signed messages, precisely because external signers hash the rendered te
 
 ### Detail lines by action type
 
-Key lengths differ by action, and a correct message will not always show 66-character keys:
+Value formats differ by action, and a correct message will not always show the same kind of value:
 
 | Action | Detail lines | Value format |
 |---|---|---|
-| Multisig updates (Strata Admin, Sequencer Manager, Alpen Admin, and `Strata Security Council Multisig Update`, which the Strata Admin authorizes) | `New Threshold`, `Members to Add`, `N. Add Member`, `Members to Remove`, `N. Remove Member` | Lower-case hex, 33-byte compressed key — **66 characters** |
+| Multisig updates (Strata Admin, Sequencer Manager, Alpen Admin, and `Strata Security Council Multisig Update`, which the Strata Admin authorizes) | `New Threshold`, `Members to Add`, `N. Add Member`, `Members to Remove`, `N. Remove Member` | The member's Admin ID: a bech32 P2WPKH address on the message's network (`bc1q…` on mainnet, `tb1q…` on testnet and signet, `bcrt1q…` on regtest). Compare it against the Admin ID the signer published |
 | `Bridge Operator Set Update` | `Operators to Add`, `N. Add Operator`, `Operators to Remove`, `N. Remove Operator` | Lower-case hex, 32-byte x-only key — **64 characters** |
 | `Sequencer Update` | `New Sequencer Key` | Lower-case hex, 32-byte — **64 characters** |
 | VK updates (`OL STF`, `ASM STF`, `EE STF`) | `Predicate Type`, then `Predicate Hex` **or** `Predicate Hash` | See below |
 | `Cancel` | `Target Id`, `Target Update`, then the cancelled update's own detail lines | See below |
-| `Safe Harbour Address Update` | `New Safe Harbour Address` | Lower-case hex of the BOSD descriptor, a type byte `04` then the 32-byte x-only key — **66 characters**. It is not the address you typed: compare it against the descriptor the app prints under that address |
-| `Defcon 1`, `Defcon 3` | None — the message is the four header lines and has no `Action Details:` block | — |
+| `Safe Harbor Address Update` | `New Safe Harbor Address` | Lower-case hex of the BOSD descriptor, a type byte `04` then the 32-byte x-only key — **66 characters**. It is not the address you typed: compare it against the descriptor the app prints under that address |
+| `Defcon 1`, `Defcon 3` | None — the message is the five header lines and has no `Action Details:` block | — |
 
 **VK updates.** The second line is `Predicate Hex: <hex>` when the condition is 32 bytes or shorter,
 and `Predicate Hash: <hex>` when it is longer. Seeing `Predicate Hash` instead of `Predicate Hex` is
@@ -174,6 +181,7 @@ normal for a large condition, not a sign of tampering. An unrecognised predicate
 
 ```
 Strata ASM Administration v1
+Network: regtest
 Action: Cancel
 Authorized By: Strata Sequencer Manager
 Sequence: 3

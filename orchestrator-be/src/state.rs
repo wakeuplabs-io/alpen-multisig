@@ -15,6 +15,8 @@ pub struct AppState {
     /// Used by `/ready` to verify Bitcoin RPC reachability (coordination service does not broadcast).
     pub btc_client: Arc<dyn BitcoinRpcClient>,
     pub proposal_expiry_days: u64,
+    /// The chain the ASM is anchored to; names the network in the admin signing message.
+    pub network: bitcoin::Network,
 }
 
 impl AppState {
@@ -25,6 +27,7 @@ impl AppState {
         auth_session_ttl_ms: u64,
         btc_client: Arc<dyn BitcoinRpcClient>,
         proposal_expiry_days: u64,
+        network: bitcoin::Network,
     ) -> Self {
         Self {
             repo,
@@ -35,6 +38,7 @@ impl AppState {
             auth_session_ttl_ms,
             btc_client,
             proposal_expiry_days,
+            network,
         }
     }
 }

@@ -27,10 +27,8 @@ const ACTION_TYPE_OPTIONS: Record<ActionType, ActionTypeOption> = {
 		title: 'Security Council signer update',
 		description: 'Add / remove council keys or change threshold.',
 	},
-	// The key keeps the protocol's `harbour` spelling, which is what the wire and the signing message
-	// carry; the on-screen title uses "Harbor".
-	safe_harbour_address_update: {
-		actionType: 'safe_harbour_address_update',
+	safe_harbor_address_update: {
+		actionType: 'safe_harbor_address_update',
 		title: 'Safe Harbor address update',
 		description: 'Change where the bridge sweeps funds to.',
 	},
@@ -67,7 +65,7 @@ const ACTION_TYPES_BY_AUTHORITY: Record<string, ActionType[]> = {
 		'council_signer_update',
 		'vk_update',
 		'operator_set_update',
-		'safe_harbour_address_update',
+		'safe_harbor_address_update',
 	],
 	sequencer_manager: ['signer_update', 'sequencer_key_update'],
 	alpen_admin: ['signer_update', 'vk_update'],

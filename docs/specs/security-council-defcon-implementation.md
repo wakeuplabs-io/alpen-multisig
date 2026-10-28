@@ -246,13 +246,13 @@ had wrong:
   an unregistered authority, so a council session that existed before `security_council: ['defcon_1']`
   did would be offered three actions its role cannot authorize. The menu entry lands first, and both
   commits are then correct in isolation.
-- **The four-line message needs no new code and must not get any.** Upstream's
+- **The five-line message needs no new code and must not get any.** Upstream's
   `SigningMessage::for_action` already appends `Action Details:` only when `render_details` produced
   lines, and Defcon 1's is empty — so AC 4 is a *placement* requirement, not a formatting one. The
   form resolves the message through the same Rust renderer the device signs over and prints it
   verbatim; a hand-written template would review identically and diverge the moment upstream bumps a
   version. The resolved message is mirrored into a form value, so a failed resolve disables the CTA
-  instead of letting a signer confirm four lines they never saw.
+  instead of letting a signer confirm five lines they never saw.
 - **No `/proposals/create/defcon-1` route is built.** This plan §3 already said Defcon 1 extends
   `create-proposal`; the contract still described a dedicated route and screen, which it had marked
   as Stage 5's call. AC 1a holds either way — the route is never registered, so `App.tsx`'s
@@ -343,7 +343,7 @@ End to end, once all six land — on regtest with the local stack (`./scripts/lo
 if any state predates the ASM pin bump):
 
 1. A council signer reaches the Defcon 1 form; every other authority sees no entry point to it.
-2. The rendered four-line signing message matches what the hardware signer displays, with no
+2. The rendered five-line signing message matches what the hardware signer displays, with no
    `Action Details:` block.
 3. Quorum, broadcast, then `safe_harbour().is_activated()` true in the reveal block with the admin
    queue empty.

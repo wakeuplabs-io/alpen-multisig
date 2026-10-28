@@ -4,3 +4,4 @@ pub mod authority;
 pub mod fee_constants;
 pub mod fee_rate;
 pub mod proposal;
+pub mod signer_id;

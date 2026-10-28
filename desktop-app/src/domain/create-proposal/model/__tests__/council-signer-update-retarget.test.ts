@@ -9,13 +9,15 @@ import { multisigTargetAuthority } from '../multisig-target.ts'
 import { isSignerUpdateActionType } from '../action-type-predicates.ts'
 import { removesCurrentMembers } from '../validators/signer-update.ts'
 
-const KEY_A = `02${'a'.repeat(64)}`
-const KEY_B = `02${'b'.repeat(64)}`
-const KEY_C = `02${'c'.repeat(64)}`
-const KEY_X = `02${'1'.repeat(64)}`
-const KEY_Y = `02${'2'.repeat(64)}`
-const KEY_Z = `02${'3'.repeat(64)}`
-const KEY_W = `02${'4'.repeat(64)}`
+// Regtest Admin IDs, as the ASM lists signers. Shape only: the form does not verify checksums.
+const adminId = (c: string) => `bcrt1q${c.repeat(38)}`
+const KEY_A = adminId('q')
+const KEY_B = adminId('p')
+const KEY_C = adminId('z')
+const KEY_X = adminId('r')
+const KEY_Y = adminId('y')
+const KEY_Z = adminId('9')
+const KEY_W = adminId('x')
 
 const ADMIN = { signers: [KEY_A, KEY_B, KEY_C], threshold: 3 }
 const COUNCIL = { signers: [KEY_X, KEY_Y, KEY_Z, KEY_W], threshold: 2 }
@@ -63,11 +65,11 @@ function issuesOn(
 
 // Claim 1 (AC 1) — the council entry joins the administrator's menu, after signer_update and
 // before vk_update, and the default selection does not move: it is the first entry, unchanged.
-// `safe_harbour_address_update` goes at the end for the same reason, which is why the whole
+// `safe_harbor_address_update` goes at the end for the same reason, which is why the whole
 // order is asserted rather than only the council entry's presence.
 assert.deepEqual(
 	getActionTypeOptions('strata_admin').map((option) => option.actionType),
-	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update', 'safe_harbour_address_update'],
+	['signer_update', 'council_signer_update', 'vk_update', 'operator_set_update', 'safe_harbor_address_update'],
 	'claim 1: strata_admin menu order',
 )
 assert.equal(getDefaultActionType('strata_admin'), 'signer_update', 'claim 1: default selection unchanged')

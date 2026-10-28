@@ -54,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
             config.proposal_expiry_days,
+            config.bitcoin_network,
         )
     } else {
         tracing::warn!("DATABASE_URL not set — using in-memory storage (data will not persist)");
@@ -65,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
             config.auth_session_ttl_ms,
             btc_client,
             config.proposal_expiry_days,
+            config.bitcoin_network,
         )
     };
 

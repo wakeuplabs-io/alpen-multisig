@@ -23,6 +23,7 @@ import { ScreenShell } from '@/screens/screen-shell'
 import { authorityLabelForRole } from '@/lib/authority-label'
 import { useWalletPanelData } from '@/domain/admin-wallet/hooks/use-wallet-panel-data'
 import { WalletSessionControl } from '@/domain/admin-wallet/components/wallet-session-control'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 export function CancelProposalBroadcastScreen() {
 	const navigate = useNavigate()
@@ -33,6 +34,7 @@ export function CancelProposalBroadcastScreen() {
 
 	const authorityLabel = authorityLabelForRole(selectedRole)
 	const panel = useWalletPanelData(isAdminWalletMode)
+	const adminId = useSessionAdminId(wallet)
 
 	// `null` until presets load: prepare/broadcast stay blocked so we never fall back to a silent default rate.
 	const feeState = useFeePresets()
@@ -77,7 +79,7 @@ export function CancelProposalBroadcastScreen() {
 						panel={panel}
 						sessionTimeLabel={sessionTimeLabel}
 						sessionWarning={sessionWarning}
-						adminId={wallet.addressSample}
+						adminId={adminId}
 					/>
 					<DisconnectButton onClick={() => void handleBack()} />
 				</>

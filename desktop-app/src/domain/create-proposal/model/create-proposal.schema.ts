@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { VK_PREDICATE_TYPES } from '@/lib/vk-predicate'
-import { normalizePubkey } from '@/lib/pubkey'
+import { normalizeAdminId } from '@/lib/admin-id'
 import { getActionTypeOptions } from './action-type-config'
 import { getActionValidator } from './validators'
 
@@ -14,7 +14,7 @@ export const CREATE_ACTION_TYPES = [
 	'council_signer_update',
 	'operator_set_update',
 	'sequencer_key_update',
-	'safe_harbour_address_update',
+	'safe_harbor_address_update',
 	'defcon_1',
 	'defcon_3',
 ] as const
@@ -23,7 +23,8 @@ const keyRowSchema = z.object({
 	value: z.string(),
 })
 
-export const normalizeSignerKey = normalizePubkey
+/** Signers are Admin IDs; ASM state and form rows compare in this one form. */
+export const normalizeSignerKey = normalizeAdminId
 
 const createProposalFormObjectSchema = z.object({
 	actionType: z.enum(CREATE_ACTION_TYPES),

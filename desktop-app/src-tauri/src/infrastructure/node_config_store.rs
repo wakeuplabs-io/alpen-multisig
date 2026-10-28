@@ -51,15 +51,16 @@ impl NodeConfig {
         }
     }
 
+    /// The Custom Bitcoin RPC URL, or `None` when left empty — Custom then means the local node.
+    fn custom_btc_rpc_url(&self) -> Option<&str> {
+        self.custom_btc_rpc_url.as_deref().filter(|s| !s.is_empty())
+    }
+
     pub fn btc_rpc_url(&self) -> &str {
         match &self.mode {
             ConnectionMode::Local => LOCAL_BTC_RPC_URL,
             ConnectionMode::Trusted => TRUSTED_BTC_RPC_URL,
-            ConnectionMode::Custom => self
-                .custom_btc_rpc_url
-                .as_deref()
-                .filter(|s| !s.is_empty())
-                .unwrap_or(LOCAL_BTC_RPC_URL),
+            ConnectionMode::Custom => self.custom_btc_rpc_url().unwrap_or(LOCAL_BTC_RPC_URL),
         }
     }
 
@@ -77,10 +78,13 @@ impl NodeConfig {
         }
     }
 
+    // Credentials follow the URL (#632): a Custom config without a Bitcoin RPC URL talks to the
+    // local node, so it authenticates as the local node does. A custom node only ever gets its own.
     pub fn btc_rpc_user(&self) -> &str {
         match &self.mode {
             ConnectionMode::Local => LOCAL_BTC_RPC_USER,
             ConnectionMode::Trusted => "",
+            ConnectionMode::Custom if self.custom_btc_rpc_url().is_none() => LOCAL_BTC_RPC_USER,
             ConnectionMode::Custom => self.custom_btc_rpc_user.as_deref().unwrap_or_default(),
         }
     }
@@ -89,6 +93,7 @@ impl NodeConfig {
         match &self.mode {
             ConnectionMode::Local => LOCAL_BTC_RPC_PASS,
             ConnectionMode::Trusted => "",
+            ConnectionMode::Custom if self.custom_btc_rpc_url().is_none() => LOCAL_BTC_RPC_PASS,
             ConnectionMode::Custom => self.custom_btc_rpc_pass.as_deref().unwrap_or_default(),
         }
     }
@@ -170,6 +175,45 @@ mod tests {
         assert_eq!(cfg.strata_rpc_url(), LOCAL_STRATA_RPC_URL);
         assert_eq!(cfg.btc_rpc_url(), LOCAL_BTC_RPC_URL);
         assert_eq!(cfg.electrum_url(), LOCAL_ELECTRUM_URL);
+    }
+
+    #[test]
+    fn custom_mode_without_btc_url_uses_local_credentials() {
+        // #632: an empty Custom config targeted the local node with empty credentials → 401.
+        for empty in [None, Some(String::new())] {
+            let cfg = NodeConfig {
+                mode: ConnectionMode::Custom,
+                custom_btc_rpc_url: empty.clone(),
+                custom_btc_rpc_user: empty.clone(),
+                custom_btc_rpc_pass: empty,
+                ..Default::default()
+            };
+            assert_eq!(cfg.btc_rpc_url(), LOCAL_BTC_RPC_URL);
+            assert_eq!(cfg.btc_rpc_user(), LOCAL_BTC_RPC_USER);
+            assert_eq!(cfg.btc_rpc_pass(), LOCAL_BTC_RPC_PASS);
+        }
+    }
+
+    #[test]
+    fn custom_mode_with_btc_url_uses_its_own_credentials() {
+        let cfg = NodeConfig {
+            mode: ConnectionMode::Custom,
+            custom_btc_rpc_url: Some("http://my-btc:8080".to_string()),
+            custom_btc_rpc_user: Some("u".to_string()),
+            custom_btc_rpc_pass: Some("p".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(cfg.btc_rpc_user(), "u");
+        assert_eq!(cfg.btc_rpc_pass(), "p");
+
+        // A custom node is never sent the local node's credentials, even when its own are blank.
+        let without_credentials = NodeConfig {
+            custom_btc_rpc_user: None,
+            custom_btc_rpc_pass: None,
+            ..cfg
+        };
+        assert_eq!(without_credentials.btc_rpc_user(), "");
+        assert_eq!(without_credentials.btc_rpc_pass(), "");
     }
 
     #[test]

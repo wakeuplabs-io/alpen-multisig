@@ -132,7 +132,7 @@ pub async fn prepare_broadcast_bundle(
             .await
             .map_err(BroadcastError::Setup)?;
 
-    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex)
+    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex, network)
         .map_err(BroadcastError::Setup)?;
 
     let payload = broadcast_tx::build_signed_payload_bytes(
@@ -480,7 +480,7 @@ pub async fn submit_commit_then_reveal(
             .await
             .map_err(BroadcastError::Setup)?;
 
-    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex)
+    let sighash = broadcast_tx::compute_sighash(proposal.seq_no, &proposal.action_hex, network)
         .map_err(BroadcastError::Setup)?;
 
     let payload = broadcast_tx::build_signed_payload_bytes(
@@ -1126,8 +1126,8 @@ pub async fn prepare_broadcast_manual(
         })
         .collect();
 
-    let sighash =
-        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+    let sighash = broadcast_tx::compute_sighash(seq_no, action_hex, network)
+        .map_err(BroadcastError::Setup)?;
 
     let payload = broadcast_tx::build_signed_payload_bytes(
         seq_no,
@@ -1189,8 +1189,8 @@ pub async fn broadcast_manual(
         })
         .collect();
 
-    let sighash =
-        broadcast_tx::compute_sighash(seq_no, action_hex).map_err(BroadcastError::Setup)?;
+    let sighash = broadcast_tx::compute_sighash(seq_no, action_hex, network)
+        .map_err(BroadcastError::Setup)?;
 
     let payload = broadcast_tx::build_signed_payload_bytes(
         seq_no,
@@ -1522,9 +1522,10 @@ mod tests {
         StartOrchestratorAuthRequest,
     };
     use crate::application::tx_broadcaster::tests::MockBroadcaster;
-    use crate::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+    use crate::domain::action::{Action, MultisigUpdate};
     use crate::domain::authority::Authority;
     use crate::domain::proposal::{Proposal as OrcProposal, ProposalSignature};
+    use crate::domain::signer_id::SignerId;
     use crate::infrastructure::action_codec;
     use crate::infrastructure::node_broadcaster::NodeBroadcaster;
     use crate::infrastructure::signing;
@@ -1561,11 +1562,12 @@ mod tests {
         let demo_bytes = [0x42u8; 32];
         let demo_sk = SecretKey::from_slice(&demo_bytes).expect("valid fixed key");
         let new_signer_pk = PublicKey::from_secret_key(SECP256K1, &demo_sk);
-        let new_signer = CompressedPubKey::new(new_signer_pk.serialize());
+        let new_signer =
+            SignerId::from_pubkey_hex(&hex::encode(new_signer_pk.serialize())).unwrap();
         Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: vec![new_signer],
-            remove_keys: vec![],
+            add_signers: vec![new_signer],
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).expect("non-zero"),
         })
     }
@@ -1576,26 +1578,27 @@ mod tests {
 
     /// Action with 4 keys — produces a payload large enough for taproot envelope (>= 126 bytes).
     fn large_demo_action_hex() -> String {
-        let keys: Vec<CompressedPubKey> = (1u8..=4)
+        let keys: Vec<SignerId> = (1u8..=4)
             .map(|i| {
                 let mut seed = [0x42u8; 32];
                 seed[0] = i;
                 let sk = SecretKey::from_slice(&seed).expect("valid key");
                 let pk = PublicKey::from_secret_key(SECP256K1, &sk);
-                CompressedPubKey::new(pk.serialize())
+                SignerId::from_pubkey_hex(&hex::encode(pk.serialize())).unwrap()
             })
             .collect();
         let action = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::StrataAdmin,
-            add_keys: keys,
-            remove_keys: vec![],
+            add_signers: keys,
+            remove_signers: vec![],
             new_threshold: NonZeroU8::new(2).expect("non-zero"),
         });
         action_codec::encode_hex(&action).expect("encode ok")
     }
 
     fn sign_action(secret_key_hex: &str, seq_no: u64, action_hex: &str) -> Signature {
-        let sighash = signing::compute_sighash(seq_no, action_hex).expect("sighash ok");
+        let sighash =
+            signing::compute_sighash(seq_no, action_hex, Network::Regtest).expect("sighash ok");
         let sig = signing::sign_sighash(secret_key_hex, &sighash.sighash_hex).expect("sign ok");
         Signature {
             signer_pubkey: sig.public_key_hex,
@@ -2228,7 +2231,8 @@ mod tests {
             .expect("should succeed");
 
         let req = mock.last_create_request().expect("request sent");
-        let sighash = signing::compute_sighash(1, &action_hex).expect("sighash ok");
+        let sighash =
+            signing::compute_sighash(1, &action_hex, Network::Regtest).expect("sighash ok");
         let verify = signing::verify_threshold(
             &[req.signer_pubkey],
             1,
@@ -3660,7 +3664,8 @@ mod tests {
         let spy = SpyCommitFunding::new("ignored");
         let pending = crate::application::pending_reveals::new();
         let action_hex = large_demo_action_hex();
-        let sighash = hex::encode(broadcast_tx::compute_sighash(1, &action_hex).unwrap());
+        let sighash =
+            hex::encode(broadcast_tx::compute_sighash(1, &action_hex, Network::Regtest).unwrap());
         let key = format!("manual-{}", &sighash[..16]);
         let stored = PendingReveal {
             reveal_tx_hex: "aa".to_string(),

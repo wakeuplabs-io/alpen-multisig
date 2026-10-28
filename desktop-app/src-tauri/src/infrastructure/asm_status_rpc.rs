@@ -2,19 +2,23 @@ use std::collections::HashMap;
 
 use serde_json::{json, Value};
 use ssz::Decode;
-use strata_asm_common::{AnchorState, Subprotocol};
+use strata_asm_admin_threshold_sig::ThresholdConfig;
+use strata_asm_common::{AnchorState, SectionStateExt, Subprotocol};
 use strata_asm_proto_administration::{AdministrationSubprotoState, AdministrationSubprotocol};
-use strata_asm_proto_bridge_v1::{BridgeV1State, BridgeV1Subproto};
+use strata_asm_proto_bridge::{BridgeStateV1, BridgeSubprotoV1};
 use strata_asm_proto_checkpoint::{CheckpointState, CheckpointSubprotocol};
 use strata_asm_txs_admin::actions::MultisigAction;
 
 use crate::domain::auth::AuthRole;
+use crate::domain::signer_id::SignerId;
+use crate::infrastructure::network_env;
 
 pub fn default_rpc_url() -> String {
     "http://127.0.0.1:8080".to_string()
 }
 
 pub struct MultisigConfig {
+    /// Admin IDs, in the ASM's canonical order, rendered on the process network.
     pub signers: Vec<String>,
     pub threshold: u8,
 }
@@ -38,12 +42,7 @@ pub async fn fetch_multisig_config(
         .ok_or_else(|| format!("admin state missing authority for role `{role:?}`"))?;
 
     Ok(MultisigConfig {
-        signers: authority
-            .config()
-            .keys()
-            .iter()
-            .map(|k| hex::encode(k.serialize()))
-            .collect(),
+        signers: admin_ids(authority.config())?,
         threshold: authority.config().threshold(),
     })
 }
@@ -65,7 +64,7 @@ pub async fn fetch_role_membership(
         AuthRole::AlpenAdministrator,
         AuthRole::StrataSecurityCouncil,
     ] {
-        match authority_keys_hex(&admin, role) {
+        match authority_admin_ids(&admin, role) {
             Ok(keys) => {
                 role_to_keys.insert(role, keys);
             }
@@ -130,7 +129,7 @@ pub async fn fetch_safe_harbor(rpc_url: &str) -> Result<SafeHarbor, String> {
     let status_result = rpc_call(rpc_url, "strata_asm_getStatus", json!([])).await?;
     let anchor = decode_anchor_state_from_status(&status_result)?;
     let bridge = decode_bridge_state(&anchor)?;
-    let safe_harbor = bridge.safe_harbour();
+    let safe_harbor = bridge.safe_harbor();
     Ok(SafeHarbor {
         activated: safe_harbor.is_activated(),
         address_hex: hex::encode(safe_harbor.address().as_descriptor().to_bytes()),
@@ -211,14 +210,15 @@ async fn rpc_call(rpc_url: &str, method: &str, params: Value) -> Result<Value, S
 }
 
 fn decode_state_bytes_from_status(status_result: &Value) -> Result<Vec<u8>, String> {
+    // `cur_state` is an `Option<AnchorState>`, which serializes as its SSZ bytes (asm v0.5).
     let raw_state = status_result
-        .pointer("/cur_state/state")
-        .or_else(|| status_result.pointer("/current_state/state"))
-        .ok_or_else(|| "status result missing `cur_state.state` array".to_string())?;
+        .get("cur_state")
+        .filter(|v| !v.is_null())
+        .ok_or_else(|| "status result missing `cur_state` bytes".to_string())?;
 
     let items = raw_state
         .as_array()
-        .ok_or_else(|| "`cur_state.state` is not an array".to_string())?;
+        .ok_or_else(|| "`cur_state` is not an array".to_string())?;
 
     items
         .iter()
@@ -265,17 +265,17 @@ fn decode_admin_state(anchor: &AnchorState) -> Result<AdministrationSubprotoStat
     })
 }
 
-fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeV1State, String> {
-    let id = BridgeV1Subproto::ID;
+fn decode_bridge_state(anchor: &AnchorState) -> Result<BridgeStateV1, String> {
+    let id = BridgeSubprotoV1::ID;
     let section = anchor.find_section(id).ok_or_else(|| {
         format!("AnchorState has no bridge-v1 subprotocol section (expected id {id})")
     })?;
     section
-        .try_to_state::<BridgeV1Subproto>()
+        .try_to_state::<BridgeSubprotoV1>()
         .map_err(|e| format!("BridgeV1 section SSZ decode failed: {e:?}"))
 }
 
-fn authority_keys_hex(
+fn authority_admin_ids(
     admin: &AdministrationSubprotoState,
     role: AuthRole,
 ) -> Result<Vec<String>, String> {
@@ -283,11 +283,16 @@ fn authority_keys_hex(
         .authority(role.to_upstream_role())
         .ok_or_else(|| format!("admin state missing authority for role `{role:?}`"))?;
 
-    Ok(authority
-        .config()
-        .keys()
+    admin_ids(authority.config())
+}
+
+/// The role's signers as Admin IDs on the chain's network. The ASM stores witness programs only.
+fn admin_ids(config: &ThresholdConfig) -> Result<Vec<String>, String> {
+    let network = network_env::network_from_env().map_err(|e| e.to_string())?;
+    Ok(config
+        .signers()
         .iter()
-        .map(|k| hex::encode(k.serialize()))
+        .map(|signer| SignerId::from_program(signer.to_byte_array()).admin_id(network))
         .collect())
 }
 
@@ -305,33 +310,28 @@ mod tests {
 
     #[test]
     fn decode_state_bytes_supports_cur_state() {
-        let status = json!({
-            "cur_state": {
-                "state": [0, 1, 2, 255]
-            }
-        });
+        let status = json!({ "cur_state": [0, 1, 2, 255] });
         let bytes = decode_state_bytes_from_status(&status).expect("should decode bytes");
         assert_eq!(bytes, vec![0, 1, 2, 255]);
     }
 
     #[test]
-    fn decode_state_bytes_supports_current_state() {
-        let status = json!({
-            "current_state": {
-                "state": [5, 6]
-            }
-        });
-        let bytes = decode_state_bytes_from_status(&status).expect("should decode bytes");
-        assert_eq!(bytes, vec![5, 6]);
+    fn decode_state_bytes_rejects_the_pre_v05_shape() {
+        let status = json!({ "cur_state": { "state": [5, 6] } });
+        let err = decode_state_bytes_from_status(&status).unwrap_err();
+        assert!(err.contains("not an array"));
+    }
+
+    #[test]
+    fn decode_state_bytes_rejects_a_missing_state() {
+        let status = json!({ "cur_state": null });
+        let err = decode_state_bytes_from_status(&status).unwrap_err();
+        assert!(err.contains("missing"));
     }
 
     #[test]
     fn decode_state_bytes_rejects_out_of_range_items() {
-        let status = json!({
-            "cur_state": {
-                "state": [300]
-            }
-        });
+        let status = json!({ "cur_state": [300] });
         let err = decode_state_bytes_from_status(&status).unwrap_err();
         assert!(err.contains("out of byte range"));
     }

@@ -11,7 +11,7 @@ import { feeSats } from '@/domain/fee-selection/model/fee-rate'
 import { useSession } from '@/hooks/use-session'
 import { ScreenShell } from '@/screens/screen-shell'
 import { CopyButton } from '@/components/copy-button'
-import { adminIdChipLabel } from '@/lib/admin-id'
+import { adminIdDisplay } from '@/lib/admin-id'
 import { DownloadButton } from '@/components/download-button'
 import { SessionChip } from '@/components/session-chip'
 import { DisconnectButton } from '@/components/disconnect-button'
@@ -26,6 +26,7 @@ import { WalletPanel } from '@/domain/admin-wallet/components/wallet-panel'
 import { WalletPanelHeader } from '@/domain/admin-wallet/components/wallet-panel-header'
 import { WalletPanelContent } from '@/domain/admin-wallet/components/wallet-panel-content'
 import { resolveManualBackNavigation, type ManualReturnTo } from '@/domain/connect-wallet/model/resume-connect-session'
+import { useSessionAdminId } from '@/domain/admin-wallet/hooks/use-session-admin-id'
 
 const STEP_LABELS = ['Import', 'Sign & Collect', 'Send']
 
@@ -54,6 +55,7 @@ export function ManualProposalScreen() {
 			: null
 
 	const { isOpen, expandedSection, open, close, setExpandedSection } = useWalletPanelState()
+	const adminId = useSessionAdminId(wallet)
 	const balanceHook = useAdminWalletBalance()
 	const receiveAddressHook = useAdminWalletReceiveAddress()
 	const syncHook = useAdminWalletSync()
@@ -85,7 +87,7 @@ export function ManualProposalScreen() {
 		return <Navigate to="/" replace />
 	}
 
-	const signerLabel = adminIdChipLabel(wallet.addressSample)
+	const signerLabel = adminIdDisplay(adminId.display, 'truncated')
 
 	const stepIndex = manual.step === 'import' ? 0 : manual.step === 'sign-collect' ? 1 : 2
 
@@ -370,7 +372,7 @@ export function ManualProposalScreen() {
 				<WalletPanelHeader onClose={close} title={`Session · ${sessionTimeLabel}`} subtitle={signerLabel} />
 				<WalletPanelContent
 					disabledError={walletDisabledError}
-					adminId={wallet.addressSample}
+					adminId={adminId}
 					confirmedBalanceSats={balanceHook.data?.confirmedSats ?? 0}
 					unconfirmedBalanceSats={balanceHook.data?.unconfirmedSats ?? 0}
 					reservedBalanceSats={balanceHook.data?.reservedSats ?? 0}

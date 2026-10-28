@@ -839,6 +839,7 @@ fn reveal_carries_proposal(
     reveal: &bitcoin::Transaction,
     commit_txid: &str,
     proposal: &Proposal,
+    network: bitcoin::Network,
 ) -> bool {
     use ssz::{Decode, Encode};
     let Some(input) = reveal.input.first() else {
@@ -852,22 +853,24 @@ fn reveal_carries_proposal(
     {
         return false;
     }
-    let Some(leaf) = input.witness.taproot_leaf_script() else {
+    let Ok(action_bytes) = hex::decode(&proposal.action_hex) else {
         return false;
     };
-    let Ok(payload) = strata_l1_envelope_fmt::parser::parse_envelope_payload(&leaf.script.into())
+    let Ok(action) = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(&action_bytes)
     else {
         return false;
     };
-    let Ok(signed) = strata_asm_txs_admin::parser::SignedPayload::from_ssz_bytes(&payload) else {
-        return false;
-    };
-    let Ok(action) = hex::decode(&proposal.action_hex) else {
+    // The envelope carries no action discriminant: the SPS-50 tag's tx type selects the type to
+    // decode. Decoding under this proposal's own tag is what the ASM does for a reveal tagged for
+    // it, and a reveal tagged for anything else cannot carry this action.
+    let tag = action.tag();
+    let input = strata_asm_common::TxInputRef::new(reveal, tag.as_ref());
+    let Some(signed) = strata_asm_txs_admin::parser::parse_tx(&input) else {
         return false;
     };
     signed.seqno == proposal.seq_no
-        && signed.action.as_ssz_bytes() == action
-        && signed_by_quorum(&signed, proposal)
+        && signed.action.as_ssz_bytes() == action_bytes
+        && signed_by_quorum(&signed, proposal, network)
 }
 
 /// Whether the payload's signatures include at least `required_signatures` distinct approvers of
@@ -875,17 +878,20 @@ fn reveal_carries_proposal(
 /// checked with the ASM's own verifier against one approver's key at a time, so this needs neither
 /// the role's key order nor an ASM call; the approvers were checked against the role when they
 /// signed.
+///
+/// `network` names the chain in the signed message, so a wrong value fails every check.
 fn signed_by_quorum(
     signed: &strata_asm_txs_admin::parser::SignedPayload,
     proposal: &Proposal,
+    network: bitcoin::Network,
 ) -> bool {
-    use strata_crypto::keys::compressed::CompressedPublicKey;
-    use strata_crypto::threshold_signature::{
-        verify_threshold_signatures, IndexedSignature, ThresholdConfig,
+    use strata_asm_admin_threshold_sig::{
+        verify_threshold_signatures, IndexedSignature, P2wpkhAddress, ThresholdConfig,
     };
     let sighash = strata_asm_txs_admin::signing_message::SigningMessage::for_action(
         &signed.action,
         signed.seqno,
+        network,
     )
     .compute_sighash()
     .0;
@@ -893,8 +899,14 @@ fn signed_by_quorum(
         .signatures
         .iter()
         .filter_map(|approval| hex::decode(&approval.signer_pubkey).ok())
-        .filter_map(|key| CompressedPublicKey::from_slice(&key).ok())
-        .filter_map(|key| ThresholdConfig::try_new(vec![key], std::num::NonZero::<u8>::MIN).ok())
+        .filter_map(|key| bitcoin::secp256k1::PublicKey::from_slice(&key).ok())
+        .filter_map(|key| {
+            ThresholdConfig::try_new(
+                vec![P2wpkhAddress::from_pubkey(&key)],
+                std::num::NonZero::<u8>::MIN,
+            )
+            .ok()
+        })
         .collect();
     let mut signed_by = vec![false; approvers.len()];
     for signature in signed.signatures.signatures() {
@@ -994,7 +1006,11 @@ enum MinedPair {
 /// the proposal (#605): the lowest block height, and within one block the reveal the block lists
 /// first — the one the ASM executed. A mined reveal that is not a commit + reveal of this proposal
 /// does not count, however low its block. The lookups run side by side.
-async fn first_mined_pair(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient) -> MinedPair {
+async fn first_mined_pair(
+    proposal: &Proposal,
+    btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
+) -> MinedPair {
     let tracked = proposal.reveal_txid.as_deref();
     // A malformed txid (stored before reports were validated) can never be mined, and its failing
     // lookup would hold back every other pair; this includes one on the row itself.
@@ -1038,7 +1054,7 @@ async fn first_mined_pair(proposal: &Proposal, btc_client: &dyn BitcoinRpcClient
                 // `None` only from a test double that reads no transaction.
                 if tx
                     .as_ref()
-                    .is_some_and(|tx| !reveal_carries_proposal(tx, &commit, proposal))
+                    .is_some_and(|tx| !reveal_carries_proposal(tx, &commit, proposal, network))
                 {
                     tracing::warn!(
                         action_id = %proposal.action_id.0,
@@ -1103,6 +1119,7 @@ async fn confirm_reveal_if_mined(
     repo: &dyn ProposalRepository,
     proposal: Proposal,
     btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
     asm_rpc_url: &str,
 ) -> Proposal {
     // The desktop pre-registers both txids at `commit_broadcasted` before it broadcasts (#516),
@@ -1123,7 +1140,8 @@ async fn confirm_reveal_if_mined(
     // leaves in place. The write applies only while the row still tracks the reveal this read
     // observed: a pair registered in between is left for the next reconcile, which sees both
     // (#605).
-    let MinedPair::First(commit_txid, reveal_txid) = first_mined_pair(&proposal, btc_client).await
+    let MinedPair::First(commit_txid, reveal_txid) =
+        first_mined_pair(&proposal, btc_client, network).await
     else {
         return proposal;
     };
@@ -1266,13 +1284,14 @@ async fn reconcile_one(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
     btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
     proposal: Proposal,
     last_seqno: Option<u64>,
 ) -> Result<(), AppError> {
     // First: did its reveal confirm while nobody was watching? Both the enactment check and the
     // sweep below read the broadcast status, so a missed confirmation would make an executed
     // proposal look dead.
-    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, asm_rpc_url).await;
+    let proposal = confirm_reveal_if_mined(repo, proposal, btc_client, network, asm_rpc_url).await;
 
     // A cancel that is already on chain owns this proposal's outcome — see `cancel_reached_chain`.
     if !proposal.is_cancel() && cancel_reached_chain(repo, &proposal.action_id).await? {
@@ -1357,6 +1376,7 @@ pub(crate) async fn reconcile_enacted_for_authority(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
     btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
     authority: Authority,
 ) -> Result<(), AppError> {
     let approved = repo
@@ -1369,7 +1389,7 @@ pub(crate) async fn reconcile_enacted_for_authority(
     let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
 
     for proposal in approved {
-        reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await?;
+        reconcile_one(repo, asm_rpc_url, btc_client, network, proposal, last_seqno).await?;
     }
     Ok(())
 }
@@ -1432,6 +1452,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     repo: &dyn ProposalRepository,
     asm_rpc_url: &str,
     btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
     authority: Authority,
     action_id: &ActionId,
 ) -> Result<(), AppError> {
@@ -1448,7 +1469,7 @@ pub(crate) async fn reconcile_enacted_for_action(
     // cycle where the proposal enacts — once, since an enacted proposal returns above — and it is
     // what lets this share `reconcile_one` with the sweep.
     let last_seqno = live_last_seqno(asm_rpc_url, authority).await;
-    reconcile_one(repo, asm_rpc_url, btc_client, proposal, last_seqno).await
+    reconcile_one(repo, asm_rpc_url, btc_client, network, proposal, last_seqno).await
 }
 
 /// When a target proposal becomes `Enacted` via the normal flow, its associated cancel
@@ -1596,6 +1617,7 @@ pub(crate) async fn report_broadcast_progress(
     session: SessionContext<'_>,
     action_id: &ActionId,
     btc_client: &dyn BitcoinRpcClient,
+    network: bitcoin::Network,
     body: ReportBroadcastProgressRequest,
 ) -> Result<Proposal, AppError> {
     let raw = repo
@@ -1752,7 +1774,7 @@ pub(crate) async fn report_broadcast_progress(
         return Ok(updated);
     }
     if confirming {
-        return Ok(confirm_reveal_if_mined(repo, updated, btc_client, asm_rpc_url).await);
+        return Ok(confirm_reveal_if_mined(repo, updated, btc_client, network, asm_rpc_url).await);
     }
 
     if updated.broadcast_status == BroadcastStatus::RevealConfirmed && !updated.is_cancel() {
@@ -3364,6 +3386,7 @@ mod tests {
             },
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             ReportBroadcastProgressRequest {
                 broadcast_status: "reveal_confirmed".to_string(),
                 proposal_status: None,
@@ -3393,6 +3416,7 @@ mod tests {
             },
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             ReportBroadcastProgressRequest {
                 broadcast_status: "reveal_confirmed".to_string(),
                 proposal_status: Some("enacted".to_string()),
@@ -3441,6 +3465,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3490,6 +3515,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3526,6 +3552,7 @@ mod tests {
                 &repo,
                 crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
                 &mock_btc(),
+                bitcoin::Network::Regtest,
                 Authority::StrataAdmin,
             )
             .await
@@ -3564,6 +3591,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3589,6 +3617,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3609,6 +3638,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_ENACTED_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3627,6 +3657,7 @@ mod tests {
             &repo,
             "mock://asm-enacted",
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3681,6 +3712,7 @@ mod tests {
             &repo,
             "mock://asm-enacted",
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3763,6 +3795,7 @@ mod tests {
             &repo,
             crate::infrastructure::asm_enactment::MOCK_SEQNO_AHEAD_URL,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3827,6 +3860,7 @@ mod tests {
             &repo,
             "mock://asm-enacted",
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -3856,6 +3890,7 @@ mod tests {
             &repo,
             "mock://asm-enacted",
             &mock_btc(),
+            bitcoin::Network::Regtest,
             Authority::StrataAdmin,
         )
         .await
@@ -4339,6 +4374,7 @@ mod tests {
                 session_of(&sig_a()),
                 &action_id,
                 &mock_btc(),
+                bitcoin::Network::Regtest,
                 report(status, Some(commit), Some(reveal)),
             )
             .await
@@ -4542,6 +4578,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             stale,
         )
         .await
@@ -4633,8 +4670,14 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         let btc = MinedTxids([(REVEAL_A, 800_010)].into_iter().collect());
 
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.commit_txid.as_deref(), Some(COMMIT_A));
@@ -4656,8 +4699,14 @@ mod tests {
                 .collect(),
         );
 
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(
             confirmed.reveal_txid.as_deref(),
@@ -4676,8 +4725,14 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         let btc = MinedTxids(std::collections::HashMap::new());
 
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(
             unchanged.broadcast_status,
@@ -4727,6 +4782,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(COMMIT_C), Some(REVEAL_C)),
         )
         .await
@@ -4740,7 +4796,14 @@ mod tests {
         );
 
         let btc = MinedTxids([(REVEAL_C, 800_005)].into_iter().collect());
-        let reconciled = confirm_reveal_if_mined(&repo, after, &btc, "mock://asm-membership").await;
+        let reconciled = confirm_reveal_if_mined(
+            &repo,
+            after,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
         assert_eq!(
             reconciled.broadcast_status,
             BroadcastStatus::CommitBroadcasted
@@ -4766,6 +4829,7 @@ mod tests {
             session_of(&sig_b()),
             &action_id,
             &btc,
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
         )
         .await
@@ -4793,6 +4857,7 @@ mod tests {
             session_of(&sig_b()),
             &action_id,
             &MinedTxids(std::collections::HashMap::new()),
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
         )
         .await
@@ -4815,6 +4880,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &MinedTxids(std::collections::HashMap::new()),
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(COMMIT_A), Some(REVEAL_A)),
         )
         .await
@@ -4836,6 +4902,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             report("reveal_broadcasted", Some(COMMIT_A), Some("reveal")),
         )
         .await
@@ -4863,8 +4930,14 @@ mod tests {
             unreadable: "reveal",
         };
 
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.reveal_txid.as_deref(), Some(REVEAL_B));
@@ -4885,6 +4958,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             unnamed,
         )
         .await
@@ -4909,8 +4983,14 @@ mod tests {
             heights: [(REVEAL_A, 800_010)].into_iter().collect(),
             unreadable: REVEAL_B,
         };
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(
             unchanged.broadcast_status,
@@ -4988,8 +5068,14 @@ mod tests {
             ..NodeView::default()
         };
 
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(
             unchanged.broadcast_status,
@@ -5012,8 +5098,14 @@ mod tests {
             ..NodeView::default()
         };
 
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(
@@ -5037,8 +5129,14 @@ mod tests {
                 .collect(),
         );
 
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &btc, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &btc,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(
             unchanged.broadcast_status,
@@ -5059,7 +5157,7 @@ mod tests {
             unreadable: "reveal",
         };
 
-        let winner = first_mined_pair(&proposal, &btc).await;
+        let winner = first_mined_pair(&proposal, &btc, bitcoin::Network::Regtest).await;
 
         assert_eq!(
             winner,
@@ -5126,15 +5224,18 @@ mod tests {
 
     /// The same payload, signed by the fixture keys with these secret scalars.
     fn signed_payload_by(seq_no: u64, action_hex: &str, secrets: &[u8]) -> Vec<u8> {
-        use ssz::{Decode, Encode};
+        use ssz::Decode;
         let action = strata_asm_txs_admin::actions::MultisigAction::from_ssz_bytes(
             &hex::decode(action_hex).unwrap(),
         )
         .unwrap();
-        let sighash =
-            strata_asm_txs_admin::signing_message::SigningMessage::for_action(&action, seq_no)
-                .compute_sighash()
-                .0;
+        let sighash = strata_asm_txs_admin::signing_message::SigningMessage::for_action(
+            &action,
+            seq_no,
+            bitcoin::Network::Regtest,
+        )
+        .compute_sighash()
+        .0;
         let secp = bitcoin::secp256k1::Secp256k1::new();
         let message = bitcoin::secp256k1::Message::from_digest(sighash);
         let signatures = secrets
@@ -5150,11 +5251,12 @@ mod tests {
                 let mut bytes = [0u8; 65];
                 bytes[0] = recovery.to_i32() as u8;
                 bytes[1..].copy_from_slice(&compact);
-                strata_crypto::threshold_signature::IndexedSignature::new(index as u8, bytes)
+                strata_asm_admin_threshold_sig::IndexedSignature::new(index as u8, bytes)
             })
             .collect();
-        let signatures = strata_crypto::threshold_signature::SignatureSet::new(signatures).unwrap();
-        strata_asm_txs_admin::parser::SignedPayload::new(seq_no, action, signatures).as_ssz_bytes()
+        let signatures = strata_asm_admin_threshold_sig::SignatureSet::new(signatures).unwrap();
+        strata_asm_txs_admin::parser::SignedPayload::new(seq_no, action, signatures)
+            .into_envelope_bytes()
     }
 
     /// The taproot envelope a commit pays to, built the way the desktop builds it.
@@ -5169,7 +5271,7 @@ mod tests {
             let secp = bitcoin::secp256k1::Secp256k1::new();
             let keypair = bitcoin::key::Keypair::from_seckey_slice(&secp, &[7u8; 32]).unwrap();
             let (internal_key, _) = keypair.x_only_public_key();
-            let script = strata_l1_envelope_fmt::builder::EnvelopeScriptBuilder::with_pubkey(
+            let script = strata_l1_envelope_fmt::EnvelopeScriptBuilder::with_pubkey(
                 &internal_key.serialize(),
             )
             .unwrap()
@@ -5301,19 +5403,34 @@ mod tests {
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
         assert_eq!(proposal.seq_no, 1);
         let reveal = envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex());
-        assert!(reveal_carries_proposal(&reveal, COMMIT_B, &proposal));
+        assert!(reveal_carries_proposal(
+            &reveal,
+            COMMIT_B,
+            &proposal,
+            bitcoin::Network::Regtest
+        ));
         assert!(
-            !reveal_carries_proposal(&reveal, COMMIT_A, &proposal),
+            !reveal_carries_proposal(&reveal, COMMIT_A, &proposal, bitcoin::Network::Regtest),
             "spends another commit"
         );
         let other_seq_no = envelope_reveal(COMMIT_B, 2, &test_fixture_action_hex());
-        assert!(!reveal_carries_proposal(&other_seq_no, COMMIT_B, &proposal));
+        assert!(!reveal_carries_proposal(
+            &other_seq_no,
+            COMMIT_B,
+            &proposal,
+            bitcoin::Network::Regtest
+        ));
         let other_action = envelope_reveal(
             COMMIT_B,
             1,
             &crate::infrastructure::action_codec::test_fixture_council_rotation_action_hex(),
         );
-        assert!(!reveal_carries_proposal(&other_action, COMMIT_B, &proposal));
+        assert!(!reveal_carries_proposal(
+            &other_action,
+            COMMIT_B,
+            &proposal,
+            bitcoin::Network::Regtest
+        ));
         // The right action without the quorum the ASM needs: unsigned, or one approver of two, or
         // the approvers' keys signing twice.
         for secrets in [&[][..], &[1], &[1, 1], &[3, 4]] {
@@ -5329,7 +5446,7 @@ mod tests {
                 1_000,
             );
             assert!(
-                !reveal_carries_proposal(&reveal, COMMIT_B, &proposal),
+                !reveal_carries_proposal(&reveal, COMMIT_B, &proposal, bitcoin::Network::Regtest),
                 "signed by {secrets:?}"
             );
         }
@@ -5342,7 +5459,12 @@ mod tests {
             }],
             output: vec![],
         };
-        assert!(!reveal_carries_proposal(&plain, COMMIT_B, &proposal));
+        assert!(!reveal_carries_proposal(
+            &plain,
+            COMMIT_B,
+            &proposal,
+            bitcoin::Network::Regtest
+        ));
     }
 
     /// Any txid can be registered. One mined after the registration that is not a commit + reveal
@@ -5368,6 +5490,7 @@ mod tests {
             &repo,
             proposal.clone(),
             &MinedReveals(vec![(REVEAL_B, 800_005, unrelated)]),
+            bitcoin::Network::Regtest,
             "mock://asm-membership",
         )
         .await;
@@ -5385,6 +5508,7 @@ mod tests {
                 800_010,
                 envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
             )]),
+            bitcoin::Network::Regtest,
             "mock://asm-membership",
         )
         .await;
@@ -5409,6 +5533,7 @@ mod tests {
                 100,
                 envelope_reveal(COMMIT_B, 1, &test_fixture_action_hex()),
             )]),
+            bitcoin::Network::Regtest,
             "mock://asm-membership",
         )
         .await;
@@ -5435,6 +5560,7 @@ mod tests {
                 mempool: vec![COMMIT_A],
                 ..NodeView::default()
             },
+            bitcoin::Network::Regtest,
             failed,
         )
         .await
@@ -5457,6 +5583,7 @@ mod tests {
             session_of(&sig_a()),
             &lone_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             failed,
         )
         .await
@@ -5481,6 +5608,7 @@ mod tests {
             session_of(&sig_b()),
             &action_id,
             &NodeView::default(),
+            bitcoin::Network::Regtest,
             failed,
         )
         .await
@@ -5517,6 +5645,7 @@ mod tests {
                 without_txindex: true,
                 ..NodeView::default()
             },
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(COMMIT_B), Some(REVEAL_B)),
         )
         .await
@@ -5592,6 +5721,7 @@ mod tests {
                 session_of(&sig_a()),
                 &action_id,
                 &NodeView::default(),
+                bitcoin::Network::Regtest,
                 failed,
             )
             .await
@@ -5614,6 +5744,7 @@ mod tests {
                 session_of(&sig_a()),
                 &action_id,
                 &NodeView::default(),
+                bitcoin::Network::Regtest,
                 report("commit_broadcasted", Some(&commit), Some(&reveal)),
             )
             .await;
@@ -5643,6 +5774,7 @@ mod tests {
             session_of(&sig_b()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             report("reveal_broadcasted", Some(COMMIT_B), Some(REVEAL_A)),
         )
         .await
@@ -5668,6 +5800,7 @@ mod tests {
                 800_010,
                 envelope_reveal(COMMIT_A, 1, &test_fixture_action_hex()),
             )]),
+            bitcoin::Network::Regtest,
         )
         .await;
         assert_eq!(
@@ -5690,6 +5823,7 @@ mod tests {
                 session_of(&sig_b()),
                 &action_id,
                 &mock_btc(),
+                bitcoin::Network::Regtest,
                 body,
             )
             .await
@@ -5735,6 +5869,7 @@ mod tests {
             session_of(&sig_a()),
             &action_id,
             &mock_btc(),
+            bitcoin::Network::Regtest,
             failed,
         )
         .await
@@ -5946,8 +6081,14 @@ mod tests {
 
         let height = chain.mine(&[&commit_b, &reveal_b]).await;
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &chain.node, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &chain.node,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.commit_txid.as_deref(), Some(commit_b.as_str()));
@@ -5987,16 +6128,28 @@ mod tests {
 
         chain.mine(&[&commit_x, &reveal_x]).await;
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &chain.node, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &chain.node,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
         assert_eq!(
             unchanged.broadcast_status,
             BroadcastStatus::CommitBroadcasted
         );
 
         let height = chain.mine(&[&commit_a, &reveal_a]).await;
-        let confirmed =
-            confirm_reveal_if_mined(&repo, unchanged, &chain.node, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            unchanged,
+            &chain.node,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(confirmed.reveal_txid.as_deref(), Some(reveal_a.as_str()));
         let stored = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
@@ -6028,8 +6181,14 @@ mod tests {
             .mine(&[&commit_a, &commit_b, &reveal_a, &reveal_b])
             .await;
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let confirmed =
-            confirm_reveal_if_mined(&repo, proposal, &chain.node, "mock://asm-membership").await;
+        let confirmed = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &chain.node,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
 
         assert_eq!(confirmed.broadcast_status, BroadcastStatus::RevealConfirmed);
         assert_eq!(
@@ -6064,8 +6223,14 @@ mod tests {
 
         chain.mine(&[&commit_b, &reveal_b]).await;
         let proposal = repo.find_by_action_id(&action_id).await.unwrap().unwrap();
-        let unchanged =
-            confirm_reveal_if_mined(&repo, proposal, &chain.node, "mock://asm-membership").await;
+        let unchanged = confirm_reveal_if_mined(
+            &repo,
+            proposal,
+            &chain.node,
+            bitcoin::Network::Regtest,
+            "mock://asm-membership",
+        )
+        .await;
         assert_eq!(
             unchanged.broadcast_status,
             BroadcastStatus::CommitBroadcasted
@@ -6084,6 +6249,7 @@ mod tests {
             session_of(&sig_a()),
             &lone,
             &chain.node,
+            bitcoin::Network::Regtest,
             report("reveal_confirmed", Some(&commit_c), Some(&reveal_c)),
         )
         .await
@@ -6220,6 +6386,7 @@ mod tests {
             session_of(&sig_b()),
             &action_id,
             &NodeDown,
+            bitcoin::Network::Regtest,
             failed,
         )
         .await

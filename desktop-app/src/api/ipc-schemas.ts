@@ -22,7 +22,7 @@ export const PROPOSAL_ACTION_TYPES = [
 	'operator_set_update',
 	'sequencer_key_update',
 	'council_signer_update',
-	'safe_harbour_address_update',
+	'safe_harbor_address_update',
 	'defcon_1',
 	'defcon_3',
 	'cancel',
@@ -155,6 +155,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 	z.object({
 		kind: z.literal('multisig_update'),
 		role: z.string(),
+		/** Admin IDs on the chain's network, as are `removeKeys`. */
 		addKeys: z.array(z.string()),
 		removeKeys: z.array(z.string()),
 		newThreshold: z.number(),
@@ -168,7 +169,7 @@ export const decodedActionSchema = z.discriminatedUnion('kind', [
 	// `address` is rendered with the process's active network; `addressHex` is the BOSD
 	// descriptor, which is what the device displays and therefore what a signer compares.
 	z.object({
-		kind: z.literal('safe_harbour_address_update'),
+		kind: z.literal('safe_harbor_address_update'),
 		addressHex: z.string(),
 		address: z.string(),
 	}),
@@ -192,8 +193,13 @@ export const rawOrchestratorAuthSessionSchema = z.object({
 	expires_at_unix_ms: z.number(),
 })
 
+// admin-id.ts schemas
+/** Admin ID per signer key (lowercase hex, no `0x`); keys that are not valid compressed keys are absent. */
+export const adminIdsSchema = z.record(z.string(), z.string())
+
 // asm-state.ts schemas
 export const multisigConfigSchema = z.object({
+	/** Admin IDs on the chain's network, in the ASM's canonical order. */
 	signers: z.array(z.string()),
 	threshold: z.number(),
 })

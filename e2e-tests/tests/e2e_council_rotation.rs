@@ -4,25 +4,29 @@
 //! real SPS-50 envelopes and a live regtest ASM; only the rotation is composed through the desktop
 //! codec because that wire mapping is part of the behavior under test.
 
+use bitcoin::Network;
 use std::num::{NonZero, NonZeroU8};
 use std::process::Command;
 
-use alpen_multisig_e2e_tests::fixtures::{decode_administration_subproto, decode_bridge_subproto};
+use alpen_multisig_e2e_tests::fixtures::{
+    decode_administration_subproto, decode_bridge_subproto, regtest_signer_config,
+};
 use alpen_multisig_e2e_tests::test_harness::{AsmTestHarness, AsmTestHarnessBuilder};
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoind_async_client::traits::Reader;
-use ssz::{Decode, Encode};
-use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role, UpdateTxType};
+use ssz::Decode;
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfig};
+use strata_asm_admin_types::{ConfirmationDepths, Role, UncheckedThresholdConfig, UpdateTxType};
+use strata_asm_params::AdministrationInitConfig;
 use strata_asm_proto_admin::AdministrationSubprotoState;
 use strata_asm_txs_admin::actions::updates::Defcon1Update;
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::test_utils::create_signature_set;
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::ThresholdConfig;
 
-use desktop_app::domain::action::{Action, CompressedPubKey, MultisigUpdate};
+use desktop_app::domain::action::{Action, MultisigUpdate};
 use desktop_app::domain::authority::Authority;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::action_codec;
 
 const COUNCIL_UPDATE_DEPTH: u16 = 5;
@@ -49,13 +53,13 @@ impl RotationFixture {
         let initial_council_config = threshold_config(&council_keys, 2);
         let rotated_council_config =
             threshold_config(&[council_keys[0], council_keys[2], replacement_key], 2);
-        let unrelated_config = threshold_config(&[fixed_key(7)], 1);
+        let unrelated_config = genesis_config(&[fixed_key(7)], 1);
 
         let admin_config = AdministrationInitConfig {
-            strata_administrator: threshold_config(&admin_keys, 2),
+            strata_administrator: genesis_config(&admin_keys, 2),
             strata_sequencer_manager: unrelated_config.clone(),
             alpen_administrator: unrelated_config.clone(),
-            strata_security_council: initial_council_config.clone(),
+            strata_security_council: genesis_config(&council_keys, 2),
             confirmation_depths: ConfirmationDepths {
                 strata_admin_multisig_update: ADMIN_UPDATE_DEPTH,
                 strata_seq_manager_multisig_update: COUNCIL_UPDATE_DEPTH,
@@ -67,7 +71,7 @@ impl RotationFixture {
                 ee_stf_vk_update: COUNCIL_UPDATE_DEPTH,
                 strata_security_council_multisig_update: COUNCIL_UPDATE_DEPTH,
                 defcon3: COUNCIL_UPDATE_DEPTH,
-                safe_harbour_address_update: COUNCIL_UPDATE_DEPTH,
+                safe_harbor_address_update: COUNCIL_UPDATE_DEPTH,
             },
             max_seqno_gap: NonZero::new(10).expect("non-zero sequence gap"),
         };
@@ -83,12 +87,12 @@ impl RotationFixture {
     }
 
     fn rotation_action(&self) -> anyhow::Result<MultisigAction> {
-        let removed = compressed_key(&self.council_keys[1]);
-        let added = compressed_key(&self.replacement_key);
+        let removed = signer(&self.council_keys[1]);
+        let added = signer(&self.replacement_key);
         let action = Action::MultisigUpdate(MultisigUpdate {
             role: Authority::SecurityCouncil,
-            add_keys: vec![domain_key(&added)],
-            remove_keys: vec![domain_key(&removed)],
+            add_signers: vec![domain_signer(&added)],
+            remove_signers: vec![domain_signer(&removed)],
             new_threshold: NonZeroU8::new(2).expect("non-zero threshold"),
         });
         let encoded = action_codec::encode_hex(&action)?;
@@ -311,8 +315,8 @@ async fn run_cancelled_rotation() -> anyhow::Result<()> {
     );
     anyhow::ensure!(
         !final_council_config
-            .keys()
-            .contains(&compressed_key(&fixture.replacement_key)),
+            .signers()
+            .contains(&signer(&fixture.replacement_key)),
         "cancelled replacement signer must remain absent"
     );
     anyhow::ensure!(
@@ -457,8 +461,9 @@ async fn submit_action(
     signer_keys: &[SecretKey],
     signer_indices: &[u8],
 ) -> anyhow::Result<u64> {
-    let signatures = create_signature_set(signer_keys, signer_indices, action, seqno);
-    let payload = SignedPayload::new(seqno, action.clone(), signatures).as_ssz_bytes();
+    let signatures =
+        create_signature_set(signer_keys, signer_indices, action, seqno, Network::Regtest);
+    let payload = SignedPayload::new(seqno, action.clone(), signatures).into_envelope_bytes();
     let reveal = harness.build_envelope_tx(action.tag(), payload).await?;
     let block_hash = harness.submit_and_mine_tx(&reveal).await?;
     Ok(harness.client.get_block_height(&block_hash).await?)
@@ -504,11 +509,11 @@ fn signer_indices(config: &ThresholdConfig, signer_keys: &[SecretKey]) -> anyhow
 }
 
 fn signer_index(config: &ThresholdConfig, secret_key: &SecretKey) -> anyhow::Result<u8> {
-    let public_key = compressed_key(secret_key);
+    let signer = signer(secret_key);
     config
-        .keys()
+        .signers()
         .iter()
-        .position(|candidate| candidate == &public_key)
+        .position(|candidate| candidate == &signer)
         .ok_or_else(|| anyhow::anyhow!("signer is absent from live authority config"))?
         .try_into()
         .map_err(|_| anyhow::anyhow!("signer index exceeds u8"))
@@ -520,7 +525,7 @@ fn bridge_safe_harbor_activated(harness: &AsmTestHarness) -> anyhow::Result<bool
         .ok_or_else(|| anyhow::anyhow!("ASM state must be present"))?;
     let bridge = decode_bridge_subproto(&asm_state)
         .ok_or_else(|| anyhow::anyhow!("bridge section must be present"))?;
-    Ok(bridge.safe_harbour().is_activated())
+    Ok(bridge.safe_harbor().is_activated())
 }
 
 fn fixed_key(byte: u8) -> SecretKey {
@@ -529,16 +534,25 @@ fn fixed_key(byte: u8) -> SecretKey {
 
 fn threshold_config(keys: &[SecretKey], threshold: u8) -> ThresholdConfig {
     ThresholdConfig::try_new(
-        keys.iter().map(compressed_key).collect(),
+        keys.iter().map(signer).collect(),
         NonZero::new(threshold).expect("non-zero threshold"),
     )
     .expect("valid threshold config")
 }
 
-fn compressed_key(secret_key: &SecretKey) -> CompressedPublicKey {
-    CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, secret_key))
+/// The same signer set, as the regtest params file writes it.
+fn genesis_config(keys: &[SecretKey], threshold: u8) -> UncheckedThresholdConfig {
+    let signers: Vec<P2wpkhAddress> = keys.iter().map(signer).collect();
+    regtest_signer_config(
+        &signers,
+        NonZero::new(threshold).expect("non-zero threshold"),
+    )
 }
 
-fn domain_key(key: &CompressedPublicKey) -> CompressedPubKey {
-    CompressedPubKey::new(key.serialize())
+fn signer(secret_key: &SecretKey) -> P2wpkhAddress {
+    P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, secret_key))
+}
+
+fn domain_signer(signer: &P2wpkhAddress) -> SignerId {
+    SignerId::from_program(signer.to_byte_array())
 }

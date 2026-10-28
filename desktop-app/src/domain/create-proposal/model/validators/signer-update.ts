@@ -1,6 +1,6 @@
 import { normalizeSignerKey, countSignersAfterUpdate } from '../create-proposal.schema'
 import type { ActionValidator } from './types'
-import { compressedPubKeyHexPattern } from './types'
+import { adminIdInputError, chainAdminIdHrp } from './types'
 
 // Upstream accepts an empty update: every rejection in `validate_update` passes with empty add
 // and remove sets, `apply_update` retains the same signers and re-sets the same threshold, and
@@ -17,33 +17,17 @@ export const validateSignerUpdate: ActionValidator = ({
 	currentMultisigThreshold,
 }) => {
 	if (data.keysToAdd.length < 1) {
-		ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for keys to add' })
+		ctx.addIssue({ code: 'custom', path: ['keysToAdd'], message: 'At least one row for signers to add' })
 	}
 	if (data.keysToRemove.length < 1) {
-		ctx.addIssue({ code: 'custom', path: ['keysToRemove'], message: 'At least one row for keys to remove' })
+		ctx.addIssue({ code: 'custom', path: ['keysToRemove'], message: 'At least one row for signers to remove' })
 	}
 
-	for (const [index, row] of data.keysToAdd.entries()) {
-		const key = row.value.trim()
-		if (key.length === 0) continue
-		if (!compressedPubKeyHexPattern.test(key)) {
-			ctx.addIssue({
-				code: 'custom',
-				path: ['keysToAdd', index, 'value'],
-				message: 'Signer key must be compressed pubkey hex (33 bytes, 02/03..., optional 0x)',
-			})
-		}
-	}
-
-	for (const [index, row] of data.keysToRemove.entries()) {
-		const key = row.value.trim()
-		if (key.length === 0) continue
-		if (!compressedPubKeyHexPattern.test(key)) {
-			ctx.addIssue({
-				code: 'custom',
-				path: ['keysToRemove', index, 'value'],
-				message: 'Signer key must be compressed pubkey hex (33 bytes, 02/03..., optional 0x)',
-			})
+	const expectedHrp = chainAdminIdHrp(currentMultisigSigners)
+	for (const field of ['keysToAdd', 'keysToRemove'] as const) {
+		for (const [index, row] of data[field].entries()) {
+			const message = row.value.trim().length === 0 ? null : adminIdInputError(row.value, expectedHrp)
+			if (message) ctx.addIssue({ code: 'custom', path: [field, index, 'value'], message })
 		}
 	}
 
@@ -63,7 +47,7 @@ export const validateSignerUpdate: ActionValidator = ({
 			ctx.addIssue({
 				code: 'custom',
 				path: ['keysToAdd', index, 'value'],
-				message: 'Duplicate signer key',
+				message: 'Duplicate signer',
 			})
 		}
 	}
@@ -84,7 +68,7 @@ export const validateSignerUpdate: ActionValidator = ({
 			ctx.addIssue({
 				code: 'custom',
 				path: ['keysToRemove', index, 'value'],
-				message: 'Duplicate signer key',
+				message: 'Duplicate signer',
 			})
 		}
 	}
@@ -96,14 +80,14 @@ export const validateSignerUpdate: ActionValidator = ({
 			ctx.addIssue({
 				code: 'custom',
 				path: ['keysToAdd', index, 'value'],
-				message: 'Duplicate signer key',
+				message: 'Duplicate signer',
 			})
 		}
 		for (const index of removeIndexes) {
 			ctx.addIssue({
 				code: 'custom',
 				path: ['keysToRemove', index, 'value'],
-				message: 'Duplicate signer key',
+				message: 'Duplicate signer',
 			})
 		}
 	}

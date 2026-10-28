@@ -7,22 +7,22 @@
 //!   4. Advance blocks past what would have been the activation height.
 //!   5. Verify ASM state matches the initial state — the new signer was NOT added.
 
+use bitcoin::Network;
 use std::num::NonZero;
 use std::process::Command;
 
-use alpen_multisig_e2e_tests::fixtures::decode_administration_subproto;
+use alpen_multisig_e2e_tests::fixtures::{decode_administration_subproto, regtest_signer_config};
 use alpen_multisig_e2e_tests::test_harness::AsmTestHarnessBuilder;
 use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoind_async_client::traits::Reader;
 use rand::rngs::OsRng;
-use ssz::encode::Encode;
-use strata_asm_params::{AdministrationInitConfig, ConfirmationDepths, Role};
+use strata_asm_admin_threshold_sig::{P2wpkhAddress, ThresholdConfigUpdate};
+use strata_asm_admin_types::{ConfirmationDepths, Role};
+use strata_asm_params::AdministrationInitConfig;
 use strata_asm_txs_admin::actions::updates::StrataAdminMultisigUpdate;
 use strata_asm_txs_admin::actions::{CancelAction, MultisigAction, UpdateAction};
 use strata_asm_txs_admin::parser::SignedPayload;
 use strata_asm_txs_admin::test_utils::create_signature_set;
-use strata_crypto::keys::compressed::CompressedPublicKey;
-use strata_crypto::threshold_signature::{ThresholdConfig, ThresholdConfigUpdate};
 
 const CONFIRMATION_DEPTH: u16 = 5;
 
@@ -38,18 +38,16 @@ async fn e2e_cancel_prevents_update_enactment() {
     // --- Setup: 3-signer 2-of-3 StrataAdministrator config ---
 
     let privkeys: Vec<SecretKey> = (0..3).map(|_| SecretKey::new(&mut OsRng)).collect();
-    let pubkeys: Vec<CompressedPublicKey> = privkeys
+    let pubkeys: Vec<P2wpkhAddress> = privkeys
         .iter()
-        .map(|sk| CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, sk)))
+        .map(|sk| P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, sk)))
         .collect();
     let threshold = NonZero::new(2).expect("threshold is non-zero");
-    let strata_admin_config =
-        ThresholdConfig::try_new(pubkeys, threshold).expect("valid threshold config");
+    let strata_admin_config = regtest_signer_config(&pubkeys, threshold);
 
     let other_sk = SecretKey::new(&mut OsRng);
-    let other_pk = CompressedPublicKey::from(PublicKey::from_secret_key(SECP256K1, &other_sk));
-    let other_config = ThresholdConfig::try_new(vec![other_pk], NonZero::new(1).unwrap())
-        .expect("valid 1-of-1 config");
+    let other_pk = P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(SECP256K1, &other_sk));
+    let other_config = regtest_signer_config(&[other_pk], NonZero::new(1).unwrap());
 
     let admin_config = AdministrationInitConfig {
         strata_administrator: strata_admin_config,
@@ -67,7 +65,7 @@ async fn e2e_cancel_prevents_update_enactment() {
             ee_stf_vk_update: CONFIRMATION_DEPTH,
             strata_security_council_multisig_update: CONFIRMATION_DEPTH,
             defcon3: CONFIRMATION_DEPTH,
-            safe_harbour_address_update: CONFIRMATION_DEPTH,
+            safe_harbor_address_update: CONFIRMATION_DEPTH,
         },
         max_seqno_gap: NonZero::new(10).unwrap(),
     };
@@ -89,25 +87,32 @@ async fn e2e_cancel_prevents_update_enactment() {
     let initial_authority = initial_admin
         .authority(Role::StrataAdministrator)
         .expect("StrataAdministrator authority should exist");
-    let initial_keys: Vec<CompressedPublicKey> = initial_authority.config().keys().to_vec();
+    let initial_keys: Vec<P2wpkhAddress> = initial_authority.config().signers().to_vec();
     let initial_threshold = initial_authority.config().threshold();
 
     // --- Step 1: Broadcast Update action (add a new signer) ---
 
-    let new_signer = CompressedPublicKey::from(PublicKey::from_secret_key(
+    let new_signer = P2wpkhAddress::from_pubkey(&PublicKey::from_secret_key(
         SECP256K1,
         &SecretKey::new(&mut OsRng),
     ));
-    let config_update = ThresholdConfigUpdate::new(vec![new_signer], vec![], threshold);
+    let config_update = ThresholdConfigUpdate::try_new(vec![new_signer], vec![], threshold)
+        .expect("valid config update");
     let update_inner =
         UpdateAction::StrataAdminMultisig(StrataAdminMultisigUpdate::new(config_update));
     let update = MultisigAction::Update(update_inner.clone());
 
     let update_seqno = 1u64;
     let signer_indices: Vec<u8> = vec![0, 2];
-    let update_sigs = create_signature_set(&privkeys, &signer_indices, &update, update_seqno);
+    let update_sigs = create_signature_set(
+        &privkeys,
+        &signer_indices,
+        &update,
+        update_seqno,
+        Network::Regtest,
+    );
     let update_payload =
-        SignedPayload::new(update_seqno, update.clone(), update_sigs).as_ssz_bytes();
+        SignedPayload::new(update_seqno, update.clone(), update_sigs).into_envelope_bytes();
 
     let update_reveal_tx = harness
         .build_envelope_tx(update.tag(), update_payload)
@@ -152,9 +157,15 @@ async fn e2e_cancel_prevents_update_enactment() {
 
     // seqno=2: StrataAdministrator seqno advanced to 1 after the update, so next valid is 2.
     let cancel_seqno = 2u64;
-    let cancel_sigs = create_signature_set(&privkeys, &signer_indices, &cancel, cancel_seqno);
+    let cancel_sigs = create_signature_set(
+        &privkeys,
+        &signer_indices,
+        &cancel,
+        cancel_seqno,
+        Network::Regtest,
+    );
     let cancel_payload =
-        SignedPayload::new(cancel_seqno, cancel.clone(), cancel_sigs).as_ssz_bytes();
+        SignedPayload::new(cancel_seqno, cancel.clone(), cancel_sigs).into_envelope_bytes();
 
     let cancel_reveal_tx = harness
         .build_envelope_tx(cancel.tag(), cancel_payload)
@@ -199,7 +210,7 @@ async fn e2e_cancel_prevents_update_enactment() {
     let final_authority = final_admin
         .authority(Role::StrataAdministrator)
         .expect("StrataAdministrator authority should exist");
-    let final_keys: Vec<CompressedPublicKey> = final_authority.config().keys().to_vec();
+    let final_keys: Vec<P2wpkhAddress> = final_authority.config().signers().to_vec();
 
     assert_eq!(
         final_authority.config().threshold(),

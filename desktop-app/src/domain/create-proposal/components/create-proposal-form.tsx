@@ -157,7 +157,7 @@ export function CreateProposalForm({
 	// Same shape, same reason, for the destination this action replaces: without it the form can
 	// neither show what is being replaced nor refuse a rotation to the address already installed,
 	// and that second rule is what keeps a no-op from reporting as Enacted.
-	const isSafeHarborAction = actionType === 'safe_harbour_address_update'
+	const isSafeHarborAction = actionType === 'safe_harbor_address_update'
 	const { safeHarbor, isLoading: isLoadingSafeHarbor } = useSafeHarbor(isSafeHarborAction)
 	const isSafeHarborUnavailable = isSafeHarborAction && !isLoadingSafeHarbor && safeHarbor === null
 

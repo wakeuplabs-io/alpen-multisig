@@ -6,6 +6,7 @@ use tauri::State;
 use desktop_app::domain::action::SafeHarborDescriptor;
 use desktop_app::domain::auth::AuthRole;
 use desktop_app::domain::authority::Authority;
+use desktop_app::domain::signer_id::SignerId;
 use desktop_app::infrastructure::asm_status_rpc;
 use desktop_app::infrastructure::bitcoin_rpc::BitcoinRpcClient;
 use desktop_app::infrastructure::bitcoin_rpc::HttpBitcoinRpcClient;
@@ -140,12 +141,53 @@ pub async fn check_authority_memberships(
     node_config: State<'_, NodeConfigState>,
 ) -> Result<HashMap<String, bool>, String> {
     let rpc_url = strata_rpc_url(&node_config)?;
-    let (role_to_keys, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
+    let (role_to_admin_ids, _) = asm_status_rpc::fetch_role_membership(&rpc_url).await?;
+    Ok(memberships(&role_to_admin_ids, &pubkey_hex))
+}
 
-    let mut result = HashMap::new();
-    for (role, keys) in &role_to_keys {
-        let is_member = keys.iter().any(|k| k.eq_ignore_ascii_case(&pubkey_hex));
-        result.insert(role.as_wire_str().to_string(), is_member);
+/// Whether the key's signer is in each role, compared by witness program: the ASM lists Admin IDs.
+fn memberships(
+    role_to_admin_ids: &HashMap<AuthRole, Vec<String>>,
+    pubkey_hex: &str,
+) -> HashMap<String, bool> {
+    let signer = SignerId::from_pubkey_hex(pubkey_hex);
+    role_to_admin_ids
+        .iter()
+        .map(|(role, admin_ids)| {
+            let is_member = signer.is_some()
+                && admin_ids
+                    .iter()
+                    .any(|id| SignerId::from_admin_id(id) == signer);
+            (role.as_wire_str().to_string(), is_member)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The generator point and its Admin ID on regtest (BIP-173 vector).
+    const KEY: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    const ADMIN_ID: &str = "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080";
+
+    #[test]
+    fn a_key_is_a_member_where_its_admin_id_is_listed() {
+        let roles = HashMap::from([
+            (AuthRole::StrataAdministrator, vec![ADMIN_ID.to_string()]),
+            (AuthRole::AlpenAdministrator, vec![]),
+        ]);
+        let result = memberships(&roles, KEY);
+        assert_eq!(result.get("strata_administrator"), Some(&true));
+        assert_eq!(result.get("alpen_administrator"), Some(&false));
     }
-    Ok(result)
+
+    #[test]
+    fn an_invalid_key_is_a_member_of_nothing() {
+        let roles = HashMap::from([(AuthRole::StrataAdministrator, vec![ADMIN_ID.to_string()])]);
+        assert_eq!(
+            memberships(&roles, "not a key").get("strata_administrator"),
+            Some(&false)
+        );
+    }
 }

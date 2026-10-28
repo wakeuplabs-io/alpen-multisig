@@ -193,16 +193,12 @@ export function ConnectPhase({
 							onClick={handleShowDebugAddress}
 							disabled={debugLoading}
 						>
-							{debugLoading ? 'Deriving address…' : 'Show compressed pubkey / address (debug)'}
+							{debugLoading ? 'Deriving address…' : 'Show address (debug)'}
 						</button>
 						{debugError !== null && <p className="m-0 mt-1 text-label text-danger">{debugError}</p>}
 						{debugEntry !== null && (
 							<div className="mt-2 rounded-md border border-[#e5e7eb] bg-white p-2 text-mono-sm text-[#374151]">
 								<p className="m-0 break-all">
-									<span className="font-medium text-[#6b7280]">Public key: </span>
-									{debugEntry.publicKeyHex}
-								</p>
-								<p className="m-0 mt-1 break-all">
 									<span className="font-medium text-[#6b7280]">Address: </span>
 									{debugEntry.address}
 								</p>

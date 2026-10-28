@@ -62,7 +62,7 @@ variant, two inherited debts, and the cancel.
 | `compute_and_store_activation_height`, `record_reveal_confirmed_facts` | same module | The activation height and the queue `UpdateId` are already persisted per proposal |
 | `defcon1_enacted` | `orchestrator-be/src/infrastructure/asm_enactment.rs` | The shape Phase 4's predicate follows — a free function over plain observations |
 | `showsActivationCountdown`, `activation-countdown.tsx` | `desktop-app/src/lib/proposal-status.ts`, `domain/cancel-proposal/components/` | Already correct for Defcon 3: the predicate excludes only `defcon_1` |
-| `SigningMessage::for_action` via `render_signing_message` | `desktop-app/src-tauri/src/infrastructure/signing.rs` | The four canonical lines come out for free |
+| `SigningMessage::for_action` via `render_signing_message` | `desktop-app/src-tauri/src/infrastructure/signing.rs` | The five canonical lines come out for free |
 | `SafeHarborNote`, `useSafeHarborActivated` | `desktop-app/src/components`, `src/hooks` | The already-in-harbor warning is a component, not a Defcon 1 detail |
 | `run_defcon3` | `e2e-tests/tests/e2e_defcon_probe.rs` | Proves queue → depth → activation on a real regtest ASM |
 | `e2e_cancel_proposal.rs` | `e2e-tests/tests/` | The shape Phase 7's cancelled-path e2e follows |
@@ -281,7 +281,7 @@ End to end, once all seven land, on regtest with the local stack
 (`./scripts/local-stack.sh --clean` if any state predates the ASM pin bump):
 
 1. A council signer reaches the Defcon 3 form; every other authority sees no entry point to it.
-2. The rendered four-line message matches the signer's screen, has no `Action Details:` block, and
+2. The rendered five-line message matches the signer's screen, has no `Action Details:` block, and
    differs from Defcon 1's.
 3. Quorum, broadcast — the proposal shows Approved, then Awaiting enactment with a countdown to the
    right block, and the harbor stays off.

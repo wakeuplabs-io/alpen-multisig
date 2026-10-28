@@ -43,21 +43,23 @@ use bitcoind_async_client::{
 };
 use corepc_node::Node;
 use rand::RngCore;
+use strata_asm_common::{AnchorState, AsmManifestHash, AsmSpec};
 use strata_asm_params::{
-    AdministrationInitConfig, AsmParams, BridgeV1InitConfig, CheckpointInitConfig,
+    AdministrationInitConfig, AsmParams, BridgeInitConfig, CheckpointInitConfig,
     SubprotocolInstance,
 };
 use strata_asm_spec::StrataAsmSpec;
-use strata_asm_worker::{AsmState, AsmWorkerBuilder, AsmWorkerHandle, WorkerContext};
-use strata_btc_types::BlockHashExt;
-use strata_identifiers::{Buf32, L1BlockCommitment};
-use strata_l1_envelope_fmt::builder::{build_envelope_script, EnvelopeScriptBuilder};
+use strata_asm_worker::{
+    test_utils::{get_l1_anchor, TestAsmWorkerContext},
+    AnchorStateStore, AsmWorkerBuilder, AsmWorkerHandle, ExecutionRegistry, ManifestMmrStore,
+};
+use strata_identifiers::L1BlockCommitment;
+use strata_l1_envelope_fmt::{build_envelope_script, EnvelopeScriptBuilder};
 use strata_l1_txfmt::{ParseConfig, TagData};
+use strata_predicate::PredicateKey;
 use strata_tasks::{TaskExecutor, TaskManager};
 use strata_test_utils_arb::ArbitraryGenerator;
 use tokio::{runtime::Handle, task::block_in_place};
-
-use crate::worker_context::{get_l1_anchor, TestAsmWorkerContext};
 
 // Test Harness
 
@@ -100,9 +102,8 @@ impl AsmTestHarness {
     ///
     /// This will:
     /// 1. Mine a block on regtest (coinbase to given address or a new one)
-    /// 2. Fetch and cache the block
-    /// 3. Submit the block commitment to ASM worker
-    /// 4. Wait until ASM worker has processed the block
+    /// 2. Submit the block hash to ASM worker
+    /// 3. Wait until ASM worker has processed the block
     ///
     /// When this method returns, the block is guaranteed to be processed by ASM.
     ///
@@ -121,20 +122,9 @@ impl AsmTestHarness {
 
         let block_hash = block_hashes[0];
 
-        // Fetch and cache the block
-        let _block = self.context.fetch_and_cache_block(block_hash).await?;
-
-        // Get block height
-        let height = self.client.get_block_height(&block_hash).await?;
-
-        // Create L1BlockCommitment and submit to ASM worker
-        let block_id = block_hash.to_l1_block_id();
-        let block_commitment = L1BlockCommitment::new(height as u32, block_id);
-
-        // Submit to ASM worker and wait for processing to complete.
-        // `submit_block` uses `send_and_wait_blocking`, so the block is fully
-        // processed when this returns.
-        block_in_place(|| self.asm_handle.submit_block(block_commitment))?;
+        // Submit to ASM worker and wait for processing to complete. The worker resolves the
+        // height itself, and the block is fully processed when this returns.
+        block_in_place(|| self.asm_handle.submit_block(block_hash))?;
 
         Ok(block_hash)
     }
@@ -198,7 +188,7 @@ impl AsmTestHarness {
         // Mine blocks until tx is confirmed
         for _ in 0..10 {
             let block_hash = self.mine_block(None).await?;
-            let block = self.context.fetch_and_cache_block(block_hash).await?;
+            let block = self.get_block(block_hash).await?;
 
             // Check if our tx is in this block
             if block.txdata.iter().any(|t| t.compute_txid() == txid) {
@@ -224,39 +214,32 @@ impl AsmTestHarness {
         Ok(commitment.height() as u64)
     }
 
-    /// Get the latest ASM state from the worker context.
-    pub fn get_latest_asm_state(&self) -> anyhow::Result<Option<(L1BlockCommitment, AsmState)>> {
-        Ok(self.context.get_latest_asm_state()?)
+    /// Get the latest anchor state from the worker context, with the block it was built up to.
+    pub fn get_latest_asm_state(&self) -> anyhow::Result<Option<(L1BlockCommitment, AnchorState)>> {
+        Ok(self
+            .context
+            .get_latest_anchor_state()?
+            .map(|state| (state.last_processed_block(), state)))
     }
 
-    /// Get ASM state at a specific block.
-    pub fn get_asm_state_at(&self, blockid: &L1BlockCommitment) -> anyhow::Result<AsmState> {
+    /// Get the anchor state at a specific block.
+    pub fn get_asm_state_at(&self, blockid: &L1BlockCommitment) -> anyhow::Result<AnchorState> {
         Ok(self.context.get_anchor_state(blockid)?)
     }
 
-    /// Get a block from the cache or Bitcoin.
+    /// Get a block from Bitcoin.
     pub async fn get_block(&self, block_hash: BlockHash) -> anyhow::Result<Block> {
-        self.context.fetch_and_cache_block(block_hash).await
+        Ok(self.client.get_block(&block_hash).await?)
     }
 
-    /// Get the number of MMR leaves (manifest hashes) stored.
-    pub fn get_mmr_leaf_count(&self) -> usize {
-        self.context.mmr_leaves.lock().unwrap().len()
+    /// Get the number of MMR leaves (sentinels plus manifest hashes) stored.
+    pub fn get_mmr_leaf_count(&self) -> u64 {
+        self.context.mmr_leaf_count()
     }
 
     /// Get a manifest hash by leaf index.
-    pub fn get_manifest_hash(&self, index: u64) -> anyhow::Result<Option<Buf32>> {
+    pub fn get_manifest_hash(&self, index: u64) -> anyhow::Result<AsmManifestHash> {
         Ok(self.context.get_manifest_hash(index)?)
-    }
-
-    /// Get a snapshot of all stored manifests.
-    pub fn get_stored_manifests(&self) -> Vec<strata_asm_manifest_types::AsmManifest> {
-        self.context.manifests.lock().unwrap().clone()
-    }
-
-    /// Get all MMR leaf hashes in leaf-index order.
-    pub fn get_mmr_leaves(&self) -> Vec<[u8; 32]> {
-        self.context.mmr_leaves.lock().unwrap().clone()
     }
 
     // Funding & Wallet
@@ -499,7 +482,7 @@ fn create_taproot_spend_info(
 pub struct AsmTestHarnessBuilder {
     genesis_height: Option<u64>,
     admin_config: Option<AdministrationInitConfig>,
-    bridge_config: Option<BridgeV1InitConfig>,
+    bridge_config: Option<BridgeInitConfig>,
     checkpoint_config: Option<CheckpointInitConfig>,
     txindex: bool,
 }
@@ -521,7 +504,7 @@ impl AsmTestHarnessBuilder {
     }
 
     /// Overrides the bridge subprotocol config.
-    pub fn with_bridge_config(mut self, config: BridgeV1InitConfig) -> Self {
+    pub fn with_bridge_config(mut self, config: BridgeInitConfig) -> Self {
         self.bridge_config = Some(config);
         self
     }
@@ -595,11 +578,18 @@ impl AsmTestHarnessBuilder {
         let task_manager = TaskManager::new(Handle::current());
         let executor = task_manager.create_executor();
 
-        // 7. Launch ASM worker service
+        // 7. Launch ASM worker service, with the spec registered under the predicate the genesis
+        // names
+        let predicate = PredicateKey::always_accept();
+        let mut registry = ExecutionRegistry::default();
+        registry.register(predicate.clone(), StrataAsmSpec)?;
         let asm_handle = AsmWorkerBuilder::new()
             .with_context(context.clone())
-            .with_asm_spec(StrataAsmSpec)
-            .with_params((*asm_params).clone())
+            .with_genesis(
+                StrataAsmSpec.construct_genesis_state(&asm_params),
+                predicate,
+            )
+            .with_registry(registry)
             .launch(&executor)?;
 
         let harness = AsmTestHarness {
@@ -612,15 +602,9 @@ impl AsmTestHarnessBuilder {
             genesis_height,
         };
 
-        // Submit genesis block to ASM worker
-        let genesis_block_id = genesis_hash.to_l1_block_id();
-        let genesis_commitment = L1BlockCommitment::new(genesis_height as u32, genesis_block_id);
-
-        // Fetch and cache genesis block
-        let _genesis_block = harness.context.fetch_and_cache_block(genesis_hash).await?;
-
-        // Submit genesis block and wait for processing to complete
-        block_in_place(|| harness.asm_handle.submit_block(genesis_commitment))?;
+        // Submit genesis block and wait for processing to complete. Genesis already has a stored
+        // anchor, so this is a no-op for the worker.
+        block_in_place(|| harness.asm_handle.submit_block(genesis_hash))?;
 
         Ok(harness)
     }

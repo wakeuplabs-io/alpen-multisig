@@ -297,10 +297,10 @@ Defcon 3, and its cancel, outside the orchestrator through the existing `/manual
 ## Signer Safety
 
 Defcon 3 authorizes sweeping **all bridge funds**, and the action carries no payload — so the
-four-line signing message is once again the entire reviewable artifact.
+five-line signing message is once again the entire reviewable artifact.
 
 1. **The message is rendered, never composed.** Resolved through upstream's renderer and printed
-   verbatim; a failed resolve disables the CTA rather than letting a signer confirm four lines they
+   verbatim; a failed resolve disables the CTA rather than letting a signer confirm five lines they
    never saw.
 2. **Type-to-confirm** `DEFCON 3` before the sign CTA enables.
 3. **Destructive visual treatment**, and honest copy about the delay
@@ -342,11 +342,11 @@ requires.
 **When** the same `(action, seq_no)` is submitted again
 **Then** the request is rejected naming the existing `ActionId`, and nothing is mutated.
 
-### 4. The signing message is the four canonical lines
+### 4. The signing message is the five canonical lines
 
 **Given** the Defcon 3 form with a resolved sequence number
 **When** the message renders
-**Then** it reads `Strata ASM Administration v1` / `Action: Defcon 3` /
+**Then** it reads `Strata ASM Administration v1` / `Network: <network>` / `Action: Defcon 3` /
 `Authorized By: Strata Security Council` / `Sequence: <n>`, with **no** `Action Details:` block, and
 it differs from the Defcon 1 message.
 

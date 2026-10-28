@@ -1,5 +1,5 @@
 import type { BroadcastAttempt, BroadcastStatus } from '@/api/proposals'
-import { normalizePubkey, truncatePubkey } from '@/lib/pubkey'
+import { normalizePubkey } from '@/lib/pubkey'
 
 type BroadcastPairsInput = {
 	broadcastStatus: BroadcastStatus
@@ -7,11 +7,16 @@ type BroadcastPairsInput = {
 	broadcastAttempts?: ReadonlyArray<BroadcastAttempt> | null
 }
 
+/**
+ * Who sent a pair: the connected signer, another signer (shown by its Admin ID), or nobody known — pairs sent
+ * before the backend kept track.
+ */
+export type BroadcastPairSender = { kind: 'you' } | { kind: 'signer'; pubkey: string } | { kind: 'unknown' }
+
 export type BroadcastPairRow = {
 	commitTxid: string
 	revealTxid: string
-	/** Who sent it: `You`, a short pubkey, or `Unknown` for pairs sent before the backend kept track. */
-	sender: string
+	sender: BroadcastPairSender
 	/**
 	 * `Mined` — the pair the ASM acted on. `Current` — the pair the proposal is tracking now.
 	 * `Not used` — another pair was mined first. `Sent` — still out there, and may yet be mined.
@@ -31,12 +36,12 @@ export function describeBroadcastPairs(proposal: BroadcastPairsInput, signerPubk
 	const own = signerPubkey === null ? null : normalizePubkey(signerPubkey)
 	return (proposal.broadcastAttempts ?? []).map((attempt) => {
 		const tracked = attempt.revealTxid.toLowerCase() === proposal.revealTxid?.toLowerCase()
-		const sender =
+		const sender: BroadcastPairSender =
 			attempt.broadcasterPubkey === null
-				? 'Unknown'
+				? { kind: 'unknown' }
 				: normalizePubkey(attempt.broadcasterPubkey) === own
-					? 'You'
-					: truncatePubkey(attempt.broadcasterPubkey)
+					? { kind: 'you' }
+					: { kind: 'signer', pubkey: attempt.broadcasterPubkey }
 		const state = tracked ? (mined ? 'Mined' : 'Current') : mined ? 'Not used' : 'Sent'
 		return { commitTxid: attempt.commitTxid, revealTxid: attempt.revealTxid, sender, state }
 	})

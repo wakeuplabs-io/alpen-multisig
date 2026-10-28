@@ -1,4 +1,5 @@
 use desktop_app::infrastructure::dev_secrets;
+use desktop_app::infrastructure::network_env;
 use desktop_app::infrastructure::signing;
 
 #[tauri::command]
@@ -6,7 +7,8 @@ pub(crate) fn compute_sighash(
     seqno: u64,
     action_hex: String,
 ) -> Result<signing::SighashResult, String> {
-    signing::compute_sighash(seqno, &action_hex)
+    let network = network_env::network_from_env().map_err(|e| e.to_string())?;
+    signing::compute_sighash(seqno, &action_hex, network)
 }
 
 /// Reports whether mnemonic / raw-key signing over IPC is enabled (debug build, or
@@ -22,7 +24,8 @@ pub(crate) fn dev_mnemonic_signing_enabled() -> bool {
 /// sighash which never appears on-device.
 #[tauri::command]
 pub(crate) fn render_signing_message(seqno: u64, action_hex: String) -> Result<String, String> {
-    signing::render_signing_message(seqno, &action_hex)
+    let network = network_env::network_from_env().map_err(|e| e.to_string())?;
+    signing::render_signing_message(seqno, &action_hex, network)
 }
 
 #[tauri::command]

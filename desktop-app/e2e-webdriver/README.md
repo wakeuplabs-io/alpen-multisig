@@ -29,14 +29,14 @@ If `npm run test:e2e` cannot find it, either add `~/.cargo/bin` to your **`PATH`
 export TAURI_DRIVER_PATH="$HOME/.cargo/bin/tauri-driver"
 ```
 
-| Requirement                 | Notes                                                                                               |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `WebKitWebDriver` on `PATH` | `which WebKitWebDriver` — often package **`webkit2gtk-driver`** (Debian/Ubuntu)                     |
-| `tauri-driver`              | `cargo install tauri-driver --locked`                                                               |
-| Node 18+                    | `npm` in this directory                                                                             |
-| Graphical session           | Run from your desktop session (not SSH-only without display)                                        |
+| Requirement                 | Notes                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `WebKitWebDriver` on `PATH` | `which WebKitWebDriver` — often package **`webkit2gtk-driver`** (Debian/Ubuntu)                                          |
+| `tauri-driver`              | `cargo install tauri-driver --locked`                                                                                    |
+| Node 18+                    | `npm` in this directory                                                                                                  |
+| Graphical session           | Run from your desktop session (not SSH-only without display)                                                             |
 | **Real backend stack**      | bitcoind regtest, electrs (Admin Wallet Electrum sync), `strata-asm-runner`, orchestrator, Postgres — same as manual E2E |
-| **Env files**               | `orchestrator-be/.env`, `desktop-app/.env` must point RPC/asm/orchestrator at your running services |
+| **Env files**               | `orchestrator-be/.env`, `desktop-app/.env` must point RPC/asm/orchestrator at your running services                      |
 
 ### Secret custody (Wave 2 Decision #2)
 
@@ -81,7 +81,7 @@ npm run test:e2e:wallet-smoke       # same as default test:e2e
 npm run test:e2e:proposal-add-signer   # create signer-update proposal (canonical Admin ID)
 npm run test:e2e:proposal-co-sign-mnemonic # second signer (cosign mnemonic, same canonical path)
 npm run test:e2e:proposal-broadcast-quorum # broadcast first quorum-ready proposal (manual step 3)
-npm run test:e2e:defcon-1-create    # Security Council session: Defcon 1 form, four signing lines, type-to-confirm gate
+npm run test:e2e:defcon-1-create    # Security Council session: Defcon 1 form, five signing lines, type-to-confirm gate
 npm run test:e2e:admin-wallet-panel # admin wallet panel lifecycle (fund, sync, unconfirmed balance)
 npm run test:e2e:fee-bump           # fee-bump flow (PRD §4.3.3) — RBF on unconfirmed send
 ```
@@ -146,9 +146,9 @@ be re-runnable evidence for #448, not to gate merges.
 Both need the dockerised emulator (see the notes kept alongside it, outside this repo) and each
 needs the device in a specific state, which the spec cannot set for you:
 
-| Script                          | Device state needed         | Proves                                                                     |
-| ------------------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| `npm run qa:trezor-wallet-choice` | passphrase **enabled**  | "Connect wallet" and "Enter passphrase on Trezor" open **different** wallets |
+| Script                             | Device state needed     | Proves                                                                             |
+| ---------------------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
+| `npm run qa:trezor-wallet-choice`  | passphrase **enabled**  | "Connect wallet" and "Enter passphrase on Trezor" open **different** wallets       |
 | `npm run qa:trezor-hidden-refused` | passphrase **disabled** | asking for a hidden wallet is refused, not silently answered with the standard one |
 
 Screenshots land in `issues/evidence/g5-448-b6-*.png`.

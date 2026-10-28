@@ -14,6 +14,22 @@ pub struct Config {
     pub bitcoin_rpc_pass: String,
     /// How many days a pending proposal stays valid before it expires. Env: PROPOSAL_EXPIRY_DAYS.
     pub proposal_expiry_days: u64,
+    /// The chain the ASM is anchored to. Env: BITCOIN_NETWORK (default `regtest`).
+    pub bitcoin_network: bitcoin::Network,
+}
+
+/// Parses a canonical `BITCOIN_NETWORK` token, the same set the desktop app accepts. An unknown
+/// token is an error rather than a silent fallback: the admin signing message names the network.
+fn parse_network(network: &str) -> anyhow::Result<bitcoin::Network> {
+    match network {
+        "bitcoin" => Ok(bitcoin::Network::Bitcoin),
+        "testnet" => Ok(bitcoin::Network::Testnet),
+        "signet" => Ok(bitcoin::Network::Signet),
+        "regtest" => Ok(bitcoin::Network::Regtest),
+        other => anyhow::bail!(
+            "invalid BITCOIN_NETWORK '{other}'; expected bitcoin/testnet/signet/regtest"
+        ),
+    }
 }
 
 /// Bearer session lifetime from sign-in when `AUTH_SESSION_TTL_MS` is unset: 24 hours (#582).
@@ -80,6 +96,9 @@ impl Config {
                 .unwrap_or_else(|_| "7".to_string())
                 .parse()
                 .context("PROPOSAL_EXPIRY_DAYS must be a valid u64")?,
+            bitcoin_network: parse_network(
+                &std::env::var("BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".to_string()),
+            )?,
         })
     }
 }
@@ -102,6 +121,20 @@ mod tests {
     #[test]
     fn default_session_ttl_is_24_hours() {
         assert_eq!(DEFAULT_AUTH_SESSION_TTL_MS, 86_400_000);
+    }
+
+    #[test]
+    fn parses_canonical_network_tokens() {
+        assert_eq!(parse_network("bitcoin").unwrap(), bitcoin::Network::Bitcoin);
+        assert_eq!(parse_network("testnet").unwrap(), bitcoin::Network::Testnet);
+        assert_eq!(parse_network("signet").unwrap(), bitcoin::Network::Signet);
+        assert_eq!(parse_network("regtest").unwrap(), bitcoin::Network::Regtest);
+    }
+
+    #[test]
+    fn rejects_unknown_network_token() {
+        let err = parse_network("mainnet").unwrap_err();
+        assert!(err.to_string().contains("BITCOIN_NETWORK"));
     }
 
     #[test]

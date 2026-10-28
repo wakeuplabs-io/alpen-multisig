@@ -14,6 +14,8 @@ per-phase delivery specs are history, in
 
 All upstream claims below were read from the `asm` submodule at tags `v0.1-alpha.11` and `v0.3.1`,
 with file and line references. Where the two tags differ, [§7.1](#71-upstream-version-notes) says so.
+The workspace pin has since moved to `v0.5.0-rc.1` ([ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)); §7.1 records what
+that changes for this feature.
 
 ---
 
@@ -122,18 +124,22 @@ Two traps worth stating plainly:
 
 ### 3.1 The signing message
 
-Both Defcon actions carry no payload, so the rendered signing message is four lines with **no
+Both Defcon actions carry no payload, so the rendered signing message is five lines with **no
 `Action Details:` block** — the block is omitted when there are no detail lines
-(`signing_message.rs:32`). Upstream pins this exact string in a test (`defcon1.rs:40-45`):
+(`signing_message.rs:38`). Upstream pins this exact string in a test (`defcon1.rs:42-49`):
 
 ```
 Strata ASM Administration v1
+Network: regtest
 Action: Defcon 1
 Authorized By: Strata Security Council
 Sequence: 42
 ```
 
-The role labels and action names are frozen by contract (`roles.rs:42-45`, `updates.rs:76-79`):
+The `Network:` line arrived with asm `v0.5.0-rc.1` (see
+[`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md)); before that the message was four lines.
+
+The role labels and action names are frozen by contract (`roles.rs:44-53`, `updates.rs:78-95`):
 *"Must remain byte-stable: external signers (hardware wallets, signing services) hash the rendered
 payload, so changing these labels invalidates already-signed messages."*
 
@@ -166,7 +172,8 @@ enactment detection for Defcon 3 additionally requires the update to be **absent
 through the real path — two council signatures, commit, reveal, worker processing the block — with
 no product code involved. Defcon 1 activates the safe harbor inside the reveal block and never
 enters the queue; Defcon 3 stays queued with the harbor off and activates exactly at its depth;
-the signing message matches the four canonical lines with no details block.
+the signing message matches the canonical lines with no details block (four at the time of the
+probe; five since asm `v0.5.0-rc.1` added `Network:`).
 
 Three things the probe settled that the source reading alone had left open:
 
@@ -361,6 +368,18 @@ cascade) and a split of `AdministrationTxParseError::MalformedTransaction` into 
 format, signing-message bytes, role assignments, confirmation-depth semantics and cancel semantics
 are the same at both tags.
 
+**At `v0.5.0-rc.1`** (the current pin, [ADR-008](../architecture/adrs/008-asm-pin-v0.5-signer-address.md)) the
+role assignments, the four actions and the confirmation-depth and cancel semantics are unchanged, but
+the wire format and the signed message are not:
+
+- Admin signers are 20-byte P2WPKH witness programs ([asm#277](https://github.com/alpenlabs/asm/pull/277)),
+  so a council rotation carries addresses, not compressed keys.
+- Every signed message carries a `Network:` line, and `SafeHarbour*` is now `SafeHarbor*`
+  ([asm#284](https://github.com/alpenlabs/asm/pull/284)).
+
+Signatures and `action_hex` from `v0.1-alpha.11` do not carry over; see
+[`asm-v0.5-signer-address.md`](./asm-v0.5-signer-address.md).
+
 ### 7.2 Coverage upstream does not have
 
 Upstream tests cover Defcon 1/3 propagation, the negative activation window, and wrong-role
@@ -394,7 +413,7 @@ Defcon authorizes sweeping **all bridge funds**, and there is no de-escalation p
 — `is_activated()` is never set back to `false`. Combined with the fact that the actions carry no
 payload, this drives the treatment:
 
-- **The four-line signing message is the reviewable artifact.** Rendered verbatim in the form, it
+- **The five-line signing message is the reviewable artifact.** Rendered verbatim in the form, it
   is byte-identical to what the hardware signer displays.
 - **Type-to-confirm** (`DEFCON 1` / `DEFCON 3`) before the sign CTA enables.
 - **Distinct destructive visual treatment**, unmistakably different from every other action form.

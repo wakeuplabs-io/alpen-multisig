@@ -316,8 +316,8 @@ for (const entry of fs.readdirSync(screensDir)) {
 	const mountsAdminId =
 		screen.includes('WalletSessionControl') || screen.includes('WalletPanelContent') || screen.includes('SessionChip')
 	if (!mountsAdminId) continue
-	if (!screen.includes('adminId={wallet.addressSample}')) {
-		rule9Violations.push(`screens/${entry}: must pass the Admin ID address into the panel (PRD 06 §3.b.ii.2)`)
+	if (!screen.includes('useSessionAdminId(wallet)') || !screen.includes('adminId={adminId}')) {
+		rule9Violations.push(`screens/${entry}: must pass the session Admin ID into the panel (PRD 06 §3.b.ii.2)`)
 	}
 	if (screen.includes('adminIdAddress')) {
 		rule9Violations.push(`screens/${entry}: must not thread a separate Admin ID address — the Admin ID is the address`)
@@ -325,7 +325,7 @@ for (const entry of fs.readdirSync(screensDir)) {
 	// Formatting an Admin ID for display is one rule in `lib/admin-id.ts`, not a ternary per
 	// screen. A screen that rolls its own is how the two shapes diverged in the first place.
 	if (screen.includes('truncateAdminId(')) {
-		rule9Violations.push(`screens/${entry}: must label the Admin ID via adminIdChipLabel, not its own truncation`)
+		rule9Violations.push(`screens/${entry}: must label the Admin ID via adminIdDisplay, not its own truncation`)
 	}
 }
 // Safety caption is a single audited literal, owned by the shared module the connect
@@ -353,16 +353,37 @@ if (adminIdRow.includes('QrCode')) {
 if (connectAdminIdCard.includes('QrCode')) {
 	rule9Violations.push('connect-admin-id-card.tsx: must NOT render a QR for the Admin ID (auth-only, never fundable)')
 }
+// Phase 6 of the ASM v0.5 plan: a surface shows and copies the chain rendering, the one the
+// add-signer field accepts, while on a hardware session the certificate modal keeps the
+// device's rendering, the one its message signs and its Verify step compares. A mnemonic
+// session has no device to match, and its `bc1q…` only comes from deriving on mainnet, so its
+// certificate signs the chain rendering. Swapping the two either rejects a copied Admin ID or
+// fails a device check that should pass.
+for (const [name, source, shown] of [
+	['admin-id-row.tsx', adminIdRow, 'value'],
+	['connect-admin-id-card.tsx', connectAdminIdCard, 'shown'],
+] as const) {
+	if (!source.includes(`= adminId.display`) || !source.includes(`<CopyButton text={${shown}}`)) {
+		rule9Violations.push(`${name}: must show and copy the chain rendering of the session Admin ID`)
+	}
+	if (!source.includes(`adminId={verify ? adminId.device : ${shown}}`) || !source.includes(`shownAdminId={${shown}}`)) {
+		rule9Violations.push(`${name}: the certificate modal must get the device rendering on a device, plus the one shown`)
+	}
+}
 // #410: the signer sees the Admin ID on the multisig-selection step, i.e. before the
 // canonical signer-set membership check has resolved.
 if (!authoritySelection.includes('<ConnectAdminIdCard adminId={adminId}')) {
 	rule9Violations.push('authority-selection-phase.tsx: must render the Admin ID before the membership check (#410)')
 }
-// PRD 06 §3.b.ii.2: both connect steps show the address the device derived, and both
-// read it from the same connect entry — the value the signer compares against the
-// device screen must not depend on which step they are looking at.
-const connectAdminIdSource = /adminId=\{state\.selectedEntry\.address\}/g
-if ((hwWalletConnect.match(connectAdminIdSource) ?? []).length < 2) {
+// PRD 06 §3.b.ii.2: both connect steps show the same Admin ID, and both read it from one
+// `useSessionAdminId` over the connect entry — what the signer copies must not depend on
+// which step they are looking at.
+const connectAdminIdSource = /adminId=\{adminId\}/g
+if (
+	!hwWalletConnect.includes('useSessionAdminId(') ||
+	!hwWalletConnect.includes('addressSample: state.selectedEntry.address') ||
+	(hwWalletConnect.match(connectAdminIdSource) ?? []).length < 2
+) {
 	rule9Violations.push(
 		'hw-wallet-connect.tsx: both connect steps must be fed the Admin ID address from the connect entry (PRD 06 §3.b.ii.2)',
 	)

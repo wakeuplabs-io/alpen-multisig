@@ -111,7 +111,7 @@ const SUPERSEDED_AFTER_CONFIRMATION = {
  *
  * A safe harbor rotation submitted after the harbor is activated is accepted on chain in full:
  * the signature verifies, the sequence number is consumed and the queue entry drains.
- * `SafeHarbour::update_address` then refuses the change and returns a boolean the bridge
+ * `SafeHarbor::update_address` then refuses the change and returns a boolean the bridge
  * subprotocol discards — no log, no error. So the sequence number is gone for the same reason as
  * above, but nothing raced this proposal, and nothing will do better: there is no de-escalation
  * upstream, so a replacement meets the same frozen destination. Constraint 1 in
