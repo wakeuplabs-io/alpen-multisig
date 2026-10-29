@@ -513,7 +513,7 @@ mod tests {
     use crate::infrastructure::admin_wallet::load_admin_wallet;
     use crate::infrastructure::node_config_store::NodeConfig;
     use bdk_wallet::bitcoin::hashes::Hash;
-    use bdk_wallet::bitcoin::{BlockHash, Network, Transaction};
+    use bdk_wallet::bitcoin::{Amount, BlockHash, Network, Transaction};
     use bdk_wallet::chain::BlockId;
     use bdk_wallet::test_utils::{insert_checkpoint, receive_output_in_latest_block};
     use bdk_wallet::KeychainKind;
@@ -551,7 +551,7 @@ mod tests {
                 hash: BlockHash::all_zeros(),
             },
         );
-        receive_output_in_latest_block(&mut wallet, 100_000);
+        receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
         wallet
     }
 

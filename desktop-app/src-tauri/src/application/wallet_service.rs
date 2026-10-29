@@ -1585,7 +1585,9 @@ mod tests {
             DeviceSignFn, HwDeviceType, HwPsbtSigner,
         };
         use bdk_wallet::bitcoin::hashes::Hash;
-        use bdk_wallet::bitcoin::{Address, BlockHash, FeeRate, Network, OutPoint, Transaction};
+        use bdk_wallet::bitcoin::{
+            Address, Amount, BlockHash, FeeRate, Network, OutPoint, Transaction,
+        };
         use bdk_wallet::chain::BlockId;
         use bdk_wallet::test_utils::{insert_checkpoint, receive_output_in_latest_block};
         use std::collections::HashSet;
@@ -1605,7 +1607,7 @@ mod tests {
                 },
             );
             for value in values {
-                receive_output_in_latest_block(&mut wallet, *value);
+                receive_output_in_latest_block(&mut wallet, Amount::from_sat(*value));
             }
             wallet
         }

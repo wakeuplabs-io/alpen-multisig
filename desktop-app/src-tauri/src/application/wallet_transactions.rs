@@ -462,7 +462,7 @@ fn map_build_fee_bump_error(e: bdk_wallet::error::BuildFeeBumpError, txid: &str)
         E::TransactionNotFound(_) | E::UnknownUtxo(_) => BumpFeeError::TxNotFound { txid },
         E::TransactionConfirmed(_) => BumpFeeError::TxAlreadyConfirmed { txid },
         E::IrreplaceableTransaction(_) => BumpFeeError::TxNotReplaceable { txid },
-        E::FeeRateUnavailable => BumpFeeError::BuildFailed {
+        E::FeeRateUnavailable | E::InvalidOutputIndex(_) => BumpFeeError::BuildFailed {
             message: e.to_string(),
         },
     }
@@ -511,7 +511,7 @@ impl WalletService {
             .filter_map(|wtx| {
                 let last_seen_secs = match wtx.chain_position {
                     ChainPosition::Confirmed { .. } => return None,
-                    ChainPosition::Unconfirmed { last_seen } => last_seen,
+                    ChainPosition::Unconfirmed { last_seen, .. } => last_seen,
                 };
                 let tx = wtx.tx_node.tx.as_ref();
                 let (sent, received) = wallet.sent_and_received(tx);
@@ -920,7 +920,7 @@ mod tests {
     };
     use bdk_wallet::chain::BlockId;
     use bdk_wallet::test_utils::{
-        insert_anchor, insert_checkpoint, insert_seen_at, insert_tx, receive_output,
+        insert_checkpoint, insert_seen_at, insert_tx, receive_output,
         receive_output_in_latest_block, ReceiveTo,
     };
     use std::sync::RwLock as StdRwLock;
@@ -949,7 +949,7 @@ mod tests {
             },
         );
         for amount in amounts {
-            receive_output_in_latest_block(&mut wallet, *amount);
+            receive_output_in_latest_block(&mut wallet, Amount::from_sat(*amount));
         }
         wallet
     }
@@ -1182,7 +1182,11 @@ mod tests {
     #[tokio::test]
     async fn list_excludes_incoming_only_unconfirmed_tx() {
         let mut wallet = funded_wallet();
-        receive_output(&mut wallet, 5_000, ReceiveTo::Mempool(4_000_000_200));
+        receive_output(
+            &mut wallet,
+            Amount::from_sat(5_000),
+            ReceiveTo::Mempool(4_000_000_200),
+        );
         let svc = WalletService::new(wallet, test_node_config());
 
         let rows = svc
@@ -1298,7 +1302,7 @@ mod tests {
     #[tokio::test]
     async fn list_reports_unknown_fee_as_none_for_foreign_input() {
         let mut wallet = funded_wallet();
-        let wallet_outpoint = receive_output_in_latest_block(&mut wallet, 20_000);
+        let wallet_outpoint = receive_output_in_latest_block(&mut wallet, Amount::from_sat(20_000));
         let foreign_outpoint = OutPoint {
             txid: Txid::from_byte_array([0xAB; 32]),
             vout: 0,
@@ -1356,8 +1360,8 @@ mod tests {
                 hash: BlockHash::all_zeros(),
             },
         );
-        let utxo_older = receive_output_in_latest_block(&mut wallet, 100_000);
-        let utxo_newer = receive_output_in_latest_block(&mut wallet, 50_000);
+        let utxo_older = receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
+        let utxo_newer = receive_output_in_latest_block(&mut wallet, Amount::from_sat(50_000));
 
         let older = {
             let mut builder = wallet.build_tx();
@@ -1883,7 +1887,7 @@ mod tests {
         };
         // Leave the anchor plus a single confirmed coin as the whole balance.
         spend_all_except(&mut wallet, anchor);
-        receive_output_in_latest_block(&mut wallet, 50_000);
+        receive_output_in_latest_block(&mut wallet, Amount::from_sat(50_000));
         let pending = pending_map(&commit, &reveal);
         let svc = signing_service(wallet);
         let mock = Arc::new(MockBroadcaster::ok("Electrum"));
@@ -2031,10 +2035,9 @@ mod tests {
         };
         assert!(coinbase.is_coinbase(), "fixture must be a coinbase");
         let height = wallet.latest_checkpoint().height();
-        insert_tx(wallet, coinbase.clone());
-        insert_anchor(
-            wallet,
-            coinbase.compute_txid(),
+        // Not `insert_tx`: it stamps a mempool `seen_at`, which bdk_chain rejects for a coinbase.
+        let mut tx_update = bdk_wallet::chain::TxUpdate::default();
+        tx_update.anchors = [(
             bdk_wallet::chain::ConfirmationBlockTime {
                 block_id: BlockId {
                     height,
@@ -2042,7 +2045,16 @@ mod tests {
                 },
                 confirmation_time: 0,
             },
-        );
+            coinbase.compute_txid(),
+        )]
+        .into();
+        tx_update.txs = vec![Arc::new(coinbase)];
+        wallet
+            .apply_update(bdk_wallet::Update {
+                tx_update,
+                ..Default::default()
+            })
+            .expect("apply coinbase update");
     }
 
     /// S1 (audit): `manually_selected_only` bypasses BDK's maturity filter, so nothing
@@ -2086,7 +2098,11 @@ mod tests {
     #[tokio::test]
     async fn cpfp_child_never_funds_itself_from_an_unrelated_unconfirmed_coin() {
         let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
-        receive_output(&mut wallet, 5_000_000, ReceiveTo::Mempool(4_000_000_500));
+        receive_output(
+            &mut wallet,
+            Amount::from_sat(5_000_000),
+            ReceiveTo::Mempool(4_000_000_500),
+        );
         let pending = pending_map_from(&commit_txid, &reveal);
         let svc = signing_service(wallet);
         let mock = Arc::new(MockBroadcaster::ok("Electrum"));
@@ -2146,7 +2162,7 @@ mod tests {
     #[tokio::test]
     async fn cpfp_child_never_funds_itself_from_a_coin_reserved_by_an_in_flight_commit() {
         let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
-        let reserved_coin = receive_output_in_latest_block(&mut wallet, 50_000);
+        let reserved_coin = receive_output_in_latest_block(&mut wallet, Amount::from_sat(50_000));
         let pending = pending_map_from(&commit_txid, &reveal);
         let svc = signing_service(wallet);
         svc.reserve_inputs(&Transaction {
@@ -2180,7 +2196,7 @@ mod tests {
     /// Returns `(wallet, commit_txid, reveal, spare)`.
     fn dust_window_wallet_with_one_spare() -> (bdk_wallet::Wallet, String, Transaction, OutPoint) {
         let (mut wallet, commit_txid, reveal) = dust_window_wallet_with_no_spare_funds();
-        let spare = receive_output_in_latest_block(&mut wallet, 50_000);
+        let spare = receive_output_in_latest_block(&mut wallet, Amount::from_sat(50_000));
         (wallet, commit_txid, reveal, spare)
     }
 
@@ -2359,8 +2375,8 @@ mod tests {
         );
         let commit_txid = commit.compute_txid().to_string();
         // Added after the package, so the commit cannot have consumed them.
-        let small = receive_output_in_latest_block(&mut wallet, 5_000);
-        let big = receive_output_in_latest_block(&mut wallet, 5_000_000);
+        let small = receive_output_in_latest_block(&mut wallet, Amount::from_sat(5_000));
+        let big = receive_output_in_latest_block(&mut wallet, Amount::from_sat(5_000_000));
         let pending = pending_map(&commit, &reveal);
         let svc = signing_service(wallet);
         let mock = Arc::new(MockBroadcaster::ok("Electrum"));

@@ -1,6 +1,6 @@
 [package]
 name = 'desktop-app'
-version = "0.4.0"
+version = "0.4.1"
 description = 'Strata Multisig desktop application (Tauri + React)'
 authors = ['WakeUp Labs']
 license = 'MIT OR Apache-2.0'
@@ -65,7 +65,7 @@ protobuf = "3.7"
 rusb = "0.9"
 gethostname = "1.1"
 # CodeEntry pairing (CPace): Elligator2 field math, the generator hash, and X25519 on it.
-crypto-bigint = "0.5"
+crypto-bigint = "0.7.6"
 sha2 = "0.10"
 x25519-dalek = "2"
 ledger_bitcoin_client = { version = "0.6", default-features = false, features = ["async"] }
