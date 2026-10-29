@@ -67,7 +67,7 @@ impl FeeEstimator for ElectrumFeeEstimator {
 
         self.with_client(move |client| {
             let btc_per_kb = client
-                .estimate_fee(target as usize)
+                .estimate_fee(target as usize, None)
                 .map_err(|e| FeeEstimateError::Unavailable(e.to_string()))?;
             btc_per_kb_to_sat_per_kvb(btc_per_kb).ok_or(FeeEstimateError::NoEstimate {
                 target,
