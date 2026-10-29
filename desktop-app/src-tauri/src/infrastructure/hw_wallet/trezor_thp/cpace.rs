@@ -4,19 +4,19 @@
 //! Rust crate exposes Elligator2 on Curve25519 (curve25519-dalek keeps it crate-private), so the
 //! map is written here over `crypto-bigint` and checked against the official vectors below.
 
-use crypto_bigint::modular::constant_mod::Residue;
-use crypto_bigint::subtle::{ConditionallySelectable, ConstantTimeEq};
-use crypto_bigint::{impl_modulus, Encoding, U256};
+use crypto_bigint::ctutils::{CtEq, CtSelect};
+use crypto_bigint::modular::ConstMontyForm;
+use crypto_bigint::{const_monty_params, U256};
 use rand::RngCore;
 use sha2::{Digest, Sha512};
 
-impl_modulus!(
+const_monty_params!(
     P25519,
     U256,
     "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
 );
 
-type Fe = Residue<P25519, { U256::LIMBS }>;
+type Fe = ConstMontyForm<P25519, { U256::LIMBS }>;
 
 /// Montgomery coefficient A of Curve25519.
 const J: u64 = 486662;
@@ -42,7 +42,7 @@ fn fe(n: u64) -> Fe {
 fn decode_coordinate(bytes: &[u8; 32]) -> Fe {
     let mut bytes = *bytes;
     bytes[31] &= 0x7f;
-    Fe::new(&U256::from_le_bytes(bytes))
+    Fe::new(&U256::from_le_slice(&bytes))
 }
 
 /// `map_to_curve_elligator2_curve25519` from RFC 9380 §G.2.1, x-coordinate only.
@@ -62,11 +62,11 @@ fn elligator2(point: &[u8; 32]) -> [u8; 32] {
     let y11 = tv2.pow(&C4) * tv3;
     let y12 = y11 * Fe::new(&SQRT_M1);
     let e1 = (y11 * y11 * gxd).ct_eq(&gx1);
-    let y1 = Fe::conditional_select(&y12, &y11, e1);
+    let y1 = y12.ct_select(&y11, e1);
     let x2n = x1n * tv1;
     let e3 = (y1 * y1 * gxd).ct_eq(&gx1);
-    let xn = Fe::conditional_select(&x2n, &x1n, e3);
-    (xn * xd.pow(&P_MINUS_2)).retrieve().to_le_bytes()
+    let xn = x2n.ct_select(&x1n, e3);
+    (xn * xd.pow(&P_MINUS_2)).retrieve().to_le_bytes().into()
 }
 
 /// Length-prefixed concatenation (`lv_cat`). Every field here is under 128 bytes, so the
