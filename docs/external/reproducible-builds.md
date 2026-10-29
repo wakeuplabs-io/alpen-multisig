@@ -22,7 +22,7 @@ A verifier rebuilds and compares the **binary** and **frontend** digests. The in
 
 Three controls make Tier 1 deterministic:
 
-1. **Pinned toolchain & dependencies** — `rust-toolchain.toml` pins the exact `rustc`; `Cargo.lock` and `package-lock.json` pin the full dependency graph; `.nvmrc` pins the Node major used for the frontend.
+1. **Pinned toolchain & dependencies** — `rust-toolchain.toml` pins the exact `rustc`; `Cargo.lock` and `package-lock.json` pin the full dependency graph; `.nvmrc` pins the exact Node version used for the frontend.
 
 2. **`trim-paths`** — `[profile.release] trim-paths = true` (root `Cargo.toml`) strips absolute build paths (`$HOME`, `$CARGO_HOME`, git/registry dep paths) from the binary, so output does not depend on *where* it was built.
 

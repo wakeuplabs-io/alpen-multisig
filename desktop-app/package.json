@@ -76,7 +76,7 @@
 		"tauri": "tauri"
 	},
 	"engines": {
-		"node": ">=20 <21"
+		"node": ">=22.23.4 <23"
 	},
 	"dependencies": {
 		"@hookform/resolvers": "^5.2.2",
