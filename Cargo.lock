@@ -548,9 +548,9 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bdk_bitcoind_rpc"
-version = "0.18.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f96e987f8736f34c1628743684f66b31faeda72f3bc86b60314197f2d8cb9731"
+checksum = "a216369a99680aab5fbc22957bef1a9bd557b56d5e306f9da89435176b8d65ff"
 dependencies = [
  "bdk_core",
  "bitcoin",
@@ -559,9 +559,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_chain"
-version = "0.21.1"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4955734f97b2baed3f36d16ae7c203fdde31ae85391ac44ee3cbcaf0886db5ce"
+checksum = "17dc15a280b922a2d52fb183ad25974859d241ec37ec46580ca602ad00ada52d"
 dependencies = [
  "bdk_core",
  "bitcoin",
@@ -571,9 +571,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_core"
-version = "0.4.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b545aea1efc090e4f71f1dd5468090d9f54c3de48002064c04895ef811fbe0b2"
+checksum = "6cbb1373ac1fafacd7adab91f58ab18d455dfb6434d47a647e75315613599cad"
 dependencies = [
  "bitcoin",
  "hashbrown 0.14.5",
@@ -582,9 +582,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_electrum"
-version = "0.21.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb2ac12acbf8f263c59d74ceeeed015e0fd00982aa8e71824f63d102999be040"
+checksum = "97455296f4f798250eaa5f7aa51fc34298a72fb661784b4c52c190d730ad04f7"
 dependencies = [
  "bdk_core",
  "electrum-client",
@@ -592,16 +592,18 @@ dependencies = [
 
 [[package]]
 name = "bdk_wallet"
-version = "1.2.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "461b92c4e47b688a92740b204f4580e0a51775df16b67dde1d2db6ede1f0ba09"
+checksum = "c99821af39c7df004bd411ece2ef22d9fba5a631b4489f3d9a0ac0d19637e2d0"
 dependencies = [
+ "anyhow",
  "bdk_chain",
  "bitcoin",
  "miniscript",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1601,7 +1603,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1762,9 +1764,9 @@ dependencies = [
 
 [[package]]
 name = "electrum-client"
-version = "0.23.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ed9a037f88aa61d3627a20af1c68fa0405ed5a16d9a0d9dc0e66adcda44afbe"
+checksum = "19701e9c0ce6e3337eb31bd307b854e762c6ffa2ccd19167ebd3588ec53e4447"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -1773,7 +1775,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "webpki-roots 0.25.4",
+ "webpki-roots 1.0.10",
  "winapi",
 ]
 
@@ -1876,7 +1878,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3550,7 +3552,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3629,7 +3631,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4878,7 +4880,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5439,7 +5441,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6882,7 +6884,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7374,7 +7376,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7475,7 +7477,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7909,12 +7911,6 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "0.25.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1"
-
-[[package]]
-name = "webpki-roots"
 version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
@@ -8014,7 +8010,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

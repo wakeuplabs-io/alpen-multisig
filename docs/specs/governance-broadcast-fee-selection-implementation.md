@@ -317,9 +317,9 @@ Wraps `&dyn BitcoinRpcClient`. Requires two trait changes in
 Single responsibility: *`FeeEstimator` over the Electrum protocol*.
 
 - Uses `bdk_electrum::electrum_client::{Client, ElectrumApi}` — already a dependency
-  (`bdk_electrum = "0.21"` workspace pin); URL from `NodeConfig::electrum_url()` (same source
+  (`bdk_electrum = "0.24"` workspace pin); URL from `NodeConfig::electrum_url()` (same source
   as wallet sync, including the R2.3 custom URL).
-- `ElectrumApi::estimate_fee(target) -> Result<f64>` returns BTC/kB; `-1.0` means
+- `ElectrumApi::estimate_fee(target, None) -> Result<f64>` returns BTC/kB; `-1.0` means
   "no estimate available" → `FeeEstimateError::NoEstimate`.
 - `ElectrumApi::relay_fee() -> Result<f64>` (BTC/kB) for `min_relay_sat_per_kvb`.
 - The electrum client is blocking I/O — every call goes through `tokio::task::spawn_blocking`,
