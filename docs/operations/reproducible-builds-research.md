@@ -56,7 +56,7 @@ Reproducibility must be assessed per layer, because each has different difficult
 
 | Source | Effect | Mitigation |
 |---|---|---|
-| Node/npm version | Output can differ across majors | Pin Node (CI uses 20; pin locally too, e.g. `.nvmrc`/`engines`) |
+| Node/npm version | Output can differ across majors | Pin Node (CI uses 22.23.4; pin locally too, e.g. `.nvmrc`/`engines`) |
 | Dependency graph | — | `npm ci` against committed `package-lock.json` (already done) |
 | Asset hashes | Content-based, so deterministic | None needed |
 | Plugin-injected timestamps / build IDs | Rare, plugin-specific | Audit Vite plugins; honor `SOURCE_DATE_EPOCH` |

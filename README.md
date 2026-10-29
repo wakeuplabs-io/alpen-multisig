@@ -63,7 +63,7 @@ For development and reproducible verification. To simply run the application, in
 ### Prerequisites
 
 - Rust toolchain pinned by `rust-toolchain.toml` (nightly)
-- Node.js 20.x and npm
+- Node.js 22.23.4 (pinned by `.nvmrc`) and npm
 - Tauri system dependencies for your OS
 - Optional, for the harness test: `bitcoind` on `PATH`
 

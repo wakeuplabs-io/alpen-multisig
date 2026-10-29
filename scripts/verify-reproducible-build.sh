@@ -13,7 +13,7 @@
 # Usage:
 #   scripts/verify-reproducible-build.sh path/to/REPRODUCIBLE-DIGESTS.txt
 #
-# Prerequisites: the pinned toolchain (rust-toolchain.toml), the Node major in
+# Prerequisites: the pinned toolchain (rust-toolchain.toml), the Node version in
 # .nvmrc, and the Tauri system dependencies (see docs/operations/desktop-build-linux.md).
 # Run from a clean checkout of the exact release tag.
 

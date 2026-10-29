@@ -56,7 +56,7 @@ Purpose: Lint, TypeScript type-check, and Vite production build.
 
 Steps:
 1. `actions/checkout@v4`
-2. `actions/setup-node@v4` with `node-version: 20`
+2. `actions/setup-node@v4` with `node-version-file: .nvmrc` (Node 22.23.4)
 3. `actions/cache@v4` with path `desktop-app/node_modules`, key based on `desktop-app/package-lock.json` hash
 4. `cd desktop-app && npm ci`
 5. `cd desktop-app && npm run format:check`
