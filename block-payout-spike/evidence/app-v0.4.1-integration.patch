@@ -1,0 +1,79 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 1900f25..99665b8 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -10,16 +10,16 @@ resolver = '2'
+ [workspace.dependencies]
+ # Alpen crates — see docs/architecture/adrs/001-alpen-crate-dependencies.md
+ # From alpenlabs/asm (tag v0.5.0-rc.1 = rev 7ada090, ADR-008; upstream renames — keep Rust crate paths via `package =`)
+-strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-params = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-common = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-proto-bridge = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-bridge-types = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-admin-threshold-sig = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-admin-types = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
++strata-asm-txs-admin = { package = "strata-asm-proto-admin-txs", git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-params = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-common = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-proto-bridge = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-bridge-types = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-admin-threshold-sig = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-admin-types = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-proto-administration = { package = "strata-asm-proto-admin", git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-txs-test-utils = { package = "strata-asm-proto-txs-test-utils", git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
+ 
+ # From alpenlabs/strata-common (v0.4.0 — matches alpenlabs/asm @ v0.5.0-rc.1 workspace)
+ strata-crypto = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0" }
+diff --git a/e2e-tests/Cargo.toml b/e2e-tests/Cargo.toml
+index 6293d4f..9f38cda 100644
+--- a/e2e-tests/Cargo.toml
++++ b/e2e-tests/Cargo.toml
+@@ -6,22 +6,22 @@ license = "MIT OR Apache-2.0"
+ 
+ [dependencies]
+ # From alpenlabs/asm
+-strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-spec = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
++strata-asm-manifest-types = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-spec = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
+ strata-asm-txs-admin = { workspace = true, features = ["test-utils"] }
+ strata-asm-params = { workspace = true, features = ["arbitrary"] }
+ strata-asm-common.workspace = true
+-strata-asm-proto-admin = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
++strata-asm-proto-admin = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-asm-proto-checkpoint = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
+ strata-asm-proto-bridge.workspace = true
+ strata-asm-bridge-types.workspace = true
+ strata-asm-admin-threshold-sig.workspace = true
+ strata-asm-admin-types.workspace = true
+ strata-predicate = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0" }
+-strata-asm-worker = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1", features = ["test-utils"] }
+-strata-btc-verification = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
+-strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", rev = "7ada090580ac12af9cd411254415090725efcec1" }
++strata-asm-worker = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1", features = ["test-utils"] }
++strata-btc-verification = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-test-utils-arb = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
++strata-test-utils-btcio = { git = "https://github.com/alpenlabs/asm", tag = "v0.5.0-rc.1" }
+ strata-asm-txs-test-utils.workspace = true
+ 
+ # From alpenlabs/strata-common
+diff --git a/orchestrator-be/Cargo.toml b/orchestrator-be/Cargo.toml
+index c0f9853..bd0a50f 100644
+--- a/orchestrator-be/Cargo.toml
++++ b/orchestrator-be/Cargo.toml
+@@ -36,6 +36,8 @@ sha2 = "0.10"
+ reqwest = { workspace = true }
+ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "macros", "migrate", "chrono"] }
+ ssz = { workspace = true }
++strata-bridge-connectors = { path = "../../strata-bridge/crates/connectors" }
++strata-bridge-tx-graph = { path = "../../strata-bridge/crates/tx-graph" }
+ strata-asm-common = { workspace = true }
+ strata-asm-params = { workspace = true }
+ strata-asm-proto-administration = { workspace = true }

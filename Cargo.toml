@@ -5,6 +5,9 @@ cargo-features = ["trim-paths"]
 
 [workspace]
 members = ['orchestrator-be', 'desktop-app/src-tauri', 'e2e-tests', 'regtest-dev-api']
+# Isolated spike workspace: pinset (bitcoin 0.32.9 / bosd v0.12) does not match this
+# workspace (bitcoin 0.32.6 / bosd v0.11). See block-payout-spike/GO_NO_GO.md.
+exclude = ['block-payout-spike']
 resolver = '2'
 
 [workspace.dependencies]

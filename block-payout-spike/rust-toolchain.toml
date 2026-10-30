@@ -1,0 +1,5 @@
+# Match strata-bridge. Compiling those crates on alpen-multisig's older nightly
+# (2026-01-01) is a Stage 2 risk; this spike does not inherit the parent toolchain.
+[toolchain]
+channel = "nightly-2026-09-01"
+components = ["cargo", "clippy", "rustc", "rustfmt"]
